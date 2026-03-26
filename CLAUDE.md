@@ -169,6 +169,7 @@ Report findings only. Do not fix code during review — present findings and let
 - Write temporary scripts to `/tmp/*.py` and execute with `poetry run python /tmp/script.py`.
 - Clean up temp files after use.
 - Do not use `python -c` with multiline strings.
+- Try to maximise use of `ast-grep` instead of plain grep when searching for code fragments.
 
 ## Talisman (Secret Detection)
 

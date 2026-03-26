@@ -7,6 +7,7 @@ through the full parse -> lower -> execute pipeline.
 from __future__ import annotations
 
 from tests.unit.rosetta.conftest import execute_for_language
+from interpreter.var_name import VarName
 
 
 class TestRubyScopeResolutionExecution:
@@ -33,7 +34,7 @@ d = Animals::Dog.new()
 answer = d.get_legs()
 """
         vm, stats = execute_for_language("ruby", source)
-        assert "answer" in vm.call_stack[0].local_vars
+        assert VarName("answer") in vm.call_stack[0].local_vars
         assert stats.llm_calls == 0
 
     def test_scope_resolution_constant_access_does_not_crash(self):
@@ -51,7 +52,7 @@ end
 answer = Config::PI
 """
         vm, stats = execute_for_language("ruby", source)
-        assert "answer" in vm.call_stack[0].local_vars
+        assert VarName("answer") in vm.call_stack[0].local_vars
         assert stats.llm_calls == 0
 
     def test_scope_resolution_in_class_method_does_not_crash(self):
@@ -79,5 +80,5 @@ c = Circle.new(2)
 answer = c.area()
 """
         vm, stats = execute_for_language("ruby", source)
-        assert "answer" in vm.call_stack[0].local_vars
+        assert VarName("answer") in vm.call_stack[0].local_vars
         assert stats.llm_calls == 0

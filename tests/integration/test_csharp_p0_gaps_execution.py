@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_csharp(source: str, max_steps: int = 500) -> dict:
@@ -23,8 +24,8 @@ skip:
 int y = 2;
 """
         local_vars = _run_csharp(source)
-        assert local_vars["x"] == 1, "goto should skip x = 99"
-        assert local_vars["y"] == 2
+        assert local_vars[VarName("x")] == 1, "goto should skip x = 99"
+        assert local_vars[VarName("y")] == 2
 
     def test_goto_label_interaction(self):
         """goto should jump to a defined label and execute code after it."""
@@ -36,8 +37,8 @@ done:
 int y = x + 10;
 """
         local_vars = _run_csharp(source)
-        assert local_vars["x"] == 1, "goto should skip x = 99"
-        assert local_vars["y"] == 11, "code after label should use original x"
+        assert local_vars[VarName("x")] == 1, "goto should skip x = 99"
+        assert local_vars[VarName("y")] == 11, "code after label should use original x"
 
     def test_goto_backward_jump(self):
         """goto can jump backward to create a loop-like construct."""
@@ -49,7 +50,7 @@ if (x < 3) goto start;
 int y = x;
 """
         local_vars = _run_csharp(source)
-        assert local_vars["y"] == 3
+        assert local_vars[VarName("y")] == 3
 
 
 class TestCSharpLabeledStatementExecution:
@@ -61,4 +62,4 @@ myLabel:
 int y = x + 5;
 """
         local_vars = _run_csharp(source)
-        assert local_vars["y"] == 15
+        assert local_vars[VarName("y")] == 15

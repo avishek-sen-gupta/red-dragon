@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_scala(source: str, max_steps: int = 200):
@@ -21,14 +22,14 @@ class TestScalaExportDeclarationExecution:
     def test_export_does_not_crash(self):
         """export declaration should execute without errors."""
         locals_ = _run_scala("export foo._\nval x = 42")
-        assert locals_["x"] == 42
+        assert locals_[VarName("x")] == 42
 
 
 class TestScalaValDeclarationExecution:
     def test_code_after_val_decl_executes(self):
         """Code after abstract val declaration should execute."""
         locals_ = _run_scala("val y = 42")
-        assert locals_["y"] == 42
+        assert locals_[VarName("y")] == 42
 
 
 class TestScalaAlternativePatternExecution:
@@ -40,7 +41,7 @@ val r = x match {
   case 1 | 2 => 10
   case _ => 0
 }""")
-        assert locals_["r"] == 10
+        assert locals_[VarName("r")] == 10
 
     def test_alternative_pattern_no_match(self):
         """match with non-matching alternative should fall through to default."""
@@ -50,7 +51,7 @@ val r = x match {
   case 1 | 2 => 10
   case _ => 0
 }""")
-        assert locals_["r"] == 0
+        assert locals_[VarName("r")] == 0
 
 
 class TestScalaPrimaryConstructorExecution:
@@ -68,7 +69,7 @@ object M {
 }""",
             max_steps=500,
         )
-        assert locals_["answer"] == 42
+        assert locals_[VarName("answer")] == 42
 
     def test_linked_list_field_traversal(self):
         """Linked list built with new + primary constructor should
@@ -92,7 +93,7 @@ object M {
 }""",
             max_steps=1000,
         )
-        assert locals_["answer"] == 6
+        assert locals_[VarName("answer")] == 6
 
 
 class TestScalaArrayIndexingExecution:
@@ -105,9 +106,9 @@ val arr = Array(10, 20, 30)
 val a = arr(0)
 val b = arr(1)
 val c = arr(2)""")
-        assert locals_["a"] == 10
-        assert locals_["b"] == 20
-        assert locals_["c"] == 30
+        assert locals_[VarName("a")] == 10
+        assert locals_[VarName("b")] == 20
+        assert locals_[VarName("c")] == 30
 
     def test_variable_index(self):
         """arr(i) with variable i should return the correct element."""
@@ -115,7 +116,7 @@ val c = arr(2)""")
 val arr = Array(10, 20, 30)
 var i = 1
 val x = arr(i)""")
-        assert locals_["x"] == 20
+        assert locals_[VarName("x")] == 20
 
     def test_expression_index(self):
         """arr(i + 1) should evaluate the index expression."""
@@ -123,7 +124,7 @@ val x = arr(i)""")
 val arr = Array(10, 20, 30)
 var i = 0
 val x = arr(i + 1)""")
-        assert locals_["x"] == 20
+        assert locals_[VarName("x")] == 20
 
     def test_array_write_and_read(self):
         """arr(0) = 99; arr(0) should return 99."""
@@ -132,7 +133,7 @@ var arr = Array(10, 20, 30)
 arr(0) = 99
 val x = arr(0)""")
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["x"] == 99
+        assert locals_[VarName("x")] == 99
 
     def test_swap_elements(self):
         """Swap arr(0) and arr(1) via temp variable."""
@@ -147,15 +148,15 @@ val b = arr(1)""",
             max_steps=300,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["a"] == 10
-        assert locals_["b"] == 30
+        assert locals_[VarName("a")] == 10
+        assert locals_[VarName("b")] == 30
 
     def test_string_character_indexing(self):
         """s(1) on a string should return the character at index 1."""
         locals_ = _run_scala("""\
 val s = "hello"
 val c = s(1)""")
-        assert locals_["c"] == "e"
+        assert locals_[VarName("c")] == "e"
 
 
 class TestScalaAuxiliaryConstructorExecution:
@@ -173,7 +174,7 @@ val answer = b.value
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 7
+        assert locals_[VarName("answer")] == 7
 
     def test_auxiliary_with_field_initializer(self):
         """Field initializer should exist after auxiliary constructor chaining."""
@@ -189,7 +190,7 @@ val answer = c.total()
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 17
+        assert locals_[VarName("answer")] == 17
 
     def test_auxiliary_body_reads_field_by_bare_name(self):
         """After this(...) delegation, body can read fields via implicit this."""
@@ -207,7 +208,7 @@ val answer = obj.doubled
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 15
+        assert locals_[VarName("answer")] == 15
 
 
 class TestScalaEnumExecution:
@@ -219,7 +220,7 @@ enum Color {
 }
 val c = Color.Red
 """)
-        assert locals_["c"] == "Red"
+        assert locals_[VarName("c")] == "Red"
 
     def test_enum_all_variants_accessible(self):
         """All enum variants should be accessible via dot notation."""
@@ -232,10 +233,10 @@ val s = Direction.South
 val e = Direction.East
 val w = Direction.West
 """)
-        assert locals_["n"] == "North"
-        assert locals_["s"] == "South"
-        assert locals_["e"] == "East"
-        assert locals_["w"] == "West"
+        assert locals_[VarName("n")] == "North"
+        assert locals_[VarName("s")] == "South"
+        assert locals_[VarName("e")] == "East"
+        assert locals_[VarName("w")] == "West"
 
     def test_enum_variant_equality(self):
         """Two accesses to the same enum variant should be equal."""
@@ -247,7 +248,7 @@ val a = Color.Red
 val b = Color.Red
 val same = a == b
 """)
-        assert locals_["same"] is True
+        assert locals_[VarName("same")] is True
 
     def test_enum_match_expression(self):
         """Match on enum values using pattern matching."""
@@ -265,7 +266,7 @@ val r = c match {
 """,
             max_steps=500,
         )
-        assert locals_["r"] == 2
+        assert locals_[VarName("r")] == 2
 
     def test_enum_equality_comparison(self):
         """Enum values can be compared with == in if expressions."""
@@ -279,7 +280,7 @@ val r = if (d == Direction.North) 1 else 0
 """,
             max_steps=500,
         )
-        assert locals_["r"] == 1
+        assert locals_[VarName("r")] == 1
 
     def test_enum_as_function_argument(self):
         """Enum values can be passed to functions and matched inside."""
@@ -298,7 +299,7 @@ val result = colorToInt(Color.Green)
 """,
             max_steps=500,
         )
-        assert locals_["result"] == 2
+        assert locals_[VarName("result")] == 2
 
     def test_enum_match_wildcard_fallback(self):
         """Enum match with wildcard catches unmatched variants."""
@@ -315,4 +316,4 @@ val r = c match {
 """,
             max_steps=500,
         )
-        assert locals_["r"] == 99
+        assert locals_[VarName("r")] == 99

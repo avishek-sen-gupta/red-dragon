@@ -16,6 +16,7 @@ from interpreter.vm.vm_types import (
     SymbolicValue,
     Pointer,
 )
+from interpreter.var_name import VarName
 
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}), var_types=MappingProxyType({})
@@ -154,7 +155,7 @@ class TestApplyUpdateTypedPath:
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
-        assert vm.current_frame.local_vars["x"] is tv
+        assert vm.current_frame.local_vars[VarName("x")] is tv
 
     def test_heap_alias_unwraps_value(self):
         from interpreter.vm.vm_types import HeapObject
@@ -162,7 +163,9 @@ class TestApplyUpdateTypedPath:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.heap["mem_0"] = HeapObject(fields={"0": typed_from_runtime(None)})
-        vm.current_frame.var_heap_aliases["x"] = Pointer(base="mem_0", offset=0)
+        vm.current_frame.var_heap_aliases[VarName("x")] = Pointer(
+            base="mem_0", offset=0
+        )
         tv = typed(42, scalar("Int"))
         update = StateUpdate(var_writes={"x": tv}, reasoning="test")
         apply_update(
@@ -182,7 +185,7 @@ class TestApplyUpdateTypedPath:
             StackFrame(
                 function_name="inner",
                 closure_env_id="env_0",
-                captured_var_names=frozenset({"x"}),
+                captured_var_names=frozenset({VarName("x")}),
             )
         )
         tv = typed(42, scalar("Int"))
@@ -191,7 +194,7 @@ class TestApplyUpdateTypedPath:
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
         assert env.bindings["x"] is tv
-        assert vm.current_frame.local_vars["x"] is tv
+        assert vm.current_frame.local_vars[VarName("x")] is tv
 
     def test_register_coercion_when_declared_type_differs(self):
         from interpreter.types.coercion.default_conversion_rules import (

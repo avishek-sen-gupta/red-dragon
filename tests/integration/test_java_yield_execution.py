@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_java(source: str, max_steps: int = 500) -> dict:
@@ -30,7 +31,7 @@ M m = new M();
 int result = m.compute(2);
 """
         local_vars = _run_java(source)
-        assert local_vars["result"] == 20
+        assert local_vars[VarName("result")] == 20
 
     def test_yield_with_computation(self):
         """yield with computed expression should evaluate correctly."""
@@ -48,7 +49,7 @@ M m = new M();
 int result = m.compute(1);
 """
         local_vars = _run_java(source)
-        assert local_vars["result"] == 10
+        assert local_vars[VarName("result")] == 10
 
     def test_yield_default_arm(self):
         """When no case matches, the default arm's yield should produce the value."""
@@ -67,4 +68,4 @@ M m = new M();
 int result = m.compute(999);
 """
         local_vars = _run_java(source)
-        assert local_vars["result"] == 99
+        assert local_vars[VarName("result")] == 99

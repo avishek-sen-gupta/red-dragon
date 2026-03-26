@@ -5,6 +5,7 @@ import statistics
 
 from interpreter.cfg import build_cfg
 from interpreter.types.typed_value import TypedValue
+from interpreter.var_name import VarName
 from interpreter.vm.vm import _heap_addr
 from interpreter.frontends import (
     get_deterministic_frontend,
@@ -205,7 +206,7 @@ def _var_name_for_language(var_name: str, language: str) -> str:
 
 def extract_answer(vm: VMState, language: str) -> object:
     """Extract the ``answer`` variable from frame 0 locals."""
-    name = _var_name_for_language("answer", language)
+    name = VarName(_var_name_for_language("answer", language))
     frame = vm.call_stack[0]
     assert name in frame.local_vars, (
         f"[{language}] expected '{name}' in frame 0 locals, "
@@ -222,7 +223,7 @@ def extract_array(
 
     Returns a Python list of the first *length* indexed fields.
     """
-    name = _var_name_for_language(var_name, language)
+    name = VarName(_var_name_for_language(var_name, language))
     frame = vm.call_stack[0]
     assert name in frame.local_vars, (
         f"[{language}] expected '{name}' in frame 0 locals, "

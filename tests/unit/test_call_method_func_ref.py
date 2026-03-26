@@ -14,6 +14,7 @@ from interpreter.frontends import get_deterministic_frontend
 from interpreter.ir import Opcode
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_program(source: str, language: Language, max_steps: int = 200) -> dict:
@@ -50,7 +51,7 @@ class M {
             source, Language.JAVA
         ), "IR should contain a FUNC_REF for the lambda"
         vars_ = _run_program(source, Language.JAVA)
-        assert vars_["answer"] == 15
+        assert vars_[VarName("answer")] == 15
 
     def test_ruby_lambda_call(self):
         """Ruby lambda invoked via .call() should dispatch through FUNC_REF."""
@@ -66,7 +67,7 @@ answer = make_adder(10)
             source, Language.RUBY
         ), "IR should contain a FUNC_REF for the lambda"
         vars_ = _run_program(source, Language.RUBY)
-        assert vars_["answer"] == 15
+        assert vars_[VarName("answer")] == 15
 
 
 class TestLambdaFuncRef:
@@ -83,7 +84,7 @@ class M {
 }
 """
         vars_ = _run_program(source, Language.CSHARP)
-        assert vars_["answer"] == 15
+        assert vars_[VarName("answer")] == 15
 
     def test_csharp_local_function_closure(self):
         """C# local function capturing enclosing variable should produce correct result."""
@@ -100,7 +101,7 @@ class M {
 }
 """
         vars_ = _run_program(source, Language.CSHARP)
-        assert vars_["answer"] == 15
+        assert vars_[VarName("answer")] == 15
 
     def test_python_lambda_produces_func_ref(self):
         """Python lambda should produce a proper FUNC_REF and compute correct closure result."""
@@ -110,7 +111,7 @@ add10 = make_adder(10)
 answer = add10(5)
 """
         vars_ = _run_program(source, Language.PYTHON)
-        assert vars_["answer"] == 15
+        assert vars_[VarName("answer")] == 15
 
     def test_kotlin_lambda_literal_binds_params(self):
         """Kotlin lambda literal should bind params and compute correct closure result."""
@@ -123,7 +124,7 @@ fun make_adder(x: Int): Int {
 val answer = make_adder(10)
 """
         vars_ = _run_program(source, Language.KOTLIN)
-        assert vars_["answer"] == 15
+        assert vars_[VarName("answer")] == 15
 
     def test_scala_lambda_expression_binds_params(self):
         """Scala lambda expression should bind params and compute correct closure result."""
@@ -138,7 +139,7 @@ object M {
 }
 """
         vars_ = _run_program(source, Language.SCALA)
-        assert vars_["answer"] == 15
+        assert vars_[VarName("answer")] == 15
 
 
 class TestCallUnknownOnFuncRef:
@@ -155,4 +156,4 @@ $answer = $add10(5);
 ?>
 """
         vars_ = _run_program(source, Language.PHP)
-        assert vars_["$answer"] == 15
+        assert vars_[VarName("$answer")] == 15

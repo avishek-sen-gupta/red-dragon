@@ -99,7 +99,9 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
 
         # Build a compact state snapshot (only what's relevant)
         compact_state: dict[str, Any] = {
-            "local_vars": {k: _serialize_value(v) for k, v in frame.local_vars.items()},
+            "local_vars": {
+                str(k): _serialize_value(v) for k, v in frame.local_vars.items()
+            },
         }
         if state.heap:
             compact_state["heap"] = {k: v.to_dict() for k, v in state.heap.items()}

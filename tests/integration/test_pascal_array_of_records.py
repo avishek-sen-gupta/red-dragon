@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_pascal(source: str, max_steps: int = 2000) -> dict:
@@ -33,7 +34,7 @@ begin
     nodes[0].value := 42;
     answer := nodes[0].value;
 end.""")
-        assert vars_["answer"] == 42
+        assert vars_[VarName("answer")] == 42
 
     def test_multiple_elements_independent(self):
         """Assign to different array elements, verify independence."""
@@ -56,9 +57,9 @@ begin
     b := nodes[1].value;
     c := nodes[2].value;
 end.""")
-        assert vars_["a"] == 10
-        assert vars_["b"] == 20
-        assert vars_["c"] == 30
+        assert vars_[VarName("a")] == 10
+        assert vars_[VarName("b")] == 20
+        assert vars_[VarName("c")] == 30
 
     def test_linked_list_traversal(self):
         """Array-of-records with index-based linked list traversal (red-dragon-b8k)."""
@@ -88,7 +89,7 @@ begin
     nodes[2].nextIdx := 0;
     answer := sumList(0, 3);
 end.""")
-        assert vars_["answer"] == 6
+        assert vars_[VarName("answer")] == 6
 
     def test_multiple_fields_same_element(self):
         """Multiple field assignments to the same array element persist."""
@@ -109,5 +110,5 @@ begin
     rx := pairs[0].x;
     ry := pairs[0].y;
 end.""")
-        assert vars_["rx"] == 3
-        assert vars_["ry"] == 7
+        assert vars_[VarName("rx")] == 3
+        assert vars_[VarName("ry")] == 7

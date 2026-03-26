@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_program(source: str, max_steps: int = 200) -> dict:
@@ -24,7 +25,7 @@ add5 = make_adder(5)
 result = add5(3)
 """
         vars_ = _run_program(source)
-        assert vars_["result"] == 8
+        assert vars_[VarName("result")] == 8
 
     def test_captured_var_not_in_caller_scope(self):
         """The closure should carry 'x' even though caller has no 'x'."""
@@ -38,9 +39,11 @@ f = make_adder(10)
 result = f(7)
 """
         vars_ = _run_program(source)
-        assert vars_["result"] == 17
+        assert vars_[VarName("result")] == 17
         # The captured variable 'x' should not leak into the caller's scope
-        assert "x" not in vars_, "captured var 'x' should not be in the caller's scope"
+        assert (
+            VarName("x") not in vars_
+        ), "captured var 'x' should not be in the caller's scope"
 
 
 class TestMultipleClosures:
@@ -58,8 +61,8 @@ a = double(5)
 b = triple(5)
 """
         vars_ = _run_program(source)
-        assert vars_["a"] == 10
-        assert vars_["b"] == 15
+        assert vars_[VarName("a")] == 10
+        assert vars_[VarName("b")] == 15
 
     def test_closures_do_not_interfere(self):
         source = """\
@@ -74,8 +77,8 @@ a = hello("Alice")
 b = bye("Bob")
 """
         vars_ = _run_program(source)
-        assert vars_["a"] == "Hello Alice"
-        assert vars_["b"] == "Bye Bob"
+        assert vars_[VarName("a")] == "Hello Alice"
+        assert vars_[VarName("b")] == "Bye Bob"
 
 
 class TestClosureWithMultipleVars:
@@ -90,7 +93,7 @@ line = make_linear(3, 7)
 result = line(10)
 """
         vars_ = _run_program(source)
-        assert vars_["result"] == 37  # 3*10 + 7
+        assert vars_[VarName("result")] == 37  # 3*10 + 7
 
 
 class TestClosureMutation:
@@ -111,8 +114,8 @@ a = c()
 b = c()
 """
         vars_ = _run_program(source, max_steps=300)
-        assert vars_["a"] == 1
-        assert vars_["b"] == 2
+        assert vars_[VarName("a")] == 1
+        assert vars_[VarName("b")] == 2
 
     def test_accumulator_persists_mutations(self):
         """An accumulator closure persists mutations across calls.
@@ -134,9 +137,9 @@ b = acc(20)
 c = acc(5)
 """
         vars_ = _run_program(source, max_steps=300)
-        assert vars_["a"] == 110
-        assert vars_["b"] == 130
-        assert vars_["c"] == 135
+        assert vars_[VarName("a")] == 110
+        assert vars_[VarName("b")] == 130
+        assert vars_[VarName("c")] == 135
 
     def test_independent_factories_dont_share(self):
         """Counters from separate factory calls are independent."""
@@ -155,9 +158,9 @@ b = c1()
 c = c2()
 """
         vars_ = _run_program(source, max_steps=400)
-        assert vars_["a"] == 1
-        assert vars_["b"] == 2
-        assert vars_["c"] == 1
+        assert vars_[VarName("a")] == 1
+        assert vars_[VarName("b")] == 2
+        assert vars_[VarName("c")] == 1
 
     def test_read_only_closure_unchanged(self):
         """Existing read-only closure patterns still work (regression guard)."""
@@ -172,8 +175,8 @@ a = add5(3)
 b = add5(10)
 """
         vars_ = _run_program(source)
-        assert vars_["a"] == 8
-        assert vars_["b"] == 15
+        assert vars_[VarName("a")] == 8
+        assert vars_[VarName("b")] == 15
 
     def test_make_counter_with_start(self):
         """make_counter(10) → counter(5)=15, counter(3)=18, result=33."""
@@ -191,9 +194,9 @@ b = counter(3)
 result = a + b
 """
         vars_ = _run_program(source, max_steps=300)
-        assert vars_["a"] == 15
-        assert vars_["b"] == 18
-        assert vars_["result"] == 33
+        assert vars_[VarName("a")] == 15
+        assert vars_[VarName("b")] == 18
+        assert vars_[VarName("result")] == 33
 
 
 class TestNonClosureFunctionsUnaffected:
@@ -206,7 +209,7 @@ def add(a, b):
 result = add(3, 4)
 """
         vm = run(source, max_steps=100)
-        assert unwrap(vm.call_stack[0].local_vars["result"]) == 7
+        assert unwrap(vm.call_stack[0].local_vars[VarName("result")]) == 7
         assert len(vm.closures) == 0
 
     def test_factorial_unchanged(self):
@@ -220,5 +223,5 @@ def factorial(n):
 result = factorial(5)
 """
         vm = run(source, max_steps=200)
-        assert unwrap(vm.call_stack[0].local_vars["result"]) == 120
+        assert unwrap(vm.call_stack[0].local_vars[VarName("result")]) == 120
         assert len(vm.closures) == 0

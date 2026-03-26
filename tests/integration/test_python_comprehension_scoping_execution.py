@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from tests.unit.rosetta.conftest import execute_for_language
 from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
 
 
 class TestListComprehensionScopingExecution:
@@ -22,7 +23,7 @@ answer = x
 """,
         )
         frame = vm.call_stack[0]
-        assert unwrap(frame.local_vars["answer"]) == 99
+        assert unwrap(frame.local_vars[VarName("answer")]) == 99
 
 
 class TestDictComprehensionScopingExecution:
@@ -37,7 +38,7 @@ answer = k
 """,
         )
         frame = vm.call_stack[0]
-        assert unwrap(frame.local_vars["answer"]) == 99
+        assert unwrap(frame.local_vars[VarName("answer")]) == 99
 
 
 class TestSetComprehensionScopingExecution:
@@ -52,7 +53,7 @@ answer = x
 """,
         )
         frame = vm.call_stack[0]
-        assert unwrap(frame.local_vars["answer"]) == 99
+        assert unwrap(frame.local_vars[VarName("answer")]) == 99
 
 
 class TestGeneratorExpressionScopingExecution:
@@ -67,4 +68,4 @@ answer = x
 """,
         )
         frame = vm.call_stack[0]
-        assert unwrap(frame.local_vars["answer"]) == 99
+        assert unwrap(frame.local_vars[VarName("answer")]) == 99

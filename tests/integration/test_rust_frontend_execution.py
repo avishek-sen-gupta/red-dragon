@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_rust(source: str, max_steps: int = 200):
@@ -21,7 +22,7 @@ class TestRustRawStringLiteralExecution:
     def test_raw_string_assigned(self):
         """let x = r\"hello\"; should store \"hello\" with prefix stripped."""
         _, local_vars = _run_rust('let x = r"hello";')
-        assert local_vars["x"] == "hello"
+        assert local_vars[VarName("x")] == "hello"
 
     def test_raw_string_in_comparison(self):
         """Raw string should be usable in comparison without crashing."""
@@ -30,7 +31,7 @@ let x = r"hello";
 let y = r"hello";
 let same = x == y;
 """)
-        assert local_vars["same"] is True
+        assert local_vars[VarName("same")] is True
 
     def test_raw_string_with_hashes(self):
         """r#\"has quotes\"# should execute without errors."""
@@ -38,14 +39,14 @@ let same = x == y;
 let x = r#"has quotes"#;
 let y = 42;
 """)
-        assert local_vars["y"] == 42
+        assert local_vars[VarName("y")] == 42
 
 
 class TestRustNegativeLiteralExecution:
     def test_negative_literal_value(self):
         """let x: i32 = -1; should store -1."""
         _, local_vars = _run_rust("let x: i32 = -1;")
-        assert local_vars["x"] == -1
+        assert local_vars[VarName("x")] == -1
 
     def test_negative_literal_in_arithmetic(self):
         """Negative literal should be usable in arithmetic."""
@@ -53,12 +54,12 @@ class TestRustNegativeLiteralExecution:
 let x: i32 = -5;
 let y = x + 10;
 """)
-        assert local_vars["y"] == 5
+        assert local_vars[VarName("y")] == 5
 
     def test_negative_float_literal(self):
         """let x = -3.0; should store a negative float."""
         _, local_vars = _run_rust("let x: f64 = -3.0;")
-        assert local_vars["x"] == -3.0
+        assert local_vars[VarName("x")] == -3.0
 
     def test_negative_literal_in_match_pattern(self):
         """match arm with -1 pattern should execute without errors."""
@@ -73,7 +74,7 @@ let r = match x {
 """,
             max_steps=300,
         )
-        assert local_vars["r"] == 50
+        assert local_vars[VarName("r")] == 50
 
     def test_negative_literal_match_hits_negative(self):
         """match arm with -1 pattern should match when value is -1."""
@@ -88,40 +89,40 @@ let r = match x {
 """,
             max_steps=300,
         )
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
 
 class TestRustForeignModItemExecution:
     def test_code_after_extern_block_executes(self):
         """Code after extern block should execute normally."""
         _, locals_ = _run_rust('extern "C" { fn foo(); }\nlet x = 10;')
-        assert locals_["x"] == 10
+        assert locals_[VarName("x")] == 10
 
 
 class TestRustUnionItemExecution:
     def test_code_after_union_executes(self):
         """Code after union definition should execute normally."""
         _, locals_ = _run_rust("union Foo { x: i32, y: f64 }\nlet a = 5;")
-        assert locals_["a"] == 5
+        assert locals_[VarName("a")] == 5
 
 
 class TestRustMacroDefinitionExecution:
     def test_code_after_macro_def_executes(self):
         """Code after macro_rules! should execute normally."""
         _, locals_ = _run_rust("macro_rules! my_macro { () => {} }\nlet y = 99;")
-        assert locals_["y"] == 99
+        assert locals_[VarName("y")] == 99
 
 
 class TestRustMutPatternExecution:
     def test_let_mut_stores_value(self):
         """let mut x = 42 should store 42 in x."""
         _, locals_ = _run_rust("let mut x = 42;")
-        assert locals_["x"] == 42
+        assert locals_[VarName("x")] == 42
 
     def test_let_mut_reassignment(self):
         """let mut x should allow reassignment."""
         _, locals_ = _run_rust("let mut x = 1;\nx = 2;")
-        assert locals_["x"] == 2
+        assert locals_[VarName("x")] == 2
 
 
 class TestRustBoxExecution:
@@ -136,7 +137,7 @@ let b = Box::new(n);
             max_steps=300,
         )
         # Box::new creates a Box heap object containing the Node via field "0"
-        b_ptr = local_vars["b"]
+        b_ptr = local_vars[VarName("b")]
         assert b_ptr.base in vm.heap
         box_obj = vm.heap[b_ptr.base]
         from interpreter.types.type_expr import ScalarType
@@ -147,14 +148,14 @@ let b = Box::new(n);
 
         inner = box_obj.fields["0"]
         inner_val = inner.value if isinstance(inner, TypedValue) else inner
-        assert inner_val == local_vars["n"]
+        assert inner_val == local_vars[VarName("n")]
 
 
 class TestRustOptionExecution:
     def test_some_creates_option_with_value(self):
         """Some(42) should create an Option object with value field = 42."""
         vm, local_vars = _run_rust("let opt = Some(42);", max_steps=300)
-        opt_ptr = local_vars.get("opt")
+        opt_ptr = local_vars.get(VarName("opt"))
         assert opt_ptr is not None
         assert opt_ptr.base in vm.heap
         assert "value" in vm.heap[opt_ptr.base].fields
@@ -173,7 +174,7 @@ let val = opt.unwrap();
 """,
             max_steps=300,
         )
-        assert local_vars["val"] == 42
+        assert local_vars[VarName("val")] == 42
 
     def test_option_as_ref_identity(self):
         """opt.as_ref() should return the same object."""
@@ -185,7 +186,7 @@ let val = ref_opt.unwrap();
 """,
             max_steps=400,
         )
-        assert local_vars["val"] == 42
+        assert local_vars[VarName("val")] == 42
 
     def test_nested_box_in_option(self):
         """Some(Box::new(42)) — unwrap returns the Box object."""
@@ -197,7 +198,7 @@ let inner = opt.unwrap();
             max_steps=400,
         )
         # unwrap returns the Box object; auto-deref to 42 is a separate concern
-        inner_ptr = local_vars["inner"]
+        inner_ptr = local_vars[VarName("inner")]
         assert inner_ptr.base in vm.heap
         from interpreter.types.type_expr import ScalarType
 
@@ -214,7 +215,7 @@ let inner = opt.as_ref().unwrap();
 """,
             max_steps=500,
         )
-        assert local_vars.get("inner") is not None
+        assert local_vars.get(VarName("inner")) is not None
 
 
 class TestRustImplMethodReturn:
@@ -235,7 +236,7 @@ let result = c.get_radius();
 """,
             max_steps=500,
         )
-        assert local_vars["result"] == 5
+        assert local_vars[VarName("result")] == 5
 
     def test_impl_method_with_arithmetic(self):
         """Method that computes from a field should return the computed value."""
@@ -255,7 +256,7 @@ let result = r.area();
 """,
             max_steps=500,
         )
-        assert local_vars["result"] == 24
+        assert local_vars[VarName("result")] == 24
 
     def test_impl_method_explicit_return_still_works(self):
         """Explicit return statement inside an impl method should still work."""
@@ -274,4 +275,4 @@ let result = f.get();
 """,
             max_steps=500,
         )
-        assert local_vars["result"] == 99
+        assert local_vars[VarName("result")] == 99

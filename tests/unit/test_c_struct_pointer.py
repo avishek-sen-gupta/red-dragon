@@ -15,6 +15,7 @@ from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _parse_and_lower(source: str):
@@ -81,11 +82,11 @@ class TestAddressOfHeapObject:
             "int val = p->x;"
         )
         vars_ = _run_c(source)
-        assert vars_["val"] == 42
+        assert vars_[VarName("val")] == 42
         from interpreter.vm.vm_types import Pointer
 
-        assert isinstance(vars_["p"], Pointer)
-        assert vars_["p"].offset == 0
+        assert isinstance(vars_[VarName("p")], Pointer)
+        assert vars_[VarName("p")].offset == 0
 
 
 # ── Executor: reading through struct pointer ─────────────────────
@@ -105,9 +106,9 @@ class TestStructPointerRead:
             "int sum = a + b;"
         )
         vars_ = _run_c(source)
-        assert vars_["a"] == 10
-        assert vars_["b"] == 20
-        assert vars_["sum"] == 30
+        assert vars_[VarName("a")] == 10
+        assert vars_[VarName("b")] == 20
+        assert vars_[VarName("sum")] == 30
 
 
 # ── Executor: writing through struct pointer ─────────────────────
@@ -128,5 +129,5 @@ class TestStructPointerWrite:
             "int b = pt.y;"
         )
         vars_ = _run_c(source)
-        assert vars_["a"] == 100
-        assert vars_["b"] == 200
+        assert vars_[VarName("a")] == 100
+        assert vars_[VarName("b")] == 200

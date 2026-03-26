@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_rust(source: str, max_steps: int = 300):
@@ -27,7 +28,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
     def test_or_pattern_matches_second_alternative(self):
         """match 2 { 1 | 2 => 10, _ => 0 } should produce 10."""
@@ -38,7 +39,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
     def test_or_pattern_falls_through_to_wildcard(self):
         """match 5 { 1 | 2 => 10, _ => 0 } should produce 0."""
@@ -49,7 +50,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 0
+        assert local_vars[VarName("r")] == 0
 
     def test_or_pattern_three_alternatives(self):
         """match 3 { 1 | 2 | 3 => 10, _ => 0 } should produce 10."""
@@ -60,7 +61,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
     def test_or_pattern_with_mixed_arms(self):
         """Or-pattern arm alongside normal arms."""
@@ -72,7 +73,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
     def test_or_pattern_normal_arm_still_works(self):
         """Normal arm after or-pattern arm should still match."""
@@ -84,7 +85,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 30
+        assert local_vars[VarName("r")] == 30
 
     def test_multiple_or_pattern_arms(self):
         """Two separate or-pattern arms in the same match."""
@@ -96,7 +97,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 20
+        assert local_vars[VarName("r")] == 20
 
     def test_or_pattern_first_arm_of_two(self):
         """First or-pattern arm should match when appropriate."""
@@ -108,4 +109,4 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10

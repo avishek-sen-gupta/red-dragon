@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_ruby(source: str, max_steps: int = 200):
@@ -23,7 +24,7 @@ end
 answer = add(*arr)
 """
         locals_ = _run_ruby(source)
-        assert locals_["answer"] == 6
+        assert locals_[VarName("answer")] == 6
 
 
 class TestRubyHashSplatExecution:
@@ -37,7 +38,7 @@ end
 answer = greet(**opts)
 """
         locals_ = _run_ruby(source)
-        assert locals_["answer"] == 42
+        assert locals_[VarName("answer")] == 42
 
 
 class TestRubyBlockArgumentExecution:
@@ -51,19 +52,19 @@ end
 answer = run_it(&my_proc)
 """
         locals_ = _run_ruby(source)
-        assert locals_["answer"] == 42
+        assert locals_[VarName("answer")] == 42
 
 
 class TestRubyBeginEndBlockExecution:
     def test_code_after_begin_block_executes(self):
         """Code after BEGIN block should execute normally."""
         locals_ = _run_ruby("BEGIN { x = 1 }\ny = 42")
-        assert locals_["y"] == 42
+        assert locals_[VarName("y")] == 42
 
     def test_code_after_end_block_executes(self):
         """Code after END block should execute normally."""
         locals_ = _run_ruby("END { x = 1 }\ny = 42")
-        assert locals_["y"] == 42
+        assert locals_[VarName("y")] == 42
 
 
 class TestRubySingletonMethodDispatch:
@@ -80,7 +81,7 @@ result = Util.square(5)
 """,
             max_steps=500,
         )
-        assert locals_["result"] == 25
+        assert locals_[VarName("result")] == 25
 
     def test_class_method_with_multiple_args(self):
         """Class method with multiple arguments should dispatch correctly."""
@@ -95,7 +96,7 @@ result = Math.add(3, 4)
 """,
             max_steps=500,
         )
-        assert locals_["result"] == 7
+        assert locals_[VarName("result")] == 7
 
     def test_class_method_alongside_instance_method(self):
         """Class and instance methods on same class should both dispatch."""
@@ -118,5 +119,5 @@ dbl = c.double
 """,
             max_steps=500,
         )
-        assert locals_["sq"] == 16
-        assert locals_["dbl"] == 6
+        assert locals_[VarName("sq")] == 16
+        assert locals_[VarName("dbl")] == 6

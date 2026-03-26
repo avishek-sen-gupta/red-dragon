@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run(source: str, language: Language, max_steps: int = 500) -> dict:
@@ -44,8 +45,8 @@ int legs = d.getLegs();
 int voice = d.speak();
 """
         vars_ = _run(source, Language.JAVA)
-        assert vars_["legs"] == 4
-        assert vars_["voice"] == 1
+        assert vars_[VarName("legs")] == 4
+        assert vars_[VarName("voice")] == 1
 
     def test_method_override(self):
         """A child class overrides a parent method — child version is called."""
@@ -62,7 +63,7 @@ Derived d = new Derived();
 int result = d.value();
 """
         vars_ = _run(source, Language.JAVA)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2
 
     def test_multi_level_inheritance(self):
         """C extends B extends A — methods inherited through the full chain."""
@@ -85,9 +86,9 @@ int b = c.fromB();
 int cc = c.fromC();
 """
         vars_ = _run(source, Language.JAVA)
-        assert vars_["a"] == 10
-        assert vars_["b"] == 20
-        assert vars_["cc"] == 30
+        assert vars_[VarName("a")] == 10
+        assert vars_[VarName("b")] == 20
+        assert vars_[VarName("cc")] == 30
 
     def test_polymorphic_dispatch(self):
         """Overridden method dispatches based on actual type, not declared type."""
@@ -115,8 +116,8 @@ Shape s2 = new Square(4);
 int a2 = s2.area();
 """
         vars_ = _run(source, Language.JAVA)
-        assert vars_["a1"] == 75
-        assert vars_["a2"] == 16
+        assert vars_[VarName("a1")] == 75
+        assert vars_[VarName("a2")] == 16
 
     def test_inherited_field_access_via_method(self):
         """A parent method reads a field set by the child constructor."""
@@ -134,4 +135,4 @@ Car c = new Car(120);
 int s = c.getSpeed();
 """
         vars_ = _run(source, Language.JAVA)
-        assert vars_["s"] == 120
+        assert vars_[VarName("s")] == 120

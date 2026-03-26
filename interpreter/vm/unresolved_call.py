@@ -146,7 +146,9 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
     ) -> str:
         frame = vm.current_frame
         compact_state: dict[str, Any] = {
-            "local_vars": {k: _serialize_value(v) for k, v in frame.local_vars.items()},
+            "local_vars": {
+                str(k): _serialize_value(v) for k, v in frame.local_vars.items()
+            },
         }
         if vm.heap:
             compact_state["heap"] = {k: v.to_dict() for k, v in vm.heap.items()}
