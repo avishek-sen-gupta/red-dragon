@@ -80,15 +80,15 @@ class ExceptionHandler:
 class StackFrame:
     function_name: str
     registers: dict[Register, TypedValue] = field(default_factory=dict)
-    local_vars: dict[str, TypedValue] = field(default_factory=dict)
+    local_vars: dict[VarName, TypedValue] = field(default_factory=dict)
     return_label: CodeLabel | None = None
     return_ip: int | None = None  # ip to resume at in caller block
     result_reg: Register = field(
         default_factory=lambda: NO_REGISTER
     )  # caller's register for return value
     closure_env_id: str = ""
-    captured_var_names: frozenset[str] = field(default_factory=frozenset)
-    var_heap_aliases: dict[str, Pointer] = field(default_factory=dict)
+    captured_var_names: frozenset[VarName] = field(default_factory=frozenset)
+    var_heap_aliases: dict[VarName, Pointer] = field(default_factory=dict)
     is_ctor: bool = False
 
     def to_dict(self) -> dict:
@@ -97,7 +97,9 @@ class StackFrame:
             "registers": {
                 str(k): _serialize_value(v) for k, v in self.registers.items()
             },
-            "local_vars": {k: _serialize_value(v) for k, v in self.local_vars.items()},
+            "local_vars": {
+                str(k): _serialize_value(v) for k, v in self.local_vars.items()
+            },
             "return_label": str(self.return_label) if self.return_label else None,
         }
         if self.closure_env_id:

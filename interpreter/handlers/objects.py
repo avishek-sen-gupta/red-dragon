@@ -17,6 +17,7 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.types.type_expr import TypeExpr, pointer, scalar
 from interpreter.types.typed_value import typed
 from interpreter import constants
+from interpreter.var_name import VarName
 
 
 def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
@@ -31,8 +32,8 @@ def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
     # extract the canonical class name.
     hint_name = str(obj_type)
     for frame in reversed(vm.call_stack):
-        if hint_name in frame.local_vars:
-            raw = frame.local_vars[hint_name].value
+        if VarName(hint_name) in frame.local_vars:
+            raw = frame.local_vars[VarName(hint_name)].value
             if isinstance(raw, ClassRef):
                 obj_type = scalar(raw.name)
             break

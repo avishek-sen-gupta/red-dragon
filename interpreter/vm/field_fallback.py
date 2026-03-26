@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 
 from interpreter import constants
 from interpreter.types.typed_value import TypedValue
+from interpreter.var_name import VarName
 from interpreter.vm.vm import VMState, _heap_addr as shared_heap_addr
 
 
@@ -47,7 +48,7 @@ class ImplicitThisFieldFallback(FieldFallbackStrategy):
     def _find_this_addr(self, vm: VMState) -> str | None:
         """Walk call stack looking for this pointing to a heap object."""
         for f in reversed(vm.call_stack):
-            this_tv = f.local_vars.get(constants.PARAM_THIS)
+            this_tv = f.local_vars.get(VarName(constants.PARAM_THIS))
             if this_tv is None:
                 continue
             addr = self._heap_addr(this_tv.value)
