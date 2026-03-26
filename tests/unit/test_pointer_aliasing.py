@@ -38,6 +38,7 @@ from interpreter.vm.executor import (
     _handle_unop,
     _default_handler_context,
 )
+from interpreter.var_name import VarName
 
 _CTX = _default_handler_context()
 
@@ -107,10 +108,10 @@ class TestAddressOfHandler:
         assert ptr.offset == 0
 
         # The variable should be aliased
-        assert "x" in vm.current_frame.var_heap_aliases
+        assert VarName("x") in vm.current_frame.var_heap_aliases
 
         # The heap object should hold the original value
-        alias_ptr = vm.current_frame.var_heap_aliases["x"]
+        alias_ptr = vm.current_frame.var_heap_aliases[VarName("x")]
         assert vm.heap[alias_ptr.base].fields["0"].value == 42
 
     def test_second_address_of_returns_same_pointer(self):
@@ -162,7 +163,7 @@ class TestAliasAwareLoadStore:
         self._promote(vm, "x")
 
         # Directly modify the heap to simulate *ptr = 99
-        alias = vm.current_frame.var_heap_aliases["x"]
+        alias = vm.current_frame.var_heap_aliases[VarName("x")]
         vm.heap[alias.base].fields["0"] = typed_from_runtime(99)
 
         inst = _make_inst(Opcode.LOAD_VAR, result_reg="%val", operands=["x"])
@@ -425,7 +426,7 @@ class TestNestedPointers:
         inst1 = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=["x"])
         _apply(vm, _handle_address_of(inst1, vm, _CTX))
         # Store ptr as a local variable (keep as TypedValue)
-        vm.current_frame.local_vars["ptr"] = vm.current_frame.registers[
+        vm.current_frame.local_vars[VarName("ptr")] = vm.current_frame.registers[
             Register("%ptr")
         ]
 

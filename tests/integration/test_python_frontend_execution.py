@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 class TestPythonFutureImportExecution:
@@ -16,7 +17,7 @@ class TestPythonFutureImportExecution:
             max_steps=200,
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
-        assert local_vars["answer"] == 42
+        assert local_vars[VarName("answer")] == 42
 
     def test_future_import_with_arithmetic(self):
         """Future import followed by arithmetic should not interfere."""
@@ -28,4 +29,4 @@ answer = y
 """
         vm = run(source, language=Language.PYTHON, max_steps=200)
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
-        assert local_vars["answer"] == 15
+        assert local_vars[VarName("answer")] == 15

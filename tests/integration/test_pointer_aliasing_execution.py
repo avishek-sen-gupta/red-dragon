@@ -12,6 +12,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_c(source: str, max_steps: int = 300):
@@ -35,7 +36,7 @@ int *ptr = &x;
 *ptr = 99;
 int answer = x;
 """)
-        assert local_vars["answer"] == 99
+        assert local_vars[VarName("answer")] == 99
 
     def test_read_through_pointer(self):
         """*ptr should read the value of x."""
@@ -44,7 +45,7 @@ int x = 42;
 int *ptr = &x;
 int answer = *ptr;
 """)
-        assert local_vars["answer"] == 42
+        assert local_vars[VarName("answer")] == 42
 
     def test_modify_original_visible_through_pointer(self):
         """Changing x after &x should be visible through *ptr."""
@@ -54,7 +55,7 @@ int *ptr = &x;
 x = 100;
 int answer = *ptr;
 """)
-        assert local_vars["answer"] == 100
+        assert local_vars[VarName("answer")] == 100
 
 
 class TestPointerArithmeticExecution:
@@ -65,7 +66,7 @@ int arr[3] = {10, 20, 30};
 int *ptr = arr;
 int answer = *(ptr + 1);
 """)
-        assert local_vars["answer"] == 20
+        assert local_vars[VarName("answer")] == 20
 
 
 class TestPointerSubtractionExecution:
@@ -78,7 +79,7 @@ int *p2 = arr;
 p2 = p2 + 3;
 int diff = p2 - p1;
 """)
-        assert local_vars["diff"] == 3
+        assert local_vars[VarName("diff")] == 3
 
 
 class TestPointerComparisonExecution:
@@ -90,7 +91,7 @@ int *p1 = arr;
 int *p2 = p1 + 2;
 int lt = p1 < p2;
 """)
-        assert local_vars["lt"] == True
+        assert local_vars[VarName("lt")] == True
 
     def test_pointer_greater_equal(self):
         """p2 >= p1 should be true when p2 points at or after p1."""
@@ -101,8 +102,8 @@ int *p2 = p1 + 1;
 int ge = p2 >= p1;
 int ge_eq = p1 >= p1;
 """)
-        assert local_vars["ge"] == True
-        assert local_vars["ge_eq"] == True
+        assert local_vars[VarName("ge")] == True
+        assert local_vars[VarName("ge_eq")] == True
 
 
 class TestNestedPointerExecution:
@@ -115,7 +116,7 @@ int **pp = &ptr;
 **pp = 99;
 int answer = x;
 """)
-        assert local_vars["answer"] == 99
+        assert local_vars[VarName("answer")] == 99
 
 
 # ── Rust source-level integration tests ──────────────────────────
@@ -129,7 +130,7 @@ let x = 42;
 let ptr = &x;
 let answer = *ptr;
 """)
-        assert local_vars["answer"] == 42
+        assert local_vars[VarName("answer")] == 42
 
 
 class TestRustMutableReferenceWrite:
@@ -141,7 +142,7 @@ let ptr = &mut x;
 *ptr = 99;
 let answer = x;
 """)
-        assert local_vars["answer"] == 99
+        assert local_vars[VarName("answer")] == 99
 
     def test_modify_original_visible_through_reference(self):
         """Changing x after &x should be visible through *ptr."""
@@ -151,4 +152,4 @@ let ptr = &x;
 x = 100;
 let answer = *ptr;
 """)
-        assert local_vars["answer"] == 100
+        assert local_vars[VarName("answer")] == 100

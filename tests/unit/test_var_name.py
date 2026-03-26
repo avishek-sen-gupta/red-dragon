@@ -31,16 +31,15 @@ class TestVarName:
         assert VarName("x") == VarName("x")
         assert VarName("x") != VarName("y")
 
-    def test_equality_with_string_bridge(self):
-        assert VarName("x") == "x"
-        assert VarName("x") != "y"
+    def test_not_equal_to_string(self):
+        assert VarName("x") != "x"
 
-    def test_hash_consistent_with_str(self):
-        assert hash(VarName("x")) == hash("x")
+    def test_hash(self):
+        assert hash(VarName("x")) == hash(VarName("x"))
 
-    def test_dict_lookup_with_str_key(self):
+    def test_dict_lookup_with_varname_key(self):
         d = {VarName("x"): 42}
-        assert d["x"] == 42
+        assert d[VarName("x")] == 42
 
     def test_contains(self):
         assert "__" in VarName("__cobol_x")

@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_rust(source: str, max_steps: int = 300):
@@ -24,7 +25,7 @@ let r = match x {
     n => n + 1,
 };
 """)
-        assert local_vars["r"] == 6
+        assert local_vars[VarName("r")] == 6
 
 
 class TestRustPatternMatchingOrPattern:
@@ -37,7 +38,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
 
 class TestRustPatternMatchingSomeDestructuring:
@@ -50,7 +51,7 @@ let r = match opt {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 5
+        assert local_vars[VarName("r")] == 5
 
 
 class TestRustIfLet:
@@ -60,7 +61,7 @@ class TestRustIfLet:
 let x = 42;
 let result = if let n = x { n + 1 } else { 0 };
 """)
-        assert local_vars["result"] == 43
+        assert local_vars[VarName("result")] == 43
 
     def test_if_let_capture_no_else(self):
         """if let n = x { n + 1 } with no else branch — result is n+1."""
@@ -68,7 +69,7 @@ let result = if let n = x { n + 1 } else { 0 };
 let x = 7;
 let result = if let n = x { n * 2 } else { 0 };
 """)
-        assert local_vars["result"] == 14
+        assert local_vars[VarName("result")] == 14
 
     def test_if_let_some_match(self):
         """if let Some(v) = Some(5) should bind v to 5."""
@@ -76,7 +77,7 @@ let result = if let n = x { n * 2 } else { 0 };
 let opt = Some(5);
 let result = if let Some(v) = opt { v } else { 0 };
 """)
-        assert local_vars["result"] == 5
+        assert local_vars[VarName("result")] == 5
 
     def test_if_let_no_match(self):
         """if let Some(v) = expr where expr is not Some should take else branch."""
@@ -84,7 +85,7 @@ let result = if let Some(v) = opt { v } else { 0 };
 let x = 42;
 let result = if let Some(v) = x { v } else { -1 };
 """)
-        assert local_vars["result"] == -1
+        assert local_vars[VarName("result")] == -1
 
 
 class TestRustPatternMatchingTuple:
@@ -97,7 +98,7 @@ let r = match pair {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 7
+        assert local_vars[VarName("r")] == 7
 
 
 class TestRustPatternMatchingStruct:
@@ -110,7 +111,7 @@ let r = match p {
     Point { x, y } => x + y,
 };
 """)
-        assert local_vars["r"] == 7
+        assert local_vars[VarName("r")] == 7
 
 
 class TestRustPatternMatchingNested:
@@ -123,7 +124,7 @@ let r = match opt {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 3
+        assert local_vars[VarName("r")] == 3
 
 
 class TestRustPatternMatchingScopedIdentifier:
@@ -137,7 +138,7 @@ let r = match c {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 1
+        assert local_vars[VarName("r")] == 1
 
 
 class TestRustPatternMatchingMultipleLiteralArms:
@@ -152,7 +153,7 @@ let r = match x {
     _ => 0,
 };
 """)
-        assert local_vars["r"] == 30
+        assert local_vars[VarName("r")] == 30
 
 
 class TestRustPatternMatchingNestedOrWithWildcard:
@@ -166,7 +167,7 @@ let r = match x {
     _ => 3,
 };
 """)
-        assert local_vars["r"] == 3
+        assert local_vars[VarName("r")] == 3
 
 
 class TestRustPatternMatchingGuardWithCaptureBinding:
@@ -179,7 +180,7 @@ let r = match x {
     n => n,
 };
 """)
-        assert local_vars["r"] == 30
+        assert local_vars[VarName("r")] == 30
 
 
 class TestRustIfLetLiteralPattern:
@@ -189,7 +190,7 @@ class TestRustIfLetLiteralPattern:
 let x = 42;
 let result = if let n = x { n + 1 } else { 0 };
 """)
-        assert local_vars["result"] == 43
+        assert local_vars[VarName("result")] == 43
 
 
 class TestRustPatternMatchingGuard:
@@ -202,7 +203,7 @@ let r = match x {
     _ => -1,
 };
 """)
-        assert local_vars["r"] == 1
+        assert local_vars[VarName("r")] == 1
 
     def test_guard_clause_no_match(self):
         """match -3 { n if n > 0 => 1, _ => -1 } should produce -1."""
@@ -213,7 +214,7 @@ let r = match x {
     _ => -1,
 };
 """)
-        assert local_vars["r"] == -1
+        assert local_vars[VarName("r")] == -1
 
 
 class TestRustWhileLet:
@@ -231,7 +232,7 @@ while let n = counter {
 """,
             max_steps=500,
         )
-        assert local_vars["sum"] == 6
+        assert local_vars[VarName("sum")] == 6
 
     def test_while_let_some_single_iteration(self):
         """while let Some(v) = opt exits after first iteration when opt is reassigned."""
@@ -246,7 +247,7 @@ while let Some(v) = opt {
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
     def test_while_let_some_multiple_iterations(self):
         """while let Some(v) loops while subject remains Some, accumulating values."""
@@ -261,7 +262,7 @@ while let Some(v) = if count > 0 { Some(count) } else { 0 } {
 """,
             max_steps=1000,
         )
-        assert local_vars["sum"] == 6
+        assert local_vars[VarName("sum")] == 6
 
     def test_while_let_immediate_exit(self):
         """while let Some(v) = non_option should exit immediately."""
@@ -275,7 +276,7 @@ while let Some(v) = x {
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == -1
+        assert local_vars[VarName("r")] == -1
 
     def test_while_let_tuple_destructuring(self):
         """while let (a, b) = pair destructures tuple each iteration."""
@@ -291,7 +292,7 @@ while let Some(v) = if sum < 5 { Some(pair) } else { 0 } {
 """,
             max_steps=1000,
         )
-        assert local_vars["sum"] == 8
+        assert local_vars[VarName("sum")] == 8
 
 
 class TestRustLetChain:
@@ -305,7 +306,7 @@ let r = if let Some(x) = a && let Some(y) = b { x + y } else { 0 };
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == 7
+        assert local_vars[VarName("r")] == 7
 
     def test_let_chain_first_fails(self):
         """If first let condition fails, take else branch."""
@@ -317,7 +318,7 @@ let r = if let Some(x) = a && let Some(y) = b { x + y } else { -1 };
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == -1
+        assert local_vars[VarName("r")] == -1
 
     def test_let_chain_second_fails(self):
         """If second let condition fails, take else branch."""
@@ -329,7 +330,7 @@ let r = if let Some(x) = a && let Some(y) = b { x + y } else { -1 };
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == -1
+        assert local_vars[VarName("r")] == -1
 
     def test_let_chain_both_fail(self):
         """If both conditions fail, take else branch."""
@@ -341,7 +342,7 @@ let r = if let Some(x) = a && let Some(y) = b { x + y } else { -1 };
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == -1
+        assert local_vars[VarName("r")] == -1
 
     def test_let_chain_three_conditions(self):
         """Three-way let chain: all must match."""
@@ -354,7 +355,7 @@ let r = if let Some(x) = a && let Some(y) = b && let Some(z) = c { x + y + z } e
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == 6
+        assert local_vars[VarName("r")] == 6
 
     def test_let_chain_no_else(self):
         """Let chain with no else branch — result is body value when matched."""
@@ -369,7 +370,7 @@ if let Some(x) = a && let Some(y) = b {
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == 30
+        assert local_vars[VarName("r")] == 30
 
 
 class TestRustReferencePattern:
@@ -386,7 +387,7 @@ let result = match r {
 """,
             max_steps=300,
         )
-        assert local_vars["result"] == 43
+        assert local_vars[VarName("result")] == 43
 
     def test_if_let_ref_capture(self):
         """if let &val = &x should dereference and bind val."""
@@ -398,7 +399,7 @@ let result = if let &val = r { val * 2 } else { 0 };
 """,
             max_steps=300,
         )
-        assert local_vars["result"] == 20
+        assert local_vars[VarName("result")] == 20
 
     def test_match_ref_literal(self):
         """match &x { &42 => 1, _ => 0 } should dereference and compare literal."""
@@ -413,7 +414,7 @@ let result = match r {
 """,
             max_steps=300,
         )
-        assert local_vars["result"] == 1
+        assert local_vars[VarName("result")] == 1
 
     def test_match_ref_wildcard(self):
         """match &x { &_ => 1 } should dereference and match wildcard."""
@@ -427,7 +428,7 @@ let result = match r {
 """,
             max_steps=300,
         )
-        assert local_vars["result"] == 1
+        assert local_vars[VarName("result")] == 1
 
     def test_match_ref_deref_in_body(self):
         """match &x { val => *val } should bind reference then deref in body."""
@@ -441,7 +442,7 @@ let result = match r {
 """,
             max_steps=300,
         )
-        assert local_vars["result"] == 5
+        assert local_vars[VarName("result")] == 5
 
 
 class TestRustSlicePattern:
@@ -457,7 +458,7 @@ let r = match arr {
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == 6
+        assert local_vars[VarName("r")] == 6
 
     def test_slice_first_with_rest(self):
         """match [1,2,3] { [first, ..] => first } should produce 1."""
@@ -471,7 +472,7 @@ let r = match arr {
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == 1
+        assert local_vars[VarName("r")] == 1
 
     def test_slice_empty(self):
         """match [] { [] => 1, _ => 0 } should match empty array."""
@@ -485,7 +486,7 @@ let r = match arr {
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == 1
+        assert local_vars[VarName("r")] == 1
 
     def test_slice_wildcards_and_capture(self):
         """match [1,2,3] { [_, _, third] => third } should produce 3."""
@@ -499,4 +500,4 @@ let r = match arr {
 """,
             max_steps=500,
         )
-        assert local_vars["r"] == 3
+        assert local_vars[VarName("r")] == 3

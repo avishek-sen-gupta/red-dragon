@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     InstructionBase,
     CallFunction,
@@ -157,21 +158,21 @@ def _try_class_constructor_call(
         )
 
     params = registry.func_params.get(init_label, [])
-    new_vars: dict[str, Any] = {}
+    new_vars: dict[VarName, Any] = {}
     # Python emits self, Java/C#/Kotlin/Scala/C++ emit this as explicit first param
     has_explicit_self = bool(params) and params[0] in constants.SELF_PARAM_NAMES
     if has_explicit_self:
         # Explicit self/this: first param is self/this, rest are constructor args
-        new_vars[params[0]] = ptr_tv
+        new_vars[VarName(params[0])] = ptr_tv
         for i, arg in enumerate(args):
             if i + 1 < len(params):
-                new_vars[params[i + 1]] = arg
+                new_vars[VarName(params[i + 1])] = arg
     else:
         # Java/C++/C#-style: this is implicit, all params are constructor args
-        new_vars[constants.PARAM_THIS] = ptr_tv
+        new_vars[VarName(constants.PARAM_THIS)] = ptr_tv
         for i, arg in enumerate(args):
             if i < len(params):
-                new_vars[params[i]] = arg
+                new_vars[VarName(params[i])] = arg
 
     return ExecutionResult.success(
         StateUpdate(
@@ -210,18 +211,23 @@ def _try_user_function_call(
         return ExecutionResult.not_handled()
 
     params = registry.func_params.get(flabel, [])
-    param_vars = {params[i]: arg for i, arg in enumerate(args) if i < len(params)}
+    param_vars = {
+        VarName(params[i]): arg for i, arg in enumerate(args) if i < len(params)
+    }
     # Inject 'arguments' array so rest params can slice it
     args_result = _builtin_array_of(list(args), vm)
-    param_vars["arguments"] = args_result.value
+    param_vars[VarName("arguments")] = args_result.value
 
     # Inject captured closure variables; parameter bindings take priority
     closure_env: ClosureEnvironment | None = None
-    captured: dict[str, Any] = {}
+    captured: dict[VarName, Any] = {}
     if func_val.closure_id:
         closure_env = vm.closures.get(func_val.closure_id)
         if closure_env:
-            captured = closure_env.bindings
+            captured = {
+                VarName(k) if isinstance(k, str) else k: v
+                for k, v in closure_env.bindings.items()
+            }
 
     new_vars = dict(captured) if captured else {}
     new_vars.update(param_vars)
@@ -229,7 +235,11 @@ def _try_user_function_call(
         logger.debug("Injecting closure vars for %s: %s", fname, list(captured.keys()))
 
     closure_env_id = func_val.closure_id if closure_env else ""
-    captured_var_names = list(captured.keys()) if closure_env else []
+    captured_var_names = (
+        [VarName(k) if isinstance(k, str) else k for k in captured.keys()]
+        if closure_env
+        else []
+    )
 
     return ExecutionResult.success(
         StateUpdate(
@@ -299,9 +309,10 @@ def _handle_call_function(
 
     # 2. Look up the function/class via scope chain
     func_val = ""
+    lookup_key = VarName(base_name) if isinstance(base_name, str) else base_name
     for f in reversed(vm.call_stack):
-        if base_name in f.local_vars:
-            func_val = f.local_vars[base_name].value
+        if lookup_key in f.local_vars:
+            func_val = f.local_vars[lookup_key].value
             break
     if not func_val:
         # Unknown function — resolve via configured strategy
@@ -395,9 +406,10 @@ def _handle_call_ctor(
 
     # Look up the ClassRef via scope chain
     func_val = ""
+    ctor_key = VarName(func_name) if isinstance(func_name, str) else func_name
     for f in reversed(vm.call_stack):
-        if func_name in f.local_vars:
-            func_val = f.local_vars[func_name].value
+        if ctor_key in f.local_vars:
+            func_val = f.local_vars[ctor_key].value
             break
     if not func_val:
         return ctx.call_resolver.resolve_call(
@@ -577,15 +589,15 @@ def _handle_call_method(
             )
 
     params = ctx.registry.func_params.get(func_label, [])
-    new_vars: dict[str, Any] = {}
+    new_vars: dict[VarName, Any] = {}
     if params:
-        new_vars[params[0]] = obj_val
+        new_vars[VarName(params[0])] = obj_val
     for i, arg in enumerate(args):
         if i + 1 < len(params):
-            new_vars[params[i + 1]] = arg
+            new_vars[VarName(params[i + 1])] = arg
     # Inject 'arguments' array (explicit args only, not 'this')
     args_result = _builtin_array_of(list(args), vm)
-    new_vars["arguments"] = typed(args_result.value, UNKNOWN)
+    new_vars[VarName("arguments")] = typed(args_result.value, UNKNOWN)
 
     return ExecutionResult.success(
         StateUpdate(

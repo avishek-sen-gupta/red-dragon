@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_pascal(source: str, max_steps: int = 500) -> tuple:
@@ -37,7 +38,7 @@ begin
   foo.FName := 'Alice';
   answer := foo.Name;
 end.""")
-        assert vars_["answer"] == "Alice"
+        assert vars_[VarName("answer")] == "Alice"
 
     def test_field_write_property_stores_to_backing_field(self):
         """foo.Name := 'x' with field-targeted write should store to FName."""
@@ -58,7 +59,7 @@ begin
   foo.Name := 'Bob';
   answer := foo.FName;
 end.""")
-        assert vars_["answer"] == "Bob"
+        assert vars_[VarName("answer")] == "Bob"
 
     def test_method_write_property_calls_setter_procedure(self):
         """foo.Name := 'x' should call SetName which stores to self.FName."""
@@ -89,7 +90,7 @@ begin
 end.""",
             max_steps=1000,
         )
-        assert vars_["answer"] == "Charlie"
+        assert vars_[VarName("answer")] == "Charlie"
 
     def test_read_only_property_returns_value(self):
         """Read-only property (no write accessor) returns backing field value."""
@@ -110,7 +111,7 @@ begin
   foo.FValue := 42;
   answer := foo.Value;
 end.""")
-        assert vars_["answer"] == 42
+        assert vars_[VarName("answer")] == 42
 
     def test_class_without_properties_regression(self):
         """Class without properties should still work (regression guard)."""
@@ -131,4 +132,4 @@ begin
   p.Y := 20;
   answer := p.X + p.Y;
 end.""")
-        assert vars_["answer"] == 30
+        assert vars_[VarName("answer")] == 30

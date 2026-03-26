@@ -28,6 +28,7 @@ from interpreter.vm.vm_types import (
     StateUpdate,
     VMState,
 )
+from interpreter.var_name import VarName
 
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),
@@ -178,7 +179,7 @@ class TestApplyUpdateStoresTypedValue:
             type_hint=None, fields={"0": typed_from_runtime(0)}
         )
         ptr = Pointer(base="mem_0", offset=0)
-        vm.current_frame.var_heap_aliases["x"] = ptr
+        vm.current_frame.var_heap_aliases[VarName("x")] = ptr
         tv = typed(99, scalar(TypeName.INT))
         update = StateUpdate(var_writes={"x": tv}, reasoning="test")
         apply_update(vm, update, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
@@ -207,7 +208,7 @@ class TestHeapFieldsStoreTypedValue:
         """_handle_address_of stores TypedValue in promoted heap object."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.current_frame.local_vars["x"] = typed(42, scalar(TypeName.INT))
+        vm.current_frame.local_vars[VarName("x")] = typed(42, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.ADDRESS_OF, operands=["x"], result_reg="%0")
         _handle_address_of(inst, vm, _CTX)
         heap_objs = [obj for obj in vm.heap.values() if obj.fields.get("0") is not None]
@@ -260,7 +261,7 @@ class TestHeapFieldsStoreTypedValue:
         original_tv = typed(77, scalar(TypeName.INT))
         vm.heap["mem_0"] = HeapObject(fields={"0": original_tv})
         ptr = Pointer(base="mem_0", offset=0)
-        vm.current_frame.var_heap_aliases["x"] = ptr
+        vm.current_frame.var_heap_aliases[VarName("x")] = ptr
         inst = IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="%0")
         result = _handle_load_var(inst, vm, _CTX)
         loaded_tv = result.update.register_writes[Register("%0")]

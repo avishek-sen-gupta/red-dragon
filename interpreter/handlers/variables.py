@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     InstructionBase,
     Const,
@@ -182,7 +183,7 @@ def _handle_symbolic(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
     # If this is a parameter and the value was pre-populated by a call,
     # use the concrete value instead of creating a symbolic.
     if isinstance(hint, str) and hint.startswith(constants.PARAM_PREFIX):
-        param_name = hint[len(constants.PARAM_PREFIX) :]
+        param_name = VarName(hint[len(constants.PARAM_PREFIX) :])
         if param_name in frame.local_vars:
             stored = frame.local_vars[param_name]
             return ExecutionResult.success(
