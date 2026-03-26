@@ -11,6 +11,7 @@ from functools import reduce
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.register import Register
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -183,7 +184,7 @@ def _emit_binop(ctx: TreeSitterEmitContext, op: str, left: str, right: str) -> R
     ctx.emit_inst(
         Binop(
             result_reg=combined,
-            operator=op,
+            operator=resolve_binop(op),
             left=str(left),
             right=str(right),
         ),
@@ -248,7 +249,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 Binop(
                     result_reg=cmp_reg,
-                    operator="==",
+                    operator=resolve_binop("=="),
                     left=str(subject_reg),
                     right=str(const_reg),
                 ),
@@ -390,7 +391,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 Binop(
                     result_reg=cmp_reg,
-                    operator="==",
+                    operator=resolve_binop("=="),
                     left=str(subject_reg),
                     right=str(reg),
                 ),
@@ -403,7 +404,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 Binop(
                     result_reg=cmp_reg,
-                    operator=op,
+                    operator=resolve_binop(op),
                     left=str(subject_reg),
                     right=str(const_reg),
                 ),
@@ -416,7 +417,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 Binop(
                     result_reg=and_reg,
-                    operator="and",
+                    operator=resolve_binop("and"),
                     left=str(left_reg),
                     right=str(right_reg),
                 ),
@@ -428,7 +429,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 Unop(
                     result_reg=neg_reg,
-                    operator="not",
+                    operator=resolve_unop("not"),
                     operand=str(inner_reg),
                 ),
             )
@@ -662,7 +663,7 @@ def _compile_refutable_case(
         ctx.emit_inst(
             Binop(
                 result_reg=combined,
-                operator="&&",
+                operator=resolve_binop("&&"),
                 left=str(test_reg),
                 right=str(guard_reg),
             ),

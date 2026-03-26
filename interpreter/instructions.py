@@ -290,7 +290,7 @@ class Binop(InstructionBase):
     """BINOP: binary operation (operator, left register, right register)."""
 
     result_reg: Register = NO_REGISTER
-    operator: BinopKind | str = ""
+    operator: BinopKind = BinopKind.ADD
     left: Register = NO_REGISTER
     right: Register = NO_REGISTER
 
@@ -316,7 +316,7 @@ class Unop(InstructionBase):
     """UNOP: unary operation (operator, operand register)."""
 
     result_reg: Register = NO_REGISTER
-    operator: UnopKind | str = ""
+    operator: UnopKind = UnopKind.NEG
     operand: Register = NO_REGISTER
 
     # ── IRInstruction-compat fields ──
@@ -1013,7 +1013,7 @@ def _binop(inst: IRInstruction) -> Binop:
     raw_op = getattr(ops[0], "value", str(ops[0])) if ops else ""
     return Binop(
         result_reg=inst.result_reg,
-        operator=resolve_binop(raw_op),
+        operator=resolve_binop(raw_op) if raw_op else BinopKind.ADD,
         left=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         right=Register(str(ops[2])) if len(ops) >= 3 else NO_REGISTER,
         source_location=inst.source_location,
@@ -1025,7 +1025,7 @@ def _unop(inst: IRInstruction) -> Unop:
     raw_op = getattr(ops[0], "value", str(ops[0])) if ops else ""
     return Unop(
         result_reg=inst.result_reg,
-        operator=resolve_unop(raw_op),
+        operator=resolve_unop(raw_op) if raw_op else UnopKind.NEG,
         operand=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         source_location=inst.source_location,
     )

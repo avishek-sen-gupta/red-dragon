@@ -2,6 +2,7 @@
 
 from interpreter.instructions import *
 from interpreter.ir import CodeLabel, NO_LABEL, Opcode
+from interpreter.operator_kind import BinopKind, UnopKind
 from interpreter.register import Register, NO_REGISTER
 
 
@@ -13,8 +14,8 @@ class TestOpcodeProperty:
             (DeclVar(name="x", value_reg="%0"), Opcode.DECL_VAR),
             (StoreVar(name="x", value_reg="%0"), Opcode.STORE_VAR),
             (Symbolic(hint="p"), Opcode.SYMBOLIC),
-            (Binop(operator="+", left="%0", right="%1"), Opcode.BINOP),
-            (Unop(operator="!", operand="%0"), Opcode.UNOP),
+            (Binop(operator=BinopKind.ADD, left="%0", right="%1"), Opcode.BINOP),
+            (Unop(operator=UnopKind.BANG, operand="%0"), Opcode.UNOP),
             (CallFunction(func_name="f"), Opcode.CALL_FUNCTION),
             (CallMethod(obj_reg="%0", method_name="m"), Opcode.CALL_METHOD),
             (CallUnknown(target_reg="%0"), Opcode.CALL_UNKNOWN),
@@ -92,7 +93,7 @@ class TestLabelDefault:
     def test_no_label_types(self):
         for inst in [
             Const(value="42"),
-            Binop(operator="+"),
+            Binop(operator=BinopKind.ADD),
             CallFunction(func_name="f"),
             StoreVar(name="x", value_reg="%0"),
         ]:
@@ -105,7 +106,7 @@ class TestBranchTargetsDefault:
     def test_no_branch_targets(self):
         for inst in [
             Const(value="42"),
-            Binop(operator="+"),
+            Binop(operator=BinopKind.ADD),
             Return_(),
             Label_(label=CodeLabel("entry")),
         ]:
@@ -121,7 +122,11 @@ class TestOperandsProperty:
         assert Const(value="42").operands == ["42"]
 
     def test_binop(self):
-        assert Binop(operator="+", left="%0", right="%1").operands == ["+", "%0", "%1"]
+        assert Binop(operator=BinopKind.ADD, left="%0", right="%1").operands == [
+            "+",
+            "%0",
+            "%1",
+        ]
 
     def test_call_function_no_args(self):
         assert CallFunction(func_name="f").operands == ["f"]

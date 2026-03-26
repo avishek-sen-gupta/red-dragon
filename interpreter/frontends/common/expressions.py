@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.ir import SpreadArguments
 from interpreter.types.type_expr import scalar
 from interpreter.register import Register
@@ -163,7 +164,7 @@ def lower_binop(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         Binop(
             result_reg=reg,
-            operator=op,
+            operator=resolve_binop(op),
             left=str(lhs_reg),
             right=str(rhs_reg),
         ),
@@ -185,7 +186,7 @@ def lower_comparison(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         Binop(
             result_reg=reg,
-            operator=op,
+            operator=resolve_binop(op),
             left=str(lhs_reg),
             right=str(rhs_reg),
         ),
@@ -206,7 +207,7 @@ def lower_unop(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         Unop(
             result_reg=reg,
-            operator=op,
+            operator=resolve_unop(op),
             operand=str(operand_reg),
         ),
         node=node,
@@ -395,7 +396,7 @@ def lower_interpolated_string_parts(
         ctx.emit_inst(
             Binop(
                 result_reg=new_reg,
-                operator="+",
+                operator=resolve_binop("+"),
                 left=str(result),
                 right=str(part),
             ),
@@ -420,7 +421,7 @@ def lower_update_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         Binop(
             result_reg=result_reg,
-            operator=op,
+            operator=resolve_binop(op),
             left=str(operand_reg),
             right=str(one_reg),
         ),

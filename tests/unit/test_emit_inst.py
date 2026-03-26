@@ -15,6 +15,7 @@ from interpreter.instructions import (
     Label_,
 )
 from interpreter.ir import CodeLabel, Opcode, SourceLocation
+from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
 
@@ -46,7 +47,9 @@ class TestEmitInst:
 
     def test_returns_the_typed_instruction(self):
         ctx = _make_ctx()
-        inst = Binop(result_reg=Register("%0"), operator="+", left="%1", right="%2")
+        inst = Binop(
+            result_reg=Register("%0"), operator=BinopKind.ADD, left="%1", right="%2"
+        )
         result = ctx.emit_inst(inst)
         assert isinstance(result, Binop)
         assert result.operator == "+"

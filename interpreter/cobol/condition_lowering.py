@@ -16,6 +16,7 @@ from interpreter.cobol.condition_name import ConditionValue
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import Binop, Const
 from interpreter.register import Register
 
@@ -43,7 +44,7 @@ def _emit_single_value_test(
         ctx.emit_inst(
             Binop(
                 result_reg=ge_result,
-                operator=">=",
+                operator=resolve_binop(">="),
                 left=Register(str(parent_reg)),
                 right=Register(str(from_reg)),
             )
@@ -58,7 +59,7 @@ def _emit_single_value_test(
         ctx.emit_inst(
             Binop(
                 result_reg=le_result,
-                operator="<=",
+                operator=resolve_binop("<="),
                 left=Register(str(parent_reg2)),
                 right=Register(str(to_reg)),
             )
@@ -68,7 +69,7 @@ def _emit_single_value_test(
         ctx.emit_inst(
             Binop(
                 result_reg=and_result,
-                operator="and",
+                operator=resolve_binop("and"),
                 left=ge_result,
                 right=le_result,
             )
@@ -80,7 +81,7 @@ def _emit_single_value_test(
     ctx.emit_inst(
         Binop(
             result_reg=eq_result,
-            operator="==",
+            operator=resolve_binop("=="),
             left=Register(str(parent_reg)),
             right=Register(str(value_reg)),
         )
@@ -103,7 +104,7 @@ def _emit_or(ctx: EmitContext, left_reg: str, right_reg: str) -> str:
     ctx.emit_inst(
         Binop(
             result_reg=result,
-            operator="or",
+            operator=resolve_binop("or"),
             left=Register(str(left_reg)),
             right=Register(str(right_reg)),
         )
@@ -191,7 +192,7 @@ def lower_condition(
         ctx.emit_inst(
             Binop(
                 result_reg=result,
-                operator=op,
+                operator=resolve_binop(op),
                 left=Register(str(left_reg)),
                 right=Register(str(right_reg)),
             )
@@ -224,7 +225,7 @@ def lower_expr_node(
         ctx.emit_inst(
             Binop(
                 result_reg=result_reg,
-                operator=node.op,
+                operator=resolve_binop(node.op),
                 left=Register(str(left_reg)),
                 right=Register(str(right_reg)),
             )
