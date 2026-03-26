@@ -17,6 +17,7 @@ from interpreter.instructions import (
 from interpreter.ir import CodeLabel, Opcode, SourceLocation
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 class _NullObserver(FrontendObserver):
@@ -62,7 +63,7 @@ class TestEmitInst:
 
     def test_tracks_decl_var_name(self):
         ctx = _make_ctx()
-        ctx.emit_inst(DeclVar(name="x", value_reg="%0"))
+        ctx.emit_inst(DeclVar(name=VarName("x"), value_reg="%0"))
         assert "x" in ctx._method_declared_names
 
     def test_source_location_from_node(self):

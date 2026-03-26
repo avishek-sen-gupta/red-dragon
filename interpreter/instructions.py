@@ -34,6 +34,7 @@ from interpreter.ir import (
 from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolve_unop
 from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
+from interpreter.var_name import NO_VAR_NAME, VarName
 
 
 def _is_union(origin: object) -> bool:
@@ -205,7 +206,7 @@ class LoadVar(InstructionBase):
     """LOAD_VAR: load a named variable into a register."""
 
     result_reg: Register = NO_REGISTER
-    name: str = ""
+    name: VarName = NO_VAR_NAME
 
     # ── IRInstruction-compat fields ──
     label: CodeLabel = NO_LABEL
@@ -217,14 +218,14 @@ class LoadVar(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.name]
+        return [str(self.name)]
 
 
 @dataclass(frozen=True)
 class DeclVar(InstructionBase):
     """DECL_VAR: declare a variable and assign a value from a register."""
 
-    name: str = ""
+    name: VarName = NO_VAR_NAME
     value_reg: Register = NO_REGISTER
 
     # ── IRInstruction-compat fields ──
@@ -238,14 +239,14 @@ class DeclVar(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.name, str(self.value_reg)]
+        return [str(self.name), str(self.value_reg)]
 
 
 @dataclass(frozen=True)
 class StoreVar(InstructionBase):
     """STORE_VAR: assign to an existing variable from a register."""
 
-    name: str = ""
+    name: VarName = NO_VAR_NAME
     value_reg: Register = NO_REGISTER
 
     # ── IRInstruction-compat fields ──
@@ -259,7 +260,7 @@ class StoreVar(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.name, str(self.value_reg)]
+        return [str(self.name), str(self.value_reg)]
 
 
 @dataclass(frozen=True)
@@ -601,7 +602,7 @@ class AddressOf(InstructionBase):
     """ADDRESS_OF: take address of a named variable."""
 
     result_reg: Register = NO_REGISTER
-    var_name: str = ""
+    var_name: VarName = NO_VAR_NAME
 
     # ── IRInstruction-compat fields ──
     label: CodeLabel = NO_LABEL
@@ -613,7 +614,7 @@ class AddressOf(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.var_name]
+        return [str(self.var_name)]
 
 
 # ── Objects ──────────────────────────────────────────────────────
@@ -977,7 +978,7 @@ def _const(inst: IRInstruction) -> Const:
 def _load_var(inst: IRInstruction) -> LoadVar:
     return LoadVar(
         result_reg=inst.result_reg,
-        name=str(inst.operands[0]) if inst.operands else "",
+        name=VarName(str(inst.operands[0])) if inst.operands else NO_VAR_NAME,
         source_location=inst.source_location,
     )
 
@@ -985,7 +986,7 @@ def _load_var(inst: IRInstruction) -> LoadVar:
 def _decl_var(inst: IRInstruction) -> DeclVar:
     ops = inst.operands
     return DeclVar(
-        name=str(ops[0]) if len(ops) >= 1 else "",
+        name=VarName(str(ops[0])) if len(ops) >= 1 else NO_VAR_NAME,
         value_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         source_location=inst.source_location,
     )
@@ -994,7 +995,7 @@ def _decl_var(inst: IRInstruction) -> DeclVar:
 def _store_var(inst: IRInstruction) -> StoreVar:
     ops = inst.operands
     return StoreVar(
-        name=str(ops[0]) if len(ops) >= 1 else "",
+        name=VarName(str(ops[0])) if len(ops) >= 1 else NO_VAR_NAME,
         value_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         source_location=inst.source_location,
     )
@@ -1165,7 +1166,7 @@ def _store_indirect(inst: IRInstruction) -> StoreIndirect:
 def _address_of(inst: IRInstruction) -> AddressOf:
     return AddressOf(
         result_reg=inst.result_reg,
-        var_name=str(inst.operands[0]) if inst.operands else "",
+        var_name=VarName(str(inst.operands[0])) if inst.operands else NO_VAR_NAME,
         source_location=inst.source_location,
     )
 
