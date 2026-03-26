@@ -13,6 +13,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -60,7 +61,7 @@ def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     text = ctx.node_text(node)
     if text == "field" and ctx._accessor_backing_field:
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadField(
@@ -301,18 +302,18 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     ctx.emit_inst(Label_(label=true_label))
     true_reg = _lower_control_body(ctx, body_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
         false_reg = _lower_control_body(ctx, alt_node)
-        ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -390,7 +391,7 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> Register:
             name_node = next((c for c in subject_var_decl.children if c.is_named), None)
             raw_name = ctx.node_text(name_node) if name_node else "__when_subject"
             var_name = ctx.declare_block_var(raw_name)
-            ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg))
+            ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg))
         else:
             inner = next((c for c in subject_node.children if c.is_named), None)
             if inner:
@@ -414,7 +415,7 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -444,7 +445,7 @@ def _lower_subjectless_when_entry(
         ctx.emit_inst(Label_(label=arm_label))
 
     arm_result = _lower_when_body(ctx, entry)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=arm_result))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=arm_result))
     ctx.emit_inst(Branch(label=end_label))
     ctx.emit_inst(Label_(label=next_label))
 
@@ -577,7 +578,9 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
                         node=child,
                     )
                     ctx.emit_inst(
-                        DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}")
+                        DeclVar(
+                            name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"
+                        )
                     )
 
     # Lambda body children (skip braces, arrow, lambda_parameters)
@@ -685,7 +688,9 @@ def _lower_anon_func_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     ),
                     node=child,
                 )
-                ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+                ctx.emit_inst(
+                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                )
 
 
 def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> Register:
@@ -868,7 +873,7 @@ def _lower_elvis_with_throw(
     )
 
     ctx.emit_inst(Label_(label=non_null_label))
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=left_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=left_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=throw_label))
@@ -877,7 +882,7 @@ def _lower_elvis_with_throw(
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -1006,7 +1011,7 @@ def lower_kotlin_store_target(
         text = ctx.node_text(target)
         if text == "field" and ctx._accessor_backing_field:
             this_reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+            ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
                 StoreField(
                     obj_reg=this_reg,
@@ -1016,7 +1021,7 @@ def lower_kotlin_store_target(
                 node=parent_node,
             )
             return
-        ctx.emit_inst(StoreVar(name=text, value_reg=val_reg), node=parent_node)
+        ctx.emit_inst(StoreVar(name=VarName(text), value_reg=val_reg), node=parent_node)
     elif target.type == KNT.NAVIGATION_EXPRESSION:
         from interpreter.frontends.common.property_accessors import (
             emit_field_store_or_setter,
@@ -1045,7 +1050,7 @@ def lower_kotlin_store_target(
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=ctx.node_text(target), value_reg=val_reg),
+                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == KNT.INDEXING_EXPRESSION:
@@ -1069,7 +1074,7 @@ def lower_kotlin_store_target(
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=ctx.node_text(target), value_reg=val_reg),
+                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == KNT.DIRECTLY_ASSIGNABLE_EXPRESSION:
@@ -1136,12 +1141,13 @@ def lower_kotlin_store_target(
                 lower_kotlin_store_target(ctx, inner, val_reg, parent_node)
             else:
                 ctx.emit_inst(
-                    StoreVar(name=ctx.node_text(target), value_reg=val_reg),
+                    StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
                     node=parent_node,
                 )
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
 
 
@@ -1155,7 +1161,7 @@ def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.node_text(named_children[-1]) if named_children else ctx.node_text(node)
     )
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=func_name), node=node)
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(func_name)), node=node)
     return reg
 
 

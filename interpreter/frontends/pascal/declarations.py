@@ -18,6 +18,7 @@ from interpreter.frontends.common.property_accessors import (
     emit_field_store_or_setter,
 )
 from interpreter.types.type_expr import EnumType, scalar
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -91,7 +92,7 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=ctx.node_text(target), value_reg=val_reg),
+                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
                 node=node,
             )
     elif target.type == PascalNodeType.EXPR_DOT:
@@ -118,7 +119,9 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
         if current_function_name and target_name == current_function_name:
             ctx.emit_inst(Return_(value_reg=val_reg), node=node)
         else:
-            ctx.emit_inst(StoreVar(name=target_name, value_reg=val_reg), node=node)
+            ctx.emit_inst(
+                StoreVar(name=VarName(target_name), value_reg=val_reg), node=node
+            )
 
 
 def lower_pascal_decl_vars(ctx: TreeSitterEmitContext, node) -> None:
@@ -149,7 +152,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
         record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
         if elem_type in record_types:
             _populate_array_with_records(ctx, arr_reg, array_size, elem_type, node)
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=arr_reg), node=node)
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=arr_reg), node=node)
     else:
         type_name = _pascal_var_type_name(ctx, type_node) if type_node else ""
         type_hint = normalize_type_hint(type_name.lower(), ctx.type_map)
@@ -167,7 +170,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
             )
         else:
             ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
         ctx.seed_var_type(var_name, type_hint)
         pascal_var_types: dict = getattr(ctx, "_pascal_var_types", {})
         if type_name in record_types:
@@ -289,8 +292,12 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
             Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"),
             node=node,
         )
-        ctx.emit_inst(DeclVar(name="this", value_reg=f"%{ctx.reg_counter - 1}"))
-        ctx.emit_inst(DeclVar(name="self", value_reg=f"%{ctx.reg_counter - 1}"))
+        ctx.emit_inst(
+            DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}")
+        )
+        ctx.emit_inst(
+            DeclVar(name=VarName("self"), value_reg=f"%{ctx.reg_counter - 1}")
+        )
 
     if args_node:
         _lower_pascal_params(ctx, args_node)
@@ -312,7 +319,7 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
     is_function = any(c.type == PascalNodeType.K_FUNCTION for c in search_node.children)
     if is_function:
         result_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=result_reg, name="Result"))
+        ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName("Result")))
         ctx.emit_inst(Return_(value_reg=result_reg))
     else:
         none_reg = ctx.fresh_reg()
@@ -324,7 +331,7 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _lower_pascal_params(ctx: TreeSitterEmitContext, args_node) -> None:
@@ -344,7 +351,9 @@ def _lower_pascal_params(ctx: TreeSitterEmitContext, args_node) -> None:
                 ),
                 node=child,
             )
-            ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+            ctx.emit_inst(
+                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+            )
             param_index += 1
 
 
@@ -374,7 +383,7 @@ def _lower_pascal_single_param(
         )
         ctx.seed_register_type(_sym_reg, type_hint)
         ctx.seed_param_type(pname, type_hint)
-        ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+        ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"))
         ctx.seed_var_type(pname, type_hint)
         if default_value_node:
             from interpreter.frontends.common.default_params import (
@@ -425,7 +434,7 @@ def lower_pascal_decl_const(ctx: TreeSitterEmitContext, node) -> None:
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
 
 
 def lower_pascal_decl_types(ctx: TreeSitterEmitContext, node) -> None:
@@ -494,7 +503,7 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=type_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=cls_reg))
 
 
 def _collect_class_field_names(ctx: TreeSitterEmitContext, class_node) -> list[str]:
@@ -522,13 +531,13 @@ def _emit_synthetic_init_for_fields(
 
     sym_reg = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
-    ctx.emit_inst(DeclVar(name="this", value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}"))
 
     for fname in field_names:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
         ctx.emit_inst(StoreField(obj_reg=this_reg, field_name=fname, value_reg=val_reg))
 
     none_reg = ctx.fresh_reg()
@@ -538,7 +547,7 @@ def _emit_synthetic_init_for_fields(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref("__init__", func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name="__init__", value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName("__init__"), value_reg=func_reg))
 
 
 def _lower_pascal_class_section(
@@ -580,7 +589,7 @@ def _lower_pascal_method(ctx: TreeSitterEmitContext, node) -> None:
         Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"),
         node=node,
     )
-    ctx.emit_inst(DeclVar(name="this", value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}"))
 
     if args_node:
         _lower_pascal_params(ctx, args_node)
@@ -656,10 +665,10 @@ def _emit_property_getter(
 
     sym_reg = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
-    ctx.emit_inst(DeclVar(name="this", value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}"))
 
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
 
     if target in field_names:
         result_reg = ctx.fresh_reg()
@@ -682,7 +691,7 @@ def _emit_property_getter(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(getter_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=getter_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(getter_name), value_reg=func_reg))
 
     register_property_accessor(ctx, class_name, prop_name, "get")
 
@@ -704,16 +713,16 @@ def _emit_property_setter(
 
     sym_reg = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
-    ctx.emit_inst(DeclVar(name="this", value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}"))
 
     val_sym = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=val_sym, hint=f"{constants.PARAM_PREFIX}value"))
-    ctx.emit_inst(DeclVar(name="value", value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(DeclVar(name=VarName("value"), value_reg=f"%{ctx.reg_counter - 1}"))
 
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
     val_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=val_reg, name="value"))
+    ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName("value")))
 
     if target in field_names:
         ctx.emit_inst(
@@ -736,7 +745,7 @@ def _emit_property_setter(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(setter_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=setter_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(setter_name), value_reg=func_reg))
 
     register_property_accessor(ctx, class_name, prop_name, "set")
 
@@ -770,8 +779,8 @@ def _lower_pascal_enum(
         # Declare each member as a top-level variable with ordinal value
         ord_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=ord_reg, value=i))
-        ctx.emit_inst(DeclVar(name=member_name, value_reg=ord_reg))
-    ctx.emit_inst(DeclVar(name=type_name, value_reg=obj_reg))
+        ctx.emit_inst(DeclVar(name=VarName(member_name), value_reg=ord_reg))
+    ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=obj_reg))
 
 
 # ---------------------------------------------------------------------------

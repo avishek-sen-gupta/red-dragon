@@ -17,6 +17,7 @@ from interpreter.frontends.go.expressions import (
     lower_go_store_target,
 )
 from interpreter.frontends.go.node_types import GoNodeType
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     DeclVar,
@@ -40,7 +41,7 @@ def lower_short_var_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     for name, val_reg in zip(left_names, right_regs):
         var_name = ctx.declare_block_var(name)
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
 
 
 # -- Go: assignment statement (=) ------------------------------------------
@@ -95,7 +96,7 @@ def lower_go_func_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _lower_go_main_hoisted(ctx: TreeSitterEmitContext, body_node) -> None:
@@ -146,7 +147,7 @@ def lower_go_method_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
@@ -167,7 +168,9 @@ def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 )
                 ctx.seed_register_type(param_reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
-                ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+                ctx.emit_inst(
+                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                )
                 ctx.seed_var_type(pname, type_hint)
         elif child.type == GoNodeType.IDENTIFIER:
             pname = ctx.node_text(child)
@@ -178,7 +181,9 @@ def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ),
                 node=child,
             )
-            ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+            ctx.emit_inst(
+                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+            )
 
 
 # -- Go: type declaration (struct) -----------------------------------------
@@ -201,7 +206,7 @@ def lower_go_type_decl(ctx: TreeSitterEmitContext, node) -> None:
                         Symbolic(result_reg=reg, hint=f"type:{type_name}"),
                         node=node,
                     )
-                    ctx.emit_inst(DeclVar(name=type_name, value_reg=reg))
+                    ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=reg))
 
 
 def _lower_go_struct_type(
@@ -218,7 +223,7 @@ def _lower_go_struct_type(
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=type_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=cls_reg))
 
 
 def _lower_go_interface_type(
@@ -239,7 +244,7 @@ def _lower_go_interface_type(
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=type_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=cls_reg))
 
 
 def _lower_go_interface_method(ctx: TreeSitterEmitContext, method_node) -> None:
@@ -268,7 +273,7 @@ def _lower_go_interface_method(ctx: TreeSitterEmitContext, method_node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=method_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(method_name), value_reg=func_reg))
 
 
 def _extract_go_method_elem_return_type(ctx: TreeSitterEmitContext, method_node) -> str:
@@ -315,21 +320,27 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
         val_regs = lower_expression_list(ctx, value_node)
         for name_node, val_reg in zip(names, val_regs):
             name_str = ctx.declare_block_var(ctx.node_text(name_node))
-            ctx.emit_inst(DeclVar(name=name_str, value_reg=val_reg), node=parent_node)
+            ctx.emit_inst(
+                DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node
+            )
             ctx.seed_var_type(name_str, type_hint)
         # If more names than values (e.g. `var a, b int`), store None for remainder
         for name_node in names[len(val_regs) :]:
             name_str = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-            ctx.emit_inst(DeclVar(name=name_str, value_reg=val_reg), node=parent_node)
+            ctx.emit_inst(
+                DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node
+            )
             ctx.seed_var_type(name_str, type_hint)
     else:
         for name_node in names:
             name_str = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-            ctx.emit_inst(DeclVar(name=name_str, value_reg=val_reg), node=parent_node)
+            ctx.emit_inst(
+                DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node
+            )
             ctx.seed_var_type(name_str, type_hint)
 
 
@@ -378,18 +389,21 @@ def _lower_const_spec(ctx: TreeSitterEmitContext, node, prev_value_node=None) ->
     if name_node and value_node:
         val_reg = ctx.lower_expr(value_node)
         ctx.emit_inst(
-            DeclVar(name=ctx.node_text(name_node), value_reg=val_reg), node=node
+            DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
+            node=node,
         )
     elif name_node and prev_value_node is not None:
         val_reg = ctx.lower_expr(prev_value_node)
         ctx.emit_inst(
-            DeclVar(name=ctx.node_text(name_node), value_reg=val_reg), node=node
+            DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
+            node=node,
         )
     elif name_node:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
         ctx.emit_inst(
-            DeclVar(name=ctx.node_text(name_node), value_reg=val_reg), node=node
+            DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
+            node=node,
         )
 
 

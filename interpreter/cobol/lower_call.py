@@ -12,6 +12,7 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     CallFunction,
     Label_,
@@ -67,7 +68,10 @@ def lower_alter(
     for pt in stmt.proceed_tos:
         target_reg = ctx.const_to_reg(f"para_{pt.target}")
         ctx.emit_inst(
-            StoreVar(name=f"__alter_{pt.source}", value_reg=Register(str(target_reg)))
+            StoreVar(
+                name=VarName(f"__alter_{pt.source}"),
+                value_reg=Register(str(target_reg)),
+            )
         )
         logger.info("ALTER %s TO PROCEED TO %s", pt.source, pt.target)
 

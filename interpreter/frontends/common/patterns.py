@@ -12,6 +12,7 @@ from functools import reduce
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.register import Register
 from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -376,7 +377,7 @@ def compile_pattern_test(
         case ValuePattern(parts=parts):
             # LOAD_VAR first part, then LOAD_FIELD for each remaining part
             reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=reg, name=parts[0]))
+            ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(parts[0])))
             for part in parts[1:]:
                 next_reg = ctx.fresh_reg()
                 ctx.emit_inst(
@@ -469,7 +470,7 @@ def compile_pattern_bindings(
     """Emit IR that binds variables from a matched pattern."""
     match pattern:
         case CapturePattern(name=name):
-            ctx.emit_inst(StoreVar(name=name, value_reg=str(subject_reg)))
+            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=str(subject_reg)))
         case LiteralPattern() | WildcardPattern():
             pass  # no bindings
         case RelationalPattern():
@@ -539,7 +540,7 @@ def compile_pattern_bindings(
                         ),
                     )
                     ctx.emit_inst(
-                        StoreVar(name=star_pat.name, value_reg=str(slice_reg)),
+                        StoreVar(name=VarName(star_pat.name), value_reg=str(slice_reg)),
                     )
                 # After star: computed indices
                 for k, elem_pat in enumerate(elems[star_idx + 1 :]):
@@ -598,10 +599,10 @@ def compile_pattern_bindings(
             ctx.emit_inst(Label_(label=or_done))
         case AsPattern(pattern=inner, name=name):
             compile_pattern_bindings(ctx, subject_reg, inner)
-            ctx.emit_inst(StoreVar(name=name, value_reg=str(subject_reg)))
+            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=str(subject_reg)))
         case StarPattern(name=name):
             if name != "_":
-                ctx.emit_inst(StoreVar(name=name, value_reg=str(subject_reg)))
+                ctx.emit_inst(StoreVar(name=VarName(name), value_reg=str(subject_reg)))
         case DerefPattern(inner=inner):
             # Dereference subject via LOAD_INDIRECT, then bind inner pattern
             deref_reg = ctx.fresh_reg()

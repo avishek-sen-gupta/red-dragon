@@ -22,6 +22,7 @@ from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     InstructionBase,
     Binop,
@@ -453,7 +454,7 @@ class BaseFrontend(Frontend):
     def _lower_identifier(self, node) -> Register:
         reg = self._fresh_reg()
         self._emit_inst(
-            LoadVar(result_reg=reg, name=self._node_text(node)),
+            LoadVar(result_reg=reg, name=VarName(self._node_text(node))),
             node=node,
         )
         return reg
@@ -673,7 +674,7 @@ class BaseFrontend(Frontend):
     def _lower_store_target(self, target, val_reg: str, parent_node):
         if target.type == BaseNodeType.IDENTIFIER:
             self._emit_inst(
-                StoreVar(name=self._node_text(target), value_reg=val_reg),
+                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),
                 node=parent_node,
             )
         elif target.type in (
@@ -712,7 +713,7 @@ class BaseFrontend(Frontend):
         else:
             # Fallback: just store to the text of the target
             self._emit_inst(
-                StoreVar(name=self._node_text(target), value_reg=val_reg),
+                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),
                 node=parent_node,
             )
 
@@ -979,7 +980,7 @@ class BaseFrontend(Frontend):
 
         func_reg = self._fresh_reg()
         self._emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
-        self._emit_inst(DeclVar(name=func_name, value_reg=func_reg), node=node)
+        self._emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)
 
     def _lower_params(self, params_node):
         """Lower function parameters. Override for language-specific param shapes."""
@@ -1005,7 +1006,7 @@ class BaseFrontend(Frontend):
             node=child,
         )
         self._emit_inst(
-            DeclVar(name=pname, value_reg=param_reg),
+            DeclVar(name=VarName(pname), value_reg=param_reg),
             node=child,
         )
 
@@ -1043,7 +1044,7 @@ class BaseFrontend(Frontend):
 
         cls_reg = self._fresh_reg()
         self._emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
-        self._emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+        self._emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     def _lower_raise_or_throw(self, node, keyword: str = "raise"):
         children = [c for c in node.children if c.type != keyword]
@@ -1187,7 +1188,7 @@ class BaseFrontend(Frontend):
             exc_var = clause.get("variable")
             if exc_var:
                 self._emit_inst(
-                    DeclVar(name=exc_var, value_reg=exc_reg),
+                    DeclVar(name=VarName(exc_var), value_reg=exc_reg),
                     node=node,
                 )
             catch_body = clause.get("body")
@@ -1236,7 +1237,9 @@ class BaseFrontend(Frontend):
                 if name_node and value_node:
                     val_reg = self._lower_expr(value_node)
                     self._emit_inst(
-                        DeclVar(name=self._node_text(name_node), value_reg=val_reg),
+                        DeclVar(
+                            name=VarName(self._node_text(name_node)), value_reg=val_reg
+                        ),
                         node=node,
                     )
                 elif name_node:
@@ -1246,6 +1249,8 @@ class BaseFrontend(Frontend):
                         Const(result_reg=val_reg, value=self.NONE_LITERAL),
                     )
                     self._emit_inst(
-                        DeclVar(name=self._node_text(name_node), value_reg=val_reg),
+                        DeclVar(
+                            name=VarName(self._node_text(name_node)), value_reg=val_reg
+                        ),
                         node=node,
                     )
