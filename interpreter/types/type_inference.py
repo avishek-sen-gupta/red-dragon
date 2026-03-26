@@ -624,7 +624,7 @@ def _infer_binop(
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    operator = str(inst.operator)
+    operator = getattr(inst.operator, "value", inst.operator)
     left_hint = ctx.register_types.get(_reg_key(inst.left), UNKNOWN)
     right_hint = ctx.register_types.get(_reg_key(inst.right), UNKNOWN)
     result = type_resolver.resolve_binop(operator, left_hint, right_hint)
@@ -647,7 +647,7 @@ def _infer_unop(
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    operator = str(inst.operator)
+    operator = getattr(inst.operator, "value", inst.operator)
     fixed = _UNOP_FIXED_TYPES.get(operator)
     if fixed:
         ctx.register_types[inst.result_reg] = fixed

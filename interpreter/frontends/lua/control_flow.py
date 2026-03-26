@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.lua.node_types import LuaNodeType
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -169,7 +170,12 @@ def _lower_lua_for_numeric(
     ctx.emit_inst(LoadVar(result_reg=current_reg, name=var_name))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=cond_reg, operator="<=", left=current_reg, right=end_reg)
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<="),
+            left=current_reg,
+            right=end_reg,
+        )
     )
     ctx.emit_inst(
         BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
@@ -188,7 +194,12 @@ def _lower_lua_for_numeric(
     cur_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=cur_reg, name=var_name))
     ctx.emit_inst(
-        Binop(result_reg=next_reg, operator="+", left=cur_reg, right=step_reg)
+        Binop(
+            result_reg=next_reg,
+            operator=resolve_binop("+"),
+            left=cur_reg,
+            right=step_reg,
+        )
     )
     ctx.emit_inst(StoreVar(name=var_name, value_reg=next_reg))
     ctx.emit_inst(Branch(label=loop_label))
@@ -255,7 +266,14 @@ def _lower_lua_for_generic(
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<"),
+            left=idx_reg,
+            right=len_reg,
+        )
+    )
     ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
     ctx.emit_inst(Label_(label=body_label))
@@ -279,7 +297,11 @@ def _lower_lua_for_generic(
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
+        )
+    )
     ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
@@ -304,7 +326,8 @@ def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
     # repeat-until: loop continues while condition is FALSE
     negated_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Unop(result_reg=negated_reg, operator="not", operand=cond_reg), node=node
+        Unop(result_reg=negated_reg, operator=resolve_unop("not"), operand=cond_reg),
+        node=node,
     )
     ctx.emit_inst(
         BranchIf(cond_reg=negated_reg, branch_targets=(body_label, end_label)),

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -105,7 +106,10 @@ def _lower_interpolated_string_parts(
     for part in parts[1:]:
         new_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            Binop(result_reg=new_reg, operator="+", left=result, right=part), node=node
+            Binop(
+                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part
+            ),
+            node=node,
         )
         result = new_reg
     return result
@@ -230,7 +234,12 @@ def lower_php_augmented_assignment_expr(ctx: TreeSitterEmitContext, node) -> Reg
     rhs_reg = ctx.lower_expr(right)
     result = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=result, operator=op_text, left=lhs_reg, right=rhs_reg),
+        Binop(
+            result_reg=result,
+            operator=resolve_binop(op_text),
+            left=lhs_reg,
+            right=rhs_reg,
+        ),
         node=node,
     )
     lower_php_store_target(ctx, left, result, node)
@@ -567,7 +576,7 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> Register:
                 ctx.emit_inst(
                     Binop(
                         result_reg=cmp_reg,
-                        operator="===",
+                        operator=resolve_binop("==="),
                         left=subject_reg,
                         right=pattern_reg,
                     ),
