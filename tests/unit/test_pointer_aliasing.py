@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.vm.vm_types import (
@@ -38,7 +39,6 @@ from interpreter.vm.executor import (
     _handle_unop,
     _default_handler_context,
 )
-from interpreter.var_name import VarName
 
 _CTX = _default_handler_context()
 

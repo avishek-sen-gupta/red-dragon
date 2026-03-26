@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.var_name import VarName
 from interpreter.ir import Opcode
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.var_name import VarName
 
 
 def _run_program(source: str, language: str = "python", max_steps: int = 300) -> dict:

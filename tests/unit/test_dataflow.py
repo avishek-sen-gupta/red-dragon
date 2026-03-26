@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.cfg import BasicBlock, CFG, build_cfg
 from interpreter.dataflow import (
     BlockDataflowFacts,
@@ -297,8 +296,8 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert VarName("y") in result.dependency_graph
-        assert VarName("x") in result.dependency_graph["y"]
+        assert "y" in result.dependency_graph
+        assert "x" in result.dependency_graph["y"]
 
     def test_decl_var_dependency(self):
         """DECL_VAR x t0; y = x + 1 → y depends on x (DECL_VAR is a variable definition)."""
@@ -314,8 +313,8 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert VarName("y") in result.dependency_graph
-        assert VarName("x") in result.dependency_graph["y"]
+        assert "y" in result.dependency_graph
+        assert "x" in result.dependency_graph["y"]
 
     def test_direct_dependency_in_raw_graph(self):
         """y = x + 1 → raw graph has y depending on x."""
@@ -331,8 +330,8 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert VarName("y") in result.raw_dependency_graph
-        assert VarName("x") in result.raw_dependency_graph["y"]
+        assert "y" in result.raw_dependency_graph
+        assert "x" in result.raw_dependency_graph["y"]
 
     def test_transitive_dependency(self):
         """y=x+1; z=y*2 → z depends on y and transitively on x."""
@@ -352,9 +351,9 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert VarName("z") in result.dependency_graph
-        assert VarName("y") in result.dependency_graph["z"]
-        assert VarName("x") in result.dependency_graph["z"]
+        assert "z" in result.dependency_graph
+        assert "y" in result.dependency_graph["z"]
+        assert "x" in result.dependency_graph["z"]
 
     def test_raw_graph_excludes_transitive_deps(self):
         """y=x+1; z=y*2 → raw graph has z depending on y but NOT x."""
@@ -374,9 +373,9 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert VarName("z") in result.raw_dependency_graph
-        assert VarName("y") in result.raw_dependency_graph["z"]
-        assert VarName("x") not in result.raw_dependency_graph["z"]
+        assert "z" in result.raw_dependency_graph
+        assert "y" in result.raw_dependency_graph["z"]
+        assert "x" not in result.raw_dependency_graph["z"]
 
     def test_raw_graph_preserves_all_direct_deps_in_multi_operand_expression(self):
         """a=1; b=2; c=a+b; d=c+b → raw graph has d depending on both c and b."""
@@ -417,7 +416,7 @@ class TestDependencyGraph:
         defined_vars = {d.variable for d in result.definitions}
         assert "x" in defined_vars, "x should appear in definitions"
         # x = 1 has no self-dependency
-        assert VarName("x") not in result.dependency_graph.get(
+        assert "x" not in result.dependency_graph.get(
             "x", set()
         ), "x = 1 should not self-depend"
 
@@ -447,8 +446,8 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert VarName("x") in result.dependency_graph
-        assert VarName("x") in result.dependency_graph["x"]
+        assert "x" in result.dependency_graph
+        assert "x" in result.dependency_graph["x"]
 
 
 class TestIntegration:
@@ -498,10 +497,10 @@ class TestIntegration:
 
         assert isinstance(result, DataflowResult)
         # z depends on y, y depends on x
-        assert VarName("y") in result.dependency_graph
-        assert VarName("x") in result.dependency_graph["y"]
-        assert VarName("z") in result.dependency_graph
-        assert VarName("y") in result.dependency_graph["z"]
+        assert "y" in result.dependency_graph
+        assert "x" in result.dependency_graph["y"]
+        assert "z" in result.dependency_graph
+        assert "y" in result.dependency_graph["z"]
 
     def test_analysis_converges_for_loop_program(self):
         """Reaching definitions analysis converges and covers all blocks on a loop program."""

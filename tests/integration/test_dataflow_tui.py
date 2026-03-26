@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.interprocedural.types import (
     InterproceduralResult,
     ReturnEndpoint,
@@ -13,7 +14,6 @@ from viz.panels.dataflow_graph_panel import (
     find_top_level_call_sites,
 )
 from viz.pipeline import run_pipeline
-from interpreter.var_name import VarName
 
 
 def _collect_labels(nodes: list[ChainNode]) -> list[str]:

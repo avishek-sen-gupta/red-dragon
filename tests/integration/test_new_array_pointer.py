@@ -1,10 +1,10 @@
 """Integration tests for NEW_ARRAY producing Pointer with correct type."""
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.vm.vm_types import Pointer
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.var_name import VarName
 
 
 class TestNewArrayProducesPointer:

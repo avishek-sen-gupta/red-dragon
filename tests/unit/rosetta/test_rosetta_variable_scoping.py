@@ -20,6 +20,7 @@ import pytest
 
 from interpreter.ir import Opcode
 from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
 from tests.unit.rosetta.conftest import (
     parse_for_language,
     assert_clean_lowering,
@@ -225,7 +226,7 @@ EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES
 
 def _extract_var(vm, var_name, language):
     """Extract a variable from frame 0 locals, handling PHP $ prefix."""
-    name = f"${var_name}" if language == "php" else var_name
+    name = VarName(f"${var_name}" if language == "php" else var_name)
     frame = vm.call_stack[0]
     assert name in frame.local_vars, (
         f"[{language}] expected '{name}' in frame 0 locals, "

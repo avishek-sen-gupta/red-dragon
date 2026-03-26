@@ -4,6 +4,7 @@ DECL_VAR always creates/overwrites in the current frame (declaration).
 STORE_VAR walks the scope chain to update existing variables (assignment).
 """
 
+from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import typed_from_runtime, unwrap, typed
 from interpreter.vm.vm import VMState, apply_update
@@ -18,7 +19,6 @@ from interpreter.vm.executor import (
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.register import Register
-from interpreter.var_name import VarName
 
 
 def _make_vm() -> VMState:

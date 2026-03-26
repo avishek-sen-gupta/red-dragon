@@ -13,7 +13,6 @@ from mcp_server.tools import (
     handle_run_to_end,
     handle_step,
 )
-from interpreter.var_name import VarName
 from mcp_server.resources import (
     handle_source_resource,
     handle_ir_resource,
