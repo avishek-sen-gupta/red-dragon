@@ -4,15 +4,16 @@ from interpreter.instructions import *
 from interpreter.ir import CodeLabel, NO_LABEL, Opcode
 from interpreter.operator_kind import BinopKind, UnopKind
 from interpreter.register import Register, NO_REGISTER
+from interpreter.var_name import VarName
 
 
 class TestOpcodeProperty:
     def test_every_typed_class_has_opcode(self):
         cases = [
             (Const(value="42"), Opcode.CONST),
-            (LoadVar(name="x"), Opcode.LOAD_VAR),
-            (DeclVar(name="x", value_reg="%0"), Opcode.DECL_VAR),
-            (StoreVar(name="x", value_reg="%0"), Opcode.STORE_VAR),
+            (LoadVar(name=VarName("x")), Opcode.LOAD_VAR),
+            (DeclVar(name=VarName("x"), value_reg="%0"), Opcode.DECL_VAR),
+            (StoreVar(name=VarName("x"), value_reg="%0"), Opcode.STORE_VAR),
             (Symbolic(hint="p"), Opcode.SYMBOLIC),
             (Binop(operator=BinopKind.ADD, left="%0", right="%1"), Opcode.BINOP),
             (Unop(operator=UnopKind.BANG, operand="%0"), Opcode.UNOP),
@@ -35,7 +36,7 @@ class TestOpcodeProperty:
             ),
             (LoadIndirect(ptr_reg="%0"), Opcode.LOAD_INDIRECT),
             (StoreIndirect(ptr_reg="%0", value_reg="%1"), Opcode.STORE_INDIRECT),
-            (AddressOf(var_name="x"), Opcode.ADDRESS_OF),
+            (AddressOf(var_name=VarName("x")), Opcode.ADDRESS_OF),
             (NewObject(type_hint="Foo"), Opcode.NEW_OBJECT),
             (NewArray(type_hint="list", size_reg="%0"), Opcode.NEW_ARRAY),
             (Label_(label=CodeLabel("entry")), Opcode.LABEL),
@@ -66,8 +67,8 @@ class TestResultRegDefault:
 
     def test_no_result_types(self):
         for inst in [
-            DeclVar(name="x", value_reg="%0"),
-            StoreVar(name="x", value_reg="%0"),
+            DeclVar(name=VarName("x"), value_reg="%0"),
+            StoreVar(name=VarName("x"), value_reg="%0"),
             StoreField(obj_reg="%0", field_name="x", value_reg="%1"),
             StoreIndex(arr_reg="%0", index_reg="%1", value_reg="%2"),
             StoreIndirect(ptr_reg="%0", value_reg="%1"),
@@ -95,7 +96,7 @@ class TestLabelDefault:
             Const(value="42"),
             Binop(operator=BinopKind.ADD),
             CallFunction(func_name="f"),
-            StoreVar(name="x", value_reg="%0"),
+            StoreVar(name=VarName("x"), value_reg="%0"),
         ]:
             assert inst.label == NO_LABEL, f"{type(inst).__name__} should have NO_LABEL"
 
