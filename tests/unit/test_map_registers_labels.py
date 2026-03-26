@@ -17,6 +17,7 @@ from interpreter.instructions import (
 from interpreter.operator_kind import BinopKind
 from interpreter.ir import CodeLabel, NO_LABEL, SpreadArguments
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _inc(reg: Register) -> Register:
@@ -44,10 +45,10 @@ class TestMapRegisters:
         assert mapped.operator == "+"  # not a register — unchanged
 
     def test_decl_var(self):
-        inst = DeclVar(name="x", value_reg=Register("%r0"))
+        inst = DeclVar(name=VarName("x"), value_reg=Register("%r0"))
         mapped = inst.map_registers(_inc)
         assert mapped.value_reg == Register("%r100")
-        assert mapped.name == "x"  # not a register — unchanged
+        assert mapped.name == VarName("x")  # not a register — unchanged
 
     def test_call_function_with_spread(self):
         inst = CallFunction(
