@@ -6,6 +6,7 @@ frame, STORE_VAR walks up the scope chain to find existing bindings.
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
@@ -30,7 +31,7 @@ set_x()
         # Our VM's STORE_VAR walks the scope chain, so x becomes 20.
         # This matches the VM's intentional simplification.
         result = _run(source, Language.PYTHON)
-        assert result["x"] == 20
+        assert result[VarName("x")] == 20
 
     def test_function_does_not_shadow_with_declaration(self):
         source = """
@@ -40,9 +41,9 @@ def make_x():
 make_x()
 """
         result = _run(source, Language.PYTHON)
-        assert result["x"] == 10
+        assert result[VarName("x")] == 10
         # y was declared in inner scope, not visible at top level
-        assert "y" not in result
+        assert VarName("y") not in result
 
 
 class TestJavaScriptScopeChainWrites:
@@ -58,7 +59,7 @@ increment();
 increment();
 """
         result = _run(source, Language.JAVASCRIPT)
-        assert result["count"] == 2
+        assert result[VarName("count")] == 2
 
     def test_let_declaration_shadows(self):
         source = """
@@ -69,7 +70,7 @@ function f() {
 f();
 """
         result = _run(source, Language.JAVASCRIPT)
-        assert result["x"] == 10
+        assert result[VarName("x")] == 10
 
 
 class TestScalaScopeChainWrites:
@@ -85,7 +86,7 @@ add(5)
 add(3)
 """
         result = _run(source, Language.SCALA)
-        assert result["total"] == 8
+        assert result[VarName("total")] == 8
 
 
 class TestRubyScopeChainWrites:
@@ -101,7 +102,7 @@ bump()
 bump()
 """
         result = _run(source, Language.RUBY)
-        assert result["x"] == 2
+        assert result[VarName("x")] == 2
 
 
 class TestGoScopeChainWrites:
@@ -124,4 +125,4 @@ func main() {
 }
 """
         result = _run(source, Language.GO, max_steps=500)
-        assert result["counter"] == 3
+        assert result[VarName("counter")] == 3

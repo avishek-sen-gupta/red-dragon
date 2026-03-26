@@ -64,7 +64,7 @@ class TestEmitInst:
     def test_tracks_decl_var_name(self):
         ctx = _make_ctx()
         ctx.emit_inst(DeclVar(name=VarName("x"), value_reg="%0"))
-        assert "x" in ctx._method_declared_names
+        assert VarName("x") in ctx._method_declared_names
 
     def test_source_location_from_node(self):
         """When the instruction has no source_location and node is passed,

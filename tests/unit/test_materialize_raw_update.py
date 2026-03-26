@@ -76,7 +76,7 @@ class TestMaterializeRawUpdate:
     def test_var_write_materialized(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        raw = StateUpdate(var_writes={"x": 10}, reasoning="test")
+        raw = StateUpdate(var_writes={VarName("x"): 10}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         tv = result.var_writes["x"]
         assert isinstance(tv, TypedValue)
@@ -129,7 +129,7 @@ class TestMaterializeRawUpdate:
         """Var writes do NOT get register coercion (matching current behavior)."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        raw = StateUpdate(var_writes={"x": 42}, reasoning="test")
+        raw = StateUpdate(var_writes={VarName("x"): 42}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         tv = result.var_writes["x"]
         assert tv.value == 42
@@ -151,7 +151,7 @@ class TestApplyUpdateTypedPath:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         tv = typed(10, scalar("Int"))
-        update = StateUpdate(var_writes={"x": tv}, reasoning="test")
+        update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
@@ -167,7 +167,7 @@ class TestApplyUpdateTypedPath:
             base="mem_0", offset=0
         )
         tv = typed(42, scalar("Int"))
-        update = StateUpdate(var_writes={"x": tv}, reasoning="test")
+        update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
@@ -189,7 +189,7 @@ class TestApplyUpdateTypedPath:
             )
         )
         tv = typed(42, scalar("Int"))
-        update = StateUpdate(var_writes={"x": tv}, reasoning="test")
+        update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
