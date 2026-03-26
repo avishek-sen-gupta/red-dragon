@@ -13,6 +13,7 @@ from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.ir import SpreadArguments
 from interpreter.types.type_expr import scalar
 from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     CallFunction,
@@ -99,7 +100,7 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> Register:
         and ctx.symbol_table.resolve_field(ctx._current_class_name, resolved_name).name
     ):
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"), node=node)
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")), node=node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadField(
@@ -114,7 +115,7 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         LoadVar(
             result_reg=reg,
-            name=resolved_name,
+            name=VarName(resolved_name),
         ),
         node=node,
     )
@@ -511,7 +512,7 @@ def lower_store_target(
     if target.type == CommonNodeType.IDENTIFIER:
         ctx.emit_inst(
             StoreVar(
-                name=ctx.resolve_var(ctx.node_text(target)),
+                name=VarName(ctx.resolve_var(ctx.node_text(target))),
                 value_reg=str(val_reg),
             ),
             node=parent_node,
@@ -557,7 +558,7 @@ def lower_store_target(
         # Fallback: just store to the text of the target
         ctx.emit_inst(
             StoreVar(
-                name=ctx.node_text(target),
+                name=VarName(ctx.node_text(target)),
                 value_reg=str(val_reg),
             ),
             node=parent_node,

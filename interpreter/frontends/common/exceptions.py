@@ -10,6 +10,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import CodeLabel, NO_LABEL
 from interpreter import constants
 from interpreter.constants import DEFAULT_EXCEPTION_TYPE
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -81,7 +82,7 @@ def lower_try_catch(
             resolved_var = ctx.declare_block_var(exc_var)
             ctx.emit_inst(
                 DeclVar(
-                    name=resolved_var,
+                    name=VarName(resolved_var),
                     value_reg=str(exc_reg),
                 ),
                 node=node,

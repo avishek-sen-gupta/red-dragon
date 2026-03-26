@@ -11,6 +11,7 @@ from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -184,7 +185,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
     start_reg = ctx.lower_expr(start_node)
     end_reg = ctx.lower_expr(end_node)
 
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=start_reg))
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=start_reg))
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
@@ -194,7 +195,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     current_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=current_reg, name=var_name))
+    ctx.emit_inst(LoadVar(result_reg=current_reg, name=VarName(var_name)))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -214,7 +215,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
 
     step_op = "-" if is_downto else "+"
     cur_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=cur_reg, name=var_name))
+    ctx.emit_inst(LoadVar(result_reg=cur_reg, name=VarName(var_name)))
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     next_reg = ctx.fresh_reg()
@@ -226,7 +227,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
             right=one_reg,
         )
     )
-    ctx.emit_inst(StoreVar(name=var_name, value_reg=next_reg))
+    ctx.emit_inst(StoreVar(name=VarName(var_name), value_reg=next_reg))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -460,7 +461,9 @@ def lower_pascal_exception_handler(ctx: TreeSitterEmitContext, node) -> None:
             Symbolic(result_reg=reg, hint=f"{constants.PARAM_PREFIX}{var_name}"),
             node=id_node,
         )
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=f"%{ctx.reg_counter - 1}"))
+        ctx.emit_inst(
+            DeclVar(name=VarName(var_name), value_reg=f"%{ctx.reg_counter - 1}")
+        )
     # Lower body statements
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -520,7 +523,7 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     idx_var = f"__foreach_idx_{var_name}"
     zero_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=zero_reg, value="0"))
-    ctx.emit_inst(DeclVar(name=idx_var, value_reg=zero_reg))
+    ctx.emit_inst(DeclVar(name=VarName(idx_var), value_reg=zero_reg))
 
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -534,7 +537,7 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     cur_idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=cur_idx_reg, name=idx_var))
+    ctx.emit_inst(LoadVar(result_reg=cur_idx_reg, name=VarName(idx_var)))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -554,11 +557,11 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(
         LoadIndex(result_reg=elem_reg, arr_reg=coll_reg, index_reg=cur_idx_reg)
     )
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
     ctx.lower_stmt(body_node)
 
     cur2_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=cur2_reg, name=idx_var))
+    ctx.emit_inst(LoadVar(result_reg=cur2_reg, name=VarName(idx_var)))
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     next_reg = ctx.fresh_reg()
@@ -570,7 +573,7 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
             right=one_reg,
         )
     )
-    ctx.emit_inst(StoreVar(name=idx_var, value_reg=next_reg))
+    ctx.emit_inst(StoreVar(name=VarName(idx_var), value_reg=next_reg))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))

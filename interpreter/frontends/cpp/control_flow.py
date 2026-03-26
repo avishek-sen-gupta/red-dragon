@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -159,7 +160,7 @@ def _lower_structured_binding(
             LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),
             node=id_node,
         )
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=part_reg), node=id_node)
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=part_reg), node=id_node)
 
 
 def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
@@ -187,7 +188,7 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__range_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__range_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
@@ -197,7 +198,7 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__range_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__range_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -218,7 +219,7 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
         _lower_structured_binding(ctx, declarator_node, elem_reg)
     else:
         var_name = ctx.declare_block_var(raw_name)
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("range_for_update")
     ctx.push_loop(update_label, end_label)
@@ -236,7 +237,7 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__range_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__range_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))

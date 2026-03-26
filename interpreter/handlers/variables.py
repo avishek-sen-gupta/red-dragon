@@ -161,7 +161,7 @@ def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
     if this_addr is not None:
         return ExecutionResult.success(
             StateUpdate(
-                heap_writes=[HeapWrite(obj_addr=this_addr, field=name, value=tv)],
+                heap_writes=[HeapWrite(obj_addr=this_addr, field=str(name), value=tv)],
                 reasoning=f"store {name} = {tv.value!r} (via implicit this.{name})",
             )
         )

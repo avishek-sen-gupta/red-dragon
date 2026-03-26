@@ -11,6 +11,7 @@ from interpreter.frontends.c.node_types import CNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 from interpreter.operator_kind import resolve_unop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -84,13 +85,15 @@ def lower_c_store_target(
         name = ctx.node_text(target)
         if ctx.symbol_table.resolve_field(ctx._current_class_name, name).name:
             this_reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+            ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
                 StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg),
                 node=parent_node,
             )
         else:
-            ctx.emit_inst(StoreVar(name=name, value_reg=val_reg), node=parent_node)
+            ctx.emit_inst(
+                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node
+            )
     elif target.type == CNodeType.FIELD_EXPRESSION:
         obj_node = target.child_by_field_name("argument")
         field_node = target.child_by_field_name("field")
@@ -125,7 +128,8 @@ def lower_c_store_target(
         )
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
 
 
@@ -161,7 +165,9 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> Register:
         if operand_node and operand_node.type == CNodeType.IDENTIFIER:
             var_name = ctx.node_text(operand_node)
             reg = ctx.fresh_reg()
-            ctx.emit_inst(AddressOf(result_reg=reg, var_name=var_name), node=node)
+            ctx.emit_inst(
+                AddressOf(result_reg=reg, var_name=VarName(var_name)), node=node
+            )
             return reg
         inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
         reg = ctx.fresh_reg()
@@ -220,17 +226,17 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName(result_var)))
     return result_reg
 
 

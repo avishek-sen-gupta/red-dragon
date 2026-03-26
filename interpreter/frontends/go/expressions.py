@@ -13,6 +13,7 @@ from interpreter.frontends.common.expressions import (
 from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import ParameterizedType, scalar, array_of, map_of
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     CallCtorFunction,
@@ -423,7 +424,7 @@ def lower_go_store_target(
 ) -> None:
     if target.type == GoNodeType.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == GoNodeType.SELECTOR_EXPRESSION:
@@ -451,6 +452,6 @@ def lower_go_store_target(
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     AddressOf,
     Branch,
@@ -67,7 +68,9 @@ def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]
             if has_byref and inner.type == NT.IDENTIFIER:
                 # ref x / in x / out existingVar — emit ADDRESS_OF
                 reg = ctx.fresh_reg()
-                ctx.emit_inst(AddressOf(result_reg=reg, var_name=ctx.node_text(inner)))
+                ctx.emit_inst(
+                    AddressOf(result_reg=reg, var_name=VarName(ctx.node_text(inner)))
+                )
                 regs.append(reg)
             else:
                 # declaration_expression (out int x) or regular arg
@@ -259,17 +262,17 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName(result_var)))
     return result_reg
 
 
@@ -327,7 +330,7 @@ def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> Regi
     """Load a variable, dereferencing if it's a byref (out/ref/in) param."""
     reg = ctx.fresh_reg()
     resolved = ctx.resolve_var(name)
-    ctx.emit_inst(LoadVar(result_reg=reg, name=resolved), node=node)
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(resolved)), node=node)
     if name in ctx.byref_params:
         deref_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadIndirect(result_reg=deref_reg, ptr_reg=reg), node=node)
@@ -342,11 +345,11 @@ def emit_byref_store(
     if name in ctx.byref_params:
         ptr_reg = ctx.fresh_reg()
         resolved = ctx.resolve_var(name)
-        ctx.emit_inst(LoadVar(result_reg=ptr_reg, name=resolved), node=node)
+        ctx.emit_inst(LoadVar(result_reg=ptr_reg, name=VarName(resolved)), node=node)
         ctx.emit_inst(StoreIndirect(ptr_reg=ptr_reg, value_reg=val_reg), node=node)
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.resolve_var(name), value_reg=val_reg), node=node
+            StoreVar(name=VarName(ctx.resolve_var(name)), value_reg=val_reg), node=node
         )
 
 
@@ -356,7 +359,7 @@ def lower_ref_expression(ctx: TreeSitterEmitContext, node) -> Register:
     if inner is not None and inner.type == NT.IDENTIFIER:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            AddressOf(result_reg=reg, var_name=ctx.node_text(inner)), node=node
+            AddressOf(result_reg=reg, var_name=VarName(ctx.node_text(inner))), node=node
         )
         return reg
     # Degraded: unsupported inner expression (arr[i], obj.field) — lower as value
@@ -382,9 +385,9 @@ def lower_declaration_expression(ctx: TreeSitterEmitContext, node) -> Register:
     var_name = ctx.node_text(name_node) if name_node else "__out_var"
     default_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=default_reg, value="0"))
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=default_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=default_reg), node=node)
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(AddressOf(result_reg=result_reg, var_name=var_name))
+    ctx.emit_inst(AddressOf(result_reg=result_reg, var_name=VarName(var_name)))
     return result_reg
 
 
@@ -400,7 +403,7 @@ def lower_declaration_pattern(ctx: TreeSitterEmitContext, node) -> Register:
 
     if designation:
         var_name = ctx.node_text(designation)
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=type_reg), node=node)
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=type_reg), node=node)
     return type_reg
 
 
@@ -735,7 +738,7 @@ def lower_csharp_store_target(
         name = ctx.node_text(target)
         if ctx.symbol_table.resolve_field(ctx._current_class_name, name).name:
             this_reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+            ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
                 StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg),
                 node=parent_node,
@@ -776,7 +779,8 @@ def lower_csharp_store_target(
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
 
 
@@ -825,7 +829,7 @@ def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 )
                 ctx.seed_register_type(param_reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
-                ctx.emit_inst(DeclVar(name=pname, value_reg=param_reg))
+                ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=param_reg))
                 ctx.seed_var_type(pname, type_hint)
                 default_value_node = _extract_csharp_default_value(child)
                 if default_value_node:

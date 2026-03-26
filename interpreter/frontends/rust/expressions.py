@@ -6,6 +6,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     AddressOf,
     Binop,
@@ -139,7 +140,7 @@ def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> Register:
     if inner.type == RustNodeType.IDENTIFIER:
         var_name = ctx.node_text(inner)
         reg = ctx.fresh_reg()
-        ctx.emit_inst(AddressOf(result_reg=reg, var_name=var_name), node=node)
+        ctx.emit_inst(AddressOf(result_reg=reg, var_name=VarName(var_name)), node=node)
         return reg
 
     inner_reg = ctx.lower_expr(inner)
@@ -204,18 +205,18 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     ctx.emit_inst(Label_(label=true_label))
     true_reg = lower_block_expr(ctx, body_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
         false_reg = ctx.lower_expr(alt_node)
-        ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -244,18 +245,18 @@ def _lower_if_let_expr(ctx: TreeSitterEmitContext, node, let_cond_node) -> Regis
     ctx.emit_inst(Label_(label=true_label))
     compile_pattern_bindings(ctx, subject_reg, pattern)
     true_reg = lower_block_expr(ctx, body_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
         false_reg = ctx.lower_expr(alt_node)
-        ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -308,18 +309,18 @@ def _lower_if_let_chain_expr(
     for _, pattern, subject_reg in arms:
         compile_pattern_bindings(ctx, subject_reg, pattern)
     true_reg = lower_block_expr(ctx, body_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
         false_reg = ctx.lower_expr(alt_node)
-        ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -500,7 +501,9 @@ def _lower_closure_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ),
                 node=child,
             )
-            ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+            ctx.emit_inst(
+                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+            )
         elif child.type == RustNodeType.PARAMETER:
             lower_rust_param(ctx, child)
 
@@ -718,7 +721,7 @@ def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.node_text(c) for c in node.children if c.type == RustNodeType.IDENTIFIER
     )
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=full_name), node=node)
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(full_name)), node=node)
     return reg
 
 
@@ -911,7 +914,8 @@ def lower_rust_store_target(
     """Rust-specific store target handling field_expression and index_expression."""
     if target.type == RustNodeType.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
     elif target.type == RustNodeType.FIELD_EXPRESSION:
         value_node = target.child_by_field_name("value")
@@ -949,5 +953,6 @@ def lower_rust_store_target(
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )

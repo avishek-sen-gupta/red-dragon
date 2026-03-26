@@ -12,6 +12,7 @@ from interpreter.ir import CodeLabel
 from interpreter.register import Register, NO_REGISTER
 from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed
+from interpreter.var_name import VarName
 
 # ── Data types ───────────────────────────────────────────────────
 
@@ -202,7 +203,7 @@ class StackFramePush(BaseModel):
     function_name: str
     return_label: CodeLabel | None = None
     closure_env_id: str = ""
-    captured_var_names: list[str] = []
+    captured_var_names: list[str | VarName] = []
     is_ctor: bool = False
 
 
@@ -211,7 +212,7 @@ VOID_RETURN: TypedValue = typed(None, scalar(TypeName.VOID))
 
 class StateUpdate(BaseModel):
     register_writes: dict[Register, Any] = {}
-    var_writes: dict[str, Any] = {}
+    var_writes: dict[str | VarName, Any] = {}
     heap_writes: list[HeapWrite] = []
     new_objects: list[NewObject] = []
     region_writes: list[RegionWrite] = []
