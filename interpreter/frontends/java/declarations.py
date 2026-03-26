@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -39,7 +40,9 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
             if name_node and value_node:
                 var_name = ctx.declare_block_var(ctx.node_text(name_node))
                 val_reg = ctx.lower_expr(value_node)
-                ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+                ctx.emit_inst(
+                    DeclVar(name=VarName(var_name), value_reg=val_reg), node=node
+                )
                 ctx.seed_var_type(var_name, type_hint)
             elif name_node:
                 var_name = ctx.declare_block_var(ctx.node_text(name_node))
@@ -47,7 +50,9 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit_inst(
                     Const(result_reg=val_reg, value=ctx.constants.none_literal)
                 )
-                ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+                ctx.emit_inst(
+                    DeclVar(name=VarName(var_name), value_reg=val_reg), node=node
+                )
                 ctx.seed_var_type(var_name, type_hint)
 
 
@@ -58,7 +63,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type(constants.PARAM_THIS, class_type)
-    ctx.emit_inst(DeclVar(name=constants.PARAM_THIS, value_reg=param_reg))
+    ctx.emit_inst(DeclVar(name=VarName(constants.PARAM_THIS), value_reg=param_reg))
     ctx.seed_var_type(constants.PARAM_THIS, class_type)
 
 
@@ -105,7 +110,7 @@ def lower_method_decl(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_method_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -228,7 +233,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = class_name
@@ -286,7 +291,7 @@ def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(record_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=record_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(record_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = record_name
@@ -366,7 +371,7 @@ def _emit_record_init(
     for name in param_names:
         param_reg = ctx.fresh_reg()
         ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"param:{name}"))
-        ctx.emit_inst(DeclVar(name=name, value_reg=param_reg))
+        ctx.emit_inst(DeclVar(name=VarName(name), value_reg=param_reg))
 
     # Compact constructor body runs before field assignments (validation etc.)
     if compact_body:
@@ -378,9 +383,9 @@ def _emit_record_init(
     # Store record params as fields on this
     for name in param_names:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=val_reg, name=name))
+        ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName(name)))
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
         ctx.emit_inst(StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg))
 
     none_reg = ctx.fresh_reg()
@@ -390,7 +395,7 @@ def _emit_record_init(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _lower_constructor_decl(
@@ -425,7 +430,7 @@ def _lower_constructor_decl(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -485,7 +490,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=iface_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = iface_name
@@ -522,7 +527,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
                 )
-        ctx.emit_inst(DeclVar(name=enum_name, value_reg=obj_reg))
+        ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=obj_reg))
 
 
 def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -552,7 +557,7 @@ def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
             )
-    ctx.emit_inst(DeclVar(name=annot_name, value_reg=obj_reg))
+    ctx.emit_inst(DeclVar(name=VarName(annot_name), value_reg=obj_reg))
 
 
 # ---------------------------------------------------------------------------

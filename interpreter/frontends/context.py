@@ -14,6 +14,7 @@ from typing import Any, Callable
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     InstructionBase,
     Const,
@@ -203,7 +204,7 @@ class TreeSitterEmitContext:
 
     def emit_decl_var(self, name: str, val_reg: str, *, node=None) -> Instruction:
         """Emit DECL_VAR: declare a new variable in the current scope."""
-        return self.emit_inst(DeclVar(name=name, value_reg=val_reg), node=node)
+        return self.emit_inst(DeclVar(name=VarName(name), value_reg=val_reg), node=node)
 
     def emit_func_ref(
         self,

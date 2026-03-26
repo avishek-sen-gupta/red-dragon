@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -62,7 +63,7 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit_inst(
                     Const(result_reg=val_reg, value=ctx.constants.none_literal)
                 )
-            ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+            ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
             ctx.seed_var_type(var_name, type_hint)
 
 
@@ -90,7 +91,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type("this", class_type)
-    ctx.emit_inst(DeclVar(name="this", value_reg=param_reg))
+    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=param_reg))
     ctx.seed_var_type("this", class_type)
 
 
@@ -196,7 +197,7 @@ def _lower_cpp_constructor_with_field_inits(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
@@ -236,7 +237,7 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 def _lower_cpp_class_body_b2(
@@ -369,7 +370,7 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
@@ -378,7 +379,7 @@ def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
     Emits: LOAD_VAR this -> [lower_expr(arg) -> STORE_FIELD this, field, val] x N
     """
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"), node=node)
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")), node=node)
     for child in node.children:
         if child.type == CppNodeType.FIELD_INITIALIZER:
             field_node = next(
@@ -469,7 +470,7 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_cpp_struct_body(ctx: TreeSitterEmitContext, node) -> None:
@@ -518,7 +519,7 @@ def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(struct_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=struct_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(struct_name), value_reg=cls_reg))
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -153,7 +154,7 @@ def _lower_lua_for_numeric(
     start_reg = ctx.lower_expr(start_node) if start_node else ctx.fresh_reg()
     end_reg = ctx.lower_expr(end_node) if end_node else ctx.fresh_reg()
 
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=start_reg))
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=start_reg))
 
     step_reg = ctx.fresh_reg()
     if step_node:
@@ -167,7 +168,7 @@ def _lower_lua_for_numeric(
 
     ctx.emit_inst(Label_(label=loop_label))
     current_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=current_reg, name=var_name))
+    ctx.emit_inst(LoadVar(result_reg=current_reg, name=VarName(var_name)))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -192,7 +193,7 @@ def _lower_lua_for_numeric(
     ctx.emit_inst(Label_(label=update_label))
     next_reg = ctx.fresh_reg()
     cur_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=cur_reg, name=var_name))
+    ctx.emit_inst(LoadVar(result_reg=cur_reg, name=VarName(var_name)))
     ctx.emit_inst(
         Binop(
             result_reg=next_reg,
@@ -201,7 +202,7 @@ def _lower_lua_for_numeric(
             right=step_reg,
         )
     )
-    ctx.emit_inst(StoreVar(name=var_name, value_reg=next_reg))
+    ctx.emit_inst(StoreVar(name=VarName(var_name), value_reg=next_reg))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -254,7 +255,7 @@ def _lower_lua_for_generic(
 
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
@@ -264,7 +265,7 @@ def _lower_lua_for_generic(
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__for_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -279,13 +280,13 @@ def _lower_lua_for_generic(
     ctx.emit_inst(Label_(label=body_label))
     # First var = index, second var = element
     if len(var_names) >= 1:
-        ctx.emit_inst(DeclVar(name=var_names[0], value_reg=idx_reg))
+        ctx.emit_inst(DeclVar(name=VarName(var_names[0]), value_reg=idx_reg))
     if len(var_names) >= 2:
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg)
         )
-        ctx.emit_inst(DeclVar(name=var_names[1], value_reg=elem_reg))
+        ctx.emit_inst(DeclVar(name=VarName(var_names[1]), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("generic_for_update")
     ctx.push_loop(update_label, end_label)
@@ -302,7 +303,7 @@ def _lower_lua_for_generic(
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__for_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))

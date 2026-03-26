@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.instructions import (
@@ -53,7 +54,7 @@ def _emit_self_param(ctx: TreeSitterEmitContext) -> None:
         Symbolic(result_reg=ctx.fresh_reg(), hint=f"{constants.PARAM_PREFIX}self")
     )
     ctx.emit_inst(
-        DeclVar(name=constants.PARAM_SELF, value_reg=f"%{ctx.reg_counter - 1}")
+        DeclVar(name=VarName(constants.PARAM_SELF), value_reg=f"%{ctx.reg_counter - 1}")
     )
 
 
@@ -95,7 +96,7 @@ def lower_ruby_method(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_ruby_method_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -139,7 +140,7 @@ def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
@@ -200,7 +201,7 @@ def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=method_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(method_name), value_reg=func_reg))
 
 
 def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
@@ -220,7 +221,7 @@ def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(module_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=module_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(module_name), value_reg=cls_reg))
 
 
 # ---------------------------------------------------------------------------

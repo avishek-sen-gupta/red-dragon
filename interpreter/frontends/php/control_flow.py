@@ -6,6 +6,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -185,14 +186,14 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=body_label))
     # Store key variable (index) if present
     if key_var:
-        ctx.emit_inst(DeclVar(name=key_var, value_reg=idx_reg))
+        ctx.emit_inst(DeclVar(name=VarName(key_var), value_reg=idx_reg))
     # Store value variable (element at index)
     if value_var:
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg)
         )
-        ctx.emit_inst(DeclVar(name=value_var, value_reg=elem_reg))
+        ctx.emit_inst(DeclVar(name=VarName(value_var), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("foreach_update")
     ctx.push_loop(update_label, end_label)
@@ -209,7 +210,7 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__foreach_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__foreach_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))

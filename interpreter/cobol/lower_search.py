@@ -8,6 +8,7 @@ from interpreter.cobol.cobol_statements import SearchStatement
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -36,14 +37,16 @@ def lower_search(
     max_iterations = 256
     counter_var = ctx.fresh_name("__search_ctr")
     zero_reg = ctx.const_to_reg(0)
-    ctx.emit_inst(StoreVar(name=counter_var, value_reg=Register(str(zero_reg))))
+    ctx.emit_inst(
+        StoreVar(name=VarName(counter_var), value_reg=Register(str(zero_reg)))
+    )
 
     max_reg = ctx.const_to_reg(max_iterations)
 
     ctx.emit_inst(Label_(label=loop_label))
 
     ctr_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=ctr_reg, name=counter_var))
+    ctx.emit_inst(LoadVar(result_reg=ctr_reg, name=VarName(counter_var)))
     bound_cond = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -104,7 +107,7 @@ def lower_search(
         )
 
     ctr_reg2 = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=counter_var))
+    ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=VarName(counter_var)))
     one_ctr = ctx.const_to_reg(1)
     inc_ctr = ctx.fresh_reg()
     ctx.emit_inst(
@@ -115,7 +118,7 @@ def lower_search(
             right=Register(str(one_ctr)),
         )
     )
-    ctx.emit_inst(StoreVar(name=counter_var, value_reg=inc_ctr))
+    ctx.emit_inst(StoreVar(name=VarName(counter_var), value_reg=inc_ctr))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=at_end_label))

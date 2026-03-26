@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -81,7 +82,7 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
@@ -91,7 +92,7 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__for_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -108,7 +109,7 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
     var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
     ctx.push_loop(update_label, end_label)
@@ -127,7 +128,7 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__for_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -323,7 +324,7 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> Register:
             arm_result = ctx.fresh_reg()
             for stmt in body_stmts:
                 arm_result = ctx.lower_expr(stmt)
-            ctx.emit_inst(DeclVar(name=result_var, value_reg=arm_result))
+            ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=arm_result))
             ctx.emit_inst(Branch(label=end_label))
         ctx.emit_inst(Label_(label=next_label))
 
@@ -331,7 +332,7 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.switch_result_stack.pop()
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -345,7 +346,7 @@ def lower_yield_statement(ctx: TreeSitterEmitContext, node) -> None:
     val_reg = ctx.lower_expr(value_children[0]) if value_children else ctx.fresh_reg()
     result_var = ctx.switch_result_stack[-1]
     end_label = ctx.break_target_stack[-1]
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=val_reg), node=node)
     ctx.emit_inst(Branch(label=end_label), node=node)
 
 
@@ -477,7 +478,7 @@ def _lower_resource_decl(ctx: TreeSitterEmitContext, resource) -> None:
     raw_name = ctx.node_text(name_node) if name_node else "__resource"
     var_name = ctx.declare_block_var(raw_name)
     val_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=resource)
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=resource)
 
 
 def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> None:
@@ -498,7 +499,7 @@ def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> N
 
     if target_name == JavaNodeType.THIS:
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
         ctx.emit_inst(
             CallMethod(
                 result_reg=ctx.fresh_reg(),
