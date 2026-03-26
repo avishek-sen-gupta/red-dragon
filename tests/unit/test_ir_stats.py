@@ -2,6 +2,7 @@
 
 import pytest
 
+from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.ir_stats import count_opcodes
 from interpreter.api import ir_stats
@@ -84,16 +85,16 @@ class TestIrStats:
     def test_simple_assignment_has_const_and_store(self):
         """x = 42 should produce exactly 1 CONST and 1 STORE_VAR."""
         result = ir_stats(SIMPLE_SOURCE)
-        assert result["CONST"] == 1
-        assert result["STORE_VAR"] == 1
+        assert result[VarName("CONST")] == 1
+        assert result[VarName("STORE_VAR")] == 1
         # No other store opcodes should appear for a simple assignment
-        assert result.get("STORE_FIELD", 0) == 0
-        assert result.get("STORE_INDEX", 0) == 0
+        assert result.get(VarName("STORE_FIELD"), 0) == 0
+        assert result.get(VarName("STORE_INDEX"), 0) == 0
 
     def test_function_source_has_call_and_return(self):
         result = ir_stats(FUNCTION_SOURCE)
-        assert result["CALL_FUNCTION"] == 1
-        assert result["RETURN"] == 2
+        assert result[VarName("CALL_FUNCTION")] == 1
+        assert result[VarName("RETURN")] == 2
 
     def test_returns_dict(self):
         result = ir_stats(SIMPLE_SOURCE)
@@ -102,8 +103,8 @@ class TestIrStats:
     def test_language_parameter(self):
         js_source = "let x = 42;\n"
         result = ir_stats(js_source, language="javascript")
-        assert result["CONST"] == 1
-        assert result["DECL_VAR"] == 1
+        assert result[VarName("CONST")] == 1
+        assert result[VarName("DECL_VAR")] == 1
 
     def test_all_counts_are_positive(self):
         result = ir_stats(SIMPLE_SOURCE)
