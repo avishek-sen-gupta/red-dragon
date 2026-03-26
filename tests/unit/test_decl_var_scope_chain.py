@@ -18,6 +18,7 @@ from interpreter.vm.executor import (
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _make_vm() -> VMState:
@@ -53,7 +54,7 @@ class TestDeclVar:
         vm = _make_vm()
         _set_reg(vm, "%v", 42)
         _execute(vm, IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%v"]))
-        assert unwrap(vm.current_frame.local_vars["x"]) == 42
+        assert unwrap(vm.current_frame.local_vars[VarName("x")]) == 42
 
     def test_shadows_parent_frame_variable(self):
         """DECL_VAR in inner frame should NOT modify parent frame."""
@@ -66,9 +67,9 @@ class TestDeclVar:
         _execute(vm, IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%v2"]))
 
         # Inner frame has 99
-        assert unwrap(vm.current_frame.local_vars["x"]) == 99
+        assert unwrap(vm.current_frame.local_vars[VarName("x")]) == 99
         # Parent frame still has 10
-        assert unwrap(vm.call_stack[0].local_vars["x"]) == 10
+        assert unwrap(vm.call_stack[0].local_vars[VarName("x")]) == 10
 
 
 class TestStoreVarScopeChain:
@@ -79,7 +80,7 @@ class TestStoreVarScopeChain:
         vm = _make_vm()
         _set_reg(vm, "%v", 42)
         _execute(vm, IRInstruction(opcode=Opcode.STORE_VAR, operands=["x", "%v"]))
-        assert unwrap(vm.current_frame.local_vars["x"]) == 42
+        assert unwrap(vm.current_frame.local_vars[VarName("x")]) == 42
 
     def test_updates_parent_frame_variable(self):
         """STORE_VAR should update variable in parent frame when it exists there."""
@@ -92,9 +93,9 @@ class TestStoreVarScopeChain:
         _execute(vm, IRInstruction(opcode=Opcode.STORE_VAR, operands=["x", "%v2"]))
 
         # Parent frame updated to 42
-        assert unwrap(vm.call_stack[0].local_vars["x"]) == 42
+        assert unwrap(vm.call_stack[0].local_vars[VarName("x")]) == 42
         # Inner frame should NOT have x (it updated the parent, not created local)
-        assert "x" not in vm.current_frame.local_vars
+        assert VarName("x") not in vm.current_frame.local_vars
 
     def test_updates_grandparent_frame(self):
         """STORE_VAR should walk past intermediate frames."""
@@ -108,10 +109,10 @@ class TestStoreVarScopeChain:
         _execute(vm, IRInstruction(opcode=Opcode.STORE_VAR, operands=["x", "%v2"]))
 
         # Grandparent (main) frame updated
-        assert unwrap(vm.call_stack[0].local_vars["x"]) == 99
+        assert unwrap(vm.call_stack[0].local_vars[VarName("x")]) == 99
         # Middle and inner frames don't have x
-        assert "x" not in vm.call_stack[1].local_vars
-        assert "x" not in vm.call_stack[2].local_vars
+        assert VarName("x") not in vm.call_stack[1].local_vars
+        assert VarName("x") not in vm.call_stack[2].local_vars
 
     def test_decl_then_store_in_same_frame(self):
         """DECL_VAR then STORE_VAR in same frame updates same frame."""
@@ -120,7 +121,7 @@ class TestStoreVarScopeChain:
         _execute(vm, IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%v1"]))
         _set_reg(vm, "%v2", 20)
         _execute(vm, IRInstruction(opcode=Opcode.STORE_VAR, operands=["x", "%v2"]))
-        assert unwrap(vm.current_frame.local_vars["x"]) == 20
+        assert unwrap(vm.current_frame.local_vars[VarName("x")]) == 20
 
     def test_inner_decl_shadows_then_store_updates_inner(self):
         """If inner frame declares x (DECL_VAR), STORE_VAR in inner frame updates inner x."""
@@ -135,9 +136,9 @@ class TestStoreVarScopeChain:
         _execute(vm, IRInstruction(opcode=Opcode.STORE_VAR, operands=["x", "%v3"]))
 
         # Inner frame x updated to 30
-        assert unwrap(vm.current_frame.local_vars["x"]) == 30
+        assert unwrap(vm.current_frame.local_vars[VarName("x")]) == 30
         # Parent frame x unchanged
-        assert unwrap(vm.call_stack[0].local_vars["x"]) == 10
+        assert unwrap(vm.call_stack[0].local_vars[VarName("x")]) == 10
 
 
 class TestImplicitThisFieldResolution:
@@ -152,7 +153,7 @@ class TestImplicitThisFieldResolution:
         addr = "obj_0"
         heap_fields = {k: typed(v, UNKNOWN) for k, v in fields.items()}
         vm.heap[addr] = HeapObject(fields=heap_fields)
-        vm.current_frame.local_vars["this"] = typed(addr, UNKNOWN)
+        vm.current_frame.local_vars[VarName("this")] = typed(addr, UNKNOWN)
         return vm
 
     def test_bare_field_resolves_via_this(self):

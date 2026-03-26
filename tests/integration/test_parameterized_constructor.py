@@ -4,6 +4,7 @@ from interpreter.types.type_expr import ScalarType
 from interpreter.types.typed_value import TypedValue
 from interpreter.run import run
 from interpreter.constants import Language
+from interpreter.var_name import VarName
 
 
 class TestParameterizedCallFunction:
@@ -21,7 +22,7 @@ let b = Box::new(n);
             for k, v in vm.call_stack[0].local_vars.items()
         }
         # Box::new creates a Box heap object
-        b_ptr = locals_["b"]
+        b_ptr = locals_[VarName("b")]
         assert b_ptr.base in vm.heap
         box_obj = vm.heap[b_ptr.base]
         assert box_obj.type_hint == ScalarType("Box")
@@ -31,7 +32,7 @@ let b = Box::new(n);
         inner_val = (
             inner_addr.value if isinstance(inner_addr, TypedValue) else inner_addr
         )
-        assert inner_val == locals_["n"]  # Both are Pointers now
+        assert inner_val == locals_[VarName("n")]  # Both are Pointers now
 
     def test_option_constructor_creates_heap_object(self):
         """Option(42) should create a HeapObject with Option type_hint."""
@@ -41,7 +42,7 @@ let b = Box::new(n);
             k: v.value if isinstance(v, TypedValue) else v
             for k, v in vm.call_stack[0].local_vars.items()
         }
-        opt_ptr = locals_.get("opt")
+        opt_ptr = locals_.get(VarName("opt"))
         assert opt_ptr.base in vm.heap
         opt_obj = vm.heap[opt_ptr.base]
         assert opt_obj.type_hint == ScalarType("Option")

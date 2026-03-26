@@ -15,6 +15,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run(source: str, language: Language, max_steps: int = 500) -> dict:
@@ -39,7 +40,7 @@ match x:
         result = "other"
 """
         local_vars = _run(source, Language.PYTHON)
-        assert local_vars["result"] == "small"
+        assert local_vars[VarName("result")] == "small"
 
     def test_csharp(self):
         """C# switch expression with separate arms for 2 and 3."""
@@ -57,7 +58,7 @@ class M {
 }
 """
         local_vars = _run(source, Language.CSHARP, max_steps=1000)
-        assert local_vars["result"] == "small"
+        assert local_vars[VarName("result")] == "small"
 
     def test_rust(self):
         """Rust match with or-pattern (2 | 3)."""
@@ -70,7 +71,7 @@ let result = match x {
 };
 """
         local_vars = _run(source, Language.RUST)
-        assert local_vars["result"] == "small"
+        assert local_vars[VarName("result")] == "small"
 
     def test_scala(self):
         """Scala match with alternative pattern (2 | 3)."""
@@ -82,7 +83,7 @@ val result = x match {
   case _ => "other"
 }"""
         local_vars = _run(source, Language.SCALA)
-        assert local_vars["result"] == "small"
+        assert local_vars[VarName("result")] == "small"
 
     def test_kotlin(self):
         """Kotlin when expression with separate arms for 2 and 3."""
@@ -96,7 +97,7 @@ val result = when(x) {
 }
 """
         local_vars = _run(source, Language.KOTLIN)
-        assert local_vars["result"] == "small"
+        assert local_vars[VarName("result")] == "small"
 
     def test_ruby(self):
         """Ruby case/in with separate arms for 2 and 3 (or-patterns not used)."""
@@ -110,4 +111,4 @@ result = case x
 end
 """
         local_vars = _run(source, Language.RUBY)
-        assert local_vars["result"] == "small"
+        assert local_vars[VarName("result")] == "small"

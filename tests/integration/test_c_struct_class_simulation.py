@@ -10,6 +10,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_c(source: str, max_steps: int = 800) -> dict:
@@ -39,7 +40,7 @@ s.area = &rect_area;
 int result = (*s.area)(&s);
 """
         vars_ = _run_c(source)
-        assert vars_["result"] == 42
+        assert vars_[VarName("result")] == 42
 
     def test_multiple_methods(self):
         """Struct with several function pointer fields simulating a full class."""
@@ -75,7 +76,7 @@ c.get = &counter_get;
 int result = (*c.get)(&c);
 """
         vars_ = _run_c(source)
-        assert vars_["result"] == 12
+        assert vars_[VarName("result")] == 12
 
     def test_constructor_pattern(self):
         """A function that initialises a struct and attaches method pointers."""
@@ -111,8 +112,8 @@ vec2_init(&b, 1, 2);
 int d = (*a.dot)(&a, &b);
 """
         vars_ = _run_c(source)
-        assert vars_["mag"] == 25
-        assert vars_["d"] == 11
+        assert vars_[VarName("mag")] == 25
+        assert vars_[VarName("d")] == 11
 
 
 class TestStructPolymorphism:
@@ -141,8 +142,8 @@ a.speak = &cat_speak;
 int r2 = (*a.speak)(&a);
 """
         vars_ = _run_c(source)
-        assert vars_["r1"] == 1
-        assert vars_["r2"] == 2
+        assert vars_[VarName("r1")] == 1
+        assert vars_[VarName("r2")] == 2
 
     def test_dispatch_via_shared_interface(self):
         """Two structs with the same function pointer field, each bound to
@@ -177,5 +178,5 @@ int ca = compute_area(&circle);
 int sa = compute_area(&square);
 """
         vars_ = _run_c(source)
-        assert vars_["ca"] == 75
-        assert vars_["sa"] == 16
+        assert vars_[VarName("ca")] == 75
+        assert vars_[VarName("sa")] == 16

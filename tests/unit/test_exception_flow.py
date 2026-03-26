@@ -7,6 +7,7 @@ import pytest
 from interpreter.ir import Opcode
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_program(source: str, language: str = "python", max_steps: int = 300) -> dict:
@@ -28,7 +29,7 @@ except Exception as e:
     answer = -1
 """
         vars_ = _run_program(source)
-        assert vars_["answer"] == -1
+        assert vars_[VarName("answer")] == -1
 
     def test_code_after_raise_not_executed(self):
         """Code after raise should not execute."""
@@ -43,8 +44,10 @@ except Exception as e:
 """
         vars_ = _run_program(source)
         # marker should be 10 (catch block), NOT 2 (code after raise)
-        assert vars_["marker"] != 2, "Code after raise should not have executed"
-        assert vars_["marker"] == 10
+        assert (
+            vars_[VarName("marker")] != 2
+        ), "Code after raise should not have executed"
+        assert vars_[VarName("marker")] == 10
 
     def test_no_exception_skips_catch(self):
         """If no exception is raised, catch block is not entered."""
@@ -56,7 +59,7 @@ except Exception as e:
     answer = -1
 """
         vars_ = _run_program(source)
-        assert vars_["answer"] == 42
+        assert vars_[VarName("answer")] == 42
 
     def test_finally_always_executes_on_raise(self):
         """Finally block should execute even when exception is raised."""
@@ -72,8 +75,8 @@ finally:
     cleanup = 1
 """
         vars_ = _run_program(source)
-        assert vars_["answer"] == -1
-        assert vars_["cleanup"] == 1
+        assert vars_[VarName("answer")] == -1
+        assert vars_[VarName("cleanup")] == 1
 
     def test_finally_executes_without_exception(self):
         """Finally block should execute on normal flow too."""
@@ -86,8 +89,8 @@ finally:
     cleanup = 1
 """
         vars_ = _run_program(source)
-        assert vars_["answer"] == 42
-        assert vars_["cleanup"] == 1
+        assert vars_[VarName("answer")] == 42
+        assert vars_[VarName("cleanup")] == 1
 
 
 class TestTryPushPopInIR:

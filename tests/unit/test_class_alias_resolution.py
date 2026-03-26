@@ -9,6 +9,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.type_expr import ParameterizedType, ScalarType, metatype
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 
 
@@ -40,7 +41,7 @@ class TestNewObjectDereference:
             let obj = new Foo();
             """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        obj_ptr = locals_["obj"]
+        obj_ptr = locals_[VarName("obj")]
         assert isinstance(obj_ptr, Pointer)
         type_hint = vm.heap[obj_ptr.base].type_hint
         assert (
@@ -57,7 +58,7 @@ class TestNewObjectDereference:
             let obj = new Bar();
             """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        obj_ptr = locals_["obj"]
+        obj_ptr = locals_[VarName("obj")]
         assert isinstance(obj_ptr, Pointer)
         assert vm.heap[obj_ptr.base].type_hint == "Bar"
 
@@ -70,7 +71,7 @@ class TestNewObjectDereference:
             let result = obj.x;
             """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["result"] == 42
+        assert locals_[VarName("result")] == 42
 
 
 class TestClassMetatypeSeeding:

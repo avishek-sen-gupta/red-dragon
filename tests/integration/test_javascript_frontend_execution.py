@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_js(source: str, max_steps: int = 200):
@@ -16,7 +17,7 @@ class TestJSMetaPropertyExecution:
     def test_meta_property_does_not_block(self):
         """Code after new.target usage should execute."""
         locals_ = _run_js("let x = new.target;\nlet y = 42;")
-        assert locals_["y"] == 42
+        assert locals_[VarName("y")] == 42
 
 
 class TestJSComputedPropertyNameExecution:
@@ -28,14 +29,14 @@ class TestJSComputedPropertyNameExecution:
             let obj = { [key]: "Alice" };
             let result = obj["name"];
             """)
-        assert locals_["result"] == "Alice"
+        assert locals_[VarName("result")] == "Alice"
 
     def test_expression_as_computed_key(self):
         locals_ = _run_js("""
             let obj = { ["a" + "b"]: 42 };
             let result = obj["ab"];
             """)
-        assert locals_["result"] == 42
+        assert locals_[VarName("result")] == 42
 
     def test_mixed_computed_and_static_keys(self):
         locals_ = _run_js("""
@@ -44,8 +45,8 @@ class TestJSComputedPropertyNameExecution:
             let a = obj["static_key"];
             let b = obj["dynamic"];
             """)
-        assert locals_["a"] == 1
-        assert locals_["b"] == 2
+        assert locals_[VarName("a")] == 1
+        assert locals_[VarName("b")] == 2
 
 
 class TestJSOptionalChainExecution:
@@ -56,21 +57,21 @@ class TestJSOptionalChainExecution:
             let obj = { name: "Alice" };
             let result = obj?.name;
             """)
-        assert locals_["result"] == "Alice"
+        assert locals_[VarName("result")] == "Alice"
 
     def test_optional_chain_on_null_returns_none(self):
         locals_ = _run_js("""
             let obj = null;
             let result = obj?.name;
             """)
-        assert locals_["result"] is None
+        assert locals_[VarName("result")] is None
 
     def test_optional_chain_nested_short_circuits(self):
         locals_ = _run_js("""
             let outer = { inner: { value: 42 } };
             let result = outer?.inner?.value;
             """)
-        assert locals_["result"] == 42
+        assert locals_[VarName("result")] == 42
 
 
 class TestJSAnonymousClassExpressionExecution:
@@ -84,7 +85,7 @@ class TestJSAnonymousClassExpressionExecution:
             let obj = new Foo(42);
             let result = obj.x;
             """)
-        assert locals_["result"] == 42
+        assert locals_[VarName("result")] == 42
 
     def test_anonymous_class_method_call(self):
         locals_ = _run_js("""
@@ -95,7 +96,7 @@ class TestJSAnonymousClassExpressionExecution:
             let obj = new Adder(10);
             let result = obj.add(5);
             """)
-        assert locals_["result"] == 15
+        assert locals_[VarName("result")] == 15
 
     def test_named_class_expression_execution(self):
         locals_ = _run_js("""
@@ -105,4 +106,4 @@ class TestJSAnonymousClassExpressionExecution:
             let obj = new Foo(99);
             let result = obj.v;
             """)
-        assert locals_["result"] == 99
+        assert locals_[VarName("result")] == 99

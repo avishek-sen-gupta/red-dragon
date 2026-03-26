@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_ruby(source: str, max_steps: int = 500):
@@ -22,7 +23,7 @@ r = case x
   else 0
 end
 """)
-        assert local_vars["r"] == 20
+        assert local_vars[VarName("r")] == 20
 
     def test_else_fallback(self):
         local_vars = _run_ruby("""\
@@ -32,7 +33,7 @@ r = case x
   else 0
 end
 """)
-        assert local_vars["r"] == 0
+        assert local_vars[VarName("r")] == 0
 
 
 class TestWildcardMatch:
@@ -43,7 +44,7 @@ r = case x
   in _ then 42
 end
 """)
-        assert local_vars["r"] == 42
+        assert local_vars[VarName("r")] == 42
 
 
 class TestAlternativeMatch:
@@ -55,7 +56,7 @@ r = case x
   else 0
 end
 """)
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
 
 class TestArrayDestructuring:
@@ -67,4 +68,4 @@ r = case arr
   else 0
 end
 """)
-        assert local_vars["r"] == 3
+        assert local_vars[VarName("r")] == 3

@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_csharp(source: str, max_steps: int = 1000) -> dict:
@@ -30,7 +31,10 @@ class M {
 """,
             max_steps=1000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "null"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "null"
+        )
 
     def test_switch_expr_discard(self):
         local_vars = _run_csharp(
@@ -47,7 +51,10 @@ class M {
 """,
             max_steps=1000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "other"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "other"
+        )
 
     def test_switch_expr_declaration_pattern_int(self):
         local_vars = _run_csharp(
@@ -65,7 +72,8 @@ class M {
             max_steps=1000,
         )
         assert (
-            isinstance(local_vars["result"], str) and local_vars["result"] == "integer"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "integer"
         )
 
     def test_switch_expr_var_pattern(self):
@@ -82,7 +90,10 @@ class M {
 """,
             max_steps=1000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 42
+        )
 
     def test_switch_expr_recursive_pattern(self):
         local_vars = _run_csharp(
@@ -103,7 +114,10 @@ class M {
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "point"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "point"
+        )
 
     def test_switch_expr_recursive_with_capture(self):
         local_vars = _run_csharp(
@@ -124,7 +138,10 @@ class M {
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 5
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 5
+        )
 
 
 class TestCSharpSwitchStmtPatterns:
@@ -153,7 +170,8 @@ class M {
             max_steps=1500,
         )
         assert (
-            isinstance(local_vars["result"], str) and local_vars["result"] == "integer"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "integer"
         )
 
 

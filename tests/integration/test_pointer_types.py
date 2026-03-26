@@ -6,6 +6,7 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.vm.vm_types import Pointer
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 class TestHeapReferenceTypes:
@@ -16,8 +17,8 @@ class TestHeapReferenceTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["p"], Pointer)
-        assert locals_["p"].base.startswith("obj_")
+        assert isinstance(locals_[VarName("p")], Pointer)
+        assert locals_[VarName("p")].base.startswith("obj_")
 
     def test_csharp_new_produces_pointer(self):
         vm = run(
@@ -26,7 +27,7 @@ class TestHeapReferenceTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["d"], Pointer)
+        assert isinstance(locals_[VarName("d")], Pointer)
 
     def test_kotlin_class_produces_pointer(self):
         vm = run(
@@ -35,7 +36,7 @@ class TestHeapReferenceTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["d"], Pointer)
+        assert isinstance(locals_[VarName("d")], Pointer)
 
     def test_go_struct_produces_pointer(self):
         vm = run(
@@ -44,7 +45,7 @@ class TestHeapReferenceTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["p"], Pointer)
+        assert isinstance(locals_[VarName("p")], Pointer)
 
     def test_ruby_new_produces_pointer(self):
         vm = run(
@@ -53,7 +54,7 @@ class TestHeapReferenceTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["d"], Pointer)
+        assert isinstance(locals_[VarName("d")], Pointer)
 
     def test_php_new_produces_pointer(self):
         vm = run(
@@ -62,7 +63,7 @@ class TestHeapReferenceTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["$d"], Pointer)
+        assert isinstance(locals_[VarName("$d")], Pointer)
 
     def test_scala_new_produces_pointer(self):
         vm = run(
@@ -71,7 +72,7 @@ class TestHeapReferenceTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["d"], Pointer)
+        assert isinstance(locals_[VarName("d")], Pointer)
 
     def test_typescript_new_produces_pointer(self):
         vm = run(
@@ -80,7 +81,7 @@ class TestHeapReferenceTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["d"], Pointer)
+        assert isinstance(locals_[VarName("d")], Pointer)
 
 
 class TestArrayPointerTypes:
@@ -91,8 +92,8 @@ class TestArrayPointerTypes:
             max_steps=100,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["arr"], Pointer)
-        assert locals_["arr"].base.startswith("arr_")
+        assert isinstance(locals_[VarName("arr")], Pointer)
+        assert locals_[VarName("arr")].base.startswith("arr_")
 
     @pytest.mark.xfail(reason="Rust vec![] macro → SymbolicValue — red-dragon-cjkr")
     def test_rust_vec_produces_pointer(self):
@@ -102,7 +103,7 @@ class TestArrayPointerTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["v"], Pointer)
+        assert isinstance(locals_[VarName("v")], Pointer)
 
     def test_c_array_produces_pointer(self):
         vm = run(
@@ -111,4 +112,4 @@ class TestArrayPointerTypes:
             max_steps=200,
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_["arr"], Pointer)
+        assert isinstance(locals_[VarName("arr")], Pointer)
