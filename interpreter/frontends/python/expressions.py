@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from interpreter.ir import SpreadArguments, CodeLabel
 
+from interpreter.var_name import VarName
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter import constants
@@ -185,17 +186,17 @@ def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_expr)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_expr)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName(result_var)))
     return result_reg
 
 
@@ -256,7 +257,7 @@ def _lower_comprehension_loop(
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
@@ -266,7 +267,7 @@ def _lower_comprehension_loop(
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__for_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -291,7 +292,7 @@ def _lower_comprehension_loop(
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
     if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
         var_name = ctx.declare_block_var(ctx.node_text(loop_var))
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
     else:
         lower_store_target(ctx, loop_var, elem_reg, node)
 
@@ -337,7 +338,9 @@ def _lower_comprehension_loop(
                 right=one_reg,
             )
         )
-        ctx.emit_inst(DeclVar(name="__comp_result_idx", value_reg=new_result_idx))
+        ctx.emit_inst(
+            DeclVar(name=VarName("__comp_result_idx"), value_reg=new_result_idx)
+        )
 
         if skip_label:
             ctx.emit_inst(Label_(label=skip_label))
@@ -374,7 +377,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
@@ -384,7 +387,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__for_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -406,7 +409,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
     if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
         var_name = ctx.declare_block_var(ctx.node_text(loop_var))
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
     else:
         lower_store_target(ctx, loop_var, elem_reg, node)
 
@@ -539,7 +542,7 @@ def _lower_python_param(ctx: TreeSitterEmitContext, child, param_index: int) -> 
     ctx.seed_register_type(param_reg, type_hint)
     ctx.seed_param_type(pname, type_hint)
     ctx.emit_inst(
-        DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"),
+        DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"),
         node=child,
     )
     ctx.seed_var_type(pname, type_hint)
@@ -721,7 +724,7 @@ def lower_named_expression(ctx: TreeSitterEmitContext, node) -> Register:
     value_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     val_reg = ctx.lower_expr(value_node)
     var_name = ctx.node_text(name_node)
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     return val_reg
 
 
@@ -948,5 +951,5 @@ def _emit_for_increment(
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__for_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))

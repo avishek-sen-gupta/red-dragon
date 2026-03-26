@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -78,7 +79,7 @@ def _lower_this_call_as_delegation(
 
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallMethod(
@@ -119,7 +120,8 @@ def lower_scala_store_target(
 ) -> None:
     if target.type == NT.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
     elif target.type == NT.FIELD_EXPRESSION:
         value_node = target.child_by_field_name(ctx.constants.attr_object_field)
@@ -149,7 +151,8 @@ def lower_scala_store_target(
                 )
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
 
 
@@ -178,18 +181,18 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     ctx.emit_inst(Label_(label=true_label))
     true_reg = _lower_body_as_expr(ctx, body_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
         false_reg = _lower_body_as_expr(ctx, alt_node)
-        ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -342,7 +345,9 @@ def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> Register:
                         node=child,
                     )
                     ctx.emit_inst(
-                        DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}")
+                        DeclVar(
+                            name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"
+                        )
                     )
 
     # Lambda body: lower all named children except bindings.

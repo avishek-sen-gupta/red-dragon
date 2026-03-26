@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
     CallMethod,
@@ -83,7 +84,7 @@ def _lower_csharp_declarator(
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, type_hint)
     if is_ref:
         ctx.byref_params.add(var_name)
@@ -96,7 +97,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type("this", class_type)
-    ctx.emit_inst(DeclVar(name="this", value_reg=param_reg))
+    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=param_reg))
     ctx.seed_var_type("this", class_type)
 
 
@@ -144,7 +145,7 @@ def lower_method_decl(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_constructor_decl(
@@ -190,7 +191,7 @@ def lower_constructor_decl(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _lower_constructor_initializer(ctx: TreeSitterEmitContext, node) -> None:
@@ -211,7 +212,7 @@ def _lower_constructor_initializer(ctx: TreeSitterEmitContext, node) -> None:
         if arg.type == NT.ARGUMENT
     ]
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
     ctx.emit_inst(
         CallMethod(
             result_reg=ctx.fresh_reg(),
@@ -289,7 +290,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = class_name
@@ -360,7 +361,7 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
     prop_name = ctx.node_text(name_node)
 
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
 
     # Check for an initializer (e.g. ``= 42``)
     initializer_node = _find_property_initializer(ctx, node)
@@ -423,7 +424,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=iface_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = iface_name
@@ -463,7 +464,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
                 )
-        ctx.emit_inst(DeclVar(name=enum_name, value_reg=obj_reg))
+        ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=obj_reg))
 
 
 def lower_namespace(ctx: TreeSitterEmitContext, node) -> None:
@@ -521,7 +522,7 @@ def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_event_field_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -539,7 +540,7 @@ def lower_event_decl(ctx: TreeSitterEmitContext, node) -> None:
     event_name = ctx.node_text(name_node)
     val_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=val_reg, value=f"event:{event_name}"), node=node)
-    ctx.emit_inst(DeclVar(name=event_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(event_name), value_reg=val_reg), node=node)
 
 
 def lower_delegate_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -559,7 +560,7 @@ def lower_delegate_declaration(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 # ---------------------------------------------------------------------------

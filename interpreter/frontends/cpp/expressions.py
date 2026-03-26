@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -106,7 +107,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
 def lower_qualified_id(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower qualified_identifier (e.g., std::cout) as LOAD_VAR."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=ctx.node_text(node)), node=node)
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(ctx.node_text(node))), node=node)
     return reg
 
 
@@ -159,7 +160,9 @@ def lower_cpp_call(ctx: TreeSitterEmitContext, node) -> Register:
         if parts is not None:
             class_name, method_name = parts
             obj_reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=obj_reg, name=class_name), node=func_node)
+            ctx.emit_inst(
+                LoadVar(result_reg=obj_reg, name=VarName(class_name)), node=func_node
+            )
             arg_regs = extract_call_args(ctx, args_node)
             result_reg = ctx.fresh_reg()
             ctx.emit_inst(

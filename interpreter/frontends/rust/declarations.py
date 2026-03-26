@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -95,7 +96,7 @@ def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
     )
     ctx.seed_register_type(reg, type_hint)
     ctx.seed_param_type(pname, type_hint)
-    ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"))
     ctx.seed_var_type(pname, type_hint)
 
 
@@ -192,7 +193,7 @@ def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 # ── let declaration ──────────────────────────────────────────────────
@@ -217,7 +218,7 @@ def lower_let_decl(ctx: TreeSitterEmitContext, node) -> None:
     else:
         raw_name = _extract_let_pattern_name(ctx, pattern_node)
         var_name = ctx.declare_block_var(raw_name)
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
         ctx.seed_var_type(var_name, type_hint)
 
 
@@ -241,7 +242,9 @@ def _lower_tuple_destructure(
             node=child,
         )
         var_name = _extract_let_pattern_name(ctx, child)
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg), node=parent_node)
+        ctx.emit_inst(
+            DeclVar(name=VarName(var_name), value_reg=elem_reg), node=parent_node
+        )
 
 
 def _lower_struct_destructure(
@@ -272,7 +275,7 @@ def _lower_struct_destructure(
                 node=child,
             )
             ctx.emit_inst(
-                DeclVar(name=field_name, value_reg=field_reg), node=parent_node
+                DeclVar(name=VarName(field_name), value_reg=field_reg), node=parent_node
             )
 
 
@@ -292,7 +295,7 @@ def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 # ── impl block ───────────────────────────────────────────────────────
@@ -315,7 +318,7 @@ def lower_impl_item(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(impl_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=impl_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(impl_name), value_reg=cls_reg))
 
 
 # ── trait item ───────────────────────────────────────────────────────
@@ -338,7 +341,7 @@ def lower_trait_item(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=trait_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(trait_name), value_reg=cls_reg))
 
 
 # ── enum item ────────────────────────────────────────────────────────
@@ -374,7 +377,7 @@ def lower_enum_item(ctx: TreeSitterEmitContext, node) -> None:
                 )
             )
 
-    ctx.emit_inst(DeclVar(name=enum_name, value_reg=obj_reg))
+    ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=obj_reg))
 
 
 # ── const item ───────────────────────────────────────────────────────
@@ -393,7 +396,7 @@ def lower_const_item(ctx: TreeSitterEmitContext, node) -> None:
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, type_hint)
 
 
@@ -413,7 +416,7 @@ def lower_static_item(ctx: TreeSitterEmitContext, node) -> None:
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, type_hint)
 
 
@@ -429,7 +432,7 @@ def lower_type_item(ctx: TreeSitterEmitContext, node) -> None:
 
     val_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=val_reg, value=type_text), node=node)
-    ctx.emit_inst(DeclVar(name=alias_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(alias_name), value_reg=val_reg), node=node)
 
 
 # ── mod item ─────────────────────────────────────────────────────────
@@ -483,7 +486,7 @@ def lower_function_signature(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 # ── Rust prelude (Box, Option) ─────────────────────────────────────────
@@ -529,7 +532,7 @@ def _emit_method_params(ctx: TreeSitterEmitContext, param_names: list[str]) -> N
     for pname in param_names:
         reg = ctx.fresh_reg()
         ctx.emit_inst(Symbolic(result_reg=reg, hint=f"{constants.PARAM_PREFIX}{pname}"))
-        ctx.emit_inst(DeclVar(name=pname, value_reg=reg))
+        ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=reg))
 
 
 def _emit_prelude_func_ref(
@@ -538,7 +541,7 @@ def _emit_prelude_func_ref(
     """Emit CONST <function:name@label> + STORE_VAR."""
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
@@ -564,9 +567,9 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Label_(label=init_label))
     _emit_method_params(ctx, [constants.PARAM_SELF, "value"])
     self_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=self_reg, name=constants.PARAM_SELF))
+    ctx.emit_inst(LoadVar(result_reg=self_reg, name=VarName(constants.PARAM_SELF)))
     val_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=val_reg, name="value"))
+    ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName("value")))
     ctx.emit_inst(
         StoreField(
             obj_reg=self_reg, field_name=constants.BOXED_FIELD, value_reg=val_reg
@@ -580,7 +583,7 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Label_(label=mm_label))
     _emit_method_params(ctx, [constants.PARAM_SELF, "name"])
     mm_self = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=mm_self, name=constants.PARAM_SELF))
+    ctx.emit_inst(LoadVar(result_reg=mm_self, name=VarName(constants.PARAM_SELF)))
     mm_inner = ctx.fresh_reg()
     ctx.emit_inst(
         LoadField(
@@ -588,7 +591,7 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
         )
     )
     mm_name = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=mm_name, name="name"))
+    ctx.emit_inst(LoadVar(result_reg=mm_name, name=VarName("name")))
     mm_result = ctx.fresh_reg()
     ctx.emit_inst(
         LoadFieldIndirect(result_reg=mm_result, obj_reg=mm_inner, name_reg=mm_name)
@@ -605,7 +608,7 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
     # Store class ref (OUTSIDE class body, after end_label)
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
@@ -630,9 +633,9 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Label_(label=init_label))
     _emit_method_params(ctx, [constants.PARAM_SELF, "value"])
     self_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=self_reg, name=constants.PARAM_SELF))
+    ctx.emit_inst(LoadVar(result_reg=self_reg, name=VarName(constants.PARAM_SELF)))
     val_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=val_reg, name="value"))
+    ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName("value")))
     ctx.emit_inst(StoreField(obj_reg=self_reg, field_name="value", value_reg=val_reg))
     ctx.emit_inst(Return_(value_reg=self_reg))
     ctx.emit_inst(Label_(label=init_end))
@@ -642,7 +645,7 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Label_(label=unwrap_label))
     _emit_method_params(ctx, [constants.PARAM_SELF])
     self_reg2 = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=self_reg2, name=constants.PARAM_SELF))
+    ctx.emit_inst(LoadVar(result_reg=self_reg2, name=VarName(constants.PARAM_SELF)))
     val_reg2 = ctx.fresh_reg()
     ctx.emit_inst(LoadField(result_reg=val_reg2, obj_reg=self_reg2, field_name="value"))
     ctx.emit_inst(Return_(value_reg=val_reg2))
@@ -653,7 +656,7 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Label_(label=as_ref_label))
     _emit_method_params(ctx, [constants.PARAM_SELF])
     self_reg3 = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=self_reg3, name=constants.PARAM_SELF))
+    ctx.emit_inst(LoadVar(result_reg=self_reg3, name=VarName(constants.PARAM_SELF)))
     ctx.emit_inst(Return_(value_reg=self_reg3))
     ctx.emit_inst(Label_(label=as_ref_end))
 
@@ -666,7 +669,7 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 # ---------------------------------------------------------------------------
