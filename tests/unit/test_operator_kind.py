@@ -1,5 +1,7 @@
 """Tests for BinopKind and UnopKind enums."""
 
+import pytest
+
 from interpreter.operator_kind import BinopKind, UnopKind
 
 
@@ -26,7 +28,12 @@ class TestBinopKind:
 
         assert resolve_binop("+") == BinopKind.ADD
         assert resolve_binop("==") == BinopKind.EQ
-        assert resolve_binop("unknown_op") == "unknown_op"  # bridge fallback
+
+    def test_resolve_binop_rejects_unknown(self):
+        from interpreter.operator_kind import resolve_binop
+
+        with pytest.raises(ValueError, match="Unknown binary operator"):
+            resolve_binop("unknown_op")
 
 
 class TestUnopKind:
@@ -47,4 +54,9 @@ class TestUnopKind:
 
         assert resolve_unop("-") == UnopKind.NEG
         assert resolve_unop("not") == UnopKind.NOT
-        assert resolve_unop("unknown_op") == "unknown_op"  # bridge fallback
+
+    def test_resolve_unop_rejects_unknown(self):
+        from interpreter.operator_kind import resolve_unop
+
+        with pytest.raises(ValueError, match="Unknown unary operator"):
+            resolve_unop("unknown_op")

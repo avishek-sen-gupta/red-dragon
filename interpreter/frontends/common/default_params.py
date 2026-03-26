@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from interpreter import constants
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -94,7 +95,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(
         Binop(
             result_reg=cmp_reg,
-            operator=">",
+            operator=resolve_binop(">"),
             left=len_reg,
             right=load_idx,
         ),

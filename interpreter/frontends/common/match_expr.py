@@ -20,6 +20,7 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.register import Register
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -98,7 +99,7 @@ def _lower_arm(
         ctx.emit_inst(
             Binop(
                 result_reg=final_test,
-                operator="&&",
+                operator=resolve_binop("&&"),
                 left=str(test_reg),
                 right=str(guard_reg),
             ),
