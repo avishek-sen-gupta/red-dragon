@@ -6,6 +6,7 @@ from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg_traced, VMConfig
 from interpreter.trace_types import TraceStep, ExecutionTrace
 from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
 
 
 def _make_instructions(*specs):
@@ -62,9 +63,13 @@ class TestExecuteCfgTracedBasic:
         vm, trace = execute_cfg_traced(cfg, "entry", registry)
 
         # Mutating one snapshot must not affect others
-        trace.steps[0].vm_state.call_stack[0].local_vars["INJECTED"] = "bad"
-        assert "INJECTED" not in trace.steps[1].vm_state.call_stack[0].local_vars
-        assert "INJECTED" not in trace.steps[-1].vm_state.call_stack[0].local_vars
+        trace.steps[0].vm_state.call_stack[0].local_vars[VarName("INJECTED")] = "bad"
+        assert (
+            VarName("INJECTED") not in trace.steps[1].vm_state.call_stack[0].local_vars
+        )
+        assert (
+            VarName("INJECTED") not in trace.steps[-1].vm_state.call_stack[0].local_vars
+        )
 
     def test_block_label_and_instruction_index_are_correct(self):
         instructions = _make_instructions(
@@ -143,7 +148,7 @@ class TestExecuteCfgTracedBasic:
         vm, trace = execute_cfg_traced(cfg, "entry", registry)
 
         last_step_vars = trace.steps[-1].vm_state.call_stack[0].local_vars
-        assert unwrap(last_step_vars["x"]) == 42
+        assert unwrap(last_step_vars[VarName("x")]) == 42
 
     def test_used_llm_is_false_for_local_execution(self):
         instructions = _make_instructions(

@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_csharp(source: str, max_steps: int = 500) -> dict:
@@ -26,8 +27,8 @@ int y = x + 5;
 ;
 """
         vars_ = _run_csharp(source)
-        assert vars_["x"] == 10
-        assert vars_["y"] == 15
+        assert vars_[VarName("x")] == 10
+        assert vars_[VarName("y")] == 15
 
     def test_empty_statement_in_method(self):
         """Empty statement inside a method body should not affect VM execution."""
@@ -45,4 +46,4 @@ C c = new C();
 int r = c.Compute(3, 4);
 """
         vars_ = _run_csharp(source)
-        assert vars_["r"] == 7
+        assert vars_[VarName("r")] == 7

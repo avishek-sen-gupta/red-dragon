@@ -205,7 +205,7 @@ class StackFramePush(BaseModel):
     function_name: str
     return_label: CodeLabel | None = None
     closure_env_id: str = ""
-    captured_var_names: list[str | VarName] = []
+    captured_var_names: list[VarName] = []
     is_ctor: bool = False
 
 
@@ -214,7 +214,7 @@ VOID_RETURN: TypedValue = typed(None, scalar(TypeName.VOID))
 
 class StateUpdate(BaseModel):
     register_writes: dict[Register, Any] = {}
-    var_writes: dict[str | VarName, Any] = {}
+    var_writes: dict[VarName, Any] = {}
     heap_writes: list[HeapWrite] = []
     new_objects: list[NewObject] = []
     region_writes: list[RegionWrite] = []

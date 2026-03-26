@@ -13,6 +13,7 @@ from viz.panels.dataflow_graph_panel import (
     find_top_level_call_sites,
 )
 from viz.pipeline import run_pipeline
+from interpreter.var_name import VarName
 
 
 def _collect_labels(nodes: list[ChainNode]) -> list[str]:
@@ -243,7 +244,7 @@ result = quadruple(5)
 
         # Runtime: result == 20 (5 * 2 * 2)
         vm = run(self.SOURCE, language="python")
-        runtime_result = vm.current_frame.local_vars["result"]
+        runtime_result = vm.current_frame.local_vars[VarName("result")]
         assert (
             runtime_result.value == 20
         ), f"Expected quadruple(5) == 20, got {runtime_result.value}"

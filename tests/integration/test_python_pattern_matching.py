@@ -8,6 +8,7 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 from interpreter.vm.vm import _heap_addr
 
 
@@ -28,7 +29,7 @@ match x:
     case 3:
         y = 30
 """)
-        assert local_vars["y"] == 20
+        assert local_vars[VarName("y")] == 20
 
     def test_literal_str_match(self):
         _, local_vars = _run_python("""\
@@ -39,7 +40,7 @@ match x:
     case "hello":
         y = 2
 """)
-        assert local_vars["y"] == 2
+        assert local_vars[VarName("y")] == 2
 
 
 class TestWildcardMatch:
@@ -52,7 +53,7 @@ match x:
     case _:
         y = 99
 """)
-        assert local_vars["y"] == 99
+        assert local_vars[VarName("y")] == 99
 
 
 class TestCaptureMatch:
@@ -63,7 +64,7 @@ match x:
     case val:
         y = val
 """)
-        assert local_vars["y"] == 42
+        assert local_vars[VarName("y")] == 42
 
 
 class TestFallThrough:
@@ -79,7 +80,7 @@ match x:
     case _:
         y = 999
 """)
-        assert local_vars["y"] == 999
+        assert local_vars[VarName("y")] == 999
 
     def test_no_match_no_crash(self):
         _, local_vars = _run_python("""\
@@ -91,7 +92,7 @@ match x:
     case 2:
         y = 20
 """)
-        assert local_vars["y"] == 0
+        assert local_vars[VarName("y")] == 0
 
 
 class TestTupleDestructure:
@@ -105,7 +106,7 @@ match point:
 """,
             max_steps=1000,
         )
-        assert local_vars["z"] == 7
+        assert local_vars[VarName("z")] == 7
 
 
 class TestListDestructure:
@@ -119,7 +120,7 @@ match items:
 """,
             max_steps=1000,
         )
-        assert local_vars["z"] == 30
+        assert local_vars[VarName("z")] == 30
 
 
 class TestNestedSequence:
@@ -133,7 +134,7 @@ match data:
 """,
             max_steps=1000,
         )
-        assert local_vars["z"] == 6
+        assert local_vars[VarName("z")] == 6
 
 
 class TestDictPattern:
@@ -147,7 +148,7 @@ match d:
 """,
             max_steps=1000,
         )
-        assert local_vars["result"] == "Alice"
+        assert local_vars[VarName("result")] == "Alice"
 
 
 class TestOrPattern:
@@ -160,7 +161,7 @@ match x:
     case _:
         y = "no"
 """)
-        assert local_vars["y"] == "yes"
+        assert local_vars[VarName("y")] == "yes"
 
 
 class TestAsPattern:
@@ -171,7 +172,7 @@ match x:
     case val as name:
         y = name
 """)
-        assert local_vars["y"] == 42
+        assert local_vars[VarName("y")] == 42
 
 
 class TestGuard:
@@ -184,7 +185,7 @@ match x:
     case _:
         y = "non-positive"
 """)
-        assert local_vars["y"] == "non-positive"
+        assert local_vars[VarName("y")] == "non-positive"
 
 
 class TestClassPattern:
@@ -203,7 +204,7 @@ match p:
 """,
             max_steps=2000,
         )
-        assert local_vars["result"] == 4
+        assert local_vars[VarName("result")] == 4
 
     def test_class_positional(self):
         _, local_vars = _run_python(
@@ -221,7 +222,7 @@ match p:
 """,
             max_steps=2000,
         )
-        assert local_vars["result"] == 30
+        assert local_vars[VarName("result")] == 30
 
 
 class TestPositionalClassPattern:
@@ -242,7 +243,10 @@ match p:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 4
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 4
+        )
 
     def test_class_positional_two_captures(self):
         """Point(a, b) captures both fields via __match_args__."""
@@ -262,8 +266,14 @@ match p:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 3
-        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 4
+        assert (
+            isinstance(local_vars[VarName("ra")], int)
+            and local_vars[VarName("ra")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("rb")], int)
+            and local_vars[VarName("rb")] == 4
+        )
 
     def test_class_positional_literal_rejects(self):
         """Point(99, b) with non-matching x — falls to default."""
@@ -286,7 +296,8 @@ match p:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["result"], str) and local_vars["result"] == "default"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "default"
         )
 
     def test_class_positional_in_sequence_with_star(self):
@@ -312,14 +323,35 @@ match points:
 """,
             max_steps=5000,
         )
-        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 1
-        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 2
-        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
-        assert isinstance(local_vars["r0x"], int) and local_vars["r0x"] == 3
-        assert isinstance(local_vars["r0y"], int) and local_vars["r0y"] == 4
-        assert isinstance(local_vars["r1x"], int) and local_vars["r1x"] == 5
-        assert isinstance(local_vars["r1y"], int) and local_vars["r1y"] == 6
-        rest_addr = _heap_addr(local_vars["rest"])
+        assert (
+            isinstance(local_vars[VarName("ra")], int)
+            and local_vars[VarName("ra")] == 1
+        )
+        assert (
+            isinstance(local_vars[VarName("rb")], int)
+            and local_vars[VarName("rb")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("rest_len")], int)
+            and local_vars[VarName("rest_len")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("r0x")], int)
+            and local_vars[VarName("r0x")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("r0y")], int)
+            and local_vars[VarName("r0y")] == 4
+        )
+        assert (
+            isinstance(local_vars[VarName("r1x")], int)
+            and local_vars[VarName("r1x")] == 5
+        )
+        assert (
+            isinstance(local_vars[VarName("r1y")], int)
+            and local_vars[VarName("r1y")] == 6
+        )
+        rest_addr = _heap_addr(local_vars[VarName("rest")])
         r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
         r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
         assert vm.heap[r0_addr].type_hint == scalar("Point")
@@ -349,8 +381,14 @@ match line:
 """,
             max_steps=5000,
         )
-        assert isinstance(local_vars["dx"], int) and local_vars["dx"] == 3
-        assert isinstance(local_vars["dy"], int) and local_vars["dy"] == 4
+        assert (
+            isinstance(local_vars[VarName("dx")], int)
+            and local_vars[VarName("dx")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("dy")], int)
+            and local_vars[VarName("dy")] == 4
+        )
 
     def test_positional_with_guard_pythagorean(self):
         """Positional capture + guard using x*x + y*y."""
@@ -373,9 +411,16 @@ match p:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "near"
-        assert isinstance(local_vars["x"], int) and local_vars["x"] == 3
-        assert isinstance(local_vars["y"], int) and local_vars["y"] == 4
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "near"
+        )
+        assert (
+            isinstance(local_vars[VarName("x")], int) and local_vars[VarName("x")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("y")], int) and local_vars[VarName("y")] == 4
+        )
 
     def test_or_pattern_with_positional_class_alternatives(self):
         """Or-pattern across Success(v) | Error(v) — positional on both."""
@@ -399,8 +444,8 @@ match result_obj:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["extracted"], str)
-            and local_vars["extracted"] == "not found"
+            isinstance(local_vars[VarName("extracted")], str)
+            and local_vars[VarName("extracted")] == "not found"
         )
 
     def test_positional_in_or_inside_list_with_star(self):
@@ -432,14 +477,35 @@ match items:
 """,
             max_steps=5000,
         )
-        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 10
-        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 20
-        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
-        assert isinstance(local_vars["r0x"], int) and local_vars["r0x"] == 3
-        assert isinstance(local_vars["r0y"], int) and local_vars["r0y"] == 4
-        assert isinstance(local_vars["r1x"], int) and local_vars["r1x"] == 5
-        assert isinstance(local_vars["r1y"], int) and local_vars["r1y"] == 6
-        rest_addr = _heap_addr(local_vars["rest"])
+        assert (
+            isinstance(local_vars[VarName("ra")], int)
+            and local_vars[VarName("ra")] == 10
+        )
+        assert (
+            isinstance(local_vars[VarName("rb")], int)
+            and local_vars[VarName("rb")] == 20
+        )
+        assert (
+            isinstance(local_vars[VarName("rest_len")], int)
+            and local_vars[VarName("rest_len")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("r0x")], int)
+            and local_vars[VarName("r0x")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("r0y")], int)
+            and local_vars[VarName("r0y")] == 4
+        )
+        assert (
+            isinstance(local_vars[VarName("r1x")], int)
+            and local_vars[VarName("r1x")] == 5
+        )
+        assert (
+            isinstance(local_vars[VarName("r1y")], int)
+            and local_vars[VarName("r1y")] == 6
+        )
+        rest_addr = _heap_addr(local_vars[VarName("rest")])
         r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
         r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
         assert vm.heap[r0_addr].type_hint == scalar("Point")
@@ -467,8 +533,11 @@ match tree:
 """,
             max_steps=5000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 6
-        tree_addr = _heap_addr(local_vars["tree"])
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 6
+        )
+        tree_addr = _heap_addr(local_vars[VarName("tree")])
         assert vm.heap[tree_addr].type_hint == scalar("Node")
 
 
@@ -490,7 +559,7 @@ match z:
 """,
             max_steps=500,
         )
-        assert local_vars["result"] == "no match"
+        assert local_vars[VarName("result")] == "no match"
 
 
 class TestValuePatterns:
@@ -514,7 +583,10 @@ match c:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "red"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "red"
+        )
 
     def test_value_pattern_rejects_mismatch(self):
         """case Color.RED: with non-matching value — falls to default."""
@@ -535,7 +607,8 @@ match c:
             max_steps=2000,
         )
         assert (
-            isinstance(local_vars["result"], str) and local_vars["result"] == "no match"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "no match"
         )
 
     def test_value_pattern_multi_level(self):
@@ -558,7 +631,10 @@ match code:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "ok"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "ok"
+        )
 
     def test_value_pattern_in_or(self):
         """case Color.RED | Color.GREEN: with matching value."""
@@ -578,7 +654,10 @@ match c:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "warm"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "warm"
+        )
 
     def test_value_pattern_inside_tuple(self):
         """Value pattern as element of a tuple pattern."""
@@ -600,8 +679,8 @@ match data:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["result"], str)
-            and local_vars["result"] == "moving up"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "moving up"
         )
 
     def test_value_pattern_with_guard(self):
@@ -625,7 +704,10 @@ match severity:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "log"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "log"
+        )
 
     def test_value_pattern_in_list_with_star(self):
         """Value pattern as first element of list with star capture."""
@@ -653,12 +735,25 @@ match instructions:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["result"], str) and local_vars["result"] == "addition"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "addition"
         )
-        assert isinstance(local_vars["op_len"], int) and local_vars["op_len"] == 3
-        assert isinstance(local_vars["op_0"], int) and local_vars["op_0"] == 1
-        assert isinstance(local_vars["op_1"], int) and local_vars["op_1"] == 2
-        assert isinstance(local_vars["op_2"], int) and local_vars["op_2"] == 3
+        assert (
+            isinstance(local_vars[VarName("op_len")], int)
+            and local_vars[VarName("op_len")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("op_0")], int)
+            and local_vars[VarName("op_0")] == 1
+        )
+        assert (
+            isinstance(local_vars[VarName("op_1")], int)
+            and local_vars[VarName("op_1")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("op_2")], int)
+            and local_vars[VarName("op_2")] == 3
+        )
 
     def test_value_pattern_as_class_keyword(self):
         """Value pattern used as keyword argument in class pattern."""
@@ -686,8 +781,8 @@ match s:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["result"], str)
-            and local_vars["result"] == "red circle"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "red circle"
         )
 
     def test_value_or_pattern_http_status(self):
@@ -715,8 +810,8 @@ match code:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["category"], str)
-            and local_vars["category"] == "client_error"
+            isinstance(local_vars[VarName("category")], str)
+            and local_vars[VarName("category")] == "client_error"
         )
 
     def test_value_pattern_in_positional_class(self):
@@ -744,10 +839,13 @@ match m:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
         assert (
-            isinstance(local_vars["direction"], str)
-            and local_vars["direction"] == "horizontal"
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 42
+        )
+        assert (
+            isinstance(local_vars[VarName("direction")], str)
+            and local_vars[VarName("direction")] == "horizontal"
         )
 
     def test_value_pattern_head_with_star_of_typed_objects(self):
@@ -778,17 +876,31 @@ match commands:
 """,
             max_steps=5000,
         )
-        assert isinstance(local_vars["action"], str) and local_vars["action"] == "move"
-        assert isinstance(local_vars["t_len"], int) and local_vars["t_len"] == 2
         assert (
-            isinstance(local_vars["t0_name"], str) and local_vars["t0_name"] == "goblin"
+            isinstance(local_vars[VarName("action")], str)
+            and local_vars[VarName("action")] == "move"
         )
-        assert isinstance(local_vars["t0_hp"], int) and local_vars["t0_hp"] == 30
         assert (
-            isinstance(local_vars["t1_name"], str) and local_vars["t1_name"] == "dragon"
+            isinstance(local_vars[VarName("t_len")], int)
+            and local_vars[VarName("t_len")] == 2
         )
-        assert isinstance(local_vars["t1_hp"], int) and local_vars["t1_hp"] == 100
-        rest_addr = _heap_addr(local_vars["targets"])
+        assert (
+            isinstance(local_vars[VarName("t0_name")], str)
+            and local_vars[VarName("t0_name")] == "goblin"
+        )
+        assert (
+            isinstance(local_vars[VarName("t0_hp")], int)
+            and local_vars[VarName("t0_hp")] == 30
+        )
+        assert (
+            isinstance(local_vars[VarName("t1_name")], str)
+            and local_vars[VarName("t1_name")] == "dragon"
+        )
+        assert (
+            isinstance(local_vars[VarName("t1_hp")], int)
+            and local_vars[VarName("t1_hp")] == 100
+        )
+        rest_addr = _heap_addr(local_vars[VarName("targets")])
         t0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
         t1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
         assert vm.heap[t0_addr].type_hint == scalar("Target")
@@ -806,7 +918,7 @@ match items:
 """,
             max_steps=1000,
         )
-        assert local_vars["result"] == 1
+        assert local_vars[VarName("result")] == 1
 
     def test_or_pattern_with_captures(self):
         _, local_vars = _run_python(
@@ -818,7 +930,7 @@ match data:
 """,
             max_steps=1000,
         )
-        assert local_vars["result"] == 99
+        assert local_vars[VarName("result")] == 99
 
 
 class TestNestedCrossPattern:
@@ -837,7 +949,7 @@ match data:
 """,
             max_steps=3000,
         )
-        assert local_vars["result"] == 6
+        assert local_vars[VarName("result")] == 6
 
     def test_nested_mapping_in_class(self):
         _, local_vars = _run_python(
@@ -853,7 +965,7 @@ match cfg:
 """,
             max_steps=3000,
         )
-        assert local_vars["result"] is True
+        assert local_vars[VarName("result")] is True
 
 
 class TestStarPatterns:
@@ -871,11 +983,11 @@ match items:
 """,
             max_steps=1000,
         )
-        assert local_vars["result_first"] == 1
-        assert local_vars["rest_len"] == 3
-        assert local_vars["rest_0"] == 2
-        assert local_vars["rest_1"] == 3
-        assert local_vars["rest_2"] == 4
+        assert local_vars[VarName("result_first")] == 1
+        assert local_vars[VarName("rest_len")] == 3
+        assert local_vars[VarName("rest_0")] == 2
+        assert local_vars[VarName("rest_1")] == 3
+        assert local_vars[VarName("rest_2")] == 4
 
     def test_star_at_beginning(self):
         _, local_vars = _run_python(
@@ -890,10 +1002,10 @@ match items:
 """,
             max_steps=1000,
         )
-        assert local_vars["result_last"] == 3
-        assert local_vars["head_len"] == 2
-        assert local_vars["head_0"] == 1
-        assert local_vars["head_1"] == 2
+        assert local_vars[VarName("result_last")] == 3
+        assert local_vars[VarName("head_len")] == 2
+        assert local_vars[VarName("head_0")] == 1
+        assert local_vars[VarName("head_1")] == 2
 
     def test_star_in_middle(self):
         _, local_vars = _run_python(
@@ -910,12 +1022,12 @@ match items:
 """,
             max_steps=1000,
         )
-        assert local_vars["result_a"] == 1
-        assert local_vars["result_z"] == 5
-        assert local_vars["mid_len"] == 3
-        assert local_vars["mid_0"] == 2
-        assert local_vars["mid_1"] == 3
-        assert local_vars["mid_2"] == 4
+        assert local_vars[VarName("result_a")] == 1
+        assert local_vars[VarName("result_z")] == 5
+        assert local_vars[VarName("mid_len")] == 3
+        assert local_vars[VarName("mid_0")] == 2
+        assert local_vars[VarName("mid_1")] == 3
+        assert local_vars[VarName("mid_2")] == 4
 
     def test_star_empty_rest(self):
         _, local_vars = _run_python(
@@ -929,9 +1041,9 @@ match items:
 """,
             max_steps=1000,
         )
-        assert local_vars["result_a"] == 1
-        assert local_vars["result_b"] == 2
-        assert local_vars["rest_len"] == 0
+        assert local_vars[VarName("result_a")] == 1
+        assert local_vars[VarName("result_b")] == 2
+        assert local_vars[VarName("rest_len")] == 0
 
     def test_star_in_tuple(self):
         _, local_vars = _run_python(
@@ -945,9 +1057,9 @@ match data:
 """,
             max_steps=1000,
         )
-        assert local_vars["result"] == 10
-        assert local_vars["rest_0"] == 20
-        assert local_vars["rest_1"] == 30
+        assert local_vars[VarName("result")] == 10
+        assert local_vars[VarName("rest_0")] == 20
+        assert local_vars[VarName("rest_1")] == 30
 
     def test_star_minimum_length_rejects(self):
         _, local_vars = _run_python(
@@ -962,7 +1074,7 @@ match items:
 """,
             max_steps=1000,
         )
-        assert local_vars["result"] == "default"
+        assert local_vars[VarName("result")] == "default"
 
     def test_wildcard_star_no_binding(self):
         _, local_vars = _run_python(
@@ -974,7 +1086,7 @@ match items:
 """,
             max_steps=1000,
         )
-        assert local_vars["result"] == 1
+        assert local_vars[VarName("result")] == 1
 
     def test_nested_star_pattern(self):
         _, local_vars = _run_python(
@@ -991,12 +1103,12 @@ match data:
 """,
             max_steps=2000,
         )
-        assert local_vars["result_a"] == 1
-        assert local_vars["result_b"] == 2
-        assert local_vars["result_c"] == 5
-        assert local_vars["inner_len"] == 2
-        assert local_vars["inner_0"] == 3
-        assert local_vars["inner_1"] == 4
+        assert local_vars[VarName("result_a")] == 1
+        assert local_vars[VarName("result_b")] == 2
+        assert local_vars[VarName("result_c")] == 5
+        assert local_vars[VarName("inner_len")] == 2
+        assert local_vars[VarName("inner_0")] == 3
+        assert local_vars[VarName("inner_1")] == 4
 
 
 class TestCompoundPatterns:
@@ -1024,15 +1136,36 @@ match points:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["rx"], int) and local_vars["rx"] == 1
-        assert isinstance(local_vars["ry"], int) and local_vars["ry"] == 2
-        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
-        assert isinstance(local_vars["r0x"], int) and local_vars["r0x"] == 3
-        assert isinstance(local_vars["r0y"], int) and local_vars["r0y"] == 4
-        assert isinstance(local_vars["r1x"], int) and local_vars["r1x"] == 5
-        assert isinstance(local_vars["r1y"], int) and local_vars["r1y"] == 6
+        assert (
+            isinstance(local_vars[VarName("rx")], int)
+            and local_vars[VarName("rx")] == 1
+        )
+        assert (
+            isinstance(local_vars[VarName("ry")], int)
+            and local_vars[VarName("ry")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("rest_len")], int)
+            and local_vars[VarName("rest_len")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("r0x")], int)
+            and local_vars[VarName("r0x")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("r0y")], int)
+            and local_vars[VarName("r0y")] == 4
+        )
+        assert (
+            isinstance(local_vars[VarName("r1x")], int)
+            and local_vars[VarName("r1x")] == 5
+        )
+        assert (
+            isinstance(local_vars[VarName("r1y")], int)
+            and local_vars[VarName("r1y")] == 6
+        )
         # Verify rest elements are Point objects via heap type_hint
-        rest_addr = _heap_addr(local_vars["rest"])
+        rest_addr = _heap_addr(local_vars[VarName("rest")])
         r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
         r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
         assert vm.heap[r0_addr].type_hint == scalar("Point")
@@ -1053,15 +1186,25 @@ match data:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["rn"], str) and local_vars["rn"] == "Alice"
-        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 30
-        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 1
         assert (
-            isinstance(local_vars["rest0_name"], str)
-            and local_vars["rest0_name"] == "Bob"
+            isinstance(local_vars[VarName("rn")], str)
+            and local_vars[VarName("rn")] == "Alice"
         )
         assert (
-            isinstance(local_vars["rest0_age"], int) and local_vars["rest0_age"] == 25
+            isinstance(local_vars[VarName("ra")], int)
+            and local_vars[VarName("ra")] == 30
+        )
+        assert (
+            isinstance(local_vars[VarName("rest_len")], int)
+            and local_vars[VarName("rest_len")] == 1
+        )
+        assert (
+            isinstance(local_vars[VarName("rest0_name")], str)
+            and local_vars[VarName("rest0_name")] == "Bob"
+        )
+        assert (
+            isinstance(local_vars[VarName("rest0_age")], int)
+            and local_vars[VarName("rest0_age")] == 25
         )
 
     def test_guard_with_sequence_captures(self):
@@ -1081,9 +1224,18 @@ match data:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "small"
-        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 10
-        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 20
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "small"
+        )
+        assert (
+            isinstance(local_vars[VarName("ra")], int)
+            and local_vars[VarName("ra")] == 10
+        )
+        assert (
+            isinstance(local_vars[VarName("rb")], int)
+            and local_vars[VarName("rb")] == 20
+        )
 
     def test_class_pattern_with_guard(self):
         """Class keyword pattern with guard on field product — verify matched object type."""
@@ -1107,11 +1259,20 @@ match r:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "small"
-        assert isinstance(local_vars["rw"], int) and local_vars["rw"] == 10
-        assert isinstance(local_vars["rh"], int) and local_vars["rh"] == 5
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "small"
+        )
+        assert (
+            isinstance(local_vars[VarName("rw")], int)
+            and local_vars[VarName("rw")] == 10
+        )
+        assert (
+            isinstance(local_vars[VarName("rh")], int)
+            and local_vars[VarName("rh")] == 5
+        )
         # Verify r is a Rect via heap type_hint
-        r_addr = _heap_addr(local_vars["r"])
+        r_addr = _heap_addr(local_vars[VarName("r")])
         assert vm.heap[r_addr].type_hint == scalar("Rect")
 
     def test_mixed_pattern_types_across_cases(self):
@@ -1132,10 +1293,22 @@ match data:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 7
-        assert isinstance(local_vars["rt"], str) and local_vars["rt"] == "point"
-        assert isinstance(local_vars["rx"], int) and local_vars["rx"] == 3
-        assert isinstance(local_vars["ry"], int) and local_vars["ry"] == 4
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 7
+        )
+        assert (
+            isinstance(local_vars[VarName("rt")], str)
+            and local_vars[VarName("rt")] == "point"
+        )
+        assert (
+            isinstance(local_vars[VarName("rx")], int)
+            and local_vars[VarName("rx")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("ry")], int)
+            and local_vars[VarName("ry")] == 4
+        )
 
     def test_star_with_class_field_access(self):
         """Star captures rest of array after class-pattern head — verify types + all fields."""
@@ -1159,21 +1332,36 @@ match cart:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["rn"], str) and local_vars["rn"] == "apple"
-        assert isinstance(local_vars["rp"], int) and local_vars["rp"] == 1
         assert (
-            isinstance(local_vars["others_len"], int) and local_vars["others_len"] == 2
+            isinstance(local_vars[VarName("rn")], str)
+            and local_vars[VarName("rn")] == "apple"
         )
         assert (
-            isinstance(local_vars["o0_name"], str) and local_vars["o0_name"] == "banana"
+            isinstance(local_vars[VarName("rp")], int)
+            and local_vars[VarName("rp")] == 1
         )
-        assert isinstance(local_vars["o0_price"], int) and local_vars["o0_price"] == 2
         assert (
-            isinstance(local_vars["o1_name"], str) and local_vars["o1_name"] == "cherry"
+            isinstance(local_vars[VarName("others_len")], int)
+            and local_vars[VarName("others_len")] == 2
         )
-        assert isinstance(local_vars["o1_price"], int) and local_vars["o1_price"] == 3
+        assert (
+            isinstance(local_vars[VarName("o0_name")], str)
+            and local_vars[VarName("o0_name")] == "banana"
+        )
+        assert (
+            isinstance(local_vars[VarName("o0_price")], int)
+            and local_vars[VarName("o0_price")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("o1_name")], str)
+            and local_vars[VarName("o1_name")] == "cherry"
+        )
+        assert (
+            isinstance(local_vars[VarName("o1_price")], int)
+            and local_vars[VarName("o1_price")] == 3
+        )
         # Verify others elements are Item objects via heap type_hint
-        others_addr = _heap_addr(local_vars["others"])
+        others_addr = _heap_addr(local_vars[VarName("others")])
         o0_addr = _heap_addr(vm.heap[others_addr].fields["0"].value)
         o1_addr = _heap_addr(vm.heap[others_addr].fields["1"].value)
         assert vm.heap[o0_addr].type_hint == scalar("Item")
@@ -1196,9 +1384,9 @@ match data:
 """,
             max_steps=2000,
         )
-        assert local_vars["result"] == "b_bigger"
-        assert local_vars["ra"] == 3
-        assert local_vars["rb"] == 7
+        assert local_vars[VarName("result")] == "b_bigger"
+        assert local_vars[VarName("ra")] == 3
+        assert local_vars[VarName("rb")] == 7
 
 
 class TestStressPatterns:
@@ -1223,12 +1411,27 @@ match resp:
 """,
             max_steps=5000,
         )
-        assert isinstance(local_vars["rf"], int) and local_vars["rf"] == 10
-        assert isinstance(local_vars["rn"], int) and local_vars["rn"] == 3
-        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
-        assert isinstance(local_vars["r0"], int) and local_vars["r0"] == 20
-        assert isinstance(local_vars["r1"], int) and local_vars["r1"] == 30
-        r_addr = _heap_addr(local_vars["resp"])
+        assert (
+            isinstance(local_vars[VarName("rf")], int)
+            and local_vars[VarName("rf")] == 10
+        )
+        assert (
+            isinstance(local_vars[VarName("rn")], int)
+            and local_vars[VarName("rn")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("rest_len")], int)
+            and local_vars[VarName("rest_len")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("r0")], int)
+            and local_vars[VarName("r0")] == 20
+        )
+        assert (
+            isinstance(local_vars[VarName("r1")], int)
+            and local_vars[VarName("r1")] == 30
+        )
+        r_addr = _heap_addr(local_vars[VarName("resp")])
         assert vm.heap[r_addr].type_hint == scalar("Response")
 
     def test_multi_case_dispatch_with_guards(self):
@@ -1257,9 +1460,15 @@ match cmd:
 """,
             max_steps=5000,
         )
-        assert isinstance(local_vars["action"], str) and local_vars["action"] == "move"
-        assert isinstance(local_vars["detail"], int) and local_vars["detail"] == 6
-        cmd_addr = _heap_addr(local_vars["cmd"])
+        assert (
+            isinstance(local_vars[VarName("action")], str)
+            and local_vars[VarName("action")] == "move"
+        )
+        assert (
+            isinstance(local_vars[VarName("detail")], int)
+            and local_vars[VarName("detail")] == 6
+        )
+        cmd_addr = _heap_addr(local_vars[VarName("cmd")])
         assert vm.heap[cmd_addr].type_hint == scalar("Cmd")
 
     def test_as_pattern_wrapping_sequence(self):
@@ -1274,8 +1483,14 @@ match data:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 2
-        assert isinstance(local_vars["rc"], int) and local_vars["rc"] == 3
+        assert (
+            isinstance(local_vars[VarName("rb")], int)
+            and local_vars[VarName("rb")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("rc")], int)
+            and local_vars[VarName("rc")] == 3
+        )
 
     def test_many_alternative_or_pattern(self):
         """Or-pattern with 4+ alternatives per case across multiple cases."""
@@ -1296,8 +1511,8 @@ match status:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["category"], str)
-        assert local_vars["category"] == "client_error"
+        assert isinstance(local_vars[VarName("category")], str)
+        assert local_vars[VarName("category")] == "client_error"
 
     def test_binary_tree_nested_class_patterns(self):
         """3-level deep nested class patterns on a binary tree."""
@@ -1318,10 +1533,19 @@ match tree:
 """,
             max_steps=5000,
         )
-        assert isinstance(local_vars["rv"], int) and local_vars["rv"] == 1
-        assert isinstance(local_vars["lv_val"], int) and local_vars["lv_val"] == 2
-        assert isinstance(local_vars["llv"], int) and local_vars["llv"] == 4
-        tree_addr = _heap_addr(local_vars["tree"])
+        assert (
+            isinstance(local_vars[VarName("rv")], int)
+            and local_vars[VarName("rv")] == 1
+        )
+        assert (
+            isinstance(local_vars[VarName("lv_val")], int)
+            and local_vars[VarName("lv_val")] == 2
+        )
+        assert (
+            isinstance(local_vars[VarName("llv")], int)
+            and local_vars[VarName("llv")] == 4
+        )
+        tree_addr = _heap_addr(local_vars[VarName("tree")])
         assert vm.heap[tree_addr].type_hint == scalar("Node")
         left_addr = _heap_addr(vm.heap[tree_addr].fields["left"].value)
         assert vm.heap[left_addr].type_hint == scalar("Node")
@@ -1349,10 +1573,15 @@ match v:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["label"], str) and local_vars["label"] == "boundary"
+            isinstance(local_vars[VarName("label")], str)
+            and local_vars[VarName("label")] == "boundary"
         )
-        assert isinstance(local_vars["x"], int) and local_vars["x"] == 3
-        assert isinstance(local_vars["y"], int) and local_vars["y"] == 4
+        assert (
+            isinstance(local_vars[VarName("x")], int) and local_vars[VarName("x")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("y")], int) and local_vars[VarName("y")] == 4
+        )
 
     def test_star_with_guard_on_rest_length(self):
         """Star capture with guard checking len(rest) > threshold."""
@@ -1371,9 +1600,18 @@ match items:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "long"
-        assert isinstance(local_vars["rf"], int) and local_vars["rf"] == 1
-        assert isinstance(local_vars["rl"], int) and local_vars["rl"] == 4
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "long"
+        )
+        assert (
+            isinstance(local_vars[VarName("rf")], int)
+            and local_vars[VarName("rf")] == 1
+        )
+        assert (
+            isinstance(local_vars[VarName("rl")], int)
+            and local_vars[VarName("rl")] == 4
+        )
 
     def test_dict_pattern_all_fields_extracted(self):
         """Dict pattern matching and extracting all keys."""
@@ -1388,9 +1626,15 @@ match config:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["addr"], str) and local_vars["addr"] == "localhost"
-        assert isinstance(local_vars["port"], int) and local_vars["port"] == 8080
-        assert local_vars["is_debug"] is True
+        assert (
+            isinstance(local_vars[VarName("addr")], str)
+            and local_vars[VarName("addr")] == "localhost"
+        )
+        assert (
+            isinstance(local_vars[VarName("port")], int)
+            and local_vars[VarName("port")] == 8080
+        )
+        assert local_vars[VarName("is_debug")] is True
 
 
 class TestOrPatternWithBindings:
@@ -1405,7 +1649,10 @@ match data:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 99
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 99
+        )
 
     def test_or_pattern_first_alternative_binds(self):
         """case (1, x) | (2, x): with (1, 77) — first alt matches, x bound to 77."""
@@ -1418,7 +1665,10 @@ match data:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 77
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 77
+        )
 
     def test_or_pattern_list_with_captures(self):
         """case [1, y] | [2, y]: with [2, 42] — y bound to 42."""
@@ -1431,7 +1681,10 @@ match data:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 42
+        )
 
     def test_or_pattern_no_match_falls_through(self):
         """Neither alternative matches — falls to default."""
@@ -1448,7 +1701,8 @@ match data:
             max_steps=2000,
         )
         assert (
-            isinstance(local_vars["result"], str) and local_vars["result"] == "default"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "default"
         )
 
     def test_or_pattern_with_class_alternatives(self):
@@ -1473,7 +1727,8 @@ match pet:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["result"], str) and local_vars["result"] == "Whiskers"
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "Whiskers"
         )
 
     def test_or_pattern_with_star_in_alternatives(self):
@@ -1489,9 +1744,13 @@ match data:
             max_steps=3000,
         )
         assert (
-            isinstance(local_vars["first_rest"], int) and local_vars["first_rest"] == 10
+            isinstance(local_vars[VarName("first_rest")], int)
+            and local_vars[VarName("first_rest")] == 10
         )
-        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 3
+        assert (
+            isinstance(local_vars[VarName("rest_len")], int)
+            and local_vars[VarName("rest_len")] == 3
+        )
 
     def test_or_pattern_nested_inside_sequence(self):
         """Or-pattern as an element inside a tuple pattern."""
@@ -1506,7 +1765,10 @@ match data:
 """,
             max_steps=2000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 404
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 404
+        )
 
     def test_or_pattern_with_guard_on_capture(self):
         """Or-pattern with guard referencing the captured variable."""
@@ -1523,8 +1785,14 @@ match data:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "big"
-        assert isinstance(local_vars["rv"], int) and local_vars["rv"] == 100
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "big"
+        )
+        assert (
+            isinstance(local_vars[VarName("rv")], int)
+            and local_vars[VarName("rv")] == 100
+        )
 
     def test_or_pattern_with_mapping_alternatives(self):
         """Or-pattern across dict patterns sharing a key."""
@@ -1539,7 +1807,10 @@ match event:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 42
+        )
 
     def test_three_way_or_pattern(self):
         """Three alternatives in an or-pattern, third matches."""
@@ -1554,4 +1825,7 @@ match data:
 """,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 99
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 99
+        )

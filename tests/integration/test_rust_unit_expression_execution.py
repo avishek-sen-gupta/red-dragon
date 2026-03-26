@@ -8,6 +8,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_rust(source: str, max_steps: int = 200):
@@ -20,7 +21,7 @@ class TestRustUnitExpressionExecution:
     def test_unit_expression_assigned(self):
         """let x = (); should store the unit value."""
         _, local_vars = _run_rust("let x = ();")
-        assert local_vars["x"] == "()"
+        assert local_vars[VarName("x")] == "()"
 
     def test_unit_expression_in_block(self):
         """Unit expression as last expression in a block."""
@@ -28,8 +29,8 @@ class TestRustUnitExpressionExecution:
 let a = 42;
 let x = ();
 """)
-        assert local_vars["a"] == 42
-        assert local_vars["x"] == "()"
+        assert local_vars[VarName("a")] == 42
+        assert local_vars[VarName("x")] == "()"
 
     def test_unit_as_function_return(self):
         """Function returning () should return unit."""
@@ -40,5 +41,5 @@ fn do_nothing() {
 let x = do_nothing();
 let y = 42;
 """)
-        assert local_vars["y"] == 42
-        assert local_vars["x"] == "()"
+        assert local_vars[VarName("y")] == 42
+        assert local_vars[VarName("x")] == "()"

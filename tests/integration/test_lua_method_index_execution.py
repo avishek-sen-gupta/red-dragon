@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_lua(source: str, max_steps: int = 200):
@@ -25,7 +26,7 @@ local t = {}
 t.greet = function(self) return "hello" end
 local r = t:greet()
 """)
-        assert local_vars["r"] == "hello"
+        assert local_vars[VarName("r")] == "hello"
 
     def test_method_call_with_args_executes(self):
         """obj:method(arg) should pass arguments correctly."""
@@ -34,7 +35,7 @@ local t = {}
 t.add = function(self, x) return x end
 local r = t:add(42)
 """)
-        assert local_vars["r"] == 42
+        assert local_vars[VarName("r")] == 42
 
     def test_method_call_chained(self):
         """obj:method1():method2() chained call should return correct value."""
@@ -44,4 +45,4 @@ t.get = function(self) return self end
 t.val = function(self) return 42 end
 local r = t:get():val()
 """)
-        assert local_vars["r"] == 42
+        assert local_vars[VarName("r")] == 42

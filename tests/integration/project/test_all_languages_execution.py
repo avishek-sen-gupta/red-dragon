@@ -15,6 +15,7 @@ from interpreter.project.compiler import compile_project
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
+from interpreter.var_name import VarName
 
 
 def _run_project_vm(tmp_path, files, entry, language):
@@ -64,7 +65,7 @@ class TestPythonMultiFile:
             "main.py",
             Language.PYTHON,
         )
-        assert result["result"] == 30
+        assert result[VarName("result")] == 30
 
     def test_from_import_variable(self, tmp_path):
         result = _run_project(
@@ -76,7 +77,7 @@ class TestPythonMultiFile:
             "main.py",
             Language.PYTHON,
         )
-        assert result["result"] == 3.14
+        assert result[VarName("result")] == 3.14
 
     def test_from_import_class(self, tmp_path):
         result = _run_project(
@@ -92,7 +93,7 @@ class TestPythonMultiFile:
             "main.py",
             Language.PYTHON,
         )
-        assert "d" in result
+        assert VarName("d") in result
 
     def test_transitive_imports(self, tmp_path):
         result = _run_project(
@@ -105,7 +106,7 @@ class TestPythonMultiFile:
             "main.py",
             Language.PYTHON,
         )
-        assert result["result"] == 20
+        assert result[VarName("result")] == 20
 
     def test_cross_module_method_call(self, tmp_path):
         result = _run_project(
@@ -125,7 +126,7 @@ class TestPythonMultiFile:
             "main.py",
             Language.PYTHON,
         )
-        assert result["a"] == 25
+        assert result[VarName("a")] == 25
 
 
 # ── JavaScript ───────────────────────────────────────────────────
@@ -142,7 +143,7 @@ class TestJavaScriptMultiFile:
             "main.js",
             Language.JAVASCRIPT,
         )
-        assert result["result"] == 30
+        assert result[VarName("result")] == 30
 
     def test_multiple_named_imports(self, tmp_path):
         result = _run_project(
@@ -161,8 +162,8 @@ class TestJavaScriptMultiFile:
             "main.js",
             Language.JAVASCRIPT,
         )
-        assert result["s"] == 7
-        assert result["p"] == 12
+        assert result[VarName("s")] == 7
+        assert result[VarName("p")] == 12
 
 
 # ── TypeScript ───────────────────────────────────────────────────
@@ -182,7 +183,7 @@ class TestTypeScriptMultiFile:
             "main.ts",
             Language.TYPESCRIPT,
         )
-        assert result["result"] == 42
+        assert result[VarName("result")] == 42
 
 
 # ── Java ─────────────────────────────────────────────────────────
@@ -212,7 +213,7 @@ class TestJavaMultiFile:
             "Main.java",
             Language.JAVA,
         )
-        assert result["answer"] == 30
+        assert result[VarName("answer")] == 30
 
 
 # ── Go ───────────────────────────────────────────────────────────
@@ -234,7 +235,7 @@ class TestGoMultiFile:
             "main.go",
             Language.GO,
         )
-        assert result["result"] == 30
+        assert result[VarName("result")] == 30
 
 
 # ── Rust ─────────────────────────────────────────────────────────
@@ -255,7 +256,7 @@ class TestRustMultiFile:
             "main.rs",
             Language.RUST,
         )
-        assert result["answer"] == 30
+        assert result[VarName("answer")] == 30
 
 
 # ── C ────────────────────────────────────────────────────────────
@@ -276,7 +277,7 @@ class TestCMultiFile:
             "main.c",
             Language.C,
         )
-        assert result["answer"] == 30
+        assert result[VarName("answer")] == 30
 
 
 # ── C++ ──────────────────────────────────────────────────────────
@@ -297,7 +298,7 @@ class TestCppMultiFile:
             "main.cpp",
             Language.CPP,
         )
-        assert result["answer"] == 30
+        assert result[VarName("answer")] == 30
 
 
 # ── C# ───────────────────────────────────────────────────────────
@@ -324,7 +325,7 @@ class TestCSharpMultiFile:
             "Program.cs",
             Language.CSHARP,
         )
-        assert result["answer"] == 30
+        assert result[VarName("answer")] == 30
 
 
 # ── Kotlin ───────────────────────────────────────────────────────
@@ -341,7 +342,7 @@ class TestKotlinMultiFile:
             "Main.kt",
             Language.KOTLIN,
         )
-        assert result["result"] == 30
+        assert result[VarName("result")] == 30
 
 
 # ── Scala ────────────────────────────────────────────────────────
@@ -358,7 +359,7 @@ class TestScalaMultiFile:
             "Main.scala",
             Language.SCALA,
         )
-        assert result["result"] == 30
+        assert result[VarName("result")] == 30
 
 
 # ── Ruby ─────────────────────────────────────────────────────────
@@ -375,7 +376,7 @@ class TestRubyMultiFile:
             "main.rb",
             Language.RUBY,
         )
-        assert result["result"] == 43
+        assert result[VarName("result")] == 43
 
 
 # ── PHP ──────────────────────────────────────────────────────────
@@ -392,7 +393,7 @@ class TestPhpMultiFile:
             "main.php",
             Language.PHP,
         )
-        assert result["$result"] == 30
+        assert result[VarName("$result")] == 30
 
 
 # ── Lua ──────────────────────────────────────────────────────────
@@ -409,7 +410,7 @@ class TestLuaMultiFile:
             "main.lua",
             Language.LUA,
         )
-        assert result["result"] == 30
+        assert result[VarName("result")] == 30
 
 
 # ── Pascal ───────────────────────────────────────────────────────
@@ -437,7 +438,7 @@ class TestPascalMultiFile:
             "main.pas",
             Language.PASCAL,
         )
-        assert result["answer"] == 30
+        assert result[VarName("answer")] == 30
 
 
 # ── COBOL ────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_pascal(source: str, max_steps: int = 300):
@@ -29,7 +30,7 @@ begin
     writeln(i);
 end."""
         _, local_vars = _run_pascal(source, max_steps=500)
-        assert isinstance(local_vars["i"], int)
+        assert isinstance(local_vars[VarName("i")], int)
 
     def test_foreach_accumulates_via_index(self):
         """for-in loop should iterate — verify the index counter advances."""
@@ -39,7 +40,7 @@ end."""
         )
         # __foreach_idx_i tracks iterations; should be > 0 if loop ran
         assert (
-            local_vars.get("__foreach_idx_i", 0) > 0
+            local_vars.get(VarName("__foreach_idx_i"), 0) > 0
         ), "foreach should iterate at least once"
 
 
@@ -49,8 +50,8 @@ class TestPascalGotoExecution:
         _, local_vars = _run_pascal(
             "program M; label skip; begin x := 1; goto skip; x := 99; skip: y := 2; end."
         )
-        assert local_vars["x"] == 1, "goto should skip x := 99"
-        assert local_vars["y"] == 2
+        assert local_vars[VarName("x")] == 1, "goto should skip x := 99"
+        assert local_vars[VarName("y")] == 2
 
     def test_goto_backward_jump(self):
         """goto can jump backward to create a loop."""
@@ -58,7 +59,7 @@ class TestPascalGotoExecution:
             "program M; label top; var x: Integer; begin x := 0; top: x := x + 1; if x < 3 then goto top; end.",
             max_steps=500,
         )
-        assert local_vars["x"] == 3
+        assert local_vars[VarName("x")] == 3
 
 
 class TestPascalDeclClassExecution:
@@ -72,8 +73,8 @@ type
 begin
 end."""
         _, local_vars = _run_pascal(source)
-        assert isinstance(local_vars["TAnimal"], ClassRef)
-        assert local_vars["TAnimal"].name == "TAnimal"
+        assert isinstance(local_vars[VarName("TAnimal")], ClassRef)
+        assert local_vars[VarName("TAnimal")].name == "TAnimal"
 
 
 class TestPascalEnumExecution:
@@ -86,4 +87,4 @@ var c: Integer;
 begin
   c := Green;
 end.""")
-        assert local_vars["c"] == 1
+        assert local_vars[VarName("c")] == 1
