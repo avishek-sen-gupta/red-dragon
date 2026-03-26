@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
     Const,
@@ -48,7 +49,12 @@ def lower_ruby_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
     rhs_reg = ctx.lower_expr(right)
     result = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=result, operator=op_text, left=lhs_reg, right=rhs_reg),
+        Binop(
+            result_reg=result,
+            operator=resolve_binop(op_text),
+            left=lhs_reg,
+            right=rhs_reg,
+        ),
         node=node,
     )
     lower_ruby_store_target(ctx, left, result, node)

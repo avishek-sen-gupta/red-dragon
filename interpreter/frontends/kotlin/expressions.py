@@ -12,6 +12,7 @@ import re
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -537,7 +538,9 @@ def _lower_not_null_assertion(ctx: TreeSitterEmitContext, node) -> Register:
         return lower_const_literal(ctx, node)
     expr_reg = ctx.lower_expr(named_children[0])
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Unop(result_reg=reg, operator="!!", operand=expr_reg), node=node)
+    ctx.emit_inst(
+        Unop(result_reg=reg, operator=resolve_unop("!!"), operand=expr_reg), node=node
+    )
     return reg
 
 
@@ -826,7 +829,10 @@ def lower_elvis_expr(ctx: TreeSitterEmitContext, node) -> Register:
     right_reg = ctx.lower_expr(rhs_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=reg, operator="?:", left=left_reg, right=right_reg), node=node
+        Binop(
+            result_reg=reg, operator=resolve_binop("?:"), left=left_reg, right=right_reg
+        ),
+        node=node,
     )
     return reg
 
@@ -842,7 +848,12 @@ def _lower_elvis_with_throw(
 
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=cond_reg, operator="!=", left=left_reg, right=null_reg)
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("!="),
+            left=left_reg,
+            right=null_reg,
+        )
     )
 
     non_null_label = ctx.fresh_label("elvis_non_null")
@@ -897,7 +908,12 @@ def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> Register:
     bitwise_op = _KOTLIN_BITWISE_INFIX.get(func_name)
     if bitwise_op:
         ctx.emit_inst(
-            Binop(result_reg=reg, operator=bitwise_op, left=left_reg, right=right_reg),
+            Binop(
+                result_reg=reg,
+                operator=resolve_binop(bitwise_op),
+                left=left_reg,
+                right=right_reg,
+            ),
             node=node,
         )
     else:

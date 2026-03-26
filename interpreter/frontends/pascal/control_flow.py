@@ -10,6 +10,7 @@ from interpreter.ir import CodeLabel
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.node_types import PascalNodeType
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -196,7 +197,12 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(LoadVar(result_reg=current_reg, name=var_name))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=cond_reg, operator=cmp_op, left=current_reg, right=end_reg)
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop(cmp_op),
+            left=current_reg,
+            right=end_reg,
+        )
     )
     ctx.emit_inst(
         BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
@@ -213,7 +219,12 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     next_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=next_reg, operator=step_op, left=cur_reg, right=one_reg)
+        Binop(
+            result_reg=next_reg,
+            operator=resolve_binop(step_op),
+            left=cur_reg,
+            right=one_reg,
+        )
     )
     ctx.emit_inst(StoreVar(name=var_name, value_reg=next_reg))
     ctx.emit_inst(Branch(label=loop_label))
@@ -288,7 +299,7 @@ def _lower_pascal_case_branch(
             ctx.emit_inst(
                 Binop(
                     result_reg=cmp_reg,
-                    operator="==",
+                    operator=resolve_binop("=="),
                     left=selector_reg,
                     right=first_val_reg,
                 ),
@@ -300,7 +311,7 @@ def _lower_pascal_case_branch(
                 ctx.emit_inst(
                     Binop(
                         result_reg=extra_cmp,
-                        operator="==",
+                        operator=resolve_binop("=="),
                         left=selector_reg,
                         right=extra_reg,
                     )
@@ -309,7 +320,7 @@ def _lower_pascal_case_branch(
                 ctx.emit_inst(
                     Binop(
                         result_reg=or_reg,
-                        operator="or",
+                        operator=resolve_binop("or"),
                         left=cmp_reg,
                         right=extra_cmp,
                     )
@@ -526,7 +537,12 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(LoadVar(result_reg=cur_idx_reg, name=idx_var))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=cond_reg, operator="<", left=cur_idx_reg, right=len_reg)
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<"),
+            left=cur_idx_reg,
+            right=len_reg,
+        )
     )
     ctx.emit_inst(
         BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
@@ -547,7 +563,12 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     next_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=next_reg, operator="+", left=cur2_reg, right=one_reg)
+        Binop(
+            result_reg=next_reg,
+            operator=resolve_binop("+"),
+            left=cur2_reg,
+            right=one_reg,
+        )
     )
     ctx.emit_inst(StoreVar(name=idx_var, value_reg=next_reg))
     ctx.emit_inst(Branch(label=loop_label))

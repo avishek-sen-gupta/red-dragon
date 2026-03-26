@@ -38,6 +38,7 @@ from interpreter.cobol.ir_encoders import (
     build_encode_float_ir,
     build_decode_float_ir,
 )
+from interpreter.operator_kind import resolve_binop
 from interpreter.ir import Opcode, CodeLabel, NO_LABEL
 from interpreter.instructions import (
     InstructionBase,
@@ -200,7 +201,12 @@ class EmitContext:
         one_reg = self.const_to_reg(1)
         idx_minus_one = self.fresh_reg()
         self.emit_inst(
-            Binop(result_reg=idx_minus_one, operator="-", left=idx_reg, right=one_reg),
+            Binop(
+                result_reg=idx_minus_one,
+                operator=resolve_binop("-"),
+                left=idx_reg,
+                right=one_reg,
+            ),
         )
 
         elem_size = fl.element_size if fl.element_size > 0 else fl.byte_length
@@ -209,7 +215,7 @@ class EmitContext:
         self.emit_inst(
             Binop(
                 result_reg=displacement,
-                operator="*",
+                operator=resolve_binop("*"),
                 left=idx_minus_one,
                 right=elem_size_reg,
             ),
@@ -220,7 +226,7 @@ class EmitContext:
         self.emit_inst(
             Binop(
                 result_reg=final_offset_reg,
-                operator="+",
+                operator=resolve_binop("+"),
                 left=base_offset_reg,
                 right=displacement,
             ),

@@ -9,6 +9,7 @@ from interpreter.frontends.common.exceptions import (
     lower_try_catch,
 )
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -110,7 +111,14 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<"),
+            left=idx_reg,
+            right=len_reg,
+        )
+    )
     ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
     ctx.emit_inst(Label_(label=body_label))
@@ -136,7 +144,11 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
+        )
+    )
     ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
@@ -176,7 +188,14 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<"),
+            left=idx_reg,
+            right=len_reg,
+        )
+    )
     ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
     ctx.emit_inst(Label_(label=body_label))
@@ -202,7 +221,11 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
+        )
+    )
     ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
@@ -289,7 +312,7 @@ def lower_switch_statement(ctx: TreeSitterEmitContext, node) -> None:
                     ctx.emit_inst(
                         Binop(
                             result_reg=cond_reg,
-                            operator="===",
+                            operator=resolve_binop("==="),
                             left=disc_reg,
                             right=case_reg,
                         ),

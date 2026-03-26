@@ -12,6 +12,7 @@ from interpreter.frontends.go.expressions import (
     lower_go_store_target,
 )
 from interpreter.frontends.go.node_types import GoNodeType
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -178,7 +179,14 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<"),
+            left=idx_reg,
+            right=len_reg,
+        )
+    )
     ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
     ctx.emit_inst(Label_(label=body_label))
@@ -206,7 +214,11 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
+        )
+    )
     ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
@@ -268,7 +280,12 @@ def lower_go_inc(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=result_reg, operator="+", left=operand_reg, right=one_reg),
+        Binop(
+            result_reg=result_reg,
+            operator=resolve_binop("+"),
+            left=operand_reg,
+            right=one_reg,
+        ),
         node=node,
     )
     lower_go_store_target(ctx, operand, result_reg, node)
@@ -284,7 +301,12 @@ def lower_go_dec(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=result_reg, operator="-", left=operand_reg, right=one_reg),
+        Binop(
+            result_reg=result_reg,
+            operator=resolve_binop("-"),
+            left=operand_reg,
+            right=one_reg,
+        ),
         node=node,
     )
     lower_go_store_target(ctx, operand, result_reg, node)
@@ -398,7 +420,7 @@ def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
                     ctx.emit_inst(
                         Binop(
                             result_reg=cmp_reg,
-                            operator="==",
+                            operator=resolve_binop("=="),
                             left=val_reg,
                             right=case_exprs[0],
                         ),
