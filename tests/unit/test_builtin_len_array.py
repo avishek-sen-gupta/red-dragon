@@ -7,6 +7,7 @@ includes the 'length' key itself and produces an off-by-one.
 
 from __future__ import annotations
 
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import _builtin_len, _builtin_array_of
 from interpreter.constants import TypeName
 from interpreter.types.type_expr import scalar
@@ -59,8 +60,8 @@ class TestBuiltinLenRespectsLengthField:
         vm.heap["obj_0"] = HeapObject(
             type_hint="object",
             fields={
-                "a": typed(1, scalar(TypeName.INT)),
-                "b": typed(2, scalar(TypeName.INT)),
+                FieldName("a"): typed(1, scalar(TypeName.INT)),
+                FieldName("b"): typed(2, scalar(TypeName.INT)),
             },
         )
         result = _builtin_len([typed_from_runtime("obj_0")], vm)
@@ -72,10 +73,10 @@ class TestBuiltinLenRespectsLengthField:
         vm.heap["arr_0"] = HeapObject(
             type_hint="array",
             fields={
-                "0": typed(10, scalar(TypeName.INT)),
-                "1": typed(20, scalar(TypeName.INT)),
-                "2": typed(30, scalar(TypeName.INT)),
-                "length": typed(3, scalar(TypeName.INT)),
+                FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
+                FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
+                FieldName("2", FieldKind.INDEX): typed(30, scalar(TypeName.INT)),
+                FieldName("length", FieldKind.SPECIAL): typed(3, scalar(TypeName.INT)),
             },
         )
         result = _builtin_len([typed_from_runtime("arr_0")], vm)

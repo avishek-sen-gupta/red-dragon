@@ -1,6 +1,6 @@
 """Tests for parameterized CALL_FUNCTION operand handling."""
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.types.type_expr import ScalarType
 from interpreter.types.typed_value import TypedValue
@@ -27,9 +27,9 @@ let b = Box::new(n);
         assert b_ptr.base in vm.heap
         box_obj = vm.heap[b_ptr.base]
         assert box_obj.type_hint == ScalarType("Box")
-        # The Box stores the inner Node via field "0"
-        assert FieldName("0", FieldKind.INDEX) in box_obj.fields
-        inner_addr = box_obj.fields[FieldName("0", FieldKind.INDEX)]
+        # The Box stores the inner Node via field "0" (PROPERTY kind)
+        assert FieldName("0") in box_obj.fields
+        inner_addr = box_obj.fields[FieldName("0")]
         inner_val = (
             inner_addr.value if isinstance(inner_addr, TypedValue) else inner_addr
         )

@@ -7,7 +7,7 @@ len() and index-based iteration work correctly.
 
 from __future__ import annotations
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import Builtins, _builtin_len
 from interpreter.types.type_expr import scalar
 from interpreter.vm.vm import VMState, apply_update

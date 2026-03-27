@@ -133,7 +133,7 @@ class TestLoadFieldIndirect:
 
         vm.heap[addr] = HeapObject(
             type_hint="TestObj",
-            fields={METHOD_MISSING: typed(mm_bound, UNKNOWN)},
+            fields={FieldName(METHOD_MISSING): typed(mm_bound, UNKNOWN)},
         )
         _set_reg(vm, "%obj", addr)
         _set_reg(vm, "%name", "nonexistent")
