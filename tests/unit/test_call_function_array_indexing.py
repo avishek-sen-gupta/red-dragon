@@ -5,6 +5,7 @@ as array indexing. Out-of-bounds indices should produce symbolic values,
 not crash by falling through to native string indexing.
 """
 
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import typed_from_runtime, unwrap
@@ -54,8 +55,11 @@ def _setup_heap_array(vm, name, elements):
     """Create a heap-backed array and bind it to a local variable."""
     addr = f"arr_{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    fields = {str(i): typed_from_runtime(v) for i, v in enumerate(elements)}
-    fields["length"] = typed_from_runtime(len(elements))
+    fields = {
+        FieldName(str(i), FieldKind.INDEX): typed_from_runtime(v)
+        for i, v in enumerate(elements)
+    }
+    fields[FieldName("length", FieldKind.SPECIAL)] = typed_from_runtime(len(elements))
     vm.heap[addr] = HeapObject(type_hint="array", fields=fields)
     vm.current_frame.local_vars[VarName(name)] = typed_from_runtime(addr)
     return addr

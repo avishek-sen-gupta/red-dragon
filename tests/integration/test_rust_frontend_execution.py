@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
@@ -144,10 +144,10 @@ let b = Box::new(n);
         from interpreter.types.type_expr import ScalarType
 
         assert box_obj.type_hint == ScalarType("Box")
-        assert FieldName("0", FieldKind.INDEX) in box_obj.fields
+        assert FieldName("0") in box_obj.fields
         from interpreter.types.typed_value import TypedValue
 
-        inner = box_obj.fields[FieldName("0", FieldKind.INDEX)]
+        inner = box_obj.fields[FieldName("0")]
         inner_val = inner.value if isinstance(inner, TypedValue) else inner
         assert inner_val == local_vars[VarName("n")]
 
