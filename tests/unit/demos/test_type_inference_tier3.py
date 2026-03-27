@@ -18,6 +18,7 @@ from interpreter.types.type_expr import parse_type, scalar
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _resolver():
@@ -202,7 +203,7 @@ class TestArrayElementTypePromotion:
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["nums", "%arr"]),
         ]
         env = infer_types(instructions, _resolver())
-        assert env.var_types["nums"] == "Array[Int]"
+        assert env.var_types[VarName("nums")] == "Array[Int]"
 
     def test_array_var_promoted_to_array_of_string(self):
         """STORE_VAR of an array with String elements → var type is Array[String]."""
@@ -215,7 +216,7 @@ class TestArrayElementTypePromotion:
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["names", "%arr"]),
         ]
         env = infer_types(instructions, _resolver())
-        assert env.var_types["names"] == "Array[String]"
+        assert env.var_types[VarName("names")] == "Array[String]"
 
     def test_element_type_propagated_through_load_var(self):
         """Array element types propagate through STORE_VAR → LOAD_VAR → LOAD_INDEX."""
@@ -249,4 +250,4 @@ class TestArrayElementTypePromotion:
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["items", "%val"]),
         ]
         env = infer_types(instructions, _resolver(), type_env_builder=builder)
-        assert env.var_types["items"] == "List[String]"
+        assert env.var_types[VarName("items")] == "List[String]"
