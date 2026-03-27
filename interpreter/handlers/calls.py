@@ -225,10 +225,7 @@ def _try_user_function_call(
     if func_val.closure_id:
         closure_env = vm.closures.get(func_val.closure_id)
         if closure_env:
-            captured = {
-                VarName(k) if isinstance(k, str) else k: v
-                for k, v in closure_env.bindings.items()
-            }
+            captured = {k: v for k, v in closure_env.bindings.items()}
 
     new_vars = dict(captured) if captured else {}
     new_vars.update(param_vars)
