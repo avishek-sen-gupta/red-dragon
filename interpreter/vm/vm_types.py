@@ -62,10 +62,10 @@ class HeapObject:
 class ClosureEnvironment:
     """Shared mutable environment for closure capture-by-reference."""
 
-    bindings: dict[str, TypedValue] = field(default_factory=dict)
+    bindings: dict[VarName, TypedValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
-        return {k: _serialize_value(v) for k, v in self.bindings.items()}
+        return {str(k): _serialize_value(v) for k, v in self.bindings.items()}
 
 
 @dataclass
