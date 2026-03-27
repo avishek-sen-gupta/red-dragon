@@ -12,6 +12,7 @@ from litellm.exceptions import OpenAIError
 from interpreter.llm.llm_client import LLMClient
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import (
     ExecutionResult,
     HeapWrite,
@@ -189,8 +190,8 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
             for hw in data.get("heap_writes", [])
         ]
 
-        var_writes: dict[str, TypedValue] = {
-            var: typed_from_runtime(val)
+        var_writes: dict[VarName, TypedValue] = {
+            VarName(var): typed_from_runtime(val)
             for var, val in data.get("var_writes", {}).items()
         }
 
