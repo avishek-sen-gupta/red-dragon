@@ -19,6 +19,7 @@ from interpreter.types.type_expr import (
 )
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
+from interpreter.var_name import VarName
 
 
 def _resolver():
@@ -54,7 +55,7 @@ class TestJavaTypeInference:
         assert len(binops) == 1
         binop_reg = binops[0].result_reg
         assert env.register_types[binop_reg] == TypeName.INT
-        assert env.var_types["x"] == "Int"
+        assert env.var_types[VarName("x")] == "Int"
 
     def test_typed_params(self):
         """Java method params carry type hints → register_types."""
@@ -119,14 +120,14 @@ class M {
         _instructions, env = _lower_and_infer(
             'class M { static String name = "hello"; }', "java"
         )
-        assert env.var_types["name"] == "String"
+        assert env.var_types[VarName("name")] == "String"
 
     def test_boolean_variable(self):
         """Java boolean variable gets Bool type."""
         _instructions, env = _lower_and_infer(
             "class M { static boolean flag = true; }", "java"
         )
-        assert env.var_types["flag"] == "Bool"
+        assert env.var_types[VarName("flag")] == "Bool"
 
 
 # ---------------------------------------------------------------------------
@@ -223,10 +224,10 @@ func main() {
 """,
             "go",
         )
-        assert env.var_types["x"] == "Int"
-        assert env.var_types["name"] == "String"
-        assert env.var_types["pi"] == "Float"
-        assert env.var_types["flag"] == "Bool"
+        assert env.var_types[VarName("x")] == "Int"
+        assert env.var_types[VarName("name")] == "String"
+        assert env.var_types[VarName("pi")] == "Float"
+        assert env.var_types[VarName("flag")] == "Bool"
 
 
 # ---------------------------------------------------------------------------
@@ -262,8 +263,8 @@ function add(a: number, b: number): number {
             "typescript",
         )
         # Inferred from CONST literal, not from TS type annotation
-        assert env.var_types["x"] == TypeName.INT
-        assert env.var_types["name"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.INT
+        assert env.var_types[VarName("name")] == TypeName.STRING
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +298,7 @@ int add(int a, int b) {
             "float pi = 3.14;",
             "c",
         )
-        assert env.var_types["pi"] == "Float"
+        assert env.var_types[VarName("pi")] == "Float"
 
     def test_pointer_variable_typed_as_pointer_int(self):
         """C int *ptr should infer var type Pointer[Int]."""
@@ -305,7 +306,7 @@ int add(int a, int b) {
             "void f() { int *ptr; }",
             "c",
         )
-        assert env.var_types["ptr"] == "Pointer[Int]"
+        assert env.var_types[VarName("ptr")] == "Pointer[Int]"
 
     def test_double_pointer(self):
         """C int **pp should infer Pointer[Pointer[Int]]."""
@@ -313,7 +314,7 @@ int add(int a, int b) {
             "void f() { int **pp; }",
             "c",
         )
-        assert env.var_types["pp"] == "Pointer[Pointer[Int]]"
+        assert env.var_types[VarName("pp")] == "Pointer[Pointer[Int]]"
 
     def test_pointer_parameter_type(self):
         """C function with int *arr param should have Pointer[Int] in signature."""
@@ -336,8 +337,8 @@ void f() {
 """,
             "c",
         )
-        assert env.var_types["p"] == "Pointer[Int]"
-        assert env.var_types["q"] == "Pointer[Int]"
+        assert env.var_types[VarName("p")] == "Pointer[Int]"
+        assert env.var_types[VarName("q")] == "Pointer[Int]"
 
 
 # ---------------------------------------------------------------------------
@@ -369,11 +370,11 @@ class TestCrossLanguageConsistency:
     def test_x_typed_as_int(self, lang_env):
         lang, env = lang_env
         assert (
-            "x" in env.var_types
+            VarName("x") in env.var_types
         ), f"[{lang}] expected 'x' in var_types, got: {dict(env.var_types)}"
         assert (
-            env.var_types["x"] == TypeName.INT
-        ), f"[{lang}] expected x typed as Int, got {env.var_types['x']!r}"
+            env.var_types[VarName("x")] == TypeName.INT
+        ), f"[{lang}] expected x typed as Int, got {env.var_types[VarName('x')]!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1091,7 +1092,7 @@ class TestPythonBuiltinReturnTypes:
             'x = len("hello")',
             "python",
         )
-        assert env.var_types["x"] == TypeName.INT
+        assert env.var_types[VarName("x")] == TypeName.INT
 
     def test_range_returns_array(self):
         """Python `r = range(10)` → var_types["r"] == Array."""
@@ -1099,7 +1100,7 @@ class TestPythonBuiltinReturnTypes:
             "r = range(10)",
             "python",
         )
-        assert env.var_types["r"] == TypeName.ARRAY
+        assert env.var_types[VarName("r")] == TypeName.ARRAY
 
     def test_abs_returns_number(self):
         """Python `y = abs(-5)` → var_types["y"] == Number."""
@@ -1107,7 +1108,7 @@ class TestPythonBuiltinReturnTypes:
             "y = abs(-5)",
             "python",
         )
-        assert env.var_types["y"] == TypeName.NUMBER
+        assert env.var_types[VarName("y")] == TypeName.NUMBER
 
 
 # ---------------------------------------------------------------------------
@@ -1868,35 +1869,35 @@ class TestNewObjectTypingOOP:
 class TestBuiltinMethodReturnTypesPython:
     def test_upper_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.upper()", "python")
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
     def test_split_returns_array(self):
         _instructions, env = _lower_and_infer("x = 'a,b'.split(',')", "python")
-        assert env.var_types["x"] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == TypeName.ARRAY
 
     def test_find_returns_int(self):
         _instructions, env = _lower_and_infer("x = 'hello'.find('l')", "python")
-        assert env.var_types["x"] == TypeName.INT
+        assert env.var_types[VarName("x")] == TypeName.INT
 
     def test_startswith_returns_bool(self):
         _instructions, env = _lower_and_infer("x = 'hello'.startswith('h')", "python")
-        assert env.var_types["x"] == TypeName.BOOL
+        assert env.var_types[VarName("x")] == TypeName.BOOL
 
     def test_keys_returns_array(self):
         _instructions, env = _lower_and_infer("d = {}; x = d.keys()", "python")
-        assert env.var_types["x"] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == TypeName.ARRAY
 
     def test_values_returns_array(self):
         _instructions, env = _lower_and_infer("d = {}; x = d.values()", "python")
-        assert env.var_types["x"] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == TypeName.ARRAY
 
     def test_replace_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.replace('l','r')", "python")
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
     def test_count_returns_int(self):
         _instructions, env = _lower_and_infer("x = [1,2,1].count(1)", "python")
-        assert env.var_types["x"] == TypeName.INT
+        assert env.var_types[VarName("x")] == TypeName.INT
 
 
 class TestBuiltinMethodReturnTypesJavaScript:
@@ -1904,27 +1905,27 @@ class TestBuiltinMethodReturnTypesJavaScript:
         _instructions, env = _lower_and_infer(
             "let x = 'hello'.toUpperCase();", "javascript"
         )
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
     def test_split_returns_array(self):
         _instructions, env = _lower_and_infer("let x = 'a,b'.split(',');", "javascript")
-        assert env.var_types["x"] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == TypeName.ARRAY
 
     def test_indexOf_returns_int(self):
         _instructions, env = _lower_and_infer(
             "let x = 'hello'.indexOf('l');", "javascript"
         )
-        assert env.var_types["x"] == TypeName.INT
+        assert env.var_types[VarName("x")] == TypeName.INT
 
     def test_includes_returns_bool(self):
         _instructions, env = _lower_and_infer(
             "let x = 'hello'.includes('l');", "javascript"
         )
-        assert env.var_types["x"] == TypeName.BOOL
+        assert env.var_types[VarName("x")] == TypeName.BOOL
 
     def test_trim_returns_string(self):
         _instructions, env = _lower_and_infer("let x = ' hello '.trim();", "javascript")
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
 
 class TestBuiltinMethodReturnTypesJava:
@@ -1932,37 +1933,37 @@ class TestBuiltinMethodReturnTypesJava:
         _instructions, env = _lower_and_infer(
             'class M { static String x = "hello".toUpperCase(); }', "java"
         )
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
     def test_indexOf_returns_int(self):
         _instructions, env = _lower_and_infer(
             'class M { static int x = "hello".indexOf("l"); }', "java"
         )
-        assert env.var_types["x"] == TypeName.INT
+        assert env.var_types[VarName("x")] == TypeName.INT
 
     def test_contains_returns_bool(self):
         _instructions, env = _lower_and_infer(
             'class M { static boolean x = "hello".contains("l"); }', "java"
         )
-        assert env.var_types["x"] == TypeName.BOOL
+        assert env.var_types[VarName("x")] == TypeName.BOOL
 
 
 class TestBuiltinMethodReturnTypesRuby:
     def test_upcase_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.upcase", "ruby")
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
     def test_downcase_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.downcase", "ruby")
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
     def test_split_returns_array(self):
         _instructions, env = _lower_and_infer("x = 'a,b'.split(',')", "ruby")
-        assert env.var_types["x"] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == TypeName.ARRAY
 
     def test_gsub_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.gsub('l','r')", "ruby")
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
 
 class TestBuiltinMethodReturnTypesKotlin:
@@ -1970,19 +1971,19 @@ class TestBuiltinMethodReturnTypesKotlin:
         _instructions, env = _lower_and_infer(
             'fun main() { val x = "hello".toUpperCase() }', "kotlin"
         )
-        assert env.var_types["x"] == TypeName.STRING
+        assert env.var_types[VarName("x")] == TypeName.STRING
 
     def test_indexOf_returns_int(self):
         _instructions, env = _lower_and_infer(
             'fun main() { val x = "hello".indexOf("l") }', "kotlin"
         )
-        assert env.var_types["x"] == TypeName.INT
+        assert env.var_types[VarName("x")] == TypeName.INT
 
     def test_contains_returns_bool(self):
         _instructions, env = _lower_and_infer(
             'fun main() { val x = "hello".contains("l") }', "kotlin"
         )
-        assert env.var_types["x"] == TypeName.BOOL
+        assert env.var_types[VarName("x")] == TypeName.BOOL
 
 
 # ---------------------------------------------------------------------------
@@ -2285,14 +2286,14 @@ class TestJavaGenericTypeInference:
             "class M { void m() { List<String> items = new ArrayList<>(); } }",
             "java",
         )
-        assert env.var_types["items"] == "List[String]"
+        assert env.var_types[VarName("items")] == "List[String]"
 
     def test_map_generic_normalises_inner_types(self):
         instructions, env = _lower_and_infer(
             "class M { void m() { Map<String, Integer> m = new HashMap<>(); } }",
             "java",
         )
-        assert env.var_types["m"] == "Map[String, Int]"
+        assert env.var_types[VarName("m")] == "Map[String, Int]"
 
     def test_generic_return_type_in_signature(self):
         instructions, env = _lower_and_infer(
@@ -2311,14 +2312,14 @@ class TestCSharpGenericTypeInference:
             "class M { void m() { List<string> items = new List<string>(); } }",
             "csharp",
         )
-        assert env.var_types["items"] == "List[String]"
+        assert env.var_types[VarName("items")] == "List[String]"
 
     def test_dictionary_normalises_inner_types(self):
         instructions, env = _lower_and_infer(
             "class M { void m() { Dictionary<string, int> d = new Dictionary<string, int>(); } }",
             "csharp",
         )
-        assert env.var_types["d"] == "Dictionary[String, Int]"
+        assert env.var_types[VarName("d")] == "Dictionary[String, Int]"
 
 
 class TestScalaGenericTypeInference:
@@ -2329,14 +2330,14 @@ class TestScalaGenericTypeInference:
             'object M { val items: List[String] = List("a") }',
             "scala",
         )
-        assert env.var_types["items"] == "List[String]"
+        assert env.var_types[VarName("items")] == "List[String]"
 
     def test_map_generic_var_type(self):
         instructions, env = _lower_and_infer(
             "object M { val m: Map[String, Int] = Map() }",
             "scala",
         )
-        assert env.var_types["m"] == "Map[String, Int]"
+        assert env.var_types[VarName("m")] == "Map[String, Int]"
 
 
 class TestKotlinGenericTypeInference:
@@ -2347,14 +2348,14 @@ class TestKotlinGenericTypeInference:
             'fun main() { val items: List<String> = listOf("a") }',
             "kotlin",
         )
-        assert env.var_types["items"] == "List[String]"
+        assert env.var_types[VarName("items")] == "List[String]"
 
     def test_map_generic_var_type(self):
         instructions, env = _lower_and_infer(
             "fun main() { val m: Map<String, Int> = mapOf() }",
             "kotlin",
         )
-        assert env.var_types["m"] == "Map[String, Int]"
+        assert env.var_types[VarName("m")] == "Map[String, Int]"
 
 
 # ---------------------------------------------------------------------------
@@ -2371,7 +2372,7 @@ class TestArrayElementTypePromotion:
             "items = [1, 2, 3]",
             "python",
         )
-        assert env.var_types["items"] == "Array[Int]"
+        assert env.var_types[VarName("items")] == "Array[Int]"
 
     def test_python_list_element_type_string(self):
         """Python names = ['a', 'b'] should infer Array[String] for names."""
@@ -2379,7 +2380,7 @@ class TestArrayElementTypePromotion:
             'names = ["a", "b"]',
             "python",
         )
-        assert env.var_types["names"] == "Array[String]"
+        assert env.var_types[VarName("names")] == "Array[String]"
 
     def test_javascript_array_element_type(self):
         """JS const items = [1, 2, 3] should infer Array[Int] for items."""
@@ -2387,7 +2388,7 @@ class TestArrayElementTypePromotion:
             "const items = [1, 2, 3];",
             "javascript",
         )
-        assert env.var_types["items"] == "Array[Int]"
+        assert env.var_types[VarName("items")] == "Array[Int]"
 
     def test_ruby_array_element_type(self):
         """Ruby items = [1, 2, 3] should infer Array[Int] for items."""
@@ -2395,7 +2396,7 @@ class TestArrayElementTypePromotion:
             "items = [1, 2, 3]",
             "ruby",
         )
-        assert env.var_types["items"] == "Array[Int]"
+        assert env.var_types[VarName("items")] == "Array[Int]"
 
 
 # ---------------------------------------------------------------------------
@@ -2408,25 +2409,25 @@ class TestUnionTypeInference:
         """Python: x = 5; x = 'hello' → x is Union[Int, String]."""
         source = 'x = 5\nx = "hello"'
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types["x"] == "Union[Int, String]"
+        assert env.var_types[VarName("x")] == "Union[Int, String]"
 
     def test_javascript_var_assigned_different_types(self):
         """JS: let x = 5; x = 'hello' → x is Union[Int, String]."""
         source = 'let x = 5;\nx = "hello";'
         _, env = _lower_and_infer(source, "javascript")
-        assert env.var_types["x"] == "Union[Int, String]"
+        assert env.var_types[VarName("x")] == "Union[Int, String]"
 
     def test_python_var_same_type_no_union(self):
         """Python: x = 5; x = 10 → x is Int (no union)."""
         source = "x = 5\nx = 10"
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types["x"] == "Int"
+        assert env.var_types[VarName("x")] == "Int"
 
     def test_python_three_types(self):
         """Python: x = 5; x = 'hi'; x = True → Union[Bool, Int, String]."""
         source = 'x = 5\nx = "hi"\nx = True'
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types["x"] == "Union[Bool, Int, String]"
+        assert env.var_types[VarName("x")] == "Union[Bool, Int, String]"
 
 
 # ---------------------------------------------------------------------------
@@ -2582,7 +2583,7 @@ class TestTupleTypeInferenceIntegration:
         """Python (1, 2, 3) → Tuple[Int, Int, Int]."""
         source = "x = (1, 2, 3)\n"
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types["x"] == tuple_of(
+        assert env.var_types[VarName("x")] == tuple_of(
             scalar("Int"), scalar("Int"), scalar("Int")
         )
 
@@ -2590,7 +2591,7 @@ class TestTupleTypeInferenceIntegration:
         """Python (1, 'hello') → Tuple[Int, String]."""
         source = 'x = (1, "hello")\n'
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types["x"] == tuple_of(scalar("Int"), scalar("String"))
+        assert env.var_types[VarName("x")] == tuple_of(scalar("Int"), scalar("String"))
 
     def test_python_tuple_element_access(self):
         """Python y = t[0] where t = (1, 'hi') → y is Int."""
@@ -2599,8 +2600,8 @@ t = (1, "hi")
 y = t[0]
 """
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types["t"] == tuple_of(scalar("Int"), scalar("String"))
-        assert env.var_types["y"] == scalar("Int")
+        assert env.var_types[VarName("t")] == tuple_of(scalar("Int"), scalar("String"))
+        assert env.var_types[VarName("y")] == scalar("Int")
 
     def test_python_nested_tuple(self):
         """Python ((1, 2), 'a') → Tuple[Tuple[Int, Int], String]."""
@@ -2609,7 +2610,7 @@ inner = (1, 2)
 outer = (inner, "a")
 """
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types["inner"] == tuple_of(scalar("Int"), scalar("Int"))
+        assert env.var_types[VarName("inner")] == tuple_of(scalar("Int"), scalar("Int"))
 
 
 # ---------------------------------------------------------------------------
@@ -2627,7 +2628,7 @@ typedef int UserId;
 UserId x = 42;
 """
         _, env = _lower_and_infer(source, "c")
-        assert env.var_types["x"] == scalar("Int")
+        assert env.var_types[VarName("x")] == scalar("Int")
         assert "UserId" in env.type_aliases
         assert env.type_aliases["UserId"] == scalar("Int")
 
@@ -2640,7 +2641,7 @@ IntPtr p;
         _, env = _lower_and_infer(source, "c")
         from interpreter.types.type_expr import pointer
 
-        assert env.var_types["p"] == pointer(scalar("Int"))
+        assert env.var_types[VarName("p")] == pointer(scalar("Int"))
         assert "IntPtr" in env.type_aliases
 
 
@@ -2691,7 +2692,7 @@ class TestVarianceIntegration:
             "class M { void m() { List<String> items = new ArrayList<>(); } }",
             "java",
         )
-        inferred_type = env.var_types["items"]
+        inferred_type = env.var_types[VarName("items")]
         assert inferred_type == "List[String]"
 
         # With invariant variance, List[String] should NOT be subtype of List[Any]
@@ -2714,7 +2715,7 @@ class TestVarianceIntegration:
             "class M { void m() { Map<String, Integer> m = new HashMap<>(); } }",
             "java",
         )
-        inferred_type = env.var_types["m"]
+        inferred_type = env.var_types[VarName("m")]
         assert inferred_type == "Map[String, Int]"
 
         graph = TypeGraph(
@@ -2740,7 +2741,7 @@ class TestVarianceIntegration:
             'fun main() { val items: List<String> = listOf("a") }',
             "kotlin",
         )
-        inferred_type = env.var_types["items"]
+        inferred_type = env.var_types[VarName("items")]
         assert inferred_type == "List[String]"
 
         # Default covariant: List[String] IS subtype of List[Any]
@@ -2763,7 +2764,7 @@ class TestBoundedTypeVarIntegration:
             "class M { static int x_tv1 = 42; }",
             "java",
         )
-        inferred = env.var_types["x_tv1"]
+        inferred = env.var_types[VarName("x_tv1")]
         assert inferred == "Int"
 
         graph = TypeGraph(DEFAULT_TYPE_NODES)
@@ -2781,7 +2782,7 @@ class TestBoundedTypeVarIntegration:
             'class M { void m() { String s_tv1 = "hello"; } }',
             "java",
         )
-        inferred = env.var_types["s_tv1"]
+        inferred = env.var_types[VarName("s_tv1")]
         assert inferred == "String"
 
         graph = TypeGraph(DEFAULT_TYPE_NODES)
@@ -2799,7 +2800,7 @@ class TestBoundedTypeVarIntegration:
             "class M { void m() { List<Integer> nums_tv1 = new ArrayList<>(); } }",
             "java",
         )
-        inferred = env.var_types["nums_tv1"]
+        inferred = env.var_types[VarName("nums_tv1")]
         assert inferred == "List[Int]"
 
         graph = TypeGraph(DEFAULT_TYPE_NODES)
@@ -2850,9 +2851,9 @@ class Main {
 """,
             "java",
         )
-        assert env.var_types.get("msg") == scalar(
+        assert env.var_types.get(VarName("msg")) == scalar(
             "String"
-        ), f"Expected 'msg' typed as String, got: {env.var_types.get('msg')}"
+        ), f"Expected 'msg' typed as String, got: {env.var_types.get(VarName('msg'))}"
         assert env.interface_implementations.get("HelloGreeter") == (
             "Greeter",
         ), f"Expected HelloGreeter implements Greeter, got: {env.interface_implementations}"

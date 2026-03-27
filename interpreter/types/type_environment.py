@@ -9,6 +9,7 @@ from interpreter.register import Register
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
 from interpreter.types.var_scope_info import VarScopeInfo
+from interpreter.var_name import VarName
 
 _NULL_SIGNATURE = FunctionSignature(params=(), return_type=UNKNOWN)
 
@@ -32,7 +33,7 @@ class TypeEnvironment:
     """
 
     register_types: MappingProxyType[Register, TypeExpr]
-    var_types: MappingProxyType[str, TypeExpr]
+    var_types: MappingProxyType[VarName, TypeExpr]
     method_signatures: MappingProxyType[
         TypeExpr, MappingProxyType[str, list[FunctionSignature]]
     ] = MappingProxyType({})
@@ -40,7 +41,7 @@ class TypeEnvironment:
     interface_implementations: MappingProxyType[str, tuple[str, ...]] = (
         MappingProxyType({})
     )
-    scoped_var_types: MappingProxyType[str, MappingProxyType[str, TypeExpr]] = (
+    scoped_var_types: MappingProxyType[str, MappingProxyType[VarName, TypeExpr]] = (
         MappingProxyType({})
     )
     var_scope_metadata: MappingProxyType[str, VarScopeInfo] = MappingProxyType({})
