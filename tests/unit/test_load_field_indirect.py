@@ -5,6 +5,7 @@ the field name comes from a register (not a static operand).  This is
 needed by __method_missing__ to forward field access by dynamic name.
 """
 
+from interpreter.field_name import FieldName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.instructions import InstructionBase
 from interpreter.vm.vm import VMState, HeapObject, apply_update
@@ -69,7 +70,7 @@ class TestLoadFieldIndirect:
         addr = "obj_0"
         vm.heap[addr] = HeapObject(
             type_hint="TestObj",
-            fields={"x": typed_from_runtime(42)},
+            fields={FieldName("x"): typed_from_runtime(42)},
         )
         _set_reg(vm, "%obj", addr)
         _set_reg(vm, "%name", "x")
@@ -89,7 +90,7 @@ class TestLoadFieldIndirect:
         addr = "obj_0"
         vm.heap[addr] = HeapObject(
             type_hint="TestObj",
-            fields={"x": typed_from_runtime(42)},
+            fields={FieldName("x"): typed_from_runtime(42)},
         )
         _set_reg(vm, "%obj", addr)
         _set_reg(vm, "%name", "y")

@@ -7,6 +7,7 @@ write time — so str(2) == "2" matches on both store and load.
 
 from types import MappingProxyType
 
+from interpreter.field_name import FieldName
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 
 from interpreter.types.coercion.default_conversion_rules import (
@@ -182,7 +183,9 @@ class TestFloatIndexHeapKeyMismatch:
 
         arr_addr = _heap_addr(unwrap(vm.current_frame.registers[Register("%arr")]))
         heap_obj = vm.heap[arr_addr]
-        assert "2" in heap_obj.fields, "Expected int key '2' in heap fields"
         assert (
-            "2.0" not in heap_obj.fields
+            FieldName("2", FieldKind.INDEX) in heap_obj.fields
+        ), "Expected int key '2' in heap fields"
+        assert (
+            FieldName("2.0") not in heap_obj.fields
         ), "Key '2.0' should NOT exist — float was coerced to int"

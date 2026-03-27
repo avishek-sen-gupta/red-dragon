@@ -1,5 +1,6 @@
 """Unit tests for partially-delegating builtins returning BuiltinResult."""
 
+from interpreter.field_name import FieldName
 from interpreter.vm.builtins import (
     _builtin_keys,
     _builtin_slice,
@@ -31,7 +32,7 @@ class TestBuiltinKeysResult:
         vm = VMState()
         vm.heap["obj_0"] = HeapObject(
             type_hint="object",
-            fields={"a": typed_from_runtime(1)},
+            fields={FieldName("a"): typed_from_runtime(1)},
         )
         result = _builtin_keys([typed_from_runtime("obj_0")], vm)
         assert isinstance(result, BuiltinResult)
@@ -76,10 +77,10 @@ class TestBuiltinSliceResult:
         vm.heap["arr_0"] = HeapObject(
             type_hint="array",
             fields={
-                "0": typed(10, scalar(TypeName.INT)),
-                "1": typed(20, scalar(TypeName.INT)),
-                "2": typed(30, scalar(TypeName.INT)),
-                "length": typed(3, scalar(TypeName.INT)),
+                FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
+                FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
+                FieldName("2", FieldKind.INDEX): typed(30, scalar(TypeName.INT)),
+                FieldName("length", FieldKind.SPECIAL): typed(3, scalar(TypeName.INT)),
             },
         )
         result = _builtin_slice(
@@ -97,9 +98,9 @@ class TestSliceHeapArrayResult:
         heap_obj = HeapObject(
             type_hint="array",
             fields={
-                "0": typed(10, scalar(TypeName.INT)),
-                "1": typed(20, scalar(TypeName.INT)),
-                "length": typed(2, scalar(TypeName.INT)),
+                FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
+                FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
+                FieldName("length", FieldKind.SPECIAL): typed(2, scalar(TypeName.INT)),
             },
         )
         vm = VMState()
@@ -112,7 +113,11 @@ class TestSliceHeapArrayResult:
     def test_uncomputable_non_int_length(self):
         heap_obj = HeapObject(
             type_hint="array",
-            fields={"length": typed("unknown", scalar(TypeName.STRING))},
+            fields={
+                FieldName("length", FieldKind.SPECIAL): typed(
+                    "unknown", scalar(TypeName.STRING)
+                )
+            },
         )
         vm = VMState()
         result = _slice_heap_array(heap_obj, slice(0, 1), vm)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm import _heap_addr
@@ -99,12 +100,14 @@ let answer = a;
         rest_addr = _heap_addr(rest_val)
         rest_obj = vm.heap[rest_addr]
         assert (
-            rest_obj.fields["b"].value == 2
-        ), f"expected b=2, got {rest_obj.fields.get('b')}"
+            rest_obj.fields[FieldName("b")].value == 2
+        ), f"expected b=2, got {rest_obj.fields.get(FieldName('b'))}"
         assert (
-            rest_obj.fields["c"].value == 3
-        ), f"expected c=3, got {rest_obj.fields.get('c')}"
-        assert "a" not in rest_obj.fields, "rest should not contain excluded key 'a'"
+            rest_obj.fields[FieldName("c")].value == 3
+        ), f"expected c=3, got {rest_obj.fields.get(FieldName('c'))}"
+        assert (
+            FieldName("a") not in rest_obj.fields
+        ), "rest should not contain excluded key 'a'"
 
     def test_zero_llm_calls_obj_rest(self):
         _vm, stats = execute_for_language("javascript", self.PROGRAM)
@@ -129,12 +132,12 @@ let answer = 1;
         assert result_addr in vm.heap, f"expected heap address, got {result}"
         heap_obj = vm.heap[result_addr]
         assert (
-            heap_obj.fields["0"].value == 2
+            heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 2
         ), f"expected rest[0]=2, got {heap_obj.fields}"
         assert (
-            heap_obj.fields["1"].value == 3
+            heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 3
         ), f"expected rest[1]=3, got {heap_obj.fields}"
-        assert heap_obj.fields["length"].value == 2
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_zero_llm_calls(self):
         _vm, stats = execute_for_language("javascript", self.PROGRAM)
