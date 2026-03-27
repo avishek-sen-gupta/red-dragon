@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -404,7 +405,11 @@ def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
                     Const(result_reg=val_reg, value=ctx.constants.default_return_value)
                 )
             ctx.emit_inst(
-                StoreField(obj_reg=this_reg, field_name=field_name, value_reg=val_reg),
+                StoreField(
+                    obj_reg=this_reg,
+                    field_name=FieldName(field_name),
+                    value_reg=val_reg,
+                ),
                 node=child,
             )
 
