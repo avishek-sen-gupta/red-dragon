@@ -2,6 +2,7 @@
 
 from interpreter.constants import Language
 from interpreter.run import run
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 
 
@@ -14,7 +15,7 @@ class TestNewObjectProducesPointer:
         vm = run(
             "class Dog {} Dog d = new Dog();", language=Language.JAVA, max_steps=100
         )
-        tv = _typed_locals(vm)["d"]
+        tv = _typed_locals(vm)[VarName("d")]
         assert isinstance(tv.value, Pointer)
         assert tv.value.base.startswith("obj_")
 
@@ -24,7 +25,7 @@ class TestNewObjectProducesPointer:
             language=Language.PYTHON,
             max_steps=100,
         )
-        tv = _typed_locals(vm)["c"]
+        tv = _typed_locals(vm)[VarName("c")]
         assert isinstance(tv.value, Pointer)
         assert tv.value.base.startswith("obj_")
 
@@ -34,7 +35,7 @@ class TestNewObjectProducesPointer:
             language=Language.RUST,
             max_steps=200,
         )
-        tv = _typed_locals(vm)["p"]
+        tv = _typed_locals(vm)[VarName("p")]
         assert isinstance(tv.value, Pointer)
         assert tv.value.base.startswith("obj_")
 
@@ -48,6 +49,6 @@ class TestNewObjectProducesPointer:
         vm = run(
             "class Dog {} Dog d = new Dog();", language=Language.JAVA, max_steps=100
         )
-        tv = _typed_locals(vm)["d"]
+        tv = _typed_locals(vm)[VarName("d")]
         assert tv.value.base in vm.heap
         assert vm.heap[tv.value.base].type_hint == "Dog"

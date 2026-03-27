@@ -66,12 +66,12 @@ class ImplicitThisFieldFallback(FieldFallbackStrategy):
         addr = self._find_this_addr(vm)
         if addr is None:
             return None
-        return vm.heap[addr].fields.get(name)
+        return vm.heap[addr].fields.get(str(name))
 
     def resolve_store(self, vm: VMState, name: str) -> str | None:
         addr = self._find_this_addr(vm)
         if addr is None:
             return None
-        if name in vm.heap[addr].fields:
+        if str(name) in vm.heap[addr].fields:
             return addr
         return None

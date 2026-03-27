@@ -24,6 +24,7 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
 from interpreter import constants
+from interpreter.var_name import VarName
 
 
 def _make_inst(
@@ -75,8 +76,8 @@ class TestReachingDefinitions:
 
         # x and y should both be defined in reach_out
         defined_vars = {d.variable for d in reach_out}
-        assert "x" in defined_vars
-        assert "y" in defined_vars
+        assert VarName("x") in defined_vars
+        assert VarName("y") in defined_vars
 
     def test_redefinition_kills(self):
         """x=1; x=2 → only second def of x reaches end."""
@@ -91,7 +92,7 @@ class TestReachingDefinitions:
         facts = solve_reaching_definitions(cfg)
 
         entry_label = cfg.entry
-        x_defs = [d for d in facts[entry_label].reach_out if d.variable == "x"]
+        x_defs = [d for d in facts[entry_label].reach_out if d.variable == VarName("x")]
         # Only one definition of x should survive (the last one)
         assert len(x_defs) == 1
         assert x_defs[0].instruction.operands == ["x", "t1"]
@@ -124,7 +125,7 @@ class TestReachingDefinitions:
         facts = solve_reaching_definitions(cfg)
 
         # At merge's reach_in, both definitions of x should be present
-        x_defs_in = [d for d in facts["merge"].reach_in if d.variable == "x"]
+        x_defs_in = [d for d in facts["merge"].reach_in if d.variable == VarName("x")]
         assert len(x_defs_in) == 2
 
     def test_loop_reaches_header(self):
@@ -156,7 +157,9 @@ class TestReachingDefinitions:
         facts = solve_reaching_definitions(cfg)
 
         # At loop_header, both the initial x=0 and the body's x=x+1 should reach
-        x_defs_in = [d for d in facts["loop_header"].reach_in if d.variable == "x"]
+        x_defs_in = [
+            d for d in facts["loop_header"].reach_in if d.variable == VarName("x")
+        ]
         assert len(x_defs_in) == 2
 
     def test_empty_program(self):
@@ -185,7 +188,9 @@ class TestDefUseChains:
 
         # Should have a chain from x's STORE_VAR to the LOAD_VAR of x
         x_chains = [
-            c for c in chains if c.definition.variable == "x" and c.use.variable == "x"
+            c
+            for c in chains
+            if c.definition.variable == VarName("x") and c.use.variable == VarName("x")
         ]
         assert len(x_chains) == 1
         assert any(c.use.instruction.opcode == Opcode.LOAD_VAR for c in x_chains)
@@ -209,7 +214,8 @@ class TestDefUseChains:
         load_x_chains = [
             c
             for c in chains
-            if c.use.variable == "x" and c.use.instruction.opcode == Opcode.LOAD_VAR
+            if c.use.variable == VarName("x")
+            and c.use.instruction.opcode == Opcode.LOAD_VAR
         ]
         assert len(load_x_chains) == 1
         assert load_x_chains[0].definition.instruction.operands == ["x", "t1"]
@@ -243,7 +249,7 @@ class TestDefUseChains:
         load_x_chains = [
             c
             for c in chains
-            if c.use.variable == "x"
+            if c.use.variable == VarName("x")
             and c.use.instruction.opcode == Opcode.LOAD_VAR
             and c.use.block_label == "merge"
         ]
@@ -262,7 +268,7 @@ class TestDefUseChains:
         chains = extract_def_use_chains(cfg, facts)
 
         # x should be defined and usable
-        x_chains = [c for c in chains if c.use.variable == "x"]
+        x_chains = [c for c in chains if c.use.variable == VarName("x")]
         assert len(x_chains) == 1
 
     def test_decl_var_params_are_definitions(self):
@@ -277,7 +283,7 @@ class TestDefUseChains:
         facts = solve_reaching_definitions(cfg)
         chains = extract_def_use_chains(cfg, facts)
 
-        x_chains = [c for c in chains if c.use.variable == "x"]
+        x_chains = [c for c in chains if c.use.variable == VarName("x")]
         assert len(x_chains) == 1
 
 
@@ -296,8 +302,8 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert "y" in result.dependency_graph
-        assert "x" in result.dependency_graph["y"]
+        assert VarName("y") in result.dependency_graph
+        assert VarName("x") in result.dependency_graph[VarName("y")]
 
     def test_decl_var_dependency(self):
         """DECL_VAR x t0; y = x + 1 → y depends on x (DECL_VAR is a variable definition)."""
@@ -313,8 +319,8 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert "y" in result.dependency_graph
-        assert "x" in result.dependency_graph["y"]
+        assert VarName("y") in result.dependency_graph
+        assert VarName("x") in result.dependency_graph[VarName("y")]
 
     def test_direct_dependency_in_raw_graph(self):
         """y = x + 1 → raw graph has y depending on x."""
@@ -330,8 +336,8 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert "y" in result.raw_dependency_graph
-        assert "x" in result.raw_dependency_graph["y"]
+        assert VarName("y") in result.raw_dependency_graph
+        assert VarName("x") in result.raw_dependency_graph[VarName("y")]
 
     def test_transitive_dependency(self):
         """y=x+1; z=y*2 → z depends on y and transitively on x."""
@@ -351,9 +357,9 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert "z" in result.dependency_graph
-        assert "y" in result.dependency_graph["z"]
-        assert "x" in result.dependency_graph["z"]
+        assert VarName("z") in result.dependency_graph
+        assert VarName("y") in result.dependency_graph[VarName("z")]
+        assert VarName("x") in result.dependency_graph[VarName("z")]
 
     def test_raw_graph_excludes_transitive_deps(self):
         """y=x+1; z=y*2 → raw graph has z depending on y but NOT x."""
@@ -373,9 +379,9 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert "z" in result.raw_dependency_graph
-        assert "y" in result.raw_dependency_graph["z"]
-        assert "x" not in result.raw_dependency_graph["z"]
+        assert VarName("z") in result.raw_dependency_graph
+        assert VarName("y") in result.raw_dependency_graph[VarName("z")]
+        assert VarName("x") not in result.raw_dependency_graph[VarName("z")]
 
     def test_raw_graph_preserves_all_direct_deps_in_multi_operand_expression(self):
         """a=1; b=2; c=a+b; d=c+b → raw graph has d depending on both c and b."""
@@ -398,9 +404,13 @@ class TestDependencyGraph:
         result = analyze(cfg)
 
         # Raw: d directly depends on c and b (both operands of d = c + b)
-        assert result.raw_dependency_graph["d"] == {"c", "b"}
+        assert result.raw_dependency_graph[VarName("d")] == {VarName("c"), VarName("b")}
         # Transitive: d depends on a, b, c (b directly, a through c)
-        assert result.dependency_graph["d"] == {"a", "b", "c"}
+        assert result.dependency_graph[VarName("d")] == {
+            VarName("a"),
+            VarName("b"),
+            VarName("c"),
+        }
 
     def test_no_self_dependency_without_loop(self):
         """x=1 → x does not depend on itself."""
@@ -414,10 +424,10 @@ class TestDependencyGraph:
 
         # x must appear in definitions (proves analysis processed it)
         defined_vars = {d.variable for d in result.definitions}
-        assert "x" in defined_vars, "x should appear in definitions"
+        assert VarName("x") in defined_vars, "x should appear in definitions"
         # x = 1 has no self-dependency
-        assert "x" not in result.dependency_graph.get(
-            "x", set()
+        assert VarName("x") not in result.dependency_graph.get(
+            VarName("x"), set()
         ), "x = 1 should not self-depend"
 
     def test_loop_creates_self_dependency(self):
@@ -446,8 +456,8 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        assert "x" in result.dependency_graph
-        assert "x" in result.dependency_graph["x"]
+        assert VarName("x") in result.dependency_graph
+        assert VarName("x") in result.dependency_graph[VarName("x")]
 
 
 class TestIntegration:
@@ -481,12 +491,14 @@ class TestIntegration:
         assert isinstance(result, DataflowResult)
         assert len(result.block_facts) == len(cfg.blocks)
         # x is defined in entry, y is defined in both then and else
-        x_defs = [d for d in result.definitions if d.variable == "x"]
-        y_defs = [d for d in result.definitions if d.variable == "y"]
+        x_defs = [d for d in result.definitions if d.variable == VarName("x")]
+        y_defs = [d for d in result.definitions if d.variable == VarName("y")]
         assert len(x_defs) == 1
         assert len(y_defs) == 2
         # y is used in the merge block's LOAD_VAR
-        y_uses = [c for c in result.def_use_chains if c.definition.variable == "y"]
+        y_uses = [
+            c for c in result.def_use_chains if c.definition.variable == VarName("y")
+        ]
         assert len(y_uses) >= 1
 
     def test_python_frontend_to_dataflow(self):
@@ -497,10 +509,10 @@ class TestIntegration:
 
         assert isinstance(result, DataflowResult)
         # z depends on y, y depends on x
-        assert "y" in result.dependency_graph
-        assert "x" in result.dependency_graph["y"]
-        assert "z" in result.dependency_graph
-        assert "y" in result.dependency_graph["z"]
+        assert VarName("y") in result.dependency_graph
+        assert VarName("x") in result.dependency_graph[VarName("y")]
+        assert VarName("z") in result.dependency_graph
+        assert VarName("y") in result.dependency_graph[VarName("z")]
 
     def test_analysis_converges_for_loop_program(self):
         """Reaching definitions analysis converges and covers all blocks on a loop program."""
@@ -651,5 +663,5 @@ class TestEdgeCases:
         result = analyze(cfg)
 
         assert isinstance(result, DataflowResult)
-        x_defs = [d for d in result.definitions if d.variable == "x"]
+        x_defs = [d for d in result.definitions if d.variable == VarName("x")]
         assert len(x_defs) == 1

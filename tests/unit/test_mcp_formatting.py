@@ -81,9 +81,9 @@ class TestFormatChainNode:
         child = ChainNode(label="a \u2192 return(add)")
         node = ChainNode(label="x \u2192 add(a=x)", children=[child])
         result = format_chain_node(node)
-        assert result[VarName("label")] == "x \u2192 add(a=x)"
-        assert len(result[VarName("children")]) == 1
-        assert result[VarName("children")][0]["label"] == "a \u2192 return(add)"
+        assert result["label"] == "x \u2192 add(a=x)"
+        assert len(result["children"]) == 1
+        assert result["children"][0]["label"] == "a \u2192 return(add)"
 
 
 class TestFormatStateUpdate:
@@ -99,14 +99,14 @@ class TestFormatStateUpdate:
 
         update = StateUpdate(register_writes={Register("%0"): 42})
         result = format_state_update(update)
-        assert result[VarName("registers")] == {"%0": 42}
+        assert result["registers"] == {"%0": 42}
 
     def test_var_write(self):
         from interpreter.vm.vm_types import StateUpdate
 
         update = StateUpdate(var_writes={VarName("x"): 10})
         result = format_state_update(update)
-        assert result[VarName("variables")] == {"x": 10}
+        assert result["variables"] == {"x": 10}
 
     def test_next_label(self):
         from interpreter.vm.vm_types import StateUpdate
@@ -115,4 +115,4 @@ class TestFormatStateUpdate:
 
         update = StateUpdate(next_label=CodeLabel("func_f_0"))
         result = format_state_update(update)
-        assert result[VarName("next_block")] == "func_f_0"
+        assert result["next_block"] == "func_f_0"

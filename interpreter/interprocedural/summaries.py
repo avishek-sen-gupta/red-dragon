@@ -23,6 +23,7 @@ from interpreter.instructions import (
 )
 from interpreter import constants
 from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.interprocedural.types import (
     CallContext,
     FieldEndpoint,
@@ -99,7 +100,7 @@ def extract_sub_cfg(cfg: CFG, function_entry: FunctionEntry) -> CFG:
     return CFG(blocks=filtered_blocks, entry=entry_label)
 
 
-def _find_param_names(cfg: CFG) -> frozenset[str]:
+def _find_param_names(cfg: CFG) -> frozenset[VarName]:
     """Find all parameter names declared via SYMBOLIC param:x → DECL_VAR/STORE_VAR x patterns."""
     return frozenset(
         t.name
@@ -178,11 +179,11 @@ def _find_load_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
 
 
 def _trace_register_to_params(
-    register: str,
-    dependency_graph: dict[str, set[str]],
-    raw_dependency_graph: dict[str, set[str]],
-    param_names: frozenset[str],
-) -> frozenset[str]:
+    register: VarName,
+    dependency_graph: dict[VarName, set[VarName]],
+    raw_dependency_graph: dict[VarName, set[VarName]],
+    param_names: frozenset[VarName],
+) -> frozenset[VarName]:
     """Trace a register back through the dependency graph to find which params it depends on.
 
     Checks both the transitive dependency graph (for named variables) and
@@ -200,7 +201,7 @@ def _trace_register_to_params(
 def _trace_register_to_named_var(
     register: str,
     dataflow: DataflowResult,
-) -> str | None:
+) -> VarName | None:
     """Trace a register back to the named variable it loaded from.
 
     Looks for def-use chains where the register was defined by a LOAD_VAR.
@@ -208,25 +209,25 @@ def _trace_register_to_named_var(
     """
     for defn in dataflow.definitions:
         t = defn.instruction
-        if defn.variable == register and isinstance(t, LoadVar):
-            return str(t.name)
+        if str(defn.variable) == register and isinstance(t, LoadVar):
+            return t.name
     return None
 
 
 def _find_register_source_var(
     register: str,
     cfg: CFG,
-) -> str | None:
+) -> VarName | None:
     """Find the named variable that a register was loaded from via LOAD_VAR."""
     for block in cfg.blocks.values():
         for inst in block.instructions:
             t = inst
             if isinstance(t, LoadVar) and str(t.result_reg) == register:
-                return str(t.name)
+                return t.name
     return None
 
 
-def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[str]:
+def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[VarName]:
     """Trace a register backward through computations to find all named variable sources.
 
     Walks backward from the register through IR instructions (BINOP, CALL, etc.)
@@ -234,7 +235,7 @@ def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[str]:
     """
     visited: set[str] = set()
     worklist = [register]
-    source_vars: set[str] = set()
+    source_vars: set[VarName] = set()
 
     while worklist:
         reg = worklist.pop()
@@ -248,7 +249,7 @@ def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[str]:
                 if str(t.result_reg) != reg:
                     continue
                 if isinstance(t, LoadVar):
-                    source_vars.add(str(t.name))
+                    source_vars.add(t.name)
                 else:
                     worklist.extend(
                         str(op)
@@ -259,11 +260,11 @@ def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[str]:
     return frozenset(source_vars)
 
 
-def _make_var_endpoint(name: str, dataflow: DataflowResult) -> VariableEndpoint:
+def _make_var_endpoint(name: VarName, dataflow: DataflowResult) -> VariableEndpoint:
     """Create a VariableEndpoint for a named variable using its definition from dataflow."""
     matching_defs = [d for d in dataflow.definitions if d.variable == name]
     defn = matching_defs[0] if matching_defs else NO_DEFINITION
-    return VariableEndpoint(name=name, definition=defn)
+    return VariableEndpoint(name=str(name), definition=defn)
 
 
 def _build_return_flows(
