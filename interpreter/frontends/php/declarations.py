@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -501,7 +502,9 @@ def lower_php_property_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 field_name = ctx.node_text(name_node).lstrip("$")
                 ctx.emit_inst(
                     StoreField(
-                        obj_reg=this_reg, field_name=field_name, value_reg=val_reg
+                        obj_reg=this_reg,
+                        field_name=FieldName(field_name),
+                        value_reg=val_reg,
                     ),
                     node=node,
                 )
@@ -540,7 +543,9 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
             val_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=val_reg, value=case_name))
         ctx.emit_inst(
-            StoreField(obj_reg=self_reg, field_name=case_name, value_reg=val_reg),
+            StoreField(
+                obj_reg=self_reg, field_name=FieldName(case_name), value_reg=val_reg
+            ),
             node=node,
         )
 

@@ -11,6 +11,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -197,7 +198,8 @@ def lower_php_member_access(ctx: TreeSitterEmitContext, node) -> Register:
     field_name = ctx.node_text(name_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -264,7 +266,7 @@ def lower_php_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
-                    field_name=ctx.node_text(name_node),
+                    field_name=FieldName(ctx.node_text(name_node)),
                     value_reg=val_reg,
                 ),
                 node=parent_node,
@@ -716,7 +718,8 @@ def lower_php_nullsafe_member_access(ctx: TreeSitterEmitContext, node) -> Regist
     field_name = ctx.node_text(name_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -730,7 +733,8 @@ def lower_php_class_constant_access(ctx: TreeSitterEmitContext, node) -> Registe
     const_name = ctx.node_text(named[1])
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=class_reg, field_name=const_name), node=node
+        LoadField(result_reg=reg, obj_reg=class_reg, field_name=FieldName(const_name)),
+        node=node,
     )
     return reg
 
@@ -744,7 +748,8 @@ def lower_php_scoped_property_access(ctx: TreeSitterEmitContext, node) -> Regist
     prop_name = ctx.node_text(named[1])
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=class_reg, field_name=prop_name), node=node
+        LoadField(result_reg=reg, obj_reg=class_reg, field_name=FieldName(prop_name)),
+        node=node,
     )
     return reg
 

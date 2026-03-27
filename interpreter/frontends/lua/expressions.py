@@ -13,6 +13,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.register import Register
+from interpreter.field_name import FieldName
 from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
     Const,
@@ -76,7 +77,11 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
             field_name = ctx.node_text(field_node)
             func_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                LoadField(result_reg=func_reg, obj_reg=obj_reg, field_name=field_name),
+                LoadField(
+                    result_reg=func_reg,
+                    obj_reg=obj_reg,
+                    field_name=FieldName(field_name),
+                ),
                 node=node,
             )
             reg = ctx.fresh_reg()
@@ -116,7 +121,8 @@ def lower_dot_index(ctx: TreeSitterEmitContext, node) -> Register:
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -135,7 +141,8 @@ def lower_method_index(ctx: TreeSitterEmitContext, node) -> Register:
     method_name = ctx.node_text(method_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=method_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(method_name)),
+        node=node,
     )
     return reg
 

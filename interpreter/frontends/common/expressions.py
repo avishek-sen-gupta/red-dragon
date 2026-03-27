@@ -14,6 +14,7 @@ from interpreter.ir import SpreadArguments
 from interpreter.types.type_expr import scalar
 from interpreter.register import Register
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Binop,
     CallFunction,
@@ -106,7 +107,7 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> Register:
             LoadField(
                 result_reg=reg,
                 obj_reg=str(this_reg),
-                field_name=resolved_name,
+                field_name=FieldName(resolved_name),
             ),
             node=node,
         )
@@ -359,7 +360,7 @@ def lower_attribute(ctx: TreeSitterEmitContext, node) -> Register:
         LoadField(
             result_reg=reg,
             obj_reg=str(obj_reg),
-            field_name=field_name,
+            field_name=FieldName(field_name),
         ),
         node=node,
     )
@@ -535,7 +536,7 @@ def lower_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=str(obj_reg),
-                    field_name=ctx.node_text(attr_node),
+                    field_name=FieldName(ctx.node_text(attr_node)),
                     value_reg=str(val_reg),
                 ),
                 node=parent_node,

@@ -13,6 +13,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
@@ -65,7 +66,9 @@ def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> Register:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadField(
-                result_reg=reg, obj_reg=this_reg, field_name=ctx._accessor_backing_field
+                result_reg=reg,
+                obj_reg=this_reg,
+                field_name=FieldName(ctx._accessor_backing_field),
             ),
             node=node,
         )
@@ -218,7 +221,8 @@ def lower_navigation_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -1015,7 +1019,7 @@ def lower_kotlin_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=this_reg,
-                    field_name=ctx._accessor_backing_field,
+                    field_name=FieldName(ctx._accessor_backing_field),
                     value_reg=val_reg,
                 ),
                 node=parent_node,
@@ -1045,7 +1049,9 @@ def lower_kotlin_store_target(
                 return
 
             ctx.emit_inst(
-                StoreField(obj_reg=obj_reg, field_name=field_name, value_reg=val_reg),
+                StoreField(
+                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg
+                ),
                 node=parent_node,
             )
         else:
@@ -1131,7 +1137,9 @@ def lower_kotlin_store_target(
                 return
 
             ctx.emit_inst(
-                StoreField(obj_reg=obj_reg, field_name=field_name, value_reg=val_reg),
+                StoreField(
+                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg
+                ),
                 node=parent_node,
             )
         else:
