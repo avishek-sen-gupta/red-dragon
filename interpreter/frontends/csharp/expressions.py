@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     AddressOf,
     Branch,
@@ -155,7 +156,8 @@ def lower_member_access(ctx: TreeSitterEmitContext, node) -> Register:
     field_name = ctx.node_text(name_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -563,7 +565,8 @@ def lower_conditional_access(ctx: TreeSitterEmitContext, node) -> Register:
         field_name = ctx.node_text(binding_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -681,7 +684,9 @@ def lower_with_expression(ctx: TreeSitterEmitContext, node) -> Register:
                 val_reg = ctx.lower_expr(init_named[1])
                 ctx.emit_inst(
                     StoreField(
-                        obj_reg=clone_reg, field_name=field_name, value_reg=val_reg
+                        obj_reg=clone_reg,
+                        field_name=FieldName(field_name),
+                        value_reg=val_reg,
                     ),
                     node=child,
                 )
@@ -702,7 +707,9 @@ def lower_anonymous_object_creation(ctx: TreeSitterEmitContext, node) -> Registe
         field_name = ctx.node_text(named[i])
         val_reg = ctx.lower_expr(named[i + 1])
         ctx.emit_inst(
-            StoreField(obj_reg=obj_reg, field_name=field_name, value_reg=val_reg),
+            StoreField(
+                obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg
+            ),
             node=named[i],
         )
         i += 2
@@ -740,7 +747,9 @@ def lower_csharp_store_target(
             this_reg = ctx.fresh_reg()
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
-                StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg),
+                StoreField(
+                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
+                ),
                 node=parent_node,
             )
         else:
@@ -753,7 +762,7 @@ def lower_csharp_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
-                    field_name=ctx.node_text(name_node),
+                    field_name=FieldName(ctx.node_text(name_node)),
                     value_reg=val_reg,
                 ),
                 node=parent_node,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
@@ -386,7 +387,9 @@ def _emit_record_init(
         ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName(name)))
         this_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
-        ctx.emit_inst(StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg))
+        ctx.emit_inst(
+            StoreField(obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg)
+        )
 
     none_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))

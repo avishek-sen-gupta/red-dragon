@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -267,7 +268,9 @@ def _lower_struct_initializer_list(
             obj_load = ctx.fresh_reg()
             ctx.emit_inst(LoadVar(result_reg=obj_load, name=VarName(var_name)))
             ctx.emit_inst(
-                StoreField(obj_reg=obj_load, field_name=fname, value_reg=val_reg),
+                StoreField(
+                    obj_reg=obj_load, field_name=FieldName(fname), value_reg=val_reg
+                ),
                 node=elem,
             )
 
@@ -466,7 +469,9 @@ def lower_struct_field(ctx: TreeSitterEmitContext, node) -> None:
         default_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=default_reg, value="0"), node=node)
         ctx.emit_inst(
-            StoreField(obj_reg=this_reg, field_name=fname, value_reg=default_reg),
+            StoreField(
+                obj_reg=this_reg, field_name=FieldName(fname), value_reg=default_reg
+            ),
             node=node,
         )
 
@@ -498,7 +503,11 @@ def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
                 val_reg = ctx.fresh_reg()
                 ctx.emit_inst(Const(result_reg=val_reg, value=str(i)))
             ctx.emit_inst(
-                StoreField(obj_reg=obj_reg, field_name=member_name, value_reg=val_reg),
+                StoreField(
+                    obj_reg=obj_reg,
+                    field_name=FieldName(member_name),
+                    value_reg=val_reg,
+                ),
                 node=enumerator,
             )
 

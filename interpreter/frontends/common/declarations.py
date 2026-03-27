@@ -12,6 +12,7 @@ from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter import constants
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -157,7 +158,7 @@ def emit_field_initializers(
         ctx.emit_inst(
             StoreField(
                 obj_reg=str(this_reg),
-                field_name=field_name,
+                field_name=FieldName(field_name),
                 value_reg=str(val_reg),
             ),
         )

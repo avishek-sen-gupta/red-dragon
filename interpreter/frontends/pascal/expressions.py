@@ -17,6 +17,7 @@ from interpreter.frontends.pascal.declarations import _resolve_object_class
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Const,
     Binop,
@@ -143,7 +144,8 @@ def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> Register:
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 

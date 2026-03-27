@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
@@ -97,7 +98,8 @@ def lower_field_access(ctx: TreeSitterEmitContext, node) -> Register:
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -110,7 +112,8 @@ def lower_method_reference(ctx: TreeSitterEmitContext, node) -> Register:
     method_name = ctx.node_text(method_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=method_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(method_name)),
+        node=node,
     )
     return reg
 
@@ -129,7 +132,8 @@ def lower_class_literal(ctx: TreeSitterEmitContext, node) -> Register:
     type_reg = ctx.lower_expr(type_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=type_reg, field_name="class"), node=node
+        LoadField(result_reg=reg, obj_reg=type_reg, field_name=FieldName("class")),
+        node=node,
     )
     return reg
 
@@ -279,7 +283,9 @@ def lower_java_store_target(
             this_reg = ctx.fresh_reg()
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
-                StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg),
+                StoreField(
+                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
+                ),
                 node=parent_node,
             )
         else:
@@ -294,7 +300,7 @@ def lower_java_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
-                    field_name=ctx.node_text(field_node),
+                    field_name=FieldName(ctx.node_text(field_node)),
                     value_reg=val_reg,
                 ),
                 node=parent_node,

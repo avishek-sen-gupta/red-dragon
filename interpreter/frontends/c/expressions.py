@@ -12,6 +12,7 @@ from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 from interpreter.operator_kind import resolve_unop
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -48,7 +49,8 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -87,7 +89,9 @@ def lower_c_store_target(
             this_reg = ctx.fresh_reg()
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
-                StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg),
+                StoreField(
+                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
+                ),
                 node=parent_node,
             )
         else:
@@ -102,7 +106,7 @@ def lower_c_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
-                    field_name=ctx.node_text(field_node),
+                    field_name=FieldName(ctx.node_text(field_node)),
                     value_reg=val_reg,
                 ),
                 node=parent_node,

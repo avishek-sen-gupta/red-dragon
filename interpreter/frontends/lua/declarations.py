@@ -10,6 +10,7 @@ from interpreter import constants
 from interpreter.frontends.common.declarations import lower_params
 from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -92,7 +93,7 @@ def lower_lua_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
-                    field_name=ctx.node_text(field_node),
+                    field_name=FieldName(ctx.node_text(field_node)),
                     value_reg=val_reg,
                 ),
                 node=parent_node,
@@ -161,7 +162,9 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
         obj_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=obj_reg, name=VarName(table_name)))
         ctx.emit_inst(
-            StoreField(obj_reg=obj_reg, field_name=func_name, value_reg=func_reg),
+            StoreField(
+                obj_reg=obj_reg, field_name=FieldName(func_name), value_reg=func_reg
+            ),
             node=node,
         )
     else:
