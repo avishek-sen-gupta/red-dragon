@@ -4,6 +4,7 @@ import logging
 import statistics
 
 from interpreter.cfg import build_cfg
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
 from interpreter.vm.vm import _heap_addr
@@ -238,8 +239,11 @@ def extract_array(
     )
     obj = vm.heap[heap_addr]
     # Lua uses 1-based indexing; detect by checking for key "0"
-    start_index = 0 if "0" in obj.fields else 1
+    start_index = 0 if FieldName("0", FieldKind.INDEX) in obj.fields else 1
     return [
         field.value if isinstance(field, TypedValue) else field
-        for field in (obj.fields[str(start_index + i)] for i in range(length))
+        for field in (
+            obj.fields[FieldName(str(start_index + i), FieldKind.INDEX)]
+            for i in range(length)
+        )
     ]

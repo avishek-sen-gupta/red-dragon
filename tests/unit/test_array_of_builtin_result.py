@@ -1,5 +1,6 @@
 """Unit tests for _builtin_array_of returning BuiltinResult with heap side effects."""
 
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import _builtin_array_of
 from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import BuiltinResult, Pointer
@@ -33,12 +34,12 @@ class TestArrayOfBuiltinResult:
         vm = VMState()
         result = _builtin_array_of([typed_from_runtime(10), typed_from_runtime(20)], vm)
         fields = {hw.field: hw.value for hw in result.heap_writes}
-        assert "0" in fields
-        assert "1" in fields
-        assert "length" in fields
-        assert isinstance(fields["0"], TypedValue)
-        assert fields["0"].value == 10
-        assert fields["length"].value == 2
+        assert FieldName("0", FieldKind.INDEX) in fields
+        assert FieldName("1", FieldKind.INDEX) in fields
+        assert FieldName("length", FieldKind.SPECIAL) in fields
+        assert isinstance(fields[FieldName("0", FieldKind.INDEX)], TypedValue)
+        assert fields[FieldName("0", FieldKind.INDEX)].value == 10
+        assert fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_does_not_mutate_heap(self):
         vm = VMState()
@@ -49,7 +50,11 @@ class TestArrayOfBuiltinResult:
         vm = VMState()
         result = _builtin_array_of([], vm)
         assert len(result.new_objects) == 1
-        length_writes = [hw for hw in result.heap_writes if hw.field == "length"]
+        length_writes = [
+            hw
+            for hw in result.heap_writes
+            if hw.field == FieldName("length", FieldKind.SPECIAL)
+        ]
         assert len(length_writes) == 1
         assert length_writes[0].value.value == 0
 

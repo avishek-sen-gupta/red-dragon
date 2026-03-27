@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.vm.executor import _resolve_call_args
 from interpreter.ir import SpreadArguments
 from interpreter.vm.vm import VMState
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import scalar
@@ -17,9 +18,12 @@ class TestResolveCallArgs:
         """Create a VM with a heap array and a frame holding a register pointing to it."""
         vm = VMState()
         fields = {
-            str(i): typed(e, scalar(TypeName.INT)) for i, e in enumerate(elements)
+            FieldName(str(i), FieldKind.INDEX): typed(e, scalar(TypeName.INT))
+            for i, e in enumerate(elements)
         }
-        fields["length"] = typed(len(elements), scalar(TypeName.INT))
+        fields[FieldName("length", FieldKind.SPECIAL)] = typed(
+            len(elements), scalar(TypeName.INT)
+        )
         vm.heap["arr_0"] = HeapObject(type_hint="Array", fields=fields)
         ptr = Pointer(base="arr_0", offset=0)
         vm.call_stack.append(

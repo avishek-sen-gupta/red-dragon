@@ -21,6 +21,7 @@ from interpreter.ir import (
     SpreadArguments,
 )
 from interpreter.instructions import InstructionBase
+from interpreter.field_name import FieldName
 from interpreter.register import NO_REGISTER, Register
 
 
@@ -514,7 +515,7 @@ class TestTypedFieldAccess:
         )
         typed = inst
         assert typed.obj_reg == Register("%0")
-        assert typed.field_name == "count"
+        assert typed.field_name == FieldName("count")
         assert typed.value_reg == Register("%1")
 
     def test_branch_if_fields(self):
