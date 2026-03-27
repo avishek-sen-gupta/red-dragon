@@ -35,16 +35,18 @@ class FieldName:
 
     def is_present(self) -> bool: return True
     def __str__(self) -> str: return self.value
-    def __hash__(self) -> int: return hash(self.value)
+
+    def __hash__(self) -> int:
+        return hash((self.value, self.kind))
 
     def __eq__(self, other):
         if isinstance(other, FieldName):
-            return self.value == other.value  # kind is NOT part of identity
+            return self.value == other.value and self.kind == other.kind
         return NotImplemented
 
     def __lt__(self, other):
         if isinstance(other, FieldName):
-            return self.value < other.value  # kind not in ordering
+            return (self.value, self.kind.value) < (other.value, other.kind.value)
         return NotImplemented
 
     def __contains__(self, item: str): return item in self.value
@@ -66,7 +68,7 @@ NO_FIELD_NAME = NoFieldName()
 - **Default PROPERTY.** ~130 frontend sites construct properties — no explicit tag needed. Only array/special sites (~20 in builtins/handlers) pass the tag.
 - **No str bridge.** Lesson from VarName: bridge-then-remove costs more than going strict from day one.
 - **`__post_init__` guard.** Rejects `FieldName(FieldName(...))` double-wrapping and non-str values.
-- **Kind is advisory metadata, not identity.** `__eq__` and `__hash__` compare `value` only — `kind` is ignored. A heap slot is identified by its string name alone; you cannot have both `FieldName("x", PROPERTY)` and `FieldName("x", INDEX)` as distinct keys in the same dict. The tag describes the *access pattern* (is this a property access, an array index, or a special key?), not the field's identity.
+- **Kind is part of identity.** `__eq__` and `__hash__` include both `value` and `kind`. `FieldName("0", INDEX) != FieldName("0", PROPERTY)`. This means writers and readers must agree on the kind — a field stored as INDEX must be looked up as INDEX. In practice this is naturally consistent: StoreField always uses PROPERTY, array builtins always use INDEX, and special keys always use SPECIAL. The indirect handler boundary (LoadFieldIndirect, StoreIndirect) must use the correct kind when wrapping runtime strings — see mmdt for analysis.
 - **`NoFieldName(eq=False)` preserves parent `__eq__`.** Use `x.is_present()` for null checks, not `x == NO_FIELD_NAME`.
 
 ## Instruction Field Changes
@@ -161,3 +163,5 @@ Also fix test setup sites that construct `HeapObject(fields={"X": ...})` with st
 - **SymbolTable/FunctionRegistry migration (9adr):** `ClassInfo.fields`, `resolve_field()`, etc. still use str keys. Follow-up P4 issue.
 - **LoadFieldIndirect/StoreFieldIndirect instruction fields:** Use `name_reg: Register` for dynamic names — no `field_name` field to migrate. But their handlers DO wrap runtime values at the boundary (see Construction Sites above).
 - **FuncName (cnz9):** Separate domain type for CallFunction.func_name, CallMethod.method_name.
+- **Address domain type (v217):** HeapWrite.obj_addr, Pointer.base, NewObject.addr, vm.heap keys.
+- **Indirect handler impedance mismatch (mmdt):** Runtime string → FieldName wrapping at LoadFieldIndirect/StoreIndirect boundaries. Analysis filed; may not need fixing.
