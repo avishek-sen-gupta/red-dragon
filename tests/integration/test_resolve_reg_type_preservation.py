@@ -4,6 +4,7 @@ from interpreter.constants import Language, TypeName
 from interpreter.run import run
 from interpreter.types.typed_value import TypedValue
 from interpreter.types.type_expr import ParameterizedType, pointer, scalar
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 
 
@@ -18,7 +19,7 @@ class TestTypePreservationThroughResolveReg:
         vm = run(
             "class Dog {} Dog d = new Dog();", language=Language.JAVA, max_steps=100
         )
-        tv = _typed_locals(vm)["d"]
+        tv = _typed_locals(vm)[VarName("d")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
         assert tv.type == scalar("Dog")
@@ -30,7 +31,7 @@ class TestTypePreservationThroughResolveReg:
             language=Language.PYTHON,
             max_steps=100,
         )
-        tv = _typed_locals(vm)["c"]
+        tv = _typed_locals(vm)[VarName("c")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
         assert tv.type == pointer(scalar("Cat"))
@@ -42,15 +43,15 @@ class TestTypePreservationThroughResolveReg:
             language=Language.JAVA,
             max_steps=100,
         )
-        tv_x = _typed_locals(vm)["x"]
-        tv_y = _typed_locals(vm)["y"]
+        tv_x = _typed_locals(vm)[VarName("x")]
+        tv_y = _typed_locals(vm)[VarName("y")]
         assert tv_x.type == scalar("Foo")
         assert tv_y.type == scalar("Foo")
 
     def test_array_preserves_parameterized_type(self):
         """Array type inference produces Array[Int] for integer lists."""
         vm = run("x = [1, 2, 3]\n", language=Language.PYTHON, max_steps=100)
-        tv = _typed_locals(vm)["x"]
+        tv = _typed_locals(vm)[VarName("x")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
         assert isinstance(tv.type, ParameterizedType)
@@ -65,7 +66,7 @@ Box make() { return new Box(); }
 Box b = make();
 """
         vm = run(code, language=Language.JAVA, max_steps=200)
-        tv = _typed_locals(vm)["b"]
+        tv = _typed_locals(vm)[VarName("b")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
         assert tv.type == scalar("Box")

@@ -192,8 +192,10 @@ class TestLLMPlausibleResolver:
 
         result = resolver.resolve_call("set_status", [], inst, vm)
 
-        assert result.update.var_writes["status"].value == "done"
-        assert isinstance(result.update.var_writes["status"], TypedValue)
+        from interpreter.var_name import VarName
+
+        assert result.update.var_writes[VarName("status")].value == "done"
+        assert isinstance(result.update.var_writes[VarName("status")], TypedValue)
         assert result.update.register_writes[Register("%0")].value == "ok"
 
     def test_resolve_method_returns_concrete_value(self):

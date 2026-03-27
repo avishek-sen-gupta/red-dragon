@@ -95,7 +95,7 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     resolved_name = ctx.resolve_var(name)
     # Implicit this: bare identifier that's a class field and not a local/param
     if (
-        resolved_name not in ctx._method_declared_names
+        VarName(resolved_name) not in ctx._method_declared_names
         and ctx._current_class_name
         and ctx.symbol_table.resolve_field(ctx._current_class_name, resolved_name).name
     ):

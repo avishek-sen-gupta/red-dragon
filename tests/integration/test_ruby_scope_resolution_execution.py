@@ -6,6 +6,7 @@ through the full parse -> lower -> execute pipeline.
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from tests.unit.rosetta.conftest import execute_for_language
 
 

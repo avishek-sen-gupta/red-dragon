@@ -10,8 +10,15 @@ from functools import reduce
 from interpreter import constants
 from interpreter.cfg import BasicBlock, CFG
 from interpreter.ir import Opcode, VAR_DEFINITION_OPCODES
-from interpreter.instructions import DeclVar, InstructionBase, StoreVar, Symbolic
+from interpreter.instructions import (
+    DeclVar,
+    InstructionBase,
+    LoadVar,
+    StoreVar,
+    Symbolic,
+)
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +115,8 @@ class DataflowResult:
     definitions: list[Definition]
     block_facts: dict[str, BlockDataflowFacts]
     def_use_chains: list[DefUseLink]
-    dependency_graph: dict[str, set[str]]
-    raw_dependency_graph: dict[str, set[str]]
+    dependency_graph: dict[VarName, set[VarName]]
+    raw_dependency_graph: dict[VarName, set[VarName]]
 
 
 def _defs_of(instruction: InstructionBase) -> list[str]:
@@ -125,15 +132,18 @@ def _defs_of(instruction: InstructionBase) -> list[str]:
     return []
 
 
-def _uses_of(instruction: InstructionBase) -> list[str]:
-    """Return variable/register names used by an instruction."""
+def _uses_of(instruction: InstructionBase) -> list:
+    """Return variable/register names used by an instruction.
+
+    Returns VarName for named variable references, str for register references.
+    """
     op = instruction.opcode
     operands = instruction.operands
 
     if op == Opcode.CONST:
         return []
-    if op == Opcode.LOAD_VAR and len(operands) >= 1:
-        return [operands[0]]
+    if op == Opcode.LOAD_VAR and isinstance(instruction, LoadVar):
+        return [instruction.name]
     if op in VAR_DEFINITION_OPCODES and len(operands) >= 2:
         return [operands[1]]
     if op == Opcode.LOAD_FIELD and len(operands) >= 1:
@@ -336,7 +346,7 @@ def extract_def_use_chains(
 
 def _build_raw_dependency_graph(
     def_use_chains: list[DefUseLink],
-) -> dict[str, set[str]]:
+) -> dict[VarName, set[VarName]]:
     """Build a raw variable dependency graph: var -> set of vars it directly depends on.
 
     Traces through register chains: for each STORE_VAR, find what named variables
@@ -364,8 +374,8 @@ def _build_raw_dependency_graph(
     }
 
     # For each STORE_VAR, trace the RHS register backward to named variables
-    def _trace_deps(var_name: str, rhs_reg: str) -> tuple[str, set[str]]:
-        named_deps: set[str] = set()
+    def _trace_deps(var_name: VarName, rhs_reg: str) -> tuple[VarName, set[VarName]]:
+        named_deps: set[VarName] = set()
         _trace_to_named_vars(str(rhs_reg), produced_from, named_deps, set())
         return (var_name, named_deps)
 
@@ -378,8 +388,8 @@ def _build_raw_dependency_graph(
 
 
 def _transitive_closure(
-    raw_graph: dict[str, set[str]],
-) -> dict[str, set[str]]:
+    raw_graph: dict[VarName, set[VarName]],
+) -> dict[VarName, set[VarName]]:
     """Compute transitive closure of a dependency graph."""
     dep_graph = {var: set(deps) for var, deps in raw_graph.items()}
     changed = True
@@ -396,7 +406,7 @@ def _transitive_closure(
 
 def build_dependency_graph(
     def_use_chains: list[DefUseLink],
-) -> dict[str, set[str]]:
+) -> dict[VarName, set[VarName]]:
     """Build a variable dependency graph with transitive closure.
 
     Returns var -> set of all vars it depends on (direct + transitive).
@@ -416,18 +426,21 @@ def _is_temporary_register(name: str) -> bool:
 
 
 def _trace_to_named_vars(
-    reg: str,
-    produced_from: dict[str, set[str]],
-    result: set[str],
-    visited: set[str],
+    reg,
+    produced_from: dict[str, set],
+    result: set[VarName],
+    visited: set,
 ) -> None:
     """Recursively trace a register back to named variables via the produced_from map."""
+    if isinstance(reg, VarName):
+        result.add(reg)
+        return
     if reg in visited:
         return
     visited.add(reg)
 
     if not _is_temporary_register(reg):
-        result.add(reg)
+        result.add(VarName(reg))
         return
 
     for source in produced_from.get(reg, set()):

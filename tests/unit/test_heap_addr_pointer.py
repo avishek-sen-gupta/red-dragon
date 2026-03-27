@@ -1,6 +1,7 @@
 """Tests for _heap_addr() Pointer support and ADDRESS_OF guard."""
 
 from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.vm.vm import _heap_addr, HeapObject, VMState
 from interpreter.vm.vm_types import Pointer, StackFrame, SymbolicValue
 from interpreter.ir import IRInstruction, Opcode
@@ -45,7 +46,7 @@ class TestAddressOfPointerGuard:
         frame = StackFrame(
             function_name="main",
             local_vars={
-                "ptr": typed(existing_ptr, scalar(TypeName.POINTER)),
+                VarName("ptr"): typed(existing_ptr, scalar(TypeName.POINTER)),
             },
         )
         vm = VMState(
@@ -87,7 +88,7 @@ class TestAddressOfPointerGuard:
         frame = StackFrame(
             function_name="main",
             local_vars={
-                "arr": typed(arr_ptr, pointer(scalar("Array"))),
+                VarName("arr"): typed(arr_ptr, pointer(scalar("Array"))),
             },
         )
         vm = VMState(
@@ -121,7 +122,7 @@ class TestAddressOfPointerGuard:
         frame = StackFrame(
             function_name="main",
             local_vars={
-                "pt": typed(struct_ptr, pointer(scalar("Point"))),
+                VarName("pt"): typed(struct_ptr, pointer(scalar("Point"))),
             },
         )
         vm = VMState(
