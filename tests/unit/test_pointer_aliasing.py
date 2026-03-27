@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
@@ -112,7 +113,9 @@ class TestAddressOfHandler:
 
         # The heap object should hold the original value
         alias_ptr = vm.current_frame.var_heap_aliases[VarName("x")]
-        assert vm.heap[alias_ptr.base].fields["0"].value == 42
+        assert (
+            vm.heap[alias_ptr.base].fields[FieldName("0", FieldKind.INDEX)].value == 42
+        )
 
     def test_second_address_of_returns_same_pointer(self):
         """Taking &x twice should return the same Pointer (same heap object)."""
@@ -134,7 +137,10 @@ class TestAddressOfHandler:
         vm = _make_vm(s="obj_0")
         vm.heap["obj_0"] = HeapObject(
             type_hint="Point",
-            fields={k: typed_from_runtime(v) for k, v in {"x": 10, "y": 20}.items()},
+            fields={
+                k: typed_from_runtime(v)
+                for k, v in {FieldName("x"): 10, FieldName("y"): 20}.items()
+            },
         )
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["s"])
         result = _handle_address_of(inst, vm, _CTX)
@@ -164,7 +170,9 @@ class TestAliasAwareLoadStore:
 
         # Directly modify the heap to simulate *ptr = 99
         alias = vm.current_frame.var_heap_aliases[VarName("x")]
-        vm.heap[alias.base].fields["0"] = typed_from_runtime(99)
+        vm.heap[alias.base].fields[FieldName("0", FieldKind.INDEX)] = (
+            typed_from_runtime(99)
+        )
 
         inst = _make_inst(Opcode.LOAD_VAR, result_reg="%val", operands=["x"])
         result = _handle_load_var(inst, vm, _CTX)
@@ -184,7 +192,7 @@ class TestAliasAwareLoadStore:
         _apply(vm, result)
 
         # The heap should reflect the new value
-        assert vm.heap[ptr.base].fields["0"].value == 77
+        assert vm.heap[ptr.base].fields[FieldName("0", FieldKind.INDEX)].value == 77
 
     def test_store_via_pointer_then_load_var(self):
         """*ptr = 99 then read x should see 99."""
@@ -239,7 +247,7 @@ class TestPointerDereference:
         result = _handle_store_indirect(inst, vm, _CTX)
         _apply(vm, result)
 
-        assert vm.heap[ptr.base].fields["0"].value == 99
+        assert vm.heap[ptr.base].fields[FieldName("0", FieldKind.INDEX)].value == 99
 
 
 # ── Pointer arithmetic ───────────────────────────────────────────
@@ -307,7 +315,12 @@ class TestPointerArithmetic:
         vm.heap["arr_0"] = HeapObject(
             fields={
                 k: typed_from_runtime(v)
-                for k, v in {"0": 10, "1": 20, "2": 30, "length": 3}.items()
+                for k, v in {
+                    FieldName("0", FieldKind.INDEX): 10,
+                    FieldName("1", FieldKind.INDEX): 20,
+                    FieldName("2", FieldKind.INDEX): 30,
+                    FieldName("length", FieldKind.SPECIAL): 3,
+                }.items()
             }
         )
         ptr = Pointer("arr_0", 0)

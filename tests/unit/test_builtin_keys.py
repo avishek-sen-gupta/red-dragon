@@ -7,6 +7,7 @@ len() and index-based iteration work correctly.
 
 from __future__ import annotations
 
+from interpreter.field_name import FieldName
 from interpreter.vm.builtins import Builtins, _builtin_len
 from interpreter.types.type_expr import scalar
 from interpreter.vm.vm import VMState, apply_update
@@ -47,7 +48,10 @@ class TestBuiltinKeysProducesConcreteArray:
         vm.call_stack.append(StackFrame(function_name="test"))
         vm.heap["obj_0"] = HeapObject(
             type_hint="object",
-            fields={k: typed_from_runtime(v) for k, v in {"a": 10, "b": 5}.items()},
+            fields={
+                k: typed_from_runtime(v)
+                for k, v in {FieldName("a"): 10, FieldName("b"): 5}.items()
+            },
         )
         result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
@@ -55,8 +59,11 @@ class TestBuiltinKeysProducesConcreteArray:
         assert isinstance(result.value.value, Pointer)
         assert _result_addr(result) in vm.heap
         keys_obj = vm.heap[_result_addr(result)]
-        assert keys_obj.fields["length"].value == 2
-        key_values = {keys_obj.fields["0"].value, keys_obj.fields["1"].value}
+        assert keys_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
+        key_values = {
+            keys_obj.fields[FieldName("0", FieldKind.INDEX)].value,
+            keys_obj.fields[FieldName("1", FieldKind.INDEX)].value,
+        }
         assert key_values == {"a", "b"}
 
     def test_keys_of_empty_object(self):
@@ -66,7 +73,12 @@ class TestBuiltinKeysProducesConcreteArray:
         result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert _result_addr(result) in vm.heap
-        assert vm.heap[_result_addr(result)].fields["length"].value == 0
+        assert (
+            vm.heap[_result_addr(result)]
+            .fields[FieldName("length", FieldKind.SPECIAL)]
+            .value
+            == 0
+        )
 
     def test_keys_excludes_length_field(self):
         """Arrays have a 'length' field — keys() should exclude it."""
@@ -76,14 +88,21 @@ class TestBuiltinKeysProducesConcreteArray:
             type_hint="array",
             fields={
                 k: typed_from_runtime(v)
-                for k, v in {"0": 10, "1": 20, "length": 2}.items()
+                for k, v in {
+                    FieldName("0", FieldKind.INDEX): 10,
+                    FieldName("1", FieldKind.INDEX): 20,
+                    FieldName("length", FieldKind.SPECIAL): 2,
+                }.items()
             },
         )
         result = Builtins.TABLE["keys"]([typed_from_runtime("arr_0")], vm)
         _apply_builtin_result(vm, result)
         keys_obj = vm.heap[_result_addr(result)]
-        assert keys_obj.fields["length"].value == 2
-        key_values = {keys_obj.fields["0"].value, keys_obj.fields["1"].value}
+        assert keys_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
+        key_values = {
+            keys_obj.fields[FieldName("0", FieldKind.INDEX)].value,
+            keys_obj.fields[FieldName("1", FieldKind.INDEX)].value,
+        }
         assert key_values == {"0", "1"}
 
     def test_len_of_keys_result(self):
@@ -93,7 +112,12 @@ class TestBuiltinKeysProducesConcreteArray:
         vm.heap["obj_0"] = HeapObject(
             type_hint="object",
             fields={
-                k: typed_from_runtime(v) for k, v in {"x": 1, "y": 2, "z": 3}.items()
+                k: typed_from_runtime(v)
+                for k, v in {
+                    FieldName("x"): 1,
+                    FieldName("y"): 2,
+                    FieldName("z"): 3,
+                }.items()
             },
         )
         keys_result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)

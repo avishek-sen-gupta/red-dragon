@@ -7,6 +7,7 @@ rather than falling back to symbolic resolution.
 
 from __future__ import annotations
 
+from interpreter.field_name import FieldName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, SymbolicValue, apply_update
 from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
@@ -56,7 +57,7 @@ def _build_callable_field_vm():
     vm.heap["obj_0"] = HeapObject(
         type_hint="table",
         fields={
-            "greet": typed_from_runtime(bound),
+            FieldName("greet"): typed_from_runtime(bound),
         },
     )
     ptr = Pointer(base="obj_0", offset=0)
@@ -93,7 +94,7 @@ class TestHeapFieldMethodCall:
         """CALL_METHOD on a field that's not callable should fall back to resolver."""
         vm, cfg, registry = _build_callable_field_vm()
         # Overwrite greet with a non-callable value
-        vm.heap["obj_0"].fields["greet"] = typed_from_runtime(42)
+        vm.heap["obj_0"].fields[FieldName("greet")] = typed_from_runtime(42)
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
             result_reg="%result",
