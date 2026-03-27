@@ -9,6 +9,7 @@ from typing import Any
 
 from litellm.exceptions import OpenAIError
 
+from interpreter.field_name import FieldName
 from interpreter.llm.llm_client import LLMClient
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
@@ -184,7 +185,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         heap_writes = [
             HeapWrite(
                 obj_addr=hw["obj_addr"],
-                field=hw["field"],
+                field=FieldName(hw["field"]),
                 value=typed_from_runtime(hw["value"]),
             )
             for hw in data.get("heap_writes", [])
