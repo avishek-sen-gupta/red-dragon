@@ -53,7 +53,7 @@ def format_state_update(update: StateUpdate) -> dict[str, Any]:
         }
     if update.var_writes:
         result["variables"] = {
-            k: format_typed_value(v) for k, v in update.var_writes.items()
+            str(k): format_typed_value(v) for k, v in update.var_writes.items()
         }
     if update.heap_writes:
         result["heap_writes"] = [
@@ -84,6 +84,10 @@ def format_vm_state_frame(frame) -> dict[str, Any]:
     """Convert a StackFrame to a JSON dict."""
     return {
         "function": frame.function_name,
-        "variables": {k: format_typed_value(v) for k, v in frame.local_vars.items()},
-        "registers": {k: format_typed_value(v) for k, v in frame.registers.items()},
+        "variables": {
+            str(k): format_typed_value(v) for k, v in frame.local_vars.items()
+        },
+        "registers": {
+            str(k): format_typed_value(v) for k, v in frame.registers.items()
+        },
     }

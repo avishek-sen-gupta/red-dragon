@@ -78,7 +78,7 @@ class TestMaterializeRawUpdate:
         vm.call_stack.append(StackFrame(function_name="main"))
         raw = StateUpdate(var_writes={VarName("x"): 10}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
-        tv = result.var_writes["x"]
+        tv = result.var_writes[VarName("x")]
         assert isinstance(tv, TypedValue)
         assert tv.value == 10
         assert tv.type == scalar("Int")
@@ -131,7 +131,7 @@ class TestMaterializeRawUpdate:
         vm.call_stack.append(StackFrame(function_name="main"))
         raw = StateUpdate(var_writes={VarName("x"): 42}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
-        tv = result.var_writes["x"]
+        tv = result.var_writes[VarName("x")]
         assert tv.value == 42
         assert tv.type == scalar("Int")
 
@@ -193,7 +193,7 @@ class TestApplyUpdateTypedPath:
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
-        assert env.bindings["x"] is tv
+        assert env.bindings[VarName("x")] is tv
         assert vm.current_frame.local_vars[VarName("x")] is tv
 
     def test_register_coercion_when_declared_type_differs(self):

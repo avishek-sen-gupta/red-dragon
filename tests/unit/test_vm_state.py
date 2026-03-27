@@ -1,6 +1,5 @@
 """Tests for VMState — data_layout field and serialization."""
 
-from interpreter.var_name import VarName
 from interpreter.vm.vm_types import VMState
 
 
@@ -24,12 +23,12 @@ class TestVMStateDataLayout:
             }
         }
         result = vm.to_dict()
-        assert VarName("data_layout") in result
-        assert result[VarName("data_layout")]["WS-A"]["offset"] == 0
-        assert result[VarName("data_layout")]["WS-A"]["length"] == 3
+        assert "data_layout" in result
+        assert result["data_layout"]["WS-A"]["offset"] == 0
+        assert result["data_layout"]["WS-A"]["length"] == 3
 
     def test_data_layout_omitted_from_to_dict_when_empty(self):
         """to_dict() omits data_layout when empty (sparse serialization)."""
         vm = VMState()
         result = vm.to_dict()
-        assert VarName("data_layout") not in result
+        assert "data_layout" not in result
