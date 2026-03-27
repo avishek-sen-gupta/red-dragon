@@ -33,6 +33,7 @@ from interpreter.refs.func_ref import FuncRef
 from interpreter.types.type_inference import infer_types, _infer_const_type
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _make_inst(
@@ -257,7 +258,7 @@ class TestStoreVarInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["x"] == "Int"
+        assert env.var_types[VarName("x")] == "Int"
 
     def test_store_var_inherits_register_type(self):
         instructions = [
@@ -270,7 +271,7 @@ class TestStoreVarInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["pi"] == TypeName.FLOAT
+        assert env.var_types[VarName("pi")] == TypeName.FLOAT
 
     def test_store_var_explicit_type_overrides_register(self):
         """Declared type (pre-seeded) takes precedence over inferred register type."""
@@ -286,7 +287,7 @@ class TestStoreVarInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["x"] == "Float"
+        assert env.var_types[VarName("x")] == "Float"
 
 
 # ---------------------------------------------------------------------------
@@ -585,9 +586,9 @@ class TestFullChain:
         assert env.register_types[Register("%2")] == "Int"
         assert env.register_types[Register("%3")] == "Int"
         assert env.register_types[Register("%4")] == TypeName.INT
-        assert env.var_types["x"] == "Int"
-        assert env.var_types["y"] == "Int"
-        assert env.var_types["z"] == "Int"
+        assert env.var_types[VarName("x")] == "Int"
+        assert env.var_types[VarName("y")] == "Int"
+        assert env.var_types[VarName("z")] == "Int"
 
 
 # ---------------------------------------------------------------------------
@@ -616,7 +617,7 @@ class TestNullTypeResolver:
         )
         assert env.register_types[Register("%0")] == "Int"
         assert env.register_types[Register("%1")] == TypeName.FLOAT
-        assert env.var_types["x"] == "Int"
+        assert env.var_types[VarName("x")] == "Int"
 
     def test_binop_result_type_empty(self):
         """NullTypeResolver produces no result type for BINOP."""
@@ -782,7 +783,7 @@ class TestForwardReferenceResolution:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         assert env.register_types[Register("%0")] == TypeName.STRING
-        assert env.var_types["result"] == TypeName.STRING
+        assert env.var_types[VarName("result")] == TypeName.STRING
 
     def test_three_function_chain_resolves(self):
         """a() calls b() calls c() — all defined in reverse order → all resolve."""
@@ -2417,8 +2418,8 @@ class TestInferenceInternalTypeExpr:
             _null_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert isinstance(env.var_types["x"], ScalarType)
-        assert env.var_types["x"] == TypeName.INT
+        assert isinstance(env.var_types[VarName("x")], ScalarType)
+        assert env.var_types[VarName("x")] == TypeName.INT
 
     def test_seeded_register_type_becomes_type_expr(self):
         """Seeded string types from builder should be parsed to TypeExpr."""
@@ -2449,7 +2450,7 @@ class TestInferenceInternalTypeExpr:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        var_type = env.var_types["items"]
+        var_type = env.var_types[VarName("items")]
         assert isinstance(var_type, ParameterizedType)
         assert var_type.constructor == "Map"
 
@@ -2640,8 +2641,8 @@ class TestUnionAwareVarTyping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert isinstance(env.var_types["x"], UnionType)
-        assert env.var_types["x"] == "Union[Int, String]"
+        assert isinstance(env.var_types[VarName("x")], UnionType)
+        assert env.var_types[VarName("x")] == "Union[Int, String]"
 
     def test_var_assigned_same_type_twice_no_union(self):
         """STORE_VAR x with Int twice → stays Int (no trivial union)."""
@@ -2657,8 +2658,8 @@ class TestUnionAwareVarTyping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["x"] == "Int"
-        assert not isinstance(env.var_types["x"], UnionType)
+        assert env.var_types[VarName("x")] == "Int"
+        assert not isinstance(env.var_types[VarName("x")], UnionType)
 
     def test_seeded_type_not_widened_to_union(self):
         """Seeded var type from builder is NOT widened by inference."""
@@ -2676,7 +2677,7 @@ class TestUnionAwareVarTyping:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["items"] == "List[String]"
+        assert env.var_types[VarName("items")] == "List[String]"
 
     def test_three_types_produce_three_member_union(self):
         """Three different types → Union[Bool, Int, String]."""
@@ -2694,8 +2695,8 @@ class TestUnionAwareVarTyping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert isinstance(env.var_types["x"], UnionType)
-        assert env.var_types["x"] == "Union[Bool, Int, String]"
+        assert isinstance(env.var_types[VarName("x")], UnionType)
+        assert env.var_types[VarName("x")] == "Union[Bool, Int, String]"
 
 
 # ---------------------------------------------------------------------------
@@ -2902,7 +2903,7 @@ class TestTupleTypeInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["x"] == tuple_of(scalar("Int"), scalar("String"))
+        assert env.var_types[VarName("x")] == tuple_of(scalar("Int"), scalar("String"))
 
     def test_tuple_load_index_resolves_per_element(self):
         """LOAD_INDEX on a tuple at known index resolves to that element type."""
@@ -2926,7 +2927,7 @@ class TestTupleTypeInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["y"] == scalar("Int")
+        assert env.var_types[VarName("y")] == scalar("Int")
 
     def test_tuple_var_propagation(self):
         """Tuple element types propagate through STORE_VAR → LOAD_VAR."""
@@ -2952,8 +2953,8 @@ class TestTupleTypeInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["t"] == tuple_of(scalar("Int"), scalar("String"))
-        assert env.var_types["val"] == scalar("String")
+        assert env.var_types[VarName("t")] == tuple_of(scalar("Int"), scalar("String"))
+        assert env.var_types[VarName("val")] == scalar("String")
 
 
 class TestTypeAliasInference:
@@ -2976,7 +2977,7 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["x"] == scalar("Int")
+        assert env.var_types[VarName("x")] == scalar("Int")
 
     def test_alias_resolves_transitively(self):
         """Chained aliases resolve fully: Km → Distance → Int."""
@@ -2998,7 +2999,7 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["d"] == scalar("Int")
+        assert env.var_types[VarName("d")] == scalar("Int")
 
     def test_alias_resolves_parameterized(self):
         """Alias to parameterized type: StringMap → Map[String, String]."""
@@ -3019,7 +3020,7 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types["m"] == map_of(scalar("String"), scalar("String"))
+        assert env.var_types[VarName("m")] == map_of(scalar("String"), scalar("String"))
 
     def test_aliases_exposed_in_environment(self):
         """TypeEnvironment includes alias registry."""

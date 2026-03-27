@@ -16,6 +16,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 
 SIMPLE_SOURCE = "x = 42\n"
 
@@ -237,7 +238,7 @@ class TestLowerAndInfer:
 
     def test_default_language_is_python(self):
         instructions, env = lower_and_infer("x = 42\n")
-        assert env.var_types["x"] == "Int"
+        assert env.var_types[VarName("x")] == "Int"
         # Verify Python-specific lowering: top-level assignment uses STORE_VAR
         store_vars = [i for i in instructions if i.opcode == Opcode.STORE_VAR]
         assert any("x" in i.operands for i in store_vars)

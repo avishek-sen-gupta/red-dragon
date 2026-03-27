@@ -14,6 +14,7 @@ from interpreter.types.type_expr import (
     parse_type,
     scalar,
 )
+from interpreter.var_name import VarName
 
 
 class TestTypeEnvironmentBuilder:
@@ -40,8 +41,8 @@ class TestTypeEnvironmentBuilder:
             var_types={"x": scalar("Int"), "name": scalar("String")}
         )
         env = builder.build()
-        assert env.var_types["x"] == "Int"
-        assert env.var_types["name"] == "String"
+        assert env.var_types[VarName("x")] == "Int"
+        assert env.var_types[VarName("name")] == "String"
 
     def test_build_creates_func_signatures_from_return_and_param_types(self):
         builder = TypeEnvironmentBuilder(
@@ -118,15 +119,15 @@ class TestTypeEnvironmentStoresTypeExpr:
     def test_var_types_are_type_expr(self):
         builder = TypeEnvironmentBuilder(var_types={"x": scalar("Float")})
         env = builder.build()
-        assert isinstance(env.var_types["x"], TypeExpr)
-        assert isinstance(env.var_types["x"], ScalarType)
+        assert isinstance(env.var_types[VarName("x")], TypeExpr)
+        assert isinstance(env.var_types[VarName("x")], ScalarType)
 
     def test_parameterized_type_preserved(self):
         builder = TypeEnvironmentBuilder(var_types={"ptr": parse_type("Pointer[Int]")})
         env = builder.build()
-        assert isinstance(env.var_types["ptr"], ParameterizedType)
-        assert env.var_types["ptr"].constructor == "Pointer"
-        assert env.var_types["ptr"].arguments == (ScalarType("Int"),)
+        assert isinstance(env.var_types[VarName("ptr")], ParameterizedType)
+        assert env.var_types[VarName("ptr")].constructor == "Pointer"
+        assert env.var_types[VarName("ptr")].arguments == (ScalarType("Int"),)
 
     def test_func_signature_return_type_is_type_expr(self):
         builder = TypeEnvironmentBuilder(func_return_types={"add": scalar("Int")})
@@ -153,4 +154,4 @@ class TestTypeEnvironmentStoresTypeExpr:
         )
         env = builder.build()
         assert env.register_types[Register("%0")] == "Int"
-        assert env.var_types["x"] == "Pointer[Int]"
+        assert env.var_types[VarName("x")] == "Pointer[Int]"

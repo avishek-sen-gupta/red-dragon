@@ -16,6 +16,7 @@ from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
 from interpreter.types.var_scope_info import VarScopeInfo
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,9 @@ class TypeEnvironmentBuilder:
             unified[UNBOUND] = MappingProxyType(standalone_sigs)
         return TypeEnvironment(
             register_types=MappingProxyType(dict(self.register_types)),
-            var_types=MappingProxyType(dict(self.var_types)),
+            var_types=MappingProxyType(
+                {VarName(k): v for k, v in self.var_types.items()}
+            ),
             method_signatures=MappingProxyType(unified),
         )
 
