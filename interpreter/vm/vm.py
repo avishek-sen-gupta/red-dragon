@@ -85,7 +85,7 @@ def _materialize_single_register(
 def _materialize_single_var(
     val: Any,
     vm: VMState,
-    var: str,
+    var: VarName,
     type_env: TypeEnvironment,
 ) -> TypedValue:
     """Deserialize and wrap a single variable value as TypedValue (no register coercion)."""
