@@ -19,6 +19,7 @@ from interpreter.frontends.common.property_accessors import (
 )
 from interpreter.types.type_expr import EnumType, scalar
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -110,7 +111,9 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
             )
         else:
             ctx.emit_inst(
-                StoreField(obj_reg=obj_reg, field_name=field_name, value_reg=val_reg),
+                StoreField(
+                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg
+                ),
                 node=node,
             )
     else:
@@ -538,7 +541,9 @@ def _emit_synthetic_init_for_fields(
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
         this_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
-        ctx.emit_inst(StoreField(obj_reg=this_reg, field_name=fname, value_reg=val_reg))
+        ctx.emit_inst(
+            StoreField(obj_reg=this_reg, field_name=FieldName(fname), value_reg=val_reg)
+        )
 
     none_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
@@ -673,7 +678,9 @@ def _emit_property_getter(
     if target in field_names:
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadField(result_reg=result_reg, obj_reg=this_reg, field_name=target)
+            LoadField(
+                result_reg=result_reg, obj_reg=this_reg, field_name=FieldName(target)
+            )
         )
     else:
         result_reg = ctx.fresh_reg()
@@ -726,7 +733,9 @@ def _emit_property_setter(
 
     if target in field_names:
         ctx.emit_inst(
-            StoreField(obj_reg=this_reg, field_name=target, value_reg=val_reg)
+            StoreField(
+                obj_reg=this_reg, field_name=FieldName(target), value_reg=val_reg
+            )
         )
     else:
         ctx.emit_inst(

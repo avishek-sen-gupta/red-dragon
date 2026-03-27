@@ -14,6 +14,7 @@ from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JS
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
@@ -116,7 +117,9 @@ def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> Register:
     def emit_access():
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name),
+            LoadField(
+                result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)
+            ),
             node=node,
         )
         return reg
@@ -199,7 +202,7 @@ def lower_js_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
-                    field_name=ctx.node_text(prop_node),
+                    field_name=FieldName(ctx.node_text(prop_node)),
                     value_reg=val_reg,
                 ),
                 node=parent_node,

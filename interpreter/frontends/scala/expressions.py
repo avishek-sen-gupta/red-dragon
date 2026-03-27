@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
@@ -102,7 +103,8 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -131,7 +133,7 @@ def lower_scala_store_target(
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
-                    field_name=ctx.node_text(field_node),
+                    field_name=FieldName(ctx.node_text(field_node)),
                     value_reg=val_reg,
                 ),
                 node=parent_node,
@@ -526,7 +528,8 @@ def lower_stable_type_identifier(ctx: TreeSitterEmitContext, node) -> Register:
         field_name = ctx.node_text(child)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadField(result_reg=reg, obj_reg=result, field_name=field_name), node=node
+            LoadField(result_reg=reg, obj_reg=result, field_name=FieldName(field_name)),
+            node=node,
         )
         result = reg
     return result
