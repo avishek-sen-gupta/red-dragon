@@ -6,6 +6,7 @@ from typing import Any
 
 from interpreter.vm.vm import VMState, SymbolicValue, _heap_addr, _is_symbolic
 from interpreter.vm.vm_types import StackFrame
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
 from interpreter.ir import SpreadArguments
@@ -24,7 +25,9 @@ def _resolve_call_args(vm: VMState, arg_operands: list) -> list[TypedValue]:
             if addr and addr in vm.heap:
                 fields = vm.heap[addr].fields
                 args.extend(
-                    fields[str(i)] for i in range(len(fields)) if str(i) in fields
+                    fields[FieldName(str(i), FieldKind.INDEX)]
+                    for i in range(len(fields))
+                    if FieldName(str(i), FieldKind.INDEX) in fields
                 )
             else:
                 args.append(tv)
@@ -58,7 +61,9 @@ def _write_var_to_frame(
     """Write a variable to a specific frame, handling aliases and closure envs."""
     alias_ptr = frame.var_heap_aliases.get(name)
     if alias_ptr and alias_ptr.base in vm.heap:
-        vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = tv
+        vm.heap[alias_ptr.base].fields[
+            FieldName(str(alias_ptr.offset), FieldKind.INDEX)
+        ] = tv
     else:
         frame.local_vars[name] = tv
     if frame.closure_env_id and name in frame.captured_var_names:

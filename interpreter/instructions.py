@@ -34,6 +34,7 @@ from interpreter.ir import (
 from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolve_unop
 from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
+from interpreter.field_name import FieldName, FieldKind, NO_FIELD_NAME
 from interpreter.var_name import NO_VAR_NAME, VarName
 
 
@@ -444,7 +445,7 @@ class LoadField(InstructionBase):
 
     result_reg: Register = NO_REGISTER
     obj_reg: Register = NO_REGISTER
-    field_name: str = ""
+    field_name: FieldName = NO_FIELD_NAME
 
     # ── IRInstruction-compat fields ──
     label: CodeLabel = NO_LABEL
@@ -456,7 +457,7 @@ class LoadField(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [str(self.obj_reg), self.field_name]
+        return [str(self.obj_reg), str(self.field_name)]
 
 
 @dataclass(frozen=True)
@@ -464,7 +465,7 @@ class StoreField(InstructionBase):
     """STORE_FIELD: store a value into a named field on an object."""
 
     obj_reg: Register = NO_REGISTER
-    field_name: str = ""
+    field_name: FieldName = NO_FIELD_NAME
     value_reg: Register = NO_REGISTER
 
     # ── IRInstruction-compat fields ──
@@ -478,7 +479,7 @@ class StoreField(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [str(self.obj_reg), self.field_name, str(self.value_reg)]
+        return [str(self.obj_reg), str(self.field_name), str(self.value_reg)]
 
 
 @dataclass(frozen=True)
@@ -1096,7 +1097,7 @@ def _load_field(inst: IRInstruction) -> LoadField:
     return LoadField(
         result_reg=inst.result_reg,
         obj_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
-        field_name=str(ops[1]) if len(ops) >= 2 else "",
+        field_name=FieldName(str(ops[1])) if len(ops) >= 2 else NO_FIELD_NAME,
         source_location=inst.source_location,
     )
 
@@ -1105,7 +1106,7 @@ def _store_field(inst: IRInstruction) -> StoreField:
     ops = inst.operands
     return StoreField(
         obj_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
-        field_name=str(ops[1]) if len(ops) >= 2 else "",
+        field_name=FieldName(str(ops[1])) if len(ops) >= 2 else NO_FIELD_NAME,
         value_reg=Register(str(ops[2])) if len(ops) >= 3 else NO_REGISTER,
         source_location=inst.source_location,
     )

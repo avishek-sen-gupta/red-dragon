@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     InstructionBase,
@@ -325,7 +326,7 @@ def _handle_call_function(
         addr = _heap_addr(func_val)
         if addr and addr in vm.heap:
             heap_obj = vm.heap[addr]
-            idx_key = str(args[0].value)
+            idx_key = FieldName(str(args[0].value), FieldKind.INDEX)
             if idx_key in heap_obj.fields:
                 tv = heap_obj.fields[idx_key]
                 return ExecutionResult.success(
@@ -501,7 +502,7 @@ def _handle_call_method(
         # (e.g., Lua table OOP: t.method = function(...) end)
         # Inject obj as first arg (self) — mirrors colon-call convention.
         if addr and addr in vm.heap:
-            field_tv = vm.heap[addr].fields.get(method_name)
+            field_tv = vm.heap[addr].fields.get(FieldName(str(method_name)))
             if field_tv and isinstance(field_tv.value, BoundFuncRef):
                 return _try_user_function_call(
                     field_tv.value,
