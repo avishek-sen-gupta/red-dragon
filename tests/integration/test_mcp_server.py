@@ -40,11 +40,11 @@ class TestFullRoundTrip:
     def test_load_step_and_verify_result(self):
         """Load quadruple program, run to end, verify result == 20."""
         load_result = handle_load_program(MULTI_FUNC_SOURCE, "python", max_steps=300)
-        assert load_result[VarName("total_steps")] > 0
+        assert load_result["total_steps"] > 0
 
         end_result = handle_run_to_end()
-        assert end_result[VarName("done")] is True
-        assert end_result[VarName("variables")]["result"] == 20
+        assert end_result["done"] is True
+        assert end_result["variables"]["result"] == 20
 
     def test_analyze_then_load_and_step(self):
         """Analysis tools work independently of execution session."""
@@ -53,7 +53,7 @@ class TestFullRoundTrip:
 
         handle_load_program(MULTI_FUNC_SOURCE, "python")
         step_result = handle_step(5)
-        assert step_result[VarName("steps_executed")] == 5
+        assert step_result["steps_executed"] == 5
 
         state = handle_get_state()
         assert state["step_index"] == 5

@@ -292,7 +292,9 @@ def handle_run_to_end() -> dict[str, Any]:
     frame = session.vm.current_frame
     return {
         "steps_executed": remaining,
-        "variables": {k: format_typed_value(v) for k, v in frame.local_vars.items()},
+        "variables": {
+            str(k): format_typed_value(v) for k, v in frame.local_vars.items()
+        },
         "heap": {
             addr: {
                 "type": str(obj.type_hint),
