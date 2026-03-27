@@ -56,9 +56,9 @@ class TestObjectRestBuiltinResult:
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
         )
         fields = {hw.field: hw.value for hw in result.heap_writes}
-        assert "a" not in fields
-        assert "b" in fields
-        assert "c" in fields
+        assert FieldName("a") not in fields
+        assert FieldName("b") in fields
+        assert FieldName("c") in fields
 
     def test_does_not_mutate_heap(self):
         vm = VMState()

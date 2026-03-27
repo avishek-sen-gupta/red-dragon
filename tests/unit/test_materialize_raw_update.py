@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar

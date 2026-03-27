@@ -1,6 +1,6 @@
 """Tests for _heap_addr() Pointer support and ADDRESS_OF guard."""
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.vm.vm import _heap_addr, HeapObject, VMState

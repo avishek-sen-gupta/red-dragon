@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.vm.builtins import Builtins
 from interpreter.vm.vm import VMState
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import TypeExpr, scalar
@@ -25,7 +26,7 @@ class TestCloneBuiltin:
         """clone should return a new Pointer, not the original."""
         vm, ptr = self._make_vm_with_object(
             scalar("MyClass"),
-            {"x": typed(42, scalar(TypeName.INT))},
+            {FieldName("x"): typed(42, scalar(TypeName.INT))},
         )
         result = Builtins.TABLE["clone"]([typed_from_runtime(ptr)], vm)
         assert isinstance(result, BuiltinResult)
@@ -37,20 +38,20 @@ class TestCloneBuiltin:
         vm, ptr = self._make_vm_with_object(
             scalar("MyClass"),
             {
-                "x": typed(42, scalar(TypeName.INT)),
-                "name": typed("hello", scalar(TypeName.STRING)),
+                FieldName("x"): typed(42, scalar(TypeName.INT)),
+                FieldName("name"): typed("hello", scalar(TypeName.STRING)),
             },
         )
         result = Builtins.TABLE["clone"]([typed_from_runtime(ptr)], vm)
         field_writes = {w.field: w.value for w in result.heap_writes}
-        assert field_writes["x"].value == 42
-        assert field_writes["name"].value == "hello"
+        assert field_writes[FieldName("x")].value == 42
+        assert field_writes[FieldName("name")].value == "hello"
 
     def test_clone_preserves_type_hint(self):
         """clone should create a new object with the same type_hint."""
         vm, ptr = self._make_vm_with_object(
             scalar("Dog"),
-            {"breed": typed("labrador", scalar(TypeName.STRING))},
+            {FieldName("breed"): typed("labrador", scalar(TypeName.STRING))},
         )
         result = Builtins.TABLE["clone"]([typed_from_runtime(ptr)], vm)
         assert len(result.new_objects) == 1
