@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.field_name import FieldName
 from interpreter.types.typed_value import TypedValue
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
@@ -150,11 +151,11 @@ class TestFieldInitMethodChaining:
         heap_objects = [obj for obj in vm.heap.values() if obj.type_hint == "Counter"]
         assert len(heap_objects) >= 1, f"[{lang}] expected Counter heap object"
         counter_obj = heap_objects[0]
-        assert "count" in counter_obj.fields, (
+        assert FieldName("count") in counter_obj.fields, (
             f"[{lang}] expected 'count' field on Counter heap object, "
             f"got fields: {list(counter_obj.fields.keys())}"
         )
-        count_tv = counter_obj.fields["count"]
+        count_tv = counter_obj.fields[FieldName("count")]
         assert isinstance(
             count_tv, TypedValue
         ), f"[{lang}] expected count to be TypedValue, got {type(count_tv).__name__}: {count_tv}"

@@ -4,6 +4,7 @@ DECL_VAR always creates/overwrites in the current frame (declaration).
 STORE_VAR walks the scope chain to update existing variables (assignment).
 """
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import typed_from_runtime, unwrap, typed
@@ -224,4 +225,4 @@ class TestImplicitThisFieldResolution:
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["doubled", "%v"]),
             field_fallback=self.FALLBACK,
         )
-        assert unwrap(vm.heap["obj_0"].fields["doubled"]) == 42
+        assert unwrap(vm.heap["obj_0"].fields[FieldName("doubled")]) == 42

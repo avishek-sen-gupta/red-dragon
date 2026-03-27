@@ -48,7 +48,7 @@ class TestFieldName:
         assert FieldName("a") < FieldName("b")
 
     def test_contains(self):
-        assert "__" in FieldName("__method_missing__")
+        assert "__" in FieldName("__method_missing__", FieldKind.SPECIAL)
 
     def test_startswith(self):
         assert FieldName("__x").startswith("__")

@@ -2,6 +2,7 @@
 
 import logging
 
+from interpreter.field_name import FieldName
 from interpreter.vm.builtins import (
     _builtin_print,
     _builtin_slice,
@@ -71,10 +72,10 @@ class TestBuiltinSlice:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == 20
-        assert heap_obj.fields["1"].value == 30
-        assert heap_obj.fields["2"].value == 40
-        assert heap_obj.fields["length"].value == 3
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 20
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 30
+        assert heap_obj.fields[FieldName("2", FieldKind.INDEX)].value == 40
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 3
 
     def test_slice_native_list_from_index_2(self):
         vm = VMState()
@@ -84,8 +85,8 @@ class TestBuiltinSlice:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["length"].value == 3
-        assert heap_obj.fields["0"].value == 3
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 3
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 3
 
     def test_slice_heap_array(self):
         vm = VMState()
@@ -95,15 +96,20 @@ class TestBuiltinSlice:
             type_hint="array",
             fields={
                 k: typed_from_runtime(v)
-                for k, v in {"0": "a", "1": "b", "2": "c", "length": 3}.items()
+                for k, v in {
+                    FieldName("0", FieldKind.INDEX): "a",
+                    FieldName("1", FieldKind.INDEX): "b",
+                    FieldName("2", FieldKind.INDEX): "c",
+                    FieldName("length", FieldKind.SPECIAL): 3,
+                }.items()
             },
         )
         result = _builtin_slice([typed_from_runtime(addr), typed_from_runtime(1)], vm)
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == "b"
-        assert heap_obj.fields["1"].value == "c"
-        assert heap_obj.fields["length"].value == 2
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == "b"
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == "c"
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_slice_insufficient_args(self):
         vm = VMState()
@@ -125,9 +131,9 @@ class TestBuiltinSlice:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == 20
-        assert heap_obj.fields["1"].value == 30
-        assert heap_obj.fields["length"].value == 2
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 20
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 30
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_slice_with_stop_heap_array(self):
         """slice(heap_arr, 1, 3) should return elements at indices 1 and 2."""
@@ -139,11 +145,11 @@ class TestBuiltinSlice:
             fields={
                 k: typed_from_runtime(v)
                 for k, v in {
-                    "0": "a",
-                    "1": "b",
-                    "2": "c",
-                    "3": "d",
-                    "length": 4,
+                    FieldName("0", FieldKind.INDEX): "a",
+                    FieldName("1", FieldKind.INDEX): "b",
+                    FieldName("2", FieldKind.INDEX): "c",
+                    FieldName("3", FieldKind.INDEX): "d",
+                    FieldName("length", FieldKind.SPECIAL): 4,
                 }.items()
             },
         )
@@ -152,9 +158,9 @@ class TestBuiltinSlice:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == "b"
-        assert heap_obj.fields["1"].value == "c"
-        assert heap_obj.fields["length"].value == 2
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == "b"
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == "c"
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_slice_with_step(self):
         """slice(collection, start, stop, step) with step=2."""
@@ -171,10 +177,10 @@ class TestBuiltinSlice:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == 0
-        assert heap_obj.fields["1"].value == 2
-        assert heap_obj.fields["2"].value == 4
-        assert heap_obj.fields["length"].value == 3
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 0
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 2
+        assert heap_obj.fields[FieldName("2", FieldKind.INDEX)].value == 4
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 3
 
     def test_slice_with_none_stop(self):
         """slice(collection, 2, 'None') should slice from index 2 to end."""
@@ -190,9 +196,9 @@ class TestBuiltinSlice:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == 30
-        assert heap_obj.fields["1"].value == 40
-        assert heap_obj.fields["length"].value == 2
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 30
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 40
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_slice_with_none_start(self):
         """slice(collection, 'None', 2) should slice from beginning to index 2."""
@@ -208,9 +214,9 @@ class TestBuiltinSlice:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == 10
-        assert heap_obj.fields["1"].value == 20
-        assert heap_obj.fields["length"].value == 2
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 10
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 20
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_slice_negative_start(self):
         """slice(collection, -2) should slice last 2 elements."""
@@ -221,9 +227,9 @@ class TestBuiltinSlice:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == 30
-        assert heap_obj.fields["1"].value == 40
-        assert heap_obj.fields["length"].value == 2
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 30
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 40
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_slice_string(self):
         """slice(string, start, stop) should return substring."""
@@ -251,7 +257,12 @@ class TestBuiltinObjectRest:
         vm.heap[addr] = HeapObject(
             type_hint="object",
             fields={
-                k: typed_from_runtime(v) for k, v in {"a": 1, "b": 2, "c": 3}.items()
+                k: typed_from_runtime(v)
+                for k, v in {
+                    FieldName("a"): 1,
+                    FieldName("b"): 2,
+                    FieldName("c"): 3,
+                }.items()
             },
         )
         result = _builtin_object_rest(
@@ -259,9 +270,9 @@ class TestBuiltinObjectRest:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert "a" not in heap_obj.fields
-        assert heap_obj.fields["b"].value == 2
-        assert heap_obj.fields["c"].value == 3
+        assert FieldName("a") not in heap_obj.fields
+        assert heap_obj.fields[FieldName("b")].value == 2
+        assert heap_obj.fields[FieldName("c")].value == 3
 
     def test_object_rest_excludes_multiple_keys(self):
         vm = VMState()
@@ -270,7 +281,12 @@ class TestBuiltinObjectRest:
         vm.heap[addr] = HeapObject(
             type_hint="object",
             fields={
-                k: typed_from_runtime(v) for k, v in {"x": 10, "y": 20, "z": 30}.items()
+                k: typed_from_runtime(v)
+                for k, v in {
+                    FieldName("x"): 10,
+                    FieldName("y"): 20,
+                    FieldName("z"): 30,
+                }.items()
             },
         )
         result = _builtin_object_rest(
@@ -283,7 +299,7 @@ class TestBuiltinObjectRest:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["z"].value == 30
+        assert heap_obj.fields[FieldName("z")].value == 30
         assert set(heap_obj.fields.keys()) == {"z"}
 
     def test_object_rest_no_args(self):
@@ -309,7 +325,13 @@ class TestMethodBuiltins:
             type_hint="array",
             fields={
                 k: typed_from_runtime(v)
-                for k, v in {"0": 10, "1": 20, "2": 30, "3": 40, "length": 4}.items()
+                for k, v in {
+                    FieldName("0", FieldKind.INDEX): 10,
+                    FieldName("1", FieldKind.INDEX): 20,
+                    FieldName("2", FieldKind.INDEX): 30,
+                    FieldName("3", FieldKind.INDEX): 40,
+                    FieldName("length", FieldKind.SPECIAL): 4,
+                }.items()
             },
         )
         fn = Builtins.METHOD_TABLE["subList"]
@@ -318,9 +340,9 @@ class TestMethodBuiltins:
         )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
-        assert heap_obj.fields["0"].value == 20
-        assert heap_obj.fields["1"].value == 30
-        assert heap_obj.fields["length"].value == 2
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 20
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 30
+        assert heap_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
 
     def test_substring_delegates_to_slice(self):
         """substring should call slice(obj, start, stop) on strings."""
