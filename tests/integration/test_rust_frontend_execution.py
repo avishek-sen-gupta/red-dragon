@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
@@ -143,10 +144,10 @@ let b = Box::new(n);
         from interpreter.types.type_expr import ScalarType
 
         assert box_obj.type_hint == ScalarType("Box")
-        assert "0" in box_obj.fields
+        assert FieldName("0", FieldKind.INDEX) in box_obj.fields
         from interpreter.types.typed_value import TypedValue
 
-        inner = box_obj.fields["0"]
+        inner = box_obj.fields[FieldName("0", FieldKind.INDEX)]
         inner_val = inner.value if isinstance(inner, TypedValue) else inner
         assert inner_val == local_vars[VarName("n")]
 
@@ -158,10 +159,10 @@ class TestRustOptionExecution:
         opt_ptr = local_vars.get(VarName("opt"))
         assert opt_ptr is not None
         assert opt_ptr.base in vm.heap
-        assert "value" in vm.heap[opt_ptr.base].fields
+        assert FieldName("value") in vm.heap[opt_ptr.base].fields
         from interpreter.types.typed_value import TypedValue
 
-        tv = vm.heap[opt_ptr.base].fields["value"]
+        tv = vm.heap[opt_ptr.base].fields[FieldName("value")]
         assert isinstance(tv, TypedValue)
         assert tv.value == 42
 

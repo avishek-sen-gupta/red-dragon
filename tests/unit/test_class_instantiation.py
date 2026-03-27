@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.ir import Opcode
 from interpreter.run import run
@@ -35,7 +36,7 @@ answer = 42
         obj_ptr = vars_[VarName("d")]
         assert isinstance(obj_ptr, Pointer)
         assert obj_ptr.base in vm.heap
-        assert vm.heap[obj_ptr.base].fields.get("name").value == "Rex"
+        assert vm.heap[obj_ptr.base].fields.get(FieldName("name")).value == "Rex"
 
     def test_method_call_on_instance(self):
         """Method calls on instances should work."""
@@ -117,7 +118,7 @@ int answer = 42;
         obj_ptr = unwrap(vm.call_stack[0].local_vars[VarName("d")])
         assert isinstance(obj_ptr, Pointer)
         assert obj_ptr.base in heap
-        assert heap[obj_ptr.base].fields.get("name").value == "Rex"
+        assert heap[obj_ptr.base].fields.get(FieldName("name")).value == "Rex"
 
 
 class TestCSharpClassInstantiation:
@@ -180,4 +181,4 @@ let answer = 42;
         assert vars_[VarName("d")].base.startswith("obj_")
         # Constructor body must have run: this.name = "Rex"
         heap_obj = vm.heap[vars_[VarName("d")].base]
-        assert heap_obj.fields["name"].value == "Rex"
+        assert heap_obj.fields[FieldName("name")].value == "Rex"

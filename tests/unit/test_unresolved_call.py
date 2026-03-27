@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from interpreter.field_name import FieldName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.llm.llm_client import LLMClient
@@ -299,7 +300,7 @@ class TestLLMPlausibleResolver:
         resolver = LLMPlausibleResolver(llm_client=CapturingClient())
         vm = _make_vm()
         vm.heap["obj_1"] = HeapObject(type_hint=scalar("MyClass"))
-        vm.heap["obj_1"].fields["x"] = 10
+        vm.heap["obj_1"].fields[FieldName("x")] = 10
         inst = _make_call_inst()
 
         resolver.resolve_call("func", [], inst, vm)
