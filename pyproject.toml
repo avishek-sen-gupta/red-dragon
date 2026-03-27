@@ -30,6 +30,7 @@ addopts = "-n auto -m 'not external'"
 markers = [
     "external: tests requiring external services (LLM APIs); run with -m external",
 ]
+tdd_guard_project_root = "/Users/asgupta/code/red-dragon"
 
 [tool.poetry.group.dev.dependencies]
 black = "^26.1.0"
@@ -42,6 +43,7 @@ grimp = "^3.0"
 pydeps = "^1.12"
 textual = "^8.1.0"
 pyright = "^1.1.408"
+tdd-guard-pytest = "^0.1.2"
 
 [tool.radon]
 exclude = "tests/*"
