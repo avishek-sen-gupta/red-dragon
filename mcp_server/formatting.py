@@ -59,7 +59,7 @@ def format_state_update(update: StateUpdate) -> dict[str, Any]:
         result["heap_writes"] = [
             {
                 "address": hw.obj_addr,
-                "field": hw.field,
+                "field": str(hw.field),
                 "value": format_typed_value(hw.value),
             }
             for hw in update.heap_writes

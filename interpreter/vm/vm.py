@@ -6,6 +6,7 @@ from types import MappingProxyType
 from typing import Any
 
 from interpreter.constants import CanonicalLiteral, TypeName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
@@ -280,7 +281,9 @@ def apply_update(
         # Alias-aware: if variable is backed by a heap object, write TypedValue
         alias_ptr = target_frame.var_heap_aliases.get(var)
         if alias_ptr and alias_ptr.base in vm.heap:
-            vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = tv
+            vm.heap[alias_ptr.base].fields[
+                FieldName(str(alias_ptr.offset), FieldKind.INDEX)
+            ] = tv
         else:
             target_frame.local_vars[var] = tv
         if target_frame.closure_env_id and var in target_frame.captured_var_names:
