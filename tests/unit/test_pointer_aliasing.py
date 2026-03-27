@@ -45,7 +45,7 @@ _CTX = _default_handler_context()
 
 def _make_vm(**local_vars: object) -> VMState:
     """Create a VMState with a single frame containing the given local vars."""
-    typed_vars = {k: typed_from_runtime(v) for k, v in local_vars.items()}
+    typed_vars = {VarName(k): typed_from_runtime(v) for k, v in local_vars.items()}
     frame = StackFrame(function_name="test", local_vars=typed_vars)
     return VMState(call_stack=[frame])
 

@@ -19,24 +19,24 @@ class TestHandleLoadProject:
     def test_returns_dict(self, python_project):
         result = handle_load_project(str(python_project / "main.py"), "python")
         assert isinstance(result, dict)
-        assert VarName("error") not in result
+        assert "error" not in result
 
     def test_has_expected_keys(self, python_project):
         result = handle_load_project(str(python_project / "main.py"), "python")
-        assert VarName("modules") in result
-        assert VarName("entry") in result
-        assert VarName("import_graph") in result
-        assert VarName("cfg_blocks") in result
-        assert VarName("functions") in result
+        assert "modules" in result
+        assert "entry" in result
+        assert "import_graph" in result
+        assert "cfg_blocks" in result
+        assert "functions" in result
 
     def test_correct_module_count(self, python_project):
         result = handle_load_project(str(python_project / "main.py"), "python")
-        assert result[VarName("modules")] == 2
+        assert result["modules"] == 2
 
     def test_invalid_language_returns_error(self, python_project):
         result = handle_load_project(str(python_project / "main.py"), "nonexistent")
-        assert VarName("error") in result
+        assert "error" in result
 
     def test_missing_file_returns_error(self):
         result = handle_load_project("/nonexistent/main.py", "python")
-        assert VarName("error") in result
+        assert "error" in result
