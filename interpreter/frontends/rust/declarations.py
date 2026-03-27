@@ -6,6 +6,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -271,7 +272,11 @@ def _lower_struct_destructure(
             field_name = ctx.node_text(id_node)
             field_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                LoadField(result_reg=field_reg, obj_reg=val_reg, field_name=field_name),
+                LoadField(
+                    result_reg=field_reg,
+                    obj_reg=val_reg,
+                    field_name=FieldName(field_name),
+                ),
                 node=child,
             )
             ctx.emit_inst(
@@ -373,7 +378,9 @@ def lower_enum_item(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit_inst(Const(result_reg=variant_reg, value=variant_name))
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=obj_reg, field_name=variant_name, value_reg=variant_reg
+                    obj_reg=obj_reg,
+                    field_name=FieldName(variant_name),
+                    value_reg=variant_reg,
                 )
             )
 
@@ -572,7 +579,9 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName("value")))
     ctx.emit_inst(
         StoreField(
-            obj_reg=self_reg, field_name=constants.BOXED_FIELD, value_reg=val_reg
+            obj_reg=self_reg,
+            field_name=FieldName(constants.BOXED_FIELD),
+            value_reg=val_reg,
         )
     )
     ctx.emit_inst(Return_(value_reg=self_reg))
@@ -636,7 +645,9 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(LoadVar(result_reg=self_reg, name=VarName(constants.PARAM_SELF)))
     val_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName("value")))
-    ctx.emit_inst(StoreField(obj_reg=self_reg, field_name="value", value_reg=val_reg))
+    ctx.emit_inst(
+        StoreField(obj_reg=self_reg, field_name=FieldName("value"), value_reg=val_reg)
+    )
     ctx.emit_inst(Return_(value_reg=self_reg))
     ctx.emit_inst(Label_(label=init_end))
 
@@ -647,7 +658,9 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
     self_reg2 = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=self_reg2, name=VarName(constants.PARAM_SELF)))
     val_reg2 = ctx.fresh_reg()
-    ctx.emit_inst(LoadField(result_reg=val_reg2, obj_reg=self_reg2, field_name="value"))
+    ctx.emit_inst(
+        LoadField(result_reg=val_reg2, obj_reg=self_reg2, field_name=FieldName("value"))
+    )
     ctx.emit_inst(Return_(value_reg=val_reg2))
     ctx.emit_inst(Label_(label=unwrap_end))
 

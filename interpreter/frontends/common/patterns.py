@@ -13,6 +13,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.register import Register
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -318,7 +319,7 @@ def compile_pattern_test(
                     LoadField(
                         result_reg=field_reg,
                         obj_reg=str(subject_reg),
-                        field_name=str(key),
+                        field_name=FieldName(str(key)),
                     ),
                 )
                 val_test = compile_pattern_test(ctx, field_reg, val_pat)
@@ -352,7 +353,7 @@ def compile_pattern_test(
                     LoadField(
                         result_reg=field_reg,
                         obj_reg=str(subject_reg),
-                        field_name=name,
+                        field_name=FieldName(name),
                     ),
                 )
                 sub_results.append(compile_pattern_test(ctx, field_reg, p))
@@ -384,7 +385,7 @@ def compile_pattern_test(
                     LoadField(
                         result_reg=next_reg,
                         obj_reg=str(reg),
-                        field_name=part,
+                        field_name=FieldName(part),
                     ),
                 )
                 reg = next_reg
@@ -554,7 +555,7 @@ def compile_pattern_bindings(
                     LoadField(
                         result_reg=field_reg,
                         obj_reg=str(subject_reg),
-                        field_name=str(key),
+                        field_name=FieldName(str(key)),
                     ),
                 )
                 compile_pattern_bindings(ctx, field_reg, val_pat)
@@ -575,7 +576,7 @@ def compile_pattern_bindings(
                     LoadField(
                         result_reg=field_reg,
                         obj_reg=str(subject_reg),
-                        field_name=name,
+                        field_name=FieldName(name),
                     ),
                 )
                 compile_pattern_bindings(ctx, field_reg, p)

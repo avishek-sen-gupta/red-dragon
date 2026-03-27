@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Branch,
     CallMethod,
@@ -374,7 +375,10 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
         )
 
     ctx.emit_inst(
-        StoreField(obj_reg=this_reg, field_name=prop_name, value_reg=val_reg), node=node
+        StoreField(
+            obj_reg=this_reg, field_name=FieldName(prop_name), value_reg=val_reg
+        ),
+        node=node,
     )
 
     # Lower accessor bodies (get { ... } / set { ... }) if present

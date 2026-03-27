@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
@@ -64,7 +65,9 @@ def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit_inst(Const(result_reg=variant_reg, value=variant_name))
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=obj_reg, field_name=variant_name, value_reg=variant_reg
+                    obj_reg=obj_reg,
+                    field_name=FieldName(variant_name),
+                    value_reg=variant_reg,
                 )
             )
 
@@ -472,7 +475,9 @@ def _emit_primary_constructor_init(
         ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName(name)))
         this_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
-        ctx.emit_inst(StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg))
+        ctx.emit_inst(
+            StoreField(obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg)
+        )
 
     none_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))

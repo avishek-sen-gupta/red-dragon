@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
@@ -57,7 +58,8 @@ def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> Register:
     scope_reg = ctx.lower_expr(scope_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=scope_reg, field_name=name_text), node=node
+        LoadField(result_reg=reg, obj_reg=scope_reg, field_name=FieldName(name_text)),
+        node=node,
     )
     return reg
 
@@ -72,7 +74,8 @@ def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> Register:
     )
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=self_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=self_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
 
@@ -664,7 +667,9 @@ def lower_ruby_store_target(
             node=parent_node,
         )
         ctx.emit_inst(
-            StoreField(obj_reg=self_reg, field_name=field_name, value_reg=val_reg),
+            StoreField(
+                obj_reg=self_reg, field_name=FieldName(field_name), value_reg=val_reg
+            ),
             node=parent_node,
         )
     elif target.type in (

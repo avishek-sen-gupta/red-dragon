@@ -13,6 +13,7 @@ from interpreter.frontends.context import GrammarConstants
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
@@ -679,6 +680,7 @@ def _lower_nested_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     field_name = ctx.node_text(named[-1])
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        node=node,
     )
     return reg
