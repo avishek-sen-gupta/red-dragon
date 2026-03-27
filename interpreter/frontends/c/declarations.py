@@ -269,7 +269,9 @@ def _lower_struct_initializer_list(
             ctx.emit_inst(LoadVar(result_reg=obj_load, name=VarName(var_name)))
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=obj_load, field_name=FieldName(fname), value_reg=val_reg
+                    obj_reg=obj_load,
+                    field_name=FieldName(str(fname)),
+                    value_reg=val_reg,
                 ),
                 node=elem,
             )

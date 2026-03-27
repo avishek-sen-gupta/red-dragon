@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase

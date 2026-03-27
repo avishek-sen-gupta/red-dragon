@@ -2,7 +2,7 @@
 
 import logging
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import (
     _builtin_print,
     _builtin_slice,
@@ -300,7 +300,7 @@ class TestBuiltinObjectRest:
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields[FieldName("z")].value == 30
-        assert set(heap_obj.fields.keys()) == {"z"}
+        assert set(heap_obj.fields.keys()) == {FieldName("z")}
 
     def test_object_rest_no_args(self):
         vm = VMState()
