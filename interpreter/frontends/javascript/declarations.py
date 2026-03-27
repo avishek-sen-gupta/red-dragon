@@ -12,6 +12,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.types.type_expr import ScalarType, metatype
+from interpreter.field_name import FieldName
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.instructions import (
@@ -67,7 +68,11 @@ def _lower_object_destructure(
             extracted_keys.append(prop_name)
             field_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                LoadField(result_reg=field_reg, obj_reg=val_reg, field_name=prop_name),
+                LoadField(
+                    result_reg=field_reg,
+                    obj_reg=val_reg,
+                    field_name=FieldName(prop_name),
+                ),
                 node=child,
             )
             ctx.emit_inst(
@@ -83,7 +88,9 @@ def _lower_object_destructure(
                 field_reg = ctx.fresh_reg()
                 ctx.emit_inst(
                     LoadField(
-                        result_reg=field_reg, obj_reg=val_reg, field_name=key_name
+                        result_reg=field_reg,
+                        obj_reg=val_reg,
+                        field_name=FieldName(key_name),
                     ),
                     node=child,
                 )

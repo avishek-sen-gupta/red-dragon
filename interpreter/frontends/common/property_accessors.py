@@ -7,6 +7,7 @@ Reusable by any frontend that supports property getters/setters
 from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.field_name import FieldName
 from interpreter.instructions import CallMethod, LoadField, StoreField
 from interpreter.register import Register
 
@@ -55,7 +56,7 @@ def emit_field_load_or_getter(
         LoadField(
             result_reg=reg,
             obj_reg=str(obj_reg),
-            field_name=field_name,
+            field_name=FieldName(field_name),
         ),
         node=node,
     )
@@ -85,7 +86,7 @@ def emit_field_store_or_setter(
     ctx.emit_inst(
         StoreField(
             obj_reg=str(obj_reg),
-            field_name=field_name,
+            field_name=FieldName(field_name),
             value_reg=str(val_reg),
         ),
         node=node,

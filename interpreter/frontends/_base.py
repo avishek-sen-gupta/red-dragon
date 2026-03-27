@@ -23,6 +23,7 @@ from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContex
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.instructions import (
     InstructionBase,
     Binop,
@@ -650,7 +651,9 @@ class BaseFrontend(Frontend):
         field_name = self._node_text(attr_node)
         reg = self._fresh_reg()
         self._emit_inst(
-            LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name),
+            LoadField(
+                result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)
+            ),
             node=node,
         )
         return reg
@@ -695,7 +698,7 @@ class BaseFrontend(Frontend):
                 self._emit_inst(
                     StoreField(
                         obj_reg=obj_reg,
-                        field_name=self._node_text(attr_node),
+                        field_name=FieldName(self._node_text(attr_node)),
                         value_reg=val_reg,
                     ),
                     node=parent_node,
