@@ -5,6 +5,7 @@ non-existent field should dispatch through that function instead of returning
 a symbolic value.
 """
 
+from interpreter.field_name import FieldName
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
 from interpreter.constants import BOXED_FIELD, METHOD_MISSING
@@ -94,7 +95,7 @@ class TestMethodMissingLoadField:
     def test_delegates_to_inner_object_field(self):
         """LOAD_FIELD for a missing field triggers __method_missing__ dispatch."""
         vm, cfg, registry = _make_vm_with_method_missing(
-            inner_fields={"value": typed_from_runtime(42)}
+            inner_fields={FieldName("value"): typed_from_runtime(42)}
         )
 
         inst = IRInstruction(
@@ -115,7 +116,7 @@ class TestMethodMissingLoadField:
     def test_existing_field_does_not_trigger_method_missing(self):
         """LOAD_FIELD for BOXED_FIELD (which exists) returns directly, no method_missing."""
         vm, cfg, registry = _make_vm_with_method_missing(
-            inner_fields={"value": typed_from_runtime(42)}
+            inner_fields={FieldName("value"): typed_from_runtime(42)}
         )
 
         inst = IRInstruction(
@@ -141,7 +142,7 @@ class TestMethodMissingLoadField:
         addr = "obj_0"
         vm.heap[addr] = HeapObject(
             type_hint="Plain",
-            fields={"x": typed_from_runtime(10)},
+            fields={FieldName("x"): typed_from_runtime(10)},
         )
         vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
 
@@ -262,7 +263,7 @@ class TestMethodMissingCallMethod:
     def test_delegates_method_call_to_inner_object_method(self):
         """CALL_METHOD for unknown method on Outer delegates to Inner's method via BOXED_FIELD."""
         vm, cfg, registry = _make_vm_with_method_missing(
-            inner_fields={"value": typed_from_runtime(42)}
+            inner_fields={FieldName("value"): typed_from_runtime(42)}
         )
         # Register "Outer" with no methods, "Inner" with 'some_method'
         registry.class_methods["Outer"] = {}
@@ -296,7 +297,7 @@ class TestMethodMissingCallMethod:
     def test_unknown_method_on_inner_falls_through_to_symbolic(self):
         """CALL_METHOD for method not on Outer or Inner falls through to symbolic."""
         vm, cfg, registry = _make_vm_with_method_missing(
-            inner_fields={"value": typed_from_runtime(42)}
+            inner_fields={FieldName("value"): typed_from_runtime(42)}
         )
         registry.class_methods["Outer"] = {}
 
@@ -322,7 +323,7 @@ class TestMethodMissingCallMethod:
     def test_existing_method_does_not_trigger_method_missing(self):
         """CALL_METHOD for known method dispatches to real label, not __method_missing__."""
         vm, cfg, registry = _make_vm_with_method_missing(
-            inner_fields={"value": typed_from_runtime(42)}
+            inner_fields={FieldName("value"): typed_from_runtime(42)}
         )
         real_label = CodeLabel("func_real_method_0")
         cfg.blocks[real_label] = BasicBlock(

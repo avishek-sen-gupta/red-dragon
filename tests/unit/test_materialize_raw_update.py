@@ -2,6 +2,7 @@
 
 from types import MappingProxyType
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
@@ -162,7 +163,9 @@ class TestApplyUpdateTypedPath:
 
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["mem_0"] = HeapObject(fields={"0": typed_from_runtime(None)})
+        vm.heap["mem_0"] = HeapObject(
+            fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(None)}
+        )
         vm.current_frame.var_heap_aliases[VarName("x")] = Pointer(
             base="mem_0", offset=0
         )
@@ -171,7 +174,7 @@ class TestApplyUpdateTypedPath:
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
-        field_val = vm.heap["mem_0"].fields["0"]
+        field_val = vm.heap["mem_0"].fields[FieldName("0", FieldKind.INDEX)]
         assert isinstance(field_val, TypedValue)
         assert field_val.value == 42
 

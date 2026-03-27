@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
@@ -352,8 +353,12 @@ match points:
             and local_vars[VarName("r1y")] == 6
         )
         rest_addr = _heap_addr(local_vars[VarName("rest")])
-        r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
-        r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
+        r0_addr = _heap_addr(
+            vm.heap[rest_addr].fields[FieldName("0", FieldKind.INDEX)].value
+        )
+        r1_addr = _heap_addr(
+            vm.heap[rest_addr].fields[FieldName("1", FieldKind.INDEX)].value
+        )
         assert vm.heap[r0_addr].type_hint == scalar("Point")
         assert vm.heap[r1_addr].type_hint == scalar("Point")
 
@@ -506,8 +511,12 @@ match items:
             and local_vars[VarName("r1y")] == 6
         )
         rest_addr = _heap_addr(local_vars[VarName("rest")])
-        r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
-        r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
+        r0_addr = _heap_addr(
+            vm.heap[rest_addr].fields[FieldName("0", FieldKind.INDEX)].value
+        )
+        r1_addr = _heap_addr(
+            vm.heap[rest_addr].fields[FieldName("1", FieldKind.INDEX)].value
+        )
         assert vm.heap[r0_addr].type_hint == scalar("Point")
         assert vm.heap[r1_addr].type_hint == scalar("Point")
 
@@ -901,8 +910,12 @@ match commands:
             and local_vars[VarName("t1_hp")] == 100
         )
         rest_addr = _heap_addr(local_vars[VarName("targets")])
-        t0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
-        t1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
+        t0_addr = _heap_addr(
+            vm.heap[rest_addr].fields[FieldName("0", FieldKind.INDEX)].value
+        )
+        t1_addr = _heap_addr(
+            vm.heap[rest_addr].fields[FieldName("1", FieldKind.INDEX)].value
+        )
         assert vm.heap[t0_addr].type_hint == scalar("Target")
         assert vm.heap[t1_addr].type_hint == scalar("Target")
 
@@ -1166,8 +1179,12 @@ match points:
         )
         # Verify rest elements are Point objects via heap type_hint
         rest_addr = _heap_addr(local_vars[VarName("rest")])
-        r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
-        r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
+        r0_addr = _heap_addr(
+            vm.heap[rest_addr].fields[FieldName("0", FieldKind.INDEX)].value
+        )
+        r1_addr = _heap_addr(
+            vm.heap[rest_addr].fields[FieldName("1", FieldKind.INDEX)].value
+        )
         assert vm.heap[r0_addr].type_hint == scalar("Point")
         assert vm.heap[r1_addr].type_hint == scalar("Point")
 
@@ -1362,8 +1379,12 @@ match cart:
         )
         # Verify others elements are Item objects via heap type_hint
         others_addr = _heap_addr(local_vars[VarName("others")])
-        o0_addr = _heap_addr(vm.heap[others_addr].fields["0"].value)
-        o1_addr = _heap_addr(vm.heap[others_addr].fields["1"].value)
+        o0_addr = _heap_addr(
+            vm.heap[others_addr].fields[FieldName("0", FieldKind.INDEX)].value
+        )
+        o1_addr = _heap_addr(
+            vm.heap[others_addr].fields[FieldName("1", FieldKind.INDEX)].value
+        )
         assert vm.heap[o0_addr].type_hint == scalar("Item")
         assert vm.heap[o1_addr].type_hint == scalar("Item")
 
@@ -1547,9 +1568,9 @@ match tree:
         )
         tree_addr = _heap_addr(local_vars[VarName("tree")])
         assert vm.heap[tree_addr].type_hint == scalar("Node")
-        left_addr = _heap_addr(vm.heap[tree_addr].fields["left"].value)
+        left_addr = _heap_addr(vm.heap[tree_addr].fields[FieldName("left")].value)
         assert vm.heap[left_addr].type_hint == scalar("Node")
-        ll_addr = _heap_addr(vm.heap[left_addr].fields["left"].value)
+        ll_addr = _heap_addr(vm.heap[left_addr].fields[FieldName("left")].value)
         assert vm.heap[ll_addr].type_hint == scalar("Node")
 
     def test_guard_with_pythagorean_computation(self):
