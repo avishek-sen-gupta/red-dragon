@@ -3177,6 +3177,21 @@ support = ["sphobjinv"]
 test = ["coverage[toml]", "pytest", "pytest-cov"]
 
 [[package]]
+name = "tdd-guard-pytest"
+version = "0.1.2"
+description = "Pytest plugin for TDD Guard - enforces Test-Driven Development principles"
+optional = false
+python-versions = ">=3.8"
+groups = ["dev"]
+files = [
+    {file = "tdd_guard_pytest-0.1.2-py3-none-any.whl", hash = "sha256:4ca9333315f859b841461c03760ff8fe5d3525ab2389230233e7ad594f90117e"},
+    {file = "tdd_guard_pytest-0.1.2.tar.gz", hash = "sha256:5fafd89e0dac6140d7db46865d12c09075d0ed211b6aac7c300393994582be00"},
+]
+
+[package.dependencies]
+pytest = ">=6.0"
+
+[[package]]
 name = "textual"
 version = "8.1.0"
 description = "Modern Text User Interface framework"
@@ -3809,4 +3824,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "cd8e62f75259878282ecdb3eaf40548da63079a5baf69d0d35b5f035d6c63d99"
+content-hash = "419c9b7c9a0e0ea9898030649418889f36a5297c0000d552833ed7ce0e4aab3a"
