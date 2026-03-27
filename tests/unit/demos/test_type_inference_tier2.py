@@ -18,6 +18,7 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _resolver():
@@ -41,12 +42,12 @@ b = bool(0)
 """
         _instructions, env = _lower_and_infer(source, "python")
 
-        assert env.var_types["n"] == "Int"
-        assert env.var_types["r"] == "Array"
-        assert env.var_types["x"] == "Number"
-        assert env.var_types["s"] == "String"
-        assert env.var_types["f"] == "Float"
-        assert env.var_types["b"] == "Bool"
+        assert env.var_types[VarName("n")] == "Int"
+        assert env.var_types[VarName("r")] == "Array"
+        assert env.var_types[VarName("x")] == "Number"
+        assert env.var_types[VarName("s")] == "String"
+        assert env.var_types[VarName("f")] == "Float"
+        assert env.var_types[VarName("b")] == "Bool"
 
 
 class TestReturnBackfill:
@@ -102,8 +103,8 @@ y = not x
 """
         _instructions, env = _lower_and_infer(source, "python")
 
-        assert env.var_types["x"] == "Int"
-        assert env.var_types["y"] == "Bool"
+        assert env.var_types[VarName("x")] == "Int"
+        assert env.var_types[VarName("y")] == "Bool"
 
     def test_unop_javascript_bang(self):
         source = """\
@@ -112,8 +113,8 @@ let negated = !flag;
 """
         _instructions, env = _lower_and_infer(source, "javascript")
 
-        assert env.var_types["flag"] == "Bool"
-        assert env.var_types["negated"] == "Bool"
+        assert env.var_types[VarName("flag")] == "Bool"
+        assert env.var_types[VarName("negated")] == "Bool"
 
     def test_unop_lua_hash(self):
         source = """\
