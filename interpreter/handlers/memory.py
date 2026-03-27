@@ -35,6 +35,7 @@ from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.field_name import FieldName, FieldKind
 from interpreter import constants
 from interpreter.handlers._common import _symbolic_name, _symbolic_type_hint
 
@@ -47,8 +48,8 @@ def _find_method_missing(
     cfg: CFG,
 ) -> BoundFuncRef | None:
     """Look up __method_missing__ on a heap object: instance field first, then class registry."""
-    if constants.METHOD_MISSING in heap_obj.fields:
-        mm_tv = heap_obj.fields[constants.METHOD_MISSING]
+    if FieldName(constants.METHOD_MISSING) in heap_obj.fields:
+        mm_tv = heap_obj.fields[FieldName(constants.METHOD_MISSING)]
         if isinstance(mm_tv.value, BoundFuncRef):
             return mm_tv.value
     # Check class-level __method_missing__ via registry
@@ -86,9 +87,9 @@ def _resolve_method_delegation_target(
         if _find_method_missing(heap_obj, registry, cfg) is None:
             return None
         # Follow the __boxed__ field to the inner object
-        if constants.BOXED_FIELD not in heap_obj.fields:
+        if FieldName(constants.BOXED_FIELD) not in heap_obj.fields:
             return None
-        inner_tv = heap_obj.fields[constants.BOXED_FIELD]
+        inner_tv = heap_obj.fields[FieldName(constants.BOXED_FIELD)]
         inner_addr = _heap_addr(inner_tv.value)
         if not inner_addr or inner_addr not in vm.heap:
             return None
@@ -165,7 +166,8 @@ def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
     mem_addr = f"mem_{vm.symbolic_counter}"
     vm.symbolic_counter += 1
     vm.heap[mem_addr] = HeapObject(
-        type_hint=None, fields={"0": typed_from_runtime(current_val)}
+        type_hint=None,
+        fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(current_val)},
     )
     ptr = Pointer(base=mem_addr, offset=0)
     frame.var_heap_aliases[name] = ptr
@@ -190,7 +192,7 @@ def _handle_load_indirect(
     # Pointer dereference: read from heap[base].fields[offset]
     if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
         heap_obj = vm.heap[obj_val.base]
-        tv = heap_obj.fields.get(str(obj_val.offset))
+        tv = heap_obj.fields.get(FieldName(str(obj_val.offset), FieldKind.INDEX))
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={t.result_reg: tv},
@@ -245,8 +247,9 @@ def _handle_load_field_indirect(
             )
         )
     heap_obj = vm.heap[addr]
-    if field_name in heap_obj.fields:
-        tv = heap_obj.fields[field_name]
+    field_key = FieldName(str(field_name))
+    if field_key in heap_obj.fields:
+        tv = heap_obj.fields[field_key]
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={t.result_reg: tv},
@@ -286,7 +289,7 @@ def _handle_store_indirect(
     obj_val = _resolve_reg(vm, t.ptr_reg).value
     tv = _resolve_reg(vm, t.value_reg)
     if isinstance(obj_val, Pointer):
-        target_field = str(obj_val.offset)
+        target_field = FieldName(str(obj_val.offset), FieldKind.INDEX)
         return ExecutionResult.success(
             StateUpdate(
                 heap_writes=[
@@ -314,7 +317,11 @@ def _handle_store_field(
     t = inst
     assert isinstance(t, StoreField)
     obj_val = _resolve_reg(vm, t.obj_reg).value
-    field_name = t.field_name
+    field_name = (
+        t.field_name
+        if isinstance(t.field_name, FieldName)
+        else FieldName(str(t.field_name))
+    )
     tv = _resolve_reg(vm, t.value_reg)
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
@@ -353,13 +360,17 @@ def _handle_load_field(
     t = inst
     assert isinstance(t, LoadField)
     obj_val = _resolve_reg(vm, t.obj_reg).value
-    field_name = t.field_name
+    field_name = (
+        t.field_name
+        if isinstance(t.field_name, FieldName)
+        else FieldName(str(t.field_name))
+    )
     # Static field access on a ClassRef: look up via symbol table constants
     if isinstance(obj_val, ClassRef):
         symbol_table = ctx.symbol_table
         class_info = symbol_table.classes.get(obj_val.name)
-        if class_info and field_name in class_info.constants:
-            raw = class_info.constants[field_name]
+        if class_info and str(field_name) in class_info.constants:
+            raw = class_info.constants[str(field_name)]
             val = _parse_const(raw)
             static_tv = typed_from_runtime(val)
             logger.debug(
@@ -401,7 +412,7 @@ def _handle_load_field(
     mm_ref = _find_method_missing(heap_obj, ctx.registry, ctx.cfg)
     if mm_ref is not None:
         self_tv = typed(obj_val, heap_obj.type_hint)
-        name_tv = typed(field_name, scalar("String"))
+        name_tv = typed(str(field_name), scalar("String"))
         return _try_user_function_call(
             mm_ref,
             [self_tv, name_tv],
@@ -443,12 +454,13 @@ def _handle_store_index(
                 reasoning=f"store {arr_desc}[{idx_val}] = {tv.value!r} (array not on heap, no-op)",
             )
         )
+    idx_kind = FieldKind.INDEX if isinstance(idx_val, int) else FieldKind.PROPERTY
     return ExecutionResult.success(
         StateUpdate(
             heap_writes=[
                 HeapWrite(
                     obj_addr=addr,
-                    field=str(idx_val),
+                    field=FieldName(str(idx_val), idx_kind),
                     value=tv,
                 )
             ],
@@ -497,7 +509,8 @@ def _handle_load_index(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
             )
         )
     heap_obj = vm.heap[addr]
-    key = str(idx_val)
+    idx_kind = FieldKind.INDEX if isinstance(idx_val, int) else FieldKind.PROPERTY
+    key = FieldName(str(idx_val), idx_kind)
     if key in heap_obj.fields:
         tv = heap_obj.fields[key]
         return ExecutionResult.success(

@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from interpreter.constants import ARR_ADDR_PREFIX, TypeName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.vm import VMState, Operators, _is_symbolic, _heap_addr
 from interpreter.vm.vm_types import (
     HeapObject,
@@ -30,8 +31,10 @@ def _builtin_len(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     addr = _heap_addr(val)
     if addr and addr in vm.heap:
         fields = vm.heap[addr].fields
-        if "length" in fields:
-            return BuiltinResult(value=fields["length"].value)
+        if FieldName("length", FieldKind.SPECIAL) in fields:
+            return BuiltinResult(
+                value=fields[FieldName("length", FieldKind.SPECIAL)].value
+            )
         return BuiltinResult(value=len(fields))
     if isinstance(val, (list, tuple, str)):
         return BuiltinResult(value=len(val))
@@ -126,7 +129,11 @@ def _builtin_keys(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     addr = _heap_addr(val)
     if not addr or addr not in vm.heap:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    field_names = [k for k in vm.heap[addr].fields if k != "length"]
+    field_names = [
+        str(k)
+        for k in vm.heap[addr].fields
+        if k != FieldName("length", FieldKind.SPECIAL)
+    ]
     return _builtin_array_of(field_names, vm)
 
 
@@ -135,10 +142,14 @@ def _builtin_array_of(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
     fields = {
-        str(i): val if isinstance(val, TypedValue) else typed_from_runtime(val)
+        FieldName(str(i), FieldKind.INDEX): (
+            val if isinstance(val, TypedValue) else typed_from_runtime(val)
+        )
         for i, val in enumerate(args)
     }
-    fields["length"] = typed(len(args), scalar(TypeName.INT))
+    fields[FieldName("length", FieldKind.SPECIAL)] = typed(
+        len(args), scalar(TypeName.INT)
+    )
     return BuiltinResult(
         value=typed(Pointer(base=addr, offset=0), pointer(scalar("Array"))),
         new_objects=[NewObject(addr=addr, type_hint=scalar("Array"))],
@@ -195,12 +206,16 @@ def _slice_heap_array(
     heap_obj: HeapObject, py_slice: slice, vm: VMState
 ) -> BuiltinResult:
     """Apply a Python slice to a heap-backed array and return a new heap array."""
-    length_raw = heap_obj.fields.get("length", len(heap_obj.fields))
+    length_raw = heap_obj.fields.get(
+        FieldName("length", FieldKind.SPECIAL), len(heap_obj.fields)
+    )
     length = length_raw.value if isinstance(length_raw, TypedValue) else length_raw
     if not isinstance(length, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     indices = range(length)[py_slice]
-    elements = [heap_obj.fields.get(str(i)) for i in indices]
+    elements = [
+        heap_obj.fields.get(FieldName(str(i), FieldKind.INDEX)) for i in indices
+    ]
     return _builtin_array_of(elements, vm)
 
 
@@ -233,7 +248,7 @@ def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     if not args:
         return BuiltinResult(value=_UNCOMPUTABLE)
     obj_val = args[0].value
-    excluded_keys = set(a.value for a in args[1:])
+    excluded_keys = {FieldName(str(a.value)) for a in args[1:]}
     addr = _heap_addr(obj_val)
     if not addr or addr not in vm.heap:
         return BuiltinResult(value=_UNCOMPUTABLE)
@@ -241,7 +256,7 @@ def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     rest_fields = {
         k: v
         for k, v in source_fields.items()
-        if k not in excluded_keys and k != "length"
+        if k not in excluded_keys and k != FieldName("length", FieldKind.SPECIAL)
     }
     rest_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
