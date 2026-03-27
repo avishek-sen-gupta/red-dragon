@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from interpreter.constants import TypeName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.ir import CodeLabel
 from interpreter.register import Register, NO_REGISTER
 from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
@@ -48,12 +49,12 @@ class Pointer:
 @dataclass
 class HeapObject:
     type_hint: TypeExpr = UNKNOWN
-    fields: dict[str, TypedValue] = field(default_factory=dict)
+    fields: dict[FieldName, TypedValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
             "type_hint": str(self.type_hint) or None,
-            "fields": {k: _serialize_value(v) for k, v in self.fields.items()},
+            "fields": {str(k): _serialize_value(v) for k, v in self.fields.items()},
         }
 
 
@@ -171,8 +172,9 @@ class VMState:
 
 
 class HeapWrite(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     obj_addr: str
-    field: str
+    field: FieldName
     value: Any
 
 

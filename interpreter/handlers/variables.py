@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     InstructionBase,
@@ -95,7 +96,9 @@ def _handle_load_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
     for f in reversed(vm.call_stack):
         alias_ptr = f.var_heap_aliases.get(name)
         if alias_ptr and alias_ptr.base in vm.heap:
-            tv = vm.heap[alias_ptr.base].fields.get(str(alias_ptr.offset))
+            tv = vm.heap[alias_ptr.base].fields.get(
+                FieldName(str(alias_ptr.offset), FieldKind.INDEX)
+            )
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={t.result_reg: tv},
@@ -162,7 +165,9 @@ def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
     if this_addr is not None:
         return ExecutionResult.success(
             StateUpdate(
-                heap_writes=[HeapWrite(obj_addr=this_addr, field=str(name), value=tv)],
+                heap_writes=[
+                    HeapWrite(obj_addr=this_addr, field=FieldName(str(name)), value=tv)
+                ],
                 reasoning=f"store {name} = {tv.value!r} (via implicit this.{name})",
             )
         )
