@@ -7,7 +7,7 @@ write time — so str(2) == "2" matches on both store and load.
 
 from types import MappingProxyType
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 
 from interpreter.types.coercion.default_conversion_rules import (

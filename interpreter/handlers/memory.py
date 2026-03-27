@@ -42,6 +42,23 @@ from interpreter.handlers._common import _symbolic_name, _symbolic_type_hint
 logger = logging.getLogger(__name__)
 
 
+def _infer_index_kind(idx_val: Any) -> FieldKind:
+    """Determine whether an index value represents a numeric index or a named property.
+
+    Numeric indices (int or string representation of a non-negative integer)
+    use INDEX kind; everything else uses PROPERTY kind.
+    """
+    if isinstance(idx_val, int):
+        return FieldKind.INDEX
+    if isinstance(idx_val, str):
+        try:
+            int(idx_val)
+            return FieldKind.INDEX
+        except ValueError:
+            pass
+    return FieldKind.PROPERTY
+
+
 def _find_method_missing(
     heap_obj: HeapObject,
     registry: FunctionRegistry,
@@ -192,7 +209,14 @@ def _handle_load_indirect(
     # Pointer dereference: read from heap[base].fields[offset]
     if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
         heap_obj = vm.heap[obj_val.base]
-        tv = heap_obj.fields.get(FieldName(str(obj_val.offset), FieldKind.INDEX))
+        # Try INDEX kind first (array-style), then PROPERTY (store_field default).
+        offset_str = str(obj_val.offset)
+        tv = heap_obj.fields.get(
+            FieldName(offset_str, FieldKind.INDEX)
+        ) or heap_obj.fields.get(FieldName(offset_str, FieldKind.PROPERTY))
+        if tv is None:
+            sym = vm.fresh_symbolic(hint=f"*{obj_val}")
+            tv = typed(sym, UNKNOWN)
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={t.result_reg: tv},
@@ -454,7 +478,7 @@ def _handle_store_index(
                 reasoning=f"store {arr_desc}[{idx_val}] = {tv.value!r} (array not on heap, no-op)",
             )
         )
-    idx_kind = FieldKind.INDEX if isinstance(idx_val, int) else FieldKind.PROPERTY
+    idx_kind = _infer_index_kind(idx_val)
     return ExecutionResult.success(
         StateUpdate(
             heap_writes=[
@@ -509,7 +533,7 @@ def _handle_load_index(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
             )
         )
     heap_obj = vm.heap[addr]
-    idx_kind = FieldKind.INDEX if isinstance(idx_val, int) else FieldKind.PROPERTY
+    idx_kind = _infer_index_kind(idx_val)
     key = FieldName(str(idx_val), idx_kind)
     if key in heap_obj.fields:
         tv = heap_obj.fields[key]

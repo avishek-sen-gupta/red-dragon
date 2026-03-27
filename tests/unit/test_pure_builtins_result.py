@@ -12,6 +12,7 @@ from interpreter.vm.builtins import (
     _builtin_max,
     _builtin_min,
 )
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.vm import VMState, Operators
 from interpreter.vm.vm_types import BuiltinResult, HeapObject
 from interpreter.types.typed_value import typed, typed_from_runtime
@@ -25,8 +26,8 @@ class TestPureBuiltinsReturnBuiltinResult:
         vm.heap["arr_0"] = HeapObject(
             type_hint="array",
             fields={
-                "0": typed(10, scalar(TypeName.INT)),
-                "length": typed(1, scalar(TypeName.INT)),
+                FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
+                FieldName("length", FieldKind.SPECIAL): typed(1, scalar(TypeName.INT)),
             },
         )
         result = _builtin_len([typed_from_runtime("arr_0")], vm)

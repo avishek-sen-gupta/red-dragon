@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.constants import TypeName
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
@@ -112,7 +112,7 @@ class TestMaterializeHeapWrites:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         raw = StateUpdate(
-            heap_writes=[HeapWrite(obj_addr="obj_0", field="x", value=42)],
+            heap_writes=[HeapWrite(obj_addr="obj_0", field=FieldName("x"), value=42)],
             reasoning="test",
         )
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
@@ -128,7 +128,9 @@ class TestMaterializeHeapWrites:
         vm.call_stack.append(StackFrame(function_name="main"))
         sym_dict = {"__symbolic__": True, "name": "sym_0", "type_hint": "Int"}
         raw = StateUpdate(
-            heap_writes=[HeapWrite(obj_addr="obj_0", field="x", value=sym_dict)],
+            heap_writes=[
+                HeapWrite(obj_addr="obj_0", field=FieldName("x"), value=sym_dict)
+            ],
             reasoning="test",
         )
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
@@ -142,7 +144,7 @@ class TestMaterializeHeapWrites:
         vm.call_stack.append(StackFrame(function_name="main"))
         tv = typed(42, scalar(TypeName.INT))
         raw = StateUpdate(
-            heap_writes=[HeapWrite(obj_addr="obj_0", field="x", value=tv)],
+            heap_writes=[HeapWrite(obj_addr="obj_0", field=FieldName("x"), value=tv)],
             reasoning="test",
         )
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
@@ -166,7 +168,7 @@ class TestApplyUpdateStoresTypedValue:
         vm.heap["obj_0"] = HeapObject(type_hint=scalar("Point"))
         tv = typed(42, scalar(TypeName.INT))
         update = StateUpdate(
-            heap_writes=[HeapWrite(obj_addr="obj_0", field="x", value=tv)],
+            heap_writes=[HeapWrite(obj_addr="obj_0", field=FieldName("x"), value=tv)],
             reasoning="test",
         )
         apply_update(vm, update, _EMPTY_TYPE_ENV, _IDENTITY_RULES)

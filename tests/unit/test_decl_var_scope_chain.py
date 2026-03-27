@@ -152,7 +152,7 @@ class TestImplicitThisFieldResolution:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="<main>"))
         addr = "obj_0"
-        heap_fields = {k: typed(v, UNKNOWN) for k, v in fields.items()}
+        heap_fields = {FieldName(k): typed(v, UNKNOWN) for k, v in fields.items()}
         vm.heap[addr] = HeapObject(fields=heap_fields)
         vm.current_frame.local_vars[VarName("this")] = typed(addr, UNKNOWN)
         return vm

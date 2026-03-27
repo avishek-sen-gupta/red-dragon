@@ -1,6 +1,6 @@
 """Unit tests for partially-delegating builtins returning BuiltinResult."""
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import (
     _builtin_keys,
     _builtin_slice,

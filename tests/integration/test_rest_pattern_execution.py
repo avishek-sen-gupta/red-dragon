@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm import _heap_addr

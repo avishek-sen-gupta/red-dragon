@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
@@ -18,7 +19,7 @@ def _run_csharp(source: str, max_steps: int = 500) -> dict:
     for name, ptr in frame.var_heap_aliases.items():
         heap_obj = vm.heap.get(ptr.base)
         if heap_obj:
-            field_val = heap_obj.fields.get(str(ptr.offset))
+            field_val = heap_obj.fields.get(FieldName(str(ptr.offset), FieldKind.INDEX))
             if field_val:
                 result[name] = (
                     field_val.value if hasattr(field_val, "value") else field_val
