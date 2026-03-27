@@ -67,6 +67,7 @@ from interpreter.types.type_expr import (
     tuple_of,
 )
 from interpreter.types.type_resolver import TypeResolver
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +177,7 @@ class _InferenceContext:
     """Mutable bundle of all state accumulated during the inference walk."""
 
     register_types: dict[Register, TypeExpr] = field(default_factory=dict)
-    scoped_var_types: dict[str, dict[str, TypeExpr]] = field(default_factory=dict)
+    scoped_var_types: dict[str, dict[VarName, TypeExpr]] = field(default_factory=dict)
     func_return_types: dict[str, TypeExpr] = field(default_factory=dict)
     func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(
         default_factory=dict
@@ -188,23 +189,23 @@ class _InferenceContext:
     )
     field_types: dict[TypeExpr, dict[str, TypeExpr]] = field(default_factory=dict)
     array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
-    var_array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
+    var_array_element_types: dict[VarName, TypeExpr] = field(default_factory=dict)
     const_values: dict[str, str] = field(default_factory=dict)
     tuple_registers: set[str] = field(default_factory=set)
     tuple_element_types: dict[str, dict[int, TypeExpr]] = field(default_factory=dict)
-    var_tuple_element_types: dict[str, dict[int, TypeExpr]] = field(
+    var_tuple_element_types: dict[VarName, dict[int, TypeExpr]] = field(
         default_factory=dict
     )
-    register_source_var: dict[str, str] = field(default_factory=dict)
+    register_source_var: dict[str, VarName] = field(default_factory=dict)
     interface_implementations: dict[str, tuple[str, ...]] = field(default_factory=dict)
     class_method_signatures: dict[TypeExpr, dict[str, list[FunctionSignature]]] = field(
         default_factory=dict
     )
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
-    _seeded_var_names: frozenset[str] = field(default_factory=frozenset)
+    _seeded_var_names: frozenset[VarName] = field(default_factory=frozenset)
 
-    def store_var_type(self, name: str, type_expr: TypeExpr) -> None:
+    def store_var_type(self, name: VarName, type_expr: TypeExpr) -> None:
         """Store a variable type in the current function scope.
 
         Seeded types (from the builder) take precedence and are never widened.
@@ -221,7 +222,7 @@ class _InferenceContext:
         elif existing != type_expr:
             scope_dict[name] = union_of(existing, type_expr)
 
-    def lookup_var_type(self, name: str) -> TypeExpr:
+    def lookup_var_type(self, name: VarName) -> TypeExpr:
         """Look up a variable type: current scope first, then global."""
         scope = self.current_func_label
         scope_dict = self.scoped_var_types.get(scope, {})
@@ -230,13 +231,13 @@ class _InferenceContext:
         global_dict = self.scoped_var_types.get(_GLOBAL_SCOPE, {})
         return global_dict.get(name, UNKNOWN)
 
-    def flat_var_types(self) -> dict[str, TypeExpr]:
+    def flat_var_types(self) -> dict[VarName, TypeExpr]:
         """Flatten all scoped var types into a single dict for TypeEnvironment.
 
         When the same variable name appears in multiple scopes with different
         types, the result is a union of those types rather than last-writer-wins.
         """
-        result: dict[str, TypeExpr] = {}
+        result: dict[VarName, TypeExpr] = {}
         for scope_dict in self.scoped_var_types.values():
             for name, type_expr in scope_dict.items():
                 existing = result.get(name, UNKNOWN)
@@ -369,7 +370,12 @@ def infer_types(
             type_env_builder.register_types, aliases
         ),
         scoped_var_types={
-            _GLOBAL_SCOPE: _resolve_aliases_in_dict(type_env_builder.var_types, aliases)
+            _GLOBAL_SCOPE: {
+                VarName(k): v
+                for k, v in _resolve_aliases_in_dict(
+                    type_env_builder.var_types, aliases
+                ).items()
+            }
         },
         func_return_types=_resolve_aliases_in_dict(
             type_env_builder.func_return_types, aliases
@@ -383,7 +389,9 @@ def infer_types(
         },
         func_symbol_table=func_symbol_table,
         class_symbol_table=class_symbol_table,
-        _seeded_var_names=frozenset(type_env_builder.var_types.keys()),
+        _seeded_var_names=frozenset(
+            VarName(k) for k in type_env_builder.var_types.keys()
+        ),
     )
 
     prev_size = -1
@@ -576,21 +584,21 @@ def _infer_load_var(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    name = inst.name if inst.name else ""
+    name = inst.name if inst.name else None
     if inst.result_reg.is_present() and name:
-        ctx.register_source_var[str(inst.result_reg)] = str(name)
-    var_type = ctx.lookup_var_type(str(name)) if name else UNKNOWN
+        ctx.register_source_var[str(inst.result_reg)] = name
+    var_type = ctx.lookup_var_type(name) if name else UNKNOWN
     if inst.result_reg.is_present() and var_type:
         ctx.register_types[inst.result_reg] = var_type
     # Propagate array element types from variable to register
-    if inst.result_reg.is_present() and str(name) in ctx.var_array_element_types:
+    if inst.result_reg.is_present() and name in ctx.var_array_element_types:
         ctx.array_element_types[str(inst.result_reg)] = ctx.var_array_element_types[
-            str(name)
+            name
         ]
     # Propagate tuple element types from variable to register
-    if inst.result_reg.is_present() and str(name) in ctx.var_tuple_element_types:
+    if inst.result_reg.is_present() and name in ctx.var_tuple_element_types:
         ctx.tuple_element_types[str(inst.result_reg)] = ctx.var_tuple_element_types[
-            str(name)
+            name
         ]
         ctx.tuple_registers.add(str(inst.result_reg))
 
@@ -601,20 +609,20 @@ def _infer_store_var(
     type_resolver: TypeResolver,
 ) -> None:
     # Dispatched for both StoreVar and DeclVar
-    name = inst.name if inst.name else ""
+    name = inst.name if inst.name else None
     if not name:
         return
     value_reg = _reg_key(inst.value_reg)
     if value_reg.is_present():
         if value_reg in ctx.register_types:
-            ctx.store_var_type(str(name), ctx.register_types[value_reg])
+            ctx.store_var_type(name, ctx.register_types[value_reg])
         # Track array element types at the variable level
         str_reg = str(value_reg)
         if str_reg in ctx.array_element_types:
-            ctx.var_array_element_types[str(name)] = ctx.array_element_types[str_reg]
+            ctx.var_array_element_types[name] = ctx.array_element_types[str_reg]
         # Track tuple element types at the variable level
         if str_reg in ctx.tuple_element_types:
-            ctx.var_tuple_element_types[str(name)] = ctx.tuple_element_types[str_reg]
+            ctx.var_tuple_element_types[name] = ctx.tuple_element_types[str_reg]
 
 
 def _infer_binop(
@@ -816,9 +824,10 @@ def _infer_call_unknown(
     if isinstance(target_type, FunctionType) and target_type.return_type:
         ctx.register_types[inst.result_reg] = target_type.return_type
         return
-    func_name = ctx.register_source_var.get(str(inst.target_reg), "")
-    if not func_name:
+    source_var = ctx.register_source_var.get(str(inst.target_reg))
+    if not source_var:
         return
+    func_name = str(source_var)
     if func_name in ctx.func_return_types:
         ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
     elif func_name in _BUILTIN_RETURN_TYPES:
