@@ -1,5 +1,6 @@
 """Unit tests for _builtin_object_rest returning BuiltinResult."""
 
+from interpreter.field_name import FieldName
 from interpreter.vm.builtins import _builtin_object_rest
 from interpreter.vm.vm import VMState, Operators
 from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
@@ -13,9 +14,9 @@ class TestObjectRestBuiltinResult:
         vm.heap["obj_0"] = HeapObject(
             type_hint="object",
             fields={
-                "a": typed_from_runtime(1),
-                "b": typed_from_runtime(2),
-                "c": typed_from_runtime(3),
+                FieldName("a"): typed_from_runtime(1),
+                FieldName("b"): typed_from_runtime(2),
+                FieldName("c"): typed_from_runtime(3),
             },
         )
         result = _builtin_object_rest(
@@ -28,8 +29,8 @@ class TestObjectRestBuiltinResult:
         vm.heap["obj_0"] = HeapObject(
             type_hint="object",
             fields={
-                "a": typed_from_runtime(1),
-                "b": typed_from_runtime(2),
+                FieldName("a"): typed_from_runtime(1),
+                FieldName("b"): typed_from_runtime(2),
             },
         )
         result = _builtin_object_rest(
@@ -46,9 +47,9 @@ class TestObjectRestBuiltinResult:
         vm.heap["obj_0"] = HeapObject(
             type_hint="object",
             fields={
-                "a": typed_from_runtime(1),
-                "b": typed_from_runtime(2),
-                "c": typed_from_runtime(3),
+                FieldName("a"): typed_from_runtime(1),
+                FieldName("b"): typed_from_runtime(2),
+                FieldName("c"): typed_from_runtime(3),
             },
         )
         result = _builtin_object_rest(
@@ -63,7 +64,10 @@ class TestObjectRestBuiltinResult:
         vm = VMState()
         vm.heap["obj_0"] = HeapObject(
             type_hint="object",
-            fields={"a": typed_from_runtime(1), "b": typed_from_runtime(2)},
+            fields={
+                FieldName("a"): typed_from_runtime(1),
+                FieldName("b"): typed_from_runtime(2),
+            },
         )
         result = _builtin_object_rest(
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm

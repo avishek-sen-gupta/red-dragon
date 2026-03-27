@@ -1,5 +1,6 @@
 """Tests for _heap_addr() Pointer support and ADDRESS_OF guard."""
 
+from interpreter.field_name import FieldName
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.vm.vm import _heap_addr, HeapObject, VMState
@@ -54,7 +55,9 @@ class TestAddressOfPointerGuard:
             heap={
                 "mem_0": HeapObject(
                     type_hint=None,
-                    fields={"0": typed(42, scalar(TypeName.INT))},
+                    fields={
+                        FieldName("0", FieldKind.INDEX): typed(42, scalar(TypeName.INT))
+                    },
                 ),
             },
             symbolic_counter=1,
@@ -77,7 +80,9 @@ class TestAddressOfPointerGuard:
         assert result_ptr.base != "mem_0"
         # The new heap slot must contain the original Pointer as its value.
         assert result_ptr.base in vm.heap
-        promoted_val = vm.heap[result_ptr.base].fields["0"].value
+        promoted_val = (
+            vm.heap[result_ptr.base].fields[FieldName("0", FieldKind.INDEX)].value
+        )
         assert isinstance(promoted_val, Pointer)
         assert promoted_val.base == "mem_0"
 
@@ -96,7 +101,9 @@ class TestAddressOfPointerGuard:
             heap={
                 "arr_0": HeapObject(
                     type_hint="Array",
-                    fields={"0": typed(10, scalar(TypeName.INT))},
+                    fields={
+                        FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT))
+                    },
                 ),
             },
         )
@@ -130,7 +137,7 @@ class TestAddressOfPointerGuard:
             heap={
                 "obj_0": HeapObject(
                     type_hint="Point",
-                    fields={"x": typed(42, scalar(TypeName.INT))},
+                    fields={FieldName("x"): typed(42, scalar(TypeName.INT))},
                 ),
             },
         )
