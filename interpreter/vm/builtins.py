@@ -7,6 +7,7 @@ from typing import Any
 
 from interpreter.constants import ARR_ADDR_PREFIX, TypeName
 from interpreter.field_name import FieldName, FieldKind
+from interpreter.func_name import FuncName
 from interpreter.vm.vm import VMState, Operators, _is_symbolic, _heap_addr
 from interpreter.vm.vm_types import (
     HeapObject,
@@ -360,6 +361,14 @@ class Builtins:
         "object_rest": _builtin_object_rest,
         **BYTE_BUILTINS,
     }
+
+    @classmethod
+    def lookup_builtin(cls, name: FuncName) -> Any | None:
+        return cls.TABLE.get(str(name))
+
+    @classmethod
+    def lookup_method_builtin(cls, name: FuncName) -> Any | None:
+        return cls.METHOD_TABLE.get(str(name))
 
     # Method builtins: obj.method(args) → builtin(obj, *args)
     # Signature: (obj, args: list, vm) -> Any
