@@ -710,8 +710,9 @@ def _infer_call_function(
     if inst.result_reg in ctx.register_types:
         return
     func_name = str(inst.func_name)
-    if func_name in ctx.func_return_types:
-        ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
+    ret_type = ctx.lookup_func_return_type(FuncName(func_name))
+    if ret_type != UNKNOWN:
+        ctx.register_types[inst.result_reg] = ret_type
     else:
         # Search class-scoped method types for static methods called by name
         matching = [
@@ -789,9 +790,9 @@ def _infer_call_method(
         return
     method_name = str(inst.method_name)
     class_name = ctx.register_types.get(_reg_key(inst.obj_reg), UNKNOWN)
-    if class_name and class_name in ctx.class_method_types:
-        ret_type = ctx.class_method_types[class_name].get(method_name, UNKNOWN)
-        if ret_type:
+    if class_name:
+        ret_type = ctx.lookup_method_type(class_name, FuncName(method_name))
+        if ret_type and ret_type != UNKNOWN:
             ctx.register_types[inst.result_reg] = ret_type
             return
     # Interface chain walk: if class implements interfaces, check their method types
@@ -813,8 +814,9 @@ def _infer_call_method(
     if len(matching_types) == 1:
         ctx.register_types[inst.result_reg] = matching_types[0]
         return
-    if method_name in ctx.func_return_types:
-        ctx.register_types[inst.result_reg] = ctx.func_return_types[method_name]
+    fallback_ret = ctx.lookup_func_return_type(FuncName(method_name))
+    if fallback_ret != UNKNOWN:
+        ctx.register_types[inst.result_reg] = fallback_ret
         return
     # Final fallback: builtin method return types (e.g. .upper()→String, .split()→Array)
     builtin_type = _BUILTIN_METHOD_RETURN_TYPES.get(method_name, UNKNOWN)

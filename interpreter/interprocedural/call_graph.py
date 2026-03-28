@@ -12,6 +12,7 @@ from interpreter.instructions import (
     CallMethod,
     CallUnknown,
 )
+from interpreter.func_name import FuncName
 from interpreter.registry import FunctionRegistry
 from interpreter import constants
 from interpreter.interprocedural.types import (
@@ -70,7 +71,7 @@ def _resolve_call_function_callees(
     if entry is not None:
         return frozenset({entry})
     # Name-based lookup via FuncRef (e.g., target is "add", label is "func_add_0")
-    func_ref = registry.func_refs.get(target)
+    func_ref = registry.lookup_func(FuncName(target))
     if func_ref is not None:
         entry = function_entries.get(func_ref.label)
         if entry is not None:
@@ -86,7 +87,7 @@ def _resolve_call_method_callees_cha(
     """CHA: collect all classes that define this method, return their FunctionEntries."""
     callees: list[FunctionEntry] = []
     for _class_name, methods in registry.class_methods.items():
-        labels = methods.get(method_name, [])
+        labels = registry.lookup_methods(_class_name, FuncName(method_name))
         callees.extend(
             function_entries[lbl] for lbl in labels if lbl in function_entries
         )
