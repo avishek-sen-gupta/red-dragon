@@ -162,8 +162,8 @@ Every commit is independently green. Each phase migrates one dict.
 | Symbol table lookups (`class_info.methods`, `class_info.constants`) | Unwrap `str(name)` — symbol table not migrated (9adr) |
 | Scope chain lookup: `VarName(func_name)` in `local_vars` (calls.py:407) | Cross-domain: `VarName(str(func_name))` — FuncName→VarName boundary |
 | Heap field lookup: `FieldName(method_name)` (calls.py:502) | Cross-domain: `FieldName(str(method_name))` — FuncName→FieldName boundary |
-| Type parser: `parse_type(raw_func_name)` (calls.py:377) | Unwrap `str(raw_func_name)` — type parser expects str |
-| `calls.py` split("[") hack | Remains until n9tr (Rust Box/Option CallCtor migration) |
+| Type parser: `parse_type(raw_func_name)` (calls.py:377) | Unwrap `str(raw_func_name)` — **temporary tech debt**, removed entirely by n9tr |
+| `calls.py` split("[") hack (calls.py:273) | Unwrap `str(raw_func_name).split("[")[0]` — **temporary tech debt**, removed entirely by n9tr |
 
 ## Testing Strategy
 
@@ -173,6 +173,6 @@ Every commit is independently green. Each phase migrates one dict.
 
 ## What This Does NOT Cover
 
-- **Rust `Box[Node]` encoding (n9tr):** Separate issue to migrate to CallCtorFunction. Until then, `calls.py` split("[") hack remains.
+- **Rust `Box[Node]` encoding (n9tr):** Separate issue to migrate to CallCtorFunction. Until then, `calls.py` split("[") and `parse_type(raw_func_name)` hacks remain as temporary `str()` unwraps. Both are removed entirely by n9tr — they are not permanent boundaries.
 - **SymbolTable/FunctionRegistry full migration (9adr):** ClassInfo.methods, SymbolTable.functions still use str keys.
 - **CallUnknown:** No name field — not in scope.
