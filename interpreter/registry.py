@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from interpreter.ir import CodeLabel
 from interpreter.instructions import Const, InstructionBase, Label_, Symbolic
 from interpreter.cfg import CFG
+from interpreter.func_name import FuncName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter import constants
@@ -26,6 +27,22 @@ class FunctionRegistry:
     class_parents: dict[str, list[str]] = field(default_factory=dict)
     # function_name → FuncRef (name→label mapping for call resolution)
     func_refs: dict[str, FuncRef] = field(default_factory=dict)
+
+    def lookup_func(self, name: FuncName) -> FuncRef | None:
+        return self.func_refs.get(str(name))
+
+    def lookup_methods(self, class_name: str, name: FuncName) -> list[CodeLabel]:
+        return self.class_methods.get(class_name, {}).get(str(name), [])
+
+    def register_func(self, name: FuncName, ref: FuncRef) -> None:
+        self.func_refs[str(name)] = ref
+
+    def register_method(
+        self, class_name: str, name: FuncName, label: CodeLabel
+    ) -> None:
+        self.class_methods.setdefault(class_name, {}).setdefault(str(name), []).append(
+            label
+        )
 
 
 def _is_func_label(label: str | CodeLabel) -> bool:

@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import Operators
 
@@ -44,6 +45,9 @@ class CobolIOProvider(ABC):
     CALL_FUNCTION instruction. Implementations decide whether to return
     concrete data or UNCOMPUTABLE (which the executor wraps as symbolic).
     """
+
+    def dispatch(self, name: FuncName) -> str | None:
+        return _COBOL_IO_DISPATCH.get(str(name))
 
     def handle_call(self, func_name: str, args: list[TypedValue]) -> Any:
         """Route a __cobol_* call to the appropriate method.
