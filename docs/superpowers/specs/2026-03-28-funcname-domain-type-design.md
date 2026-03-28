@@ -160,6 +160,9 @@ Every commit is independently green. Each phase migrates one dict.
 | `reasoning=f"..."` strings | No change — f-string calls `__str__` |
 | JSON/MCP serialization | Unwrap `str(name)` at boundary |
 | Symbol table lookups (`class_info.methods`, `class_info.constants`) | Unwrap `str(name)` — symbol table not migrated (9adr) |
+| Scope chain lookup: `VarName(func_name)` in `local_vars` (calls.py:407) | Cross-domain: `VarName(str(func_name))` — FuncName→VarName boundary |
+| Heap field lookup: `FieldName(method_name)` (calls.py:502) | Cross-domain: `FieldName(str(method_name))` — FuncName→FieldName boundary |
+| Type parser: `parse_type(raw_func_name)` (calls.py:377) | Unwrap `str(raw_func_name)` — type parser expects str |
 | `calls.py` split("[") hack | Remains until n9tr (Rust Box/Option CallCtor migration) |
 
 ## Testing Strategy
