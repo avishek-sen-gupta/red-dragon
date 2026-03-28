@@ -17,6 +17,7 @@ from interpreter.instructions import (
     StoreIndex,
     LoadIndex,
 )
+from interpreter.func_name import FuncName
 from interpreter.vm.vm import (
     VMState,
     HeapObject,
@@ -71,9 +72,7 @@ def _find_method_missing(
             return mm_tv.value
     # Check class-level __method_missing__ via registry
     type_name = str(heap_obj.type_hint) if heap_obj.type_hint else ""
-    mm_labels = registry.class_methods.get(type_name, {}).get(
-        constants.METHOD_MISSING, []
-    )
+    mm_labels = registry.lookup_methods(type_name, FuncName(constants.METHOD_MISSING))
     if mm_labels and mm_labels[0] in cfg.blocks:
         return BoundFuncRef(
             func_ref=FuncRef(name=constants.METHOD_MISSING, label=mm_labels[0]),
@@ -111,8 +110,7 @@ def _resolve_method_delegation_target(
         if not inner_addr or inner_addr not in vm.heap:
             return None
         inner_type = str(vm.heap[inner_addr].type_hint or "")
-        inner_methods = registry.class_methods.get(inner_type, {})
-        if method_name in inner_methods:
+        if registry.lookup_methods(inner_type, FuncName(method_name)):
             return (inner_addr, inner_tv)
         # Inner object might itself be a Box — continue the chain
         current_addr = inner_addr
