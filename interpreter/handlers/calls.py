@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from interpreter.field_name import FieldName, FieldKind
+from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     InstructionBase,
@@ -73,9 +74,12 @@ def _try_builtin_call(
     vm: VMState,
 ) -> ExecutionResult:
     """Attempt to handle a call via the builtin table."""
-    if func_name not in Builtins.TABLE:
+    builtin_fn = Builtins.lookup_builtin(
+        FuncName(func_name) if isinstance(func_name, str) else func_name
+    )
+    if builtin_fn is None:
         return ExecutionResult.not_handled()
-    result = Builtins.TABLE[func_name](args, vm)
+    result = builtin_fn(args, vm)
     if result.value is Operators.UNCOMPUTABLE:
         args_desc = ", ".join(_symbolic_name(a.value) for a in args)
         sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
@@ -127,8 +131,7 @@ def _try_class_constructor_call(
         return ExecutionResult.not_handled()
     class_name, class_label = func_val.name, func_val.label
 
-    methods = registry.class_methods.get(class_name, {})
-    init_labels = methods.get("__init__", [])
+    init_labels = registry.lookup_methods(class_name, FuncName("__init__"))
     if init_labels:
         init_sigs = type_env.method_signatures.get(scalar(class_name), {}).get(
             "__init__", []
@@ -461,8 +464,7 @@ def _handle_call_method(
     # Static method dispatch: Class.method() where object is a ClassRef
     if isinstance(obj_val.value, ClassRef):
         class_name = obj_val.value.name
-        methods = ctx.registry.class_methods.get(class_name, {})
-        func_labels = methods.get(method_name, [])
+        func_labels = ctx.registry.lookup_methods(class_name, FuncName(method_name))
         if func_labels:
             func_label = func_labels[0]
             bound_ref = BoundFuncRef(
@@ -474,7 +476,7 @@ def _handle_call_method(
             )
 
     # Method builtins: subList, substring, slice, etc.
-    method_fn = Builtins.METHOD_TABLE.get(method_name)
+    method_fn = Builtins.lookup_method_builtin(FuncName(method_name))
     if method_fn is not None:
         result = method_fn(obj_val, args, vm)
         if result.value is not Operators.UNCOMPUTABLE:
@@ -516,8 +518,7 @@ def _handle_call_method(
             obj_desc, method_name, [a.value for a in args], inst, vm
         )
 
-    methods = ctx.registry.class_methods[type_hint]
-    func_labels = methods.get(method_name, [])
+    func_labels = ctx.registry.lookup_methods(type_hint, FuncName(method_name))
     if func_labels:
         sigs = ctx.type_env.method_signatures.get(scalar(type_hint), {}).get(
             method_name, []
@@ -533,8 +534,7 @@ def _handle_call_method(
     # Walk parent chain for inherited methods
     if not func_label or func_label not in ctx.cfg.blocks:
         for parent in ctx.registry.class_parents.get(type_hint, []):
-            parent_methods = ctx.registry.class_methods.get(parent, {})
-            parent_labels = parent_methods.get(method_name, [])
+            parent_labels = ctx.registry.lookup_methods(parent, FuncName(method_name))
             if not parent_labels:
                 continue
             parent_sigs = ctx.type_env.method_signatures.get(scalar(parent), {}).get(
@@ -560,8 +560,9 @@ def _handle_call_method(
             if delegation is not None:
                 inner_addr, inner_tv = delegation
                 inner_type = str(vm.heap[inner_addr].type_hint or "")
-                inner_methods = ctx.registry.class_methods.get(inner_type, {})
-                inner_labels = inner_methods[method_name]
+                inner_labels = ctx.registry.lookup_methods(
+                    inner_type, FuncName(method_name)
+                )
                 inner_sigs = ctx.type_env.method_signatures.get(
                     scalar(inner_type), {}
                 ).get(method_name, [])

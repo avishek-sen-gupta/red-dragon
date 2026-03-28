@@ -54,7 +54,9 @@ class CobolIOProvider(ABC):
 
         Returns a concrete value or UNCOMPUTABLE if unhandled.
         """
-        method_name = _COBOL_IO_DISPATCH.get(func_name)
+        method_name = self.dispatch(
+            FuncName(func_name) if isinstance(func_name, str) else func_name
+        )
         if method_name is None:
             logger.debug("CobolIOProvider: unknown func %s", func_name)
             return _UNCOMPUTABLE
