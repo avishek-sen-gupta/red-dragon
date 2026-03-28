@@ -66,6 +66,7 @@ from interpreter.types.type_expr import (
     fn_type,
     tuple_of,
 )
+from interpreter.func_name import FuncName
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.var_name import VarName
 
@@ -204,6 +205,15 @@ class _InferenceContext:
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
     _seeded_var_names: frozenset[VarName] = field(default_factory=frozenset)
+
+    def lookup_func_return_type(self, name: FuncName) -> TypeExpr:
+        return self.func_return_types.get(str(name), UNKNOWN)
+
+    def lookup_method_type(self, class_name: TypeExpr, name: FuncName) -> TypeExpr:
+        return self.class_method_types.get(class_name, {}).get(str(name), UNKNOWN)
+
+    def store_func_return_type(self, name: FuncName, type_expr: TypeExpr) -> None:
+        self.func_return_types[str(name)] = type_expr
 
     def store_var_type(self, name: VarName, type_expr: TypeExpr) -> None:
         """Store a variable type in the current function scope.
