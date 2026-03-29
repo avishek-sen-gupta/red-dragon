@@ -8,6 +8,7 @@ len() and index-based iteration work correctly.
 from __future__ import annotations
 
 from interpreter.field_name import FieldName, FieldKind
+from interpreter.func_name import FuncName
 from interpreter.vm.builtins import Builtins, _builtin_len
 from interpreter.types.type_expr import scalar
 from interpreter.vm.vm import VMState, apply_update
@@ -39,7 +40,9 @@ def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
 
 class TestBuiltinKeysRegistered:
     def test_keys_in_builtins_table(self):
-        assert "keys" in Builtins.TABLE, "keys not registered in Builtins.TABLE"
+        assert (
+            FuncName("keys") in Builtins.TABLE
+        ), "keys not registered in Builtins.TABLE"
 
 
 class TestBuiltinKeysProducesConcreteArray:
@@ -53,7 +56,7 @@ class TestBuiltinKeysProducesConcreteArray:
                 for k, v in {FieldName("a"): 10, FieldName("b"): 5}.items()
             },
         )
-        result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
+        result = Builtins.TABLE[FuncName("keys")]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert isinstance(result.value, TypedValue)
         assert isinstance(result.value.value, Pointer)
@@ -70,7 +73,7 @@ class TestBuiltinKeysProducesConcreteArray:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
         vm.heap["obj_0"] = HeapObject(type_hint=scalar("object"), fields={})
-        result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
+        result = Builtins.TABLE[FuncName("keys")]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert _result_addr(result) in vm.heap
         assert (
@@ -95,7 +98,7 @@ class TestBuiltinKeysProducesConcreteArray:
                 }.items()
             },
         )
-        result = Builtins.TABLE["keys"]([typed_from_runtime("arr_0")], vm)
+        result = Builtins.TABLE[FuncName("keys")]([typed_from_runtime("arr_0")], vm)
         _apply_builtin_result(vm, result)
         keys_obj = vm.heap[_result_addr(result)]
         assert keys_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
@@ -120,7 +123,9 @@ class TestBuiltinKeysProducesConcreteArray:
                 }.items()
             },
         )
-        keys_result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
+        keys_result = Builtins.TABLE[FuncName("keys")](
+            [typed_from_runtime("obj_0")], vm
+        )
         _apply_builtin_result(vm, keys_result)
         length = _builtin_len([keys_result.value], vm)
         assert length.value == 3

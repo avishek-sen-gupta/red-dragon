@@ -1,6 +1,7 @@
 """Unit tests for call graph construction — TDD: written BEFORE implementation."""
 
 from interpreter.cfg_types import BasicBlock, CFG
+from interpreter.func_name import FuncName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.registry import FunctionRegistry
 from interpreter.interprocedural.call_graph import (
@@ -125,8 +126,8 @@ class TestBuildCallGraphMethodCHA:
                 "func_Cat_speak": ["self", "volume"],
             },
             class_methods={
-                "Dog": {"speak": ["func_Dog_speak"]},
-                "Cat": {"speak": ["func_Cat_speak"]},
+                "Dog": {FuncName("speak"): ["func_Dog_speak"]},
+                "Cat": {FuncName("speak"): ["func_Cat_speak"]},
             },
         )
 

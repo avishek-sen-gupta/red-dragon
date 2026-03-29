@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.cfg import build_cfg
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
+from interpreter.func_name import FuncName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.registry import build_registry, _scan_classes
 
@@ -30,7 +31,7 @@ class TestScanClassesOverloads:
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
         )
-        assert class_methods["Foo"]["greet"] == ["func_greet_0"]
+        assert class_methods["Foo"][FuncName("greet")] == ["func_greet_0"]
 
     def test_overloaded_methods_accumulate(self):
         """Two methods with the same name should produce a two-element list."""
@@ -52,7 +53,10 @@ class TestScanClassesOverloads:
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
         )
-        assert class_methods["Foo"]["greet"] == ["func_greet_0", "func_greet_1"]
+        assert class_methods["Foo"][FuncName("greet")] == [
+            "func_greet_0",
+            "func_greet_1",
+        ]
 
     def test_different_methods_separate_lists(self):
         """Different method names should have independent lists."""
@@ -76,8 +80,8 @@ class TestScanClassesOverloads:
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
         )
-        assert class_methods["Foo"]["greet"] == ["func_greet_0"]
-        assert class_methods["Foo"]["farewell"] == ["func_farewell_0"]
+        assert class_methods["Foo"][FuncName("greet")] == ["func_greet_0"]
+        assert class_methods["Foo"][FuncName("farewell")] == ["func_farewell_0"]
 
     def test_three_overloads(self):
         """Three overloads of the same method should all be preserved."""
@@ -101,7 +105,7 @@ class TestScanClassesOverloads:
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
         )
-        assert class_methods["Calc"]["add"] == [
+        assert class_methods["Calc"][FuncName("add")] == [
             "func_add_0",
             "func_add_1",
             "func_add_2",
@@ -137,6 +141,6 @@ class Calc {
         reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
         assert "Calc" in reg.class_methods
         # __init__ should have 2 overloads (from two constructors)
-        assert len(reg.class_methods["Calc"]["__init__"]) == 2
+        assert len(reg.class_methods["Calc"][FuncName("__init__")]) == 2
         # add should have 2 overloads
-        assert len(reg.class_methods["Calc"]["add"]) == 2
+        assert len(reg.class_methods["Calc"][FuncName("add")]) == 2
