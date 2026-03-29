@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Sequence
 
 from interpreter.cfg_types import CFG
+from interpreter.class_name import ClassName
 from interpreter.constants import Language
+from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 from interpreter.instructions import InstructionBase
 from interpreter.registry import FunctionRegistry
@@ -90,23 +92,31 @@ class ExportTable:
     by scanning the registry and top-level DECL_VAR instructions.
     """
 
-    functions: dict[str, CodeLabel] = field(default_factory=dict)
-    classes: dict[str, CodeLabel] = field(default_factory=dict)
+    functions: dict[FuncName, CodeLabel] = field(default_factory=dict)
+    classes: dict[ClassName, CodeLabel] = field(default_factory=dict)
     variables: dict[str, str] = field(default_factory=dict)
 
     def lookup(self, name: str) -> CodeLabel | str | None:
         """Look up an exported name across all symbol categories.
 
         Priority: functions > classes > variables.
+        Accepts plain str and converts to FuncName/ClassName for typed lookups.
         """
-        for source in (self.functions, self.classes, self.variables):
-            if name in source:
-                return source[name]
-        return None
+        func_hit = self.functions.get(FuncName(name))
+        if func_hit is not None:
+            return func_hit
+        class_hit = self.classes.get(ClassName(name))
+        if class_hit is not None:
+            return class_hit
+        return self.variables.get(name)
 
     def all_names(self) -> set[str]:
-        """All exported names (deduplicated)."""
-        return set(self.functions) | set(self.classes) | set(self.variables)
+        """All exported names (deduplicated, as plain strings)."""
+        return (
+            {str(k) for k in self.functions}
+            | {str(k) for k in self.classes}
+            | set(self.variables)
+        )
 
 
 # ── ModuleUnit ───────────────────────────────────────────────────

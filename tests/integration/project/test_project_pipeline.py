@@ -10,6 +10,8 @@ import pytest
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_module, compile_project
 from interpreter.project.types import LinkedProgram, ModuleUnit
+from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 
 
 class TestCompileModulePython:
@@ -26,7 +28,7 @@ class TestCompileModulePython:
         assert unit.path == f
         assert unit.language == Language.PYTHON
         assert len(unit.ir) > 0
-        assert "helper" in unit.exports.functions
+        assert FuncName("helper") in unit.exports.functions
 
     def test_module_with_class(self, tmp_path):
         source = "class User:\n    def greet(self):\n        return 'hi'\n"
@@ -35,7 +37,7 @@ class TestCompileModulePython:
 
         unit = compile_module(f, Language.PYTHON)
 
-        assert "User" in unit.exports.classes
+        assert ClassName("User") in unit.exports.classes
 
     def test_module_with_imports(self, tmp_path):
         source = "import os\nfrom pathlib import Path\n\ndef main(): pass\n"
@@ -54,7 +56,7 @@ class TestCompileModulePython:
         unit = compile_module(f, Language.PYTHON)
 
         assert "PI" in unit.exports.variables
-        assert "area" in unit.exports.functions
+        assert FuncName("area") in unit.exports.functions
 
 
 class TestCompileProjectPython:
@@ -175,7 +177,7 @@ class TestCompileModuleJavaScript:
 
         assert isinstance(unit, ModuleUnit)
         assert len(unit.ir) > 0
-        assert "add" in unit.exports.functions
+        assert FuncName("add") in unit.exports.functions
 
     def test_js_project_with_import(self, tmp_path):
         (tmp_path / "utils.js").write_text("function helper(x) { return x + 1; }\n")
@@ -201,7 +203,7 @@ class TestCompileModuleJava:
         unit = compile_module(f, Language.JAVA)
 
         assert isinstance(unit, ModuleUnit)
-        assert "Utils" in unit.exports.classes
+        assert ClassName("Utils") in unit.exports.classes
 
 
 class TestCompileModuleC:

@@ -8,6 +8,7 @@ from interpreter.constants import Language
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.project.linker import link_modules
 from interpreter.project.types import ExportTable, ImportRef, ModuleUnit
+from interpreter.func_name import FuncName
 
 
 def _make_module(path, ir_instructions, exports=ExportTable(), imports=()):
@@ -49,7 +50,7 @@ class TestImportStubDropping:
                 ),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
             ],
-            exports=ExportTable(functions={"add": CodeLabel("func_add_0")}),
+            exports=ExportTable(functions={FuncName("add"): CodeLabel("func_add_0")}),
         )
         entry = _make_module(
             "/project/main.py",
@@ -91,7 +92,7 @@ class TestImportStubDropping:
                 ),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
             ],
-            exports=ExportTable(functions={"add": CodeLabel("func_add_0")}),
+            exports=ExportTable(functions={FuncName("add"): CodeLabel("func_add_0")}),
         )
         entry = _make_module(
             "/project/main.py",
