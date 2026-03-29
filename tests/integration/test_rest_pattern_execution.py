@@ -98,7 +98,7 @@ let answer = a;
         frame = vm.call_stack[0]
         rest_val = unwrap(frame.local_vars[VarName("rest")])
         rest_addr = _heap_addr(rest_val)
-        rest_obj = vm.heap[rest_addr]
+        rest_obj = vm.heap[str(rest_addr)]
         assert (
             rest_obj.fields[FieldName("b")].value == 2
         ), f"expected b=2, got {rest_obj.fields.get(FieldName('b'))}"
@@ -129,8 +129,8 @@ let answer = 1;
         vm, _stats = execute_for_language("javascript", self.PROGRAM)
         result = unwrap(vm.call_stack[0].local_vars.get(VarName("result")))
         result_addr = _heap_addr(result)
-        assert result_addr in vm.heap, f"expected heap address, got {result}"
-        heap_obj = vm.heap[result_addr]
+        assert str(result_addr) in vm.heap, f"expected heap address, got {result}"
+        heap_obj = vm.heap[str(result_addr)]
         assert (
             heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 2
         ), f"expected rest[0]=2, got {heap_obj.fields}"

@@ -6,6 +6,7 @@ from interpreter.vm.executor import _resolve_call_args
 from interpreter.ir import SpreadArguments
 from interpreter.vm.vm import VMState
 from interpreter.field_name import FieldName, FieldKind
+from interpreter.address import Address
 from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import scalar
@@ -25,7 +26,7 @@ class TestResolveCallArgs:
             len(elements), scalar(TypeName.INT)
         )
         vm.heap["arr_0"] = HeapObject(type_hint="Array", fields=fields)
-        ptr = Pointer(base="arr_0", offset=0)
+        ptr = Pointer(base=Address("arr_0"), offset=0)
         vm.call_stack.append(
             StackFrame(
                 function_name="test",

@@ -3,12 +3,13 @@
 from interpreter.vm.executor import _unwrap_builtin_result
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.types.type_expr import pointer, scalar
+from interpreter.address import Address
 from interpreter.vm.vm_types import BuiltinResult, Pointer
 
 
 class TestUnwrapBuiltinResult:
     def test_passes_through_typed_value(self):
-        tv = typed(Pointer(base="arr_0", offset=0), pointer(scalar("Array")))
+        tv = typed(Pointer(base=Address("arr_0"), offset=0), pointer(scalar("Array")))
         result = BuiltinResult(value=tv)
         assert _unwrap_builtin_result(result, "test") is tv
 

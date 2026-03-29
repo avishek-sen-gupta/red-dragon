@@ -50,5 +50,5 @@ class TestNewObjectProducesPointer:
             "class Dog {} Dog d = new Dog();", language=Language.JAVA, max_steps=100
         )
         tv = _typed_locals(vm)[VarName("d")]
-        assert tv.value.base in vm.heap
-        assert vm.heap[tv.value.base].type_hint == "Dog"
+        assert str(tv.value.base) in vm.heap
+        assert vm.heap[str(tv.value.base)].type_hint == "Dog"
