@@ -86,7 +86,7 @@ def _lower_arm(
     if is_irrefutable:
         compile_pattern_bindings(ctx, subject_reg, pattern)
         body_reg = spec.body_of(ctx, arm)
-        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=str(body_reg)))
+        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=body_reg))
         ctx.emit_inst(Branch(label=end_label))
         return
 
@@ -101,8 +101,8 @@ def _lower_arm(
             Binop(
                 result_reg=final_test,
                 operator=resolve_binop("&&"),
-                left=str(test_reg),
-                right=str(guard_reg),
+                left=test_reg,
+                right=guard_reg,
             ),
         )
         test_reg = final_test
@@ -111,7 +111,7 @@ def _lower_arm(
     next_label = ctx.fresh_label("match_next")
     ctx.emit_inst(
         BranchIf(
-            cond_reg=str(test_reg),
+            cond_reg=test_reg,
             branch_targets=(arm_label, next_label),
         ),
     )
@@ -121,6 +121,6 @@ def _lower_arm(
         compile_pattern_bindings(ctx, subject_reg, pattern)
 
     body_reg = spec.body_of(ctx, arm)
-    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=str(body_reg)))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=body_reg))
     ctx.emit_inst(Branch(label=end_label))
     ctx.emit_inst(Label_(label=next_label))
