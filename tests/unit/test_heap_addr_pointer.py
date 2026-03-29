@@ -17,11 +17,11 @@ from interpreter.constants import TypeName
 
 class TestHeapAddrPointer:
     def test_extracts_base_from_pointer(self):
-        p = Pointer(base="obj_0", offset=0)
+        p = Pointer(base=Address("obj_0"), offset=0)
         assert _heap_addr(p) == Address("obj_0")
 
     def test_extracts_base_from_pointer_with_offset(self):
-        p = Pointer(base="arr_5", offset=3)
+        p = Pointer(base=Address("arr_5"), offset=3)
         assert _heap_addr(p) == Address("arr_5")
 
     def test_still_handles_bare_string(self):
@@ -44,7 +44,7 @@ class TestAddressOfPointerGuard:
         # (base starts with mem_, NOT obj_). Taking &ptr must promote the
         # Pointer itself to a new heap slot (double-indirection).
         # Pointers with obj_ base (from NEW_OBJECT) are treated as identity.
-        existing_ptr = Pointer(base="mem_0", offset=0)
+        existing_ptr = Pointer(base=Address("mem_0"), offset=0)
         frame = StackFrame(
             function_name="main",
             local_vars={
@@ -78,19 +78,19 @@ class TestAddressOfPointerGuard:
         assert result_ptr.base.startswith(
             "mem_"
         ), f"Expected a new mem_ heap slot for &ptr, got {result_ptr.base}"
-        assert result_ptr.base != "mem_0"
+        assert result_ptr.base != Address("mem_0")
         # The new heap slot must contain the original Pointer as its value.
-        assert result_ptr.base in vm.heap
+        assert str(result_ptr.base) in vm.heap
         promoted_val = (
-            vm.heap[result_ptr.base].fields[FieldName("0", FieldKind.INDEX)].value
+            vm.heap[str(result_ptr.base)].fields[FieldName("0", FieldKind.INDEX)].value
         )
         assert isinstance(promoted_val, Pointer)
-        assert promoted_val.base == "mem_0"
+        assert promoted_val.base == Address("mem_0")
 
     def test_address_of_new_array_pointer_returns_identity(self):
         # A variable holding a Pointer from NEW_ARRAY (base starts with arr_)
         # should return identity — the array IS the heap object.
-        arr_ptr = Pointer(base="arr_0", offset=0)
+        arr_ptr = Pointer(base=Address("arr_0"), offset=0)
         frame = StackFrame(
             function_name="main",
             local_vars={
@@ -119,14 +119,14 @@ class TestAddressOfPointerGuard:
 
         result_ptr = result.update.register_writes[Register("t0")].value
         assert isinstance(result_ptr, Pointer)
-        assert (
-            result_ptr.base == "arr_0"
+        assert result_ptr.base == Address(
+            "arr_0"
         ), "ADDRESS_OF on NEW_ARRAY Pointer should return identity"
 
     def test_address_of_new_object_pointer_returns_identity(self):
         # A variable holding a Pointer from NEW_OBJECT (base starts with obj_)
         # should return identity — the struct IS the heap object.
-        struct_ptr = Pointer(base="obj_0", offset=0)
+        struct_ptr = Pointer(base=Address("obj_0"), offset=0)
         frame = StackFrame(
             function_name="main",
             local_vars={
@@ -153,6 +153,6 @@ class TestAddressOfPointerGuard:
 
         result_ptr = result.update.register_writes[Register("t0")].value
         assert isinstance(result_ptr, Pointer)
-        assert (
-            result_ptr.base == "obj_0"
+        assert result_ptr.base == Address(
+            "obj_0"
         ), "ADDRESS_OF on NEW_OBJECT Pointer should return identity"

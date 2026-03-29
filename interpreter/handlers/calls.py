@@ -151,13 +151,13 @@ def _try_class_constructor_call(
     vm.symbolic_counter += 1
     resolved_type = type_hint if type_hint else scalar(class_name)
     vm.heap_set(Address(addr), HeapObject(type_hint=resolved_type))
-    ptr_tv = typed(Pointer(base=addr, offset=0), pointer(resolved_type))
+    ptr_tv = typed(Pointer(base=Address(addr), offset=0), pointer(resolved_type))
 
     if not init_label or init_label not in cfg.blocks:
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: ptr_tv},
-                new_objects=[NewObject(addr=addr, type_hint=resolved_type)],
+                new_objects=[NewObject(addr=Address(addr), type_hint=resolved_type)],
                 reasoning=f"new {class_name}() → {addr} (no __init__)",
             )
         )

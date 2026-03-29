@@ -22,12 +22,14 @@ from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm.vm import apply_update, materialize_raw_update
 from interpreter.register import Register
+from interpreter.address import Address
 from interpreter.vm.vm_types import (
     HeapObject,
     HeapWrite,
     Pointer,
     StackFrame,
     StateUpdate,
+    SymbolicValue,
     VMState,
 )
 
@@ -59,7 +61,7 @@ class TestStoreFieldTypedValue:
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.heap["mem_0"] = HeapObject(fields={FieldName("0", FieldKind.INDEX): 0})
         vm.current_frame.registers[Register("%0")] = typed(
-            Pointer(base="mem_0", offset=0), UNKNOWN
+            Pointer(base=Address("mem_0"), offset=0), UNKNOWN
         )
         vm.current_frame.registers[Register("%1")] = typed(99, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.STORE_INDIRECT, operands=["%0", "%1"])
@@ -112,7 +114,9 @@ class TestMaterializeHeapWrites:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         raw = StateUpdate(
-            heap_writes=[HeapWrite(obj_addr="obj_0", field=FieldName("x"), value=42)],
+            heap_writes=[
+                HeapWrite(obj_addr=Address("obj_0"), field=FieldName("x"), value=42)
+            ],
             reasoning="test",
         )
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
@@ -122,14 +126,15 @@ class TestMaterializeHeapWrites:
         assert hw.value.type == scalar(TypeName.INT)
 
     def test_symbolic_dict_heap_write_materialized(self):
-        from interpreter.vm.vm_types import SymbolicValue
 
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         sym_dict = {"__symbolic__": True, "name": "sym_0", "type_hint": "Int"}
         raw = StateUpdate(
             heap_writes=[
-                HeapWrite(obj_addr="obj_0", field=FieldName("x"), value=sym_dict)
+                HeapWrite(
+                    obj_addr=Address("obj_0"), field=FieldName("x"), value=sym_dict
+                )
             ],
             reasoning="test",
         )
@@ -144,7 +149,9 @@ class TestMaterializeHeapWrites:
         vm.call_stack.append(StackFrame(function_name="main"))
         tv = typed(42, scalar(TypeName.INT))
         raw = StateUpdate(
-            heap_writes=[HeapWrite(obj_addr="obj_0", field=FieldName("x"), value=tv)],
+            heap_writes=[
+                HeapWrite(obj_addr=Address("obj_0"), field=FieldName("x"), value=tv)
+            ],
             reasoning="test",
         )
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
@@ -168,7 +175,9 @@ class TestApplyUpdateStoresTypedValue:
         vm.heap["obj_0"] = HeapObject(type_hint=scalar("Point"))
         tv = typed(42, scalar(TypeName.INT))
         update = StateUpdate(
-            heap_writes=[HeapWrite(obj_addr="obj_0", field=FieldName("x"), value=tv)],
+            heap_writes=[
+                HeapWrite(obj_addr=Address("obj_0"), field=FieldName("x"), value=tv)
+            ],
             reasoning="test",
         )
         apply_update(vm, update, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
@@ -185,7 +194,7 @@ class TestApplyUpdateStoresTypedValue:
             type_hint=None,
             fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(0)},
         )
-        ptr = Pointer(base="mem_0", offset=0)
+        ptr = Pointer(base=Address("mem_0"), offset=0)
         vm.current_frame.var_heap_aliases[VarName("x")] = ptr
         tv = typed(99, scalar(TypeName.INT))
         update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
@@ -273,7 +282,7 @@ class TestHeapFieldsStoreTypedValue:
         vm.heap["mem_0"] = HeapObject(
             fields={FieldName("0", FieldKind.INDEX): original_tv}
         )
-        ptr = Pointer(base="mem_0", offset=0)
+        ptr = Pointer(base=Address("mem_0"), offset=0)
         vm.current_frame.var_heap_aliases[VarName("x")] = ptr
         inst = IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="%0")
         result = _handle_load_var(inst, vm, _CTX)

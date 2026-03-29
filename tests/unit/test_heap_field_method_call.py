@@ -10,6 +10,7 @@ from __future__ import annotations
 from interpreter.field_name import FieldName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, SymbolicValue, apply_update
+from interpreter.address import Address
 from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
 from interpreter.vm.executor import (
     LocalExecutor,
@@ -60,7 +61,7 @@ def _build_callable_field_vm():
             FieldName("greet"): typed_from_runtime(bound),
         },
     )
-    ptr = Pointer(base="obj_0", offset=0)
+    ptr = Pointer(base=Address("obj_0"), offset=0)
     vm.call_stack.append(
         StackFrame(
             function_name="<main>",

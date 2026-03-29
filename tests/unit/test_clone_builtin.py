@@ -6,6 +6,7 @@ from interpreter.vm.builtins import Builtins
 from interpreter.vm.vm import VMState
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.func_name import FuncName
+from interpreter.address import Address
 from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import TypeExpr, scalar
@@ -18,7 +19,7 @@ class TestCloneBuiltin:
     ) -> tuple[VMState, Pointer]:
         vm = VMState()
         vm.heap["obj_0"] = HeapObject(type_hint=type_hint, fields=fields)
-        return vm, Pointer(base="obj_0", offset=0)
+        return vm, Pointer(base=Address("obj_0"), offset=0)
 
     def test_clone_is_registered(self):
         assert FuncName("clone") in Builtins.TABLE
@@ -32,7 +33,7 @@ class TestCloneBuiltin:
         result = Builtins.TABLE[FuncName("clone")]([typed_from_runtime(ptr)], vm)
         assert isinstance(result, BuiltinResult)
         assert isinstance(result.value.value, Pointer)
-        assert result.value.value.base != "obj_0"  # different heap address
+        assert result.value.value.base != Address("obj_0")  # different heap address
 
     def test_clone_copies_all_fields(self):
         """clone should copy all fields from the original object."""

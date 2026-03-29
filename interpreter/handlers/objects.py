@@ -16,6 +16,7 @@ from interpreter.vm.vm import (
 from interpreter.refs.class_ref import ClassRef
 from interpreter.types.type_expr import TypeExpr, pointer, scalar
 from interpreter.types.typed_value import typed
+from interpreter.address import Address
 from interpreter import constants
 from interpreter.var_name import VarName
 
@@ -43,10 +44,10 @@ def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
         obj_type = scalar("Object")
     return ExecutionResult.success(
         StateUpdate(
-            new_objects=[NewObject(addr=addr, type_hint=obj_type)],
+            new_objects=[NewObject(addr=Address(addr), type_hint=obj_type)],
             register_writes={
                 t.result_reg: typed(
-                    Pointer(base=addr, offset=0),
+                    Pointer(base=Address(addr), offset=0),
                     pointer(obj_type),
                 )
             },
@@ -67,10 +68,10 @@ def _handle_new_array(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
     )
     return ExecutionResult.success(
         StateUpdate(
-            new_objects=[NewObject(addr=addr, type_hint=arr_type)],
+            new_objects=[NewObject(addr=Address(addr), type_hint=arr_type)],
             register_writes={
                 t.result_reg: typed(
-                    Pointer(base=addr, offset=0),
+                    Pointer(base=Address(addr), offset=0),
                     pointer(arr_type),
                 )
             },

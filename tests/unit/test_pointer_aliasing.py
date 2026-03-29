@@ -17,6 +17,7 @@ from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.address import Address
 from interpreter.vm.vm_types import (
     HeapObject,
     Pointer,
@@ -71,21 +72,21 @@ def _apply(vm: VMState, result: ExecutionResult) -> None:
 
 class TestPointerDataclass:
     def test_pointer_creation(self):
-        p = Pointer(base="mem_0", offset=0)
-        assert p.base == "mem_0"
+        p = Pointer(base=Address("mem_0"), offset=0)
+        assert p.base == Address("mem_0")
         assert p.offset == 0
 
     def test_pointer_with_offset(self):
-        p = Pointer(base="mem_0", offset=3)
+        p = Pointer(base=Address("mem_0"), offset=3)
         assert p.offset == 3
 
     def test_pointer_equality(self):
-        assert Pointer("mem_0", 0) == Pointer("mem_0", 0)
-        assert Pointer("mem_0", 0) != Pointer("mem_0", 1)
-        assert Pointer("mem_0", 0) != Pointer("mem_1", 0)
+        assert Pointer(Address("mem_0"), 0) == Pointer(Address("mem_0"), 0)
+        assert Pointer(Address("mem_0"), 0) != Pointer(Address("mem_0"), 1)
+        assert Pointer(Address("mem_0"), 0) != Pointer(Address("mem_1"), 0)
 
     def test_pointer_is_frozen(self):
-        p = Pointer("mem_0", 0)
+        p = Pointer(Address("mem_0"), 0)
         with pytest.raises(AttributeError):
             p.offset = 5
 
@@ -114,7 +115,8 @@ class TestAddressOfHandler:
         # The heap object should hold the original value
         alias_ptr = vm.current_frame.var_heap_aliases[VarName("x")]
         assert (
-            vm.heap[alias_ptr.base].fields[FieldName("0", FieldKind.INDEX)].value == 42
+            vm.heap[str(alias_ptr.base)].fields[FieldName("0", FieldKind.INDEX)].value
+            == 42
         )
 
     def test_second_address_of_returns_same_pointer(self):
@@ -148,7 +150,7 @@ class TestAddressOfHandler:
 
         ptr = unwrap(vm.current_frame.registers[Register("%0")])
         assert isinstance(ptr, Pointer)
-        assert ptr.base == "obj_0"
+        assert ptr.base == Address("obj_0")
         assert ptr.offset == 0
 
 
@@ -170,7 +172,7 @@ class TestAliasAwareLoadStore:
 
         # Directly modify the heap to simulate *ptr = 99
         alias = vm.current_frame.var_heap_aliases[VarName("x")]
-        vm.heap[alias.base].fields[FieldName("0", FieldKind.INDEX)] = (
+        vm.heap[str(alias.base)].fields[FieldName("0", FieldKind.INDEX)] = (
             typed_from_runtime(99)
         )
 
@@ -192,7 +194,9 @@ class TestAliasAwareLoadStore:
         _apply(vm, result)
 
         # The heap should reflect the new value
-        assert vm.heap[ptr.base].fields[FieldName("0", FieldKind.INDEX)].value == 77
+        assert (
+            vm.heap[str(ptr.base)].fields[FieldName("0", FieldKind.INDEX)].value == 77
+        )
 
     def test_store_via_pointer_then_load_var(self):
         """*ptr = 99 then read x should see 99."""
@@ -225,7 +229,7 @@ class TestPointerDereference:
         return unwrap(vm.current_frame.registers[Register("%ptr")])
 
     def test_load_indirect_reads_through_pointer(self):
-        """LOAD_INDIRECT ptr should read from heap[ptr.base].fields[str(ptr.offset)]."""
+        """LOAD_INDIRECT ptr should read from heap[str(ptr.base)].fields[str(ptr.offset)]."""
         vm = _make_vm(x=42)
         ptr = self._promote(vm, "x")
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
@@ -247,7 +251,9 @@ class TestPointerDereference:
         result = _handle_store_indirect(inst, vm, _CTX)
         _apply(vm, result)
 
-        assert vm.heap[ptr.base].fields[FieldName("0", FieldKind.INDEX)].value == 99
+        assert (
+            vm.heap[str(ptr.base)].fields[FieldName("0", FieldKind.INDEX)].value == 99
+        )
 
 
 # ── Pointer arithmetic ───────────────────────────────────────────
@@ -257,7 +263,7 @@ class TestPointerArithmetic:
     def test_pointer_plus_int(self):
         """Pointer + int should produce Pointer with adjusted offset."""
         vm = _make_vm()
-        ptr = Pointer("mem_0", 0)
+        ptr = Pointer(Address("mem_0"), 0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
         vm.current_frame.registers[Register("%3")] = typed_from_runtime(3)
 
@@ -269,13 +275,13 @@ class TestPointerArithmetic:
 
         new_ptr = unwrap(vm.current_frame.registers[Register("%result")])
         assert isinstance(new_ptr, Pointer)
-        assert new_ptr.base == "mem_0"
+        assert new_ptr.base == Address("mem_0")
         assert new_ptr.offset == 3
 
     def test_int_plus_pointer(self):
         """int + Pointer should also produce Pointer (commutative)."""
         vm = _make_vm()
-        ptr = Pointer("mem_0", 2)
+        ptr = Pointer(Address("mem_0"), 2)
         vm.current_frame.registers[Register("%2")] = typed_from_runtime(2)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
 
@@ -287,13 +293,13 @@ class TestPointerArithmetic:
 
         new_ptr = unwrap(vm.current_frame.registers[Register("%result")])
         assert isinstance(new_ptr, Pointer)
-        assert new_ptr.base == "mem_0"
+        assert new_ptr.base == Address("mem_0")
         assert new_ptr.offset == 4
 
     def test_pointer_minus_int(self):
         """Pointer - int should produce Pointer with decreased offset."""
         vm = _make_vm()
-        ptr = Pointer("mem_0", 5)
+        ptr = Pointer(Address("mem_0"), 5)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
         vm.current_frame.registers[Register("%2")] = typed_from_runtime(2)
 
@@ -305,7 +311,7 @@ class TestPointerArithmetic:
 
         new_ptr = unwrap(vm.current_frame.registers[Register("%result")])
         assert isinstance(new_ptr, Pointer)
-        assert new_ptr.base == "mem_0"
+        assert new_ptr.base == Address("mem_0")
         assert new_ptr.offset == 3
 
     def test_pointer_arithmetic_then_deref(self):
@@ -323,7 +329,7 @@ class TestPointerArithmetic:
                 }.items()
             }
         )
-        ptr = Pointer("arr_0", 0)
+        ptr = Pointer(Address("arr_0"), 0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
         vm.current_frame.registers[Register("%1")] = typed_from_runtime(1)
 
@@ -351,8 +357,8 @@ class TestPointerSubtraction:
     def test_pointer_minus_pointer_same_base(self):
         """Pointer - Pointer with same base should return offset difference."""
         vm = _make_vm()
-        vm.current_frame.registers[Register("%p1")] = Pointer("arr_0", 1)
-        vm.current_frame.registers[Register("%p2")] = Pointer("arr_0", 4)
+        vm.current_frame.registers[Register("%p1")] = Pointer(Address("arr_0"), 1)
+        vm.current_frame.registers[Register("%p2")] = Pointer(Address("arr_0"), 4)
 
         inst = _make_inst(
             Opcode.BINOP, result_reg="%diff", operands=["-", "%p2", "%p1"]
@@ -365,8 +371,8 @@ class TestPointerSubtraction:
     def test_pointer_minus_pointer_negative(self):
         """Lower pointer minus higher pointer should give negative difference."""
         vm = _make_vm()
-        vm.current_frame.registers[Register("%p1")] = Pointer("arr_0", 5)
-        vm.current_frame.registers[Register("%p2")] = Pointer("arr_0", 2)
+        vm.current_frame.registers[Register("%p1")] = Pointer(Address("arr_0"), 5)
+        vm.current_frame.registers[Register("%p2")] = Pointer(Address("arr_0"), 2)
 
         inst = _make_inst(
             Opcode.BINOP, result_reg="%diff", operands=["-", "%p2", "%p1"]
@@ -381,8 +387,8 @@ class TestPointerComparison:
     def test_less_than(self):
         """Pointer < Pointer should compare offsets."""
         vm = _make_vm()
-        vm.current_frame.registers[Register("%p1")] = Pointer("arr_0", 0)
-        vm.current_frame.registers[Register("%p2")] = Pointer("arr_0", 1)
+        vm.current_frame.registers[Register("%p1")] = Pointer(Address("arr_0"), 0)
+        vm.current_frame.registers[Register("%p2")] = Pointer(Address("arr_0"), 1)
 
         inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["<", "%p1", "%p2"])
         result = _handle_binop(inst, vm, _CTX)
@@ -393,8 +399,8 @@ class TestPointerComparison:
     def test_greater_than(self):
         """Pointer > Pointer should compare offsets."""
         vm = _make_vm()
-        vm.current_frame.registers[Register("%p1")] = Pointer("arr_0", 3)
-        vm.current_frame.registers[Register("%p2")] = Pointer("arr_0", 1)
+        vm.current_frame.registers[Register("%p1")] = Pointer(Address("arr_0"), 3)
+        vm.current_frame.registers[Register("%p2")] = Pointer(Address("arr_0"), 1)
 
         inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=[">", "%p1", "%p2"])
         result = _handle_binop(inst, vm, _CTX)
@@ -405,8 +411,8 @@ class TestPointerComparison:
     def test_less_than_or_equal(self):
         """Pointer <= Pointer with equal offsets should be True."""
         vm = _make_vm()
-        vm.current_frame.registers[Register("%p1")] = Pointer("arr_0", 2)
-        vm.current_frame.registers[Register("%p2")] = Pointer("arr_0", 2)
+        vm.current_frame.registers[Register("%p1")] = Pointer(Address("arr_0"), 2)
+        vm.current_frame.registers[Register("%p2")] = Pointer(Address("arr_0"), 2)
 
         inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["<=", "%p1", "%p2"])
         result = _handle_binop(inst, vm, _CTX)
@@ -417,8 +423,8 @@ class TestPointerComparison:
     def test_not_equal(self):
         """Pointer != Pointer with different offsets should be True."""
         vm = _make_vm()
-        vm.current_frame.registers[Register("%p1")] = Pointer("arr_0", 0)
-        vm.current_frame.registers[Register("%p2")] = Pointer("arr_0", 3)
+        vm.current_frame.registers[Register("%p1")] = Pointer(Address("arr_0"), 0)
+        vm.current_frame.registers[Register("%p2")] = Pointer(Address("arr_0"), 3)
 
         inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["!=", "%p1", "%p2"])
         result = _handle_binop(inst, vm, _CTX)

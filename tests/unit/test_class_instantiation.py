@@ -36,8 +36,8 @@ answer = 42
         assert VarName("d") in vars_
         obj_ptr = vars_[VarName("d")]
         assert isinstance(obj_ptr, Pointer)
-        assert obj_ptr.base in vm.heap
-        assert vm.heap[obj_ptr.base].fields.get(FieldName("name")).value == "Rex"
+        assert str(obj_ptr.base) in vm.heap
+        assert vm.heap[str(obj_ptr.base)].fields.get(FieldName("name")).value == "Rex"
 
     def test_method_call_on_instance(self):
         """Method calls on instances should work."""
@@ -100,7 +100,7 @@ int answer = 42;
         assert isinstance(vars_[VarName("d")], Pointer)
         assert vars_[VarName("d")].base.startswith("obj_")
         # Constructor should have dispatched to Dog — verify heap object type
-        assert vm.heap[vars_[VarName("d")].base].type_hint == "Dog"
+        assert vm.heap[str(vars_[VarName("d")].base)].type_hint == "Dog"
 
     def test_constructor_sets_fields(self):
         """Java constructor should set fields on the allocated object."""
@@ -118,8 +118,8 @@ int answer = 42;
         heap = vm.heap
         obj_ptr = unwrap(vm.call_stack[0].local_vars[VarName("d")])
         assert isinstance(obj_ptr, Pointer)
-        assert obj_ptr.base in heap
-        assert heap[obj_ptr.base].fields.get(FieldName("name")).value == "Rex"
+        assert str(obj_ptr.base) in heap
+        assert heap[str(obj_ptr.base)].fields.get(FieldName("name")).value == "Rex"
 
 
 class TestCSharpClassInstantiation:
@@ -181,5 +181,5 @@ let answer = 42;
         assert isinstance(vars_[VarName("d")], Pointer)
         assert vars_[VarName("d")].base.startswith("obj_")
         # Constructor body must have run: this.name = "Rex"
-        heap_obj = vm.heap[vars_[VarName("d")].base]
+        heap_obj = vm.heap[str(vars_[VarName("d")].base)]
         assert heap_obj.fields[FieldName("name")].value == "Rex"

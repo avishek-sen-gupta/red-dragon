@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
@@ -171,7 +172,7 @@ class TestLLMPlausibleResolver:
 
         assert result.handled
         assert len(result.update.heap_writes) == 2
-        assert result.update.heap_writes[0].obj_addr == "arr_5"
+        assert result.update.heap_writes[0].obj_addr == Address("arr_5")
         assert result.update.heap_writes[0].field == FieldName("3")
         assert isinstance(result.update.heap_writes[0].value, TypedValue)
         assert result.update.heap_writes[0].value.value == "new_element"

@@ -43,7 +43,7 @@ class Pointer:
     heap[base].fields[str(offset)].
     """
 
-    base: str
+    base: Address
     offset: int = 0
 
 
@@ -133,7 +133,7 @@ def _serialize_value(v: Any) -> Any:
     if isinstance(v, HeapObject):
         return v.to_dict()
     if isinstance(v, Pointer):
-        return {"__pointer__": True, "base": v.base, "offset": v.offset}
+        return {"__pointer__": True, "base": str(v.base), "offset": v.offset}
     return v
 
 
@@ -223,19 +223,19 @@ class VMState:
 
 class HeapWrite(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    obj_addr: str
+    obj_addr: Address
     field: FieldName
     value: Any
 
 
 class NewObject(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    addr: str
+    addr: Address
     type_hint: TypeExpr = UNKNOWN
 
 
 class RegionWrite(BaseModel):
-    region_addr: str
+    region_addr: Address
     offset: int
     data: list[int]
 
