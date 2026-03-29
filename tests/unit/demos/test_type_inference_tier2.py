@@ -18,6 +18,7 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.register import Register
+from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 
 
@@ -61,8 +62,8 @@ def greet():
 """
         _instructions, env = _lower_and_infer(source, "python")
 
-        assert env.get_func_signature("double").return_type == "Int"
-        assert env.get_func_signature("greet").return_type == "String"
+        assert env.get_func_signature(FuncName("double")).return_type == "Int"
+        assert env.get_func_signature(FuncName("greet")).return_type == "String"
 
     def test_return_backfill_javascript(self):
         source = """\
@@ -76,8 +77,8 @@ function greet() {
 """
         _instructions, env = _lower_and_infer(source, "javascript")
 
-        assert env.get_func_signature("double").return_type == "Int"
-        assert env.get_func_signature("greet").return_type == "String"
+        assert env.get_func_signature(FuncName("double")).return_type == "Int"
+        assert env.get_func_signature(FuncName("greet")).return_type == "String"
 
     def test_return_backfill_ruby(self):
         source = """\
@@ -91,8 +92,8 @@ end
 """
         _instructions, env = _lower_and_infer(source, "ruby")
 
-        assert env.get_func_signature("double").return_type == "Int"
-        assert env.get_func_signature("greet").return_type == "String"
+        assert env.get_func_signature(FuncName("double")).return_type == "Int"
+        assert env.get_func_signature(FuncName("greet")).return_type == "String"
 
 
 class TestUnopRefinement:
