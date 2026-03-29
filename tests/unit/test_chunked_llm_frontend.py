@@ -136,9 +136,13 @@ class TestIRRenumberer:
 
     def test_register_offset(self):
         instructions = [
-            IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["42"]),
             IRInstruction(
-                opcode=Opcode.BINOP, result_reg="%1", operands=["+", "%0", "%0"]
+                opcode=Opcode.CONST, result_reg=Register("%0"), operands=["42"]
+            ),
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=Register("%1"),
+                operands=["+", "%0", "%0"],
             ),
         ]
         result, next_offset = self.renumberer.renumber(instructions, 10, "_s")
@@ -174,12 +178,12 @@ class TestIRRenumberer:
         instructions = [
             IRInstruction(
                 opcode=Opcode.CONST,
-                result_reg="%0",
+                result_reg=Register("%0"),
                 operands=["<function:foo@func_foo_0>"],
             ),
             IRInstruction(
                 opcode=Opcode.CONST,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["<class:Bar@class_Bar_0>"],
             ),
         ]
@@ -190,7 +194,9 @@ class TestIRRenumberer:
     def test_non_register_operands_untouched(self):
         instructions = [
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["my_var", "%0"]),
-            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%1", operands=["my_var"]),
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["my_var"]
+            ),
         ]
         result, _ = self.renumberer.renumber(instructions, 3, "_s")
         assert result[0].operands == ["my_var", "%3"]

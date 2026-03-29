@@ -13,6 +13,7 @@ from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
+from interpreter.register import Register, NO_REGISTER
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 import dataclasses
@@ -249,7 +250,9 @@ def _parse_single_instruction(raw: dict[str, Any]) -> InstructionBase:
     raw_targets = raw.get("branch_targets", [])
     return IRInstruction(
         opcode=opcode,
-        result_reg=raw.get("result_reg"),
+        result_reg=(
+            Register(raw["result_reg"]) if raw.get("result_reg") else NO_REGISTER
+        ),
         operands=raw.get("operands", []),
         label=CodeLabel(raw_label) if raw_label else NO_LABEL,
         branch_targets=[CodeLabel(t) for t in raw_targets],
