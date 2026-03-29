@@ -29,8 +29,8 @@ Use `bd` (Beads) for ALL task tracking. Do NOT use markdown TODO lists.
 
 Every non-trivial task goes through these phases. Do not skip. Do not start implementing before completing brainstorm.
 
-1. **Brainstorm** — Read the relevant code. Check how the existing system handles similar cases. Identify at least two approaches and their trade-offs. Ask: "does the system already have infrastructure for this?" Consider whether an open-source project already solves the problem.
-2. **Plan** — Choose an approach. For features spanning multiple modules, identify independently-committable units and their order. For Heavy tasks, write the design down before proceeding.
+1. **Brainstorm** — **Always invoke the `superpowers:brainstorming` skill first.** Read the relevant code. Check how the existing system handles similar cases. Identify at least two approaches and their trade-offs. Ask: "does the system already have infrastructure for this?" Consider whether an open-source project already solves the problem.
+2. **Plan** — Choose an approach. For features spanning multiple modules, identify independently-committable units and their order. For Heavy tasks, write the design down before proceeding. Use the `superpowers:writing-plans` skill for multi-step tasks.
 3. **Test first** — Write failing tests that define the expected behavior. No implementation code until at least one test exists.
 4. **Implement** — Write the minimum code to make the tests pass.
 5. **Self-review** — Before running the verification gate, review your own diff (`git diff`). Check against the Design Principles and Programming Patterns sections below. Look for: workaround guards, mutation in loops, missing test coverage, weak assertions, leaked abstractions, stale docs. If the diff is large (Heavy task), run the `/review` skill.
