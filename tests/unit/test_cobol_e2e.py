@@ -46,8 +46,14 @@ def _load_fixture(name: str) -> CobolASG:
 
 def _execute_straight_line(
     instructions: list[InstructionBase],
+    *,
+    stop_before_procedure: bool = False,
 ) -> VMState:
-    """Execute IR straight-line (no branches). Good for Data Division only."""
+    """Execute IR straight-line (no branches).
+
+    When *stop_before_procedure* is True, execution halts at the first
+    paragraph label (``para_`` prefix), running only the Data Division.
+    """
     vm = VMState()
     vm.call_stack.append(StackFrame(function_name="<main>"))
     cfg = build_cfg(instructions)
@@ -58,6 +64,8 @@ def _execute_straight_line(
 
     for inst in instructions:
         if inst.opcode == Opcode.LABEL:
+            if stop_before_procedure and str(inst.label).startswith("para_"):
+                break
             continue
         if inst.opcode == Opcode.RETURN:
             break
@@ -160,12 +168,26 @@ class TestArithmeticFixture:
         frontend = CobolFrontend(_FakeParser(asg))
         instructions = frontend.lower(b"")
 
+        vm = _execute_straight_line(instructions, stop_before_procedure=True)
+
+        region_addr = list(vm.region_keys())[0]
+        region = vm.region_get(region_addr)
+        assert len(region) == 5  # 9(5)
+        assert (
+            _decode_zoned_unsigned(region, 0, 5) == 100
+        ), f"expected initial zoned decimal 100, got {_decode_zoned_unsigned(region, 0, 5)}"
+
+    def test_arithmetic_produces_correct_result(self):
+        """Full execution: 100 + 50 - 25 = 125 in zoned decimal region."""
+        asg = _load_fixture("arithmetic.json")
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(b"")
+
         vm = _execute_straight_line(instructions)
 
         region_addr = list(vm.region_keys())[0]
         region = vm.region_get(region_addr)
         assert len(region) == 5  # 9(5)
-        # Straight-line execution runs DATA + PROCEDURE: 100 + 50 - 25 = 125
         assert (
             _decode_zoned_unsigned(region, 0, 5) == 125
         ), f"expected zoned decimal 125 (100+50-25), got {_decode_zoned_unsigned(region, 0, 5)}"
