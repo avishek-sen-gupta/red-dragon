@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -186,7 +187,9 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")

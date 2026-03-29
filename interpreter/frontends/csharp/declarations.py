@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
     CallMethod,
@@ -218,7 +219,7 @@ def _lower_constructor_initializer(ctx: TreeSitterEmitContext, node) -> None:
         CallMethod(
             result_reg=ctx.fresh_reg(),
             obj_reg=this_reg,
-            method_name="__init__",
+            method_name=FuncName("__init__"),
             args=tuple(arg_regs),
         ),
         node=node,

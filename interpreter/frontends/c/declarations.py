@@ -8,6 +8,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -163,7 +164,9 @@ def _lower_init_declarator(
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=val_reg, func_name=struct_type, args=tuple(arg_regs)
+                result_reg=val_reg,
+                func_name=FuncName(struct_type),
+                args=tuple(arg_regs),
             ),
             node=node,
         )
@@ -229,7 +232,8 @@ def _lower_struct_initializer_list(
     """
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=obj_reg, func_name=struct_type, args=()), node=decl_node
+        CallFunction(result_reg=obj_reg, func_name=FuncName(struct_type), args=()),
+        node=decl_node,
     )
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=obj_reg), node=decl_node)
 

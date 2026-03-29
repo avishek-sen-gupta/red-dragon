@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -58,7 +59,8 @@ def lower_php_echo(ctx: TreeSitterEmitContext, node) -> None:
     arg_regs = [ctx.lower_expr(c) for c in children]
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="echo", args=tuple(arg_regs)), node=node
+        CallFunction(result_reg=reg, func_name=FuncName("echo"), args=tuple(arg_regs)),
+        node=node,
     )
 
 
@@ -165,7 +167,9 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=idx_reg, value="0"))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("foreach_cond")
     body_label = ctx.fresh_label("foreach_body")

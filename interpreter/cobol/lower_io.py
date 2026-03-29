@@ -16,6 +16,7 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.func_name import FuncName
 from interpreter.instructions import CallFunction
 from interpreter.register import Register
 
@@ -34,7 +35,7 @@ def lower_accept(
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
-            func_name="__cobol_accept",
+            func_name=FuncName("__cobol_accept"),
             args=(Register(str(device_reg)),),
         ),
     )
@@ -61,7 +62,7 @@ def lower_open(
         ctx.emit_inst(
             CallFunction(
                 result_reg=result_reg,
-                func_name="__cobol_open_file",
+                func_name=FuncName("__cobol_open_file"),
                 args=(Register(str(fn_reg)), Register(str(mode_reg))),
             ),
         )
@@ -81,7 +82,7 @@ def lower_close(
         ctx.emit_inst(
             CallFunction(
                 result_reg=result_reg,
-                func_name="__cobol_close_file",
+                func_name=FuncName("__cobol_close_file"),
                 args=(Register(str(fn_reg)),),
             ),
         )
@@ -100,7 +101,7 @@ def lower_read(
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
-            func_name="__cobol_read_record",
+            func_name=FuncName("__cobol_read_record"),
             args=(Register(str(fn_reg)),),
         ),
     )
@@ -134,7 +135,7 @@ def lower_write(
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
-            func_name="__cobol_write_record",
+            func_name=FuncName("__cobol_write_record"),
             args=(Register(str(fn_reg)), Register(str(data_reg))),
         ),
     )
@@ -162,7 +163,7 @@ def lower_rewrite(
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
-            func_name="__cobol_rewrite_record",
+            func_name=FuncName("__cobol_rewrite_record"),
             args=(Register(str(fn_reg)), Register(str(data_reg))),
         ),
     )
@@ -182,7 +183,7 @@ def lower_start(
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
-            func_name="__cobol_start_file",
+            func_name=FuncName("__cobol_start_file"),
             args=(Register(str(fn_reg)), Register(str(key_reg))),
         ),
     )
@@ -201,7 +202,7 @@ def lower_delete(
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
-            func_name="__cobol_delete_record",
+            func_name=FuncName("__cobol_delete_record"),
             args=(Register(str(fn_reg)),),
         ),
     )

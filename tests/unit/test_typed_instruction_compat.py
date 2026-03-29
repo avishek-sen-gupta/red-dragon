@@ -1,6 +1,7 @@
 """Test that typed instructions expose the same interface as IRInstruction."""
 
 from interpreter.instructions import *
+from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel, NO_LABEL, Opcode
 from interpreter.operator_kind import BinopKind, UnopKind
 from interpreter.register import Register, NO_REGISTER
@@ -17,8 +18,8 @@ class TestOpcodeProperty:
             (Symbolic(hint="p"), Opcode.SYMBOLIC),
             (Binop(operator=BinopKind.ADD, left="%0", right="%1"), Opcode.BINOP),
             (Unop(operator=UnopKind.BANG, operand="%0"), Opcode.UNOP),
-            (CallFunction(func_name="f"), Opcode.CALL_FUNCTION),
-            (CallMethod(obj_reg="%0", method_name="m"), Opcode.CALL_METHOD),
+            (CallFunction(func_name=FuncName("f")), Opcode.CALL_FUNCTION),
+            (CallMethod(obj_reg="%0", method_name=FuncName("m")), Opcode.CALL_METHOD),
             (CallUnknown(target_reg="%0"), Opcode.CALL_UNKNOWN),
             (LoadField(obj_reg="%0", field_name="x"), Opcode.LOAD_FIELD),
             (
@@ -95,7 +96,7 @@ class TestLabelDefault:
         for inst in [
             Const(value="42"),
             Binop(operator=BinopKind.ADD),
-            CallFunction(func_name="f"),
+            CallFunction(func_name=FuncName("f")),
             StoreVar(name=VarName("x"), value_reg="%0"),
         ]:
             assert inst.label == NO_LABEL, f"{type(inst).__name__} should have NO_LABEL"
@@ -130,10 +131,10 @@ class TestOperandsProperty:
         ]
 
     def test_call_function_no_args(self):
-        assert CallFunction(func_name="f").operands == ["f"]
+        assert CallFunction(func_name=FuncName("f")).operands == ["f"]
 
     def test_call_function_with_args(self):
-        assert CallFunction(func_name="f", args=("%0", "%1")).operands == [
+        assert CallFunction(func_name=FuncName("f"), args=("%0", "%1")).operands == [
             "f",
             "%0",
             "%1",

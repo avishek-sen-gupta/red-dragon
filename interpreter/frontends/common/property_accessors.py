@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import CallMethod, LoadField, StoreField
 from interpreter.register import Register
 
@@ -45,7 +46,7 @@ def emit_field_load_or_getter(
             CallMethod(
                 result_reg=reg,
                 obj_reg=str(obj_reg),
-                method_name=f"__get_{field_name}__",
+                method_name=FuncName(f"__get_{field_name}__"),
                 args=(),
             ),
             node=node,
@@ -77,7 +78,7 @@ def emit_field_store_or_setter(
             CallMethod(
                 result_reg=ctx.fresh_reg(),
                 obj_reg=str(obj_reg),
-                method_name=f"__set_{field_name}__",
+                method_name=FuncName(f"__set_{field_name}__"),
                 args=(str(val_reg),),
             ),
             node=node,

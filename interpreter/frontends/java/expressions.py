@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
     BranchIf,
@@ -54,7 +55,7 @@ def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> Register:
             CallMethod(
                 result_reg=reg,
                 obj_reg=obj_reg,
-                method_name=method_name,
+                method_name=FuncName(method_name),
                 args=tuple(arg_regs),
             ),
             node=node,
@@ -64,7 +65,9 @@ def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> Register:
     func_name = ctx.node_text(name_node) if name_node else "unknown"
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+        CallFunction(
+            result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+        ),
         node=node,
     )
     return reg
@@ -79,7 +82,7 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallCtorFunction(
             result_reg=reg,
-            func_name=type_name,
+            func_name=FuncName(type_name),
             type_hint=scalar(type_name),
             args=tuple(arg_regs),
         ),
@@ -370,7 +373,7 @@ def lower_instanceof(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="isinstance",
+            func_name=FuncName("isinstance"),
             args=(
                 obj_reg,
                 type_reg,

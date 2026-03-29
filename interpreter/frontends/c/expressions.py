@@ -13,6 +13,7 @@ from interpreter.types.type_expr import scalar
 from interpreter.operator_kind import resolve_unop
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -210,7 +211,8 @@ def lower_sizeof(ctx: TreeSitterEmitContext, node) -> Register:
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="sizeof", args=(arg_reg,)), node=node
+        CallFunction(result_reg=reg, func_name=FuncName("sizeof"), args=(arg_reg,)),
+        node=node,
     )
     return reg
 

@@ -8,6 +8,7 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -349,7 +350,7 @@ def _lower_this_delegation_call(ctx: TreeSitterEmitContext, node) -> None:
         CallMethod(
             result_reg=ctx.fresh_reg(),
             obj_reg=this_reg,
-            method_name="__init__",
+            method_name=FuncName("__init__"),
             args=tuple(arg_regs),
         ),
         node=node,

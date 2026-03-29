@@ -16,6 +16,7 @@ from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -147,7 +148,7 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> Register:
                     CallMethod(
                         result_reg=reg,
                         obj_reg=obj_reg,
-                        method_name=method_name,
+                        method_name=FuncName(method_name),
                         args=tuple(arg_regs),
                     ),
                     node=node,
@@ -162,7 +163,9 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> Register:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+            CallFunction(
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            ),
             node=node,
         )
         return reg
@@ -346,7 +349,7 @@ def lower_new_expression(ctx: TreeSitterEmitContext, node) -> Register:
         CallMethod(
             result_reg=ctor_reg,
             obj_reg=obj_reg,
-            method_name="constructor",
+            method_name=FuncName("constructor"),
             args=tuple(arg_regs),
         ),
         node=node,
@@ -360,7 +363,7 @@ def lower_await_expression(ctx: TreeSitterEmitContext, node) -> Register:
     expr_reg = ctx.lower_expr(children[0]) if children else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="await", args=(expr_reg,)),
+        CallFunction(result_reg=reg, func_name=FuncName("await"), args=(expr_reg,)),
         node=node,
     )
     return reg
@@ -373,7 +376,7 @@ def lower_yield_expression(ctx: TreeSitterEmitContext, node) -> Register:
         expr_reg = ctx.lower_expr(children[0])
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name="yield", args=(expr_reg,)),
+            CallFunction(result_reg=reg, func_name=FuncName("yield"), args=(expr_reg,)),
             node=node,
         )
         return reg
@@ -382,7 +385,7 @@ def lower_yield_expression(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.none_literal))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="yield", args=(none_reg,)),
+        CallFunction(result_reg=reg, func_name=FuncName("yield"), args=(none_reg,)),
         node=node,
     )
     return reg
@@ -569,7 +572,7 @@ def _lower_rest_param(ctx: TreeSitterEmitContext, child, start_index: int) -> No
     ctx.emit_inst(
         CallFunction(
             result_reg=rest_reg,
-            func_name="slice",
+            func_name=FuncName("slice"),
             args=(args_reg, idx_reg),
         ),
         node=child,

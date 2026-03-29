@@ -8,6 +8,7 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -56,7 +57,9 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
             if struct_type:
                 val_reg = ctx.fresh_reg()
                 ctx.emit_inst(
-                    CallFunction(result_reg=val_reg, func_name=struct_type, args=()),
+                    CallFunction(
+                        result_reg=val_reg, func_name=FuncName(struct_type), args=()
+                    ),
                     node=node,
                 )
             else:

@@ -8,6 +8,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import NO_LABEL
 from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -131,7 +132,9 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
@@ -727,7 +730,9 @@ def lower_ruby_in_clause(ctx: TreeSitterEmitContext, node) -> None:
 def lower_ruby_retry(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `retry` as CALL_FUNCTION('retry')."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=reg, func_name="retry", args=()), node=node)
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name=FuncName("retry"), args=()), node=node
+    )
 
 
 # ── rescue_modifier (expr rescue fallback) ────────────────────────

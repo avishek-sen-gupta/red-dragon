@@ -15,6 +15,7 @@ from interpreter.types.type_expr import ScalarType, metatype
 from interpreter.field_name import FieldName
 from interpreter.register import Register
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     DeclVar,
@@ -109,7 +110,7 @@ def _lower_object_destructure(
             ctx.emit_inst(
                 CallFunction(
                     result_reg=rest_reg,
-                    func_name="object_rest",
+                    func_name=FuncName("object_rest"),
                     args=(val_reg, *key_regs),
                 ),
                 node=rest_child,
@@ -149,7 +150,7 @@ def _lower_array_destructure(
             ctx.emit_inst(
                 CallFunction(
                     result_reg=rest_reg,
-                    func_name="slice",
+                    func_name=FuncName("slice"),
                     args=(val_reg, start_reg),
                 ),
                 node=child,
