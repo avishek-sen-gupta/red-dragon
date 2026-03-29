@@ -7,6 +7,7 @@ import pytest
 from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
+from interpreter.vm.vm_types import Pointer
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
@@ -217,7 +218,10 @@ let inner = opt.as_ref().unwrap();
 """,
             max_steps=500,
         )
-        assert local_vars.get(VarName("inner")) is not None
+        inner = local_vars.get(VarName("inner"))
+        assert isinstance(
+            inner, Pointer
+        ), f"expected Pointer, got {type(inner).__name__}"
 
 
 class TestRustImplMethodReturn:
