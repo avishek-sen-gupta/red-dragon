@@ -21,7 +21,7 @@ from interpreter.interprocedural.types import (
     ReturnEndpoint,
     VariableEndpoint,
 )
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 from interpreter.interprocedural.summaries import (
     build_summary,
     extract_sub_cfg,
@@ -30,7 +30,7 @@ from interpreter.interprocedural.summaries import (
 
 def _inst(
     opcode: Opcode,
-    result_reg=None,
+    result_reg=NO_REGISTER,
     operands=None,
     label: CodeLabel = NO_LABEL,
     branch_targets: list[CodeLabel] = [],
