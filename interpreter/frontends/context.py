@@ -242,7 +242,9 @@ class TreeSitterEmitContext:
         maps class_label -> ClassRef(name, label, parents) for downstream consumers.
         """
         self.class_symbol_table[class_label] = ClassRef(
-            name=ClassName(class_name), label=class_label, parents=tuple(parents)
+            name=ClassName(class_name),
+            label=class_label,
+            parents=tuple(ClassName(p) for p in parents),
         )
         return self.emit_inst(
             Const(result_reg=result_reg, value=str(class_label)),

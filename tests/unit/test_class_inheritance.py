@@ -41,7 +41,9 @@ class TestConvertLLMClassRefs:
         _convert_llm_class_refs(instructions, table)
         assert instructions[0].operands[0] == "class_Dog_0"
         assert table["class_Dog_0"] == ClassRef(
-            name=ClassName("Dog"), label=CodeLabel("class_Dog_0"), parents=("Animal",)
+            name=ClassName("Dog"),
+            label=CodeLabel("class_Dog_0"),
+            parents=(ClassName("Animal"),),
         )
 
     def test_class_ref_with_multiple_parents(self):
@@ -50,7 +52,7 @@ class TestConvertLLMClassRefs:
         table: dict[str, ClassRef] = {}
         _convert_llm_class_refs(instructions, table)
         assert instructions[0].operands[0] == "class_C_0"
-        assert table["class_C_0"].parents == ("A", "B")
+        assert table["class_C_0"].parents == (ClassName("A"), ClassName("B"))
 
     def test_non_matching_operand_unchanged(self):
         inst = IRInstruction(opcode=Opcode.CONST, operands=["not a class ref"])
@@ -126,7 +128,7 @@ class TestRegistryClassParents:
             "class_Dog_2": ClassRef(
                 name=ClassName("Dog"),
                 label=CodeLabel("class_Dog_2"),
-                parents=("Animal",),
+                parents=(ClassName("Animal"),),
             ),
         }
         cfg = build_cfg(instructions)
@@ -144,10 +146,14 @@ class TestRegistryClassParents:
                 name=ClassName("A"), label=CodeLabel("class_A_0"), parents=()
             ),
             "class_B_1": ClassRef(
-                name=ClassName("B"), label=CodeLabel("class_B_1"), parents=("A",)
+                name=ClassName("B"),
+                label=CodeLabel("class_B_1"),
+                parents=(ClassName("A"),),
             ),
             "class_C_2": ClassRef(
-                name=ClassName("C"), label=CodeLabel("class_C_2"), parents=("B",)
+                name=ClassName("C"),
+                label=CodeLabel("class_C_2"),
+                parents=(ClassName("B"),),
             ),
         }
         cfg = build_cfg(instructions)
