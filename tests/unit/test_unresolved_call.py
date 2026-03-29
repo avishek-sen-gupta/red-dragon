@@ -24,12 +24,13 @@ from interpreter.vm.vm_types import (
     SymbolicValue,
     VMState,
 )
+from interpreter.func_name import FuncName
 
 
 def _make_vm() -> VMState:
     """Create a minimal VMState with one stack frame."""
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="test"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("test")))
     return vm
 
 

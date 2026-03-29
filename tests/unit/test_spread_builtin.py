@@ -12,6 +12,7 @@ from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import scalar
 from interpreter.constants import TypeName
 from interpreter.register import Register
+from interpreter.func_name import FuncName
 
 
 class TestResolveCallArgs:
@@ -29,7 +30,7 @@ class TestResolveCallArgs:
         ptr = Pointer(base=Address("arr_0"), offset=0)
         vm.call_stack.append(
             StackFrame(
-                function_name="test",
+                function_name=FuncName("test"),
                 registers={Register("%arr"): typed_from_runtime(ptr)},
             )
         )
@@ -40,7 +41,7 @@ class TestResolveCallArgs:
         vm = VMState()
         vm.call_stack.append(
             StackFrame(
-                function_name="test",
+                function_name=FuncName("test"),
                 registers={
                     Register("%a"): typed_from_runtime(1),
                     Register("%b"): typed_from_runtime(2),

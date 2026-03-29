@@ -11,11 +11,12 @@ _CTX = _default_handler_context()
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame, StateUpdate
+from interpreter.func_name import FuncName
 
 
 def _make_vm() -> VMState:
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<main>"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
     return vm
 
 

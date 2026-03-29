@@ -12,6 +12,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import typed_from_runtime, unwrap
 from interpreter.vm.vm import VMState, _is_symbolic, apply_update
 from interpreter.vm.vm_types import HeapObject, StackFrame, StateUpdate
+from interpreter.func_name import FuncName
 from interpreter.vm.executor import (
     LocalExecutor,
     HandlerContext,
@@ -24,7 +25,7 @@ from interpreter.register import Register
 
 def _make_vm() -> VMState:
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<main>"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
     return vm
 
 

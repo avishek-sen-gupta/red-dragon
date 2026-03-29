@@ -11,6 +11,7 @@ from interpreter.instructions import InstructionBase
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame
+from interpreter.func_name import FuncName
 from interpreter.vm.executor import (
     LocalExecutor,
     HandlerContext,
@@ -51,7 +52,9 @@ from interpreter.register import Register
 def _execute_ir(instructions: list[InstructionBase], registers: dict[str, Any]) -> Any:
     """Execute straight-line IR and return the RETURN value."""
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="test", registers=dict(registers)))
+    vm.call_stack.append(
+        StackFrame(function_name=FuncName("test"), registers=dict(registers))
+    )
     ctx = _default_handler_context()
 
     for inst in instructions:

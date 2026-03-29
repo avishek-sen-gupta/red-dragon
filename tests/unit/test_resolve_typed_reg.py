@@ -11,12 +11,13 @@ from interpreter.types.coercion.identity_conversion_rules import IdentityConvers
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.vm.vm import VMState, _resolve_typed_reg, runtime_type_name
 from interpreter.vm.vm_types import StackFrame
+from interpreter.func_name import FuncName
 from interpreter.register import Register
 
 
 def _make_vm() -> VMState:
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<main>"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
     return vm
 
 

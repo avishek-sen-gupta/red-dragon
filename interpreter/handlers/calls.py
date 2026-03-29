@@ -183,7 +183,7 @@ def _try_class_constructor_call(
         StateUpdate(
             register_writes={inst.result_reg: ptr_tv},
             call_push=StackFramePush(
-                function_name=f"{class_name}.__init__",
+                function_name=FuncName(f"{class_name}.__init__"),
                 return_label=current_label,
                 is_ctor=True,
             ),
@@ -246,7 +246,7 @@ def _try_user_function_call(
     return ExecutionResult.success(
         StateUpdate(
             call_push=StackFramePush(
-                function_name=str(fname),
+                function_name=fname,
                 return_label=current_label,
                 closure_env_id=closure_env_id,
                 captured_var_names=captured_var_names,
@@ -598,7 +598,7 @@ def _handle_call_method(
     return ExecutionResult.success(
         StateUpdate(
             call_push=StackFramePush(
-                function_name=f"{type_hint}.{method_name}",
+                function_name=FuncName(f"{type_hint}.{method_name}"),
                 return_label=ctx.current_label,
             ),
             next_label=func_label,

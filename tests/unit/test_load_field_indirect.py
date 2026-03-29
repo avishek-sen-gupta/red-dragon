@@ -36,7 +36,7 @@ def _ctx(**overrides) -> HandlerContext:
 
 def _make_vm() -> VMState:
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<main>"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
     return vm
 
 
