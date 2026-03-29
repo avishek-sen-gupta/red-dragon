@@ -174,7 +174,7 @@ def _compile_indexed_element(
     ctx.emit_inst(
         LoadIndex(
             result_reg=elem_reg,
-            arr_reg=str(subject_reg),
+            arr_reg=subject_reg,
             index_reg=str(index),
         ),
     )
@@ -223,8 +223,8 @@ def _compile_after_star_element_test(
     ctx.emit_inst(
         LoadIndex(
             result_reg=elem_reg,
-            arr_reg=str(subject_reg),
-            index_reg=str(idx_reg),
+            arr_reg=subject_reg,
+            index_reg=idx_reg,
         ),
     )
     return compile_pattern_test(ctx, elem_reg, elem_pat)
@@ -253,8 +253,8 @@ def compile_pattern_test(
                 Binop(
                     result_reg=cmp_reg,
                     operator=resolve_binop("=="),
-                    left=str(subject_reg),
-                    right=str(const_reg),
+                    left=subject_reg,
+                    right=const_reg,
                 ),
             )
             return cmp_reg
@@ -269,7 +269,7 @@ def compile_pattern_test(
                 CallFunction(
                     result_reg=len_reg,
                     func_name=FuncName("len"),
-                    args=(str(subject_reg),),
+                    args=(subject_reg,),
                 ),
             )
 
@@ -319,7 +319,7 @@ def compile_pattern_test(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=str(subject_reg),
+                        obj_reg=subject_reg,
                         field_name=FieldName(str(key)),
                     ),
                 )
@@ -334,7 +334,7 @@ def compile_pattern_test(
                 CallFunction(
                     result_reg=isinstance_reg,
                     func_name=FuncName("isinstance"),
-                    args=(str(subject_reg), str(cls_reg)),
+                    args=(subject_reg, cls_reg),
                 ),
             )
             sub_results = [isinstance_reg]
@@ -343,7 +343,7 @@ def compile_pattern_test(
                 ctx.emit_inst(
                     LoadIndex(
                         result_reg=elem_reg,
-                        arr_reg=str(subject_reg),
+                        arr_reg=subject_reg,
                         index_reg=str(i),
                     ),
                 )
@@ -353,7 +353,7 @@ def compile_pattern_test(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=str(subject_reg),
+                        obj_reg=subject_reg,
                         field_name=FieldName(name),
                     ),
                 )
@@ -372,7 +372,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 LoadIndirect(
                     result_reg=deref_reg,
-                    ptr_reg=str(subject_reg),
+                    ptr_reg=subject_reg,
                 ),
             )
             return compile_pattern_test(ctx, deref_reg, inner)
@@ -395,7 +395,7 @@ def compile_pattern_test(
                 Binop(
                     result_reg=cmp_reg,
                     operator=resolve_binop("=="),
-                    left=str(subject_reg),
+                    left=subject_reg,
                     right=str(reg),
                 ),
             )
@@ -408,8 +408,8 @@ def compile_pattern_test(
                 Binop(
                     result_reg=cmp_reg,
                     operator=resolve_binop(op),
-                    left=str(subject_reg),
-                    right=str(const_reg),
+                    left=subject_reg,
+                    right=const_reg,
                 ),
             )
             return cmp_reg
@@ -421,8 +421,8 @@ def compile_pattern_test(
                 Binop(
                     result_reg=and_reg,
                     operator=resolve_binop("and"),
-                    left=str(left_reg),
-                    right=str(right_reg),
+                    left=left_reg,
+                    right=right_reg,
                 ),
             )
             return and_reg
@@ -433,7 +433,7 @@ def compile_pattern_test(
                 Unop(
                     result_reg=neg_reg,
                     operator=resolve_unop("not"),
-                    operand=str(inner_reg),
+                    operand=inner_reg,
                 ),
             )
             return neg_reg
@@ -459,8 +459,8 @@ def _compile_after_star_element_binding(
     ctx.emit_inst(
         LoadIndex(
             result_reg=elem_reg,
-            arr_reg=str(subject_reg),
-            index_reg=str(idx_reg),
+            arr_reg=subject_reg,
+            index_reg=idx_reg,
         ),
     )
     compile_pattern_bindings(ctx, elem_reg, elem_pat)
@@ -472,7 +472,7 @@ def compile_pattern_bindings(
     """Emit IR that binds variables from a matched pattern."""
     match pattern:
         case CapturePattern(name=name):
-            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=str(subject_reg)))
+            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))
         case LiteralPattern() | WildcardPattern():
             pass  # no bindings
         case RelationalPattern():
@@ -489,7 +489,7 @@ def compile_pattern_bindings(
                     ctx.emit_inst(
                         LoadIndex(
                             result_reg=elem_reg,
-                            arr_reg=str(subject_reg),
+                            arr_reg=subject_reg,
                             index_reg=str(i),
                         ),
                     )
@@ -502,7 +502,7 @@ def compile_pattern_bindings(
                     CallFunction(
                         result_reg=len_reg,
                         func_name=FuncName("len"),
-                        args=(str(subject_reg),),
+                        args=(subject_reg,),
                     ),
                 )
                 after_count = len(elems) - star_idx - 1
@@ -512,7 +512,7 @@ def compile_pattern_bindings(
                     ctx.emit_inst(
                         LoadIndex(
                             result_reg=elem_reg,
-                            arr_reg=str(subject_reg),
+                            arr_reg=subject_reg,
                             index_reg=str(i),
                         ),
                     )
@@ -535,14 +535,14 @@ def compile_pattern_bindings(
                             result_reg=slice_reg,
                             func_name=FuncName("slice"),
                             args=(
-                                str(subject_reg),
-                                str(start_reg),
-                                str(stop_reg),
+                                subject_reg,
+                                start_reg,
+                                stop_reg,
                             ),
                         ),
                     )
                     ctx.emit_inst(
-                        StoreVar(name=VarName(star_pat.name), value_reg=str(slice_reg)),
+                        StoreVar(name=VarName(star_pat.name), value_reg=slice_reg),
                     )
                 # After star: computed indices
                 for k, elem_pat in enumerate(elems[star_idx + 1 :]):
@@ -555,7 +555,7 @@ def compile_pattern_bindings(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=str(subject_reg),
+                        obj_reg=subject_reg,
                         field_name=FieldName(str(key)),
                     ),
                 )
@@ -566,7 +566,7 @@ def compile_pattern_bindings(
                 ctx.emit_inst(
                     LoadIndex(
                         result_reg=elem_reg,
-                        arr_reg=str(subject_reg),
+                        arr_reg=subject_reg,
                         index_reg=str(i),
                     ),
                 )
@@ -576,7 +576,7 @@ def compile_pattern_bindings(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=str(subject_reg),
+                        obj_reg=subject_reg,
                         field_name=FieldName(name),
                     ),
                 )
@@ -590,7 +590,7 @@ def compile_pattern_bindings(
                 next_label = ctx.fresh_label("or_next")
                 ctx.emit_inst(
                     BranchIf(
-                        cond_reg=str(test_reg),
+                        cond_reg=test_reg,
                         branch_targets=(bind_label, next_label),
                     ),
                 )
@@ -601,17 +601,17 @@ def compile_pattern_bindings(
             ctx.emit_inst(Label_(label=or_done))
         case AsPattern(pattern=inner, name=name):
             compile_pattern_bindings(ctx, subject_reg, inner)
-            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=str(subject_reg)))
+            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))
         case StarPattern(name=name):
             if name != "_":
-                ctx.emit_inst(StoreVar(name=VarName(name), value_reg=str(subject_reg)))
+                ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))
         case DerefPattern(inner=inner):
             # Dereference subject via LOAD_INDIRECT, then bind inner pattern
             deref_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 LoadIndirect(
                     result_reg=deref_reg,
-                    ptr_reg=str(subject_reg),
+                    ptr_reg=subject_reg,
                 ),
             )
             compile_pattern_bindings(ctx, deref_reg, inner)
@@ -667,8 +667,8 @@ def _compile_refutable_case(
             Binop(
                 result_reg=combined,
                 operator=resolve_binop("&&"),
-                left=str(test_reg),
-                right=str(guard_reg),
+                left=test_reg,
+                right=guard_reg,
             ),
         )
         test_reg = combined
@@ -677,7 +677,7 @@ def _compile_refutable_case(
     case_next = ctx.fresh_label("case_next")
     ctx.emit_inst(
         BranchIf(
-            cond_reg=str(test_reg),
+            cond_reg=test_reg,
             branch_targets=(case_true, case_next),
         ),
     )

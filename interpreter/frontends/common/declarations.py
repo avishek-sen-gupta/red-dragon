@@ -158,9 +158,9 @@ def emit_field_initializers(
         ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(this_var)))
         ctx.emit_inst(
             StoreField(
-                obj_reg=str(this_reg),
+                obj_reg=this_reg,
                 field_name=FieldName(field_name),
-                value_reg=str(val_reg),
+                value_reg=val_reg,
             ),
         )
 
@@ -236,7 +236,7 @@ def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit_inst(
                     DeclVar(
                         name=VarName(ctx.node_text(name_node)),
-                        value_reg=str(val_reg),
+                        value_reg=val_reg,
                     ),
                     node=node,
                 )
@@ -252,7 +252,7 @@ def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit_inst(
                     DeclVar(
                         name=VarName(ctx.node_text(name_node)),
-                        value_reg=str(val_reg),
+                        value_reg=val_reg,
                     ),
                     node=node,
                 )

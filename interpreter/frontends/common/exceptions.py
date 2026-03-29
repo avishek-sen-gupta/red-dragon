@@ -83,7 +83,7 @@ def lower_try_catch(
             ctx.emit_inst(
                 DeclVar(
                     name=VarName(resolved_var),
-                    value_reg=str(exc_reg),
+                    value_reg=exc_reg,
                 ),
                 node=node,
             )

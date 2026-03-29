@@ -33,8 +33,8 @@ def lower_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
         Binop(
             result_reg=result,
             operator=resolve_binop(op_text),
-            left=str(lhs_reg),
-            right=str(rhs_reg),
+            left=lhs_reg,
+            right=rhs_reg,
         ),
         node=node,
     )
