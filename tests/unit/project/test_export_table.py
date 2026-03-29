@@ -10,6 +10,7 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.refs.func_ref import FuncRef
 from interpreter.refs.class_ref import ClassRef
 from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 
 
 class TestBuildExportTable:
@@ -34,7 +35,7 @@ class TestBuildExportTable:
     def test_exports_classes(self):
         class_table = {
             "class_User_0": ClassRef(
-                name="User", label=CodeLabel("class_User_0"), parents=()
+                name=ClassName("User"), label=CodeLabel("class_User_0"), parents=()
             ),
         }
         et = build_export_table([], {}, class_table)
@@ -116,7 +117,7 @@ class TestBuildExportTable:
         """If a class is in class_symbol_table, its DECL_VAR is not also in variables."""
         class_table = {
             "class_User_0": ClassRef(
-                name="User", label=CodeLabel("class_User_0"), parents=()
+                name=ClassName("User"), label=CodeLabel("class_User_0"), parents=()
             ),
         }
         ir = [

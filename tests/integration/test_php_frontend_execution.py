@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.class_name import ClassName
 from interpreter.var_name import VarName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.constants import Language
@@ -78,7 +79,7 @@ class TestPHPEnumCaseExecution:
         """Enum declaration should store a class reference in local vars."""
         vars_ = _run_php("<?php enum Color { case Red; case Green; } ?>")
         assert isinstance(vars_[VarName("Color")], ClassRef)
-        assert vars_[VarName("Color")].name == "Color"
+        assert vars_[VarName("Color")].name == ClassName("Color")
 
 
 class TestPHPMemberAccessExecution:
