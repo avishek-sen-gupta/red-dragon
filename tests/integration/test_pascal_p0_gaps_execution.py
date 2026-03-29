@@ -42,6 +42,10 @@ end."""
         assert (
             local_vars.get(VarName("__foreach_idx_i"), 0) > 0
         ), "foreach should iterate at least once"
+        # accumulator s should also be incremented by the loop body
+        assert (
+            local_vars.get(VarName("s"), 0) > 0
+        ), "accumulator s should be incremented by loop body"
 
 
 class TestPascalGotoExecution:

@@ -427,6 +427,11 @@ class TestWholeProgramFixpoint:
 
         # Should have at least one summary for func__f
         assert any(key.function.label == "func__f" for key in summaries)
+        # Verify the summary references the correct function
+        key = next(k for k in summaries if k.function.label == "func__f")
+        summary = summaries[key]
+        assert summary.function.label == CodeLabel("func__f")
+        assert summary.function.params == ("x",)
 
     def test_empty_call_graph(self):
         """Empty call graph produces empty summaries."""
@@ -515,8 +520,9 @@ class TestBuildWholeProgramGraph:
         raw_graph, transitive_graph = build_whole_program_graph(summaries, call_graph)
 
         # Raw graph should contain the summary flows + propagated call-site edges
-        # The summaries themselves contribute flows
         assert len(raw_graph) > 0
+        # Transitive closure is at least as large as the raw graph
+        assert len(transitive_graph) >= len(raw_graph)
 
     def test_empty_summaries(self):
         """Empty summaries produce empty graphs."""
