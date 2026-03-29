@@ -270,13 +270,7 @@ def _handle_call_function(
 ) -> ExecutionResult:
     t = inst
     assert isinstance(t, CallFunction)
-    raw_func_name = t.func_name
-    # Extract base name for scope lookup: "Box[Node]" → "Box"
-    base_name = (
-        FuncName(str(raw_func_name).split("[")[0])
-        if "[" in raw_func_name
-        else raw_func_name
-    )
+    base_name = t.func_name
     arg_regs = list(t.args)
     args = _resolve_call_args(vm, arg_regs)
 
@@ -379,7 +373,7 @@ def _handle_call_function(
         ctx.current_label,
         overload_resolver=ctx.overload_resolver,
         type_env=ctx.type_env,
-        type_hint=parse_type(str(raw_func_name)) if raw_func_name else UNKNOWN,
+        type_hint=parse_type(str(base_name)) if base_name else UNKNOWN,
     )
     if ctor_result.handled:
         return ctor_result
