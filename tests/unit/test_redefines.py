@@ -81,7 +81,7 @@ class TestAlphanumericRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[8],
             ),
         )
@@ -107,7 +107,7 @@ class TestAlphanumericRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%year_bytes",
+                result_reg=Register("%year_bytes"),
                 operands=["%rgn", "%off0", 4],
             ),
         )
@@ -129,7 +129,7 @@ class TestAlphanumericRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[8],
             ),
         )
@@ -154,7 +154,7 @@ class TestAlphanumericRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%month_bytes",
+                result_reg=Register("%month_bytes"),
                 operands=["%rgn", "%off4", 2],
             ),
         )
@@ -179,7 +179,7 @@ class TestZonedDecimalRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[10],
             ),
         )
@@ -207,7 +207,7 @@ class TestZonedDecimalRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%read_bytes",
+                result_reg=Register("%read_bytes"),
                 operands=["%rgn", "%off0", 5],
             ),
         )
@@ -233,7 +233,7 @@ class TestMultiFieldRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[10],
             ),
         )
@@ -275,7 +275,7 @@ class TestMultiFieldRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%z_read",
+                result_reg=Register("%z_read"),
                 operands=["%rgn", "%off0", 5],
             ),
         )
@@ -291,7 +291,7 @@ class TestMultiFieldRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%a_read",
+                result_reg=Register("%a_read"),
                 operands=["%rgn", "%off5", 5],
             ),
         )
@@ -310,7 +310,7 @@ class TestMultiFieldRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[8],
             ),
         )
@@ -336,7 +336,7 @@ class TestMultiFieldRedefines:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%overlay",
+                result_reg=Register("%overlay"),
                 operands=["%rgn", "%off4", 4],
             ),
         )

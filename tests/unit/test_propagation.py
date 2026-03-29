@@ -26,6 +26,7 @@ from interpreter.interprocedural.propagation import (
     whole_program_fixpoint,
 )
 from interpreter.registry import FunctionRegistry
+from interpreter.register import Register
 
 
 def _inst(
@@ -340,27 +341,27 @@ def _build_two_function_cfg_and_registry():
     ir = [
         # main
         _inst(Opcode.LABEL, label=CodeLabel("func__main")),
-        _inst(Opcode.CONST, result_reg="%10", operands=["3"]),
-        _inst(Opcode.CONST, result_reg="%11", operands=["4"]),
+        _inst(Opcode.CONST, result_reg=Register("%10"), operands=["3"]),
+        _inst(Opcode.CONST, result_reg=Register("%11"), operands=["4"]),
         _inst(
             Opcode.CALL_FUNCTION,
-            result_reg="%12",
+            result_reg=Register("%12"),
             operands=["func__add", "%10", "%11"],
         ),
         _inst(Opcode.STORE_VAR, operands=["result", "%12"]),
-        _inst(Opcode.LOAD_VAR, result_reg="%13", operands=["result"]),
+        _inst(Opcode.LOAD_VAR, result_reg=Register("%13"), operands=["result"]),
         _inst(Opcode.RETURN, operands=["%13"]),
         # func__add
         _inst(Opcode.LABEL, label=CodeLabel("func__add")),
-        _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
+        _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:a"]),
         _inst(Opcode.STORE_VAR, operands=["a", "%0"]),
-        _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
+        _inst(Opcode.SYMBOLIC, result_reg=Register("%1"), operands=["param:b"]),
         _inst(Opcode.STORE_VAR, operands=["b", "%1"]),
-        _inst(Opcode.LOAD_VAR, result_reg="%2", operands=["a"]),
-        _inst(Opcode.LOAD_VAR, result_reg="%3", operands=["b"]),
-        _inst(Opcode.BINOP, result_reg="%4", operands=["+", "%2", "%3"]),
+        _inst(Opcode.LOAD_VAR, result_reg=Register("%2"), operands=["a"]),
+        _inst(Opcode.LOAD_VAR, result_reg=Register("%3"), operands=["b"]),
+        _inst(Opcode.BINOP, result_reg=Register("%4"), operands=["+", "%2", "%3"]),
         _inst(Opcode.STORE_VAR, operands=["result", "%4"]),
-        _inst(Opcode.LOAD_VAR, result_reg="%5", operands=["result"]),
+        _inst(Opcode.LOAD_VAR, result_reg=Register("%5"), operands=["result"]),
         _inst(Opcode.RETURN, operands=["%5"]),
     ]
     cfg = build_cfg(ir)
@@ -407,12 +408,12 @@ class TestWholeProgramFixpoint:
         """func__f calls func__f. Fixpoint converges without infinite loop."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__f")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%0"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["x"]),
             _inst(
                 Opcode.CALL_FUNCTION,
-                result_reg="%2",
+                result_reg=Register("%2"),
                 operands=["func__f", "%1"],
             ),
             _inst(Opcode.RETURN, operands=["%1"]),

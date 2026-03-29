@@ -12,6 +12,7 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame, StateUpdate
 from interpreter.func_name import FuncName
+from interpreter.register import Register
 
 
 def _make_vm() -> VMState:
@@ -113,13 +114,17 @@ class TestCFGBuilderResumeContinuation:
     def test_resume_continuation_terminates_block(self):
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("para_A")),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%r0", operands=["hello"]),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%r0"), operands=["hello"]
+            ),
             IRInstruction(
                 opcode=Opcode.RESUME_CONTINUATION,
                 operands=["para_A_end"],
             ),
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("para_B")),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%r1", operands=["world"]),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%r1"), operands=["world"]
+            ),
             IRInstruction(
                 opcode=Opcode.RESUME_CONTINUATION,
                 operands=["para_B_end"],

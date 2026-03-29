@@ -31,24 +31,40 @@ def _build_division_index_program() -> list[InstructionBase]:
     return [
         IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
         # Create array
-        IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr", operands=["int"]),
+        IRInstruction(
+            opcode=Opcode.NEW_ARRAY, result_reg=Register("%arr"), operands=["int"]
+        ),
         # Store 42 at index 0
-        IRInstruction(opcode=Opcode.CONST, result_reg="%zero", operands=["0"]),
-        IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
+        IRInstruction(
+            opcode=Opcode.CONST, result_reg=Register("%zero"), operands=["0"]
+        ),
+        IRInstruction(
+            opcode=Opcode.CONST, result_reg=Register("%val"), operands=["42"]
+        ),
         IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%zero", "%val"]),
         # Compute index: 4 / 2 = 2.0 (float in Python)
-        IRInstruction(opcode=Opcode.CONST, result_reg="%four", operands=["4"]),
-        IRInstruction(opcode=Opcode.CONST, result_reg="%two", operands=["2"]),
         IRInstruction(
-            opcode=Opcode.BINOP, result_reg="%idx", operands=["/", "%four", "%two"]
+            opcode=Opcode.CONST, result_reg=Register("%four"), operands=["4"]
+        ),
+        IRInstruction(opcode=Opcode.CONST, result_reg=Register("%two"), operands=["2"]),
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=Register("%idx"),
+            operands=["/", "%four", "%two"],
         ),
         # Store 99 at computed index
-        IRInstruction(opcode=Opcode.CONST, result_reg="%val2", operands=["99"]),
+        IRInstruction(
+            opcode=Opcode.CONST, result_reg=Register("%val2"), operands=["99"]
+        ),
         IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val2"]),
         # Load from int literal 2 — should find value 99
-        IRInstruction(opcode=Opcode.CONST, result_reg="%two_i", operands=["2"]),
         IRInstruction(
-            opcode=Opcode.LOAD_INDEX, result_reg="%result", operands=["%arr", "%two_i"]
+            opcode=Opcode.CONST, result_reg=Register("%two_i"), operands=["2"]
+        ),
+        IRInstruction(
+            opcode=Opcode.LOAD_INDEX,
+            result_reg=Register("%result"),
+            operands=["%arr", "%two_i"],
         ),
         # Store result in variable for inspection
         IRInstruction(opcode=Opcode.STORE_VAR, operands=["result", "%result"]),

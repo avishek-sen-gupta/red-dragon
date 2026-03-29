@@ -94,26 +94,28 @@ class TestCallUnknownResolution:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("func_add_0")),
             IRInstruction(
                 opcode=Opcode.SYMBOLIC,
-                result_reg="%0",
+                result_reg=Register("%0"),
                 operands=["param:a"],
             ),
             IRInstruction(
                 opcode=Opcode.SYMBOLIC,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["param:b"],
             ),
             IRInstruction(opcode=Opcode.RETURN, operands=["%2"]),
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_add_0")),
             IRInstruction(
                 opcode=Opcode.CONST,
-                result_reg="%3",
+                result_reg=Register("%3"),
                 operands=["func_add_0"],
             ),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%3"]),
-            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%4", operands=["add"]),
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%4"), operands=["add"]
+            ),
             IRInstruction(
                 opcode=Opcode.CALL_UNKNOWN,
-                result_reg="%5",
+                result_reg=Register("%5"),
                 operands=["%4", "%6", "%7"],
             ),
         ]
@@ -145,13 +147,21 @@ class TestStoreLoadIndex:
     def test_store_load_index(self):
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%0"),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"]),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%2", operands=["0"]),
-            IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%0", "%2", "%1"]),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%3", operands=["1"]),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg=Register("%0")),
             IRInstruction(
-                opcode=Opcode.LOAD_INDEX, result_reg="%4", operands=["%0", "%3"]
+                opcode=Opcode.CONST, result_reg=Register("%1"), operands=["42"]
+            ),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%2"), operands=["0"]
+            ),
+            IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%0", "%2", "%1"]),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%3"), operands=["1"]
+            ),
+            IRInstruction(
+                opcode=Opcode.LOAD_INDEX,
+                result_reg=Register("%4"),
+                operands=["%0", "%3"],
             ),
         ]
 
@@ -164,14 +174,22 @@ class TestStoreLoadIndex:
     def test_store_load_index_last_write_wins(self):
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%0"),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"]),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg=Register("%0")),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%1"), operands=["42"]
+            ),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%idx"), operands=["0"]
+            ),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%0", "%idx", "%1"]),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%2", operands=['"hello"']),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%2"), operands=['"hello"']
+            ),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%0", "%idx", "%2"]),
             IRInstruction(
-                opcode=Opcode.LOAD_INDEX, result_reg="%3", operands=["%0", "%idx"]
+                opcode=Opcode.LOAD_INDEX,
+                result_reg=Register("%3"),
+                operands=["%0", "%idx"],
             ),
         ]
 
@@ -187,9 +205,13 @@ class TestArrayElementTypePromotion:
         """NEW_ARRAY + STORE_INDEX with Int value → register type is Array[Int]."""
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg=Register("%arr")),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%val"), operands=["42"]
+            ),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%idx"), operands=["0"]
+            ),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
         ]
         env = infer_types(instructions, _resolver())
@@ -199,9 +221,13 @@ class TestArrayElementTypePromotion:
         """STORE_VAR of an array with Int elements → var type is Array[Int]."""
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg=Register("%arr")),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%val"), operands=["42"]
+            ),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%idx"), operands=["0"]
+            ),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["nums", "%arr"]),
         ]
@@ -212,9 +238,13 @@ class TestArrayElementTypePromotion:
         """STORE_VAR of an array with String elements → var type is Array[String]."""
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=['"hello"']),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg=Register("%arr")),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%val"), operands=['"hello"']
+            ),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%idx"), operands=["0"]
+            ),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["names", "%arr"]),
         ]
@@ -225,18 +255,28 @@ class TestArrayElementTypePromotion:
         """Array element types propagate through STORE_VAR → LOAD_VAR → LOAD_INDEX."""
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg=Register("%arr")),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%val"), operands=["42"]
+            ),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%idx"), operands=["0"]
+            ),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["nums", "%arr"]),
             # Load the variable into a new register
             IRInstruction(
-                opcode=Opcode.LOAD_VAR, result_reg="%loaded", operands=["nums"]
+                opcode=Opcode.LOAD_VAR,
+                result_reg=Register("%loaded"),
+                operands=["nums"],
             ),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%i", operands=["0"]),
             IRInstruction(
-                opcode=Opcode.LOAD_INDEX, result_reg="%elem", operands=["%loaded", "%i"]
+                opcode=Opcode.CONST, result_reg=Register("%i"), operands=["0"]
+            ),
+            IRInstruction(
+                opcode=Opcode.LOAD_INDEX,
+                result_reg=Register("%elem"),
+                operands=["%loaded", "%i"],
             ),
         ]
         env = infer_types(instructions, _resolver())
@@ -249,7 +289,9 @@ class TestArrayElementTypePromotion:
         )
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["obj"]),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%val"), operands=["obj"]
+            ),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["items", "%val"]),
         ]
         env = infer_types(instructions, _resolver(), type_env_builder=builder)

@@ -13,6 +13,7 @@ from interpreter.project.linker import (
 )
 from interpreter.constants import Language
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.register import Register
 
 # ── module_prefix ────────────────────────────────────────────────
 
@@ -90,15 +91,25 @@ class TestMaxRegisterNumber:
         assert max_register_number(()) == -1
 
     def test_single_instruction(self):
-        ir = (IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["42"]),)
+        ir = (
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%0"), operands=["42"]
+            ),
+        )
         assert max_register_number(ir) == 0
 
     def test_multiple_instructions(self):
         ir = (
-            IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["42"]),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%5", operands=["99"]),
             IRInstruction(
-                opcode=Opcode.BINOP, result_reg="%3", operands=["+", "%0", "%5"]
+                opcode=Opcode.CONST, result_reg=Register("%0"), operands=["42"]
+            ),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%5"), operands=["99"]
+            ),
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=Register("%3"),
+                operands=["+", "%0", "%5"],
             ),
         )
         assert max_register_number(ir) == 5

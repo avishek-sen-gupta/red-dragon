@@ -79,7 +79,7 @@ class TestCallFunctionHeapArrayIndexing:
             vm,
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%out",
+                result_reg=Register("%out"),
                 operands=["arr", "%idx"],
             ),
         )
@@ -94,7 +94,7 @@ class TestCallFunctionHeapArrayIndexing:
             vm,
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%out",
+                result_reg=Register("%out"),
                 operands=["arr", "%idx"],
             ),
         )
@@ -109,7 +109,7 @@ class TestCallFunctionHeapArrayIndexing:
             vm,
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%out",
+                result_reg=Register("%out"),
                 operands=["arr", "%idx"],
             ),
         )
@@ -127,7 +127,7 @@ class TestCallFunctionHeapArrayIndexing:
             vm,
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%out",
+                result_reg=Register("%out"),
                 operands=["arr", "%idx"],
             ),
         )
@@ -149,7 +149,7 @@ class TestCallFunctionNativeStringIndexing:
             vm,
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%out",
+                result_reg=Register("%out"),
                 operands=["s", "%idx"],
             ),
         )

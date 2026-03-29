@@ -28,7 +28,7 @@ def _build_call_function_ir(func_name: str, *arg_literals) -> list[InstructionBa
     instructions.append(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=[func_name, *arg_regs],
         )
     )
@@ -99,28 +99,32 @@ class TestExecutorIOProviderDispatch:
         instructions = [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))]
 
         instructions.append(
-            IRInstruction(opcode=Opcode.CONST, result_reg="%f", operands=["MY-FILE"])
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%f"), operands=["MY-FILE"]
+            )
         )
         instructions.append(
-            IRInstruction(opcode=Opcode.CONST, result_reg="%m", operands=["INPUT"])
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%m"), operands=["INPUT"]
+            )
         )
         instructions.append(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%r1",
+                result_reg=Register("%r1"),
                 operands=["__cobol_open_file", "%f", "%m"],
             )
         )
         instructions.append(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%r2",
+                result_reg=Register("%r2"),
                 operands=["__cobol_close_file", "%f"],
             )
         )
 
         instructions.append(
-            IRInstruction(opcode=Opcode.CONST, result_reg="%z", operands=[0])
+            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%z"), operands=[0])
         )
         instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=["%z"]))
 

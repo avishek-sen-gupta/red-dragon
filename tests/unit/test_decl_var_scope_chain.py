@@ -164,7 +164,9 @@ class TestImplicitThisFieldResolution:
         vm = self._make_vm_with_this({"count": 42})
         _execute(
             vm,
-            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["count"]),
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%0"), operands=["count"]
+            ),
             field_fallback=self.FALLBACK,
         )
         assert unwrap(vm.current_frame.registers[Register("%0")]) == 42
@@ -176,7 +178,9 @@ class TestImplicitThisFieldResolution:
         _execute(vm, IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%v"]))
         _execute(
             vm,
-            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["x"]),
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%0"), operands=["x"]
+            ),
             field_fallback=self.FALLBACK,
         )
         assert unwrap(vm.current_frame.registers[Register("%0")]) == 99
@@ -187,7 +191,7 @@ class TestImplicitThisFieldResolution:
         _execute(
             vm,
             IRInstruction(
-                opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["missing"]
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%0"), operands=["missing"]
             ),
             field_fallback=self.FALLBACK,
         )
@@ -200,7 +204,7 @@ class TestImplicitThisFieldResolution:
         _execute(
             vm,
             IRInstruction(
-                opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["missing"]
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%0"), operands=["missing"]
             ),
             field_fallback=self.FALLBACK,
         )
@@ -212,7 +216,9 @@ class TestImplicitThisFieldResolution:
         vm = self._make_vm_with_this({"count": 42})
         _execute(
             vm,
-            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["count"]),
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%0"), operands=["count"]
+            ),
             # No field_fallback — uses default NoFieldFallback
         )
         val = vm.current_frame.registers[Register("%0")].value

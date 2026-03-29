@@ -45,7 +45,7 @@ def _build_callable_field_vm():
         IRInstruction(
             opcode=Opcode.RETURN,
             operands=["%param_self", "%param_x"],
-            result_reg="%ret",
+            result_reg=Register("%ret"),
         ),
     ]
     cfg = build_cfg(instructions)
@@ -83,7 +83,7 @@ class TestHeapFieldMethodCall:
         vm.current_frame.registers[Register("%arg")] = typed_from_runtime(42)
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%obj", "greet", "%obj", "%arg"],
         )
         result = LocalExecutor.execute(
@@ -104,7 +104,7 @@ class TestHeapFieldMethodCall:
         )
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%obj", "greet", "%obj"],
         )
         result = LocalExecutor.execute(
@@ -121,7 +121,7 @@ class TestHeapFieldMethodCall:
         vm, cfg, registry = _build_callable_field_vm()
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%obj", "nonexistent", "%obj"],
         )
         result = LocalExecutor.execute(
