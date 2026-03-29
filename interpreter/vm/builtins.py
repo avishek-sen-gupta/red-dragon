@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.address import Address
 from interpreter.constants import ARR_ADDR_PREFIX, TypeName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.func_name import FuncName
@@ -30,8 +31,8 @@ def _builtin_len(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         return BuiltinResult(value=_UNCOMPUTABLE)
     val = args[0].value
     addr = _heap_addr(val)
-    if addr and addr in vm.heap:
-        fields = vm.heap[addr].fields
+    if addr and vm.heap_contains(addr):
+        fields = vm.heap_get(addr).fields
         if FieldName("length", FieldKind.SPECIAL) in fields:
             return BuiltinResult(
                 value=fields[FieldName("length", FieldKind.SPECIAL)].value
@@ -128,11 +129,11 @@ def _builtin_keys(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         return BuiltinResult(value=_UNCOMPUTABLE)
     val = args[0].value
     addr = _heap_addr(val)
-    if not addr or addr not in vm.heap:
+    if not addr or not vm.heap_contains(addr):
         return BuiltinResult(value=_UNCOMPUTABLE)
     field_names = [
         str(k)
-        for k in vm.heap[addr].fields
+        for k in vm.heap_get(addr).fields
         if k != FieldName("length", FieldKind.SPECIAL)
     ]
     return _builtin_array_of(field_names, vm)
@@ -183,8 +184,8 @@ def _builtin_slice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         return _builtin_array_of(list(collection[py_slice]), vm)
     # Heap-backed array (check before string — heap addresses are strings too)
     addr = _heap_addr(collection)
-    if addr and addr in vm.heap:
-        return _slice_heap_array(vm.heap[addr], py_slice, vm)
+    if addr and vm.heap_contains(addr):
+        return _slice_heap_array(vm.heap_get(addr), py_slice, vm)
     # Native string
     if isinstance(collection, str):
         return BuiltinResult(value=collection[py_slice])
@@ -225,9 +226,9 @@ def _builtin_clone(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     if not args:
         return BuiltinResult(value=_UNCOMPUTABLE)
     addr = _heap_addr(args[0].value)
-    if not addr or addr not in vm.heap:
+    if not addr or not vm.heap_contains(addr):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    source = vm.heap[addr]
+    source = vm.heap_get(addr)
     clone_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
     hint = source.type_hint if source.type_hint else scalar("Object")
@@ -251,9 +252,9 @@ def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     obj_val = args[0].value
     excluded_keys = {FieldName(str(a.value)) for a in args[1:]}
     addr = _heap_addr(obj_val)
-    if not addr or addr not in vm.heap:
+    if not addr or not vm.heap_contains(addr):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    source_fields = vm.heap[addr].fields
+    source_fields = vm.heap_get(addr).fields
     rest_fields = {
         k: v
         for k, v in source_fields.items()
@@ -320,10 +321,10 @@ def _builtin_isinstance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     class_name = str(args[1].value)
     # Try heap object first
     addr = _heap_addr(obj_val)
-    if addr and addr in vm.heap:
+    if addr and vm.heap_contains(addr):
         from interpreter.types.type_expr import ScalarType
 
-        type_hint = vm.heap[addr].type_hint
+        type_hint = vm.heap_get(addr).type_hint
         matches = isinstance(type_hint, ScalarType) and type_hint.name == class_name
         return BuiltinResult(value=typed(matches, scalar("Boolean")))
     # Fall back to primitive type check
