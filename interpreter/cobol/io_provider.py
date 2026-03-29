@@ -26,15 +26,15 @@ logger = logging.getLogger(__name__)
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
 # Dispatch table mapping __cobol_* function names to provider method names.
-_COBOL_IO_DISPATCH: dict[str, str] = {
-    "__cobol_accept": "_accept",
-    "__cobol_open_file": "_open_file",
-    "__cobol_close_file": "_close_file",
-    "__cobol_read_record": "_read_record",
-    "__cobol_write_record": "_write_record",
-    "__cobol_rewrite_record": "_rewrite_record",
-    "__cobol_start_file": "_start_file",
-    "__cobol_delete_record": "_delete_record",
+_COBOL_IO_DISPATCH: dict[FuncName, str] = {
+    FuncName("__cobol_accept"): "_accept",
+    FuncName("__cobol_open_file"): "_open_file",
+    FuncName("__cobol_close_file"): "_close_file",
+    FuncName("__cobol_read_record"): "_read_record",
+    FuncName("__cobol_write_record"): "_write_record",
+    FuncName("__cobol_rewrite_record"): "_rewrite_record",
+    FuncName("__cobol_start_file"): "_start_file",
+    FuncName("__cobol_delete_record"): "_delete_record",
 }
 
 
@@ -47,16 +47,14 @@ class CobolIOProvider(ABC):
     """
 
     def dispatch(self, name: FuncName) -> str | None:
-        return _COBOL_IO_DISPATCH.get(str(name))
+        return _COBOL_IO_DISPATCH.get(name)
 
-    def handle_call(self, func_name: str, args: list[TypedValue]) -> Any:
+    def handle_call(self, func_name: FuncName, args: list[TypedValue]) -> Any:
         """Route a __cobol_* call to the appropriate method.
 
         Returns a concrete value or UNCOMPUTABLE if unhandled.
         """
-        method_name = self.dispatch(
-            func_name if isinstance(func_name, FuncName) else FuncName(func_name)
-        )
+        method_name = self.dispatch(func_name)
         if method_name is None:
             logger.debug("CobolIOProvider: unknown func %s", func_name)
             return _UNCOMPUTABLE
