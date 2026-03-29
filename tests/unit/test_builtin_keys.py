@@ -49,7 +49,7 @@ class TestBuiltinKeysRegistered:
 class TestBuiltinKeysProducesConcreteArray:
     def test_keys_of_two_field_object(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         vm.heap_set(
             Address("obj_0"),
             HeapObject(
@@ -75,7 +75,7 @@ class TestBuiltinKeysProducesConcreteArray:
 
     def test_keys_of_empty_object(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("object"), fields={}))
         result = Builtins.TABLE[FuncName("keys")]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
@@ -90,7 +90,7 @@ class TestBuiltinKeysProducesConcreteArray:
     def test_keys_excludes_length_field(self):
         """Arrays have a 'length' field — keys() should exclude it."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         vm.heap_set(
             Address("arr_0"),
             HeapObject(
@@ -118,7 +118,7 @@ class TestBuiltinKeysProducesConcreteArray:
     def test_len_of_keys_result(self):
         """len() on the keys array should return correct count."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         vm.heap_set(
             Address("obj_0"),
             HeapObject(

@@ -27,6 +27,7 @@ from interpreter.vm.vm_types import (
     StateUpdate,
 )
 from interpreter.vm.vm import apply_update
+from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 from interpreter.register import Register
 from interpreter.address import Address
@@ -41,7 +42,7 @@ _CTX = _default_handler_context()
 
 
 def _make_vm() -> VMState:
-    frame = StackFrame(function_name="test")
+    frame = StackFrame(function_name=FuncName("test"))
     return VMState(call_stack=[frame])
 
 

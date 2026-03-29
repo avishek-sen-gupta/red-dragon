@@ -21,11 +21,12 @@ from interpreter.vm.executor import (
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.register import Register
+from interpreter.func_name import FuncName
 
 
 def _make_vm() -> VMState:
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<main>"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
     return vm
 
 
@@ -46,7 +47,7 @@ def _set_reg(vm, reg, val):
 
 
 def _push_frame(vm, name="inner"):
-    vm.call_stack.append(StackFrame(function_name=name))
+    vm.call_stack.append(StackFrame(function_name=FuncName(name)))
 
 
 class TestDeclVar:
@@ -151,7 +152,7 @@ class TestImplicitThisFieldResolution:
     def _make_vm_with_this(self, fields: dict) -> VMState:
         """Create a VM with a heap object and 'this' pointing to it."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="<main>"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
         addr = Address("obj_0")
         heap_fields = {FieldName(k): typed(v, UNKNOWN) for k, v in fields.items()}
         vm.heap_set(addr, HeapObject(fields=heap_fields))

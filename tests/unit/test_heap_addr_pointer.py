@@ -13,6 +13,7 @@ _CTX = _default_handler_context()
 from interpreter.types.typed_value import typed
 from interpreter.types.type_expr import pointer, scalar
 from interpreter.constants import TypeName
+from interpreter.func_name import FuncName
 
 
 class TestHeapAddrPointer:
@@ -46,7 +47,7 @@ class TestAddressOfPointerGuard:
         # Pointers with obj_ base (from NEW_OBJECT) are treated as identity.
         existing_ptr = Pointer(base=Address("mem_0"), offset=0)
         frame = StackFrame(
-            function_name="main",
+            function_name=FuncName("main"),
             local_vars={
                 VarName("ptr"): typed(existing_ptr, scalar(TypeName.POINTER)),
             },
@@ -92,7 +93,7 @@ class TestAddressOfPointerGuard:
         # should return identity — the array IS the heap object.
         arr_ptr = Pointer(base=Address("arr_0"), offset=0)
         frame = StackFrame(
-            function_name="main",
+            function_name=FuncName("main"),
             local_vars={
                 VarName("arr"): typed(arr_ptr, pointer(scalar("Array"))),
             },
@@ -128,7 +129,7 @@ class TestAddressOfPointerGuard:
         # should return identity — the struct IS the heap object.
         struct_ptr = Pointer(base=Address("obj_0"), offset=0)
         frame = StackFrame(
-            function_name="main",
+            function_name=FuncName("main"),
             local_vars={
                 VarName("pt"): typed(struct_ptr, pointer(scalar("Point"))),
             },

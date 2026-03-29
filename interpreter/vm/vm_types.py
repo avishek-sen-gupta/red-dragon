@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from interpreter.address import Address
 from interpreter.constants import TypeName
 from interpreter.field_name import FieldName, FieldKind
+from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 from interpreter.register import Register, NO_REGISTER
 from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
@@ -94,7 +95,7 @@ class ExceptionHandler:
 
 @dataclass
 class StackFrame:
-    function_name: str
+    function_name: FuncName
     registers: dict[Register, TypedValue] = field(default_factory=dict)
     local_vars: dict[VarName, TypedValue] = field(default_factory=dict)
     return_label: CodeLabel | None = None
@@ -109,7 +110,7 @@ class StackFrame:
 
     def to_dict(self) -> dict:
         d: dict[str, Any] = {
-            "function_name": self.function_name,
+            "function_name": str(self.function_name),
             "registers": {
                 str(k): _serialize_value(v) for k, v in self.registers.items()
             },
@@ -273,7 +274,7 @@ class BuiltinResult:
 
 
 class StackFramePush(BaseModel):
-    function_name: str
+    function_name: FuncName
     return_label: CodeLabel | None = None
     closure_env_id: str = ""
     captured_var_names: list[VarName] = []
