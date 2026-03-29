@@ -3,6 +3,7 @@
 import logging
 
 from interpreter.field_name import FieldName, FieldKind
+from interpreter.func_name import FuncName
 from interpreter.vm.builtins import (
     _builtin_print,
     _builtin_slice,
@@ -334,7 +335,7 @@ class TestMethodBuiltins:
                 }.items()
             },
         )
-        fn = Builtins.METHOD_TABLE["subList"]
+        fn = Builtins.METHOD_TABLE[FuncName("subList")]
         result = fn(
             typed_from_runtime(addr), [typed_from_runtime(1), typed_from_runtime(3)], vm
         )
@@ -347,7 +348,7 @@ class TestMethodBuiltins:
     def test_substring_delegates_to_slice(self):
         """substring should call slice(obj, start, stop) on strings."""
         vm = VMState()
-        fn = Builtins.METHOD_TABLE["substring"]
+        fn = Builtins.METHOD_TABLE[FuncName("substring")]
         result = fn(
             typed_from_runtime("hello"),
             [typed_from_runtime(1), typed_from_runtime(3)],
@@ -356,6 +357,6 @@ class TestMethodBuiltins:
         assert result.value == "el"
 
     def test_method_table_has_expected_entries(self):
-        assert "subList" in Builtins.METHOD_TABLE
-        assert "substring" in Builtins.METHOD_TABLE
-        assert "slice" in Builtins.METHOD_TABLE
+        assert FuncName("subList") in Builtins.METHOD_TABLE
+        assert FuncName("substring") in Builtins.METHOD_TABLE
+        assert FuncName("slice") in Builtins.METHOD_TABLE
