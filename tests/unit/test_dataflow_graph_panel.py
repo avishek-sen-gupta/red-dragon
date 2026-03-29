@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from interpreter.dataflow import Definition
+from interpreter.field_name import FieldName
 from interpreter.interprocedural.types import (
     FieldEndpoint,
     FunctionEntry,
@@ -89,7 +90,7 @@ class TestAnnotateEndpoint:
     def test_field_endpoint(self):
         base = VariableEndpoint(name="self", definition=NO_DEFINITION)
         loc = InstructionLocation(block_label=CodeLabel("b"), instruction_index=1)
-        ep = FieldEndpoint(base=base, field="name", location=loc)
+        ep = FieldEndpoint(base=base, field=FieldName("name"), location=loc)
         assert annotate_endpoint(ep, None) == "Field(self.name)"
 
 

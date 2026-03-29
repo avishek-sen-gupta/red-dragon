@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from interpreter.cfg import build_cfg
+from interpreter.field_name import FieldName
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import Definition
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
@@ -288,7 +289,7 @@ class TestBuildSummary:
         src, dst = field_flows[0]
         assert isinstance(src, VariableEndpoint)
         assert src.name == "val"
-        assert dst.field == "name"
+        assert dst.field == FieldName("name")
         assert dst.base.name == "obj"
 
     def test_field_read_to_return(self):
@@ -314,7 +315,7 @@ class TestBuildSummary:
         ]
         assert len(field_source_flows) >= 1
         src, dst = field_source_flows[0]
-        assert src.field == "name"
+        assert src.field == FieldName("name")
         assert src.base.name == "obj"
         assert isinstance(dst, ReturnEndpoint)
 
