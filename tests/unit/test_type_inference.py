@@ -760,7 +760,7 @@ class TestForwardReferenceResolution:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.get_func_signature("main").return_type == TypeName.INT
+        assert env.get_func_signature(FuncName("main")).return_type == TypeName.INT
 
     def test_forward_ref_store_var_propagates(self):
         """result = helper() where helper is defined later → var_types["result"] typed."""
@@ -831,9 +831,9 @@ class TestForwardReferenceResolution:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.get_func_signature("c").return_type == TypeName.FLOAT
-        assert env.get_func_signature("b").return_type == TypeName.FLOAT
-        assert env.get_func_signature("a").return_type == TypeName.FLOAT
+        assert env.get_func_signature(FuncName("c")).return_type == TypeName.FLOAT
+        assert env.get_func_signature(FuncName("b")).return_type == TypeName.FLOAT
+        assert env.get_func_signature(FuncName("a")).return_type == TypeName.FLOAT
 
     def test_no_forward_ref_converges_in_one_pass(self):
         """When all definitions precede calls, inference still works (no regression)."""
@@ -1161,8 +1161,8 @@ class TestReturnBackfill:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "double" in env.method_signatures.get(UNBOUND, {})
-        assert env.get_func_signature("double").return_type == TypeName.INT
+        assert FuncName("double") in env.method_signatures.get(UNBOUND, {})
+        assert env.get_func_signature(FuncName("double")).return_type == TypeName.INT
 
     def test_call_function_picks_up_backfilled_return_type(self):
         """CALL_FUNCTION picks up the backfilled return type from RETURN."""
@@ -1218,7 +1218,7 @@ class TestReturnBackfill:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # Float (from annotation) should NOT be overwritten by Int (from CONST 42)
-        assert env.get_func_signature("add").return_type == "Float"
+        assert env.get_func_signature(FuncName("add")).return_type == "Float"
 
     def test_return_with_untyped_register_does_not_backfill(self):
         """RETURN with an untyped register does not backfill."""
@@ -1240,7 +1240,7 @@ class TestReturnBackfill:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.get_func_signature("f").return_type == ""
+        assert env.get_func_signature(FuncName("f")).return_type == ""
 
 
 # ---------------------------------------------------------------------------
@@ -1670,8 +1670,8 @@ class TestFunctionSignatures:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "add" in env.method_signatures.get(UNBOUND, {})
-        sig = env.get_func_signature("add")
+        assert FuncName("add") in env.method_signatures.get(UNBOUND, {})
+        sig = env.get_func_signature(FuncName("add"))
         assert sig == FunctionSignature(
             params=(("a", "Int"), ("b", "Int")), return_type="Int"
         )
@@ -1697,8 +1697,8 @@ class TestFunctionSignatures:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "greet" in env.method_signatures.get(UNBOUND, {})
-        sig = env.get_func_signature("greet")
+        assert FuncName("greet") in env.method_signatures.get(UNBOUND, {})
+        sig = env.get_func_signature(FuncName("greet"))
         assert sig == FunctionSignature(params=(("name", ""),), return_type="")
 
     def test_no_internal_labels_in_signatures(self):
@@ -1729,7 +1729,7 @@ class TestFunctionSignatures:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         assert "func_add_0" not in env.method_signatures.get(UNBOUND, {})
-        assert "add" in env.method_signatures.get(UNBOUND, {})
+        assert FuncName("add") in env.method_signatures.get(UNBOUND, {})
 
     def test_function_with_no_params(self):
         """Function with no parameters → empty params tuple."""
@@ -1755,7 +1755,7 @@ class TestFunctionSignatures:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.get_func_signature("main") == FunctionSignature(
+        assert env.get_func_signature(FuncName("main")) == FunctionSignature(
             params=(), return_type="void"
         )
 
@@ -1810,10 +1810,10 @@ class TestFunctionSignatures:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.get_func_signature("add") == FunctionSignature(
+        assert env.get_func_signature(FuncName("add")) == FunctionSignature(
             params=(("a", "Int"), ("b", "Int")), return_type="Int"
         )
-        assert env.get_func_signature("greet") == FunctionSignature(
+        assert env.get_func_signature(FuncName("greet")) == FunctionSignature(
             params=(("name", "String"),), return_type="String"
         )
 
@@ -3117,7 +3117,7 @@ class TestMethodSignatures:
         )
         calc_type = scalar("Calc")
         assert calc_type in env.method_signatures
-        sig = env.get_func_signature("add", class_name=calc_type)
+        sig = env.get_func_signature(FuncName("add"), class_name=calc_type)
         assert sig.return_type == "Int"
         assert len(sig.params) == 3
         assert sig.kind is FunctionKind.INSTANCE
@@ -3174,7 +3174,7 @@ class TestMethodSignatures:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         calc_type = scalar("Calc")
-        sigs = env.method_signatures.get(calc_type, {}).get("add", [])
+        sigs = env.method_signatures.get(calc_type, {}).get(FuncName("add"), [])
         assert len(sigs) == 2
         assert len(sigs[0].params) == 3  # this, a, b
         assert len(sigs[1].params) == 4  # this, a, b, c
@@ -3223,8 +3223,8 @@ class TestMethodSignatures:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        foo_sig = env.get_func_signature("greet", class_name=scalar("Foo"))
-        bar_sig = env.get_func_signature("greet", class_name=scalar("Bar"))
+        foo_sig = env.get_func_signature(FuncName("greet"), class_name=scalar("Foo"))
+        bar_sig = env.get_func_signature(FuncName("greet"), class_name=scalar("Bar"))
         assert len(foo_sig.params) == 1  # just this
         assert len(bar_sig.params) == 2  # this, name
 
@@ -3247,7 +3247,7 @@ class TestMethodSignatures:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        sig = env.get_func_signature("f")
+        sig = env.get_func_signature(FuncName("f"))
         assert sig.return_type == "Int"
         assert sig.kind is FunctionKind.UNBOUND
 
@@ -3281,7 +3281,7 @@ class TestFunctionKindInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        sig = env.get_func_signature("add", class_name=scalar("M"))
+        sig = env.get_func_signature(FuncName("add"), class_name=scalar("M"))
         assert sig.kind is FunctionKind.STATIC
         assert sig.callable_params == sig.params  # no this to exclude
 
@@ -3310,7 +3310,7 @@ class TestFunctionKindInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        sig = env.get_func_signature("bark", class_name=scalar("Dog"))
+        sig = env.get_func_signature(FuncName("bark"), class_name=scalar("Dog"))
         assert sig.kind is FunctionKind.INSTANCE
         assert sig.callable_params == ()  # this excluded, no other params
 
@@ -3343,6 +3343,6 @@ class TestFunctionKindInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        sig = env.get_func_signature("greet", class_name=scalar("User"))
+        sig = env.get_func_signature(FuncName("greet"), class_name=scalar("User"))
         assert sig.kind is FunctionKind.INSTANCE
         assert sig.callable_params == (("msg", scalar("String")),)
