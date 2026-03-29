@@ -6,7 +6,7 @@ from interpreter.cfg import BasicBlock, CFG
 from interpreter.field_name import FieldName
 from interpreter.dataflow import Definition
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 from interpreter.interprocedural.types import (
     CallContext,
     CallGraph,
@@ -28,7 +28,7 @@ from interpreter.interprocedural.types import (
 
 def _make_inst(
     opcode: Opcode,
-    result_reg=None,
+    result_reg=NO_REGISTER,
     operands=None,
     label: CodeLabel = NO_LABEL,
     branch_targets: list[CodeLabel] = [],
