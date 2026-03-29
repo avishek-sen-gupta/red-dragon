@@ -139,8 +139,8 @@ let b = Box::new(n);
         )
         # Box::new creates a Box heap object containing the Node via field "0"
         b_ptr = local_vars[VarName("b")]
-        assert b_ptr.base in vm.heap
-        box_obj = vm.heap[b_ptr.base]
+        assert str(b_ptr.base) in vm.heap
+        box_obj = vm.heap[str(b_ptr.base)]
         from interpreter.types.type_expr import ScalarType
 
         assert box_obj.type_hint == ScalarType("Box")
@@ -158,11 +158,11 @@ class TestRustOptionExecution:
         vm, local_vars = _run_rust("let opt = Some(42);", max_steps=300)
         opt_ptr = local_vars.get(VarName("opt"))
         assert opt_ptr is not None
-        assert opt_ptr.base in vm.heap
-        assert FieldName("value") in vm.heap[opt_ptr.base].fields
+        assert str(opt_ptr.base) in vm.heap
+        assert FieldName("value") in vm.heap[str(opt_ptr.base)].fields
         from interpreter.types.typed_value import TypedValue
 
-        tv = vm.heap[opt_ptr.base].fields[FieldName("value")]
+        tv = vm.heap[str(opt_ptr.base)].fields[FieldName("value")]
         assert isinstance(tv, TypedValue)
         assert tv.value == 42
 
@@ -200,10 +200,10 @@ let inner = opt.unwrap();
         )
         # unwrap returns the Box object; auto-deref to 42 is a separate concern
         inner_ptr = local_vars[VarName("inner")]
-        assert inner_ptr.base in vm.heap
+        assert str(inner_ptr.base) in vm.heap
         from interpreter.types.type_expr import ScalarType
 
-        assert vm.heap[inner_ptr.base].type_hint == ScalarType("Box")
+        assert vm.heap[str(inner_ptr.base)].type_hint == ScalarType("Box")
 
     def test_as_ref_unwrap_chain(self):
         """opt.as_ref().unwrap() — the actual Rosetta pattern."""

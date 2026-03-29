@@ -72,7 +72,7 @@ class TestObjectRestBuiltinResult:
         result = _builtin_object_rest(
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
         )
-        assert result.value.value.base not in vm.heap
+        assert str(result.value.value.base) not in vm.heap
 
     def test_uncomputable_no_args_returns_builtin_result(self):
         vm = VMState()

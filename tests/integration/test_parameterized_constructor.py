@@ -24,8 +24,8 @@ let b = Box::new(n);
         }
         # Box::new creates a Box heap object
         b_ptr = locals_[VarName("b")]
-        assert b_ptr.base in vm.heap
-        box_obj = vm.heap[b_ptr.base]
+        assert str(b_ptr.base) in vm.heap
+        box_obj = vm.heap[str(b_ptr.base)]
         assert box_obj.type_hint == ScalarType("Box")
         # The Box stores the inner Node via field "0" (PROPERTY kind)
         assert FieldName("0") in box_obj.fields
@@ -44,7 +44,7 @@ let b = Box::new(n);
             for k, v in vm.call_stack[0].local_vars.items()
         }
         opt_ptr = locals_.get(VarName("opt"))
-        assert opt_ptr.base in vm.heap
-        opt_obj = vm.heap[opt_ptr.base]
+        assert str(opt_ptr.base) in vm.heap
+        opt_obj = vm.heap[str(opt_ptr.base)]
         assert opt_obj.type_hint == ScalarType("Option")
         assert FieldName("value") in opt_obj.fields
