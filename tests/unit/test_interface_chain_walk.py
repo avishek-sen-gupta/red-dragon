@@ -6,6 +6,7 @@ when the concrete class's class_method_types lacks the method.
 
 from __future__ import annotations
 
+from interpreter.func_name import FuncName
 from interpreter.instructions import CallMethod
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar, UNKNOWN
@@ -39,7 +40,7 @@ class TestInterfaceChainWalk:
         ctx = _InferenceContext(
             register_types={Register("%0"): scalar("Dog")},
             class_method_types={
-                scalar("Animal"): {"speak": scalar("String")},
+                scalar("Animal"): {FuncName("speak"): scalar("String")},
                 scalar("Dog"): {},  # Dog has no methods of its own
             },
             interface_implementations={"Dog": ("Animal",)},
@@ -53,8 +54,8 @@ class TestInterfaceChainWalk:
         ctx = _InferenceContext(
             register_types={Register("%0"): scalar("Dog")},
             class_method_types={
-                scalar("Animal"): {"speak": scalar("String")},
-                scalar("Dog"): {"speak": scalar("Int")},
+                scalar("Animal"): {FuncName("speak"): scalar("String")},
+                scalar("Dog"): {FuncName("speak"): scalar("Int")},
             },
             interface_implementations={"Dog": ("Animal",)},
         )
@@ -67,8 +68,8 @@ class TestInterfaceChainWalk:
         ctx = _InferenceContext(
             register_types={Register("%0"): scalar("Widget")},
             class_method_types={
-                scalar("Drawable"): {"draw": scalar("Void")},
-                scalar("Clickable"): {"draw": scalar("Bool")},
+                scalar("Drawable"): {FuncName("draw"): scalar("Void")},
+                scalar("Clickable"): {FuncName("draw"): scalar("Bool")},
                 scalar("Widget"): {},
             },
             interface_implementations={"Widget": ("Drawable", "Clickable")},
