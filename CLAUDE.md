@@ -166,12 +166,39 @@ Report findings only. Do not fix code during review — present findings and let
 - **Brainstorm collaboratively.** When thinking through approaches, present options and trade-offs to the user and actively incorporate their input before proceeding. Do not pick an approach and start implementing without discussion. The user's judgment on complexity/correctness trade-offs overrides the agent's default.
 - **Stop and consult when patching.** If an implementation requires more than one corrective patch (fix-on-fix), stop. The design is wrong. Re-brainstorm the approach with the user before adding more patches. Accumulating compensating transforms is a sign the underlying model doesn't match reality.
 
+## Code Search and Analysis Tools
+
+### ast-grep (structural code search)
+
+Use the `/ast-grep` skill for structural code searches instead of regex grep. ast-grep matches AST patterns and handles multi-line constructs, indentation variations, and nested expressions that regex misses.
+
+**When to use ast-grep:**
+- Searching for constructor/function call patterns (e.g., `FuncRef(name=$X)`, `DeclVar(name=$N, value_reg=$R)`)
+- Finding all call sites of a specific function with certain argument shapes
+- Migrating field types: finding all constructions that pass a specific field
+- Any search where the pattern spans multiple lines or has variable whitespace
+
+**When plain grep is sufficient:**
+- Simple keyword/string searches (`SELF_PARAM_NAMES`, `def _handle_const`)
+- Import statements
+- Constant definitions
+
+### code-review-graph (knowledge graph)
+
+Use the code-review-graph MCP tools before scanning files manually for codebase understanding:
+
+- `semantic_search_nodes_tool` — find classes, functions, or types by name or keyword
+- `query_graph_tool` — explore relationships: `callers_of`, `callees_of`, `imports_of`, `children_of`, `tests_for`, `inheritors_of`, `file_summary`
+- `get_impact_radius_tool` — understand blast radius before making changes
+- `get_review_context_tool` — token-efficient review context for PRs
+
+These save significant tokens by avoiding full codebase scans. Fall back to grep/glob/read only when the graph doesn't cover what you need.
+
 ## Python Introspection
 
 - Write temporary scripts to `/tmp/*.py` and execute with `poetry run python /tmp/script.py`.
 - Clean up temp files after use.
 - Do not use `python -c` with multiline strings.
-- Try to maximise use of `ast-grep` instead of plain grep when searching for code fragments.
 
 ## Talisman (Secret Detection)
 
@@ -189,7 +216,7 @@ Report findings only. Do not fix code during review — present findings and let
 
 ### Type propagation
 
-When replacing a primitive (`str`) with a domain type (`CodeLabel`) across a codebase:
+When replacing a primitive (`str`) with a domain type (`CodeLabel`) across a codebase, use `get_impact_radius_tool` to map blast radius before starting, and `ast-grep` to find all construction sites structurally:
 
 - **No coercion validators.** Do not add Pydantic `field_validator` or `__post_init__` hacks that auto-convert strings to the domain type. These mask call sites that should be explicitly updated. If Pydantic rejects a value, the caller is wrong — fix the caller.
 - **Push wrapping to the origin.** Wrap at the point the value is created (`fresh_label()`, JSON parse boundary, LLM response), not at every intermediate consumer. If a factory returns the domain type, downstream code should never need to re-wrap.
