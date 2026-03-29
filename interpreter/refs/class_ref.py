@@ -18,7 +18,7 @@ class ClassRef:
 
     name: ClassName  # ClassName("Dog"), ClassName("Counter")
     label: CodeLabel  # CodeLabel("class_Dog_0")
-    parents: tuple[str, ...]  # ("Animal",) or () for no parents
+    parents: tuple[ClassName, ...]  # (ClassName("Animal"),) or () for no parents
 
 
 NO_CLASS_REF = ClassRef(name=NO_CLASS_NAME, label=NO_LABEL, parents=())

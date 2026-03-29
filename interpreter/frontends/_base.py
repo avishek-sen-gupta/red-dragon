@@ -251,7 +251,9 @@ class BaseFrontend(Frontend):
         maps class_label -> ClassRef(name, label, parents) for downstream consumers.
         """
         self._class_symbol_table[class_label] = ClassRef(
-            name=ClassName(class_name), label=class_label, parents=tuple(parents)
+            name=ClassName(class_name),
+            label=class_label,
+            parents=tuple(ClassName(p) for p in parents),
         )
         return self._emit(
             Opcode.CONST,
