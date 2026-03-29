@@ -6,6 +6,7 @@ a symbolic value.
 """
 
 from interpreter.address import Address
+from interpreter.class_name import ClassName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.func_name import FuncName
 from interpreter.cfg import CFG
@@ -202,7 +203,9 @@ class TestFindMethodMissingRegistryPath:
             ],
         )
         registry = FunctionRegistry()
-        registry.class_methods["BoxType"] = {FuncName(METHOD_MISSING): [mm_label]}
+        registry.class_methods[ClassName("BoxType")] = {
+            FuncName(METHOD_MISSING): [mm_label]
+        }
         registry.func_params[mm_label] = ["self", "name"]
 
         inst = IRInstruction(
@@ -255,7 +258,7 @@ class TestFindMethodMissingRegistryPath:
         vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
 
         registry = FunctionRegistry()
-        registry.class_methods["DualBox"] = {
+        registry.class_methods[ClassName("DualBox")] = {
             FuncName(METHOD_MISSING): [registry_mm_label]
         }
         registry.func_params[instance_mm_label] = ["self", "name"]
@@ -284,7 +287,7 @@ class TestMethodMissingCallMethod:
             inner_fields={FieldName("value"): typed_from_runtime(42)}
         )
         # Register "Outer" with no methods, "Inner" with 'some_method'
-        registry.class_methods["Outer"] = {}
+        registry.class_methods[ClassName("Outer")] = {}
         inner_method_label = CodeLabel("func_inner_some_method_0")
         cfg.blocks[inner_method_label] = BasicBlock(
             label=inner_method_label,
@@ -292,7 +295,7 @@ class TestMethodMissingCallMethod:
                 IRInstruction(opcode=Opcode.RETURN, operands=["%result"]),
             ],
         )
-        registry.class_methods["Inner"] = {
+        registry.class_methods[ClassName("Inner")] = {
             FuncName("some_method"): [inner_method_label]
         }
         registry.func_params[inner_method_label] = ["self", "arg"]
@@ -319,7 +322,7 @@ class TestMethodMissingCallMethod:
         vm, cfg, registry = _make_vm_with_method_missing(
             inner_fields={FieldName("value"): typed_from_runtime(42)}
         )
-        registry.class_methods["Outer"] = {}
+        registry.class_methods[ClassName("Outer")] = {}
 
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
@@ -352,7 +355,9 @@ class TestMethodMissingCallMethod:
                 IRInstruction(opcode=Opcode.RETURN, operands=["%result"]),
             ],
         )
-        registry.class_methods["Outer"] = {FuncName("real_method"): [real_label]}
+        registry.class_methods[ClassName("Outer")] = {
+            FuncName("real_method"): [real_label]
+        }
         registry.func_params[real_label] = ["self"]
 
         inst = IRInstruction(
