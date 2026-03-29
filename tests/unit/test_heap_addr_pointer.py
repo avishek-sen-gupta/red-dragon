@@ -3,6 +3,7 @@
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.register import Register
 from interpreter.var_name import VarName
+from interpreter.address import Address, NO_ADDRESS
 from interpreter.vm.vm import _heap_addr, HeapObject, VMState
 from interpreter.vm.vm_types import Pointer, StackFrame, SymbolicValue
 from interpreter.ir import IRInstruction, Opcode
@@ -17,21 +18,21 @@ from interpreter.constants import TypeName
 class TestHeapAddrPointer:
     def test_extracts_base_from_pointer(self):
         p = Pointer(base="obj_0", offset=0)
-        assert _heap_addr(p) == "obj_0"
+        assert _heap_addr(p) == Address("obj_0")
 
     def test_extracts_base_from_pointer_with_offset(self):
         p = Pointer(base="arr_5", offset=3)
-        assert _heap_addr(p) == "arr_5"
+        assert _heap_addr(p) == Address("arr_5")
 
     def test_still_handles_bare_string(self):
-        assert _heap_addr("obj_0") == "obj_0"
+        assert _heap_addr("obj_0") == Address("obj_0")
 
     def test_still_handles_symbolic_value(self):
         sym = SymbolicValue(name="sym_0")
-        assert _heap_addr(sym) == "sym_0"
+        assert _heap_addr(sym) == Address("sym_0")
 
     def test_returns_empty_for_int(self):
-        assert _heap_addr(42) == ""
+        assert _heap_addr(42) == NO_ADDRESS
 
 
 class TestAddressOfPointerGuard:
