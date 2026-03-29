@@ -398,7 +398,7 @@ def _handle_load_field(
     # Static field access on a ClassRef: look up via symbol table constants
     if isinstance(obj_val, ClassRef):
         symbol_table = ctx.symbol_table
-        class_info = symbol_table.classes.get(obj_val.name)
+        class_info = symbol_table.classes.get(str(obj_val.name))
         if class_info and str(field_name) in class_info.constants:
             raw = class_info.constants[str(field_name)]
             val = _parse_const(raw)

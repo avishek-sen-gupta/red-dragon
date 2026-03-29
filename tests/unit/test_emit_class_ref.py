@@ -7,6 +7,7 @@ from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
 from interpreter.refs.class_ref import ClassRef
 from interpreter.ir import CodeLabel
+from interpreter.class_name import ClassName
 from interpreter.ir import Opcode
 from interpreter.register import Register
 
@@ -26,7 +27,9 @@ class TestEmitClassRef:
         ctx.emit_class_ref("Dog", "class_Dog_0", [], result_reg="%0")
         assert "class_Dog_0" in ctx.class_symbol_table
         ref = ctx.class_symbol_table["class_Dog_0"]
-        assert ref == ClassRef(name="Dog", label=CodeLabel("class_Dog_0"), parents=())
+        assert ref == ClassRef(
+            name=ClassName("Dog"), label=CodeLabel("class_Dog_0"), parents=()
+        )
 
     def test_registers_in_symbol_table_with_parents(self):
         ctx = _make_ctx()
@@ -55,8 +58,8 @@ class TestEmitClassRef:
         ctx.emit_class_ref("Dog", "class_Dog_0", ["Animal"], result_reg="%0")
         ctx.emit_class_ref("Cat", "class_Cat_0", [], result_reg="%1")
         assert len(ctx.class_symbol_table) == 2
-        assert ctx.class_symbol_table["class_Dog_0"].name == "Dog"
-        assert ctx.class_symbol_table["class_Cat_0"].name == "Cat"
+        assert ctx.class_symbol_table["class_Dog_0"].name == ClassName("Dog")
+        assert ctx.class_symbol_table["class_Cat_0"].name == ClassName("Cat")
 
     def test_parents_converted_to_tuple(self):
         """Parents are passed as a list but stored as a tuple."""
