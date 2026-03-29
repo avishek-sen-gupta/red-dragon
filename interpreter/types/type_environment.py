@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from interpreter.func_name import FuncName
 from interpreter.register import Register
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
@@ -35,7 +36,7 @@ class TypeEnvironment:
     register_types: MappingProxyType[Register, TypeExpr]
     var_types: MappingProxyType[VarName, TypeExpr]
     method_signatures: MappingProxyType[
-        TypeExpr, MappingProxyType[str, list[FunctionSignature]]
+        TypeExpr, MappingProxyType[FuncName, list[FunctionSignature]]
     ] = MappingProxyType({})
     type_aliases: MappingProxyType[str, TypeExpr] = MappingProxyType({})
     interface_implementations: MappingProxyType[str, tuple[str, ...]] = (
@@ -48,7 +49,7 @@ class TypeEnvironment:
 
     def get_func_signature(
         self,
-        name: str,
+        name: FuncName,
         index: int = 0,
         class_name: TypeExpr = UNBOUND,
     ) -> FunctionSignature:
