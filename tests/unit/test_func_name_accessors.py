@@ -116,7 +116,7 @@ class TestInferenceContextAccessors:
 
         ctx = _InferenceContext()
         class_type = scalar("MyClass")
-        ctx.class_method_types[class_type] = {"get": scalar("String")}
+        ctx.class_method_types[class_type] = {FuncName("get"): scalar("String")}
         assert ctx.lookup_method_type(class_type, FuncName("get")) == scalar("String")
         assert ctx.lookup_method_type(class_type, FuncName("missing")) == UNKNOWN
         assert ctx.lookup_method_type(scalar("Other"), FuncName("get")) == UNKNOWN
