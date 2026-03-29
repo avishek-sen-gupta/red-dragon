@@ -13,6 +13,7 @@ import pytest
 
 from interpreter.cfg import build_cfg
 from interpreter.constants import Language
+from interpreter.field_name import FieldName
 from interpreter.frontend import get_frontend
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.types import (
@@ -292,7 +293,7 @@ d.set_name("Rex")
         assert len(field_flows) >= 1
         src, dst = field_flows[0]
         assert src.name == "name"
-        assert dst.field == "name"
+        assert dst.field == FieldName("name")
 
 
 class TestParamToReturnFlowsJavaScript:
