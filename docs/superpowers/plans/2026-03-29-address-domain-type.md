@@ -159,8 +159,8 @@ from interpreter.address import Address
 class VMState:
     # existing fields unchanged
 
-    def heap_get(self, addr: Address) -> HeapObject | None:
-        return self.heap.get(str(addr))
+    def heap_get(self, addr: Address) -> HeapObject:
+        return self.heap.get(str(addr), NO_HEAP_OBJECT)
 
     def heap_set(self, addr: Address, obj: HeapObject) -> None:
         self.heap[str(addr)] = obj
@@ -185,7 +185,7 @@ class VMState:
 
 ```python
 from interpreter.address import Address
-from interpreter.vm.vm_types import VMState, HeapObject
+from interpreter.vm.vm_types import VMState, HeapObject, NO_HEAP_OBJECT
 
 class TestVMStateHeapAccessors:
     def test_heap_get_found(self):
@@ -195,7 +195,12 @@ class TestVMStateHeapAccessors:
 
     def test_heap_get_not_found(self):
         vm = VMState()
-        assert vm.heap_get(Address("missing")) is None
+        assert not vm.heap_get(Address("missing")).is_present()
+
+    def test_heap_get_found_is_present(self):
+        vm = VMState()
+        vm.heap["obj_0"] = HeapObject()
+        assert vm.heap_get(Address("obj_0")).is_present()
 
     def test_heap_set_and_get(self):
         vm = VMState()
