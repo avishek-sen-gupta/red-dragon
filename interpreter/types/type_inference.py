@@ -179,13 +179,13 @@ class _InferenceContext:
 
     register_types: dict[Register, TypeExpr] = field(default_factory=dict)
     scoped_var_types: dict[str, dict[VarName, TypeExpr]] = field(default_factory=dict)
-    func_return_types: dict[str, TypeExpr] = field(default_factory=dict)
+    func_return_types: dict[FuncName, TypeExpr] = field(default_factory=dict)
     func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(
         default_factory=dict
     )
     current_func_label: str = ""
     current_class_name: TypeExpr = UNKNOWN
-    class_method_types: dict[TypeExpr, dict[str, TypeExpr]] = field(
+    class_method_types: dict[TypeExpr, dict[FuncName, TypeExpr]] = field(
         default_factory=dict
     )
     field_types: dict[TypeExpr, dict[str, TypeExpr]] = field(default_factory=dict)
@@ -207,13 +207,13 @@ class _InferenceContext:
     _seeded_var_names: frozenset[VarName] = field(default_factory=frozenset)
 
     def lookup_func_return_type(self, name: FuncName) -> TypeExpr:
-        return self.func_return_types.get(str(name), UNKNOWN)
+        return self.func_return_types.get(name, UNKNOWN)
 
     def lookup_method_type(self, class_name: TypeExpr, name: FuncName) -> TypeExpr:
-        return self.class_method_types.get(class_name, {}).get(str(name), UNKNOWN)
+        return self.class_method_types.get(class_name, {}).get(name, UNKNOWN)
 
     def store_func_return_type(self, name: FuncName, type_expr: TypeExpr) -> None:
-        self.func_return_types[str(name)] = type_expr
+        self.func_return_types[name] = type_expr
 
     def store_var_type(self, name: VarName, type_expr: TypeExpr) -> None:
         """Store a variable type in the current function scope.
@@ -301,7 +301,7 @@ def _promote_tuple_element_types(ctx: _InferenceContext) -> None:
 
 
 def _build_func_signatures(
-    func_return_types: dict[str, TypeExpr],
+    func_return_types: dict[FuncName, TypeExpr],
     func_param_types: dict[str, list[tuple[str, TypeExpr]]],
 ) -> dict[str, list[FunctionSignature]]:
     """Build signatures keyed only by user-facing function names.
@@ -314,9 +314,10 @@ def _build_func_signatures(
     so each list has at most one entry until class-scoped accumulation
     is added.
     """
+    func_return_str_keys = {str(k) for k in func_return_types}
     user_facing_names = {
         name
-        for name in set(func_return_types) | set(func_param_types)
+        for name in func_return_str_keys | set(func_param_types)
         if not name.startswith("func_")
     }
 
@@ -324,7 +325,7 @@ def _build_func_signatures(
         name: [
             FunctionSignature(
                 params=tuple(func_param_types.get(name, [])),
-                return_type=func_return_types.get(name, UNKNOWN),
+                return_type=func_return_types.get(FuncName(name), UNKNOWN),
             )
         ]
         for name in user_facing_names
@@ -387,9 +388,12 @@ def infer_types(
                 ).items()
             }
         },
-        func_return_types=_resolve_aliases_in_dict(
-            type_env_builder.func_return_types, aliases
-        ),
+        func_return_types={
+            FuncName(k): v
+            for k, v in _resolve_aliases_in_dict(
+                type_env_builder.func_return_types, aliases
+            ).items()
+        },
         func_param_types={
             k: [(pn, _resolve_alias(pt, aliases)) for pn, pt in v]
             for k, v in type_env_builder.func_param_types.items()
@@ -542,19 +546,21 @@ def _infer_const(
     func_name, func_label = "", ""
     if raw in ctx.func_symbol_table:
         ref = ctx.func_symbol_table[raw]
-        func_name, func_label = ref.name, ref.label
+        func_name, func_label = ref.name, str(ref.label)
     if func_name and func_label:
         # Only populate flat (name-keyed) dicts for standalone functions.
         # Class methods go into class_method_signatures instead.
         if not ctx.current_class_name:
-            if func_label in ctx.func_return_types:
-                ctx.func_return_types[func_name] = ctx.func_return_types[func_label]
+            if FuncName(func_label) in ctx.func_return_types:
+                ctx.func_return_types[FuncName(func_name)] = ctx.func_return_types[
+                    FuncName(func_label)
+                ]
             if func_label in ctx.func_param_types:
                 ctx.func_param_types[func_name] = ctx.func_param_types[func_label]
         if ctx.current_class_name:
-            ret_type = ctx.func_return_types.get(func_label, UNKNOWN)
+            ret_type = ctx.func_return_types.get(FuncName(func_label), UNKNOWN)
             ctx.class_method_types.setdefault(ctx.current_class_name, {})[
-                func_name
+                FuncName(func_name)
             ] = ret_type
             # Build class-scoped method signature (supports overloads)
             param_pairs = ctx.func_param_types.get(func_label, [])
@@ -571,7 +577,7 @@ def _infer_const(
             if sig not in method_sigs:
                 method_sigs.append(sig)
         # Infer FunctionType for the register holding the function reference
-        ret_type = ctx.func_return_types.get(func_label, UNKNOWN)
+        ret_type = ctx.func_return_types.get(FuncName(func_label), UNKNOWN)
         if ret_type:
             param_pairs = ctx.func_param_types.get(func_label, [])
             param_types = tuple(pt for _, pt in param_pairs)
@@ -715,10 +721,11 @@ def _infer_call_function(
         ctx.register_types[inst.result_reg] = ret_type
     else:
         # Search class-scoped method types for static methods called by name
+        func_name_key = FuncName(func_name)
         matching = [
-            methods[func_name]
+            methods[func_name_key]
             for methods in ctx.class_method_types.values()
-            if func_name in methods
+            if func_name_key in methods
         ]
         if len(matching) == 1:
             ctx.register_types[inst.result_reg] = matching[0]
@@ -801,15 +808,18 @@ def _infer_call_method(
         for iface in ctx.interface_implementations[class_name_str]:
             iface_type = scalar(iface)
             if iface_type in ctx.class_method_types:
-                ret = ctx.class_method_types[iface_type].get(method_name, UNKNOWN)
+                ret = ctx.class_method_types[iface_type].get(
+                    FuncName(method_name), UNKNOWN
+                )
                 if ret:
                     ctx.register_types[inst.result_reg] = ret
                     return
     # Fallback: search class method types across all classes, then flat func_return_types
+    method_name_key = FuncName(method_name)
     matching_types = [
-        methods[method_name]
+        methods[method_name_key]
         for methods in ctx.class_method_types.values()
-        if method_name in methods
+        if method_name_key in methods
     ]
     if len(matching_types) == 1:
         ctx.register_types[inst.result_reg] = matching_types[0]
@@ -840,8 +850,9 @@ def _infer_call_unknown(
     if not source_var:
         return
     func_name = str(source_var)
-    if func_name in ctx.func_return_types:
-        ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
+    func_name_key = FuncName(func_name)
+    if func_name_key in ctx.func_return_types:
+        ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name_key]
     elif func_name in _BUILTIN_RETURN_TYPES:
         ctx.register_types[inst.result_reg] = _BUILTIN_RETURN_TYPES[func_name]
 
@@ -893,13 +904,14 @@ def _infer_return(
 ) -> None:
     if not ctx.current_func_label:
         return
-    if ctx.current_func_label in ctx.func_return_types:
+    current_label_key = FuncName(ctx.current_func_label)
+    if current_label_key in ctx.func_return_types:
         return
     if inst.value_reg is None:
         return
     ret_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)
     if ret_type:
-        ctx.func_return_types[ctx.current_func_label] = ret_type
+        ctx.func_return_types[current_label_key] = ret_type
 
 
 def _infer_load_indirect(
