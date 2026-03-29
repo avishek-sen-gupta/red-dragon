@@ -110,7 +110,7 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(
             LoadField(
                 result_reg=reg,
-                obj_reg=str(this_reg),
+                obj_reg=this_reg,
                 field_name=FieldName(resolved_name),
             ),
             node=node,
@@ -171,8 +171,8 @@ def lower_binop(ctx: TreeSitterEmitContext, node) -> Register:
         Binop(
             result_reg=reg,
             operator=resolve_binop(op),
-            left=str(lhs_reg),
-            right=str(rhs_reg),
+            left=lhs_reg,
+            right=rhs_reg,
         ),
         node=node,
     )
@@ -193,8 +193,8 @@ def lower_comparison(ctx: TreeSitterEmitContext, node) -> Register:
         Binop(
             result_reg=reg,
             operator=resolve_binop(op),
-            left=str(lhs_reg),
-            right=str(rhs_reg),
+            left=lhs_reg,
+            right=rhs_reg,
         ),
         node=node,
     )
@@ -214,7 +214,7 @@ def lower_unop(ctx: TreeSitterEmitContext, node) -> Register:
         Unop(
             result_reg=reg,
             operator=resolve_unop(op),
-            operand=str(operand_reg),
+            operand=operand_reg,
         ),
         node=node,
     )
@@ -252,7 +252,7 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> R
             ctx.emit_inst(
                 CallMethod(
                     result_reg=reg,
-                    obj_reg=str(obj_reg),
+                    obj_reg=obj_reg,
                     method_name=FuncName(method_name),
                     args=tuple(
                         str(a) if not isinstance(a, SpreadArguments) else a
@@ -295,7 +295,7 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> R
     ctx.emit_inst(
         CallUnknown(
             result_reg=reg,
-            target_reg=str(target_reg),
+            target_reg=target_reg,
             args=tuple(
                 str(a) if not isinstance(a, SpreadArguments) else a for a in arg_regs
             ),
@@ -363,7 +363,7 @@ def lower_attribute(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         LoadField(
             result_reg=reg,
-            obj_reg=str(obj_reg),
+            obj_reg=obj_reg,
             field_name=FieldName(field_name),
         ),
         node=node,
@@ -382,8 +382,8 @@ def lower_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         LoadIndex(
             result_reg=reg,
-            arr_reg=str(obj_reg),
-            index_reg=str(idx_reg),
+            arr_reg=obj_reg,
+            index_reg=idx_reg,
         ),
         node=node,
     )
@@ -428,8 +428,8 @@ def lower_update_expr(ctx: TreeSitterEmitContext, node) -> Register:
         Binop(
             result_reg=result_reg,
             operator=resolve_binop(op),
-            left=str(operand_reg),
-            right=str(one_reg),
+            left=operand_reg,
+            right=one_reg,
         ),
         node=node,
     )
@@ -455,7 +455,7 @@ def lower_list_literal(ctx: TreeSitterEmitContext, node) -> Register:
         NewArray(
             result_reg=arr_reg,
             type_hint=scalar("list"),
-            size_reg=str(size_reg),
+            size_reg=size_reg,
         ),
         node=node,
     )
@@ -465,10 +465,10 @@ def lower_list_literal(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         ctx.emit_inst(
             StoreIndex(
-                arr_reg=str(arr_reg),
-                index_reg=str(idx_reg),
+                arr_reg=arr_reg,
+                index_reg=idx_reg,
                 value_reg=(
-                    val_reg if isinstance(val_reg, SpreadArguments) else str(val_reg)
+                    val_reg if isinstance(val_reg, SpreadArguments) else val_reg
                 ),
             ),
         )
@@ -492,16 +492,12 @@ def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> Register:
             val_reg = ctx.lower_expr(val_node)
             ctx.emit_inst(
                 StoreIndex(
-                    arr_reg=str(obj_reg),
+                    arr_reg=obj_reg,
                     index_reg=(
-                        key_reg
-                        if isinstance(key_reg, SpreadArguments)
-                        else str(key_reg)
+                        key_reg if isinstance(key_reg, SpreadArguments) else key_reg
                     ),
                     value_reg=(
-                        val_reg
-                        if isinstance(val_reg, SpreadArguments)
-                        else str(val_reg)
+                        val_reg if isinstance(val_reg, SpreadArguments) else val_reg
                     ),
                 ),
             )
@@ -518,7 +514,7 @@ def lower_store_target(
         ctx.emit_inst(
             StoreVar(
                 name=VarName(ctx.resolve_var(ctx.node_text(target))),
-                value_reg=str(val_reg),
+                value_reg=val_reg,
             ),
             node=parent_node,
         )
@@ -539,9 +535,9 @@ def lower_store_target(
             obj_reg = ctx.lower_expr(obj_node)
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=str(obj_reg),
+                    obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(attr_node)),
-                    value_reg=str(val_reg),
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -553,9 +549,9 @@ def lower_store_target(
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
                 StoreIndex(
-                    arr_reg=str(obj_reg),
-                    index_reg=str(idx_reg),
-                    value_reg=str(val_reg),
+                    arr_reg=obj_reg,
+                    index_reg=idx_reg,
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -564,7 +560,7 @@ def lower_store_target(
         ctx.emit_inst(
             StoreVar(
                 name=VarName(ctx.node_text(target)),
-                value_reg=str(val_reg),
+                value_reg=val_reg,
             ),
             node=parent_node,
         )
