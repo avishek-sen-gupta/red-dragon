@@ -8,6 +8,7 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.types.type_expr import scalar
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -44,7 +45,7 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallCtorFunction(
             result_reg=reg,
-            func_name=type_name,
+            func_name=FuncName(type_name),
             type_hint=scalar(type_name),
             args=tuple(arg_regs),
         ),
@@ -61,7 +62,8 @@ def lower_delete_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ptr_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="delete", args=(ptr_reg,)), node=node
+        CallFunction(result_reg=reg, func_name=FuncName("delete"), args=(ptr_reg,)),
+        node=node,
     )
     return reg
 
@@ -169,7 +171,7 @@ def lower_cpp_call(ctx: TreeSitterEmitContext, node) -> Register:
                 CallMethod(
                     result_reg=result_reg,
                     obj_reg=obj_reg,
-                    method_name=method_name,
+                    method_name=FuncName(method_name),
                     args=tuple(arg_regs),
                 ),
                 node=node,

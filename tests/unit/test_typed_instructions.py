@@ -22,6 +22,7 @@ from interpreter.ir import (
 )
 from interpreter.instructions import InstructionBase
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.register import NO_REGISTER, Register
 
 
@@ -504,7 +505,7 @@ class TestTypedFieldAccess:
             operands=["add", "%0", "%1"],
         )
         typed = inst
-        assert typed.func_name == "add"
+        assert typed.func_name == FuncName("add")
         assert typed.args == (Register("%0"), Register("%1"))
 
     def test_store_field_fields(self):

@@ -35,6 +35,7 @@ from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolv
 from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.field_name import FieldName, FieldKind, NO_FIELD_NAME
+from interpreter.func_name import FuncName, NO_FUNC_NAME
 from interpreter.var_name import NO_VAR_NAME, VarName
 
 
@@ -342,7 +343,7 @@ class CallFunction(InstructionBase):
     """CALL_FUNCTION: call a named function with arguments."""
 
     result_reg: Register = NO_REGISTER
-    func_name: str = ""
+    func_name: FuncName = NO_FUNC_NAME
     args: tuple[Register | SpreadArguments, ...] = ()
 
     # ── IRInstruction-compat fields ──
@@ -356,7 +357,7 @@ class CallFunction(InstructionBase):
     @property
     def operands(self) -> list[Any]:
         return [
-            self.func_name,
+            str(self.func_name),
             *(str(a) if isinstance(a, Register) else a for a in self.args),
         ]
 
@@ -367,7 +368,7 @@ class CallMethod(InstructionBase):
 
     result_reg: Register = NO_REGISTER
     obj_reg: Register = NO_REGISTER
-    method_name: str = ""
+    method_name: FuncName = NO_FUNC_NAME
     args: tuple[Register | SpreadArguments, ...] = ()
 
     # ── IRInstruction-compat fields ──
@@ -382,7 +383,7 @@ class CallMethod(InstructionBase):
     def operands(self) -> list[Any]:
         return [
             str(self.obj_reg),
-            self.method_name,
+            str(self.method_name),
             *(str(a) if isinstance(a, Register) else a for a in self.args),
         ]
 
@@ -416,7 +417,7 @@ class CallCtorFunction(InstructionBase):
     """CALL_CTOR: call a class constructor with typed type hint."""
 
     result_reg: Register = NO_REGISTER
-    func_name: str = ""
+    func_name: FuncName = NO_FUNC_NAME
     type_hint: TypeExpr = UNKNOWN
     args: tuple[Register | SpreadArguments, ...] = ()
 
@@ -431,7 +432,7 @@ class CallCtorFunction(InstructionBase):
     @property
     def operands(self) -> list[Any]:
         return [
-            self.func_name,
+            str(self.func_name),
             *(str(a) if isinstance(a, Register) else a for a in self.args),
         ]
 
@@ -1041,7 +1042,7 @@ def _call_function(inst: IRInstruction) -> CallFunction:
     )
     return CallFunction(
         result_reg=inst.result_reg,
-        func_name=str(ops[0]) if ops else "",
+        func_name=FuncName(str(ops[0])) if ops else NO_FUNC_NAME,
         args=args,
         source_location=inst.source_location,
     )
@@ -1056,7 +1057,7 @@ def _call_method(inst: IRInstruction) -> CallMethod:
     return CallMethod(
         result_reg=inst.result_reg,
         obj_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
-        method_name=str(ops[1]) if len(ops) >= 2 else "",
+        method_name=FuncName(str(ops[1])) if len(ops) >= 2 else NO_FUNC_NAME,
         args=args,
         source_location=inst.source_location,
     )
@@ -1085,7 +1086,7 @@ def _call_ctor(inst: IRInstruction) -> CallCtorFunction:
     raw_hint = str(ops[0]) if ops else ""
     return CallCtorFunction(
         result_reg=inst.result_reg,
-        func_name=raw_hint,
+        func_name=FuncName(raw_hint) if raw_hint else NO_FUNC_NAME,
         type_hint=scalar(raw_hint) if raw_hint else UNKNOWN,
         args=args,
         source_location=inst.source_location,

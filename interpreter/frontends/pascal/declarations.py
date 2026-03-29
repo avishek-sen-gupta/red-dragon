@@ -20,6 +20,7 @@ from interpreter.frontends.common.property_accessors import (
 from interpreter.types.type_expr import EnumType, scalar
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -165,7 +166,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit_inst(
                 CallCtorFunction(
                     result_reg=val_reg,
-                    func_name=type_name,
+                    func_name=FuncName(type_name),
                     type_hint=scalar(type_name),
                     args=(),
                 ),
@@ -194,7 +195,7 @@ def _populate_array_with_records(
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         obj_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=obj_reg, func_name=record_type, args=()),
+            CallFunction(result_reg=obj_reg, func_name=FuncName(record_type), args=()),
             node=node,
         )
         ctx.emit_inst(
@@ -688,7 +689,7 @@ def _emit_property_getter(
             CallMethod(
                 result_reg=result_reg,
                 obj_reg=this_reg,
-                method_name=target,
+                method_name=FuncName(target),
                 args=(),
             )
         )
@@ -742,7 +743,7 @@ def _emit_property_setter(
             CallMethod(
                 result_reg=ctx.fresh_reg(),
                 obj_reg=this_reg,
-                method_name=target,
+                method_name=FuncName(target),
                 args=(val_reg,),
             )
         )

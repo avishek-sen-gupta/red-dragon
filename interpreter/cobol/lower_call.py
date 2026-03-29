@@ -13,6 +13,7 @@ from interpreter.cobol.cobol_statements import (
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     CallFunction,
     Label_,
@@ -43,7 +44,7 @@ def lower_call(
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
-            func_name=stmt.program,
+            func_name=FuncName(stmt.program),
             args=tuple(Register(str(a)) for a in arg_regs),
         )
     )

@@ -10,6 +10,7 @@ from interpreter import constants
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -84,7 +85,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(
         CallFunction(
             result_reg=len_reg,
-            func_name="len",
+            func_name=FuncName("len"),
             args=(load_arr,),
         ),
     )
@@ -173,7 +174,7 @@ def emit_default_param_guard(
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
-            func_name="__resolve_default__",
+            func_name=FuncName("__resolve_default__"),
             args=(args_reg, idx_reg, default_reg),
         ),
     )

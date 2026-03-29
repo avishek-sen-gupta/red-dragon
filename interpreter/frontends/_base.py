@@ -24,6 +24,7 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     InstructionBase,
     Binop,
@@ -557,7 +558,7 @@ class BaseFrontend(Frontend):
                     CallMethod(
                         result_reg=reg,
                         obj_reg=obj_reg,
-                        method_name=method_name,
+                        method_name=FuncName(method_name),
                         args=tuple(arg_regs),
                     ),
                     node=node,
@@ -571,7 +572,7 @@ class BaseFrontend(Frontend):
             self._emit_inst(
                 CallFunction(
                     result_reg=reg,
-                    func_name=func_name,
+                    func_name=FuncName(func_name),
                     args=tuple(arg_regs),
                 ),
                 node=node,

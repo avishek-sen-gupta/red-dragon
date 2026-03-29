@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AddressOf,
     Branch,
@@ -98,7 +99,7 @@ def lower_invocation(ctx: TreeSitterEmitContext, node) -> Register:
                 CallMethod(
                     result_reg=reg,
                     obj_reg=obj_reg,
-                    method_name=method_name,
+                    method_name=FuncName(method_name),
                     args=tuple(arg_regs),
                 ),
                 node=node,
@@ -109,7 +110,9 @@ def lower_invocation(ctx: TreeSitterEmitContext, node) -> Register:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+            CallFunction(
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            ),
             node=node,
         )
         return reg
@@ -137,7 +140,7 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallCtorFunction(
             result_reg=reg,
-            func_name=type_name,
+            func_name=FuncName(type_name),
             type_hint=scalar(type_name),
             args=tuple(arg_regs),
         ),
@@ -290,7 +293,8 @@ def lower_typeof(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Const(result_reg=type_reg, value=type_name))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="typeof", args=(type_reg,)), node=node
+        CallFunction(result_reg=reg, func_name=FuncName("typeof"), args=(type_reg,)),
+        node=node,
     )
     return reg
 
@@ -309,7 +313,7 @@ def lower_is_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="is_check",
+            func_name=FuncName("is_check"),
             args=(
                 obj_reg,
                 type_reg,
@@ -542,7 +546,8 @@ def lower_await_expr(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Const(result_reg=inner_reg, value=ctx.constants.none_literal))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="await", args=(inner_reg,)), node=node
+        CallFunction(result_reg=reg, func_name=FuncName("await"), args=(inner_reg,)),
+        node=node,
     )
     return reg
 
@@ -623,7 +628,7 @@ def lower_is_pattern_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="is_check",
+            func_name=FuncName("is_check"),
             args=(
                 obj_reg,
                 type_reg,
@@ -655,7 +660,7 @@ def lower_implicit_object_creation(ctx: TreeSitterEmitContext, node) -> Register
         CallMethod(
             result_reg=result_reg,
             obj_reg=obj_reg,
-            method_name="constructor",
+            method_name=FuncName("constructor"),
             args=tuple(arg_regs),
         ),
         node=node,
@@ -671,7 +676,9 @@ def lower_with_expression(ctx: TreeSitterEmitContext, node) -> Register:
     # Clone the source object
     clone_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=clone_reg, func_name="clone", args=(obj_reg,)),
+        CallFunction(
+            result_reg=clone_reg, func_name=FuncName("clone"), args=(obj_reg,)
+        ),
         node=node,
     )
 
@@ -722,7 +729,9 @@ def lower_query_expression(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = [ctx.lower_expr(c) for c in named_children]
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="linq_query", args=tuple(arg_regs)),
+        CallFunction(
+            result_reg=reg, func_name=FuncName("linq_query"), args=tuple(arg_regs)
+        ),
         node=node,
     )
     return reg
@@ -884,7 +893,7 @@ def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="range",
+            func_name=FuncName("range"),
             args=(
                 start_reg,
                 end_reg,

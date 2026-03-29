@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -83,7 +84,9 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=idx_reg, value="0"))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("foreach_cond")
     body_label = ctx.fresh_label("foreach_body")
@@ -431,7 +434,8 @@ def lower_yield_stmt(ctx: TreeSitterEmitContext, node) -> None:
     if "break" in node_text and not children:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name="yield_break", args=()), node=node
+            CallFunction(result_reg=reg, func_name=FuncName("yield_break"), args=()),
+            node=node,
         )
     else:
         if children:
@@ -441,5 +445,6 @@ def lower_yield_stmt(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name="yield", args=(val_reg,)), node=node
+            CallFunction(result_reg=reg, func_name=FuncName("yield"), args=(val_reg,)),
+            node=node,
         )

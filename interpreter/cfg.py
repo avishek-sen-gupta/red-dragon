@@ -328,7 +328,7 @@ def cfg_to_mermaid(cfg: CFG) -> str:
             if not isinstance(t, (CallFunction, CallCtorFunction)):
                 continue
             func_name = t.func_name
-            target_label = call_target_map.get(func_name)
+            target_label = call_target_map.get(str(func_name))
             if target_label:
                 lines.append(f'    {src} -.->|"call"| {_node_id(target_label)}')
 

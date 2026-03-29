@@ -15,6 +15,7 @@ from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.register import Register
 from interpreter.field_name import FieldName
 from interpreter.types.type_expr import scalar
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadField,
@@ -61,7 +62,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
                 CallMethod(
                     result_reg=reg,
                     obj_reg=obj_reg,
-                    method_name=method_name,
+                    method_name=FuncName(method_name),
                     args=tuple(arg_regs),
                 ),
                 node=node,
@@ -96,7 +97,9 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
         func_name = ctx.node_text(name_node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+            CallFunction(
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            ),
             node=node,
         )
         return reg

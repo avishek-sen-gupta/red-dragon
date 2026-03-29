@@ -75,7 +75,7 @@ def _try_builtin_call(
 ) -> ExecutionResult:
     """Attempt to handle a call via the builtin table."""
     builtin_fn = Builtins.lookup_builtin(
-        FuncName(func_name) if isinstance(func_name, str) else func_name
+        func_name if isinstance(func_name, FuncName) else FuncName(func_name)
     )
     if builtin_fn is None:
         return ExecutionResult.not_handled()
@@ -273,8 +273,8 @@ def _handle_call_function(
     raw_func_name = t.func_name
     # Extract base name for scope lookup: "Box[Node]" → "Box"
     base_name = (
-        raw_func_name.split("[")[0]
-        if isinstance(raw_func_name, str) and "[" in raw_func_name
+        FuncName(str(raw_func_name).split("[")[0])
+        if "[" in raw_func_name
         else raw_func_name
     )
     arg_regs = list(t.args)
@@ -283,7 +283,7 @@ def _handle_call_function(
     # 0. Try I/O provider (for __cobol_* calls)
     if (
         vm.io_provider
-        and isinstance(base_name, str)
+        and isinstance(base_name, FuncName)
         and base_name.startswith("__cobol_")
     ):
         result = vm.io_provider.handle_call(base_name, args)
@@ -310,7 +310,9 @@ def _handle_call_function(
 
     # 2. Look up the function/class via scope chain
     func_val = ""
-    lookup_key = VarName(base_name) if isinstance(base_name, str) else base_name
+    lookup_key = (
+        VarName(str(base_name)) if isinstance(base_name, (str, FuncName)) else base_name
+    )
     for f in reversed(vm.call_stack):
         if lookup_key in f.local_vars:
             func_val = f.local_vars[lookup_key].value
@@ -377,7 +379,7 @@ def _handle_call_function(
         ctx.current_label,
         overload_resolver=ctx.overload_resolver,
         type_env=ctx.type_env,
-        type_hint=parse_type(raw_func_name) if raw_func_name else UNKNOWN,
+        type_hint=parse_type(str(raw_func_name)) if raw_func_name else UNKNOWN,
     )
     if ctor_result.handled:
         return ctor_result
@@ -407,7 +409,9 @@ def _handle_call_ctor(
 
     # Look up the ClassRef via scope chain
     func_val = ""
-    ctor_key = VarName(func_name) if isinstance(func_name, str) else func_name
+    ctor_key = (
+        VarName(str(func_name)) if isinstance(func_name, (str, FuncName)) else func_name
+    )
     for f in reversed(vm.call_stack):
         if ctor_key in f.local_vars:
             func_val = f.local_vars[ctor_key].value
@@ -464,11 +468,11 @@ def _handle_call_method(
     # Static method dispatch: Class.method() where object is a ClassRef
     if isinstance(obj_val.value, ClassRef):
         class_name = obj_val.value.name
-        func_labels = ctx.registry.lookup_methods(class_name, FuncName(method_name))
+        func_labels = ctx.registry.lookup_methods(class_name, method_name)
         if func_labels:
             func_label = func_labels[0]
             bound_ref = BoundFuncRef(
-                func_ref=FuncRef(name=method_name, label=func_label),
+                func_ref=FuncRef(name=str(method_name), label=func_label),
                 closure_id="",
             )
             return _try_user_function_call(
@@ -476,7 +480,7 @@ def _handle_call_method(
             )
 
     # Method builtins: subList, substring, slice, etc.
-    method_fn = Builtins.lookup_method_builtin(FuncName(method_name))
+    method_fn = Builtins.lookup_method_builtin(method_name)
     if method_fn is not None:
         result = method_fn(obj_val, args, vm)
         if result.value is not Operators.UNCOMPUTABLE:
@@ -518,10 +522,10 @@ def _handle_call_method(
             obj_desc, method_name, [a.value for a in args], inst, vm
         )
 
-    func_labels = ctx.registry.lookup_methods(type_hint, FuncName(method_name))
+    func_labels = ctx.registry.lookup_methods(type_hint, method_name)
     if func_labels:
         sigs = ctx.type_env.method_signatures.get(scalar(type_hint), {}).get(
-            method_name, []
+            str(method_name), []
         )
         if len(sigs) != len(func_labels):
             logger.warning("sig/label count mismatch for %s.%s", type_hint, method_name)
@@ -534,11 +538,11 @@ def _handle_call_method(
     # Walk parent chain for inherited methods
     if not func_label or func_label not in ctx.cfg.blocks:
         for parent in ctx.registry.class_parents.get(type_hint, []):
-            parent_labels = ctx.registry.lookup_methods(parent, FuncName(method_name))
+            parent_labels = ctx.registry.lookup_methods(parent, method_name)
             if not parent_labels:
                 continue
             parent_sigs = ctx.type_env.method_signatures.get(scalar(parent), {}).get(
-                method_name, []
+                str(method_name), []
             )
             if len(parent_sigs) != len(parent_labels):
                 logger.warning(
@@ -560,12 +564,10 @@ def _handle_call_method(
             if delegation is not None:
                 inner_addr, inner_tv = delegation
                 inner_type = str(vm.heap[inner_addr].type_hint or "")
-                inner_labels = ctx.registry.lookup_methods(
-                    inner_type, FuncName(method_name)
-                )
+                inner_labels = ctx.registry.lookup_methods(inner_type, method_name)
                 inner_sigs = ctx.type_env.method_signatures.get(
                     scalar(inner_type), {}
-                ).get(method_name, [])
+                ).get(str(method_name), [])
                 if len(inner_sigs) != len(inner_labels):
                     logger.warning(
                         "sig/label count mismatch for %s.%s",

@@ -6,6 +6,7 @@ LABEL emit tracks the current function for param association.
 """
 
 from interpreter.constants import Language
+from interpreter.func_name import FuncName
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.instructions import (
@@ -84,7 +85,9 @@ class TestSeedHelpers:
 
     def test_seed_register_type_for_call_function(self):
         ctx = _make_ctx()
-        ctx.emit_inst(CallFunction(result_reg=Register("%0"), func_name="Dog", args=()))
+        ctx.emit_inst(
+            CallFunction(result_reg=Register("%0"), func_name=FuncName("Dog"), args=())
+        )
         ctx.seed_register_type("%0", ScalarType("Dog"))
         assert ctx.type_env_builder.register_types[Register("%0")] == ScalarType("Dog")
 

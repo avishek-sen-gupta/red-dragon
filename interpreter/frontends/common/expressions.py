@@ -15,6 +15,7 @@ from interpreter.types.type_expr import scalar
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     CallFunction,
@@ -249,7 +250,7 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> R
                 CallMethod(
                     result_reg=reg,
                     obj_reg=str(obj_reg),
-                    method_name=method_name,
+                    method_name=FuncName(method_name),
                     args=tuple(
                         str(a) if not isinstance(a, SpreadArguments) else a
                         for a in arg_regs
@@ -266,7 +267,7 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> R
         ctx.emit_inst(
             CallFunction(
                 result_reg=reg,
-                func_name=func_name,
+                func_name=FuncName(func_name),
                 args=tuple(
                     str(a) if not isinstance(a, SpreadArguments) else a
                     for a in arg_regs
