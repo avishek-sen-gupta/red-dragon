@@ -267,7 +267,9 @@ class BaseFrontend(Frontend):
         Emits the plain func_label as the CONST operand.  The symbol table
         maps func_label → FuncRef(name, label) for downstream consumers.
         """
-        self._func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
+        self._func_symbol_table[func_label] = FuncRef(
+            name=FuncName(func_name), label=func_label
+        )
         return self._emit(
             Opcode.CONST,
             result_reg=result_reg,

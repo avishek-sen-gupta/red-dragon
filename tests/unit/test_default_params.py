@@ -10,6 +10,7 @@ from interpreter.frontends import get_deterministic_frontend
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
 from interpreter.ir import Opcode
+from interpreter.func_name import FuncName
 
 
 def _make_ctx() -> TreeSitterEmitContext:
@@ -55,7 +56,7 @@ class TestEmitResolveDefaultFunc:
         func_refs = [
             ref
             for ref in ctx.func_symbol_table.values()
-            if ref.name == "__resolve_default__"
+            if ref.name == FuncName("__resolve_default__")
         ]
         assert len(func_refs) == 1
 

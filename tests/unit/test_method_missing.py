@@ -71,7 +71,7 @@ def _make_vm_with_method_missing(
     )
 
     mm_func_ref = BoundFuncRef(
-        func_ref=FuncRef(name=METHOD_MISSING, label=mm_label), closure_id=""
+        func_ref=FuncRef(name=FuncName(METHOD_MISSING), label=mm_label), closure_id=""
     )
 
     # Outer object: BOXED_FIELD -> inner_addr, __method_missing__ -> func_ref
@@ -240,7 +240,7 @@ class TestFindMethodMissingRegistryPath:
         )
 
         instance_mm_ref = BoundFuncRef(
-            func_ref=FuncRef(name=METHOD_MISSING, label=instance_mm_label),
+            func_ref=FuncRef(name=FuncName(METHOD_MISSING), label=instance_mm_label),
             closure_id="",
         )
 

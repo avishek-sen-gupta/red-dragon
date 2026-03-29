@@ -11,6 +11,7 @@ from typing import Any
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.func_name import FuncName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 import dataclasses
@@ -309,7 +310,7 @@ def _convert_llm_func_refs(
             m = _LLM_FUNC_REF_RE.search(operand)
             if m:
                 name, label = m.group(1), CodeLabel(m.group(2))
-                func_symbol_table[label] = FuncRef(name=name, label=label)
+                func_symbol_table[label] = FuncRef(name=FuncName(name), label=label)
                 instructions[i] = dataclasses.replace(t, value=str(label))
 
 
