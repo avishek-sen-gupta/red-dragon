@@ -282,22 +282,22 @@ All VM state types live in `interpreter/vm_types.py`. The state model is designe
 
 ```
 VMState
-├── heap: dict[str, HeapObject]
+├── heap: dict[str, HeapObject]          (keys: address strings like 'obj_0', 'arr_3')
 │   └── HeapObject
 │       ├── type_hint: TypeExpr    (e.g., scalar("Point"))
-│       └── fields: dict[str, Any] (field name → value)
+│       └── fields: dict[FieldName, TypedValue]  (FieldName with FieldKind: PROPERTY/INDEX/SPECIAL)
 │
 ├── call_stack: list[StackFrame]
 │   └── StackFrame
 │       ├── function_name: str     (e.g., "factorial", "<main>")
 │       ├── registers: dict        (%0 → value)
-│       ├── local_vars: dict       (x → value)
-│       ├── var_heap_aliases: dict  (var_name → Pointer, for &x aliasing)
+│       ├── local_vars: dict[VarName, TypedValue]
+│       ├── var_heap_aliases: dict[VarName, Pointer]  (for &x aliasing)
 │       ├── return_label: str      (caller's block to resume at)
 │       ├── return_ip: int         (instruction index in caller's block)
 │       ├── result_reg: str        (caller's register for return value)
 │       ├── closure_env_id: str    (shared environment ID)
-│       └── captured_var_names: frozenset[str]
+│       └── captured_var_names: frozenset[VarName]
 │
 ├── path_conditions: list[str]     (assumptions from symbolic branches)
 ├── symbolic_counter: int          (gensym: sym_0, sym_1, ...)
