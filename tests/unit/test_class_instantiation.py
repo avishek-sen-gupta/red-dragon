@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 from interpreter.ir import Opcode
 from interpreter.run import run
@@ -78,7 +79,7 @@ class Dog {
         cfg = build_cfg(ir)
         reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
         assert "Dog" in reg.class_methods
-        assert "__init__" in reg.class_methods["Dog"]
+        assert FuncName("__init__") in reg.class_methods["Dog"]
 
     def test_constructor_dispatched(self):
         """Java new expression should dispatch the constructor."""
@@ -140,7 +141,7 @@ class Dog {
         cfg = build_cfg(ir)
         reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
         assert "Dog" in reg.class_methods
-        assert "__init__" in reg.class_methods["Dog"]
+        assert FuncName("__init__") in reg.class_methods["Dog"]
 
 
 class TestScalaClassInstantiation:
@@ -159,7 +160,7 @@ class Dog(name: String) {
         cfg = build_cfg(ir)
         reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
         assert "Dog" in reg.class_methods
-        assert "getName" in reg.class_methods["Dog"]
+        assert FuncName("getName") in reg.class_methods["Dog"]
 
 
 class TestJavaScriptClassInstantiation:
