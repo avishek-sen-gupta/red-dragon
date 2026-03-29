@@ -34,7 +34,7 @@ class TestScanClassesOverloads:
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
         )
-        assert class_methods["Foo"][FuncName("greet")] == ["func_greet_0"]
+        assert class_methods[ClassName("Foo")][FuncName("greet")] == ["func_greet_0"]
 
     def test_overloaded_methods_accumulate(self):
         """Two methods with the same name should produce a two-element list."""
@@ -60,7 +60,7 @@ class TestScanClassesOverloads:
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
         )
-        assert class_methods["Foo"][FuncName("greet")] == [
+        assert class_methods[ClassName("Foo")][FuncName("greet")] == [
             "func_greet_0",
             "func_greet_1",
         ]
@@ -89,8 +89,10 @@ class TestScanClassesOverloads:
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
         )
-        assert class_methods["Foo"][FuncName("greet")] == ["func_greet_0"]
-        assert class_methods["Foo"][FuncName("farewell")] == ["func_farewell_0"]
+        assert class_methods[ClassName("Foo")][FuncName("greet")] == ["func_greet_0"]
+        assert class_methods[ClassName("Foo")][FuncName("farewell")] == [
+            "func_farewell_0"
+        ]
 
     def test_three_overloads(self):
         """Three overloads of the same method should all be preserved."""
@@ -114,7 +116,7 @@ class TestScanClassesOverloads:
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
         )
-        assert class_methods["Calc"][FuncName("add")] == [
+        assert class_methods[ClassName("Calc")][FuncName("add")] == [
             "func_add_0",
             "func_add_1",
             "func_add_2",
@@ -148,8 +150,8 @@ class Calc {
 """)
         cfg = build_cfg(ir)
         reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
-        assert "Calc" in reg.class_methods
+        assert ClassName("Calc") in reg.class_methods
         # __init__ should have 2 overloads (from two constructors)
-        assert len(reg.class_methods["Calc"][FuncName("__init__")]) == 2
+        assert len(reg.class_methods[ClassName("Calc")][FuncName("__init__")]) == 2
         # add should have 2 overloads
-        assert len(reg.class_methods["Calc"][FuncName("add")]) == 2
+        assert len(reg.class_methods[ClassName("Calc")][FuncName("add")]) == 2

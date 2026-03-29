@@ -1,5 +1,6 @@
 """Tests for FuncName accessor methods on registries and tables."""
 
+from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
 from interpreter.registry import FunctionRegistry
 from interpreter.refs.func_ref import FuncRef
@@ -36,26 +37,26 @@ class TestRegistryLookupMethods:
     def test_lookup_methods_found(self):
         reg = FunctionRegistry()
         label = CodeLabel("func_get_0")
-        reg.register_method("MyClass", FuncName("get"), label)
-        assert reg.lookup_methods("MyClass", FuncName("get")) == [label]
+        reg.register_method(ClassName("MyClass"), FuncName("get"), label)
+        assert reg.lookup_methods(ClassName("MyClass"), FuncName("get")) == [label]
 
     def test_lookup_methods_not_found(self):
         reg = FunctionRegistry()
-        assert reg.lookup_methods("MyClass", FuncName("missing")) == []
+        assert reg.lookup_methods(ClassName("MyClass"), FuncName("missing")) == []
 
     def test_register_multiple_methods_same_name(self):
         reg = FunctionRegistry()
         l1 = CodeLabel("func_get_0")
         l2 = CodeLabel("func_get_1")
-        reg.register_method("Bar", FuncName("get"), l1)
-        reg.register_method("Bar", FuncName("get"), l2)
-        assert reg.lookup_methods("Bar", FuncName("get")) == [l1, l2]
+        reg.register_method(ClassName("Bar"), FuncName("get"), l1)
+        reg.register_method(ClassName("Bar"), FuncName("get"), l2)
+        assert reg.lookup_methods(ClassName("Bar"), FuncName("get")) == [l1, l2]
 
     def test_register_method_stores_func_name_key(self):
         reg = FunctionRegistry()
         label = CodeLabel("func_get_0")
-        reg.register_method("MyClass", FuncName("get"), label)
-        inner = reg.class_methods["MyClass"]
+        reg.register_method(ClassName("MyClass"), FuncName("get"), label)
+        inner = reg.class_methods[ClassName("MyClass")]
         for key in inner:
             assert isinstance(key, FuncName), f"inner key {key!r} should be FuncName"
 
