@@ -9,7 +9,7 @@ from interpreter.ir import CodeLabel
 class TestRegistryLookupFunc:
     def test_lookup_func_found(self):
         reg = FunctionRegistry()
-        ref = FuncRef(name="add", label=CodeLabel("func_add_0"))
+        ref = FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0"))
         reg.register_func(FuncName("add"), ref)
         assert reg.lookup_func(FuncName("add")) == ref
 
@@ -19,15 +19,15 @@ class TestRegistryLookupFunc:
 
     def test_register_func_overwrites(self):
         reg = FunctionRegistry()
-        ref1 = FuncRef(name="add", label=CodeLabel("func_add_0"))
-        ref2 = FuncRef(name="add", label=CodeLabel("func_add_1"))
+        ref1 = FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0"))
+        ref2 = FuncRef(name=FuncName("add"), label=CodeLabel("func_add_1"))
         reg.register_func(FuncName("add"), ref1)
         reg.register_func(FuncName("add"), ref2)
         assert reg.lookup_func(FuncName("add")) == ref2
 
     def test_register_func_stores_func_name_key(self):
         reg = FunctionRegistry()
-        ref = FuncRef(name="sub", label=CodeLabel("func_sub_0"))
+        ref = FuncRef(name=FuncName("sub"), label=CodeLabel("func_sub_0"))
         reg.register_func(FuncName("sub"), ref)
         assert reg.func_refs[FuncName("sub")] == ref
 
