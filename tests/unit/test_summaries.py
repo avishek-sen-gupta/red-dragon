@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.cfg import build_cfg
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import Definition
@@ -349,3 +351,6 @@ class TestBuildSummary:
         assert isinstance(summary, FunctionSummary)
         assert summary.function == entry
         assert summary.context == ctx
+        # Actually verify frozen: mutation must raise
+        with pytest.raises(AttributeError):
+            summary.function = entry

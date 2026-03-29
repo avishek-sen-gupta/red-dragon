@@ -46,10 +46,13 @@ class Dog {
 }
 $obj = new Dog();
 $copy = clone $obj;
-$answer = $copy->name;
+$obj->name = "Buddy";
+$original_name = $obj->name;
+$copy_name = $copy->name;
 ?>"""
         vars_ = _run(source)
-        assert vars_[VarName("$answer")] == "Rex"
+        assert vars_[VarName("$copy_name")] == "Rex"
+        assert vars_[VarName("$original_name")] == "Buddy"
 
 
 class TestPhpConstExecution:
