@@ -16,6 +16,7 @@ from interpreter.field_name import FieldName
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 from interpreter.instructions import (
     Const,
     DeclVar,
@@ -377,7 +378,7 @@ def _extract_js_method(node) -> tuple[str, "FunctionInfo"] | None:
     name = name_node.text.decode()
     params_node = node.child_by_field_name("parameters")
     params = _extract_param_names(params_node) if params_node is not None else ()
-    return name, FunctionInfo(name=name, params=params, return_type="")
+    return name, FunctionInfo(name=FuncName(name), params=params, return_type="")
 
 
 def _extract_param_names(params_node) -> tuple[str, ...]:
@@ -390,7 +391,6 @@ def _extract_param_names(params_node) -> tuple[str, ...]:
             id_node = next((c for c in p.children if c.type == "identifier"), p)
             names.append(id_node.text.decode())
     return tuple(names)
-    return name, FunctionInfo(name=name, params=params, return_type="")
 
 
 def _extract_js_self_fields(body) -> "dict[str, FieldInfo]":
@@ -417,8 +417,8 @@ def _extract_js_self_fields(body) -> "dict[str, FieldInfo]":
         if obj_node.text != b"this":
             continue
         field_name = prop_node.text.decode()
-        fields[field_name] = FieldInfo(
-            name=field_name, type_hint="", has_initializer=True
+        fields[FieldName(field_name)] = FieldInfo(
+            name=FieldName(field_name), type_hint="", has_initializer=True
         )
     return fields
 
@@ -445,16 +445,20 @@ def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":
             for sub in c.children
             if sub.type == JSN.IDENTIFIER
         ]
-        parents = tuple(c.text.decode() for c in (direct_ids or nested_ids))
+        parents = tuple(ClassName(c.text.decode()) for c in (direct_ids or nested_ids))
 
     body = node.child_by_field_name("body")
     if body is None:
         return class_name, ClassInfo(
-            name=class_name, fields={}, methods={}, constants={}, parents=parents
+            name=ClassName(class_name),
+            fields={},
+            methods={},
+            constants={},
+            parents=parents,
         )
 
-    fields: dict[str, FieldInfo] = {}
-    methods: dict[str, FunctionInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
 
     for child in body.children:
         if child.type == JSN.METHOD_DEFINITION:
@@ -462,7 +466,7 @@ def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":
             if result is None:
                 continue
             mname, minfo = result
-            methods[mname] = minfo
+            methods[FuncName(mname)] = minfo
             if mname == "constructor":
                 ctor_body = child.child_by_field_name("body")
                 if ctor_body is not None:
@@ -472,16 +476,20 @@ def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":
             if prop_node is not None:
                 fname = prop_node.text.decode()
                 has_init = child.child_by_field_name("value") is not None
-                fields[fname] = FieldInfo(
-                    name=fname, type_hint="", has_initializer=has_init
+                fields[FieldName(fname)] = FieldInfo(
+                    name=FieldName(fname), type_hint="", has_initializer=has_init
                 )
 
     return class_name, ClassInfo(
-        name=class_name, fields=fields, methods=methods, constants={}, parents=parents
+        name=ClassName(class_name),
+        fields=fields,
+        methods=methods,
+        constants={},
+        parents=parents,
     )
 
 
-def _collect_js_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+def _collect_js_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all class nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -489,7 +497,7 @@ def _collect_js_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
         result = _extract_js_class(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_js_classes(child, accumulator)
 
@@ -498,6 +506,6 @@ def extract_javascript_symbols(root) -> "SymbolTable":
     """Walk the JS AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_js_classes(root, classes)
     return SymbolTable(classes=classes)

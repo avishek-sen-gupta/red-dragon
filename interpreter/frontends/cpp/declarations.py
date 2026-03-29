@@ -539,6 +539,7 @@ from interpreter.frontends.symbol_table import (
     FunctionInfo,
     SymbolTable,
 )
+from interpreter.class_name import ClassName
 
 
 def _is_cpp_static(node) -> bool:
@@ -575,7 +576,9 @@ def _extract_cpp_field(node) -> tuple[str, FieldInfo] | None:
         None,
     )
     type_hint = type_node.text.decode() if type_node else ""
-    return name, FieldInfo(name=name, type_hint=type_hint, has_initializer=False)
+    return name, FieldInfo(
+        name=FieldName(name), type_hint=type_hint, has_initializer=False
+    )
 
 
 def _extract_cpp_method(node) -> tuple[str, FunctionInfo] | None:
@@ -622,7 +625,9 @@ def _extract_cpp_method(node) -> tuple[str, FunctionInfo] | None:
         None,
     )
     return_type = type_node.text.decode() if type_node else ""
-    return name, FunctionInfo(name=name, params=params, return_type=return_type)
+    return name, FunctionInfo(
+        name=FuncName(name), params=params, return_type=return_type
+    )
 
 
 def _cpp_param_name(node) -> str | None:
@@ -647,7 +652,7 @@ def _extract_cpp_class_parents(node) -> tuple[str, ...]:
     if base_clause is None:
         return ()
     return tuple(
-        c.text.decode()
+        ClassName(c.text.decode())
         for c in base_clause.children
         if c.type == CppNodeType.TYPE_IDENTIFIER
     )
@@ -670,12 +675,16 @@ def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
     )
     if body is None:
         return class_name, ClassInfo(
-            name=class_name, fields={}, methods={}, constants={}, parents=parents
+            name=ClassName(class_name),
+            fields={},
+            methods={},
+            constants={},
+            parents=parents,
         )
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     constants_map: dict[str, str] = {}
-    methods: dict[str, FunctionInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
 
     for child in body.children:
         if child.type == CppNodeType.FIELD_DECLARATION:
@@ -686,16 +695,16 @@ def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
             if _is_cpp_static(child):
                 constants_map[fname] = finfo.type_hint
             else:
-                fields[fname] = finfo
+                fields[FieldName(fname)] = finfo
         elif child.type == CppNodeType.FUNCTION_DEFINITION:
             result = _extract_cpp_method(child)
             if result is None:
                 continue
             mname, minfo = result
-            methods[mname] = minfo
+            methods[FuncName(mname)] = minfo
 
     return class_name, ClassInfo(
-        name=class_name,
+        name=ClassName(class_name),
         fields=fields,
         methods=methods,
         constants=constants_map,
@@ -703,19 +712,19 @@ def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
     )
 
 
-def _collect_cpp_classes(node, accumulator: dict[str, ClassInfo]) -> None:
+def _collect_cpp_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class_specifier nodes."""
     if node.type == CppNodeType.CLASS_SPECIFIER:
         result = _extract_cpp_class(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_cpp_classes(child, accumulator)
 
 
 def extract_cpp_symbols(root) -> SymbolTable:
     """Walk the C++ AST and return a SymbolTable of all class definitions."""
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_cpp_classes(root, classes)
     return SymbolTable(classes=classes)

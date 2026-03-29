@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from interpreter.frontends.common.patterns import ClassPattern, Pattern
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.class_name import ClassName
 
 
 def parse_number(text: str, strip_suffixes: str = "") -> int | float:
@@ -36,7 +37,7 @@ def resolve_positional_via_match_args(
     If the class has match_args in the symbol table, positional patterns
     are converted to keyword patterns using LOAD_FIELD instead of LOAD_INDEX.
     """
-    class_info = ctx.symbol_table.classes.get(class_name)
+    class_info = ctx.symbol_table.classes.get(ClassName(class_name))
     match_args = list(class_info.match_args) if class_info else []
     if positional and match_args:
         keyword = tuple(

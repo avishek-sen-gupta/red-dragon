@@ -61,5 +61,8 @@ class NoFieldName(FieldName):
     def is_present(self) -> bool:
         return False
 
+    def __bool__(self) -> bool:
+        return False
+
 
 NO_FIELD_NAME = NoFieldName()

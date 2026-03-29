@@ -18,6 +18,9 @@ from interpreter.frontends.go.expressions import (
 )
 from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.var_name import VarName
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     DeclVar,
@@ -416,7 +419,7 @@ def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
     """Extract fields from a Go struct field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     for child in field_declaration_list.children:
         if child.type != "field_declaration":
             continue
@@ -426,8 +429,8 @@ def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
         for subchild in child.children:
             if subchild.type == GoNodeType.FIELD_IDENTIFIER:
                 fname = subchild.text.decode()
-                fields[fname] = FieldInfo(
-                    name=fname, type_hint=type_hint, has_initializer=False
+                fields[FieldName(fname)] = FieldInfo(
+                    name=FieldName(fname), type_hint=type_hint, has_initializer=False
                 )
     return fields
 
@@ -444,7 +447,7 @@ def _extract_go_method_params(params_node) -> "tuple[str, ...]":
 
 
 def _collect_go_structs(
-    node, classes: "dict[str, ClassInfo]", methods: "dict[str, FunctionInfo]"
+    node, classes: "dict[ClassName, ClassInfo]", methods: "dict[FuncName, FunctionInfo]"
 ) -> None:
     """Walk AST to collect structs (as ClassInfo) and top-level/method functions."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
@@ -473,8 +476,8 @@ def _collect_go_structs(
                         if field_list is not None
                         else {}
                     )
-                    classes[struct_name] = ClassInfo(
-                        name=struct_name,
+                    classes[ClassName(struct_name)] = ClassInfo(
+                        name=ClassName(struct_name),
                         fields=fields,
                         methods={},
                         constants={},
@@ -490,7 +493,9 @@ def _collect_go_structs(
                 if params_node is not None
                 else ()
             )
-            methods[fname] = FunctionInfo(name=fname, params=params, return_type="")
+            methods[FuncName(fname)] = FunctionInfo(
+                name=FuncName(fname), params=params, return_type=""
+            )
     elif node.type == GoNodeType.METHOD_DECLARATION:
         # Attach method to its receiver type
         name_node = node.child_by_field_name("name")
@@ -503,7 +508,7 @@ def _collect_go_structs(
                 if params_node is not None
                 else ()
             )
-            minfo = FunctionInfo(name=mname, params=params, return_type="")
+            minfo = FunctionInfo(name=FuncName(mname), params=params, return_type="")
             # Find receiver type name from parameter_declaration > type_identifier
             receiver_type = next(
                 (
@@ -515,8 +520,8 @@ def _collect_go_structs(
                 ),
                 None,
             )
-            if receiver_type is not None and receiver_type in classes:
-                classes[receiver_type].methods[mname] = minfo
+            if receiver_type is not None and ClassName(receiver_type) in classes:
+                classes[ClassName(receiver_type)].methods[FuncName(mname)] = minfo
     for child in node.children:
         _collect_go_structs(child, classes, methods)
 
@@ -525,7 +530,7 @@ def extract_go_symbols(root) -> "SymbolTable":
     """Walk the Go AST and return a SymbolTable of all struct and function definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 
-    classes: dict[str, ClassInfo] = {}
-    top_level_functions: dict[str, FunctionInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
+    top_level_functions: dict[FuncName, FunctionInfo] = {}
     _collect_go_structs(root, classes, top_level_functions)
     return SymbolTable(classes=classes, functions=top_level_functions)

@@ -572,6 +572,8 @@ from interpreter.frontends.symbol_table import (
     FunctionInfo,
     SymbolTable,
 )
+from interpreter.class_name import ClassName
+from interpreter.func_name import FuncName
 
 
 def _is_java_static(node) -> bool:
@@ -616,7 +618,7 @@ def _extract_java_field(node) -> tuple[str, FieldInfo] | None:
     value_node = declarator.child_by_field_name("value")
     has_initializer = value_node is not None
     return name, FieldInfo(
-        name=name, type_hint=type_hint, has_initializer=has_initializer
+        name=FieldName(name), type_hint=type_hint, has_initializer=has_initializer
     )
 
 
@@ -639,7 +641,9 @@ def _extract_java_method(node) -> tuple[str, FunctionInfo] | None:
     )
     type_node = node.child_by_field_name("type")
     return_type = type_node.text.decode() if type_node else ""
-    return name, FunctionInfo(name=name, params=params, return_type=return_type)
+    return name, FunctionInfo(
+        name=FuncName(name), params=params, return_type=return_type
+    )
 
 
 def _extract_java_class_parents(node) -> tuple[str, ...]:
@@ -656,7 +660,7 @@ def _extract_java_class_parents(node) -> tuple[str, ...]:
     )
     if type_id is None:
         return ()
-    return (type_id.text.decode(),)
+    return (ClassName(type_id.text.decode()),)
 
 
 def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
@@ -673,12 +677,16 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
     )
     if body is None:
         return class_name, ClassInfo(
-            name=class_name, fields={}, methods={}, constants={}, parents=parents
+            name=ClassName(class_name),
+            fields={},
+            methods={},
+            constants={},
+            parents=parents,
         )
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     constants_map: dict[str, str] = {}
-    methods: dict[str, FunctionInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
 
     for child in body.children:
         if child.type == JavaNodeType.FIELD_DECLARATION:
@@ -689,16 +697,16 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
             if _is_java_static(child):
                 constants_map[fname] = finfo.type_hint
             else:
-                fields[fname] = finfo
+                fields[FieldName(fname)] = finfo
         elif child.type == JavaNodeType.METHOD_DECLARATION:
             result = _extract_java_method(child)
             if result is None:
                 continue
             mname, minfo = result
-            methods[mname] = minfo
+            methods[FuncName(mname)] = minfo
 
     return class_name, ClassInfo(
-        name=class_name,
+        name=ClassName(class_name),
         fields=fields,
         methods=methods,
         constants=constants_map,
@@ -706,19 +714,19 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
     )
 
 
-def _collect_java_classes(node, accumulator: dict[str, ClassInfo]) -> None:
+def _collect_java_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class_declaration nodes."""
     if node.type == JavaNodeType.CLASS_DECLARATION:
         result = _extract_java_class(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_java_classes(child, accumulator)
 
 
 def extract_java_symbols(root) -> SymbolTable:
     """Walk the Java AST and return a SymbolTable of all class definitions."""
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_java_classes(root, classes)
     return SymbolTable(classes=classes)
