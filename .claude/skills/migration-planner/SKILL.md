@@ -56,9 +56,11 @@ Report these counts before proceeding. The totals drive the strategy choice.
 
 | Size | Construction Sites | Consumption Dicts | Recommended Strategy |
 |------|-------------------|-------------------|---------------------|
-| **Small** | < 30 | 0-1 | Direct (no bridge) |
-| **Medium** | 30-200 | 1-3 | No bridge, split commits |
+| **Small** | < 30 | 0 | Direct (no bridge) |
+| **Medium** | 30-200 | 1-3 | Accessor pattern OR no bridge split commits |
 | **Large** | 200+ | 4+ | Accessor pattern |
+
+**Rule of thumb:** If any dicts are involved, prefer the accessor pattern. It adds one extra commit (define accessors) but makes every subsequent commit independently green. The "no bridge, split commits" strategy only makes sense when there are zero consumption dicts — just field types and construction sites.
 
 ### Strategy A: Direct (Small migrations)
 
