@@ -67,7 +67,7 @@ class TestAddressOfPointerGuard:
 
         inst = IRInstruction(
             opcode=Opcode.ADDRESS_OF,
-            result_reg="t0",
+            result_reg=Register("t0"),
             operands=["ptr"],
         )
 
@@ -112,7 +112,7 @@ class TestAddressOfPointerGuard:
 
         inst = IRInstruction(
             opcode=Opcode.ADDRESS_OF,
-            result_reg="t0",
+            result_reg=Register("t0"),
             operands=["arr"],
         )
 
@@ -146,7 +146,7 @@ class TestAddressOfPointerGuard:
 
         inst = IRInstruction(
             opcode=Opcode.ADDRESS_OF,
-            result_reg="t0",
+            result_reg=Register("t0"),
             operands=["pt"],
         )
 

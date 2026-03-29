@@ -78,7 +78,7 @@ class TestNumericStringIndexUsesIndexKind:
         vm.current_frame.registers[Register("%idx")] = typed_from_runtime("0")
 
         inst = _make_inst(
-            Opcode.LOAD_INDEX, result_reg="%out", operands=["%arr", "%idx"]
+            Opcode.LOAD_INDEX, result_reg=Register("%out"), operands=["%arr", "%idx"]
         )
         result = _handle_load_index(inst, vm, _CTX)
         _apply(vm, result)
@@ -99,7 +99,7 @@ class TestNumericStringIndexUsesIndexKind:
         vm.current_frame.registers[Register("%idx")] = typed_from_runtime("3")
 
         inst = _make_inst(
-            Opcode.LOAD_INDEX, result_reg="%out", operands=["%arr", "%idx"]
+            Opcode.LOAD_INDEX, result_reg=Register("%out"), operands=["%arr", "%idx"]
         )
         result = _handle_load_index(inst, vm, _CTX)
         _apply(vm, result)
@@ -128,7 +128,9 @@ class TestLoadIndirectIndexToPropertyFallback:
         ptr = Pointer(base=Address("box_0"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
 
-        inst = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr"])
+        inst = _make_inst(
+            Opcode.LOAD_INDIRECT, result_reg=Register("%val"), operands=["%ptr"]
+        )
         result = _handle_load_indirect(inst, vm, _CTX)
         _apply(vm, result)
 
@@ -150,7 +152,9 @@ class TestLoadIndirectIndexToPropertyFallback:
         ptr = Pointer(base=Address("mem_0"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
 
-        inst = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr"])
+        inst = _make_inst(
+            Opcode.LOAD_INDIRECT, result_reg=Register("%val"), operands=["%ptr"]
+        )
         result = _handle_load_indirect(inst, vm, _CTX)
         _apply(vm, result)
 
@@ -172,7 +176,9 @@ class TestLoadIndirectIndexToPropertyFallback:
         ptr = Pointer(base=Address("box_1"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
 
-        inst = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr"])
+        inst = _make_inst(
+            Opcode.LOAD_INDIRECT, result_reg=Register("%val"), operands=["%ptr"]
+        )
         result = _handle_load_indirect(inst, vm, _CTX)
         _apply(vm, result)
 

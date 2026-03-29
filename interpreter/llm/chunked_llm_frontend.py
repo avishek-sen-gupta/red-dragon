@@ -13,7 +13,7 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import CodeLabel, IRInstruction, NoCodeLabel, Opcode, NO_LABEL
 from interpreter.instructions import InstructionBase, Label_, Symbolic
-from interpreter.register import Register
+from interpreter.register import Register, NO_REGISTER
 from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
@@ -206,14 +206,14 @@ class IRRenumberer:
         next_offset = max_reg + 1 if max_reg >= 0 else reg_offset
         return result, next_offset
 
-    def _renumber_reg(self, reg: str | None, offset: int) -> str | None:
-        if reg is None or (hasattr(reg, "is_present") and not reg.is_present()):
-            return None
+    def _renumber_reg(self, reg: Register, offset: int) -> Register:
+        if not reg.is_present():
+            return NO_REGISTER
         reg_str = str(reg)
         match = _REG_PATTERN.match(reg_str)
         if match:
-            return f"%{int(match.group(1)) + offset}"
-        return reg_str
+            return Register(f"%{int(match.group(1)) + offset}")
+        return reg
 
     def _renumber_operand(self, operand: Any, offset: int, label_suffix: str) -> Any:
         if not isinstance(operand, str):

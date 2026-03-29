@@ -2,6 +2,7 @@
 
 from interpreter.address import Address
 from interpreter.var_name import VarName
+from interpreter.register import Register
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.cfg import build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
@@ -27,7 +28,7 @@ class TestExecuteCfgTracedBasic:
     def test_trace_length_matches_executed_steps(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [42]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [42]}),
             (Opcode.STORE_VAR, {"operands": ["x", "%0"]}),
             (Opcode.RETURN, {"operands": ["%0"]}),
         )
@@ -41,7 +42,7 @@ class TestExecuteCfgTracedBasic:
     def test_returns_execution_trace_type(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [1]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [1]}),
             (Opcode.RETURN, {"operands": ["%0"]}),
         )
         cfg, registry = _build_simple_cfg(instructions)
@@ -54,9 +55,9 @@ class TestExecuteCfgTracedBasic:
     def test_each_snapshot_is_independent(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [1]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [1]}),
             (Opcode.STORE_VAR, {"operands": ["x", "%0"]}),
-            (Opcode.CONST, {"result_reg": "%1", "operands": [2]}),
+            (Opcode.CONST, {"result_reg": Register("%1"), "operands": [2]}),
             (Opcode.STORE_VAR, {"operands": ["y", "%1"]}),
             (Opcode.RETURN, {"operands": ["%1"]}),
         )
@@ -72,7 +73,7 @@ class TestExecuteCfgTracedBasic:
     def test_block_label_and_instruction_index_are_correct(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [42]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [42]}),
             (Opcode.STORE_VAR, {"operands": ["x", "%0"]}),
             (Opcode.RETURN, {"operands": ["%0"]}),
         )
@@ -90,7 +91,7 @@ class TestExecuteCfgTracedBasic:
     def test_initial_state_has_empty_heap_and_main_frame(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [1]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [1]}),
             (Opcode.RETURN, {"operands": ["%0"]}),
         )
         cfg, registry = _build_simple_cfg(instructions)
@@ -105,9 +106,12 @@ class TestExecuteCfgTracedBasic:
     def test_step_indices_are_sequential(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [5]}),
-            (Opcode.CONST, {"result_reg": "%1", "operands": [3]}),
-            (Opcode.BINOP, {"result_reg": "%2", "operands": ["+", "%0", "%1"]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [5]}),
+            (Opcode.CONST, {"result_reg": Register("%1"), "operands": [3]}),
+            (
+                Opcode.BINOP,
+                {"result_reg": Register("%2"), "operands": ["+", "%0", "%1"]},
+            ),
             (Opcode.STORE_VAR, {"operands": ["sum", "%2"]}),
             (Opcode.RETURN, {"operands": ["%2"]}),
         )
@@ -122,7 +126,7 @@ class TestExecuteCfgTracedBasic:
     def test_stats_match_trace_length(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [42]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [42]}),
             (Opcode.STORE_VAR, {"operands": ["x", "%0"]}),
             (Opcode.RETURN, {"operands": ["%0"]}),
         )
@@ -137,7 +141,7 @@ class TestExecuteCfgTracedBasic:
     def test_final_vm_state_matches_last_trace_step(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [42]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [42]}),
             (Opcode.STORE_VAR, {"operands": ["x", "%0"]}),
             (Opcode.RETURN, {"operands": ["%0"]}),
         )
@@ -151,7 +155,7 @@ class TestExecuteCfgTracedBasic:
     def test_used_llm_is_false_for_local_execution(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [1]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [1]}),
             (Opcode.RETURN, {"operands": ["%0"]}),
         )
         cfg, registry = _build_simple_cfg(instructions)
@@ -163,7 +167,7 @@ class TestExecuteCfgTracedBasic:
     def test_branch_trace_records_correct_labels(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": "%0", "operands": [True]}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [True]}),
             (
                 Opcode.BRANCH_IF,
                 {
@@ -175,11 +179,11 @@ class TestExecuteCfgTracedBasic:
                 },
             ),
             (Opcode.LABEL, {"label": CodeLabel("then_block")}),
-            (Opcode.CONST, {"result_reg": "%1", "operands": [10]}),
+            (Opcode.CONST, {"result_reg": Register("%1"), "operands": [10]}),
             (Opcode.STORE_VAR, {"operands": ["result", "%1"]}),
             (Opcode.RETURN, {"operands": ["%1"]}),
             (Opcode.LABEL, {"label": CodeLabel("else_block")}),
-            (Opcode.CONST, {"result_reg": "%2", "operands": [20]}),
+            (Opcode.CONST, {"result_reg": Register("%2"), "operands": [20]}),
             (Opcode.RETURN, {"operands": ["%2"]}),
         )
         cfg, registry = _build_simple_cfg(instructions)

@@ -21,6 +21,7 @@ from interpreter.interprocedural.types import (
     ReturnEndpoint,
     VariableEndpoint,
 )
+from interpreter.register import Register
 from interpreter.interprocedural.summaries import (
     build_summary,
     extract_sub_cfg,
@@ -62,12 +63,12 @@ class TestExtractSubCfg:
         """A program with main + func__foo: extract_sub_cfg returns only foo's blocks."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _inst(Opcode.CONST, result_reg=Register("%0"), operands=["42"]),
             _inst(Opcode.RETURN, operands=["%0"]),
             _inst(Opcode.LABEL, label=CodeLabel("func__foo")),
-            _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:x"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%1"), operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%1"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%2", operands=["x"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%2"), operands=["x"]),
             _inst(Opcode.RETURN, operands=["%2"]),
         ]
         full_cfg = build_cfg(ir)
@@ -83,12 +84,12 @@ class TestExtractSubCfg:
         """Function with internal branching blocks — all prefixed blocks included."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _inst(Opcode.CONST, result_reg="%0", operands=["0"]),
+            _inst(Opcode.CONST, result_reg=Register("%0"), operands=["0"]),
             _inst(Opcode.RETURN, operands=["%0"]),
             _inst(Opcode.LABEL, label=CodeLabel("func__bar")),
-            _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:x"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%1"), operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%1"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%2", operands=["x"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%2"), operands=["x"]),
             _inst(
                 Opcode.BRANCH_IF,
                 operands=["%2"],
@@ -98,10 +99,10 @@ class TestExtractSubCfg:
                 ],
             ),
             _inst(Opcode.LABEL, label=CodeLabel("func__bar_if_true_1")),
-            _inst(Opcode.CONST, result_reg="%3", operands=["1"]),
+            _inst(Opcode.CONST, result_reg=Register("%3"), operands=["1"]),
             _inst(Opcode.RETURN, operands=["%3"]),
             _inst(Opcode.LABEL, label=CodeLabel("func__bar_if_false_1")),
-            _inst(Opcode.CONST, result_reg="%4", operands=["0"]),
+            _inst(Opcode.CONST, result_reg=Register("%4"), operands=["0"]),
             _inst(Opcode.RETURN, operands=["%4"]),
         ]
         full_cfg = build_cfg(ir)
@@ -123,22 +124,22 @@ class TestExtractSubCfg:
             _inst(Opcode.LABEL, label=CodeLabel("entry")),
             _inst(Opcode.BRANCH, label=CodeLabel("end_foo_1")),
             _inst(Opcode.LABEL, label=CodeLabel("func_foo_0")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:n"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:n"]),
             _inst(Opcode.DECL_VAR, operands=["n", "%0"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["n"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["n"]),
             _inst(
                 Opcode.BRANCH_IF,
                 operands=["%1"],
                 branch_targets=[CodeLabel("if_true_2"), CodeLabel("if_end_3")],
             ),
             _inst(Opcode.LABEL, label=CodeLabel("if_true_2")),
-            _inst(Opcode.CONST, result_reg="%2", operands=["1"]),
+            _inst(Opcode.CONST, result_reg=Register("%2"), operands=["1"]),
             _inst(Opcode.RETURN, operands=["%2"]),
             _inst(Opcode.LABEL, label=CodeLabel("if_end_3")),
-            _inst(Opcode.LOAD_VAR, result_reg="%3", operands=["n"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%3"), operands=["n"]),
             _inst(Opcode.RETURN, operands=["%3"]),
             _inst(Opcode.LABEL, label=CodeLabel("end_foo_1")),
-            _inst(Opcode.CONST, result_reg="%4", operands=["5"]),
+            _inst(Opcode.CONST, result_reg=Register("%4"), operands=["5"]),
             _inst(Opcode.RETURN, operands=["%4"]),
         ]
         full_cfg = build_cfg(ir)
@@ -160,9 +161,9 @@ class TestBuildSummary:
         """SYMBOLIC param:x; STORE_VAR x; LOAD_VAR x; RETURN → (Variable(x), Return)."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__id")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%0"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["x"]),
             _inst(Opcode.RETURN, operands=["%1"]),
         ]
         cfg = build_cfg(ir)
@@ -186,9 +187,9 @@ class TestBuildSummary:
         """
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__id")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:x"]),
             _inst(Opcode.DECL_VAR, operands=["x", "%0"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["x"]),
             _inst(Opcode.RETURN, operands=["%1"]),
         ]
         cfg = build_cfg(ir)
@@ -213,11 +214,11 @@ class TestBuildSummary:
         """
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__inc")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:x"]),
             _inst(Opcode.DECL_VAR, operands=["x", "%0"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
-            _inst(Opcode.CONST, result_reg="%2", operands=["1"]),
-            _inst(Opcode.BINOP, result_reg="%3", operands=["+", "%1", "%2"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["x"]),
+            _inst(Opcode.CONST, result_reg=Register("%2"), operands=["1"]),
+            _inst(Opcode.BINOP, result_reg=Register("%3"), operands=["+", "%1", "%2"]),
             _inst(Opcode.RETURN, operands=["%3"]),
         ]
         cfg = build_cfg(ir)
@@ -236,15 +237,15 @@ class TestBuildSummary:
         """a + b → return: both params flow to return."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__add")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:a"]),
             _inst(Opcode.STORE_VAR, operands=["a", "%0"]),
-            _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%1"), operands=["param:b"]),
             _inst(Opcode.STORE_VAR, operands=["b", "%1"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%2", operands=["a"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%3", operands=["b"]),
-            _inst(Opcode.BINOP, result_reg="%4", operands=["+", "%2", "%3"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%2"), operands=["a"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%3"), operands=["b"]),
+            _inst(Opcode.BINOP, result_reg=Register("%4"), operands=["+", "%2", "%3"]),
             _inst(Opcode.STORE_VAR, operands=["result", "%4"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%5", operands=["result"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%5"), operands=["result"]),
             _inst(Opcode.RETURN, operands=["%5"]),
         ]
         cfg = build_cfg(ir)
@@ -268,12 +269,12 @@ class TestBuildSummary:
         """STORE_FIELD obj "name" val → (Variable(val), FieldEndpoint(obj, "name"))."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__setter")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:obj"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:obj"]),
             _inst(Opcode.STORE_VAR, operands=["obj", "%0"]),
-            _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:val"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%1"), operands=["param:val"]),
             _inst(Opcode.STORE_VAR, operands=["val", "%1"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%2", operands=["val"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%3", operands=["obj"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%2"), operands=["val"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%3"), operands=["obj"]),
             _inst(Opcode.STORE_FIELD, operands=["%3", "name", "%2"]),
         ]
         cfg = build_cfg(ir)
@@ -296,12 +297,16 @@ class TestBuildSummary:
         """LOAD_FIELD obj "name" → return: (FieldEndpoint(obj, "name"), Return)."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__getter")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:obj"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:obj"]),
             _inst(Opcode.STORE_VAR, operands=["obj", "%0"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["obj"]),
-            _inst(Opcode.LOAD_FIELD, result_reg="%2", operands=["%1", "name"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["obj"]),
+            _inst(
+                Opcode.LOAD_FIELD, result_reg=Register("%2"), operands=["%1", "name"]
+            ),
             _inst(Opcode.STORE_VAR, operands=["__field_name", "%2"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%3", operands=["__field_name"]),
+            _inst(
+                Opcode.LOAD_VAR, result_reg=Register("%3"), operands=["__field_name"]
+            ),
             _inst(Opcode.RETURN, operands=["%3"]),
         ]
         cfg = build_cfg(ir)
@@ -323,7 +328,7 @@ class TestBuildSummary:
         """CONST 42; RETURN → no param-connected flows."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__const")),
-            _inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _inst(Opcode.CONST, result_reg=Register("%0"), operands=["42"]),
             _inst(Opcode.RETURN, operands=["%0"]),
         ]
         cfg = build_cfg(ir)
@@ -338,9 +343,9 @@ class TestBuildSummary:
         """FunctionSummary should be immutable (frozen dataclass)."""
         ir = [
             _inst(Opcode.LABEL, label=CodeLabel("func__id")),
-            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
+            _inst(Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%0"]),
-            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
+            _inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["x"]),
             _inst(Opcode.RETURN, operands=["%1"]),
         ]
         cfg = build_cfg(ir)
