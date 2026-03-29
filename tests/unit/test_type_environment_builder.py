@@ -14,6 +14,7 @@ from interpreter.types.type_expr import (
     parse_type,
     scalar,
 )
+from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 
 
@@ -51,8 +52,8 @@ class TestTypeEnvironmentBuilder:
         )
         env = builder.build()
         unbound_sigs = env.method_signatures.get(UNBOUND, {})
-        assert "add" in unbound_sigs
-        sig = env.get_func_signature("add")
+        assert FuncName("add") in unbound_sigs
+        sig = env.get_func_signature(FuncName("add"))
         assert sig.return_type == "Int"
         assert sig.params == (("a", scalar("Int")), ("b", scalar("Int")))
 
@@ -69,8 +70,8 @@ class TestTypeEnvironmentBuilder:
         )
         env = builder.build()
         unbound_sigs = env.method_signatures.get(UNBOUND, {})
-        assert "add" in unbound_sigs
-        assert "func_add_0" not in unbound_sigs
+        assert FuncName("add") in unbound_sigs
+        assert FuncName("func_add_0") not in unbound_sigs
 
     def test_build_returns_frozen_mappings(self):
         builder = TypeEnvironmentBuilder(
@@ -93,7 +94,7 @@ class TestTypeEnvironmentBuilder:
     def test_func_signature_with_return_only(self):
         builder = TypeEnvironmentBuilder(func_return_types={"greet": scalar("String")})
         env = builder.build()
-        sig = env.get_func_signature("greet")
+        sig = env.get_func_signature(FuncName("greet"))
         assert sig.return_type == "String"
         assert sig.params == ()
 
@@ -102,7 +103,7 @@ class TestTypeEnvironmentBuilder:
             func_param_types={"add": [("a", scalar("Int")), ("b", scalar("Int"))]}
         )
         env = builder.build()
-        sig = env.get_func_signature("add")
+        sig = env.get_func_signature(FuncName("add"))
         assert sig.return_type == UNKNOWN
         assert sig.params == (("a", scalar("Int")), ("b", scalar("Int")))
 
@@ -132,7 +133,7 @@ class TestTypeEnvironmentStoresTypeExpr:
     def test_func_signature_return_type_is_type_expr(self):
         builder = TypeEnvironmentBuilder(func_return_types={"add": scalar("Int")})
         env = builder.build()
-        assert isinstance(env.get_func_signature("add").return_type, TypeExpr)
+        assert isinstance(env.get_func_signature(FuncName("add")).return_type, TypeExpr)
 
     def test_func_signature_param_types_are_type_expr(self):
         builder = TypeEnvironmentBuilder(
@@ -141,7 +142,7 @@ class TestTypeEnvironmentStoresTypeExpr:
             }
         )
         env = builder.build()
-        sig = env.get_func_signature("f")
+        sig = env.get_func_signature(FuncName("f"))
         assert isinstance(sig.params[0][1], TypeExpr)
         assert isinstance(sig.params[1][1], ParameterizedType)
         assert sig.params[1][1] == "Pointer[Float]"

@@ -199,8 +199,8 @@ class _InferenceContext:
     )
     register_source_var: dict[str, VarName] = field(default_factory=dict)
     interface_implementations: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    class_method_signatures: dict[TypeExpr, dict[str, list[FunctionSignature]]] = field(
-        default_factory=dict
+    class_method_signatures: dict[TypeExpr, dict[FuncName, list[FunctionSignature]]] = (
+        field(default_factory=dict)
     )
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
@@ -303,7 +303,7 @@ def _promote_tuple_element_types(ctx: _InferenceContext) -> None:
 def _build_func_signatures(
     func_return_types: dict[FuncName, TypeExpr],
     func_param_types: dict[str, list[tuple[str, TypeExpr]]],
-) -> dict[str, list[FunctionSignature]]:
+) -> dict[FuncName, list[FunctionSignature]]:
     """Build signatures keyed only by user-facing function names.
 
     Internal labels (func_add_0) are excluded — only names that came
@@ -322,7 +322,7 @@ def _build_func_signatures(
     }
 
     return {
-        name: [
+        FuncName(name): [
             FunctionSignature(
                 params=tuple(func_param_types.get(name, [])),
                 return_type=func_return_types.get(FuncName(name), UNKNOWN),
@@ -442,7 +442,9 @@ def infer_types(
         }
     )
     # Unify standalone and class-scoped signatures under one container
-    unified_sigs: dict[TypeExpr, MappingProxyType[str, list[FunctionSignature]]] = {
+    unified_sigs: dict[
+        TypeExpr, MappingProxyType[FuncName, list[FunctionSignature]]
+    ] = {
         class_type: MappingProxyType(dict(methods))
         for class_type, methods in ctx.class_method_signatures.items()
     }
@@ -573,7 +575,7 @@ def _infer_const(
             )
             method_sigs = ctx.class_method_signatures.setdefault(
                 ctx.current_class_name, {}
-            ).setdefault(str(func_name), [])
+            ).setdefault(func_name, [])
             if sig not in method_sigs:
                 method_sigs.append(sig)
         # Infer FunctionType for the register holding the function reference

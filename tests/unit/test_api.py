@@ -16,6 +16,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import scalar
+from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 
 SIMPLE_SOURCE = "x = 42\n"
@@ -246,17 +247,23 @@ class TestLowerAndInfer:
     def test_propagates_java_type_seeds(self):
         instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
         assert (
-            env.get_func_signature("getName", class_name=scalar("Dog")).return_type
+            env.get_func_signature(
+                FuncName("getName"), class_name=scalar("Dog")
+            ).return_type
             == "String"
         )
         assert (
-            env.get_func_signature("getAge", class_name=scalar("Dog")).return_type
+            env.get_func_signature(
+                FuncName("getAge"), class_name=scalar("Dog")
+            ).return_type
             == "Int"
         )
 
     def test_java_this_param_in_func_signatures(self):
         instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
-        get_age_sig = env.get_func_signature("getAge", class_name=scalar("Dog"))
+        get_age_sig = env.get_func_signature(
+            FuncName("getAge"), class_name=scalar("Dog")
+        )
         this_params = [p for p in get_age_sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Dog"

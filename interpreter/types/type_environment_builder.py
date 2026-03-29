@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from interpreter.func_name import FuncName
 from interpreter.register import Register
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_environment import TypeEnvironment
@@ -43,7 +44,9 @@ class TypeEnvironmentBuilder:
     def build(self) -> TypeEnvironment:
         """Freeze accumulated type info into an immutable TypeEnvironment."""
         standalone_sigs = _build_func_signatures(self)
-        unified: dict[TypeExpr, MappingProxyType[str, list[FunctionSignature]]] = {}
+        unified: dict[TypeExpr, MappingProxyType[FuncName, list[FunctionSignature]]] = (
+            {}
+        )
         if standalone_sigs:
             unified[UNBOUND] = MappingProxyType(standalone_sigs)
         return TypeEnvironment(
@@ -57,7 +60,7 @@ class TypeEnvironmentBuilder:
 
 def _build_func_signatures(
     builder: TypeEnvironmentBuilder,
-) -> dict[str, list[FunctionSignature]]:
+) -> dict[FuncName, list[FunctionSignature]]:
     """Build signatures keyed only by user-facing function names.
 
     Internal labels (func_add_0) are excluded — only names that came
@@ -72,7 +75,7 @@ def _build_func_signatures(
     }
 
     return {
-        name: [
+        FuncName(name): [
             FunctionSignature(
                 params=tuple(builder.func_param_types.get(name, [])),
                 return_type=builder.func_return_types.get(name, UNKNOWN),
