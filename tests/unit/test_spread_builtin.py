@@ -25,7 +25,7 @@ class TestResolveCallArgs:
         fields[FieldName("length", FieldKind.SPECIAL)] = typed(
             len(elements), scalar(TypeName.INT)
         )
-        vm.heap["arr_0"] = HeapObject(type_hint="Array", fields=fields)
+        vm.heap_set(Address("arr_0"), HeapObject(type_hint="Array", fields=fields))
         ptr = Pointer(base=Address("arr_0"), offset=0)
         vm.call_stack.append(
             StackFrame(

@@ -3,6 +3,7 @@
 Hand-crafted IR that allocates a region, writes bytes, reads them back.
 """
 
+from interpreter.address import Address
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.types.typed_value import unwrap
@@ -52,11 +53,12 @@ class TestAllocRegion:
         )
         _execute(vm, inst)
 
-        addr = unwrap(vm.current_frame.registers[Register("%r0")])
-        assert addr.startswith("rgn_")
-        assert addr in vm.regions
-        assert len(vm.regions[addr]) == 16
-        assert all(b == 0 for b in vm.regions[addr])
+        addr_str = unwrap(vm.current_frame.registers[Register("%r0")])
+        assert addr_str.startswith("rgn_")
+        addr = Address(addr_str)
+        assert vm.region_get(addr) is not None
+        assert len(vm.region_get(addr)) == 16
+        assert all(b == 0 for b in vm.region_get(addr))
 
     def test_alloc_symbolic_size(self):
         vm = _make_vm()
@@ -190,8 +192,8 @@ class TestWriteAndLoadRegion:
             ),
         )
 
-        addr = unwrap(vm.current_frame.registers[Register("%rgn")])
-        assert len(vm.regions[addr]) == 100
+        addr = Address(unwrap(vm.current_frame.registers[Register("%rgn")]))
+        assert len(vm.region_get(addr)) == 100
 
     def test_overwrite_partial(self):
         """Write to a region, then overwrite part of it."""

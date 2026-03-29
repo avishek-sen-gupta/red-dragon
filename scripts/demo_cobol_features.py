@@ -128,7 +128,7 @@ class Field:
 
 def _show_results(title: str, vm, fields: list[Field]) -> None:
     """Display decoded field values from the first memory region."""
-    region = list(vm.regions[list(vm.regions.keys())[0]])
+    region = list(vm.region_get(list(vm.region_keys())[0]))
 
     print()
     print("=" * 72)
@@ -489,7 +489,7 @@ def demo_blank_when_zero() -> None:
         ]
     )
 
-    region = list(vm.regions[list(vm.regions.keys())[0]])
+    region = list(vm.region_get(list(vm.region_keys())[0]))
 
     print()
     print("=" * 72)
