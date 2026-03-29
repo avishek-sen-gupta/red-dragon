@@ -24,6 +24,7 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     InstructionBase,
@@ -250,7 +251,7 @@ class BaseFrontend(Frontend):
         maps class_label -> ClassRef(name, label, parents) for downstream consumers.
         """
         self._class_symbol_table[class_label] = ClassRef(
-            name=class_name, label=class_label, parents=tuple(parents)
+            name=ClassName(class_name), label=class_label, parents=tuple(parents)
         )
         return self._emit(
             Opcode.CONST,
