@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from interpreter.address import Address
 from interpreter.constants import TypeName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.ir import CodeLabel
@@ -51,11 +52,25 @@ class HeapObject:
     type_hint: TypeExpr = UNKNOWN
     fields: dict[FieldName, TypedValue] = field(default_factory=dict)
 
+    def is_present(self) -> bool:
+        return True
+
     def to_dict(self) -> dict:
         return {
             "type_hint": str(self.type_hint) or None,
             "fields": {str(k): _serialize_value(v) for k, v in self.fields.items()},
         }
+
+
+@dataclass(eq=False)
+class NullHeapObject(HeapObject):
+    """Null object: no heap object at this address. Use .is_present() for checks."""
+
+    def is_present(self) -> bool:
+        return False
+
+
+NO_HEAP_OBJECT = NullHeapObject()
 
 
 @dataclass
@@ -136,6 +151,41 @@ class VMState:
     io_provider: Any = (
         None  # Optional CobolIOProvider — Any to avoid COBOL import in core VM
     )
+
+    def heap_get(self, addr: Address) -> HeapObject:
+        """Get heap object by address. Returns NO_HEAP_OBJECT if not found."""
+        return self.heap.get(str(addr), NO_HEAP_OBJECT)
+
+    def heap_set(self, addr: Address, obj: HeapObject) -> None:
+        """Set heap object at address."""
+        self.heap[str(addr)] = obj
+
+    def heap_contains(self, addr: Address) -> bool:
+        """Check if address exists in heap."""
+        return str(addr) in self.heap
+
+    def heap_ensure(self, addr: Address) -> HeapObject:
+        """Get or create a HeapObject at addr (type_hint=UNKNOWN)."""
+        key = str(addr)
+        if key not in self.heap:
+            self.heap[key] = HeapObject()
+        return self.heap[key]
+
+    def heap_items(self):
+        """Iterate over all (address, HeapObject) pairs."""
+        return self.heap.items()
+
+    def heap_keys(self):
+        """Iterate over all heap addresses."""
+        return self.heap.keys()
+
+    def region_get(self, addr: Address) -> bytearray | None:
+        """Get region data by address."""
+        return self.regions.get(str(addr))
+
+    def region_set(self, addr: Address, data: bytearray) -> None:
+        """Set region data at address."""
+        self.regions[str(addr)] = data
 
     def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
         name = f"sym_{self.symbolic_counter}"
