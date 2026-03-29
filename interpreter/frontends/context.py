@@ -14,6 +14,7 @@ from typing import Any, Callable
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
+from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     InstructionBase,
@@ -218,7 +219,9 @@ class TreeSitterEmitContext:
         Emits the plain func_label as the CONST operand.  The symbol table
         maps func_label → FuncRef(name, label) for downstream consumers.
         """
-        self.func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
+        self.func_symbol_table[func_label] = FuncRef(
+            name=FuncName(func_name), label=func_label
+        )
         return self.emit_inst(
             Const(result_reg=result_reg, value=str(func_label)),
             node=node,

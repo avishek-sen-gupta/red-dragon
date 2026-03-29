@@ -7,6 +7,7 @@ import pytest
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.refs.func_ref import BoundFuncRef
+from interpreter.func_name import FuncName
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 
@@ -44,7 +45,7 @@ fun double(x: Int): Int { return x * 2 }
 val f = ::double
 """)
         assert isinstance(vars_[VarName("f")], BoundFuncRef)
-        assert vars_[VarName("f")].func_ref.name == "double"
+        assert vars_[VarName("f")].func_ref.name == FuncName("double")
 
     def test_callable_reference_does_not_block_execution(self):
         """Callable reference should not prevent subsequent code from executing."""

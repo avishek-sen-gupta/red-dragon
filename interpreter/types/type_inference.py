@@ -552,15 +552,15 @@ def _infer_const(
         # Class methods go into class_method_signatures instead.
         if not ctx.current_class_name:
             if FuncName(func_label) in ctx.func_return_types:
-                ctx.func_return_types[FuncName(func_name)] = ctx.func_return_types[
+                ctx.func_return_types[func_name] = ctx.func_return_types[
                     FuncName(func_label)
                 ]
             if func_label in ctx.func_param_types:
-                ctx.func_param_types[func_name] = ctx.func_param_types[func_label]
+                ctx.func_param_types[str(func_name)] = ctx.func_param_types[func_label]
         if ctx.current_class_name:
             ret_type = ctx.func_return_types.get(FuncName(func_label), UNKNOWN)
             ctx.class_method_types.setdefault(ctx.current_class_name, {})[
-                FuncName(func_name)
+                func_name
             ] = ret_type
             # Build class-scoped method signature (supports overloads)
             param_pairs = ctx.func_param_types.get(func_label, [])
@@ -573,7 +573,7 @@ def _infer_const(
             )
             method_sigs = ctx.class_method_signatures.setdefault(
                 ctx.current_class_name, {}
-            ).setdefault(func_name, [])
+            ).setdefault(str(func_name), [])
             if sig not in method_sigs:
                 method_sigs.append(sig)
         # Infer FunctionType for the register holding the function reference
