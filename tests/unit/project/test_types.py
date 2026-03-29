@@ -15,6 +15,8 @@ from interpreter.project.types import (
 from interpreter.constants import Language
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.func_name import FuncName
+from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.class_name import ClassName
 
 # ── ImportRef ────────────────────────────────────────────────────
@@ -131,8 +133,8 @@ class TestExportTable:
         assert et.lookup("User") == "class_User_4"
 
     def test_lookup_variable(self):
-        et = ExportTable(variables={"PI": "%3"})
-        assert et.lookup("PI") == "%3"
+        et = ExportTable(variables={VarName("PI"): Register("%3")})
+        assert et.lookup("PI") == Register("%3")
 
     def test_lookup_missing(self):
         et = ExportTable(functions={FuncName("helper"): CodeLabel("func_helper_0")})
@@ -142,7 +144,7 @@ class TestExportTable:
         """Functions take precedence over variables with the same name."""
         et = ExportTable(
             functions={FuncName("x"): CodeLabel("func_x_0")},
-            variables={"x": "%5"},
+            variables={VarName("x"): Register("%5")},
         )
         assert et.lookup("x") == "func_x_0"
 
@@ -161,7 +163,7 @@ class TestExportTable:
                 FuncName("f2"): CodeLabel("func_f2_1"),
             },
             classes={ClassName("C1"): CodeLabel("class_C1_2")},
-            variables={"v1": "%0"},
+            variables={VarName("v1"): Register("%0")},
         )
         assert et.all_names() == {"f1", "f2", "C1", "v1"}
 
@@ -169,7 +171,7 @@ class TestExportTable:
         """If a name appears in multiple categories, all_names returns it once."""
         et = ExportTable(
             functions={FuncName("x"): CodeLabel("func_x_0")},
-            variables={"x": "%5"},
+            variables={VarName("x"): Register("%5")},
         )
         assert et.all_names() == {"x"}
 
