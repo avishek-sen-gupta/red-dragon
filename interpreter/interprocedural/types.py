@@ -205,7 +205,7 @@ _SENTINEL_INSTRUCTION = IRInstruction(opcode=Opcode.CONST, operands=[])
 
 NO_DEFINITION = Definition(
     variable="",
-    block_label="",
+    block_label=NO_LABEL,
     instruction_index=-1,
     instruction=_SENTINEL_INSTRUCTION,
 )
