@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any
 
+from interpreter.address import Address, NO_ADDRESS
 from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.register import Register
@@ -216,13 +217,13 @@ def apply_update(
 
     # New regions
     for addr, size in update.new_regions.items():
-        vm.regions[addr] = bytearray(size)
+        vm.region_set(Address(addr), bytearray(size))
 
     # Region writes
     for rw in update.region_writes:
-        vm.regions[rw.region_addr][rw.offset : rw.offset + len(rw.data)] = bytes(
-            rw.data
-        )
+        region = vm.region_get(Address(rw.region_addr))
+        if region is not None:
+            region[rw.offset : rw.offset + len(rw.data)] = bytes(rw.data)
 
     # Continuation writes
     for name, label in update.continuation_writes.items():
@@ -234,7 +235,7 @@ def apply_update(
 
     # New objects
     for obj in update.new_objects:
-        vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)
+        vm.heap_set(Address(obj.addr), HeapObject(type_hint=obj.type_hint))
 
     # Register writes — coerce to declared type if needed
     for reg, val in update.register_writes.items():
@@ -248,9 +249,8 @@ def apply_update(
 
     # Heap writes — store TypedValue directly in fields
     for hw in update.heap_writes:
-        if hw.obj_addr not in vm.heap:
-            vm.heap[hw.obj_addr] = HeapObject()
-        vm.heap[hw.obj_addr].fields[hw.field] = hw.value
+        obj = vm.heap_ensure(Address(hw.obj_addr))
+        obj.fields[hw.field] = hw.value
 
     # Path condition
     if update.path_condition:
@@ -280,8 +280,8 @@ def apply_update(
         tv = val
         # Alias-aware: if variable is backed by a heap object, write TypedValue
         alias_ptr = target_frame.var_heap_aliases.get(var)
-        if alias_ptr and alias_ptr.base in vm.heap:
-            vm.heap[alias_ptr.base].fields[
+        if alias_ptr and vm.heap_contains(Address(alias_ptr.base)):
+            vm.heap_get(Address(alias_ptr.base)).fields[
                 FieldName(str(alias_ptr.offset), FieldKind.INDEX)
             ] = tv
         else:
@@ -316,27 +316,27 @@ def _is_symbolic(val: Any) -> bool:
     return isinstance(val, SymbolicValue)
 
 
-def _heap_addr(val: Any) -> str:
+def _heap_addr(val: Any) -> Address:
     """Extract a heap address from a value.
 
     Handles Pointer objects (extracting ``.base``), plain strings
     ("obj_Point_1"), dicts with an ``addr`` key ({"addr": "obj_Point_1",
     "type_hint": "Point"}) — the latter is what the LLM returns for
     constructor calls — and SymbolicValue objects (using ``.name``).
-    Returns empty string if *val* doesn't reference a heap address.
+    Returns NO_ADDRESS if *val* doesn't reference a heap address.
     """
     if isinstance(val, Pointer):
-        return val.base
+        return Address(val.base)
     if isinstance(val, str):
-        return val
+        return Address(val) if val else NO_ADDRESS
     if isinstance(val, SymbolicValue):
-        return val.name
+        return Address(val.name)
     if isinstance(val, dict):
         if "addr" in val:
-            return val["addr"]
+            return Address(val["addr"])
         if val.get("__symbolic__") and "name" in val:
-            return val["name"]
-    return ""
+            return Address(val["name"])
+    return NO_ADDRESS
 
 
 def _resolve_reg(vm: VMState, operand: str | Register) -> TypedValue:

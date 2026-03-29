@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from interpreter.address import Address
 from interpreter import constants
 from interpreter.field_name import FieldName
 from interpreter.types.typed_value import TypedValue
@@ -53,8 +54,8 @@ class ImplicitThisFieldFallback(FieldFallbackStrategy):
             if this_tv is None:
                 continue
             addr = self._heap_addr(this_tv.value)
-            if addr and addr in vm.heap:
-                return addr
+            if addr and vm.heap_contains(addr):
+                return str(addr)
         return None
 
     def _heap_addr(self, value: object) -> str | None:
@@ -67,12 +68,12 @@ class ImplicitThisFieldFallback(FieldFallbackStrategy):
         addr = self._find_this_addr(vm)
         if addr is None:
             return None
-        return vm.heap[addr].fields.get(FieldName(str(name)))
+        return vm.heap_get(Address(addr)).fields.get(FieldName(str(name)))
 
     def resolve_store(self, vm: VMState, name: str) -> str | None:
         addr = self._find_this_addr(vm)
         if addr is None:
             return None
-        if FieldName(str(name)) in vm.heap[addr].fields:
+        if FieldName(str(name)) in vm.heap_get(Address(addr)).fields:
             return addr
         return None
