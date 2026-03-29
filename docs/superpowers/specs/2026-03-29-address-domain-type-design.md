@@ -58,14 +58,29 @@ NO_ADDRESS = NoAddress()
 | `VMState` | `heap` keys | `dict[str, HeapObject]` | `dict[Address, HeapObject]` |
 | `VMState` | `regions` keys | `dict[str, ...]` | `dict[Address, ...]` |
 
+## NullHeapObject
+
+```python
+@dataclass(eq=False)
+class NullHeapObject(HeapObject):
+    """Null object: no heap object at this address. Use .is_present() for checks."""
+    def is_present(self) -> bool: return False
+
+NO_HEAP_OBJECT = NullHeapObject()
+```
+
+HeapObject gets `def is_present(self) -> bool: return True`. `heap_get` returns `NO_HEAP_OBJECT` on miss — never `None`. Callers check `obj.is_present()`.
+
+3 sites that do `.fields[key]` subscript must change to `.fields.get(key)` since NullHeapObject has an empty dict.
+
 ## VMState Accessors (permanent API)
 
 ```python
 class VMState:
     # heap and regions become private after migration
 
-    def heap_get(self, addr: Address) -> HeapObject | None:
-        return self.heap.get(addr)
+    def heap_get(self, addr: Address) -> HeapObject:
+        return self.heap.get(addr, NO_HEAP_OBJECT)
 
     def heap_set(self, addr: Address, obj: HeapObject) -> None:
         self.heap[addr] = obj
@@ -73,12 +88,19 @@ class VMState:
     def heap_contains(self, addr: Address) -> bool:
         return addr in self.heap
 
-    def region_get(self, addr: Address) -> list[int] | None:
+    def heap_ensure(self, addr: Address) -> HeapObject:
+        if addr not in self.heap:
+            self.heap[addr] = HeapObject()
+        return self.heap[addr]
+
+    def region_get(self, addr: Address) -> bytearray | None:
         return self.regions.get(addr)
 
-    def region_set(self, addr: Address, data: list[int]) -> None:
+    def region_set(self, addr: Address, data: bytearray) -> None:
         self.regions[addr] = data
 ```
+
+Note: `region_get` still returns `None` on miss — regions don't have a meaningful null object (they're raw bytearrays).
 
 ## Migration Sequence
 
