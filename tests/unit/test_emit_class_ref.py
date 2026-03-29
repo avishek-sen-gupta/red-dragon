@@ -35,7 +35,7 @@ class TestEmitClassRef:
         ctx = _make_ctx()
         ctx.emit_class_ref("Dog", "class_Dog_0", ["Animal"], result_reg="%0")
         ref = ctx.class_symbol_table["class_Dog_0"]
-        assert ref.parents == ("Animal",)
+        assert ref.parents == (ClassName("Animal"),)
 
     def test_emits_const_with_plain_label(self):
         ctx = _make_ctx()
@@ -67,4 +67,4 @@ class TestEmitClassRef:
         ctx.emit_class_ref("C", "class_C_0", ["A", "B"], result_reg="%0")
         ref = ctx.class_symbol_table["class_C_0"]
         assert isinstance(ref.parents, tuple)
-        assert ref.parents == ("A", "B")
+        assert ref.parents == (ClassName("A"), ClassName("B"))
