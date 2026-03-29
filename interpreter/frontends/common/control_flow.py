@@ -24,7 +24,7 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
     if alt_node:
         ctx.emit_inst(
             BranchIf(
-                cond_reg=str(cond_reg),
+                cond_reg=cond_reg,
                 branch_targets=(true_label, false_label),
             ),
             node=node,
@@ -32,7 +32,7 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
     else:
         ctx.emit_inst(
             BranchIf(
-                cond_reg=str(cond_reg),
+                cond_reg=cond_reg,
                 branch_targets=(true_label, end_label),
             ),
             node=node,
@@ -83,7 +83,7 @@ def lower_elif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
 
     ctx.emit_inst(
         BranchIf(
-            cond_reg=str(cond_reg),
+            cond_reg=cond_reg,
             branch_targets=(true_label, false_label),
         ),
         node=node,
@@ -147,7 +147,7 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
     cond_reg = ctx.lower_expr(cond_node)
     ctx.emit_inst(
         BranchIf(
-            cond_reg=str(cond_reg),
+            cond_reg=cond_reg,
             branch_targets=(body_label, end_label),
         ),
         node=node,
@@ -190,7 +190,7 @@ def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
         cond_reg = ctx.lower_expr(cond_node)
         ctx.emit_inst(
             BranchIf(
-                cond_reg=str(cond_reg),
+                cond_reg=cond_reg,
                 branch_targets=(body_label, end_label),
             ),
             node=node,
