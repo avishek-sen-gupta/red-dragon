@@ -93,17 +93,26 @@ class TestPythonImportResolver:
     def test_resolves_relative_single_dot(self, project):
         resolver = PythonImportResolver()
         ref = ImportRef(
+            source_file=project / "pkg" / "models.py",
+            module_path="",
+            names=("sub",),
+            is_relative=True,
+            relative_level=1,  # from . import sub (same directory as models.py)
+        )
+        result = resolver.resolve(ref, project)
+        assert result.resolved_path == project / "pkg" / "sub" / "__init__.py"
+
+    def test_resolves_relative_double_dot(self, project):
+        resolver = PythonImportResolver()
+        ref = ImportRef(
             source_file=project / "pkg" / "sub" / "helpers.py",
             module_path="",
             names=("models",),
             is_relative=True,
             relative_level=2,  # from .. import models (go up from pkg/sub/ to pkg/)
         )
-        # For relative imports, we resolve the module, not the name
-        # "from .. import models" from pkg/sub/ means: go to pkg/ and import models
         result = resolver.resolve(ref, project)
-        # The resolver should find pkg/models.py
-        assert result.resolved_path is not None
+        assert result.resolved_path == project / "pkg" / "models.py"
 
     def test_relative_single_dot_module(self, project):
         resolver = PythonImportResolver()
