@@ -30,7 +30,10 @@ class TestBuildExportTable:
             ),
         }
         et = build_export_table([], func_table, {})
-        assert et.functions == {"helper": "func_helper_0", "main": "func_main_2"}
+        assert et.functions == {
+            FuncName("helper"): "func_helper_0",
+            FuncName("main"): "func_main_2",
+        }
 
     def test_exports_classes(self):
         class_table = {
@@ -39,7 +42,7 @@ class TestBuildExportTable:
             ),
         }
         et = build_export_table([], {}, class_table)
-        assert et.classes == {"User": "class_User_0"}
+        assert et.classes == {ClassName("User"): "class_User_0"}
 
     def test_exports_top_level_variables(self):
         """DECL_VAR or STORE_VAR at module level (before any func/class label) is exported."""
@@ -110,7 +113,7 @@ class TestBuildExportTable:
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["helper", "%0"]),
         ]
         et = build_export_table(ir, func_table, {})
-        assert "helper" in et.functions
+        assert FuncName("helper") in et.functions
         assert "helper" not in et.variables
 
     def test_class_names_not_duplicated_as_variables(self):
@@ -126,5 +129,5 @@ class TestBuildExportTable:
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["User", "%0"]),
         ]
         et = build_export_table(ir, {}, class_table)
-        assert "User" in et.classes
+        assert ClassName("User") in et.classes
         assert "User" not in et.variables
