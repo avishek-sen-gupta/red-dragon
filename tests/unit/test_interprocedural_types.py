@@ -7,6 +7,7 @@ from interpreter.field_name import FieldName
 from interpreter.dataflow import Definition
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.register import NO_REGISTER, Register
+from interpreter.var_name import VarName
 from interpreter.interprocedural.types import (
     CallContext,
     CallGraph,
@@ -143,13 +144,13 @@ class TestFlowEndpoints:
     def test_variable_endpoint_with_real_definition(self):
         inst = _make_inst(Opcode.STORE_VAR, operands=["x", "%0"])
         defn = Definition(
-            variable="x",
+            variable=VarName("x"),
             block_label=CodeLabel("entry"),
             instruction_index=2,
             instruction=inst,
         )
         ve = VariableEndpoint(name="x", definition=defn)
-        assert ve.definition.variable == "x"
+        assert ve.definition.variable == VarName("x")
         # Hashable even with real Definition (Definition has custom __hash__)
         s = {ve}
         assert ve in s
