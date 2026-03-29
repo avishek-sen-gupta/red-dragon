@@ -354,13 +354,13 @@ match points:
         )
         rest_addr = _heap_addr(local_vars[VarName("rest")])
         r0_addr = _heap_addr(
-            vm.heap[rest_addr].fields[FieldName("0", FieldKind.INDEX)].value
+            vm.heap[str(rest_addr)].fields[FieldName("0", FieldKind.INDEX)].value
         )
         r1_addr = _heap_addr(
-            vm.heap[rest_addr].fields[FieldName("1", FieldKind.INDEX)].value
+            vm.heap[str(rest_addr)].fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap[r0_addr].type_hint == scalar("Point")
-        assert vm.heap[r1_addr].type_hint == scalar("Point")
+        assert vm.heap[str(r0_addr)].type_hint == scalar("Point")
+        assert vm.heap[str(r1_addr)].type_hint == scalar("Point")
 
     def test_nested_positional_line_of_points(self):
         """Line(Point(x1,y1), Point(x2,y2)) — nested positional resolution."""
@@ -512,13 +512,13 @@ match items:
         )
         rest_addr = _heap_addr(local_vars[VarName("rest")])
         r0_addr = _heap_addr(
-            vm.heap[rest_addr].fields[FieldName("0", FieldKind.INDEX)].value
+            vm.heap[str(rest_addr)].fields[FieldName("0", FieldKind.INDEX)].value
         )
         r1_addr = _heap_addr(
-            vm.heap[rest_addr].fields[FieldName("1", FieldKind.INDEX)].value
+            vm.heap[str(rest_addr)].fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap[r0_addr].type_hint == scalar("Point")
-        assert vm.heap[r1_addr].type_hint == scalar("Point")
+        assert vm.heap[str(r0_addr)].type_hint == scalar("Point")
+        assert vm.heap[str(r1_addr)].type_hint == scalar("Point")
 
     def test_three_level_deep_tree_positional(self):
         """Node(Node(Leaf(a), Leaf(b)), Leaf(c)) — 3 levels deep."""
@@ -547,7 +547,7 @@ match tree:
             and local_vars[VarName("result")] == 6
         )
         tree_addr = _heap_addr(local_vars[VarName("tree")])
-        assert vm.heap[tree_addr].type_hint == scalar("Node")
+        assert vm.heap[str(tree_addr)].type_hint == scalar("Node")
 
 
 class TestComplexLiteralPattern:
@@ -911,13 +911,13 @@ match commands:
         )
         rest_addr = _heap_addr(local_vars[VarName("targets")])
         t0_addr = _heap_addr(
-            vm.heap[rest_addr].fields[FieldName("0", FieldKind.INDEX)].value
+            vm.heap[str(rest_addr)].fields[FieldName("0", FieldKind.INDEX)].value
         )
         t1_addr = _heap_addr(
-            vm.heap[rest_addr].fields[FieldName("1", FieldKind.INDEX)].value
+            vm.heap[str(rest_addr)].fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap[t0_addr].type_hint == scalar("Target")
-        assert vm.heap[t1_addr].type_hint == scalar("Target")
+        assert vm.heap[str(t0_addr)].type_hint == scalar("Target")
+        assert vm.heap[str(t1_addr)].type_hint == scalar("Target")
 
 
 class TestOutOfScopePatterns:
@@ -1180,13 +1180,13 @@ match points:
         # Verify rest elements are Point objects via heap type_hint
         rest_addr = _heap_addr(local_vars[VarName("rest")])
         r0_addr = _heap_addr(
-            vm.heap[rest_addr].fields[FieldName("0", FieldKind.INDEX)].value
+            vm.heap[str(rest_addr)].fields[FieldName("0", FieldKind.INDEX)].value
         )
         r1_addr = _heap_addr(
-            vm.heap[rest_addr].fields[FieldName("1", FieldKind.INDEX)].value
+            vm.heap[str(rest_addr)].fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap[r0_addr].type_hint == scalar("Point")
-        assert vm.heap[r1_addr].type_hint == scalar("Point")
+        assert vm.heap[str(r0_addr)].type_hint == scalar("Point")
+        assert vm.heap[str(r1_addr)].type_hint == scalar("Point")
 
     def test_dict_inside_sequence_with_star(self):
         """Dict pattern inside list with star — verify extracted fields + rest element fields."""
@@ -1290,7 +1290,7 @@ match r:
         )
         # Verify r is a Rect via heap type_hint
         r_addr = _heap_addr(local_vars[VarName("r")])
-        assert vm.heap[r_addr].type_hint == scalar("Rect")
+        assert vm.heap[str(r_addr)].type_hint == scalar("Rect")
 
     def test_mixed_pattern_types_across_cases(self):
         """Dict matches before list — verify each captured field individually."""
@@ -1380,13 +1380,13 @@ match cart:
         # Verify others elements are Item objects via heap type_hint
         others_addr = _heap_addr(local_vars[VarName("others")])
         o0_addr = _heap_addr(
-            vm.heap[others_addr].fields[FieldName("0", FieldKind.INDEX)].value
+            vm.heap[str(others_addr)].fields[FieldName("0", FieldKind.INDEX)].value
         )
         o1_addr = _heap_addr(
-            vm.heap[others_addr].fields[FieldName("1", FieldKind.INDEX)].value
+            vm.heap[str(others_addr)].fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap[o0_addr].type_hint == scalar("Item")
-        assert vm.heap[o1_addr].type_hint == scalar("Item")
+        assert vm.heap[str(o0_addr)].type_hint == scalar("Item")
+        assert vm.heap[str(o1_addr)].type_hint == scalar("Item")
 
     def test_guard_rejects_then_next_case_matches(self):
         """First case guard fails, second case (same pattern, different guard) matches."""
@@ -1453,7 +1453,7 @@ match resp:
             and local_vars[VarName("r1")] == 30
         )
         r_addr = _heap_addr(local_vars[VarName("resp")])
-        assert vm.heap[r_addr].type_hint == scalar("Response")
+        assert vm.heap[str(r_addr)].type_hint == scalar("Response")
 
     def test_multi_case_dispatch_with_guards(self):
         """Multiple cases with different pattern shapes + guards + fall-through."""
@@ -1490,7 +1490,7 @@ match cmd:
             and local_vars[VarName("detail")] == 6
         )
         cmd_addr = _heap_addr(local_vars[VarName("cmd")])
-        assert vm.heap[cmd_addr].type_hint == scalar("Cmd")
+        assert vm.heap[str(cmd_addr)].type_hint == scalar("Cmd")
 
     def test_as_pattern_wrapping_sequence(self):
         """As-pattern captures the whole subject after structural match succeeds."""
@@ -1567,11 +1567,11 @@ match tree:
             and local_vars[VarName("llv")] == 4
         )
         tree_addr = _heap_addr(local_vars[VarName("tree")])
-        assert vm.heap[tree_addr].type_hint == scalar("Node")
-        left_addr = _heap_addr(vm.heap[tree_addr].fields[FieldName("left")].value)
-        assert vm.heap[left_addr].type_hint == scalar("Node")
-        ll_addr = _heap_addr(vm.heap[left_addr].fields[FieldName("left")].value)
-        assert vm.heap[ll_addr].type_hint == scalar("Node")
+        assert vm.heap[str(tree_addr)].type_hint == scalar("Node")
+        left_addr = _heap_addr(vm.heap[str(tree_addr)].fields[FieldName("left")].value)
+        assert vm.heap[str(left_addr)].type_hint == scalar("Node")
+        ll_addr = _heap_addr(vm.heap[str(left_addr)].fields[FieldName("left")].value)
+        assert vm.heap[str(ll_addr)].type_hint == scalar("Node")
 
     def test_guard_with_pythagorean_computation(self):
         """Guard uses x*x + y*y == 25 on destructured class fields."""

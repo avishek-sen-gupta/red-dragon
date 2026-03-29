@@ -61,8 +61,8 @@ def _write_var_to_frame(
 ) -> None:
     """Write a variable to a specific frame, handling aliases and closure envs."""
     alias_ptr = frame.var_heap_aliases.get(name)
-    if alias_ptr and vm.heap_contains(Address(alias_ptr.base)):
-        vm.heap_get(Address(alias_ptr.base)).fields[
+    if alias_ptr and vm.heap_contains(alias_ptr.base):
+        vm.heap_get(alias_ptr.base).fields[
             FieldName(str(alias_ptr.offset), FieldKind.INDEX)
         ] = tv
     else:

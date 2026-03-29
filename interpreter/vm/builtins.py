@@ -153,10 +153,11 @@ def _builtin_array_of(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         len(args), scalar(TypeName.INT)
     )
     return BuiltinResult(
-        value=typed(Pointer(base=addr, offset=0), pointer(scalar("Array"))),
-        new_objects=[NewObject(addr=addr, type_hint=scalar("Array"))],
+        value=typed(Pointer(base=Address(addr), offset=0), pointer(scalar("Array"))),
+        new_objects=[NewObject(addr=Address(addr), type_hint=scalar("Array"))],
         heap_writes=[
-            HeapWrite(obj_addr=addr, field=k, value=v) for k, v in fields.items()
+            HeapWrite(obj_addr=Address(addr), field=k, value=v)
+            for k, v in fields.items()
         ],
     )
 
@@ -234,12 +235,12 @@ def _builtin_clone(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     hint = source.type_hint if source.type_hint else scalar("Object")
     return BuiltinResult(
         value=typed(
-            Pointer(base=clone_addr, offset=0),
+            Pointer(base=Address(clone_addr), offset=0),
             pointer(hint),
         ),
-        new_objects=[NewObject(addr=clone_addr, type_hint=hint)],
+        new_objects=[NewObject(addr=Address(clone_addr), type_hint=hint)],
         heap_writes=[
-            HeapWrite(obj_addr=clone_addr, field=k, value=v)
+            HeapWrite(obj_addr=Address(clone_addr), field=k, value=v)
             for k, v in source.fields.items()
         ],
     )
@@ -263,10 +264,12 @@ def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     rest_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
     return BuiltinResult(
-        value=typed(Pointer(base=rest_addr, offset=0), pointer(scalar("Object"))),
-        new_objects=[NewObject(addr=rest_addr, type_hint=scalar("Object"))],
+        value=typed(
+            Pointer(base=Address(rest_addr), offset=0), pointer(scalar("Object"))
+        ),
+        new_objects=[NewObject(addr=Address(rest_addr), type_hint=scalar("Object"))],
         heap_writes=[
-            HeapWrite(obj_addr=rest_addr, field=k, value=v)
+            HeapWrite(obj_addr=Address(rest_addr), field=k, value=v)
             for k, v in rest_fields.items()
         ],
     )

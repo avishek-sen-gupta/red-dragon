@@ -43,7 +43,7 @@ class TestNewObjectDereference:
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
         obj_ptr = locals_[VarName("obj")]
         assert isinstance(obj_ptr, Pointer)
-        type_hint = vm.heap[obj_ptr.base].type_hint
+        type_hint = vm.heap[str(obj_ptr.base)].type_hint
         assert (
             str(type_hint) != "Foo"
         ), "type_hint should be the canonical class name, not the variable alias"
@@ -60,7 +60,7 @@ class TestNewObjectDereference:
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
         obj_ptr = locals_[VarName("obj")]
         assert isinstance(obj_ptr, Pointer)
-        assert vm.heap[obj_ptr.base].type_hint == "Bar"
+        assert vm.heap[str(obj_ptr.base)].type_hint == "Bar"
 
     def test_reassigned_class_ref(self):
         """const B = A where A is a named class — new B() should resolve to A."""

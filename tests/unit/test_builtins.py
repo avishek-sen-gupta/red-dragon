@@ -39,7 +39,7 @@ def _result_addr(result: BuiltinResult) -> str:
     if isinstance(val, TypedValue):
         val = val.value
     if isinstance(val, Pointer):
-        return val.base
+        return str(val.base)
     return val
 
 

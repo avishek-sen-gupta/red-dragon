@@ -221,7 +221,7 @@ def apply_update(
 
     # Region writes
     for rw in update.region_writes:
-        region = vm.region_get(Address(rw.region_addr))
+        region = vm.region_get(rw.region_addr)
         if region is not None:
             region[rw.offset : rw.offset + len(rw.data)] = bytes(rw.data)
 
@@ -235,7 +235,7 @@ def apply_update(
 
     # New objects
     for obj in update.new_objects:
-        vm.heap_set(Address(obj.addr), HeapObject(type_hint=obj.type_hint))
+        vm.heap_set(obj.addr, HeapObject(type_hint=obj.type_hint))
 
     # Register writes — coerce to declared type if needed
     for reg, val in update.register_writes.items():
@@ -249,7 +249,7 @@ def apply_update(
 
     # Heap writes — store TypedValue directly in fields
     for hw in update.heap_writes:
-        obj = vm.heap_ensure(Address(hw.obj_addr))
+        obj = vm.heap_ensure(hw.obj_addr)
         obj.fields[hw.field] = hw.value
 
     # Path condition
@@ -280,8 +280,8 @@ def apply_update(
         tv = val
         # Alias-aware: if variable is backed by a heap object, write TypedValue
         alias_ptr = target_frame.var_heap_aliases.get(var)
-        if alias_ptr and vm.heap_contains(Address(alias_ptr.base)):
-            vm.heap_get(Address(alias_ptr.base)).fields[
+        if alias_ptr and vm.heap_contains(alias_ptr.base):
+            vm.heap_get(alias_ptr.base).fields[
                 FieldName(str(alias_ptr.offset), FieldKind.INDEX)
             ] = tv
         else:
@@ -305,7 +305,7 @@ def _deserialize_value(val: Any, vm: VMState) -> Any:
             constraints=val.get("constraints", []),
         )
     if isinstance(val, dict) and val.get("__pointer__"):
-        return Pointer(base=val["base"], offset=val.get("offset", 0))
+        return Pointer(base=Address(val["base"]), offset=val.get("offset", 0))
     return val
 
 
@@ -326,7 +326,7 @@ def _heap_addr(val: Any) -> Address:
     Returns NO_ADDRESS if *val* doesn't reference a heap address.
     """
     if isinstance(val, Pointer):
-        return Address(val.base)
+        return val.base
     if isinstance(val, str):
         return Address(val) if val else NO_ADDRESS
     if isinstance(val, SymbolicValue):
