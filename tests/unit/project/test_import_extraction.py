@@ -104,7 +104,8 @@ class TestExtractImportsPython:
     def test_future_import_ignored(self):
         source = b"from __future__ import annotations\nimport os\n"
         refs = extract_imports(source, Path("main.py"), Language.PYTHON)
-        # __future__ imports should either be skipped or marked as system
+        # __future__ imports should be absent from the extracted refs
+        assert all("__future__" not in r.module_path for r in refs)
         non_future = [r for r in refs if "__future__" not in r.module_path]
         assert len(non_future) >= 1
         assert non_future[0].module_path == "os"

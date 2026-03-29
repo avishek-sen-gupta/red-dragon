@@ -59,7 +59,9 @@ class TestEmitInst:
         ctx = _make_ctx()
         label = CodeLabel("func_foo_0")
         ctx.emit_inst(Label_(label=label))
-        assert label in ctx.func_symbol_table or True  # label tracking internal
+        # Label_ emission records the instruction with the correct label
+        assert len(ctx.instructions) >= 1
+        assert ctx.instructions[-1].label == label
 
     def test_tracks_decl_var_name(self):
         ctx = _make_ctx()

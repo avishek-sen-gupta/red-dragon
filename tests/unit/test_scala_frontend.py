@@ -227,6 +227,10 @@ class TestScalaSpecial:
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
         assert Opcode.RETURN in opcodes
+        # RETURN must reference the BINOP result register (last expression returned)
+        binop = next(i for i in instructions if i.opcode == Opcode.BINOP)
+        ret = next(i for i in instructions if i.opcode == Opcode.RETURN)
+        assert str(binop.result_reg) in ret.operands
 
     def test_method_call(self):
         instructions = _parse_scala("object M { val r = obj.doSomething(1) }")
