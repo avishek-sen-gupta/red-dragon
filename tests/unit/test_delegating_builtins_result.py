@@ -1,5 +1,6 @@
 """Unit tests for partially-delegating builtins returning BuiltinResult."""
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import (
     _builtin_keys,
@@ -30,9 +31,12 @@ class TestBuiltinKeysResult:
 
     def test_happy_path_returns_builtin_result(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(
-            type_hint="object",
-            fields={FieldName("a"): typed_from_runtime(1)},
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="object",
+                fields={FieldName("a"): typed_from_runtime(1)},
+            ),
         )
         result = _builtin_keys([typed_from_runtime("obj_0")], vm)
         assert isinstance(result, BuiltinResult)
@@ -74,14 +78,19 @@ class TestBuiltinSliceResult:
 
     def test_heap_array_returns_builtin_result(self):
         vm = VMState()
-        vm.heap["arr_0"] = HeapObject(
-            type_hint="array",
-            fields={
-                FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
-                FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
-                FieldName("2", FieldKind.INDEX): typed(30, scalar(TypeName.INT)),
-                FieldName("length", FieldKind.SPECIAL): typed(3, scalar(TypeName.INT)),
-            },
+        vm.heap_set(
+            Address("arr_0"),
+            HeapObject(
+                type_hint="array",
+                fields={
+                    FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
+                    FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
+                    FieldName("2", FieldKind.INDEX): typed(30, scalar(TypeName.INT)),
+                    FieldName("length", FieldKind.SPECIAL): typed(
+                        3, scalar(TypeName.INT)
+                    ),
+                },
+            ),
         )
         result = _builtin_slice(
             [typed_from_runtime("arr_0"), typed_from_runtime(0), typed_from_runtime(2)],

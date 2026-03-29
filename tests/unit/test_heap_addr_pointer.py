@@ -53,8 +53,8 @@ class TestAddressOfPointerGuard:
         )
         vm = VMState(
             call_stack=[frame],
-            heap={
-                "mem_0": HeapObject(
+            _heap={
+                Address("mem_0"): HeapObject(
                     type_hint=None,
                     fields={
                         FieldName("0", FieldKind.INDEX): typed(42, scalar(TypeName.INT))
@@ -80,9 +80,9 @@ class TestAddressOfPointerGuard:
         ), f"Expected a new mem_ heap slot for &ptr, got {result_ptr.base}"
         assert result_ptr.base != Address("mem_0")
         # The new heap slot must contain the original Pointer as its value.
-        assert str(result_ptr.base) in vm.heap
+        assert vm.heap_contains(result_ptr.base)
         promoted_val = (
-            vm.heap[str(result_ptr.base)].fields[FieldName("0", FieldKind.INDEX)].value
+            vm.heap_get(result_ptr.base).fields[FieldName("0", FieldKind.INDEX)].value
         )
         assert isinstance(promoted_val, Pointer)
         assert promoted_val.base == Address("mem_0")
@@ -99,8 +99,8 @@ class TestAddressOfPointerGuard:
         )
         vm = VMState(
             call_stack=[frame],
-            heap={
-                "arr_0": HeapObject(
+            _heap={
+                Address("arr_0"): HeapObject(
                     type_hint="Array",
                     fields={
                         FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT))
@@ -135,8 +135,8 @@ class TestAddressOfPointerGuard:
         )
         vm = VMState(
             call_stack=[frame],
-            heap={
-                "obj_0": HeapObject(
+            _heap={
+                Address("obj_0"): HeapObject(
                     type_hint="Point",
                     fields={FieldName("x"): typed(42, scalar(TypeName.INT))},
                 ),

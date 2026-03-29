@@ -115,7 +115,7 @@ class TestAddressOfHandler:
         # The heap object should hold the original value
         alias_ptr = vm.current_frame.var_heap_aliases[VarName("x")]
         assert (
-            vm.heap[str(alias_ptr.base)].fields[FieldName("0", FieldKind.INDEX)].value
+            vm.heap_get(alias_ptr.base).fields[FieldName("0", FieldKind.INDEX)].value
             == 42
         )
 
@@ -137,12 +137,15 @@ class TestAddressOfHandler:
     def test_address_of_struct_returns_pointer_to_existing_heap(self):
         """ADDRESS_OF on a variable holding a heap address should wrap it in a Pointer."""
         vm = _make_vm(s="obj_0")
-        vm.heap["obj_0"] = HeapObject(
-            type_hint="Point",
-            fields={
-                k: typed_from_runtime(v)
-                for k, v in {FieldName("x"): 10, FieldName("y"): 20}.items()
-            },
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="Point",
+                fields={
+                    k: typed_from_runtime(v)
+                    for k, v in {FieldName("x"): 10, FieldName("y"): 20}.items()
+                },
+            ),
         )
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["s"])
         result = _handle_address_of(inst, vm, _CTX)
@@ -172,7 +175,7 @@ class TestAliasAwareLoadStore:
 
         # Directly modify the heap to simulate *ptr = 99
         alias = vm.current_frame.var_heap_aliases[VarName("x")]
-        vm.heap[str(alias.base)].fields[FieldName("0", FieldKind.INDEX)] = (
+        vm.heap_get(alias.base).fields[FieldName("0", FieldKind.INDEX)] = (
             typed_from_runtime(99)
         )
 
@@ -194,9 +197,7 @@ class TestAliasAwareLoadStore:
         _apply(vm, result)
 
         # The heap should reflect the new value
-        assert (
-            vm.heap[str(ptr.base)].fields[FieldName("0", FieldKind.INDEX)].value == 77
-        )
+        assert vm.heap_get(ptr.base).fields[FieldName("0", FieldKind.INDEX)].value == 77
 
     def test_store_via_pointer_then_load_var(self):
         """*ptr = 99 then read x should see 99."""
@@ -251,9 +252,7 @@ class TestPointerDereference:
         result = _handle_store_indirect(inst, vm, _CTX)
         _apply(vm, result)
 
-        assert (
-            vm.heap[str(ptr.base)].fields[FieldName("0", FieldKind.INDEX)].value == 99
-        )
+        assert vm.heap_get(ptr.base).fields[FieldName("0", FieldKind.INDEX)].value == 99
 
 
 # ── Pointer arithmetic ───────────────────────────────────────────
@@ -318,16 +317,19 @@ class TestPointerArithmetic:
         """(ptr + 1) then LOAD_INDIRECT should read offset 1 from the heap."""
         vm = _make_vm()
         # Set up a heap array with 3 elements
-        vm.heap["arr_0"] = HeapObject(
-            fields={
-                k: typed_from_runtime(v)
-                for k, v in {
-                    FieldName("0", FieldKind.INDEX): 10,
-                    FieldName("1", FieldKind.INDEX): 20,
-                    FieldName("2", FieldKind.INDEX): 30,
-                    FieldName("length", FieldKind.SPECIAL): 3,
-                }.items()
-            }
+        vm.heap_set(
+            Address("arr_0"),
+            HeapObject(
+                fields={
+                    k: typed_from_runtime(v)
+                    for k, v in {
+                        FieldName("0", FieldKind.INDEX): 10,
+                        FieldName("1", FieldKind.INDEX): 20,
+                        FieldName("2", FieldKind.INDEX): 30,
+                        FieldName("length", FieldKind.SPECIAL): 3,
+                    }.items()
+                }
+            ),
         )
         ptr = Pointer(Address("arr_0"), 0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)

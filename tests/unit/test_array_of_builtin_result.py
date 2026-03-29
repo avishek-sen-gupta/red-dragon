@@ -1,5 +1,6 @@
 """Unit tests for _builtin_array_of returning BuiltinResult with heap side effects."""
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import _builtin_array_of
 from interpreter.vm.vm import VMState
@@ -44,7 +45,7 @@ class TestArrayOfBuiltinResult:
     def test_does_not_mutate_heap(self):
         vm = VMState()
         result = _builtin_array_of([typed_from_runtime(10)], vm)
-        assert str(result.value.value.base) not in vm.heap
+        assert not vm.heap_contains(result.value.value.base)
 
     def test_empty_array(self):
         vm = VMState()

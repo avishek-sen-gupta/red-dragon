@@ -87,9 +87,9 @@ class VMStatePanel(Static):
             text.append("\n")
 
         # Heap
-        if vm.heap:
+        if vm.heap_count():
             text.append("  Heap:\n", style="bold magenta")
-            for addr, obj in sorted(vm.heap.items()):
+            for addr, obj in sorted(vm.heap_items()):
                 type_hint = obj.type_hint or ""
                 text.append(f"    {addr}", style="magenta")
                 if type_hint:

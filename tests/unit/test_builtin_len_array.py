@@ -7,6 +7,7 @@ includes the 'length' key itself and produces an off-by-one.
 
 from __future__ import annotations
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import _builtin_len, _builtin_array_of
 from interpreter.constants import TypeName
@@ -57,12 +58,15 @@ class TestBuiltinLenRespectsLengthField:
     def test_len_of_heap_object_without_length_field(self):
         """Plain objects (no 'length' field) should use len(fields)."""
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(
-            type_hint="object",
-            fields={
-                FieldName("a"): typed(1, scalar(TypeName.INT)),
-                FieldName("b"): typed(2, scalar(TypeName.INT)),
-            },
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="object",
+                fields={
+                    FieldName("a"): typed(1, scalar(TypeName.INT)),
+                    FieldName("b"): typed(2, scalar(TypeName.INT)),
+                },
+            ),
         )
         result = _builtin_len([typed_from_runtime("obj_0")], vm)
         assert result.value == 2
@@ -70,14 +74,19 @@ class TestBuiltinLenRespectsLengthField:
     def test_len_of_heap_object_with_length_field(self):
         """JS-style arrays with explicit 'length' field should return that value."""
         vm = VMState()
-        vm.heap["arr_0"] = HeapObject(
-            type_hint="array",
-            fields={
-                FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
-                FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
-                FieldName("2", FieldKind.INDEX): typed(30, scalar(TypeName.INT)),
-                FieldName("length", FieldKind.SPECIAL): typed(3, scalar(TypeName.INT)),
-            },
+        vm.heap_set(
+            Address("arr_0"),
+            HeapObject(
+                type_hint="array",
+                fields={
+                    FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
+                    FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
+                    FieldName("2", FieldKind.INDEX): typed(30, scalar(TypeName.INT)),
+                    FieldName("length", FieldKind.SPECIAL): typed(
+                        3, scalar(TypeName.INT)
+                    ),
+                },
+            ),
         )
         result = _builtin_len([typed_from_runtime("arr_0")], vm)
         assert result.value == 3
