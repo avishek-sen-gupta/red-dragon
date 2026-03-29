@@ -2,6 +2,7 @@
 
 import pytest
 
+from interpreter.field_name import FieldName
 from interpreter.ir import CodeLabel
 from interpreter.interprocedural.queries import (
     backward_slice,
@@ -34,7 +35,7 @@ def endpoints():
     d = VariableEndpoint(name="d", definition=NO_DEFINITION)
     f_entry = FunctionEntry(label=CodeLabel("func__f"), params=("x",))
     ret = ReturnEndpoint(function=f_entry, location=NO_INSTRUCTION_LOC)
-    field = FieldEndpoint(base=a, field="name", location=NO_INSTRUCTION_LOC)
+    field = FieldEndpoint(base=a, field=FieldName("name"), location=NO_INSTRUCTION_LOC)
     return {"a": a, "b": b, "c": c, "d": d, "ret": ret, "field": field}
 
 
