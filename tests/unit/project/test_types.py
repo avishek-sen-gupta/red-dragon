@@ -183,7 +183,9 @@ class TestModuleUnit:
     def _make_ir(self):
         return (
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["42"]),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%0"), operands=["42"]
+            ),
         )
 
     def test_construction(self):

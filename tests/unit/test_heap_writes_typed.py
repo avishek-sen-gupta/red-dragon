@@ -105,7 +105,9 @@ class TestStoreIndexTypedValue:
         vm.current_frame.registers[Register("%1")] = typed(0, scalar(TypeName.INT))
         vm.current_frame.registers[Register("%2")] = typed(100, scalar(TypeName.INT))
         inst = IRInstruction(
-            opcode=Opcode.STORE_INDEX, operands=["%0", "%1", "%2"], result_reg="%3"
+            opcode=Opcode.STORE_INDEX,
+            operands=["%0", "%1", "%2"],
+            result_reg=Register("%3"),
         )
         result = _handle_store_index(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
@@ -225,7 +227,7 @@ class TestHeapFieldsStoreTypedValue:
         vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("Foo")))
         vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         inst = IRInstruction(
-            opcode=Opcode.LOAD_FIELD, operands=["%0", "bar"], result_reg="%1"
+            opcode=Opcode.LOAD_FIELD, operands=["%0", "bar"], result_reg=Register("%1")
         )
         _handle_load_field(inst, vm, _CTX)
         field_val = vm.heap_get(Address("obj_0")).fields[FieldName("bar")]
@@ -236,7 +238,9 @@ class TestHeapFieldsStoreTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         vm.current_frame.local_vars[VarName("x")] = typed(42, scalar(TypeName.INT))
-        inst = IRInstruction(opcode=Opcode.ADDRESS_OF, operands=["x"], result_reg="%0")
+        inst = IRInstruction(
+            opcode=Opcode.ADDRESS_OF, operands=["x"], result_reg=Register("%0")
+        )
         _handle_address_of(inst, vm, _CTX)
         heap_objs = [
             obj
@@ -259,7 +263,7 @@ class TestHeapFieldsStoreTypedValue:
         )
         vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         inst = IRInstruction(
-            opcode=Opcode.LOAD_FIELD, operands=["%0", "x"], result_reg="%1"
+            opcode=Opcode.LOAD_FIELD, operands=["%0", "x"], result_reg=Register("%1")
         )
         result = _handle_load_field(inst, vm, _CTX)
         loaded_tv = result.update.register_writes[Register("%1")]
@@ -285,7 +289,7 @@ class TestHeapFieldsStoreTypedValue:
         vm.current_frame.registers[Register("%0")] = typed("arr_0", UNKNOWN)
         vm.current_frame.registers[Register("%1")] = typed(0, scalar(TypeName.INT))
         inst = IRInstruction(
-            opcode=Opcode.LOAD_INDEX, operands=["%0", "%1"], result_reg="%2"
+            opcode=Opcode.LOAD_INDEX, operands=["%0", "%1"], result_reg=Register("%2")
         )
         result = _handle_load_index(inst, vm, _CTX)
         loaded_tv = result.update.register_writes[Register("%2")]
@@ -302,7 +306,9 @@ class TestHeapFieldsStoreTypedValue:
         )
         ptr = Pointer(base=Address("mem_0"), offset=0)
         vm.current_frame.var_heap_aliases[VarName("x")] = ptr
-        inst = IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="%0")
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_VAR, operands=["x"], result_reg=Register("%0")
+        )
         result = _handle_load_var(inst, vm, _CTX)
         loaded_tv = result.update.register_writes[Register("%0")]
         assert loaded_tv is original_tv

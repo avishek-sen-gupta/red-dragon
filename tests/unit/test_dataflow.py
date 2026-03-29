@@ -25,6 +25,7 @@ from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
 from interpreter import constants
 from interpreter.var_name import VarName
+from interpreter.register import Register
 
 
 def _make_inst(
@@ -61,11 +62,13 @@ class TestReachingDefinitions:
         """x=1; y=x+1 → x's def reaches y's use."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t3"), operands=["+", "t1", "t2"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -83,9 +86,9 @@ class TestReachingDefinitions:
         """x=1; x=2 → only second def of x reaches end."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t1"), operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t1"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -101,7 +104,7 @@ class TestReachingDefinitions:
         """if/else both define x → both reach merge point."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t_cond"), operands=["true"]),
             _make_inst(
                 Opcode.BRANCH_IF,
                 operands=["t_cond"],
@@ -109,17 +112,17 @@ class TestReachingDefinitions:
             ),
             # then branch
             _make_inst(Opcode.LABEL, label=CodeLabel("then")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
             # else branch
             _make_inst(Opcode.LABEL, label=CodeLabel("else")),
-            _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t1"), operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t1"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
             # merge point
             _make_inst(Opcode.LABEL, label=CodeLabel("merge")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t2", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t2"), operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
         facts = solve_reaching_definitions(cfg)
@@ -132,12 +135,12 @@ class TestReachingDefinitions:
         """Loop body redefines x → def reaches loop header."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["0"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["0"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("loop_header")),
             # loop header
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_header")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t_cond", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t_cond"), operands=["x"]),
             _make_inst(
                 Opcode.BRANCH_IF,
                 operands=["t_cond"],
@@ -145,13 +148,15 @@ class TestReachingDefinitions:
             ),
             # loop body
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_body")),
-            _make_inst(Opcode.CONST, result_reg="t1", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t2", operands=["+", "t_cond", "t1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t1"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t2"), operands=["+", "t_cond", "t1"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t2"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("loop_header")),
             # loop exit
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_exit")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t3", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t3"), operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
         facts = solve_reaching_definitions(cfg)
@@ -177,9 +182,9 @@ class TestDefUseChains:
         """x=1; y=x → link from x's def to y's use of x."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t1"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -199,11 +204,11 @@ class TestDefUseChains:
         """x=1; x=2; y=x → only second def linked to LOAD_VAR use."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t1"), operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t1"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t2", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t2"), operands=["x"]),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t2"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -224,22 +229,22 @@ class TestDefUseChains:
         """if/else → use after merge has two possible defs."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t_cond"), operands=["true"]),
             _make_inst(
                 Opcode.BRANCH_IF,
                 operands=["t_cond"],
                 branch_targets=[CodeLabel("then"), CodeLabel("else")],
             ),
             _make_inst(Opcode.LABEL, label=CodeLabel("then")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
             _make_inst(Opcode.LABEL, label=CodeLabel("else")),
-            _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t1"), operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t1"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
             _make_inst(Opcode.LABEL, label=CodeLabel("merge")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t2", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t2"), operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
         facts = solve_reaching_definitions(cfg)
@@ -259,9 +264,11 @@ class TestDefUseChains:
         """SYMBOLIC param:x → usable as a definition."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.SYMBOLIC, result_reg="t0", operands=["param:x"]),
+            _make_inst(
+                Opcode.SYMBOLIC, result_reg=Register("t0"), operands=["param:x"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
         facts = solve_reaching_definitions(cfg)
@@ -275,9 +282,11 @@ class TestDefUseChains:
         """SYMBOLIC param:x → DECL_VAR x %0: x is a definition (real frontend pattern)."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.SYMBOLIC, result_reg="t0", operands=["param:x"]),
+            _make_inst(
+                Opcode.SYMBOLIC, result_reg=Register("t0"), operands=["param:x"]
+            ),
             _make_inst(Opcode.DECL_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
         facts = solve_reaching_definitions(cfg)
@@ -292,11 +301,13 @@ class TestDependencyGraph:
         """y = x + 1 → y depends on x."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t3"), operands=["+", "t1", "t2"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -309,11 +320,13 @@ class TestDependencyGraph:
         """DECL_VAR x t0; y = x + 1 → y depends on x (DECL_VAR is a variable definition)."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["10"]),
             _make_inst(Opcode.DECL_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t3"), operands=["+", "t1", "t2"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -326,11 +339,13 @@ class TestDependencyGraph:
         """y = x + 1 → raw graph has y depending on x."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t3"), operands=["+", "t1", "t2"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -343,15 +358,19 @@ class TestDependencyGraph:
         """y=x+1; z=y*2 → z depends on y and transitively on x."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t3"), operands=["+", "t1", "t2"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t4", operands=["y"]),
-            _make_inst(Opcode.CONST, result_reg="t5", operands=["2"]),
-            _make_inst(Opcode.BINOP, result_reg="t6", operands=["*", "t4", "t5"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t4"), operands=["y"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t5"), operands=["2"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t6"), operands=["*", "t4", "t5"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["z", "t6"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -365,15 +384,19 @@ class TestDependencyGraph:
         """y=x+1; z=y*2 → raw graph has z depending on y but NOT x."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t3"), operands=["+", "t1", "t2"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t4", operands=["y"]),
-            _make_inst(Opcode.CONST, result_reg="t5", operands=["2"]),
-            _make_inst(Opcode.BINOP, result_reg="t6", operands=["*", "t4", "t5"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t4"), operands=["y"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t5"), operands=["2"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t6"), operands=["*", "t4", "t5"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["z", "t6"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -387,17 +410,21 @@ class TestDependencyGraph:
         """a=1; b=2; c=a+b; d=c+b → raw graph has d depending on both c and b."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["a", "t0"]),
-            _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t1"), operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["b", "t1"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t2", operands=["a"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t3", operands=["b"]),
-            _make_inst(Opcode.BINOP, result_reg="t4", operands=["+", "t2", "t3"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t2"), operands=["a"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t3"), operands=["b"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t4"), operands=["+", "t2", "t3"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["c", "t4"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t5", operands=["c"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t6", operands=["b"]),
-            _make_inst(Opcode.BINOP, result_reg="t7", operands=["+", "t5", "t6"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t5"), operands=["c"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t6"), operands=["b"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t7"), operands=["+", "t5", "t6"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["d", "t7"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -416,7 +443,7 @@ class TestDependencyGraph:
         """x=1 → x does not depend on itself."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -434,24 +461,26 @@ class TestDependencyGraph:
         """while: x = x + 1 → x depends on x."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["0"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["0"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("loop_header")),
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_header")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t_cond", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t_cond"), operands=["x"]),
             _make_inst(
                 Opcode.BRANCH_IF,
                 operands=["t_cond"],
                 branch_targets=[CodeLabel("loop_body"), CodeLabel("loop_exit")],
             ),
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_body")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t3"), operands=["+", "t1", "t2"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t3"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("loop_header")),
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_exit")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t4", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t4"), operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
@@ -465,24 +494,24 @@ class TestIntegration:
         """Multi-block program produces correct structure and content."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t_cond"), operands=["true"]),
             _make_inst(
                 Opcode.BRANCH_IF,
                 operands=["t_cond"],
                 branch_targets=[CodeLabel("then"), CodeLabel("else")],
             ),
             _make_inst(Opcode.LABEL, label=CodeLabel("then")),
-            _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t1"), operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t1"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
             _make_inst(Opcode.LABEL, label=CodeLabel("else")),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["3"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["3"]),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t2"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
             _make_inst(Opcode.LABEL, label=CodeLabel("merge")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t3", operands=["y"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t3"), operands=["y"]),
             _make_inst(Opcode.RETURN, operands=["t3"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -518,13 +547,15 @@ class TestIntegration:
         """Reaching definitions analysis converges and covers all blocks on a loop program."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.CONST, result_reg="t0", operands=["0"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t0"), operands=["0"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.BRANCH, label=CodeLabel("loop")),
             _make_inst(Opcode.LABEL, label=CodeLabel("loop")),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
-            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
-            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg=Register("t2"), operands=["1"]),
+            _make_inst(
+                Opcode.BINOP, result_reg=Register("t3"), operands=["+", "t1", "t2"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t3"]),
             _make_inst(
                 Opcode.BRANCH_IF,
@@ -546,7 +577,9 @@ class TestRegionOpcodeDataflow:
         """ALLOC_REGION result_reg appears in collected definitions."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[1024]),
+            _make_inst(
+                Opcode.ALLOC_REGION, result_reg=Register("%r0"), operands=[1024]
+            ),
         ]
         cfg = _build_simple_cfg(ir)
         defs = collect_all_definitions(cfg)
@@ -558,10 +591,12 @@ class TestRegionOpcodeDataflow:
         """LOAD_REGION result_reg appears in collected definitions."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[1024]),
+            _make_inst(
+                Opcode.ALLOC_REGION, result_reg=Register("%r0"), operands=[1024]
+            ),
             _make_inst(
                 Opcode.LOAD_REGION,
-                result_reg="%r1",
+                result_reg=Register("%r1"),
                 operands=["%r0", "%off", 4],
             ),
         ]
@@ -585,7 +620,7 @@ class TestRegionOpcodeDataflow:
         """LOAD_REGION's region_reg and offset_reg tracked as uses."""
         inst = _make_inst(
             Opcode.LOAD_REGION,
-            result_reg="%r1",
+            result_reg=Register("%r1"),
             operands=["%r0", "%off", 4],
         )
         uses = _uses_of(inst)
@@ -599,15 +634,15 @@ class TestRegionOpcodeDataflow:
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # Allocate a region
-            _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[256]),
+            _make_inst(Opcode.ALLOC_REGION, result_reg=Register("%r0"), operands=[256]),
             # Write a value into the region
-            _make_inst(Opcode.CONST, result_reg="%off", operands=["0"]),
-            _make_inst(Opcode.CONST, result_reg="%val", operands=["42"]),
+            _make_inst(Opcode.CONST, result_reg=Register("%off"), operands=["0"]),
+            _make_inst(Opcode.CONST, result_reg=Register("%val"), operands=["42"]),
             _make_inst(Opcode.WRITE_REGION, operands=["%r0", "%off", 4, "%val"]),
             # Load from the region
             _make_inst(
                 Opcode.LOAD_REGION,
-                result_reg="%loaded",
+                result_reg=Register("%loaded"),
                 operands=["%r0", "%off", 4],
             ),
             # Store into a named variable
@@ -654,9 +689,11 @@ class TestEdgeCases:
         """SYMBOLIC instruction doesn't crash analysis."""
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
-            _make_inst(Opcode.SYMBOLIC, result_reg="t0", operands=["unknown_value"]),
+            _make_inst(
+                Opcode.SYMBOLIC, result_reg=Register("t0"), operands=["unknown_value"]
+            ),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg=Register("t1"), operands=["x"]),
             _make_inst(Opcode.RETURN, operands=["t1"]),
         ]
         cfg = _build_simple_cfg(ir)

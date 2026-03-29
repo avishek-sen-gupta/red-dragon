@@ -9,6 +9,7 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.project.linker import link_modules
 from interpreter.project.types import ExportTable, ImportRef, ModuleUnit
 from interpreter.func_name import FuncName
+from interpreter.register import Register
 
 
 def _make_module(path, ir_instructions, exports=ExportTable(), imports=()):
@@ -46,7 +47,9 @@ class TestImportStubDropping:
             [
                 IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
                 IRInstruction(
-                    opcode=Opcode.CONST, result_reg="%0", operands=["func_add_0"]
+                    opcode=Opcode.CONST,
+                    result_reg=Register("%0"),
+                    operands=["func_add_0"],
                 ),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
             ],
@@ -58,13 +61,13 @@ class TestImportStubDropping:
                 IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
-                    result_reg="%0",
+                    result_reg=Register("%0"),
                     operands=["import", "from utils import add"],
                 ),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
-                    result_reg="%1",
+                    result_reg=Register("%1"),
                     operands=["add", "42"],
                 ),
             ],
@@ -88,7 +91,9 @@ class TestImportStubDropping:
             [
                 IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
                 IRInstruction(
-                    opcode=Opcode.CONST, result_reg="%0", operands=["func_add_0"]
+                    opcode=Opcode.CONST,
+                    result_reg=Register("%0"),
+                    operands=["func_add_0"],
                 ),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
             ],
@@ -101,19 +106,21 @@ class TestImportStubDropping:
                 # Import CALL
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
-                    result_reg="%0",
+                    result_reg=Register("%0"),
                     operands=["import", "from utils import add"],
                 ),
                 # Intervening instruction (e.g., a type annotation or symbolic)
                 IRInstruction(
                     opcode=Opcode.SYMBOLIC,
-                    result_reg="%99",
+                    result_reg=Register("%99"),
                     operands=["type_annotation"],
                 ),
                 # DECL_VAR for the import — not adjacent
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
                 # Unrelated DECL_VAR that must NOT be dropped
-                IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"]),
+                IRInstruction(
+                    opcode=Opcode.CONST, result_reg=Register("%1"), operands=["42"]
+                ),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%1"]),
             ],
         )

@@ -3,6 +3,7 @@
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.register import Register
 from interpreter.ir_stats import count_opcodes
 from interpreter.api import ir_stats
 
@@ -22,27 +23,33 @@ class TestCountOpcodes:
 
     def test_single_instruction(self):
         instructions = [
-            IRInstruction(opcode=Opcode.CONST, operands=[42], result_reg="r0")
+            IRInstruction(opcode=Opcode.CONST, operands=[42], result_reg=Register("r0"))
         ]
         result = count_opcodes(instructions)
         assert result == {"CONST": 1}
 
     def test_multiple_distinct_opcodes(self):
         instructions = [
-            IRInstruction(opcode=Opcode.CONST, operands=[42], result_reg="r0"),
+            IRInstruction(
+                opcode=Opcode.CONST, operands=[42], result_reg=Register("r0")
+            ),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "r0"]),
-            IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="r1"),
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, operands=["x"], result_reg=Register("r1")
+            ),
         ]
         result = count_opcodes(instructions)
         assert result == {"CONST": 1, "DECL_VAR": 1, "LOAD_VAR": 1}
 
     def test_repeated_opcodes_are_summed(self):
         instructions = [
-            IRInstruction(opcode=Opcode.CONST, operands=[1], result_reg="r0"),
-            IRInstruction(opcode=Opcode.CONST, operands=[2], result_reg="r1"),
-            IRInstruction(opcode=Opcode.CONST, operands=[3], result_reg="r2"),
+            IRInstruction(opcode=Opcode.CONST, operands=[1], result_reg=Register("r0")),
+            IRInstruction(opcode=Opcode.CONST, operands=[2], result_reg=Register("r1")),
+            IRInstruction(opcode=Opcode.CONST, operands=[3], result_reg=Register("r2")),
             IRInstruction(
-                opcode=Opcode.BINOP, operands=["+", "r0", "r1"], result_reg="r3"
+                opcode=Opcode.BINOP,
+                operands=["+", "r0", "r1"],
+                result_reg=Register("r3"),
             ),
         ]
         result = count_opcodes(instructions)
@@ -51,7 +58,9 @@ class TestCountOpcodes:
     def test_all_opcodes_counted(self):
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.CONST, operands=[True], result_reg="r0"),
+            IRInstruction(
+                opcode=Opcode.CONST, operands=[True], result_reg=Register("r0")
+            ),
             IRInstruction(
                 opcode=Opcode.BRANCH_IF,
                 operands=["r0"],
@@ -73,7 +82,7 @@ class TestCountOpcodes:
 
     def test_returns_dict_of_str_to_int(self):
         instructions = [
-            IRInstruction(opcode=Opcode.CONST, operands=[0], result_reg="r0")
+            IRInstruction(opcode=Opcode.CONST, operands=[0], result_reg=Register("r0"))
         ]
         result = count_opcodes(instructions)
         assert all(isinstance(k, str) for k in result)

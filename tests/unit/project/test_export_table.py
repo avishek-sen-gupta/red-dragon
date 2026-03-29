@@ -50,7 +50,9 @@ class TestBuildExportTable:
         """DECL_VAR or STORE_VAR at module level (before any func/class label) is exported."""
         ir = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["3.14"]),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%0"), operands=["3.14"]
+            ),
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["PI", "%0"]),
         ]
         et = build_export_table(ir, {}, {})
@@ -60,7 +62,9 @@ class TestBuildExportTable:
         """DECL_VAR at module level is also exported."""
         ir = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["3.14"]),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%0"), operands=["3.14"]
+            ),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["PI", "%0"]),
         ]
         et = build_export_table(ir, {}, {})
@@ -95,7 +99,9 @@ class TestBuildExportTable:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("func_helper_0")),
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["local", "%0"]),
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_helper_1")),
-            IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"]),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%1"), operands=["42"]
+            ),
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["ANSWER", "%1"]),
         ]
         et = build_export_table(ir, {}, {})

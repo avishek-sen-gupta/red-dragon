@@ -20,6 +20,7 @@ from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.registry import build_registry
+from interpreter.register import Register
 from viz.panels.dataflow_graph_panel import (
     TopLevelCall,
     ChainNode,
@@ -52,7 +53,7 @@ class TestAnnotateEndpoint:
     def test_register_with_call_definition(self):
         inst = IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
-            result_reg="%8",
+            result_reg=Register("%8"),
             operands=["f", "%7"],
         )
         defn = Definition(
@@ -67,7 +68,7 @@ class TestAnnotateEndpoint:
     def test_register_with_non_call_definition(self):
         inst = IRInstruction(
             opcode=Opcode.BINOP,
-            result_reg="%3",
+            result_reg=Register("%3"),
             operands=["+", "%1", "%2"],
         )
         defn = Definition(
