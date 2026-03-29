@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.field_name import FieldName
 from interpreter.ir import CodeLabel
 from interpreter.interprocedural.types import (
     CallGraph,
@@ -43,7 +44,7 @@ class TestRenderEndpoint:
         loc = InstructionLocation(
             block_label=CodeLabel("func_init_0"), instruction_index=3
         )
-        ep = FieldEndpoint(base=base, field="name", location=loc)
+        ep = FieldEndpoint(base=base, field=FieldName("name"), location=loc)
         assert render_endpoint(ep) == "Field(self.name)"
 
 

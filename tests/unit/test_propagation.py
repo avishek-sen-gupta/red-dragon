@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from interpreter.cfg import build_cfg
+from interpreter.field_name import FieldName
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.interprocedural.types import (
@@ -124,7 +125,7 @@ class TestApplySummaryAtCallSite:
         val_var = _make_var_endpoint("val")
         field_ep = FieldEndpoint(
             base=obj_var,
-            field="name",
+            field=FieldName("name"),
             location=InstructionLocation(
                 block_label=CodeLabel("func__setter"), instruction_index=4
             ),
@@ -143,7 +144,7 @@ class TestApplySummaryAtCallSite:
         assert src.name == "%val"
         assert isinstance(dst, FieldEndpoint)
         assert dst.base.name == "%obj"
-        assert dst.field == "name"
+        assert dst.field == FieldName("name")
 
     def test_no_flows_yields_empty(self):
         """Summary with no flows produces empty propagated set."""
