@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstant
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
 from interpreter.refs.func_ref import FuncRef
+from interpreter.func_name import FuncName
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.register import Register
 
@@ -25,7 +26,7 @@ class TestEmitFuncRef:
         ctx.emit_func_ref("add", "func_add_0", result_reg="%0")
         assert "func_add_0" in ctx.func_symbol_table
         ref = ctx.func_symbol_table["func_add_0"]
-        assert ref == FuncRef(name="add", label=CodeLabel("func_add_0"))
+        assert ref == FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0"))
 
     def test_emits_const_with_plain_label(self):
         ctx = _make_ctx()
@@ -47,11 +48,11 @@ class TestEmitFuncRef:
         ctx.emit_func_ref("foo", "func_foo_0", result_reg="%0")
         ctx.emit_func_ref("bar", "func_bar_0", result_reg="%1")
         assert len(ctx.func_symbol_table) == 2
-        assert ctx.func_symbol_table["func_foo_0"].name == "foo"
-        assert ctx.func_symbol_table["func_bar_0"].name == "bar"
+        assert ctx.func_symbol_table["func_foo_0"].name == FuncName("foo")
+        assert ctx.func_symbol_table["func_bar_0"].name == FuncName("bar")
 
     def test_dotted_name_works(self):
         """The original regex couldn't handle dots. Symbol table can."""
         ctx = _make_ctx()
         ctx.emit_func_ref("Counter.new", "func_new_0", result_reg="%0")
-        assert ctx.func_symbol_table["func_new_0"].name == "Counter.new"
+        assert ctx.func_symbol_table["func_new_0"].name == FuncName("Counter.new")
