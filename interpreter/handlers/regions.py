@@ -84,7 +84,7 @@ def _handle_write_region(
         StateUpdate(
             region_writes=[
                 RegionWrite(
-                    region_addr=str(region_addr),
+                    region_addr=Address(region_addr),
                     offset=int(offset),
                     data=data,
                 )

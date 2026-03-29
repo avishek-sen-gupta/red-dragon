@@ -17,6 +17,7 @@ from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.address import Address
 from interpreter.vm.vm_types import (
     HeapObject,
     Pointer,
@@ -28,6 +29,7 @@ from interpreter.vm.vm_types import (
 from interpreter.vm.vm import apply_update
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 from interpreter.register import Register
+from interpreter.address import Address
 from interpreter.vm.vm_types import SymbolicValue
 from interpreter.vm.executor import (
     _handle_load_index,
@@ -113,7 +115,7 @@ class TestLoadIndirectIndexToPropertyFallback:
             type_hint="Box",
             fields={FieldName("0", FieldKind.PROPERTY): typed_from_runtime(77)},
         )
-        ptr = Pointer(base="box_0", offset=0)
+        ptr = Pointer(base=Address("box_0"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
 
         inst = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr"])
@@ -132,7 +134,7 @@ class TestLoadIndirectIndexToPropertyFallback:
                 FieldName("0", FieldKind.PROPERTY): typed_from_runtime(20),
             }
         )
-        ptr = Pointer(base="mem_0", offset=0)
+        ptr = Pointer(base=Address("mem_0"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
 
         inst = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr"])
@@ -149,7 +151,7 @@ class TestLoadIndirectIndexToPropertyFallback:
             type_hint="Box",
             fields={FieldName("0", FieldKind.PROPERTY): typed_from_runtime("hello")},
         )
-        ptr = Pointer(base="box_1", offset=0)
+        ptr = Pointer(base=Address("box_1"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
 
         inst = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr"])

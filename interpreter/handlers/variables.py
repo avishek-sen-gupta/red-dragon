@@ -96,8 +96,8 @@ def _handle_load_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
     # Alias-aware: if variable is backed by a heap object, read from heap
     for f in reversed(vm.call_stack):
         alias_ptr = f.var_heap_aliases.get(name)
-        if alias_ptr and vm.heap_contains(Address(alias_ptr.base)):
-            tv = vm.heap_get(Address(alias_ptr.base)).fields.get(
+        if alias_ptr and vm.heap_contains(alias_ptr.base):
+            tv = vm.heap_get(alias_ptr.base).fields.get(
                 FieldName(str(alias_ptr.offset), FieldKind.INDEX)
             )
             return ExecutionResult.success(
@@ -167,7 +167,11 @@ def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
         return ExecutionResult.success(
             StateUpdate(
                 heap_writes=[
-                    HeapWrite(obj_addr=this_addr, field=FieldName(str(name)), value=tv)
+                    HeapWrite(
+                        obj_addr=Address(this_addr),
+                        field=FieldName(str(name)),
+                        value=tv,
+                    )
                 ],
                 reasoning=f"store {name} = {tv.value!r} (via implicit this.{name})",
             )

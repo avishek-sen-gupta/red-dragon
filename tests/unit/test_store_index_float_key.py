@@ -182,7 +182,7 @@ class TestFloatIndexHeapKeyMismatch:
         )
 
         arr_addr = _heap_addr(unwrap(vm.current_frame.registers[Register("%arr")]))
-        heap_obj = vm.heap[arr_addr]
+        heap_obj = vm.heap[str(arr_addr)]
         assert (
             FieldName("2", FieldKind.INDEX) in heap_obj.fields
         ), "Expected int key '2' in heap fields"
