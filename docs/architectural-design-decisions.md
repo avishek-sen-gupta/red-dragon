@@ -2487,3 +2487,43 @@ compilation. No chaining, no import tables, no special variable handling.
 **Key files:** `docs/design/eliminate-irinstruction-plan.md` (full plan with 26 sub-issues, dependency graph, and file counts).
 
 **Update (2026-03-24):** Layer 5G complete. The `IRInstruction` Pydantic class is replaced by a factory function of the same name that returns typed `InstructionBase` subclasses. The `to_typed()` function is renamed to `_to_typed()` (private, used only by the factory). All 400+ call sites continue working unchanged via the factory. Type annotations across ~90 files migrated from `IRInstruction` to `InstructionBase`. `Register.__eq__(str)` was removed in the prior layer (5F).
+
+---
+
+### ADR-122: Domain type migration campaign — BinopKind, VarName, FieldName, FuncName (2026-03-26 to 2026-03-29)
+
+**Context:** After the IRInstruction elimination (ADR-121) gave `Register` and `CodeLabel` full type safety, the remaining instruction fields still used `str` for operator symbols, variable names, field names, and function names. This allowed silent interchange — a variable name could be accidentally passed where a field name was expected, or an operator string could be confused with a function name. Lookup dicts (`local_vars`, `HeapObject.fields`, `Builtins.TABLE`, `FunctionRegistry.func_refs`) all used `str` keys, providing no type-level distinction between the different kinds of names.
+
+**Decision:** Introduce four domain types as frozen dataclasses, each wrapping a `str` value with domain semantics:
+
+1. **`BinopKind` / `UnopKind`** (`interpreter/operator_kind.py`) — `str, Enum` for operator symbols. 31 binary and 9 unary operators. `resolve_binop()` / `resolve_unop()` raise `ValueError` on unknown operators. Per-language valid operator sets in `frontends/operator_sets.py` with `lint_operators()` function.
+
+2. **`VarName`** (`interpreter/var_name.py`) — variable names on `LoadVar.name`, `DeclVar.name`, `StoreVar.name`, `AddressOf.var_name`. Cascaded through `StackFrame.local_vars`, `captured_var_names`, `var_heap_aliases`, `ClosureEnvironment.bindings`, and `_InferenceContext` type inference dicts.
+
+3. **`FieldName`** (`interpreter/field_name.py`) — field/property names on `LoadField.field_name`, `StoreField.field_name`. Tagged with `FieldKind` enum (`PROPERTY`, `INDEX`, `SPECIAL`) where kind is part of identity. Cascaded through `HeapObject.fields` and `HeapWrite.field`.
+
+4. **`FuncName`** (`interpreter/func_name.py`) — function/method names on `CallFunction.func_name`, `CallMethod.method_name`, `CallCtorFunction.func_name`. Single type for both functions and methods. Cascaded through `Builtins.TABLE`, `Builtins.METHOD_TABLE`, `FunctionRegistry.func_refs`, `FunctionRegistry.class_methods`, and `_InferenceContext.func_return_types`/`class_method_types`.
+
+**Three migration strategies emerged, chosen by scope:**
+
+- **Strategy A (Direct):** For small scope (<30 sites, 0-1 dicts). Fix everything in 1-2 commits. Used for `ClosureEnvironment.bindings` (3 changes).
+- **Strategy B (No bridge, split commits):** For medium scope (30-200 sites, 1-3 dicts). No `__eq__(str)` bridge — fix all construction and consumption sites in one pass. Used for `FieldName` (~300 changes). Risk: blast radius underestimation.
+- **Strategy C (Accessor pattern):** For large scope (200+ sites, 4+ dicts). Add accessor methods that unwrap `str()` first, migrate callers to accessors, then per-dict change key types and remove `str()`. Every commit independently green. Accessors become the permanent API. Used for `FuncName` (~400 changes across 6 dicts).
+
+**Key lessons:**
+- The `__eq__(str)` bridge (tried for VarName) hides bugs that surface only at removal — total work exceeds going strict from day one.
+- The accessor pattern achieves incremental green commits without a bridge and improves encapsulation permanently.
+- Pydantic `BaseModel` fields validate key types strictly — a non-str-subclass domain type is rejected unless the field type annotation is updated.
+- Python 3.13 `str(SomeEnum.X)` returns `"SomeEnum.X"` not the value — use `.value` for the underlying string.
+- Test assertion blast radius is 0.5x-1.5x of construction sites, often through aliases (`local_vars`, `locals_`, `vars_`, `lv`, `result`).
+- Conftest/helper fixes have high leverage — one fix can resolve hundreds of test failures.
+
+**Rationale:**
+- Type safety: a `VarName` cannot silently become a `FieldName` or `FuncName`.
+- Construction-time validation: `__post_init__` rejects double-wrapping (`VarName(VarName("x"))` raises `TypeError`).
+- Wrap early, unwrap late: domain types persist through the entire pipeline, converted to `str` only at serialization boundaries and the symbol table boundary (which remains str-keyed, tracked as red-dragon-9adr).
+- Accessor encapsulation (FuncName): callers never access `func_refs`, `class_methods`, or builtin tables directly — lookup methods are the permanent API.
+
+**Consequences:** All instruction operand fields now use domain types: `Register` for registers, `CodeLabel` for labels, `BinopKind`/`UnopKind` for operators, `VarName` for variable names, `FieldName` for field names, `FuncName` for function names. The only remaining `str` fields are `Const.value` (heterogeneous), `Symbolic.hint` (description), and heap address strings (tracked as red-dragon-v217). ~2,000 changes across ~150 files, 13,080 tests passing.
+
+**Key files:** `interpreter/operator_kind.py`, `interpreter/var_name.py`, `interpreter/field_name.py`, `interpreter/func_name.py`, `interpreter/frontends/operator_sets.py`, `docs/superpowers/specs/2026-03-27-varname-domain-type-design.md`, `docs/superpowers/specs/2026-03-27-fieldname-domain-type-design.md`, `docs/superpowers/specs/2026-03-28-funcname-domain-type-design.md`.
