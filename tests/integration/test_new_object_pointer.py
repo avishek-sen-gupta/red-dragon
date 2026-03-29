@@ -1,5 +1,6 @@
 """Integration tests for NEW_OBJECT producing Pointer with correct type."""
 
+from interpreter.address import Address
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.var_name import VarName
@@ -50,5 +51,5 @@ class TestNewObjectProducesPointer:
             "class Dog {} Dog d = new Dog();", language=Language.JAVA, max_steps=100
         )
         tv = _typed_locals(vm)[VarName("d")]
-        assert str(tv.value.base) in vm.heap
-        assert vm.heap[str(tv.value.base)].type_hint == "Dog"
+        assert vm.heap_contains(tv.value.base)
+        assert vm.heap_get(tv.value.base).type_hint == "Dog"

@@ -153,8 +153,8 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
                 str(k): _serialize_value(v) for k, v in frame.local_vars.items()
             },
         }
-        if vm.heap:
-            compact_state["heap"] = {k: v.to_dict() for k, v in vm.heap.items()}
+        if vm.heap_count():
+            compact_state["heap"] = {str(k): v.to_dict() for k, v in vm.heap_items()}
 
         msg: dict[str, Any] = {
             "call": call_desc,

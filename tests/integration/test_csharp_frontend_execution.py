@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.constants import Language
@@ -17,7 +18,7 @@ def _run_csharp(source: str, max_steps: int = 500) -> dict:
     result = unwrap_locals(frame.local_vars)
     # Resolve heap aliases (e.g. ADDRESS_OF-promoted variables from out/ref params)
     for name, ptr in frame.var_heap_aliases.items():
-        heap_obj = vm.heap.get(str(ptr.base))
+        heap_obj = vm.heap_get(ptr.base)
         if heap_obj:
             field_val = heap_obj.fields.get(FieldName(str(ptr.offset), FieldKind.INDEX))
             if field_val:
