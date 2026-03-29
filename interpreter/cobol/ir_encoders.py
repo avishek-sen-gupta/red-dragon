@@ -27,6 +27,7 @@ from interpreter.cobol.cobol_constants import (
     NibblePosition,
 )
 from interpreter.operator_kind import resolve_binop
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     InstructionBase,
     Binop,
@@ -80,7 +81,7 @@ def _encode_digit_step(
         + [
             CallFunction(
                 result_reg=digit,
-                func_name=BuiltinName.LIST_GET,
+                func_name=FuncName(BuiltinName.LIST_GET),
                 args=(
                     source_list,
                     i_reg,
@@ -88,7 +89,7 @@ def _encode_digit_step(
             ),
             CallFunction(
                 result_reg=byte_val,
-                func_name=BuiltinName.NIBBLE_SET,
+                func_name=FuncName(BuiltinName.NIBBLE_SET),
                 args=(
                     zone_reg,
                     low_reg,
@@ -97,7 +98,7 @@ def _encode_digit_step(
             ),
             CallFunction(
                 result_reg=new_result,
-                func_name=BuiltinName.LIST_SET,
+                func_name=FuncName(BuiltinName.LIST_SET),
                 args=(
                     current_result,
                     i_reg,
@@ -135,7 +136,7 @@ def _decode_digit_step(
         + [
             CallFunction(
                 result_reg=byte_reg,
-                func_name=BuiltinName.LIST_GET,
+                func_name=FuncName(BuiltinName.LIST_GET),
                 args=(
                     source_list,
                     idx_reg,
@@ -143,7 +144,7 @@ def _decode_digit_step(
             ),
             CallFunction(
                 result_reg=digit,
-                func_name=BuiltinName.NIBBLE_GET,
+                func_name=FuncName(BuiltinName.NIBBLE_GET),
                 args=(
                     byte_reg,
                     low_reg,
@@ -189,7 +190,7 @@ def _accumulate_digit_step(
         + [
             CallFunction(
                 result_reg=digit,
-                func_name=BuiltinName.LIST_GET,
+                func_name=FuncName(BuiltinName.LIST_GET),
                 args=(
                     source_list,
                     i_reg,
@@ -233,7 +234,7 @@ def build_encode_zoned_ir(
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.MAKE_LIST,
+            func_name=FuncName(BuiltinName.MAKE_LIST),
             args=(
                 total_digits_reg,
                 zone_reg,
@@ -256,7 +257,7 @@ def build_encode_zoned_ir(
     instructions.append(
         CallFunction(
             result_reg=sign_byte,
-            func_name=BuiltinName.LIST_GET,
+            func_name=FuncName(BuiltinName.LIST_GET),
             args=(
                 result,
                 sign_idx_reg,
@@ -270,7 +271,7 @@ def build_encode_zoned_ir(
     instructions.append(
         CallFunction(
             result_reg=signed_byte,
-            func_name=BuiltinName.NIBBLE_SET,
+            func_name=FuncName(BuiltinName.NIBBLE_SET),
             args=(
                 sign_byte,
                 high_reg,
@@ -284,7 +285,7 @@ def build_encode_zoned_ir(
     instructions.append(
         CallFunction(
             result_reg=final_result,
-            func_name=BuiltinName.LIST_SET,
+            func_name=FuncName(BuiltinName.LIST_SET),
             args=(
                 result,
                 sign_idx_reg2,
@@ -346,7 +347,9 @@ def build_decode_zoned_ir(
         # Convert to float for consistency
         as_float = rc.next()
         instructions.append(
-            CallFunction(result_reg=as_float, func_name="float", args=(accum,))
+            CallFunction(
+                result_reg=as_float, func_name=FuncName("float"), args=(accum,)
+            )
         )
         accum = as_float
 
@@ -356,7 +359,7 @@ def build_decode_zoned_ir(
     instructions.append(
         CallFunction(
             result_reg=sign_byte,
-            func_name=BuiltinName.LIST_GET,
+            func_name=FuncName(BuiltinName.LIST_GET),
             args=(
                 p_data,
                 sign_idx_reg,
@@ -369,7 +372,7 @@ def build_decode_zoned_ir(
     instructions.append(
         CallFunction(
             result_reg=sign_nibble,
-            func_name=BuiltinName.NIBBLE_GET,
+            func_name=FuncName(BuiltinName.NIBBLE_GET),
             args=(
                 sign_byte,
                 high_reg,
@@ -448,7 +451,7 @@ def build_encode_zoned_separate_ir(
     instructions.append(
         CallFunction(
             result_reg=digits_list,
-            func_name=BuiltinName.MAKE_LIST,
+            func_name=FuncName(BuiltinName.MAKE_LIST),
             args=(
                 total_digits_reg,
                 zone_reg,
@@ -505,7 +508,7 @@ def build_encode_zoned_separate_ir(
     instructions.append(
         CallFunction(
             result_reg=sign_list,
-            func_name=BuiltinName.MAKE_LIST,
+            func_name=FuncName(BuiltinName.MAKE_LIST),
             args=(
                 one_reg,
                 zero_reg,
@@ -518,7 +521,7 @@ def build_encode_zoned_separate_ir(
     instructions.append(
         CallFunction(
             result_reg=sign_list_set,
-            func_name=BuiltinName.LIST_SET,
+            func_name=FuncName(BuiltinName.LIST_SET),
             args=(
                 sign_list,
                 zero_reg2,
@@ -533,7 +536,7 @@ def build_encode_zoned_separate_ir(
         instructions.append(
             CallFunction(
                 result_reg=final_result,
-                func_name=BuiltinName.LIST_CONCAT,
+                func_name=FuncName(BuiltinName.LIST_CONCAT),
                 args=(
                     sign_list_set,
                     digits_list,
@@ -545,7 +548,7 @@ def build_encode_zoned_separate_ir(
         instructions.append(
             CallFunction(
                 result_reg=final_result,
-                func_name=BuiltinName.LIST_CONCAT,
+                func_name=FuncName(BuiltinName.LIST_CONCAT),
                 args=(
                     digits_list,
                     sign_list_set,
@@ -583,7 +586,7 @@ def build_decode_zoned_separate_ir(
     instructions.append(
         CallFunction(
             result_reg=sign_byte,
-            func_name=BuiltinName.LIST_GET,
+            func_name=FuncName(BuiltinName.LIST_GET),
             args=(
                 p_data,
                 sign_idx_reg,
@@ -624,7 +627,9 @@ def build_decode_zoned_separate_ir(
     else:
         as_float = rc.next()
         instructions.append(
-            CallFunction(result_reg=as_float, func_name="float", args=(accum,))
+            CallFunction(
+                result_reg=as_float, func_name=FuncName("float"), args=(accum,)
+            )
         )
         accum = as_float
 
@@ -693,7 +698,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
         instructions.append(
             CallFunction(
                 result_reg=zero_list,
-                func_name=BuiltinName.MAKE_LIST,
+                func_name=FuncName(BuiltinName.MAKE_LIST),
                 args=(
                     one_reg,
                     zero_reg,
@@ -705,7 +710,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
         instructions.append(
             CallFunction(
                 result_reg=nibbles,
-                func_name=BuiltinName.LIST_CONCAT,
+                func_name=FuncName(BuiltinName.LIST_CONCAT),
                 args=(
                     zero_list,
                     p_digits,
@@ -722,7 +727,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
     instructions.append(
         CallFunction(
             result_reg=sign_list,
-            func_name=BuiltinName.MAKE_LIST,
+            func_name=FuncName(BuiltinName.MAKE_LIST),
             args=(
                 one_reg2,
                 zero_reg2,
@@ -735,7 +740,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
     instructions.append(
         CallFunction(
             result_reg=sign_list_set,
-            func_name=BuiltinName.LIST_SET,
+            func_name=FuncName(BuiltinName.LIST_SET),
             args=(
                 sign_list,
                 zero_reg3,
@@ -748,7 +753,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
     instructions.append(
         CallFunction(
             result_reg=all_nibbles,
-            func_name=BuiltinName.LIST_CONCAT,
+            func_name=FuncName(BuiltinName.LIST_CONCAT),
             args=(
                 nibbles,
                 sign_list_set,
@@ -763,7 +768,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.MAKE_LIST,
+            func_name=FuncName(BuiltinName.MAKE_LIST),
             args=(
                 byte_count_reg,
                 zero_reg4,
@@ -793,7 +798,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
             + [
                 CallFunction(
                     result_reg=high_nibble,
-                    func_name=BuiltinName.LIST_GET,
+                    func_name=FuncName(BuiltinName.LIST_GET),
                     args=(
                         all_nibbles,
                         hi_idx,
@@ -801,7 +806,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
                 ),
                 CallFunction(
                     result_reg=low_nibble,
-                    func_name=BuiltinName.LIST_GET,
+                    func_name=FuncName(BuiltinName.LIST_GET),
                     args=(
                         all_nibbles,
                         lo_idx,
@@ -809,7 +814,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
                 ),
                 CallFunction(
                     result_reg=byte_with_high,
-                    func_name=BuiltinName.NIBBLE_SET,
+                    func_name=FuncName(BuiltinName.NIBBLE_SET),
                     args=(
                         zero_base,
                         high_pos,
@@ -818,7 +823,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
                 ),
                 CallFunction(
                     result_reg=byte_complete,
-                    func_name=BuiltinName.NIBBLE_SET,
+                    func_name=FuncName(BuiltinName.NIBBLE_SET),
                     args=(
                         byte_with_high,
                         low_pos,
@@ -827,7 +832,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
                 ),
                 CallFunction(
                     result_reg=new_result,
-                    func_name=BuiltinName.LIST_SET,
+                    func_name=FuncName(BuiltinName.LIST_SET),
                     args=(
                         current_result,
                         i_reg,
@@ -877,7 +882,7 @@ def build_decode_comp3_ir(
             + [
                 CallFunction(
                     result_reg=byte_reg,
-                    func_name=BuiltinName.LIST_GET,
+                    func_name=FuncName(BuiltinName.LIST_GET),
                     args=(
                         p_data,
                         i_reg,
@@ -885,7 +890,7 @@ def build_decode_comp3_ir(
                 ),
                 CallFunction(
                     result_reg=high,
-                    func_name=BuiltinName.NIBBLE_GET,
+                    func_name=FuncName(BuiltinName.NIBBLE_GET),
                     args=(
                         byte_reg,
                         high_pos,
@@ -893,7 +898,7 @@ def build_decode_comp3_ir(
                 ),
                 CallFunction(
                     result_reg=low,
-                    func_name=BuiltinName.NIBBLE_GET,
+                    func_name=FuncName(BuiltinName.NIBBLE_GET),
                     args=(
                         byte_reg,
                         low_pos,
@@ -965,7 +970,9 @@ def build_decode_comp3_ir(
     else:
         as_float = rc.next()
         instructions.append(
-            CallFunction(result_reg=as_float, func_name="float", args=(accum,))
+            CallFunction(
+                result_reg=as_float, func_name=FuncName("float"), args=(accum,)
+            )
         )
         accum = as_float
 
@@ -1090,7 +1097,7 @@ def build_encode_binary_ir(
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.INT_TO_BINARY_BYTES,
+            func_name=FuncName(BuiltinName.INT_TO_BINARY_BYTES),
             args=(
                 signed_value,
                 byte_count_reg,
@@ -1121,7 +1128,7 @@ def build_decode_binary_ir(
     instructions.append(
         CallFunction(
             result_reg=int_val,
-            func_name=BuiltinName.BINARY_BYTES_TO_INT,
+            func_name=FuncName(BuiltinName.BINARY_BYTES_TO_INT),
             args=(
                 p_data,
                 signed_reg,
@@ -1146,7 +1153,9 @@ def build_decode_binary_ir(
     else:
         as_float = rc.next()
         instructions.append(
-            CallFunction(result_reg=as_float, func_name="float", args=(int_val,))
+            CallFunction(
+                result_reg=as_float, func_name=FuncName("float"), args=(int_val,)
+            )
         )
         int_val = as_float
 
@@ -1169,7 +1178,7 @@ def build_encode_float_ir(func_name: str, byte_count: int) -> list[InstructionBa
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.FLOAT_TO_BYTES,
+            func_name=FuncName(BuiltinName.FLOAT_TO_BYTES),
             args=(
                 p_float_value,
                 byte_count_reg,
@@ -1196,7 +1205,7 @@ def build_decode_float_ir(func_name: str, byte_count: int) -> list[InstructionBa
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.BYTES_TO_FLOAT,
+            func_name=FuncName(BuiltinName.BYTES_TO_FLOAT),
             args=(
                 p_data,
                 byte_count_reg,
@@ -1224,7 +1233,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[Instructio
     instructions.append(
         CallFunction(
             result_reg=ebcdic_bytes,
-            func_name=BuiltinName.STRING_TO_BYTES,
+            func_name=FuncName(BuiltinName.STRING_TO_BYTES),
             args=(
                 p_value,
                 encoding_reg,
@@ -1239,7 +1248,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[Instructio
     instructions.append(
         CallFunction(
             result_reg=padding,
-            func_name=BuiltinName.MAKE_LIST,
+            func_name=FuncName(BuiltinName.MAKE_LIST),
             args=(
                 length_reg,
                 space_reg,
@@ -1253,7 +1262,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[Instructio
     instructions.append(
         CallFunction(
             result_reg=combined,
-            func_name=BuiltinName.LIST_CONCAT,
+            func_name=FuncName(BuiltinName.LIST_CONCAT),
             args=(
                 ebcdic_bytes,
                 padding,
@@ -1267,7 +1276,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[Instructio
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.LIST_SLICE,
+            func_name=FuncName(BuiltinName.LIST_SLICE),
             args=(
                 combined,
                 zero_reg,
@@ -1302,7 +1311,7 @@ def build_encode_alphanumeric_justified_ir(
     instructions.append(
         CallFunction(
             result_reg=ebcdic_bytes,
-            func_name=BuiltinName.STRING_TO_BYTES,
+            func_name=FuncName(BuiltinName.STRING_TO_BYTES),
             args=(
                 p_value,
                 encoding_reg,
@@ -1317,7 +1326,7 @@ def build_encode_alphanumeric_justified_ir(
     instructions.append(
         CallFunction(
             result_reg=padding,
-            func_name=BuiltinName.MAKE_LIST,
+            func_name=FuncName(BuiltinName.MAKE_LIST),
             args=(
                 length_reg,
                 space_reg,
@@ -1330,7 +1339,7 @@ def build_encode_alphanumeric_justified_ir(
     instructions.append(
         CallFunction(
             result_reg=combined,
-            func_name=BuiltinName.LIST_CONCAT,
+            func_name=FuncName(BuiltinName.LIST_CONCAT),
             args=(
                 padding,
                 ebcdic_bytes,
@@ -1342,7 +1351,9 @@ def build_encode_alphanumeric_justified_ir(
     combined_len = rc.next()
     instructions.append(
         CallFunction(
-            result_reg=combined_len, func_name=BuiltinName.LIST_LEN, args=(combined,)
+            result_reg=combined_len,
+            func_name=FuncName(BuiltinName.LIST_LEN),
+            args=(combined,),
         )
     )
 
@@ -1372,7 +1383,7 @@ def build_encode_alphanumeric_justified_ir(
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.LIST_SLICE,
+            func_name=FuncName(BuiltinName.LIST_SLICE),
             args=(
                 combined,
                 start_offset,
@@ -1401,7 +1412,7 @@ def build_decode_alphanumeric_ir(func_name: str) -> list[InstructionBase]:
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.BYTES_TO_STRING,
+            func_name=FuncName(BuiltinName.BYTES_TO_STRING),
             args=(
                 p_data,
                 encoding_reg,
@@ -1435,7 +1446,7 @@ def build_string_delimit_ir(func_name: str) -> list[InstructionBase]:
     instructions.append(
         CallFunction(
             result_reg=pos,
-            func_name=BuiltinName.STRING_FIND,
+            func_name=FuncName(BuiltinName.STRING_FIND),
             args=(
                 p_source,
                 p_delimiter,
@@ -1470,7 +1481,7 @@ def build_string_split_ir(func_name: str) -> list[InstructionBase]:
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.STRING_SPLIT,
+            func_name=FuncName(BuiltinName.STRING_SPLIT),
             args=(
                 p_source,
                 p_delimiter,
@@ -1499,7 +1510,7 @@ def build_inspect_tally_ir(func_name: str) -> list[InstructionBase]:
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.STRING_COUNT,
+            func_name=FuncName(BuiltinName.STRING_COUNT),
             args=(
                 p_source,
                 p_pattern,
@@ -1530,7 +1541,7 @@ def build_inspect_replace_ir(func_name: str) -> list[InstructionBase]:
     instructions.append(
         CallFunction(
             result_reg=result,
-            func_name=BuiltinName.STRING_REPLACE,
+            func_name=FuncName(BuiltinName.STRING_REPLACE),
             args=(
                 p_source,
                 p_from,

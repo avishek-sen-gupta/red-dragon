@@ -40,6 +40,7 @@ from interpreter.cobol.ir_encoders import (
 )
 from interpreter.operator_kind import resolve_binop
 from interpreter.ir import Opcode, CodeLabel, NO_LABEL
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     InstructionBase,
     Binop,
@@ -295,7 +296,7 @@ class EmitContext:
         self.emit_inst(
             CallFunction(
                 result_reg=result,
-                func_name=BuiltinName.MAKE_LIST,
+                func_name=FuncName(BuiltinName.MAKE_LIST),
                 args=(Register(str(length_reg)), Register(str(space_reg))),
             ),
         )
@@ -440,7 +441,7 @@ class EmitContext:
         self.emit_inst(
             CallFunction(
                 result_reg=result,
-                func_name="str",
+                func_name=FuncName("str"),
                 args=(Register(str(value_reg)),),
             ),
         )
@@ -455,7 +456,7 @@ class EmitContext:
         self.emit_inst(
             CallFunction(
                 result_reg=result,
-                func_name=BuiltinName.COBOL_BLANK_WHEN_ZERO,
+                func_name=FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO),
                 args=(
                     Register(str(encoded_reg)),
                     Register(str(value_str_reg)),
@@ -485,7 +486,7 @@ class EmitContext:
             self.emit_inst(
                 CallFunction(
                     result_reg=float_reg,
-                    func_name="float",
+                    func_name=FuncName("float"),
                     args=(Register(str(value_str_reg)),),
                 ),
             )
@@ -516,7 +517,7 @@ class EmitContext:
         self.emit_inst(
             CallFunction(
                 result_reg=digits_reg,
-                func_name=BuiltinName.COBOL_PREPARE_DIGITS,
+                func_name=FuncName(BuiltinName.COBOL_PREPARE_DIGITS),
                 args=(
                     Register(str(value_str_reg)),
                     Register(str(total_digits_reg)),
@@ -531,7 +532,7 @@ class EmitContext:
         self.emit_inst(
             CallFunction(
                 result_reg=sign_reg,
-                func_name=BuiltinName.COBOL_PREPARE_SIGN,
+                func_name=FuncName(BuiltinName.COBOL_PREPARE_SIGN),
                 args=(Register(str(value_str_reg)), Register(str(signed_reg2))),
             ),
         )

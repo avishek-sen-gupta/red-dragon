@@ -8,6 +8,7 @@ from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -86,7 +87,7 @@ def _lower_this_call_as_delegation(
         CallMethod(
             result_reg=result_reg,
             obj_reg=this_reg,
-            method_name="__init__",
+            method_name=FuncName("__init__"),
             args=tuple(arg_regs),
         ),
         node=node,
@@ -396,7 +397,7 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallCtorFunction(
             result_reg=reg,
-            func_name=type_name,
+            func_name=FuncName(type_name),
             type_hint=scalar(type_name),
             args=tuple(arg_regs),
         ),
@@ -510,7 +511,9 @@ def lower_postfix_expression(ctx: TreeSitterEmitContext, node) -> Register:
     method_name = ctx.node_text(method_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallMethod(result_reg=reg, obj_reg=obj_reg, method_name=method_name, args=()),
+        CallMethod(
+            result_reg=reg, obj_reg=obj_reg, method_name=FuncName(method_name), args=()
+        ),
         node=node,
     )
     return reg

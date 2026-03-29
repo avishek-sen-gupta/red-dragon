@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -84,7 +85,9 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
@@ -392,7 +395,9 @@ def lower_assert_statement(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(
         CallFunction(
-            result_reg=ctx.fresh_reg(), func_name="assert", args=tuple(arg_regs)
+            result_reg=ctx.fresh_reg(),
+            func_name=FuncName("assert"),
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -504,7 +509,7 @@ def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> N
             CallMethod(
                 result_reg=ctx.fresh_reg(),
                 obj_reg=this_reg,
-                method_name="__init__",
+                method_name=FuncName("__init__"),
                 args=tuple(arg_regs),
             ),
             node=node,
@@ -512,7 +517,9 @@ def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> N
     else:
         ctx.emit_inst(
             CallFunction(
-                result_reg=ctx.fresh_reg(), func_name=target_name, args=tuple(arg_regs)
+                result_reg=ctx.fresh_reg(),
+                func_name=FuncName(target_name),
+                args=tuple(arg_regs),
             ),
             node=node,
         )

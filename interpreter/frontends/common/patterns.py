@@ -14,6 +14,7 @@ from interpreter.register import Register
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -267,7 +268,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 CallFunction(
                     result_reg=len_reg,
-                    func_name="len",
+                    func_name=FuncName("len"),
                     args=(str(subject_reg),),
                 ),
             )
@@ -332,7 +333,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 CallFunction(
                     result_reg=isinstance_reg,
-                    func_name="isinstance",
+                    func_name=FuncName("isinstance"),
                     args=(str(subject_reg), str(cls_reg)),
                 ),
             )
@@ -500,7 +501,7 @@ def compile_pattern_bindings(
                 ctx.emit_inst(
                     CallFunction(
                         result_reg=len_reg,
-                        func_name="len",
+                        func_name=FuncName("len"),
                         args=(str(subject_reg),),
                     ),
                 )
@@ -532,7 +533,7 @@ def compile_pattern_bindings(
                     ctx.emit_inst(
                         CallFunction(
                             result_reg=slice_reg,
-                            func_name="slice",
+                            func_name=FuncName("slice"),
                             args=(
                                 str(subject_reg),
                                 str(start_reg),

@@ -11,6 +11,7 @@ from interpreter.frontends.common.exceptions import (
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -87,7 +88,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     obj_reg = ctx.lower_expr(right)
     keys_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=keys_reg, func_name="keys", args=(obj_reg,)),
+        CallFunction(result_reg=keys_reg, func_name=FuncName("keys"), args=(obj_reg,)),
         node=node,
     )
 
@@ -102,7 +103,9 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(keys_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(keys_reg,))
+    )
 
     loop_label = ctx.fresh_label("for_in_cond")
     body_label = ctx.fresh_label("for_in_body")
@@ -179,7 +182,9 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("for_of_cond")
     body_label = ctx.fresh_label("for_of_body")

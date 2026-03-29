@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     CallFunction,
     DeclVar,
@@ -86,7 +87,9 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
         iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
         iter_fn_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=iter_fn_reg, func_name="iter", args=(iter_reg,)),
+            CallFunction(
+                result_reg=iter_fn_reg, func_name=FuncName("iter"), args=(iter_reg,)
+            ),
             node=gen,
         )
 
@@ -100,7 +103,8 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
         var_name = ctx.declare_block_var(raw_name)
         next_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=next_reg, func_name="next", args=()), node=gen
+            CallFunction(result_reg=next_reg, func_name=FuncName("next"), args=()),
+            node=gen,
         )
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=next_reg), node=gen)
 
