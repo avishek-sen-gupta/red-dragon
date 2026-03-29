@@ -246,7 +246,7 @@ def _try_user_function_call(
     return ExecutionResult.success(
         StateUpdate(
             call_push=StackFramePush(
-                function_name=fname,
+                function_name=str(fname),
                 return_label=current_label,
                 closure_env_id=closure_env_id,
                 captured_var_names=captured_var_names,
@@ -467,7 +467,7 @@ def _handle_call_method(
         if func_labels:
             func_label = func_labels[0]
             bound_ref = BoundFuncRef(
-                func_ref=FuncRef(name=str(method_name), label=func_label),
+                func_ref=FuncRef(name=FuncName(str(method_name)), label=func_label),
                 closure_id="",
             )
             return _try_user_function_call(

@@ -38,7 +38,7 @@ def build_export_table(
     Top-level variables come from DECL_VAR instructions at module scope — i.e.
     outside any function or class body.
     """
-    functions = {ref.name: ref.label for ref in func_symbol_table.values()}
+    functions = {str(ref.name): ref.label for ref in func_symbol_table.values()}
     classes = {ref.name: ref.label for ref in class_symbol_table.values()}
 
     # Scan for top-level DECL_VARs (those outside func/class scopes).

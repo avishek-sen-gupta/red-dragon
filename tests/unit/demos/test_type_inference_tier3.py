@@ -12,6 +12,7 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.refs.func_ref import FuncRef
+from interpreter.func_name import FuncName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import parse_type, scalar
@@ -127,7 +128,9 @@ class TestCallUnknownResolution:
                 Register("%1"): scalar("Int"),
             },
         )
-        func_st = {"func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0"))}
+        func_st = {
+            "func_add_0": FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0"))
+        }
         env = infer_types(
             instructions,
             _resolver(),

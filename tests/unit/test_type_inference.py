@@ -30,6 +30,7 @@ from interpreter.types.type_expr import (
 )
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
+from interpreter.func_name import FuncName
 from interpreter.types.type_inference import infer_types, _infer_const_type
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.register import Register
@@ -69,7 +70,7 @@ def _build_func_symbol_table(
         m = _FUNC_LABEL_RE.match(operand)
         if m:
             name = m.group(1)
-            table[operand] = FuncRef(name=name, label=CodeLabel(operand))
+            table[operand] = FuncRef(name=FuncName(name), label=CodeLabel(operand))
     return table
 
 
@@ -106,7 +107,9 @@ class TestInferConstType:
         assert _infer_const_type("None") == ""
 
     def test_func_ref(self):
-        func_st = {"func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0"))}
+        func_st = {
+            "func_add_0": FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0"))
+        }
         assert _infer_const_type("func_add_0", func_symbol_table=func_st) == ""
 
     def test_class_ref(self):
@@ -2335,7 +2338,9 @@ class TestInferConstTypeReturnsTypeExpr:
         assert result is UNKNOWN
 
     def test_func_ref_returns_unknown(self):
-        func_st = {"func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0"))}
+        func_st = {
+            "func_add_0": FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0"))
+        }
         result = _infer_const_type("func_add_0", func_symbol_table=func_st)
         assert isinstance(result, UnknownType)
 

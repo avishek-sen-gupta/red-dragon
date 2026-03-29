@@ -152,9 +152,7 @@ def _scan_classes(
             operand = str(t.value)
             if operand in func_symbol_table:
                 ref = func_symbol_table[operand]
-                class_methods[in_class].setdefault(FuncName(ref.name), []).append(
-                    ref.label
-                )
+                class_methods[in_class].setdefault(ref.name, []).append(ref.label)
 
     return classes, class_methods, class_parents
 
@@ -196,5 +194,5 @@ def build_registry(
         instructions, func_symbol_table, class_symbol_table
     )
     reg.class_parents = _expand_parent_chains(direct_parents)
-    reg.func_refs = {FuncName(ref.name): ref for ref in func_symbol_table.values()}
+    reg.func_refs = {ref.name: ref for ref in func_symbol_table.values()}
     return reg

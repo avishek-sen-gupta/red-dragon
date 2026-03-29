@@ -9,6 +9,7 @@ from interpreter.project.compiler import build_export_table
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.refs.func_ref import FuncRef
 from interpreter.refs.class_ref import ClassRef
+from interpreter.func_name import FuncName
 
 
 class TestBuildExportTable:
@@ -20,8 +21,12 @@ class TestBuildExportTable:
 
     def test_exports_functions(self):
         func_table = {
-            "func_helper_0": FuncRef(name="helper", label=CodeLabel("func_helper_0")),
-            "func_main_2": FuncRef(name="main", label=CodeLabel("func_main_2")),
+            "func_helper_0": FuncRef(
+                name=FuncName("helper"), label=CodeLabel("func_helper_0")
+            ),
+            "func_main_2": FuncRef(
+                name=FuncName("main"), label=CodeLabel("func_main_2")
+            ),
         }
         et = build_export_table([], func_table, {})
         assert et.functions == {"helper": "func_helper_0", "main": "func_main_2"}
@@ -94,7 +99,9 @@ class TestBuildExportTable:
     def test_function_names_not_duplicated_as_variables(self):
         """If a function is in func_symbol_table, its DECL_VAR is not also in variables."""
         func_table = {
-            "func_helper_0": FuncRef(name="helper", label=CodeLabel("func_helper_0")),
+            "func_helper_0": FuncRef(
+                name=FuncName("helper"), label=CodeLabel("func_helper_0")
+            ),
         }
         ir = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),

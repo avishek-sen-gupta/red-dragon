@@ -8,6 +8,7 @@ rather than falling back to symbolic resolution.
 from __future__ import annotations
 
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, SymbolicValue, apply_update
 from interpreter.address import Address
@@ -52,7 +53,7 @@ def _build_callable_field_vm():
     registry.func_params["__func__greet"] = ["self", "x"]
 
     vm = VMState()
-    func_ref = FuncRef(name="greet", label=CodeLabel("__func__greet"))
+    func_ref = FuncRef(name=FuncName("greet"), label=CodeLabel("__func__greet"))
     bound = BoundFuncRef(func_ref=func_ref, closure_id="")
 
     vm.heap_set(
