@@ -223,6 +223,9 @@ class LoadVar(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.name] if self.name.is_present() else []
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_VAR

@@ -13,44 +13,20 @@ from interpreter.ir import CodeLabel, Opcode, VAR_DEFINITION_OPCODES
 from interpreter.instructions import (
     DeclVar,
     InstructionBase,
-    LoadVar,
     StoreVar,
-    Symbolic,
 )
 from interpreter.register import Register
+from interpreter.storage_identifier import StorageIdentifier
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
-
-# Opcodes that produce a value in result_reg
-_VALUE_PRODUCERS: frozenset[Opcode] = frozenset(
-    {
-        Opcode.CONST,
-        Opcode.LOAD_VAR,
-        Opcode.LOAD_FIELD,
-        Opcode.LOAD_INDIRECT,
-        Opcode.LOAD_INDEX,
-        Opcode.NEW_OBJECT,
-        Opcode.NEW_ARRAY,
-        Opcode.BINOP,
-        Opcode.UNOP,
-        Opcode.CALL_FUNCTION,
-        Opcode.CALL_METHOD,
-        Opcode.CALL_UNKNOWN,
-        Opcode.ALLOC_REGION,
-        Opcode.LOAD_REGION,
-    }
-)
-
-# Opcodes that define a named variable (not just a register)
-_VAR_DEFINERS: frozenset[Opcode] = VAR_DEFINITION_OPCODES
 
 
 @dataclass(frozen=True)
 class Definition:
     """A single point where a variable or register is defined."""
 
-    variable: str
+    variable: StorageIdentifier
     block_label: CodeLabel
     instruction_index: int
     instruction: InstructionBase
@@ -72,7 +48,7 @@ class Definition:
 class Use:
     """A single point where a variable or register is used."""
 
-    variable: str
+    variable: StorageIdentifier
     block_label: CodeLabel
     instruction_index: int
     instruction: InstructionBase
@@ -119,69 +95,15 @@ class DataflowResult:
     raw_dependency_graph: dict[VarName, set[VarName]]
 
 
-def _defs_of(instruction: InstructionBase) -> list[str]:
-    """Return variable/register names defined by an instruction."""
-    if instruction.opcode in VAR_DEFINITION_OPCODES and len(instruction.operands) >= 1:
-        t = instruction
-        assert isinstance(t, (DeclVar, StoreVar))
-        return [t.name]
-    if instruction.opcode in _VALUE_PRODUCERS and instruction.result_reg.is_present():
-        return [str(instruction.result_reg)]
-    if isinstance(instruction, Symbolic) and instruction.result_reg.is_present():
-        return [str(instruction.result_reg)]
-    return []
+def _defs_of(instruction: InstructionBase) -> list[StorageIdentifier]:
+    """Return storage locations defined (written) by an instruction."""
+    w = instruction.writes()
+    return [w] if w is not None else []
 
 
-def _uses_of(instruction: InstructionBase) -> list:
-    """Return variable/register names used by an instruction.
-
-    Returns VarName for named variable references, str for register references.
-    """
-    op = instruction.opcode
-    operands = instruction.operands
-
-    if op == Opcode.CONST:
-        return []
-    if op == Opcode.LOAD_VAR and isinstance(instruction, LoadVar):
-        return [instruction.name]
-    if op in VAR_DEFINITION_OPCODES and len(operands) >= 2:
-        return [operands[1]]
-    if op == Opcode.LOAD_FIELD and len(operands) >= 1:
-        return [operands[0]]
-    if op == Opcode.STORE_FIELD and len(operands) >= 3:
-        return [operands[0], operands[2]]
-    if op == Opcode.LOAD_INDIRECT and len(operands) >= 1:
-        return [operands[0]]
-    if op == Opcode.STORE_INDIRECT and len(operands) >= 2:
-        return [operands[0], operands[1]]
-    if op == Opcode.LOAD_INDEX and len(operands) >= 2:
-        return [operands[0], operands[1]]
-    if op == Opcode.STORE_INDEX and len(operands) >= 3:
-        return [operands[0], operands[1], operands[2]]
-    if op == Opcode.BINOP and len(operands) >= 3:
-        return [operands[1], operands[2]]
-    if op == Opcode.UNOP and len(operands) >= 2:
-        return [operands[1]]
-    if op in (Opcode.CALL_FUNCTION, Opcode.CALL_METHOD, Opcode.CALL_UNKNOWN):
-        return list(operands[1:]) if len(operands) > 1 else []
-    if op == Opcode.BRANCH_IF and len(operands) >= 1:
-        return [operands[0]]
-    if op == Opcode.RETURN and len(operands) >= 1:
-        return [operands[0]]
-    if op == Opcode.THROW and len(operands) >= 1:
-        return [operands[0]]
-    if op == Opcode.ALLOC_REGION:
-        return [
-            o
-            for o in operands
-            if (isinstance(o, Register) and o.is_present())
-            or (isinstance(o, str) and o.startswith("%"))
-        ]
-    if op == Opcode.LOAD_REGION and len(operands) >= 2:
-        return [operands[0], operands[1]]
-    if op == Opcode.WRITE_REGION and len(operands) >= 4:
-        return [operands[0], operands[1], operands[3]]
-    return []
+def _uses_of(instruction: InstructionBase) -> list[StorageIdentifier]:
+    """Return storage locations used (read) by an instruction."""
+    return instruction.reads()
 
 
 def collect_all_definitions(cfg: CFG) -> list[Definition]:
@@ -201,10 +123,10 @@ def collect_all_definitions(cfg: CFG) -> list[Definition]:
 
 def _build_defs_by_variable(
     all_defs: list[Definition],
-) -> dict[str, set[Definition]]:
-    """Index definitions by variable name."""
+) -> dict[StorageIdentifier, set[Definition]]:
+    """Index definitions by storage identifier (variable or register)."""
 
-    def _acc_def(acc: dict[str, set[Definition]], d: Definition):
+    def _acc_def(acc: dict[StorageIdentifier, set[Definition]], d: Definition):
         return {**acc, d.variable: acc.get(d.variable, set()) | {d}}
 
     return reduce(_acc_def, all_defs, {})
@@ -213,7 +135,7 @@ def _build_defs_by_variable(
 def compute_gen_kill(
     block: BasicBlock,
     all_defs: list[Definition],
-    defs_by_var: dict[str, set[Definition]],
+    defs_by_var: dict[StorageIdentifier, set[Definition]],
 ) -> tuple[set[Definition], set[Definition]]:
     """Compute GEN and KILL sets for a basic block.
 
@@ -232,7 +154,7 @@ def compute_gen_kill(
     ]
 
     # GEN = last definition of each variable in the block (walking forward, last wins)
-    gen_map: dict[str, Definition] = {}
+    gen_map: dict[StorageIdentifier, Definition] = {}
     for d in block_defs:
         gen_map[d.variable] = d
     gen = set(gen_map.values())
@@ -310,7 +232,7 @@ def extract_def_use_chains(
         reach_in = block_facts[label].reach_in
 
         # Track local definitions as we walk forward through the block
-        local_defs: dict[str, Definition] = {}
+        local_defs: dict[StorageIdentifier, Definition] = {}
 
         for idx, inst in enumerate(block.instructions):
             uses = _uses_of(inst)
@@ -353,8 +275,8 @@ def _build_raw_dependency_graph(
     the RHS value ultimately depends on by walking backward through defining instructions.
     Does NOT compute transitive closure.
     """
-    # Map: variable -> set of variables/registers used by its defining instruction
-    produced_from: dict[str, set[str]] = reduce(
+    # Map: storage identifier -> set of identifiers used by its defining instruction
+    produced_from: dict[StorageIdentifier, set[StorageIdentifier]] = reduce(
         lambda acc, link: {
             **acc,
             link.definition.variable: acc.get(link.definition.variable, set())
@@ -365,7 +287,7 @@ def _build_raw_dependency_graph(
     )
 
     # Collect all variable definitions (DECL_VAR + STORE_VAR)
-    store_var_defs: set[tuple[str, str]] = {
+    store_var_defs: set[tuple[VarName, Register]] = {
         (t.name, t.value_reg)
         for link in def_use_chains
         if (use_inst := link.use.instruction).opcode in VAR_DEFINITION_OPCODES
@@ -374,9 +296,11 @@ def _build_raw_dependency_graph(
     }
 
     # For each STORE_VAR, trace the RHS register backward to named variables
-    def _trace_deps(var_name: VarName, rhs_reg: str) -> tuple[VarName, set[VarName]]:
+    def _trace_deps(
+        var_name: VarName, rhs_reg: Register
+    ) -> tuple[VarName, set[VarName]]:
         named_deps: set[VarName] = set()
-        _trace_to_named_vars(str(rhs_reg), produced_from, named_deps, set())
+        _trace_to_named_vars(rhs_reg, produced_from, named_deps, set())
         return (var_name, named_deps)
 
     traced = [_trace_deps(var_name, rhs_reg) for var_name, rhs_reg in store_var_defs]
@@ -415,35 +339,25 @@ def build_dependency_graph(
     return _transitive_closure(raw)
 
 
-def _is_temporary_register(name: str) -> bool:
-    """Check if a name is a temporary register (t0, t1, t_cond, %0, %1, etc.)."""
-    if name.startswith("%"):
-        return True
-    if not name.startswith("t"):
-        return False
-    rest = name[1:]
-    return rest.isdigit() or rest.startswith("_")
-
-
 def _trace_to_named_vars(
-    reg,
-    produced_from: dict[str, set],
+    identifier: StorageIdentifier,
+    produced_from: dict[StorageIdentifier, set[StorageIdentifier]],
     result: set[VarName],
-    visited: set,
+    visited: set[StorageIdentifier],
 ) -> None:
-    """Recursively trace a register back to named variables via the produced_from map."""
-    if isinstance(reg, VarName):
-        result.add(reg)
-        return
-    if reg in visited:
-        return
-    visited.add(reg)
+    """Recursively trace a storage identifier back to named variables.
 
-    if not _is_temporary_register(reg):
-        result.add(VarName(reg))
+    VarName identifiers are leaves (added to result directly).
+    Register identifiers are intermediates (traced through produced_from).
+    """
+    if isinstance(identifier, VarName):
+        result.add(identifier)
         return
+    if identifier in visited:
+        return
+    visited.add(identifier)
 
-    for source in produced_from.get(reg, set()):
+    for source in produced_from.get(identifier, set()):
         _trace_to_named_vars(source, produced_from, result, visited)
 
 
