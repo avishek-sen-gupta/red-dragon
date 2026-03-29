@@ -9,7 +9,7 @@ from functools import reduce
 
 from interpreter import constants
 from interpreter.cfg import BasicBlock, CFG
-from interpreter.ir import Opcode, VAR_DEFINITION_OPCODES
+from interpreter.ir import CodeLabel, Opcode, VAR_DEFINITION_OPCODES
 from interpreter.instructions import (
     DeclVar,
     InstructionBase,
@@ -51,7 +51,7 @@ class Definition:
     """A single point where a variable or register is defined."""
 
     variable: str
-    block_label: str
+    block_label: CodeLabel
     instruction_index: int
     instruction: InstructionBase
 
@@ -73,7 +73,7 @@ class Use:
     """A single point where a variable or register is used."""
 
     variable: str
-    block_label: str
+    block_label: CodeLabel
     instruction_index: int
     instruction: InstructionBase
 
@@ -113,7 +113,7 @@ class DataflowResult:
     """Complete result of dataflow analysis on a CFG."""
 
     definitions: list[Definition]
-    block_facts: dict[str, BlockDataflowFacts]
+    block_facts: dict[CodeLabel, BlockDataflowFacts]
     def_use_chains: list[DefUseLink]
     dependency_graph: dict[VarName, set[VarName]]
     raw_dependency_graph: dict[VarName, set[VarName]]
@@ -250,7 +250,7 @@ def compute_gen_kill(
     return gen, kill
 
 
-def solve_reaching_definitions(cfg: CFG) -> dict[str, BlockDataflowFacts]:
+def solve_reaching_definitions(cfg: CFG) -> dict[CodeLabel, BlockDataflowFacts]:
     """Classic worklist-based reaching definitions analysis.
 
     Returns a mapping of block label -> BlockDataflowFacts with reach_in/reach_out populated.
@@ -297,7 +297,7 @@ def solve_reaching_definitions(cfg: CFG) -> dict[str, BlockDataflowFacts]:
 
 
 def extract_def_use_chains(
-    cfg: CFG, block_facts: dict[str, BlockDataflowFacts]
+    cfg: CFG, block_facts: dict[CodeLabel, BlockDataflowFacts]
 ) -> list[DefUseLink]:
     """For each use, find which definitions can reach it.
 
