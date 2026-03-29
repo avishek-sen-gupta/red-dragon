@@ -693,6 +693,9 @@ class AddressOf(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.var_name] if self.var_name.is_present() else []
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.ADDRESS_OF
