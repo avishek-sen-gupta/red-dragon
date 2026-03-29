@@ -8,6 +8,7 @@ from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.class_name import ClassName
+from interpreter.register import Register
 from interpreter.instructions import (
     Branch,
     Const,
@@ -56,7 +57,10 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_register_type(reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
                 ctx.emit_inst(
-                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                    DeclVar(
+                        name=VarName(pname),
+                        value_reg=Register(f"%{ctx.reg_counter - 1}"),
+                    )
                 )
                 ctx.seed_var_type(pname, type_hint)
                 default_value_node = child.child_by_field_name("default_value")
@@ -82,7 +86,10 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_register_type(reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
                 ctx.emit_inst(
-                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                    DeclVar(
+                        name=VarName(pname),
+                        value_reg=Register(f"%{ctx.reg_counter - 1}"),
+                    )
                 )
                 ctx.seed_var_type(pname, type_hint)
         elif child.type == PHPNodeType.VARIABLE_NAME:
@@ -94,7 +101,9 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 node=child,
             )
             ctx.emit_inst(
-                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                DeclVar(
+                    name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}")
+                )
             )
         param_index += 1
 

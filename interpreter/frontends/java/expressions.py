@@ -189,7 +189,10 @@ def _lower_lambda_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     node=child,
                 )
                 ctx.emit_inst(
-                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                    DeclVar(
+                        name=VarName(pname),
+                        value_reg=Register(f"%{ctx.reg_counter - 1}"),
+                    )
                 )
 
 
@@ -464,7 +467,10 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_register_type(param_reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
                 ctx.emit_inst(
-                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                    DeclVar(
+                        name=VarName(pname),
+                        value_reg=Register(f"%{ctx.reg_counter - 1}"),
+                    )
                 )
                 ctx.seed_var_type(pname, type_hint)
         elif child.type == JavaNodeType.SPREAD_PARAMETER:
@@ -479,5 +485,8 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     node=child,
                 )
                 ctx.emit_inst(
-                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                    DeclVar(
+                        name=VarName(pname),
+                        value_reg=Register(f"%{ctx.reg_counter - 1}"),
+                    )
                 )

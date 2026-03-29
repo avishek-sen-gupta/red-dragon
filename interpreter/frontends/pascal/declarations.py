@@ -22,6 +22,7 @@ from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.class_name import ClassName
+from interpreter.register import Register
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -298,10 +299,10 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
             node=node,
         )
         ctx.emit_inst(
-            DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}")
+            DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
         )
         ctx.emit_inst(
-            DeclVar(name=VarName("self"), value_reg=f"%{ctx.reg_counter - 1}")
+            DeclVar(name=VarName("self"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
         )
 
     if args_node:
@@ -357,7 +358,9 @@ def _lower_pascal_params(ctx: TreeSitterEmitContext, args_node) -> None:
                 node=child,
             )
             ctx.emit_inst(
-                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                DeclVar(
+                    name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}")
+                )
             )
             param_index += 1
 
@@ -388,7 +391,9 @@ def _lower_pascal_single_param(
         )
         ctx.seed_register_type(_sym_reg, type_hint)
         ctx.seed_param_type(pname, type_hint)
-        ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"))
+        ctx.emit_inst(
+            DeclVar(name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+        )
         ctx.seed_var_type(pname, type_hint)
         if default_value_node:
             from interpreter.frontends.common.default_params import (
@@ -536,7 +541,9 @@ def _emit_synthetic_init_for_fields(
 
     sym_reg = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
-    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(
+        DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+    )
 
     for fname in field_names:
         val_reg = ctx.fresh_reg()
@@ -596,7 +603,9 @@ def _lower_pascal_method(ctx: TreeSitterEmitContext, node) -> None:
         Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"),
         node=node,
     )
-    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(
+        DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+    )
 
     if args_node:
         _lower_pascal_params(ctx, args_node)
@@ -672,7 +681,9 @@ def _emit_property_getter(
 
     sym_reg = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
-    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(
+        DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+    )
 
     this_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
@@ -722,11 +733,15 @@ def _emit_property_setter(
 
     sym_reg = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
-    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(
+        DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+    )
 
     val_sym = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=val_sym, hint=f"{constants.PARAM_PREFIX}value"))
-    ctx.emit_inst(DeclVar(name=VarName("value"), value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(
+        DeclVar(name=VarName("value"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+    )
 
     this_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))

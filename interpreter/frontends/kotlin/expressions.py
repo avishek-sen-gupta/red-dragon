@@ -586,7 +586,8 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
                     )
                     ctx.emit_inst(
                         DeclVar(
-                            name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"
+                            name=VarName(pname),
+                            value_reg=Register(f"%{ctx.reg_counter - 1}"),
                         )
                     )
 
@@ -696,7 +697,10 @@ def _lower_anon_func_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     node=child,
                 )
                 ctx.emit_inst(
-                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                    DeclVar(
+                        name=VarName(pname),
+                        value_reg=Register(f"%{ctx.reg_counter - 1}"),
+                    )
                 )
 
 

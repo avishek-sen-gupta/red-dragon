@@ -57,7 +57,10 @@ def _emit_self_param(ctx: TreeSitterEmitContext) -> None:
         Symbolic(result_reg=ctx.fresh_reg(), hint=f"{constants.PARAM_PREFIX}self")
     )
     ctx.emit_inst(
-        DeclVar(name=VarName(constants.PARAM_SELF), value_reg=f"%{ctx.reg_counter - 1}")
+        DeclVar(
+            name=VarName(constants.PARAM_SELF),
+            value_reg=Register(f"%{ctx.reg_counter - 1}"),
+        )
     )
 
 

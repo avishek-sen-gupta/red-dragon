@@ -36,6 +36,7 @@ from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.field_name import FieldName, FieldKind, NO_FIELD_NAME
 from interpreter.func_name import FuncName, NO_FUNC_NAME
+from interpreter.storage_identifier import StorageIdentifier
 from interpreter.var_name import NO_VAR_NAME, VarName
 
 
@@ -151,6 +152,14 @@ class InstructionBase:
                 changes[f.name] = tuple(fn(lbl) for lbl in val)
         return dataclasses.replace(self, **changes) if changes else self
 
+    def writes(self) -> StorageIdentifier | None:
+        """Return the storage location written by this instruction, or None."""
+        return self.result_reg if self.result_reg.is_present() else None
+
+    def reads(self) -> list[StorageIdentifier]:
+        """Return the storage locations read as inputs by this instruction."""
+        return []
+
     def __str__(self) -> str:
         """Render in the same format as IRInstruction.__str__."""
         parts: list[str] = []
@@ -235,6 +244,12 @@ class DeclVar(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def writes(self) -> StorageIdentifier | None:
+        return self.name
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.value_reg] if self.value_reg.is_present() else []
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.DECL_VAR
@@ -255,6 +270,12 @@ class StoreVar(InstructionBase):
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def writes(self) -> StorageIdentifier | None:
+        return self.name
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.value_reg] if self.value_reg.is_present() else []
 
     @property
     def opcode(self) -> Opcode:
@@ -301,6 +322,13 @@ class Binop(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        return [
+            r
+            for r in (self.left, self.right)
+            if isinstance(r, Register) and r.is_present()
+        ]
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.BINOP
@@ -326,6 +354,9 @@ class Unop(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.operand] if self.operand.is_present() else []
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.UNOP
@@ -349,6 +380,9 @@ class CallFunction(InstructionBase):
     # ── IRInstruction-compat fields ──
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [r for r in self.args if isinstance(r, Register) and r.is_present()]
 
     @property
     def opcode(self) -> Opcode:
@@ -375,6 +409,10 @@ class CallMethod(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
+        return ([self.obj_reg] if self.obj_reg.is_present() else []) + args_regs
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.CALL_METHOD
@@ -400,6 +438,10 @@ class CallUnknown(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
+        return ([self.target_reg] if self.target_reg.is_present() else []) + args_regs
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.CALL_UNKNOWN
@@ -424,6 +466,9 @@ class CallCtorFunction(InstructionBase):
     # ── IRInstruction-compat fields ──
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [r for r in self.args if isinstance(r, Register) and r.is_present()]
 
     @property
     def opcode(self) -> Opcode:
@@ -452,6 +497,9 @@ class LoadField(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.obj_reg] if self.obj_reg.is_present() else []
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_FIELD
@@ -474,6 +522,12 @@ class StoreField(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [r for r in (self.obj_reg, self.value_reg) if r.is_present()]
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.STORE_FIELD
@@ -494,6 +548,9 @@ class LoadFieldIndirect(InstructionBase):
     # ── IRInstruction-compat fields ──
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [r for r in (self.obj_reg, self.name_reg) if r.is_present()]
 
     @property
     def opcode(self) -> Opcode:
@@ -519,6 +576,9 @@ class LoadIndex(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        return [r for r in (self.arr_reg, self.index_reg) if r.is_present()]
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_INDEX
@@ -540,6 +600,17 @@ class StoreIndex(InstructionBase):
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
+    def reads(self) -> list[StorageIdentifier]:
+        regs: list[StorageIdentifier] = [
+            r for r in (self.arr_reg, self.index_reg) if r.is_present()
+        ]
+        if isinstance(self.value_reg, Register) and self.value_reg.is_present():
+            regs.append(self.value_reg)
+        return regs
 
     @property
     def opcode(self) -> Opcode:
@@ -569,6 +640,9 @@ class LoadIndirect(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.ptr_reg] if self.ptr_reg.is_present() else []
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_INDIRECT
@@ -589,6 +663,12 @@ class StoreIndirect(InstructionBase):
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [r for r in (self.ptr_reg, self.value_reg) if r.is_present()]
 
     @property
     def opcode(self) -> Opcode:
@@ -676,6 +756,9 @@ class Label_(InstructionBase):
     result_reg: Register = NO_REGISTER
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LABEL
@@ -694,6 +777,9 @@ class Branch(InstructionBase):
     # ── IRInstruction-compat fields ──
     result_reg: Register = NO_REGISTER
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def writes(self) -> StorageIdentifier | None:
+        return None
 
     @property
     def opcode(self) -> Opcode:
@@ -715,6 +801,12 @@ class BranchIf(InstructionBase):
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
 
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.cond_reg] if self.cond_reg.is_present() else []
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.BRANCH_IF
@@ -735,6 +827,16 @@ class Return_(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
+    def reads(self) -> list[StorageIdentifier]:
+        return (
+            [self.value_reg]
+            if self.value_reg is not None and self.value_reg.is_present()
+            else []
+        )
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.RETURN
@@ -754,6 +856,16 @@ class Throw_(InstructionBase):
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
+    def reads(self) -> list[StorageIdentifier]:
+        return (
+            [self.value_reg]
+            if self.value_reg is not None and self.value_reg.is_present()
+            else []
+        )
 
     @property
     def opcode(self) -> Opcode:
@@ -780,6 +892,9 @@ class TryPush(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.TRY_PUSH
@@ -797,6 +912,9 @@ class TryPop(InstructionBase):
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def writes(self) -> StorageIdentifier | None:
+        return None
 
     @property
     def opcode(self) -> Opcode:
@@ -821,6 +939,9 @@ class AllocRegion(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.size_reg] if self.size_reg.is_present() else []
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.ALLOC_REGION
@@ -842,6 +963,9 @@ class LoadRegion(InstructionBase):
     # ── IRInstruction-compat fields ──
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [r for r in (self.region_reg, self.offset_reg) if r.is_present()]
 
     @property
     def opcode(self) -> Opcode:
@@ -865,6 +989,16 @@ class WriteRegion(InstructionBase):
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [
+            r
+            for r in (self.region_reg, self.offset_reg, self.value_reg)
+            if r.is_present()
+        ]
 
     @property
     def opcode(self) -> Opcode:
@@ -895,6 +1029,9 @@ class SetContinuation(InstructionBase):
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.SET_CONTINUATION
@@ -914,6 +1051,9 @@ class ResumeContinuation(InstructionBase):
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
+
+    def writes(self) -> StorageIdentifier | None:
+        return None
 
     @property
     def opcode(self) -> Opcode:

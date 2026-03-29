@@ -506,7 +506,9 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
             ctx.seed_register_type(sym_reg, type_hint)
             ctx.seed_param_type(pname, type_hint)
             ctx.emit_inst(
-                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                DeclVar(
+                    name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}")
+                )
             )
             ctx.seed_var_type(pname, type_hint)
             default_value_node = child.child_by_field_name("value")
@@ -535,7 +537,9 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
             ctx.seed_register_type(sym_reg, type_hint)
             ctx.seed_param_type(pname, type_hint)
             ctx.emit_inst(
-                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                DeclVar(
+                    name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}")
+                )
             )
             ctx.seed_var_type(pname, type_hint)
         return

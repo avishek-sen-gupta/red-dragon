@@ -10,6 +10,7 @@ from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.class_name import ClassName
+from interpreter.register import Register
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -335,7 +336,9 @@ def _lower_c_single_param(ctx: TreeSitterEmitContext, child, param_index: int) -
     )
     ctx.seed_register_type(sym_reg, effective_type)
     ctx.seed_param_type(pname, effective_type)
-    ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(
+        DeclVar(name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+    )
     ctx.seed_var_type(pname, effective_type)
     # C++ optional_parameter_declaration has a default_value field
     default_value_node = child.child_by_field_name("default_value")
