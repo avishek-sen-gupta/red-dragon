@@ -16,6 +16,8 @@ from interpreter.class_name import ClassName
 from interpreter.constants import Language
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
+from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.instructions import InstructionBase
 from interpreter.registry import FunctionRegistry
 
@@ -94,13 +96,13 @@ class ExportTable:
 
     functions: dict[FuncName, CodeLabel] = field(default_factory=dict)
     classes: dict[ClassName, CodeLabel] = field(default_factory=dict)
-    variables: dict[str, str] = field(default_factory=dict)
+    variables: dict[VarName, Register] = field(default_factory=dict)
 
-    def lookup(self, name: str) -> CodeLabel | str | None:
+    def lookup(self, name: str) -> CodeLabel | Register | None:
         """Look up an exported name across all symbol categories.
 
         Priority: functions > classes > variables.
-        Accepts plain str and converts to FuncName/ClassName for typed lookups.
+        Accepts plain str and converts to typed keys for lookups.
         """
         func_hit = self.functions.get(FuncName(name))
         if func_hit is not None:
@@ -108,14 +110,14 @@ class ExportTable:
         class_hit = self.classes.get(ClassName(name))
         if class_hit is not None:
             return class_hit
-        return self.variables.get(name)
+        return self.variables.get(VarName(name))
 
     def all_names(self) -> set[str]:
         """All exported names (deduplicated, as plain strings)."""
         return (
             {str(k) for k in self.functions}
             | {str(k) for k in self.classes}
-            | set(self.variables)
+            | {str(k) for k in self.variables}
         )
 
 
