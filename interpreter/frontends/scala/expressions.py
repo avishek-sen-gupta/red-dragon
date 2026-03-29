@@ -349,7 +349,8 @@ def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> Register:
                     )
                     ctx.emit_inst(
                         DeclVar(
-                            name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"
+                            name=VarName(pname),
+                            value_reg=Register(f"%{ctx.reg_counter - 1}"),
                         )
                     )
 
