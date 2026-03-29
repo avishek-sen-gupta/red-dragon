@@ -13,6 +13,7 @@ from interpreter.frontends.common.node_types import CommonNodeType
 from interpreter import constants
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.register import Register
 from interpreter.instructions import (
     Branch,
     Const,
@@ -76,7 +77,7 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     ctx.emit_inst(
         DeclVar(
             name=VarName(pname),
-            value_reg=f"%{ctx.reg_counter - 1}",
+            value_reg=Register(f"%{ctx.reg_counter - 1}"),
         ),
         node=child,
     )
