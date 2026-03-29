@@ -12,6 +12,7 @@ from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -527,7 +528,7 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
 
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=len_reg, func_name="len", args=(coll_reg,)),
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(coll_reg,)),
         node=node,
     )
 

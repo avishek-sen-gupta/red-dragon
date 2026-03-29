@@ -7,6 +7,7 @@ from interpreter.field_name import FieldName
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -159,7 +160,7 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
                 CallMethod(
                     result_reg=ctor_reg,
                     obj_reg=obj_reg,
-                    method_name="__init__",
+                    method_name=FuncName("__init__"),
                     args=tuple(arg_regs),
                 ),
                 node=node,
@@ -173,7 +174,7 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
             CallMethod(
                 result_reg=reg,
                 obj_reg=obj_reg,
-                method_name=method_name,
+                method_name=FuncName(method_name),
                 args=tuple(arg_regs),
             ),
             node=node,
@@ -190,7 +191,9 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
             return val_reg
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+            CallFunction(
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            ),
             node=node,
         )
         return reg
@@ -242,7 +245,7 @@ def lower_ruby_range(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="range",
+            func_name=FuncName("range"),
             args=(
                 start_reg,
                 end_reg,
@@ -401,7 +404,7 @@ def _lower_range_slice(
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="slice",
+            func_name=FuncName("slice"),
             args=(
                 collection_reg,
                 start_reg,
@@ -435,7 +438,7 @@ def _lower_positional_slice(
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="slice",
+            func_name=FuncName("slice"),
             args=(
                 collection_reg,
                 start_reg,
@@ -503,7 +506,8 @@ def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="super", args=tuple(arg_regs)), node=node
+        CallFunction(result_reg=reg, func_name=FuncName("super"), args=tuple(arg_regs)),
+        node=node,
     )
     return reg
 
@@ -517,7 +521,8 @@ def lower_ruby_yield(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="yield", args=tuple(arg_regs)), node=node
+        CallFunction(result_reg=reg, func_name=FuncName("yield"), args=tuple(arg_regs)),
+        node=node,
     )
     return reg
 

@@ -14,6 +14,7 @@ from interpreter.frontends.go.expressions import (
 from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -170,7 +171,9 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("range_cond")
     body_label = ctx.fresh_label("range_body")
@@ -347,7 +350,9 @@ def lower_defer_stmt(ctx: TreeSitterEmitContext, node) -> None:
         return
     call_reg = ctx.lower_expr(call_node)
     ctx.emit_inst(
-        CallFunction(result_reg=ctx.fresh_reg(), func_name="defer", args=(call_reg,)),
+        CallFunction(
+            result_reg=ctx.fresh_reg(), func_name=FuncName("defer"), args=(call_reg,)
+        ),
         node=node,
     )
 
@@ -365,7 +370,9 @@ def lower_go_stmt(ctx: TreeSitterEmitContext, node) -> None:
         return
     call_reg = ctx.lower_expr(call_node)
     ctx.emit_inst(
-        CallFunction(result_reg=ctx.fresh_reg(), func_name="go", args=(call_reg,)),
+        CallFunction(
+            result_reg=ctx.fresh_reg(), func_name=FuncName("go"), args=(call_reg,)
+        ),
         node=node,
     )
 
@@ -506,7 +513,7 @@ def lower_type_switch(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit_inst(
                     CallFunction(
                         result_reg=check_reg,
-                        func_name="type_check",
+                        func_name=FuncName("type_check"),
                         args=(expr_reg, type_text),
                     ),
                     node=case,
@@ -571,7 +578,7 @@ def lower_send_stmt(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(
         CallFunction(
             result_reg=ctx.fresh_reg(),
-            func_name="chan_send",
+            func_name=FuncName("chan_send"),
             args=(chan_reg, val_reg),
         ),
         node=node,
@@ -629,7 +636,9 @@ def lower_receive_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
     recv_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=recv_reg, func_name="chan_recv", args=(chan_reg,)),
+        CallFunction(
+            result_reg=recv_reg, func_name=FuncName("chan_recv"), args=(chan_reg,)
+        ),
         node=node,
     )
 
