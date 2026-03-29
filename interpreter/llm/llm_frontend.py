@@ -333,7 +333,7 @@ def _convert_llm_class_refs(
             if m:
                 name, label = m.group(1), CodeLabel(m.group(2))
                 parents_str = m.group(3) or ""
-                parents = tuple(p for p in parents_str.split(",") if p)
+                parents = tuple(ClassName(p) for p in parents_str.split(",") if p)
                 class_symbol_table[label] = ClassRef(
                     name=ClassName(name), label=label, parents=parents
                 )

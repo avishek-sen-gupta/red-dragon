@@ -124,7 +124,7 @@ def _scan_classes(
     for label, cref in class_symbol_table.items():
         classes[str(cref.name)] = cref.label
         if cref.parents:
-            class_parents[str(cref.name)] = list(cref.parents)
+            class_parents[str(cref.name)] = [str(p) for p in cref.parents]
 
     # Second pass: identify class scopes and their methods.
     # Python emits methods inside the class scope (class_X ... end_class_X).
