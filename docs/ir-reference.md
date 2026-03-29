@@ -11,7 +11,7 @@ Each opcode has a dedicated frozen dataclass with named, typed fields. All share
 @dataclass(frozen=True)
 class Binop(InstructionBase):
     result_reg: Register
-    operator: str
+    operator: BinopKind  # (UnopKind for Unop)
     left: Register
     right: Register
 ```
