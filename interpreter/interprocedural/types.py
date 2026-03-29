@@ -7,6 +7,7 @@ from typing import Union
 
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import Definition
+from interpreter.field_name import FieldName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.instructions import InstructionBase
 
@@ -71,7 +72,7 @@ class FieldEndpoint:
     """A field access (STORE_FIELD / LOAD_FIELD) on an object variable."""
 
     base: VariableEndpoint
-    field: str
+    field: FieldName
     location: InstructionLocation
 
     def __hash__(self) -> int:

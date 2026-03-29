@@ -149,7 +149,7 @@ def _find_store_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
             label,
             idx,
             str(t.obj_reg),
-            str(t.field_name),
+            t.field_name,
             str(t.value_reg),
         )
         for label, block in cfg.blocks.items()
@@ -169,7 +169,7 @@ def _find_load_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
             label,
             idx,
             str(t.obj_reg),
-            str(t.field_name),
+            t.field_name,
             t.result_reg,
         )
         for label, block in cfg.blocks.items()

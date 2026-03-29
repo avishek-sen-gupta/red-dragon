@@ -32,7 +32,7 @@ def format_flow_endpoint(ep: FlowEndpoint) -> dict[str, str]:
     if isinstance(ep, ReturnEndpoint):
         return {"function": str(ep.function.label), "type": "return"}
     if isinstance(ep, FieldEndpoint):
-        return {"base": ep.base.name, "field": ep.field, "type": "field"}
+        return {"base": ep.base.name, "field": str(ep.field), "type": "field"}
     return {"value": str(ep), "type": "unknown"}
 
 
