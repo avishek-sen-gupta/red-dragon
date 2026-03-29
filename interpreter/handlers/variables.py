@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.instructions import (
@@ -95,8 +96,8 @@ def _handle_load_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
     # Alias-aware: if variable is backed by a heap object, read from heap
     for f in reversed(vm.call_stack):
         alias_ptr = f.var_heap_aliases.get(name)
-        if alias_ptr and alias_ptr.base in vm.heap:
-            tv = vm.heap[alias_ptr.base].fields.get(
+        if alias_ptr and vm.heap_contains(Address(alias_ptr.base)):
+            tv = vm.heap_get(Address(alias_ptr.base)).fields.get(
                 FieldName(str(alias_ptr.offset), FieldKind.INDEX)
             )
             return ExecutionResult.success(

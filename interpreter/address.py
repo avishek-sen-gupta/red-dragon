@@ -30,6 +30,9 @@ class Address:
             return self.value == other.value
         return NotImplemented
 
+    def __bool__(self) -> bool:
+        return bool(self.value)
+
     def __lt__(self, other: object) -> bool:
         if isinstance(other, Address):
             return self.value < other.value
