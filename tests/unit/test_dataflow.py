@@ -585,7 +585,7 @@ class TestRegionOpcodeDataflow:
         defs = collect_all_definitions(cfg)
 
         defined_vars = {d.variable for d in defs}
-        assert "%r0" in defined_vars
+        assert Register("%r0") in defined_vars
 
     def test_load_region_tracked_as_definition(self):
         """LOAD_REGION result_reg appears in collected definitions."""
@@ -604,16 +604,16 @@ class TestRegionOpcodeDataflow:
         defs = collect_all_definitions(cfg)
 
         defined_vars = {d.variable for d in defs}
-        assert "%r1" in defined_vars
+        assert Register("%r1") in defined_vars
 
     def test_write_region_uses_tracked(self):
         """WRITE_REGION's region_reg, offset_reg, and value_reg tracked as uses."""
         inst = _make_inst(Opcode.WRITE_REGION, operands=["%r0", "%off", 4, "%val"])
         uses = _uses_of(inst)
 
-        assert "%r0" in uses
-        assert "%off" in uses
-        assert "%val" in uses
+        assert Register("%r0") in uses
+        assert Register("%off") in uses
+        assert Register("%val") in uses
         assert 4 not in uses
 
     def test_load_region_uses_tracked(self):
@@ -625,8 +625,8 @@ class TestRegionOpcodeDataflow:
         )
         uses = _uses_of(inst)
 
-        assert "%r0" in uses
-        assert "%off" in uses
+        assert Register("%r0") in uses
+        assert Register("%off") in uses
         assert 4 not in uses
 
     def test_cobol_style_def_use_chain(self):
@@ -653,15 +653,15 @@ class TestRegionOpcodeDataflow:
 
         # %r0 should be defined (ALLOC_REGION)
         defined_vars = {d.variable for d in result.definitions}
-        assert "%r0" in defined_vars
-        assert "%loaded" in defined_vars
+        assert Register("%r0") in defined_vars
+        assert Register("%loaded") in defined_vars
 
         # WRITE_REGION should have def-use chain from %r0
         write_region_uses = [
             c
             for c in result.def_use_chains
             if c.use.instruction.opcode == Opcode.WRITE_REGION
-            and c.use.variable == "%r0"
+            and c.use.variable == Register("%r0")
         ]
         assert len(write_region_uses) == 1
 
@@ -670,7 +670,7 @@ class TestRegionOpcodeDataflow:
             c
             for c in result.def_use_chains
             if c.use.instruction.opcode == Opcode.LOAD_REGION
-            and c.use.variable == "%r0"
+            and c.use.variable == Register("%r0")
         ]
         assert len(load_region_uses) == 1
 
@@ -679,7 +679,7 @@ class TestRegionOpcodeDataflow:
             c
             for c in result.def_use_chains
             if c.use.instruction.opcode == Opcode.STORE_VAR
-            and c.use.variable == "%loaded"
+            and c.use.variable == Register("%loaded")
         ]
         assert len(store_result_uses) == 1
 
