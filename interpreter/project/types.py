@@ -16,6 +16,8 @@ from interpreter.class_name import ClassName
 from interpreter.constants import Language
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.instructions import InstructionBase
@@ -158,5 +160,5 @@ class LinkedProgram:
     entry_module: Path
     import_graph: dict[Path, list[Path]]
     unresolved_imports: list[ImportRef] = field(default_factory=list)
-    func_symbol_table: dict = field(default_factory=dict)
-    class_symbol_table: dict = field(default_factory=dict)
+    func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
+    class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
