@@ -38,6 +38,7 @@ from interpreter.frontends.symbol_table import (
     FunctionInfo,
     SymbolTable,
 )
+from interpreter.class_name import ClassName
 
 
 def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -602,7 +603,7 @@ def _extract_csharp_field(node) -> tuple[str, FieldInfo] | None:
     name = name_node.text.decode()
     has_initializer = len(declarator.named_children) > 1
     return name, FieldInfo(
-        name=name, type_hint=type_hint, has_initializer=has_initializer
+        name=FieldName(name), type_hint=type_hint, has_initializer=has_initializer
     )
 
 
@@ -624,7 +625,9 @@ def _extract_csharp_method(node) -> tuple[str, FunctionInfo] | None:
     )
     type_node = node.child_by_field_name("type")
     return_type = type_node.text.decode() if type_node else ""
-    return name, FunctionInfo(name=name, params=params, return_type=return_type)
+    return name, FunctionInfo(
+        name=FuncName(name), params=params, return_type=return_type
+    )
 
 
 def _extract_csharp_class_parents(node) -> tuple[str, ...]:
@@ -632,7 +635,11 @@ def _extract_csharp_class_parents(node) -> tuple[str, ...]:
     base_list = next((c for c in node.children if c.type == NT.BASE_LIST), None)
     if base_list is None:
         return ()
-    return tuple(c.text.decode() for c in base_list.children if c.type == NT.IDENTIFIER)
+    return tuple(
+        ClassName(c.text.decode())
+        for c in base_list.children
+        if c.type == NT.IDENTIFIER
+    )
 
 
 def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
@@ -646,12 +653,16 @@ def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
     body = next((c for c in node.children if c.type == "declaration_list"), None)
     if body is None:
         return class_name, ClassInfo(
-            name=class_name, fields={}, methods={}, constants={}, parents=parents
+            name=ClassName(class_name),
+            fields={},
+            methods={},
+            constants={},
+            parents=parents,
         )
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     constants_map: dict[str, str] = {}
-    methods: dict[str, FunctionInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
 
     for child in body.children:
         if child.type == NT.FIELD_DECLARATION:
@@ -662,16 +673,16 @@ def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
             if _is_csharp_static(child):
                 constants_map[fname] = finfo.type_hint
             else:
-                fields[fname] = finfo
+                fields[FieldName(fname)] = finfo
         elif child.type == NT.METHOD_DECLARATION:
             result = _extract_csharp_method(child)
             if result is None:
                 continue
             mname, minfo = result
-            methods[mname] = minfo
+            methods[FuncName(mname)] = minfo
 
     return class_name, ClassInfo(
-        name=class_name,
+        name=ClassName(class_name),
         fields=fields,
         methods=methods,
         constants=constants_map,
@@ -679,19 +690,19 @@ def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
     )
 
 
-def _collect_csharp_classes(node, accumulator: dict[str, ClassInfo]) -> None:
+def _collect_csharp_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class_declaration nodes."""
     if node.type == NT.CLASS_DECLARATION:
         result = _extract_csharp_class(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_csharp_classes(child, accumulator)
 
 
 def extract_csharp_symbols(root) -> SymbolTable:
     """Walk the C# AST and return a SymbolTable of all class definitions."""
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_csharp_classes(root, classes)
     return SymbolTable(classes=classes)

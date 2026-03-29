@@ -9,25 +9,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName, NO_FIELD_NAME
+from interpreter.func_name import FuncName
+
 
 @dataclass(frozen=True)
 class FieldInfo:
     """A class/struct/record field."""
 
-    name: str
+    name: FieldName
     type_hint: str
     has_initializer: bool
     children: tuple[FieldInfo, ...] = ()
 
 
-NULL_FIELD = FieldInfo(name="", type_hint="", has_initializer=False)
+NULL_FIELD = FieldInfo(name=NO_FIELD_NAME, type_hint="", has_initializer=False)
 
 
 @dataclass(frozen=True)
 class FunctionInfo:
     """A function/method signature."""
 
-    name: str
+    name: FuncName
     params: tuple[str, ...]
     return_type: str
 
@@ -36,11 +40,11 @@ class FunctionInfo:
 class ClassInfo:
     """A class/struct/record with its fields, methods, constants, and parents."""
 
-    name: str
-    fields: dict[str, FieldInfo]
-    methods: dict[str, FunctionInfo]
+    name: ClassName
+    fields: dict[FieldName, FieldInfo]
+    methods: dict[FuncName, FunctionInfo]
     constants: dict[str, str]
-    parents: tuple[str, ...]
+    parents: tuple[ClassName, ...]
     match_args: tuple[str, ...] = ()
 
 
@@ -48,15 +52,15 @@ class ClassInfo:
 class SymbolTable:
     """Symbol catalog extracted before IR lowering."""
 
-    classes: dict[str, ClassInfo] = field(default_factory=dict)
-    functions: dict[str, FunctionInfo] = field(default_factory=dict)
+    classes: dict[ClassName, ClassInfo] = field(default_factory=dict)
+    functions: dict[FuncName, FunctionInfo] = field(default_factory=dict)
     constants: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def empty(cls) -> SymbolTable:
         return cls()
 
-    def resolve_field(self, class_name: str, field_name: str) -> FieldInfo:
+    def resolve_field(self, class_name: ClassName, field_name: FieldName) -> FieldInfo:
         """Find field in class or any ancestor. Returns NULL_FIELD if not found."""
         class_info = self.classes.get(class_name)
         if class_info is None:
@@ -68,7 +72,7 @@ class SymbolTable:
                 result
                 for parent in class_info.parents
                 for result in [self.resolve_field(parent, field_name)]
-                if result.name
+                if result.name.is_present()
             ),
             NULL_FIELD,
         )
@@ -77,8 +81,8 @@ class SymbolTable:
     def from_data_layout(cls, layout) -> SymbolTable:
         """Convert COBOL DataLayout to a SymbolTable."""
         fields = {
-            name: FieldInfo(
-                name=name,
+            FieldName(name): FieldInfo(
+                name=FieldName(name),
                 type_hint=(
                     fl.type_descriptor.pic if hasattr(fl.type_descriptor, "pic") else ""
                 ),
@@ -87,10 +91,10 @@ class SymbolTable:
             for name, fl in layout.fields.items()
         }
         ws_class = ClassInfo(
-            name="__WORKING_STORAGE__",
+            name=ClassName("__WORKING_STORAGE__"),
             fields=fields,
             methods={},
             constants={},
             parents=(),
         )
-        return cls(classes={"__WORKING_STORAGE__": ws_class})
+        return cls(classes={ClassName("__WORKING_STORAGE__"): ws_class})
