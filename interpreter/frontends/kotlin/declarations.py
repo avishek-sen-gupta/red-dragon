@@ -5,6 +5,8 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
@@ -719,7 +721,7 @@ def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
     """Extract val/var params from a Kotlin primary_constructor as fields."""
     from interpreter.frontends.symbol_table import FieldInfo
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     for child in primary_ctor.children:
         if child.type != KNT.CLASS_PARAMETER:
             continue
@@ -739,8 +741,8 @@ def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
         fname = name_node.text.decode()
         type_hint = type_node.text.decode() if type_node is not None else ""
         has_default = any(c.type == "=" for c in child.children)
-        fields[fname] = FieldInfo(
-            name=fname, type_hint=type_hint, has_initializer=has_default
+        fields[FieldName(fname)] = FieldInfo(
+            name=FieldName(fname), type_hint=type_hint, has_initializer=has_default
         )
     return fields
 
@@ -783,14 +785,14 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
         return None
 
     parents = tuple(
-        name
+        ClassName(name)
         for child in node.children
         if child.type == KNT.DELEGATION_SPECIFIER
         for name in [_kotlin_delegation_parent_name(child)]
         if name is not None
     )
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
 
     # Extract primary constructor val/var params as fields
     primary_ctor = next(
@@ -802,10 +804,14 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
     body = next((c for c in node.children if c.type == KNT.CLASS_BODY), None)
     if body is None:
         return class_name, ClassInfo(
-            name=class_name, fields=fields, methods={}, constants={}, parents=parents
+            name=ClassName(class_name),
+            fields=fields,
+            methods={},
+            constants={},
+            parents=parents,
         )
 
-    methods: dict[str, FunctionInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
     constants_map: dict[str, str] = {}
 
     for child in body.children:
@@ -834,8 +840,10 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
                     has_init = any(
                         not c.is_named and c.text == b"=" for c in child.children
                     )
-                    fields[fname] = FieldInfo(
-                        name=fname, type_hint=type_hint, has_initializer=has_init
+                    fields[FieldName(fname)] = FieldInfo(
+                        name=FieldName(fname),
+                        type_hint=type_hint,
+                        has_initializer=has_init,
                     )
         elif child.type == KNT.FUNCTION_DECLARATION:
             mname_node = next(
@@ -876,12 +884,12 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
                     None,
                 )
                 return_type = ret_node.text.decode() if ret_node is not None else ""
-                methods[mname] = FunctionInfo(
-                    name=mname, params=params, return_type=return_type
+                methods[FuncName(mname)] = FunctionInfo(
+                    name=FuncName(mname), params=params, return_type=return_type
                 )
 
     return class_name, ClassInfo(
-        name=class_name,
+        name=ClassName(class_name),
         fields=fields,
         methods=methods,
         constants=constants_map,
@@ -889,7 +897,7 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_kotlin_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all class_declaration nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -897,7 +905,7 @@ def _collect_kotlin_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
         result = _extract_kotlin_class(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_kotlin_classes(child, accumulator)
 
@@ -906,6 +914,6 @@ def extract_kotlin_symbols(root) -> "SymbolTable":
     """Walk the Kotlin AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_kotlin_classes(root, classes)
     return SymbolTable(classes=classes)

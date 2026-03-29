@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 from interpreter.instructions import (
     AddressOf,
     Branch,
@@ -752,7 +753,9 @@ def lower_csharp_store_target(
 ) -> None:
     if target.type == NT.IDENTIFIER:
         name = ctx.node_text(target)
-        if ctx.symbol_table.resolve_field(ctx._current_class_name, name).name:
+        if ctx.symbol_table.resolve_field(
+            ClassName(ctx._current_class_name), FieldName(name)
+        ).name.is_present():
             this_reg = ctx.fresh_reg()
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
