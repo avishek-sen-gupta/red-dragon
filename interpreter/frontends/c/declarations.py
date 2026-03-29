@@ -9,6 +9,7 @@ from interpreter.ir import Opcode
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -636,7 +637,7 @@ def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":
     """Extract fields from a C struct field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     for child in field_decl_list.children:
         if child.type != CNodeType.FIELD_DECLARATION:
             continue
@@ -645,16 +646,16 @@ def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":
         for sub in child.children:
             if sub.type == CNodeType.FIELD_IDENTIFIER:
                 fname = sub.text.decode()
-                fields[fname] = FieldInfo(
-                    name=fname, type_hint=type_hint, has_initializer=False
+                fields[FieldName(fname)] = FieldInfo(
+                    name=FieldName(fname), type_hint=type_hint, has_initializer=False
                 )
     return fields
 
 
 def _collect_c_structs_and_functions(
     node,
-    classes: "dict[str, ClassInfo]",
-    functions: "dict[str, FunctionInfo]",
+    classes: "dict[ClassName, ClassInfo]",
+    functions: "dict[FuncName, FunctionInfo]",
 ) -> None:
     """Walk AST to collect struct_specifier nodes as ClassInfo and top-level function_definition nodes."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
@@ -667,8 +668,12 @@ def _collect_c_structs_and_functions(
             fields: dict[str, FieldInfo] = (
                 _extract_c_struct_fields(body) if body is not None else {}
             )
-            classes[struct_name] = ClassInfo(
-                name=struct_name, fields=fields, methods={}, constants={}, parents=()
+            classes[ClassName(struct_name)] = ClassInfo(
+                name=ClassName(struct_name),
+                fields=fields,
+                methods={},
+                constants={},
+                parents=(),
             )
     elif node.type == CNodeType.FUNCTION_DEFINITION:
         declarator = node.child_by_field_name("declarator")
@@ -687,8 +692,8 @@ def _collect_c_structs_and_functions(
                         for sub in p.children
                         if sub.type == CNodeType.IDENTIFIER
                     )
-                functions[fname] = FunctionInfo(
-                    name=fname, params=params, return_type=return_type
+                functions[FuncName(fname)] = FunctionInfo(
+                    name=FuncName(fname), params=params, return_type=return_type
                 )
     for child in node.children:
         _collect_c_structs_and_functions(child, classes, functions)
@@ -698,7 +703,7 @@ def extract_c_symbols(root) -> "SymbolTable":
     """Walk the C AST and return a SymbolTable of all struct and function definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 
-    classes: dict[str, ClassInfo] = {}
-    functions: dict[str, FunctionInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
+    functions: dict[FuncName, FunctionInfo] = {}
     _collect_c_structs_and_functions(root, classes, functions)
     return SymbolTable(classes=classes, functions=functions)
