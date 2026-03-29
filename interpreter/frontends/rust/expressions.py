@@ -507,7 +507,9 @@ def _lower_closure_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 node=child,
             )
             ctx.emit_inst(
-                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                DeclVar(
+                    name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}")
+                )
             )
         elif child.type == RustNodeType.PARAMETER:
             lower_rust_param(ctx, child)

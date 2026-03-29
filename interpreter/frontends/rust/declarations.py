@@ -99,7 +99,9 @@ def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
     )
     ctx.seed_register_type(reg, type_hint)
     ctx.seed_param_type(pname, type_hint)
-    ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(
+        DeclVar(name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+    )
     ctx.seed_var_type(pname, type_hint)
 
 

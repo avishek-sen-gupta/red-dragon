@@ -13,6 +13,7 @@ from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
+from interpreter.register import Register
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -463,7 +464,9 @@ def lower_pascal_exception_handler(ctx: TreeSitterEmitContext, node) -> None:
             node=id_node,
         )
         ctx.emit_inst(
-            DeclVar(name=VarName(var_name), value_reg=f"%{ctx.reg_counter - 1}")
+            DeclVar(
+                name=VarName(var_name), value_reg=Register(f"%{ctx.reg_counter - 1}")
+            )
         )
     # Lower body statements
     named_children = [
