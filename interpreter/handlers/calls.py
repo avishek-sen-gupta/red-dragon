@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
@@ -149,7 +150,7 @@ def _try_class_constructor_call(
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
     resolved_type = type_hint if type_hint else scalar(class_name)
-    vm.heap[addr] = HeapObject(type_hint=resolved_type)
+    vm.heap_set(Address(addr), HeapObject(type_hint=resolved_type))
     ptr_tv = typed(Pointer(base=addr, offset=0), pointer(resolved_type))
 
     if not init_label or init_label not in cfg.blocks:
@@ -320,8 +321,8 @@ def _handle_call_function(
     # 2b. Scala-style apply: arr(i) on heap-backed arrays → index into fields.
     if len(args) == 1 and isinstance(args[0].value, int):
         addr = _heap_addr(func_val)
-        if addr and addr in vm.heap:
-            heap_obj = vm.heap[addr]
+        if addr and vm.heap_contains(addr):
+            heap_obj = vm.heap_get(addr)
             idx_key = FieldName(str(args[0].value), FieldKind.INDEX)
             if idx_key in heap_obj.fields:
                 tv = heap_obj.fields[idx_key]
@@ -350,7 +351,7 @@ def _handle_call_function(
             isinstance(func_val, str)
             and func_val.startswith(constants.FUNC_LABEL_PREFIX)
         )
-        and not _heap_addr(func_val) in vm.heap
+        and not vm.heap_contains(_heap_addr(func_val))
         and len(args) == 1
         and isinstance(args[0].value, int)
     ):
@@ -491,15 +492,15 @@ def _handle_call_method(
 
     addr = _heap_addr(obj_val.value)
     type_hint = ""
-    if addr and addr in vm.heap:
-        type_hint = vm.heap[addr].type_hint or ""
+    if addr and vm.heap_contains(addr):
+        type_hint = vm.heap_get(addr).type_hint or ""
 
     if not type_hint or type_hint not in ctx.registry.class_methods:
         # Check if method exists as a callable field on the heap object
         # (e.g., Lua table OOP: t.method = function(...) end)
         # Inject obj as first arg (self) — mirrors colon-call convention.
-        if addr and addr in vm.heap:
-            field_tv = vm.heap[addr].fields.get(FieldName(str(method_name)))
+        if addr and vm.heap_contains(addr):
+            field_tv = vm.heap_get(addr).fields.get(FieldName(str(method_name)))
             if field_tv and isinstance(field_tv.value, BoundFuncRef):
                 return _try_user_function_call(
                     field_tv.value,
@@ -557,7 +558,7 @@ def _handle_call_method(
             )
             if delegation is not None:
                 inner_addr, inner_tv = delegation
-                inner_type = str(vm.heap[inner_addr].type_hint or "")
+                inner_type = str(vm.heap_get(inner_addr).type_hint or "")
                 inner_labels = ctx.registry.lookup_methods(inner_type, method_name)
                 inner_sigs = ctx.type_env.method_signatures.get(
                     scalar(inner_type), {}

@@ -17,6 +17,7 @@ from interpreter.instructions import (
     StoreIndex,
     LoadIndex,
 )
+from interpreter.address import Address
 from interpreter.func_name import FuncName
 from interpreter.vm.vm import (
     VMState,
@@ -82,12 +83,12 @@ def _find_method_missing(
 
 
 def _resolve_method_delegation_target(
-    addr: str,
+    addr: "Address",
     method_name: FuncName,
     vm: VMState,
     registry: FunctionRegistry,
     cfg: CFG,
-) -> tuple[str, TypedValue] | None:
+) -> tuple["Address", TypedValue] | None:
     """Follow __boxed__ delegation chain to find an inner object that owns *method_name*.
 
     Returns (inner_addr, inner_typed_value) for the first object whose type
@@ -95,10 +96,12 @@ def _resolve_method_delegation_target(
     exhausted without finding one.
     """
     current_addr = addr
-    visited: set[str] = set()
-    while current_addr and current_addr in vm.heap and current_addr not in visited:
+    visited: set["Address"] = set()
+    while (
+        current_addr and vm.heap_contains(current_addr) and current_addr not in visited
+    ):
         visited.add(current_addr)
-        heap_obj = vm.heap[current_addr]
+        heap_obj = vm.heap_get(current_addr)
         # Only follow delegation if this object has __method_missing__
         if _find_method_missing(heap_obj, registry, cfg) is None:
             return None
@@ -107,9 +110,9 @@ def _resolve_method_delegation_target(
             return None
         inner_tv = heap_obj.fields[FieldName(constants.BOXED_FIELD)]
         inner_addr = _heap_addr(inner_tv.value)
-        if not inner_addr or inner_addr not in vm.heap:
+        if not inner_addr or not vm.heap_contains(inner_addr):
             return None
-        inner_type = str(vm.heap[inner_addr].type_hint or "")
+        inner_type = str(vm.heap_get(inner_addr).type_hint or "")
         if registry.lookup_methods(inner_type, method_name):
             return (inner_addr, inner_tv)
         # Inner object might itself be a Box — continue the chain
@@ -166,8 +169,8 @@ def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
         if not isinstance(current_val, Pointer) or is_heap_pointer
         else ""
     )
-    if addr and addr in vm.heap:
-        ptr = Pointer(base=addr, offset=0)
+    if addr and vm.heap_contains(addr):
+        ptr = Pointer(base=str(addr), offset=0)
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={
@@ -180,9 +183,12 @@ def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
     # Promote primitive to heap: allocate a HeapObject with field "0"
     mem_addr = f"mem_{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    vm.heap[mem_addr] = HeapObject(
-        type_hint=None,
-        fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(current_val)},
+    vm.heap_set(
+        Address(mem_addr),
+        HeapObject(
+            type_hint=None,
+            fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(current_val)},
+        ),
     )
     ptr = Pointer(base=mem_addr, offset=0)
     frame.var_heap_aliases[name] = ptr
@@ -205,8 +211,8 @@ def _handle_load_indirect(
     assert isinstance(t, LoadIndirect)
     obj_val = _resolve_reg(vm, t.ptr_reg).value
     # Pointer dereference: read from heap[base].fields[offset]
-    if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
-        heap_obj = vm.heap[obj_val.base]
+    if isinstance(obj_val, Pointer) and vm.heap_contains(Address(obj_val.base)):
+        heap_obj = vm.heap_get(Address(obj_val.base))
         # Try INDEX kind first (array-style), then PROPERTY (store_field default).
         offset_str = str(obj_val.offset)
         tv = heap_obj.fields.get(
@@ -221,7 +227,7 @@ def _handle_load_indirect(
                 reasoning=f"load *{obj_val} = {tv!r}",
             )
         )
-    if isinstance(obj_val, Pointer) and obj_val.base not in vm.heap:
+    if isinstance(obj_val, Pointer) and not vm.heap_contains(Address(obj_val.base)):
         sym = vm.fresh_symbolic(hint=f"*{obj_val}")
         return ExecutionResult.success(
             StateUpdate(
@@ -260,7 +266,7 @@ def _handle_load_field_indirect(
     obj_val = _resolve_reg(vm, t.obj_reg).value
     field_name = _resolve_reg(vm, t.name_reg).value
     addr = _heap_addr(obj_val)
-    if not addr or addr not in vm.heap:
+    if not addr or not vm.heap_contains(addr):
         sym = vm.fresh_symbolic(hint=f"{_symbolic_name(obj_val)}.{field_name}")
         return ExecutionResult.success(
             StateUpdate(
@@ -268,7 +274,7 @@ def _handle_load_field_indirect(
                 reasoning=f"load_field_indirect on non-heap {obj_val!r} → {sym.name}",
             )
         )
-    heap_obj = vm.heap[addr]
+    heap_obj = vm.heap_get(addr)
     field_key = FieldName(str(field_name))
     if field_key in heap_obj.fields:
         tv = heap_obj.fields[field_key]
@@ -346,11 +352,11 @@ def _handle_store_field(
     )
     tv = _resolve_reg(vm, t.value_reg)
     addr = _heap_addr(obj_val)
-    if addr and addr not in vm.heap:
+    if addr and not vm.heap_contains(addr):
         # Materialise a synthetic heap entry for symbolic objects so that
         # field stores are persisted and subsequent loads return the value.
-        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(obj_val))
-    if not addr or addr not in vm.heap:
+        vm.heap_set(addr, HeapObject(type_hint=_symbolic_type_hint(obj_val)))
+    if not addr or not vm.heap_contains(addr):
         obj_desc = _symbolic_name(obj_val)
         logger.debug("store_field on unknown object %s.%s", obj_desc, field_name)
         return ExecutionResult.success(
@@ -362,7 +368,7 @@ def _handle_store_field(
         StateUpdate(
             heap_writes=[
                 HeapWrite(
-                    obj_addr=addr,
+                    obj_addr=str(addr),
                     field=field_name,
                     value=tv,
                 )
@@ -408,11 +414,11 @@ def _handle_load_field(
                 )
             )
     addr = _heap_addr(obj_val)
-    if addr and addr not in vm.heap:
+    if addr and not vm.heap_contains(addr):
         # Materialise a synthetic heap entry for symbolic objects so that
         # repeated field accesses return the same symbolic value (deduplication).
-        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(obj_val))
-    if not addr or addr not in vm.heap:
+        vm.heap_set(addr, HeapObject(type_hint=_symbolic_type_hint(obj_val)))
+    if not addr or not vm.heap_contains(addr):
         obj_desc = _symbolic_name(obj_val)
         sym = vm.fresh_symbolic(hint=f"{obj_desc}.{field_name}")
         return ExecutionResult.success(
@@ -421,7 +427,7 @@ def _handle_load_field(
                 reasoning=f"load {obj_desc}.{field_name} (not on heap) → {sym.name}",
             )
         )
-    heap_obj = vm.heap[addr]
+    heap_obj = vm.heap_get(addr)
     if field_name in heap_obj.fields:
         tv = heap_obj.fields[field_name]
         return ExecutionResult.success(
@@ -464,11 +470,11 @@ def _handle_store_index(
     idx_val = _resolve_reg(vm, t.index_reg).value
     tv = _resolve_reg(vm, t.value_reg)
     addr = _heap_addr(arr_val)
-    if addr and addr not in vm.heap:
+    if addr and not vm.heap_contains(addr):
         # Materialise a synthetic heap entry for symbolic arrays so that
         # repeated index stores persist and are visible to later loads.
-        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(arr_val))
-    if not addr or addr not in vm.heap:
+        vm.heap_set(addr, HeapObject(type_hint=_symbolic_type_hint(arr_val)))
+    if not addr or not vm.heap_contains(addr):
         arr_desc = _symbolic_name(arr_val)
         logger.debug("store_index on unknown array %s[%s]", arr_desc, idx_val)
         return ExecutionResult.success(
@@ -481,7 +487,7 @@ def _handle_store_index(
         StateUpdate(
             heap_writes=[
                 HeapWrite(
-                    obj_addr=addr,
+                    obj_addr=str(addr),
                     field=FieldName(str(idx_val), idx_kind),
                     value=tv,
                 )
@@ -500,7 +506,7 @@ def _handle_load_index(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
 
     # Native string/list indexing — bypass heap for raw Python values.
     # Only applies when the value is NOT a heap reference.
-    if isinstance(idx_val, int) and (addr not in vm.heap):
+    if isinstance(idx_val, int) and (not vm.heap_contains(addr)):
         if isinstance(arr_val, list):
             element = arr_val[idx_val]
             return ExecutionResult.success(
@@ -509,7 +515,7 @@ def _handle_load_index(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
                     reasoning=f"native index {arr_val!r}[{idx_val}] = {element!r}",
                 )
             )
-        if isinstance(arr_val, str) and addr not in vm.heap:
+        if isinstance(arr_val, str) and not vm.heap_contains(addr):
             element = arr_val[idx_val]
             return ExecutionResult.success(
                 StateUpdate(
@@ -517,11 +523,11 @@ def _handle_load_index(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
                     reasoning=f"native index {arr_val!r}[{idx_val}] = {element!r}",
                 )
             )
-    if addr and addr not in vm.heap:
+    if addr and not vm.heap_contains(addr):
         # Materialise a synthetic heap entry for symbolic arrays so that
         # repeated index accesses with the same key are deduplicated.
-        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(arr_val))
-    if not addr or addr not in vm.heap:
+        vm.heap_set(addr, HeapObject(type_hint=_symbolic_type_hint(arr_val)))
+    if not addr or not vm.heap_contains(addr):
         arr_desc = _symbolic_name(arr_val)
         sym = vm.fresh_symbolic(hint=f"{arr_desc}[{idx_val}]")
         return ExecutionResult.success(
@@ -530,7 +536,7 @@ def _handle_load_index(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
                 reasoning=f"load {arr_desc}[{idx_val}] (not on heap) → {sym.name}",
             )
         )
-    heap_obj = vm.heap[addr]
+    heap_obj = vm.heap_get(addr)
     idx_kind = _infer_index_kind(idx_val)
     key = FieldName(str(idx_val), idx_kind)
     if key in heap_obj.fields:

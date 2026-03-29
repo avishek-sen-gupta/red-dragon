@@ -20,6 +20,7 @@ from interpreter.vm.vm import (
 )
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import typed
+from interpreter.address import Address
 from interpreter import constants
 
 
@@ -116,7 +117,8 @@ def _handle_load_region(
         )
 
     addr_str = str(region_addr)
-    if addr_str not in vm.regions:
+    region_data = vm.region_get(Address(addr_str))
+    if region_data is None:
         sym = vm.fresh_symbolic(hint=f"region_load({addr_str})")
         return ExecutionResult.success(
             StateUpdate(
@@ -127,7 +129,7 @@ def _handle_load_region(
 
     start = int(offset)
     end = start + int(length)
-    data = list(vm.regions[addr_str][start:end])
+    data = list(region_data[start:end])
     return ExecutionResult.success(
         StateUpdate(
             register_writes={t.result_reg: typed(data, UNKNOWN)},
