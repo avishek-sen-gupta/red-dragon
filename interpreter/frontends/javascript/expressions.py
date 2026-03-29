@@ -536,7 +536,9 @@ def lower_js_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
         ),
         node=child,
     )
-    ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(
+        DeclVar(name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+    )
     if default_value_node is not None:
         from interpreter.frontends.common.default_params import (
             emit_default_param_guard,
