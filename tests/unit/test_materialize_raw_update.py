@@ -2,6 +2,7 @@
 
 from types import MappingProxyType
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.types.type_environment import TypeEnvironment
@@ -71,7 +72,7 @@ class TestMaterializeRawUpdate:
         tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
-        assert tv.value.base == "mem_0"
+        assert tv.value.base == Address("mem_0")
         assert tv.value.offset == 4
 
     def test_var_write_materialized(self):

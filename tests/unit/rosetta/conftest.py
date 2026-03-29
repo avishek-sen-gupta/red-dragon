@@ -233,11 +233,11 @@ def extract_array(
     stored = frame.local_vars[name]
     raw_val = stored.value if isinstance(stored, TypedValue) else stored
     heap_addr = _heap_addr(raw_val)
-    assert heap_addr and heap_addr in vm.heap, (
+    assert heap_addr and str(heap_addr) in vm.heap, (
         f"[{language}] expected heap address '{raw_val}' in heap, "
         f"got: {sorted(vm.heap.keys())}"
     )
-    obj = vm.heap[heap_addr]
+    obj = vm.heap[str(heap_addr)]
     # Lua uses 1-based indexing; detect by checking for key "0"
     start_index = 0 if FieldName("0", FieldKind.INDEX) in obj.fields else 1
     return [

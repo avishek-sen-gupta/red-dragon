@@ -2,6 +2,8 @@
 
 from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.address import Address
+from interpreter.vm.vm_types import Pointer, SymbolicValue
 
 
 class TestTypedValue:
@@ -29,17 +31,13 @@ class TestTypedValue:
         assert a != b
 
     def test_wraps_symbolic_value(self):
-        from interpreter.vm.vm_types import SymbolicValue
-
         sym = SymbolicValue(name="sym_0", type_hint="Int")
         tv = TypedValue(value=sym, type=UNKNOWN)
         assert tv.value is sym
         assert tv.type == UNKNOWN
 
     def test_wraps_pointer(self):
-        from interpreter.vm.vm_types import Pointer
-
-        ptr = Pointer(base="obj_0", offset=4)
+        ptr = Pointer(base=Address("obj_0"), offset=4)
         tv = TypedValue(value=ptr, type=UNKNOWN)
         assert tv.value is ptr
 
@@ -91,8 +89,6 @@ class TestTypedFactory:
         assert tv.type == UNKNOWN
 
     def test_typed_from_runtime_symbolic(self):
-        from interpreter.vm.vm_types import SymbolicValue
-
         sym = SymbolicValue(name="sym_0")
         tv = typed_from_runtime(sym)
         assert tv.value is sym

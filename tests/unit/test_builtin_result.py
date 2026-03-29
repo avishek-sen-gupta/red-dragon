@@ -2,6 +2,7 @@
 
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.types.type_expr import scalar
+from interpreter.address import Address
 from interpreter.vm.vm_types import BuiltinResult, NewObject, HeapWrite
 
 
@@ -13,7 +14,7 @@ class TestBuiltinResult:
         assert result.heap_writes == []
 
     def test_result_with_new_objects(self):
-        obj = NewObject(addr="arr_0", type_hint=scalar("Array"))
+        obj = NewObject(addr=Address("arr_0"), type_hint=scalar("Array"))
         result = BuiltinResult(value="arr_0", new_objects=[obj])
         assert result.new_objects == [obj]
         assert result.heap_writes == []
@@ -22,7 +23,7 @@ class TestBuiltinResult:
         from interpreter.types.typed_value import typed_from_runtime
 
         hw = HeapWrite(
-            obj_addr="arr_0",
+            obj_addr=Address("arr_0"),
             field=FieldName("0", FieldKind.INDEX),
             value=typed_from_runtime(10),
         )
@@ -32,9 +33,9 @@ class TestBuiltinResult:
     def test_result_with_all_fields(self):
         from interpreter.types.typed_value import typed_from_runtime
 
-        obj = NewObject(addr="arr_0", type_hint=scalar("Array"))
+        obj = NewObject(addr=Address("arr_0"), type_hint=scalar("Array"))
         hw = HeapWrite(
-            obj_addr="arr_0",
+            obj_addr=Address("arr_0"),
             field=FieldName("length", FieldKind.SPECIAL),
             value=typed_from_runtime(1),
         )

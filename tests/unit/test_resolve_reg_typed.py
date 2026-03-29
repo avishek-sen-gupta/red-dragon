@@ -2,6 +2,7 @@
 
 from interpreter.register import Register
 from interpreter.vm.vm import _resolve_reg
+from interpreter.address import Address
 from interpreter.vm.vm_types import Pointer, StackFrame, VMState
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.types.type_expr import pointer, scalar, UNKNOWN
@@ -17,7 +18,7 @@ def _make_vm(**registers: object) -> VMState:
 class TestResolveRegReturnsTypedValue:
     def test_returns_typed_value_for_typed_register(self):
         """A register holding a TypedValue should be returned as-is."""
-        tv = typed(Pointer(base="obj_0", offset=0), pointer(scalar("Dog")))
+        tv = typed(Pointer(base=Address("obj_0"), offset=0), pointer(scalar("Dog")))
         vm = _make_vm(**{"%0": tv})
         result = _resolve_reg(vm, "%0")
         assert isinstance(result, TypedValue)
@@ -26,7 +27,7 @@ class TestResolveRegReturnsTypedValue:
     def test_preserves_parameterized_type(self):
         """pointer(scalar('Dog')) must survive the resolve."""
         expected_type = pointer(scalar("Dog"))
-        tv = typed(Pointer(base="obj_0", offset=0), expected_type)
+        tv = typed(Pointer(base=Address("obj_0"), offset=0), expected_type)
         vm = _make_vm(**{"%0": tv})
         result = _resolve_reg(vm, "%0")
         assert result.type == expected_type
@@ -54,7 +55,7 @@ class TestResolveRegReturnsTypedValue:
 
     def test_bare_pointer_in_register_gets_unknown_type(self):
         """A bare Pointer (not wrapped in TypedValue) gets UNKNOWN type."""
-        vm = _make_vm(**{"%0": Pointer(base="obj_0", offset=0)})
+        vm = _make_vm(**{"%0": Pointer(base=Address("obj_0"), offset=0)})
         result = _resolve_reg(vm, "%0")
         assert isinstance(result, TypedValue)
         assert isinstance(result.value, Pointer)

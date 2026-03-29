@@ -170,7 +170,7 @@ def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
         else ""
     )
     if addr and vm.heap_contains(addr):
-        ptr = Pointer(base=str(addr), offset=0)
+        ptr = Pointer(base=addr, offset=0)
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={
@@ -190,7 +190,7 @@ def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
             fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(current_val)},
         ),
     )
-    ptr = Pointer(base=mem_addr, offset=0)
+    ptr = Pointer(base=Address(mem_addr), offset=0)
     frame.var_heap_aliases[name] = ptr
     logger.debug("address_of: promoted %s=%r to heap %s", name, current_val, mem_addr)
     return ExecutionResult.success(
@@ -211,8 +211,8 @@ def _handle_load_indirect(
     assert isinstance(t, LoadIndirect)
     obj_val = _resolve_reg(vm, t.ptr_reg).value
     # Pointer dereference: read from heap[base].fields[offset]
-    if isinstance(obj_val, Pointer) and vm.heap_contains(Address(obj_val.base)):
-        heap_obj = vm.heap_get(Address(obj_val.base))
+    if isinstance(obj_val, Pointer) and vm.heap_contains(obj_val.base):
+        heap_obj = vm.heap_get(obj_val.base)
         # Try INDEX kind first (array-style), then PROPERTY (store_field default).
         offset_str = str(obj_val.offset)
         tv = heap_obj.fields.get(
@@ -227,7 +227,7 @@ def _handle_load_indirect(
                 reasoning=f"load *{obj_val} = {tv!r}",
             )
         )
-    if isinstance(obj_val, Pointer) and not vm.heap_contains(Address(obj_val.base)):
+    if isinstance(obj_val, Pointer) and not vm.heap_contains(obj_val.base):
         sym = vm.fresh_symbolic(hint=f"*{obj_val}")
         return ExecutionResult.success(
             StateUpdate(
@@ -368,7 +368,7 @@ def _handle_store_field(
         StateUpdate(
             heap_writes=[
                 HeapWrite(
-                    obj_addr=str(addr),
+                    obj_addr=addr,
                     field=field_name,
                     value=tv,
                 )
@@ -487,7 +487,7 @@ def _handle_store_index(
         StateUpdate(
             heap_writes=[
                 HeapWrite(
-                    obj_addr=str(addr),
+                    obj_addr=addr,
                     field=FieldName(str(idx_val), idx_kind),
                     value=tv,
                 )

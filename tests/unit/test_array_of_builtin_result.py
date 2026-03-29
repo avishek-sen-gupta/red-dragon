@@ -44,7 +44,7 @@ class TestArrayOfBuiltinResult:
     def test_does_not_mutate_heap(self):
         vm = VMState()
         result = _builtin_array_of([typed_from_runtime(10)], vm)
-        assert result.value.value.base not in vm.heap
+        assert str(result.value.value.base) not in vm.heap
 
     def test_empty_array(self):
         vm = VMState()
