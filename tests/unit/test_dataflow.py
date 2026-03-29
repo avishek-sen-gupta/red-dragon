@@ -702,3 +702,70 @@ class TestEdgeCases:
         assert isinstance(result, DataflowResult)
         x_defs = [d for d in result.definitions if d.variable == VarName("x")]
         assert len(x_defs) == 1
+
+
+class TestAddressOfDataflow:
+    """ADDRESS_OF x should read x, creating def-use chains and dependency edges."""
+
+    def test_address_of_reads_the_variable(self):
+        """ADDRESS_OF x uses x — creates a def-use chain from STORE_VAR x."""
+        ir = [
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.CONST, result_reg=Register("%0"), operands=["42"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
+            _make_inst(Opcode.ADDRESS_OF, result_reg=Register("%1"), operands=["x"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        result = analyze(cfg)
+
+        # ADDRESS_OF x should use x — a def-use chain must exist
+        x_to_addr = [
+            c
+            for c in result.def_use_chains
+            if c.definition.variable == VarName("x")
+            and c.use.variable == VarName("x")
+            and c.use.instruction.opcode == Opcode.ADDRESS_OF
+        ]
+        assert len(x_to_addr) == 1
+
+    def test_address_of_creates_dependency(self):
+        """ptr = &x → dependency_graph[ptr] includes x."""
+        ir = [
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.CONST, result_reg=Register("%0"), operands=["42"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
+            _make_inst(Opcode.ADDRESS_OF, result_reg=Register("%1"), operands=["x"]),
+            _make_inst(Opcode.STORE_VAR, operands=["ptr", "%1"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        result = analyze(cfg)
+
+        assert VarName("x") in result.dependency_graph.get(VarName("ptr"), set())
+
+    def test_address_of_undefined_variable_has_no_incoming_chain(self):
+        """ADDRESS_OF x with no prior STORE_VAR x has no def-use chain for x."""
+        ir = [
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.ADDRESS_OF, result_reg=Register("%0"), operands=["x"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        result = analyze(cfg)
+
+        # %0 should be defined (ADDRESS_OF writes to result_reg)
+        addr_defs = [d for d in result.definitions if d.variable == Register("%0")]
+        assert len(addr_defs) == 1
+        # No def-use chain for x (nothing defines x before ADDRESS_OF)
+        x_chains = [c for c in result.def_use_chains if c.use.variable == VarName("x")]
+        assert len(x_chains) == 0
+
+    def test_c_pointer_program_dependency(self):
+        """End-to-end: C program 'int x = 10; int *p = &x;' — p depends on x."""
+        from interpreter.frontend import get_frontend
+        from interpreter.cfg import build_cfg
+
+        fe = get_frontend("c")
+        ir = fe.lower(b"int x = 10;\nint *p = &x;\n")
+        cfg = build_cfg(ir)
+        result = analyze(cfg)
+
+        assert VarName("x") in result.dependency_graph.get(VarName("p"), set())
