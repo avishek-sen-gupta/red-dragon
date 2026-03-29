@@ -1,5 +1,6 @@
 """Unit tests verifying pure builtins return BuiltinResult with empty side-effect lists."""
 
+from interpreter.address import Address
 from interpreter.vm.builtins import (
     _builtin_len,
     _builtin_range,
@@ -23,12 +24,17 @@ from interpreter.constants import TypeName
 class TestPureBuiltinsReturnBuiltinResult:
     def test_len_returns_builtin_result(self):
         vm = VMState()
-        vm.heap["arr_0"] = HeapObject(
-            type_hint="array",
-            fields={
-                FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
-                FieldName("length", FieldKind.SPECIAL): typed(1, scalar(TypeName.INT)),
-            },
+        vm.heap_set(
+            Address("arr_0"),
+            HeapObject(
+                type_hint="array",
+                fields={
+                    FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
+                    FieldName("length", FieldKind.SPECIAL): typed(
+                        1, scalar(TypeName.INT)
+                    ),
+                },
+            ),
         )
         result = _builtin_len([typed_from_runtime("arr_0")], vm)
         assert isinstance(result, BuiltinResult)

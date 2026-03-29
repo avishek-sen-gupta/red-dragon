@@ -18,7 +18,7 @@ class TestCloneBuiltin:
         self, type_hint: TypeExpr, fields: dict
     ) -> tuple[VMState, Pointer]:
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(type_hint=type_hint, fields=fields)
+        vm.heap_set(Address("obj_0"), HeapObject(type_hint=type_hint, fields=fields))
         return vm, Pointer(base=Address("obj_0"), offset=0)
 
     def test_clone_is_registered(self):

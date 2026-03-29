@@ -1,5 +1,6 @@
 """Unit tests for _builtin_object_rest returning BuiltinResult."""
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName
 from interpreter.vm.builtins import _builtin_object_rest
 from interpreter.vm.vm import VMState, Operators
@@ -11,13 +12,16 @@ from interpreter.types.typed_value import TypedValue, typed_from_runtime
 class TestObjectRestBuiltinResult:
     def test_returns_builtin_result(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(
-            type_hint="object",
-            fields={
-                FieldName("a"): typed_from_runtime(1),
-                FieldName("b"): typed_from_runtime(2),
-                FieldName("c"): typed_from_runtime(3),
-            },
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="object",
+                fields={
+                    FieldName("a"): typed_from_runtime(1),
+                    FieldName("b"): typed_from_runtime(2),
+                    FieldName("c"): typed_from_runtime(3),
+                },
+            ),
         )
         result = _builtin_object_rest(
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
@@ -26,12 +30,15 @@ class TestObjectRestBuiltinResult:
 
     def test_new_objects_contains_rest_object(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(
-            type_hint="object",
-            fields={
-                FieldName("a"): typed_from_runtime(1),
-                FieldName("b"): typed_from_runtime(2),
-            },
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="object",
+                fields={
+                    FieldName("a"): typed_from_runtime(1),
+                    FieldName("b"): typed_from_runtime(2),
+                },
+            ),
         )
         result = _builtin_object_rest(
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
@@ -44,13 +51,16 @@ class TestObjectRestBuiltinResult:
 
     def test_heap_writes_contain_rest_fields(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(
-            type_hint="object",
-            fields={
-                FieldName("a"): typed_from_runtime(1),
-                FieldName("b"): typed_from_runtime(2),
-                FieldName("c"): typed_from_runtime(3),
-            },
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="object",
+                fields={
+                    FieldName("a"): typed_from_runtime(1),
+                    FieldName("b"): typed_from_runtime(2),
+                    FieldName("c"): typed_from_runtime(3),
+                },
+            ),
         )
         result = _builtin_object_rest(
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
@@ -62,17 +72,20 @@ class TestObjectRestBuiltinResult:
 
     def test_does_not_mutate_heap(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(
-            type_hint="object",
-            fields={
-                FieldName("a"): typed_from_runtime(1),
-                FieldName("b"): typed_from_runtime(2),
-            },
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="object",
+                fields={
+                    FieldName("a"): typed_from_runtime(1),
+                    FieldName("b"): typed_from_runtime(2),
+                },
+            ),
         )
         result = _builtin_object_rest(
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
         )
-        assert str(result.value.value.base) not in vm.heap
+        assert not vm.heap_contains(result.value.value.base)
 
     def test_uncomputable_no_args_returns_builtin_result(self):
         vm = VMState()

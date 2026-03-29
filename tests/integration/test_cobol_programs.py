@@ -12,6 +12,7 @@ import os
 
 import pytest
 
+from interpreter.address import Address
 from interpreter.run import run
 
 _JAR_PATH = os.environ.get(
@@ -67,7 +68,7 @@ def _run_cobol(lines: list[str], max_steps: int = 1000):
 
 def _first_region(vm):
     """Return the first memory region from the VM state."""
-    return vm.regions[list(vm.regions.keys())[0]]
+    return vm.region_get(list(vm.region_keys())[0])
 
 
 # ---------------------------------------------------------------------------

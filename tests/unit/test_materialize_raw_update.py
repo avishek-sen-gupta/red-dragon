@@ -164,18 +164,23 @@ class TestApplyUpdateTypedPath:
 
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["mem_0"] = HeapObject(
-            fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(None)}
+        vm.heap_set(
+            Address("mem_0"),
+            HeapObject(
+                fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(None)}
+            ),
         )
         vm.current_frame.var_heap_aliases[VarName("x")] = Pointer(
-            base="mem_0", offset=0
+            base=Address("mem_0"), offset=0
         )
         tv = typed(42, scalar("Int"))
         update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
-        field_val = vm.heap["mem_0"].fields[FieldName("0", FieldKind.INDEX)]
+        field_val = vm.heap_get(Address("mem_0")).fields[
+            FieldName("0", FieldKind.INDEX)
+        ]
         assert isinstance(field_val, TypedValue)
         assert field_val.value == 42
 

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from interpreter.address import Address
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_project
@@ -502,9 +503,9 @@ class TestCobolMultiFile:
         # terminates the entire merged program. Only the entry module
         # should have STOP RUN. This is a simplification vs. real COBOL
         # runtime semantics where CALL returns control to the caller.
-        assert len(vm.regions) == 2
+        assert vm.region_count() == 2
         # Second region is MAIN's WS-RESULT: PIC 9(4) zoned = 0042
-        main_region = vm.regions[list(vm.regions.keys())[1]]
+        main_region = vm.region_get(list(vm.region_keys())[1])
         digits = [main_region[i] & 0x0F for i in range(4)]
         value = sum(d * (10 ** (3 - i)) for i, d in enumerate(digits))
         assert value == 42

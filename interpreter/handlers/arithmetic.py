@@ -130,7 +130,7 @@ def _handle_unop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResul
     # references rather than inline values for these.
     if oper == "&":
         addr = _heap_addr(operand)
-        if isinstance(operand, BoundFuncRef) or (addr and addr in vm.heap):
+        if isinstance(operand, BoundFuncRef) or (addr and vm.heap_contains(addr)):
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={t.result_reg: typed_from_runtime(operand)},

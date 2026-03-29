@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName
 from interpreter.types.typed_value import TypedValue
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
@@ -148,7 +149,7 @@ class TestFieldInitMethodChaining:
     def test_count_field_is_concrete(self, execution_result):
         """The count field on the heap object should be a concrete integer, not symbolic."""
         lang, vm, _stats = execution_result
-        heap_objects = [obj for obj in vm.heap.values() if obj.type_hint == "Counter"]
+        heap_objects = [obj for obj in vm.heap_values() if obj.type_hint == "Counter"]
         assert len(heap_objects) >= 1, f"[{lang}] expected Counter heap object"
         counter_obj = heap_objects[0]
         assert FieldName("count") in counter_obj.fields, (
