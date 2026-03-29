@@ -36,7 +36,7 @@ def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
         if VarName(hint_name) in frame.local_vars:
             raw = frame.local_vars[VarName(hint_name)].value
             if isinstance(raw, ClassRef):
-                obj_type = scalar(raw.name)
+                obj_type = scalar(str(raw.name))
             break
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1

@@ -39,7 +39,7 @@ def build_export_table(
     outside any function or class body.
     """
     functions = {str(ref.name): ref.label for ref in func_symbol_table.values()}
-    classes = {ref.name: ref.label for ref in class_symbol_table.values()}
+    classes = {str(ref.name): ref.label for ref in class_symbol_table.values()}
 
     # Scan for top-level DECL_VARs (those outside func/class scopes).
     variables: dict[str, str] = {}

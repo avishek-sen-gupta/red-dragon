@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from interpreter.refs.class_ref import ClassRef
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.class_name import ClassName
 from interpreter.llm.llm_frontend import _convert_llm_class_refs
 from interpreter.registry import (
     _expand_parent_chains,
@@ -28,7 +29,7 @@ class TestConvertLLMClassRefs:
         _convert_llm_class_refs(instructions, table)
         assert instructions[0].operands[0] == "class_Dog_0"
         assert table["class_Dog_0"] == ClassRef(
-            name="Dog", label=CodeLabel("class_Dog_0"), parents=()
+            name=ClassName("Dog"), label=CodeLabel("class_Dog_0"), parents=()
         )
 
     def test_class_ref_with_single_parent(self):
@@ -40,7 +41,7 @@ class TestConvertLLMClassRefs:
         _convert_llm_class_refs(instructions, table)
         assert instructions[0].operands[0] == "class_Dog_0"
         assert table["class_Dog_0"] == ClassRef(
-            name="Dog", label=CodeLabel("class_Dog_0"), parents=("Animal",)
+            name=ClassName("Dog"), label=CodeLabel("class_Dog_0"), parents=("Animal",)
         )
 
     def test_class_ref_with_multiple_parents(self):
@@ -120,10 +121,12 @@ class TestRegistryClassParents:
         ]
         class_st = {
             "class_Animal_0": ClassRef(
-                name="Animal", label=CodeLabel("class_Animal_0"), parents=()
+                name=ClassName("Animal"), label=CodeLabel("class_Animal_0"), parents=()
             ),
             "class_Dog_2": ClassRef(
-                name="Dog", label=CodeLabel("class_Dog_2"), parents=("Animal",)
+                name=ClassName("Dog"),
+                label=CodeLabel("class_Dog_2"),
+                parents=("Animal",),
             ),
         }
         cfg = build_cfg(instructions)
@@ -137,12 +140,14 @@ class TestRegistryClassParents:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
         ]
         class_st = {
-            "class_A_0": ClassRef(name="A", label=CodeLabel("class_A_0"), parents=()),
+            "class_A_0": ClassRef(
+                name=ClassName("A"), label=CodeLabel("class_A_0"), parents=()
+            ),
             "class_B_1": ClassRef(
-                name="B", label=CodeLabel("class_B_1"), parents=("A",)
+                name=ClassName("B"), label=CodeLabel("class_B_1"), parents=("A",)
             ),
             "class_C_2": ClassRef(
-                name="C", label=CodeLabel("class_C_2"), parents=("B",)
+                name=ClassName("C"), label=CodeLabel("class_C_2"), parents=("B",)
             ),
         }
         cfg = build_cfg(instructions)

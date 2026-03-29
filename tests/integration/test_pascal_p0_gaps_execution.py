@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.class_name import ClassName
 from interpreter.var_name import VarName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.constants import Language
@@ -78,7 +79,7 @@ begin
 end."""
         _, local_vars = _run_pascal(source)
         assert isinstance(local_vars[VarName("TAnimal")], ClassRef)
-        assert local_vars[VarName("TAnimal")].name == "TAnimal"
+        assert local_vars[VarName("TAnimal")].name == ClassName("TAnimal")
 
 
 class TestPascalEnumExecution:
