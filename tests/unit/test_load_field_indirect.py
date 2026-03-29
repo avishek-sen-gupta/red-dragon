@@ -82,7 +82,7 @@ class TestLoadFieldIndirect:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD_INDIRECT,
-            result_reg="%out",
+            result_reg=Register("%out"),
             operands=["%obj", "%name"],
         )
         _execute(vm, inst)
@@ -105,7 +105,7 @@ class TestLoadFieldIndirect:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD_INDIRECT,
-            result_reg="%out",
+            result_reg=Register("%out"),
             operands=["%obj", "%name"],
         )
         _execute(vm, inst)
@@ -122,7 +122,7 @@ class TestLoadFieldIndirect:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD_INDIRECT,
-            result_reg="%out",
+            result_reg=Register("%out"),
             operands=["%obj", "%name"],
         )
         _execute(vm, inst)
@@ -156,7 +156,7 @@ class TestLoadFieldIndirect:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD_INDIRECT,
-            result_reg="%out",
+            result_reg=Register("%out"),
             operands=["%obj", "%name"],
         )
         result = LocalExecutor.execute(

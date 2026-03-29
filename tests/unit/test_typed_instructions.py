@@ -51,7 +51,7 @@ class TestConstToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CONST,
-                result_reg="%0",
+                result_reg=Register("%0"),
                 operands=['"hello"'],
                 source_location=_loc(),
             )
@@ -59,34 +59,44 @@ class TestConstToTyped:
 
     def test_numeric_literal(self):
         _assert_to_typed(
-            IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"])
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%1"), operands=["42"]
+            )
         )
 
     def test_boolean_literal(self):
         _assert_to_typed(
-            IRInstruction(opcode=Opcode.CONST, result_reg="%2", operands=["True"])
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%2"), operands=["True"]
+            )
         )
 
     def test_none_literal(self):
         _assert_to_typed(
-            IRInstruction(opcode=Opcode.CONST, result_reg="%3", operands=["None"])
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%3"), operands=["None"]
+            )
         )
 
     def test_no_operands(self):
         _assert_to_typed(
-            IRInstruction(opcode=Opcode.CONST, result_reg="%4", operands=[])
+            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%4"), operands=[])
         )
 
 
 class TestLoadVarToTyped:
     def test_basic(self):
         _assert_to_typed(
-            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["x"])
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%0"), operands=["x"]
+            )
         )
 
     def test_this(self):
         _assert_to_typed(
-            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%1", operands=["this"])
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["this"]
+            )
         )
 
 
@@ -105,14 +115,16 @@ class TestSymbolicToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.SYMBOLIC,
-                result_reg="%0",
+                result_reg=Register("%0"),
                 operands=["__param__x"],
             )
         )
 
     def test_empty_hint(self):
         _assert_to_typed(
-            IRInstruction(opcode=Opcode.SYMBOLIC, result_reg="%1", operands=[])
+            IRInstruction(
+                opcode=Opcode.SYMBOLIC, result_reg=Register("%1"), operands=[]
+            )
         )
 
 
@@ -124,7 +136,7 @@ class TestBinopToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.BINOP,
-                result_reg="%2",
+                result_reg=Register("%2"),
                 operands=["+", "%0", "%1"],
             )
         )
@@ -133,7 +145,7 @@ class TestBinopToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.BINOP,
-                result_reg="%3",
+                result_reg=Register("%3"),
                 operands=[">=", "%0", "%1"],
             )
         )
@@ -144,7 +156,7 @@ class TestUnopToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.UNOP,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["!", "%0"],
             )
         )
@@ -158,7 +170,7 @@ class TestCallFunctionToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%0",
+                result_reg=Register("%0"),
                 operands=["print"],
             )
         )
@@ -167,7 +179,7 @@ class TestCallFunctionToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%2",
+                result_reg=Register("%2"),
                 operands=["add", "%0", "%1"],
             )
         )
@@ -176,7 +188,7 @@ class TestCallFunctionToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
-                result_reg="%3",
+                result_reg=Register("%3"),
                 operands=["f", "%0", SpreadArguments(register="%1")],
             )
         )
@@ -187,7 +199,7 @@ class TestCallMethodToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_METHOD,
-                result_reg="%2",
+                result_reg=Register("%2"),
                 operands=["%0", "length"],
             )
         )
@@ -196,7 +208,7 @@ class TestCallMethodToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_METHOD,
-                result_reg="%3",
+                result_reg=Register("%3"),
                 operands=["%0", "push", "%1", "%2"],
             )
         )
@@ -207,7 +219,7 @@ class TestCallUnknownToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_UNKNOWN,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["%0"],
             )
         )
@@ -216,7 +228,7 @@ class TestCallUnknownToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_UNKNOWN,
-                result_reg="%3",
+                result_reg=Register("%3"),
                 operands=["%0", "%1", "%2"],
             )
         )
@@ -230,7 +242,7 @@ class TestLoadFieldToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_FIELD,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["%0", "name"],
             )
         )
@@ -251,7 +263,7 @@ class TestLoadFieldIndirectToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_FIELD_INDIRECT,
-                result_reg="%2",
+                result_reg=Register("%2"),
                 operands=["%0", "%1"],
             )
         )
@@ -265,7 +277,7 @@ class TestLoadIndexToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_INDEX,
-                result_reg="%2",
+                result_reg=Register("%2"),
                 operands=["%0", "%1"],
             )
         )
@@ -289,7 +301,7 @@ class TestLoadIndirectToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_INDIRECT,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["%0"],
             )
         )
@@ -310,7 +322,7 @@ class TestAddressOfToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.ADDRESS_OF,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["x"],
             )
         )
@@ -324,14 +336,16 @@ class TestNewObjectToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.NEW_OBJECT,
-                result_reg="%0",
+                result_reg=Register("%0"),
                 operands=["Foo"],
             )
         )
 
     def test_empty_type(self):
         _assert_to_typed(
-            IRInstruction(opcode=Opcode.NEW_OBJECT, result_reg="%0", operands=[])
+            IRInstruction(
+                opcode=Opcode.NEW_OBJECT, result_reg=Register("%0"), operands=[]
+            )
         )
 
 
@@ -340,7 +354,7 @@ class TestNewArrayToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.NEW_ARRAY,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["list", "%0"],
             )
         )
@@ -428,7 +442,7 @@ class TestAllocRegionToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["%0"],
             )
         )
@@ -439,7 +453,7 @@ class TestLoadRegionToTyped:
         _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%2",
+                result_reg=Register("%2"),
                 operands=["%0", "%1", 8],
             )
         )
@@ -488,7 +502,7 @@ class TestTypedFieldAccess:
 
         inst = IRInstruction(
             opcode=Opcode.BINOP,
-            result_reg="%2",
+            result_reg=Register("%2"),
             operands=["+", "%0", "%1"],
         )
         typed = inst
@@ -501,7 +515,7 @@ class TestTypedFieldAccess:
 
         inst = IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
-            result_reg="%3",
+            result_reg=Register("%3"),
             operands=["add", "%0", "%1"],
         )
         typed = inst

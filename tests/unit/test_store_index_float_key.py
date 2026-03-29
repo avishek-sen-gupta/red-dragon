@@ -89,7 +89,7 @@ def _setup_array(vm):
         vm,
         IRInstruction(
             opcode=Opcode.NEW_ARRAY,
-            result_reg="%arr",
+            result_reg=Register("%arr"),
             operands=["int"],
         ),
     )
@@ -122,7 +122,7 @@ class TestFloatIndexHeapKeyMismatch:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_INDEX,
-                result_reg="%out",
+                result_reg=Register("%out"),
                 operands=["%arr", "%idx_i"],
             ),
             type_env=type_env,
@@ -156,7 +156,7 @@ class TestFloatIndexHeapKeyMismatch:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_INDEX,
-                result_reg="%out",
+                result_reg=Register("%out"),
                 operands=["%arr", "%idx_f"],
             ),
             type_env=type_env,

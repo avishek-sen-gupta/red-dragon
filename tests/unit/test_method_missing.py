@@ -52,19 +52,23 @@ def _make_vm_with_method_missing(
         label=mm_label,
         instructions=[
             IRInstruction(
-                opcode=Opcode.LOAD_VAR, result_reg="%mm_self", operands=["self"]
+                opcode=Opcode.LOAD_VAR,
+                result_reg=Register("%mm_self"),
+                operands=["self"],
             ),
             IRInstruction(
                 opcode=Opcode.LOAD_FIELD,
-                result_reg="%mm_inner",
+                result_reg=Register("%mm_inner"),
                 operands=["%mm_self", BOXED_FIELD],
             ),
             IRInstruction(
-                opcode=Opcode.LOAD_VAR, result_reg="%mm_name", operands=["name"]
+                opcode=Opcode.LOAD_VAR,
+                result_reg=Register("%mm_name"),
+                operands=["name"],
             ),
             IRInstruction(
                 opcode=Opcode.LOAD_FIELD_INDIRECT,
-                result_reg="%mm_result",
+                result_reg=Register("%mm_result"),
                 operands=["%mm_inner", "%mm_name"],
             ),
             IRInstruction(opcode=Opcode.RETURN, operands=["%mm_result"]),
@@ -106,7 +110,7 @@ class TestMethodMissingLoadField:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%outer", "nonexistent_field"],
         )
         result = LocalExecutor.execute(
@@ -127,7 +131,7 @@ class TestMethodMissingLoadField:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%outer", BOXED_FIELD],
         )
         result = LocalExecutor.execute(
@@ -159,7 +163,7 @@ class TestMethodMissingLoadField:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%obj", "missing_field"],
         )
         result = LocalExecutor.execute(
@@ -210,7 +214,7 @@ class TestFindMethodMissingRegistryPath:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%obj", "some_field"],
         )
         result = LocalExecutor.execute(
@@ -266,7 +270,7 @@ class TestFindMethodMissingRegistryPath:
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%obj", "some_field"],
         )
         result = LocalExecutor.execute(
@@ -302,7 +306,7 @@ class TestMethodMissingCallMethod:
 
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%outer", "some_method", "%arg0"],
         )
         vm.call_stack[-1].registers[Register("%arg0")] = typed_from_runtime(99)
@@ -326,7 +330,7 @@ class TestMethodMissingCallMethod:
 
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%outer", "nonexistent_method", "%arg0"],
         )
         vm.call_stack[-1].registers[Register("%arg0")] = typed_from_runtime(99)
@@ -362,7 +366,7 @@ class TestMethodMissingCallMethod:
 
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
-            result_reg="%result",
+            result_reg=Register("%result"),
             operands=["%outer", "real_method"],
         )
 

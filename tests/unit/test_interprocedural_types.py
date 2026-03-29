@@ -6,6 +6,7 @@ from interpreter.cfg import BasicBlock, CFG
 from interpreter.field_name import FieldName
 from interpreter.dataflow import Definition
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.register import Register
 from interpreter.interprocedural.types import (
     CallContext,
     CallGraph,
@@ -44,9 +45,9 @@ def _make_inst(
 
 def _make_cfg() -> CFG:
     """Build a simple two-block CFG for testing resolve methods."""
-    inst0 = _make_inst(Opcode.CONST, result_reg="%0", operands=["42"])
+    inst0 = _make_inst(Opcode.CONST, result_reg=Register("%0"), operands=["42"])
     inst1 = _make_inst(Opcode.STORE_VAR, operands=["x", "%0"])
-    inst2 = _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"])
+    inst2 = _make_inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["x"])
     inst3 = _make_inst(Opcode.RETURN, operands=["%1"])
     entry_block = BasicBlock(label=CodeLabel("entry"), instructions=[inst0, inst1])
     exit_block = BasicBlock(label=CodeLabel("exit"), instructions=[inst2, inst3])

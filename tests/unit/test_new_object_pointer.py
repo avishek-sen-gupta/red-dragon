@@ -33,7 +33,7 @@ class TestNewObjectPointer:
         cfg, registry = _empty_cfg_and_registry()
         inst = IRInstruction(
             opcode=Opcode.NEW_OBJECT,
-            result_reg="%obj",
+            result_reg=Register("%obj"),
             operands=["Point"],
         )
         result = LocalExecutor.execute(
@@ -52,7 +52,7 @@ class TestNewObjectPointer:
         cfg, registry = _empty_cfg_and_registry()
         inst = IRInstruction(
             opcode=Opcode.NEW_OBJECT,
-            result_reg="%obj",
+            result_reg=Register("%obj"),
             operands=[],
         )
         result = LocalExecutor.execute(

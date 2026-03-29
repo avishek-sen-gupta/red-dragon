@@ -47,13 +47,15 @@ class TestNewObjectTypeHint:
 
     def test_factory_wraps_string_as_scalar(self):
         inst = IRInstruction(
-            opcode=Opcode.NEW_OBJECT, result_reg="%r0", operands=["Foo"]
+            opcode=Opcode.NEW_OBJECT, result_reg=Register("%r0"), operands=["Foo"]
         )
         assert isinstance(inst.type_hint, ScalarType)
         assert inst.type_hint == scalar("Foo")
 
     def test_factory_empty_operands_gives_unknown(self):
-        inst = IRInstruction(opcode=Opcode.NEW_OBJECT, result_reg="%r0", operands=[])
+        inst = IRInstruction(
+            opcode=Opcode.NEW_OBJECT, result_reg=Register("%r0"), operands=[]
+        )
         assert inst.type_hint is UNKNOWN
 
 
@@ -91,7 +93,7 @@ class TestNewArrayTypeHint:
     def test_factory_wraps_string_as_scalar(self):
         inst = IRInstruction(
             opcode=Opcode.NEW_ARRAY,
-            result_reg="%r1",
+            result_reg=Register("%r1"),
             operands=["list", "%r0"],
         )
         assert isinstance(inst.type_hint, ScalarType)
