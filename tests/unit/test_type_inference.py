@@ -46,7 +46,7 @@ def _make_inst(
 ):
     return IRInstruction(
         opcode=opcode,
-        result_reg=result_reg or None,
+        result_reg=result_reg,
         operands=operands or [],
         label=label,
         branch_targets=branch_targets,
@@ -3241,15 +3241,15 @@ class TestMethodSignatures:
     def test_single_class_single_method(self):
         """A class with one method should appear in method_signatures."""
         instructions = [
-            _make_inst(Opcode.CONST, "%0", ["<class:Calc@class_Calc_0>"]),
+            _make_inst(Opcode.CONST, Register("%0"), ["<class:Calc@class_Calc_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Calc", "%0"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("class_Calc_0")),
             _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
-            _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
-            _make_inst(Opcode.SYMBOLIC, "%2", ["param:a"]),
-            _make_inst(Opcode.SYMBOLIC, "%3", ["param:b"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%1"), ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%2"), ["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%3"), ["param:b"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_add_0")),
-            _make_inst(Opcode.CONST, "%4", ["func_add_0"]),
+            _make_inst(Opcode.CONST, Register("%4"), ["func_add_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%4"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Calc_0")),
         ]
@@ -3280,25 +3280,25 @@ class TestMethodSignatures:
     def test_overloaded_methods_accumulate(self):
         """Two methods with the same name should produce two signatures."""
         instructions = [
-            _make_inst(Opcode.CONST, "%0", ["<class:Calc@class_Calc_0>"]),
+            _make_inst(Opcode.CONST, Register("%0"), ["<class:Calc@class_Calc_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Calc", "%0"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("class_Calc_0")),
             # First overload: add(this, a, b) -> Int
             _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
-            _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
-            _make_inst(Opcode.SYMBOLIC, "%2", ["param:a"]),
-            _make_inst(Opcode.SYMBOLIC, "%3", ["param:b"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%1"), ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%2"), ["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%3"), ["param:b"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_add_0")),
-            _make_inst(Opcode.CONST, "%4", ["func_add_0"]),
+            _make_inst(Opcode.CONST, Register("%4"), ["func_add_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%4"]),
             # Second overload: add(this, a, b, c) -> Int
             _make_inst(Opcode.LABEL, label=CodeLabel("func_add_1")),
-            _make_inst(Opcode.SYMBOLIC, "%5", ["param:this"]),
-            _make_inst(Opcode.SYMBOLIC, "%6", ["param:a"]),
-            _make_inst(Opcode.SYMBOLIC, "%7", ["param:b"]),
-            _make_inst(Opcode.SYMBOLIC, "%8", ["param:c"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%5"), ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%6"), ["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%7"), ["param:b"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%8"), ["param:c"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_add_1")),
-            _make_inst(Opcode.CONST, "%9", ["func_add_1"]),
+            _make_inst(Opcode.CONST, Register("%9"), ["func_add_1"]),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%9"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Calc_0")),
         ]
@@ -3337,24 +3337,24 @@ class TestMethodSignatures:
         """Methods from different classes should be in separate scopes."""
         instructions = [
             # Class Foo
-            _make_inst(Opcode.CONST, "%0", ["<class:Foo@class_Foo_0>"]),
+            _make_inst(Opcode.CONST, Register("%0"), ["<class:Foo@class_Foo_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Foo", "%0"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("class_Foo_0")),
             _make_inst(Opcode.LABEL, label=CodeLabel("func_greet_0")),
-            _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%1"), ["param:this"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_greet_0")),
-            _make_inst(Opcode.CONST, "%2", ["func_greet_0"]),
+            _make_inst(Opcode.CONST, Register("%2"), ["func_greet_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%2"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
             # Class Bar
-            _make_inst(Opcode.CONST, "%3", ["<class:Bar@class_Bar_0>"]),
+            _make_inst(Opcode.CONST, Register("%3"), ["<class:Bar@class_Bar_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Bar", "%3"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("class_Bar_0")),
             _make_inst(Opcode.LABEL, label=CodeLabel("func_greet_1")),
-            _make_inst(Opcode.SYMBOLIC, "%4", ["param:this"]),
-            _make_inst(Opcode.SYMBOLIC, "%5", ["param:name"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%4"), ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%5"), ["param:name"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_greet_1")),
-            _make_inst(Opcode.CONST, "%6", ["func_greet_1"]),
+            _make_inst(Opcode.CONST, Register("%6"), ["func_greet_1"]),
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%6"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Bar_0")),
         ]
@@ -3386,9 +3386,9 @@ class TestMethodSignatures:
         """get_func_signature without class_name still uses flat func_signatures."""
         instructions = [
             _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
-            _make_inst(Opcode.SYMBOLIC, "%0", ["param:x"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%0"), ["param:x"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_f_0")),
-            _make_inst(Opcode.CONST, "%1", ["func_f_0"]),
+            _make_inst(Opcode.CONST, Register("%1"), ["func_f_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
         ]
         builder = TypeEnvironmentBuilder(
@@ -3412,14 +3412,14 @@ class TestFunctionKindInference:
     def test_static_method_has_static_kind(self):
         """Class method without this param → STATIC."""
         instructions = [
-            _make_inst(Opcode.CONST, "%0", ["<class:M@class_M_0>"]),
+            _make_inst(Opcode.CONST, Register("%0"), ["<class:M@class_M_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["M", "%0"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("class_M_0")),
             _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
-            _make_inst(Opcode.SYMBOLIC, "%1", ["param:a"]),
-            _make_inst(Opcode.SYMBOLIC, "%2", ["param:b"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%1"), ["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%2"), ["param:b"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_add_0")),
-            _make_inst(Opcode.CONST, "%3", ["func_add_0"]),
+            _make_inst(Opcode.CONST, Register("%3"), ["func_add_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_M_0")),
         ]
@@ -3442,13 +3442,13 @@ class TestFunctionKindInference:
     def test_instance_method_has_instance_kind(self):
         """Class method with this param → INSTANCE."""
         instructions = [
-            _make_inst(Opcode.CONST, "%0", ["<class:Dog@class_Dog_0>"]),
+            _make_inst(Opcode.CONST, Register("%0"), ["<class:Dog@class_Dog_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Dog", "%0"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("class_Dog_0")),
             _make_inst(Opcode.LABEL, label=CodeLabel("func_bark_0")),
-            _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%1"), ["param:this"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_bark_0")),
-            _make_inst(Opcode.CONST, "%2", ["func_bark_0"]),
+            _make_inst(Opcode.CONST, Register("%2"), ["func_bark_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["bark", "%2"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
@@ -3471,14 +3471,14 @@ class TestFunctionKindInference:
     def test_php_dollar_this_is_instance(self):
         """PHP $this param → INSTANCE kind."""
         instructions = [
-            _make_inst(Opcode.CONST, "%0", ["<class:User@class_User_0>"]),
+            _make_inst(Opcode.CONST, Register("%0"), ["<class:User@class_User_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["User", "%0"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("class_User_0")),
             _make_inst(Opcode.LABEL, label=CodeLabel("func_greet_0")),
-            _make_inst(Opcode.SYMBOLIC, "%1", ["param:$this"]),
-            _make_inst(Opcode.SYMBOLIC, "%2", ["param:msg"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%1"), ["param:$this"]),
+            _make_inst(Opcode.SYMBOLIC, Register("%2"), ["param:msg"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_func_greet_0")),
-            _make_inst(Opcode.CONST, "%3", ["func_greet_0"]),
+            _make_inst(Opcode.CONST, Register("%3"), ["func_greet_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%3"]),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_User_0")),
         ]
