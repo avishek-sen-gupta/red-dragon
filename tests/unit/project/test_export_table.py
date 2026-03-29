@@ -10,6 +10,8 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.refs.func_ref import FuncRef
 from interpreter.refs.class_ref import ClassRef
 from interpreter.func_name import FuncName
+from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.class_name import ClassName
 
 
@@ -18,7 +20,7 @@ class TestBuildExportTable:
         et = build_export_table([], {}, {})
         assert et.functions == {}
         assert et.classes == {}
-        assert et.variables == {}
+        assert len(et.variables) == 0
 
     def test_exports_functions(self):
         func_table = {
@@ -52,7 +54,7 @@ class TestBuildExportTable:
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["PI", "%0"]),
         ]
         et = build_export_table(ir, {}, {})
-        assert et.variables == {"PI": "%0"}
+        assert et.variables == {VarName("PI"): Register("%0")}
 
     def test_exports_top_level_decl_var(self):
         """DECL_VAR at module level is also exported."""
@@ -62,7 +64,7 @@ class TestBuildExportTable:
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["PI", "%0"]),
         ]
         et = build_export_table(ir, {}, {})
-        assert et.variables == {"PI": "%0"}
+        assert et.variables == {VarName("PI"): Register("%0")}
 
     def test_skips_variables_inside_functions(self):
         """STORE_VAR inside a function body is NOT exported."""
@@ -73,7 +75,7 @@ class TestBuildExportTable:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_helper_1")),
         ]
         et = build_export_table(ir, {}, {})
-        assert et.variables == {}
+        assert len(et.variables) == 0
 
     def test_skips_variables_inside_classes(self):
         """STORE_VAR inside a class body is NOT exported."""
@@ -84,7 +86,7 @@ class TestBuildExportTable:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_User_1")),
         ]
         et = build_export_table(ir, {}, {})
-        assert et.variables == {}
+        assert len(et.variables) == 0
 
     def test_variable_after_function_is_exported(self):
         """STORE_VAR after end_func returns to module scope → exported."""
@@ -97,8 +99,8 @@ class TestBuildExportTable:
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["ANSWER", "%1"]),
         ]
         et = build_export_table(ir, {}, {})
-        assert "ANSWER" in et.variables
-        assert "local" not in et.variables
+        assert VarName("ANSWER") in et.variables
+        assert VarName("local") not in et.variables
 
     def test_function_names_not_duplicated_as_variables(self):
         """If a function is in func_symbol_table, its DECL_VAR is not also in variables."""
@@ -114,7 +116,7 @@ class TestBuildExportTable:
         ]
         et = build_export_table(ir, func_table, {})
         assert FuncName("helper") in et.functions
-        assert "helper" not in et.variables
+        assert VarName("helper") not in et.variables
 
     def test_class_names_not_duplicated_as_variables(self):
         """If a class is in class_symbol_table, its DECL_VAR is not also in variables."""
@@ -130,4 +132,4 @@ class TestBuildExportTable:
         ]
         et = build_export_table(ir, {}, class_table)
         assert ClassName("User") in et.classes
-        assert "User" not in et.variables
+        assert VarName("User") not in et.variables

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from interpreter.constants import Language
+from interpreter.var_name import VarName
 from interpreter.project.compiler import compile_module, compile_project
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.func_name import FuncName
@@ -55,7 +56,7 @@ class TestCompileModulePython:
 
         unit = compile_module(f, Language.PYTHON)
 
-        assert "PI" in unit.exports.variables
+        assert VarName("PI") in unit.exports.variables
         assert FuncName("area") in unit.exports.functions
 
 
