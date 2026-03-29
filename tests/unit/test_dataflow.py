@@ -25,12 +25,12 @@ from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
 from interpreter import constants
 from interpreter.var_name import VarName
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 
 
 def _make_inst(
     opcode: Opcode,
-    result_reg=None,
+    result_reg=NO_REGISTER,
     operands=None,
     label: CodeLabel = NO_LABEL,
     branch_targets: list[CodeLabel] = [],

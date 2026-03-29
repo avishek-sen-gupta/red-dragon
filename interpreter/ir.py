@@ -272,11 +272,7 @@ def IRInstruction(
             self, opcode, result_reg, operands, label, branch_targets, source_location
         ):
             self.opcode = opcode
-            self.result_reg = (
-                result_reg
-                if isinstance(result_reg, Register)
-                else (Register(result_reg) if result_reg else NO_REGISTER)
-            )
+            self.result_reg = result_reg
             self.operands = operands
             self.label = (
                 label
