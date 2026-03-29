@@ -38,7 +38,7 @@ def _make_vm_with_method_missing(
 ) -> tuple[VMState, CFG, FunctionRegistry]:
     """Create VM with outer object that has __method_missing__ delegating to inner."""
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<test>"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("<test>")))
 
     # Inner object
     inner_addr = Address("obj_0")
@@ -144,7 +144,7 @@ class TestMethodMissingLoadField:
     def test_no_method_missing_falls_through_to_symbolic(self):
         """Object WITHOUT __method_missing__; missing field returns SymbolicValue."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="<test>"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("<test>")))
 
         addr = Address("obj_0")
         vm.heap_set(
@@ -181,7 +181,7 @@ class TestFindMethodMissingRegistryPath:
     def test_finds_method_missing_via_class_registry(self):
         """Object has no __method_missing__ field, but type has it in registry.class_methods."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="<test>"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("<test>")))
 
         addr = Address("obj_0")
         vm.heap_set(
@@ -224,7 +224,7 @@ class TestFindMethodMissingRegistryPath:
         """If __method_missing__ exists as both instance field and registry entry,
         the instance field wins."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="<test>"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("<test>")))
 
         instance_mm_label = CodeLabel("func_instance_mm")
         registry_mm_label = CodeLabel("func_registry_mm")

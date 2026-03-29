@@ -15,6 +15,7 @@ from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
+from interpreter.func_name import FuncName
 
 
 def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
@@ -31,7 +32,7 @@ def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
 class TestBuiltinLenRespectsLengthField:
     def test_len_of_arrayOf_three_elements(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_array_of(
             [typed_from_runtime(10), typed_from_runtime(5), typed_from_runtime(3)], vm
         )
@@ -41,7 +42,7 @@ class TestBuiltinLenRespectsLengthField:
 
     def test_len_of_arrayOf_empty(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_array_of([], vm)
         _apply_builtin_result(vm, result)
         length = _builtin_len([result.value], vm)
@@ -49,7 +50,7 @@ class TestBuiltinLenRespectsLengthField:
 
     def test_len_of_arrayOf_single_element(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_array_of([typed_from_runtime(42)], vm)
         _apply_builtin_result(vm, result)
         length = _builtin_len([result.value], vm)
