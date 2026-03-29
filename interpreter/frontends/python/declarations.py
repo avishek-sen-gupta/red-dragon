@@ -41,9 +41,12 @@ from interpreter.frontends.symbol_table import (
     FunctionInfo,
     SymbolTable,
 )
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 
 
-def _extract_python_class_parents(node) -> tuple[str, ...]:
+def _extract_python_class_parents(node) -> tuple[ClassName, ...]:
     """Extract parent class names from a Python class_definition node."""
     arg_list = next(
         (c for c in node.children if c.type == PythonNodeType.ARGUMENT_LIST),
@@ -52,7 +55,7 @@ def _extract_python_class_parents(node) -> tuple[str, ...]:
     if arg_list is None:
         return ()
     return tuple(
-        c.text.decode()
+        ClassName(c.text.decode())
         for c in arg_list.children
         if c.type == PythonNodeType.IDENTIFIER
     )
@@ -101,8 +104,8 @@ def _extract_python_self_fields(init_body) -> dict[str, FieldInfo]:
         if obj_node.text != b"self":
             continue
         field_name = attr_node.text.decode()
-        fields[field_name] = FieldInfo(
-            name=field_name, type_hint="", has_initializer=True
+        fields[FieldName(field_name)] = FieldInfo(
+            name=FieldName(field_name), type_hint="", has_initializer=True
         )
     return fields
 
@@ -118,12 +121,16 @@ def _extract_python_class(node) -> tuple[str, ClassInfo] | None:
     body = next((c for c in node.children if c.type == PythonNodeType.BLOCK), None)
     if body is None:
         return class_name, ClassInfo(
-            name=class_name, fields={}, methods={}, constants={}, parents=parents
+            name=ClassName(class_name),
+            fields={},
+            methods={},
+            constants={},
+            parents=parents,
         )
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     constants_map: dict[str, str] = {}
-    methods: dict[str, FunctionInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
     match_args: tuple[str, ...] = ()
 
     for child in body.children:
@@ -155,8 +162,8 @@ def _extract_python_class(node) -> tuple[str, ClassInfo] | None:
             )
             ret_node = child.child_by_field_name("return_type")
             return_type = ret_node.text.decode() if ret_node else ""
-            methods[mname] = FunctionInfo(
-                name=mname, params=params, return_type=return_type
+            methods[FuncName(mname)] = FunctionInfo(
+                name=FuncName(mname), params=params, return_type=return_type
             )
             # Walk __init__ body to collect self.x fields
             if mname == "__init__":
@@ -165,7 +172,7 @@ def _extract_python_class(node) -> tuple[str, ClassInfo] | None:
                     fields.update(_extract_python_self_fields(init_body))
 
     return class_name, ClassInfo(
-        name=class_name,
+        name=ClassName(class_name),
         fields=fields,
         methods=methods,
         constants=constants_map,
@@ -196,19 +203,19 @@ def _python_param_name(node) -> str:
     return node.text.decode()
 
 
-def _collect_python_classes(node, accumulator: dict[str, ClassInfo]) -> None:
+def _collect_python_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class_definition nodes."""
     if node.type == PythonNodeType.CLASS_DEFINITION:
         result = _extract_python_class(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_python_classes(child, accumulator)
 
 
 def extract_python_symbols(root) -> SymbolTable:
     """Walk the Python AST and return a SymbolTable of all class definitions."""
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_python_classes(root, classes)
     return SymbolTable(classes=classes)

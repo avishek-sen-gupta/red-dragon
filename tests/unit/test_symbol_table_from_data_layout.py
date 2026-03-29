@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.frontends.symbol_table import SymbolTable
@@ -24,8 +26,11 @@ class TestFromDataLayout:
             total_bytes=7,
         )
         st = SymbolTable.from_data_layout(layout)
-        assert "__WORKING_STORAGE__" in st.classes
-        assert "WS-AMOUNT" in st.classes["__WORKING_STORAGE__"].fields
+        assert ClassName("__WORKING_STORAGE__") in st.classes
+        assert (
+            FieldName("WS-AMOUNT")
+            in st.classes[ClassName("__WORKING_STORAGE__")].fields
+        )
 
     def test_field_type_hint_is_empty_for_cobol_type_descriptor(self):
         """CobolTypeDescriptor has no .pic attribute; type_hint falls back to ''."""
@@ -44,7 +49,9 @@ class TestFromDataLayout:
             total_bytes=7,
         )
         st = SymbolTable.from_data_layout(layout)
-        field = st.classes["__WORKING_STORAGE__"].fields["WS-AMOUNT"]
+        field = st.classes[ClassName("__WORKING_STORAGE__")].fields[
+            FieldName("WS-AMOUNT")
+        ]
         assert field.type_hint == ""
 
     def test_field_with_value_has_initializer_true(self):
@@ -64,7 +71,9 @@ class TestFromDataLayout:
             total_bytes=1,
         )
         st = SymbolTable.from_data_layout(layout)
-        field = st.classes["__WORKING_STORAGE__"].fields["WS-FLAG"]
+        field = st.classes[ClassName("__WORKING_STORAGE__")].fields[
+            FieldName("WS-FLAG")
+        ]
         assert field.has_initializer is True
 
     def test_field_without_value_has_initializer_false(self):
@@ -83,7 +92,9 @@ class TestFromDataLayout:
             total_bytes=2,
         )
         st = SymbolTable.from_data_layout(layout)
-        field = st.classes["__WORKING_STORAGE__"].fields["WS-COUNT"]
+        field = st.classes[ClassName("__WORKING_STORAGE__")].fields[
+            FieldName("WS-COUNT")
+        ]
         assert field.has_initializer is False
 
     def test_multiple_fields_all_converted(self):
@@ -111,9 +122,9 @@ class TestFromDataLayout:
             total_bytes=22,
         )
         st = SymbolTable.from_data_layout(layout)
-        ws = st.classes["__WORKING_STORAGE__"]
-        assert "WS-NAME" in ws.fields
-        assert "WS-AGE" in ws.fields
+        ws = st.classes[ClassName("__WORKING_STORAGE__")]
+        assert FieldName("WS-NAME") in ws.fields
+        assert FieldName("WS-AGE") in ws.fields
         assert len(ws.fields) == 2
 
     def test_working_storage_class_has_no_methods_or_parents(self):
@@ -132,7 +143,7 @@ class TestFromDataLayout:
             total_bytes=2,
         )
         st = SymbolTable.from_data_layout(layout)
-        ws = st.classes["__WORKING_STORAGE__"]
+        ws = st.classes[ClassName("__WORKING_STORAGE__")]
         assert ws.methods == {}
         assert ws.parents == ()
         assert ws.constants == {}
@@ -140,5 +151,5 @@ class TestFromDataLayout:
     def test_empty_layout_produces_empty_fields(self):
         layout = DataLayout(fields={}, total_bytes=0)
         st = SymbolTable.from_data_layout(layout)
-        assert "__WORKING_STORAGE__" in st.classes
-        assert st.classes["__WORKING_STORAGE__"].fields == {}
+        assert ClassName("__WORKING_STORAGE__") in st.classes
+        assert st.classes[ClassName("__WORKING_STORAGE__")].fields == {}
