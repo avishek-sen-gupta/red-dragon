@@ -104,7 +104,7 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
             },
         }
         if state.heap:
-            compact_state["heap"] = {k: v.to_dict() for k, v in state.heap.items()}
+            compact_state["heap"] = {k: v.to_dict() for k, v in state.heap_items()}
         if state.path_conditions:
             compact_state["path_conditions"] = state.path_conditions
 
