@@ -2063,3 +2063,4 @@
 {"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-29T13:48:49Z","event_type":"created","id":"78796d2f-0514-48b6-900d-61a8abb189eb","issue_id":"red-dragon-0tsw","new_value":"","old_value":""}
 {"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-29T13:49:47Z","event_type":"closed","id":"f8395844-c1b6-47f9-90f6-918bcb286e80","issue_id":"red-dragon-n9tr","new_value":"Dead split hack removed. Frontend already emits clean FuncName. Filed 0tsw for CallCtorFunction follow-up.","old_value":""}
 {"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-29T13:59:49Z","event_type":"created","id":"11a80f02-94cf-426a-99bf-1dc677c8b056","issue_id":"red-dragon-tjv4","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-29T14:53:45Z","event_type":"created","id":"435202ab-e06d-4d46-b262-e98a16e99ce1","issue_id":"red-dragon-mkrt","new_value":"","old_value":""}
