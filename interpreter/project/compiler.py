@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from interpreter.class_name import ClassName
 from interpreter.constants import Language
+from interpreter.func_name import FuncName
 from interpreter.frontend import get_frontend
 from interpreter.ir import CodeLabel
 from interpreter.instructions import InstructionBase, DeclVar, StoreVar, Label_
@@ -38,8 +40,8 @@ def build_export_table(
     Top-level variables come from DECL_VAR instructions at module scope — i.e.
     outside any function or class body.
     """
-    functions = {str(ref.name): ref.label for ref in func_symbol_table.values()}
-    classes = {str(ref.name): ref.label for ref in class_symbol_table.values()}
+    functions = {ref.name: ref.label for ref in func_symbol_table.values()}
+    classes = {ref.name: ref.label for ref in class_symbol_table.values()}
 
     # Scan for top-level DECL_VARs (those outside func/class scopes).
     variables: dict[str, str] = {}
@@ -59,7 +61,10 @@ def build_export_table(
         if in_scope and isinstance(typed, (DeclVar, StoreVar)):
             var_name = str(typed.name)
             # Don't duplicate names already in functions or classes
-            if var_name not in functions and var_name not in classes:
+            if (
+                FuncName(var_name) not in functions
+                and ClassName(var_name) not in classes
+            ):
                 variables[var_name] = str(typed.value_reg)
 
     return ExportTable(functions=functions, classes=classes, variables=variables)
