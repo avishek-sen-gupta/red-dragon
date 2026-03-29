@@ -549,7 +549,7 @@ def _lower_python_param(ctx: TreeSitterEmitContext, child, param_index: int) -> 
     ctx.seed_register_type(param_reg, type_hint)
     ctx.seed_param_type(pname, type_hint)
     ctx.emit_inst(
-        DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"),
+        DeclVar(name=VarName(pname), value_reg=Register(f"%{ctx.reg_counter - 1}")),
         node=child,
     )
     ctx.seed_var_type(pname, type_hint)

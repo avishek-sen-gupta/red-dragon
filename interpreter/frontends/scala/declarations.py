@@ -172,7 +172,10 @@ def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_register_type(f"%{ctx.reg_counter - 1}", type_hint)
                 ctx.seed_param_type(pname, type_hint)
                 ctx.emit_inst(
-                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                    DeclVar(
+                        name=VarName(pname),
+                        value_reg=Register(f"%{ctx.reg_counter - 1}"),
+                    )
                 )
                 ctx.seed_var_type(pname, type_hint)
                 default_value_node = child.child_by_field_name("default_value")
