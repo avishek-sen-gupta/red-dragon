@@ -49,7 +49,7 @@ class TestAllocRegion:
         vm = _make_vm()
         inst = IRInstruction(
             opcode=Opcode.ALLOC_REGION,
-            result_reg="%r0",
+            result_reg=Register("%r0"),
             operands=[16],
         )
         _execute(vm, inst)
@@ -68,7 +68,7 @@ class TestAllocRegion:
         )
         inst = IRInstruction(
             opcode=Opcode.ALLOC_REGION,
-            result_reg="%r0",
+            result_reg=Register("%r0"),
             operands=["%size"],
         )
         _execute(vm, inst)
@@ -86,7 +86,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[8],
             ),
         )
@@ -107,7 +107,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%result",
+                result_reg=Register("%result"),
                 operands=["%rgn", "%offset", 4],
             ),
         )
@@ -126,7 +126,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[8],
             ),
         )
@@ -147,7 +147,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%first4",
+                result_reg=Register("%first4"),
                 operands=["%rgn", "%off0", 4],
             ),
         )
@@ -159,7 +159,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%last4",
+                result_reg=Register("%last4"),
                 operands=["%rgn", "%off4", 4],
             ),
         )
@@ -174,7 +174,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%result",
+                result_reg=Register("%result"),
                 operands=["%rgn", "%off", 4],
             ),
         )
@@ -188,7 +188,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[100],
             ),
         )
@@ -204,7 +204,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%rgn",
+                result_reg=Register("%rgn"),
                 operands=[8],
             ),
         )
@@ -236,7 +236,7 @@ class TestWriteAndLoadRegion:
             vm,
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%result",
+                result_reg=Register("%result"),
                 operands=["%rgn", "%off0", 8],
             ),
         )

@@ -8,6 +8,7 @@ from interpreter.interprocedural.call_graph import (
     build_function_entries,
     build_call_graph,
 )
+from interpreter.register import Register
 from interpreter.interprocedural.types import (
     FunctionEntry,
     CallSite,
@@ -72,7 +73,7 @@ class TestBuildCallGraphDirectCall:
         call_inst = IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             operands=["func_foo", "%1", "%2"],
-            result_reg="%3",
+            result_reg=Register("%3"),
         )
         cfg = _make_cfg(
             blocks={
@@ -104,7 +105,7 @@ class TestBuildCallGraphMethodCHA:
         call_inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
             operands=["%0", "speak", "%1"],
-            result_reg="%2",
+            result_reg=Register("%2"),
         )
         cfg = _make_cfg(
             blocks={
@@ -155,7 +156,7 @@ class TestBuildCallGraphUnknown:
         call_inst = IRInstruction(
             opcode=Opcode.CALL_UNKNOWN,
             operands=["%0", "%1"],
-            result_reg="%2",
+            result_reg=Register("%2"),
         )
         cfg = _make_cfg(
             blocks={
@@ -202,7 +203,7 @@ class TestBuildCallGraphRecursive:
         call_inst = IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             operands=["func_foo", "%1"],
-            result_reg="%2",
+            result_reg=Register("%2"),
         )
         cfg = _make_cfg(
             blocks={
@@ -228,12 +229,12 @@ class TestBuildCallGraphMultipleCalls:
         call1 = IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             operands=["func_foo"],
-            result_reg="%1",
+            result_reg=Register("%1"),
         )
         call2 = IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             operands=["func_bar", "%1"],
-            result_reg="%2",
+            result_reg=Register("%2"),
         )
         cfg = _make_cfg(
             blocks={
@@ -261,7 +262,7 @@ class TestBuildCallGraphNonExistent:
         call_inst = IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             operands=["func_nonexistent", "%1"],
-            result_reg="%2",
+            result_reg=Register("%2"),
         )
         cfg = _make_cfg(
             blocks={

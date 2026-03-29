@@ -33,7 +33,7 @@ class TestNewArrayPointer:
         cfg, registry = _empty_cfg_and_registry()
         inst = IRInstruction(
             opcode=Opcode.NEW_ARRAY,
-            result_reg="%arr",
+            result_reg=Register("%arr"),
             operands=["int"],
         )
         result = LocalExecutor.execute(
@@ -51,7 +51,7 @@ class TestNewArrayPointer:
         cfg, registry = _empty_cfg_and_registry()
         inst = IRInstruction(
             opcode=Opcode.NEW_ARRAY,
-            result_reg="%arr",
+            result_reg=Register("%arr"),
             operands=[],
         )
         result = LocalExecutor.execute(

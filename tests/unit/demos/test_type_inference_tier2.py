@@ -204,12 +204,12 @@ class TestRegionTagging:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
-                result_reg="%0",
+                result_reg=Register("%0"),
                 operands=["100"],
             ),
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
-                result_reg="%1",
+                result_reg=Register("%1"),
                 operands=["%0", "0", "10"],
             ),
         ]
