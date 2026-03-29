@@ -198,12 +198,10 @@ def _merge_symbol_tables(
         prefix = prefixes[path]
         for name, label in module.exports.functions.items():
             ns_label = label.namespace(prefix)
-            merged_func[ns_label] = FuncRef(name=FuncName(name), label=ns_label)
+            merged_func[ns_label] = FuncRef(name=name, label=ns_label)
         for name, label in module.exports.classes.items():
             ns_label = label.namespace(prefix)
-            merged_class[ns_label] = ClassRef(
-                name=ClassName(name), label=ns_label, parents=()
-            )
+            merged_class[ns_label] = ClassRef(name=name, label=ns_label, parents=())
 
     return merged_func, merged_class
 
