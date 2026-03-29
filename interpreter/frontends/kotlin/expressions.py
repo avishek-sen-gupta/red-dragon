@@ -15,6 +15,7 @@ from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -171,7 +172,7 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
                 CallMethod(
                     result_reg=reg,
                     obj_reg=obj_reg,
-                    method_name=method_name,
+                    method_name=FuncName(method_name),
                     args=tuple(arg_regs),
                 ),
                 node=node,
@@ -183,7 +184,9 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
         func_name = ctx.node_text(callee_node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+            CallFunction(
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            ),
             node=node,
         )
         return reg
@@ -759,7 +762,7 @@ def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="range",
+            func_name=FuncName("range"),
             args=(
                 start_reg,
                 end_reg,
@@ -784,7 +787,7 @@ def lower_check_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="is",
+            func_name=FuncName("is"),
             args=(
                 expr_reg,
                 type_text,
@@ -929,7 +932,7 @@ def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(
             CallFunction(
                 result_reg=reg,
-                func_name=func_name,
+                func_name=FuncName(func_name),
                 args=(
                     left_reg,
                     right_reg,
@@ -981,7 +984,7 @@ def lower_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="as",
+            func_name=FuncName("as"),
             args=(
                 expr_reg,
                 type_name,

@@ -9,6 +9,7 @@ from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -257,7 +258,9 @@ def _lower_lua_for_generic(
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("generic_for_cond")
     body_label = ctx.fresh_label("generic_for_body")

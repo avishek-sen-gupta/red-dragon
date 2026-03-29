@@ -23,6 +23,7 @@ from interpreter.frontends.python.node_types import PythonNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 from interpreter.operator_kind import resolve_binop
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -107,7 +108,7 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> Register:
             CallMethod(
                 result_reg=reg,
                 obj_reg=obj_reg,
-                method_name=method_name,
+                method_name=FuncName(method_name),
                 args=tuple(arg_regs),
             ),
             node=node,
@@ -119,7 +120,9 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> Register:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+            CallFunction(
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            ),
             node=node,
         )
         return reg
@@ -259,7 +262,9 @@ def _lower_comprehension_loop(
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("comp_cond")
     body_label = ctx.fresh_label("comp_body")
@@ -379,7 +384,9 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("dcomp_cond")
     body_label = ctx.fresh_label("dcomp_body")
@@ -611,7 +618,9 @@ def lower_generator_expression(ctx: TreeSitterEmitContext, node) -> Register:
     # Wrap as generator call
     gen_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=gen_reg, func_name="generator", args=(result_arr,)),
+        CallFunction(
+            result_reg=gen_reg, func_name=FuncName("generator"), args=(result_arr,)
+        ),
         node=node,
     )
     return gen_reg
@@ -684,7 +693,7 @@ def lower_yield(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = [ctx.lower_expr(c) for c in named_children]
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="yield", args=tuple(arg_regs)),
+        CallFunction(result_reg=reg, func_name=FuncName("yield"), args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -699,7 +708,7 @@ def lower_await(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = [ctx.lower_expr(c) for c in named_children]
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="await", args=tuple(arg_regs)),
+        CallFunction(result_reg=reg, func_name=FuncName("await"), args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -806,7 +815,7 @@ def _lower_slice_with_collection(
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="slice",
+            func_name=FuncName("slice"),
             args=(collection_reg, start_reg, stop_reg, step_reg),
         ),
         node=slice_node,
