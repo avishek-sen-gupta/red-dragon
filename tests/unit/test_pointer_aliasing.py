@@ -27,6 +27,7 @@ from interpreter.vm.vm_types import (
     StateUpdate,
 )
 from interpreter.vm.vm import apply_update
+from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 from interpreter.register import Register
 from interpreter.vm.executor import (
@@ -48,7 +49,7 @@ _CTX = _default_handler_context()
 def _make_vm(**local_vars: object) -> VMState:
     """Create a VMState with a single frame containing the given local vars."""
     typed_vars = {VarName(k): typed_from_runtime(v) for k, v in local_vars.items()}
-    frame = StackFrame(function_name="test", local_vars=typed_vars)
+    frame = StackFrame(function_name=FuncName("test"), local_vars=typed_vars)
     return VMState(call_stack=[frame])
 
 

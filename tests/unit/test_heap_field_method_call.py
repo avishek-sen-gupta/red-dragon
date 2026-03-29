@@ -68,7 +68,7 @@ def _build_callable_field_vm():
     ptr = Pointer(base=Address("obj_0"), offset=0)
     vm.call_stack.append(
         StackFrame(
-            function_name="<main>",
+            function_name=FuncName("<main>"),
             registers={Register("%obj"): typed_from_runtime(ptr)},
         )
     )
@@ -93,7 +93,7 @@ class TestHeapFieldMethodCall:
         assert (
             result.update.call_push is not None
         ), "Expected function dispatch (call_push), got register write (symbolic)"
-        assert result.update.call_push.function_name == "greet"
+        assert result.update.call_push.function_name == FuncName("greet")
 
     def test_call_method_field_not_callable_falls_back(self):
         """CALL_METHOD on a field that's not callable should fall back to resolver."""
