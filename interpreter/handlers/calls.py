@@ -7,6 +7,7 @@ from typing import Any
 
 from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
+from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
@@ -131,11 +132,10 @@ def _try_class_constructor_call(
     if not isinstance(func_val, ClassRef):
         return ExecutionResult.not_handled()
     class_name, class_label = func_val.name, func_val.label
-    class_name_str = str(class_name)
 
-    init_labels = registry.lookup_methods(class_name_str, FuncName("__init__"))
+    init_labels = registry.lookup_methods(class_name, FuncName("__init__"))
     if init_labels:
-        init_sigs = type_env.method_signatures.get(scalar(class_name_str), {}).get(
+        init_sigs = type_env.method_signatures.get(scalar(str(class_name)), {}).get(
             "__init__", []
         )
         if len(init_sigs) != len(init_labels):
@@ -150,7 +150,7 @@ def _try_class_constructor_call(
     # Allocate heap object
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    resolved_type = type_hint if type_hint else scalar(class_name_str)
+    resolved_type = type_hint if type_hint else scalar(str(class_name))
     vm.heap_set(Address(addr), HeapObject(type_hint=resolved_type))
     ptr_tv = typed(Pointer(base=Address(addr), offset=0), pointer(resolved_type))
 
@@ -464,7 +464,7 @@ def _handle_call_method(
     # Static method dispatch: Class.method() where object is a ClassRef
     if isinstance(obj_val.value, ClassRef):
         class_name = obj_val.value.name
-        func_labels = ctx.registry.lookup_methods(str(class_name), method_name)
+        func_labels = ctx.registry.lookup_methods(class_name, method_name)
         if func_labels:
             func_label = func_labels[0]
             bound_ref = BoundFuncRef(
@@ -495,8 +495,9 @@ def _handle_call_method(
     type_hint = ""
     if addr and vm.heap_contains(addr):
         type_hint = vm.heap_get(addr).type_hint or ""
+    class_key = ClassName(str(type_hint)) if type_hint else ClassName("")
 
-    if not type_hint or type_hint not in ctx.registry.class_methods:
+    if not type_hint or class_key not in ctx.registry.class_methods:
         # Check if method exists as a callable field on the heap object
         # (e.g., Lua table OOP: t.method = function(...) end)
         # Inject obj as first arg (self) — mirrors colon-call convention.
@@ -518,9 +519,9 @@ def _handle_call_method(
             obj_desc, method_name, [a.value for a in args], inst, vm
         )
 
-    func_labels = ctx.registry.lookup_methods(type_hint, method_name)
+    func_labels = ctx.registry.lookup_methods(class_key, method_name)
     if func_labels:
-        sigs = ctx.type_env.method_signatures.get(scalar(type_hint), {}).get(
+        sigs = ctx.type_env.method_signatures.get(scalar(str(type_hint)), {}).get(
             str(method_name), []
         )
         if len(sigs) != len(func_labels):
@@ -533,13 +534,13 @@ def _handle_call_method(
         func_label = ""
     # Walk parent chain for inherited methods
     if not func_label or func_label not in ctx.cfg.blocks:
-        for parent in ctx.registry.class_parents.get(type_hint, []):
+        for parent in ctx.registry.class_parents.get(class_key, []):
             parent_labels = ctx.registry.lookup_methods(parent, method_name)
             if not parent_labels:
                 continue
-            parent_sigs = ctx.type_env.method_signatures.get(scalar(parent), {}).get(
-                str(method_name), []
-            )
+            parent_sigs = ctx.type_env.method_signatures.get(
+                scalar(str(parent)), {}
+            ).get(str(method_name), [])
             if len(parent_sigs) != len(parent_labels):
                 logger.warning(
                     "sig/label count mismatch for %s.%s", parent, method_name
@@ -560,7 +561,9 @@ def _handle_call_method(
             if delegation is not None:
                 inner_addr, inner_tv = delegation
                 inner_type = str(vm.heap_get(inner_addr).type_hint or "")
-                inner_labels = ctx.registry.lookup_methods(inner_type, method_name)
+                inner_labels = ctx.registry.lookup_methods(
+                    ClassName(inner_type), method_name
+                )
                 inner_sigs = ctx.type_env.method_signatures.get(
                     scalar(inner_type), {}
                 ).get(str(method_name), [])
