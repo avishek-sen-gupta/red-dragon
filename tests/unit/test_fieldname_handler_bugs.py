@@ -29,7 +29,7 @@ from interpreter.vm.vm_types import (
 from interpreter.vm.vm import apply_update
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
-from interpreter.register import Register
+from interpreter.register import Register, NO_REGISTER
 from interpreter.address import Address
 from interpreter.vm.vm_types import SymbolicValue
 from interpreter.vm.executor import (
@@ -47,11 +47,11 @@ def _make_vm() -> VMState:
 
 
 def _make_inst(
-    opcode: Opcode, result_reg: str = "", operands: list = ()
+    opcode: Opcode, result_reg: Register = NO_REGISTER, operands: list = ()
 ) -> InstructionBase:
     return IRInstruction(
         opcode=opcode,
-        result_reg=result_reg or None,
+        result_reg=result_reg,
         operands=list(operands),
     )
 

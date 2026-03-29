@@ -26,12 +26,12 @@ from interpreter.interprocedural.propagation import (
     whole_program_fixpoint,
 )
 from interpreter.registry import FunctionRegistry
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 
 
 def _inst(
     opcode: Opcode,
-    result_reg=None,
+    result_reg=NO_REGISTER,
     operands=None,
     label: CodeLabel = NO_LABEL,
     branch_targets: list[CodeLabel] = [],
