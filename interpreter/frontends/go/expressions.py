@@ -15,6 +15,7 @@ from interpreter.register import Register
 from interpreter.types.type_expr import ParameterizedType, scalar, array_of, map_of
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     CallCtorFunction,
@@ -119,7 +120,7 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
                 CallMethod(
                     result_reg=reg,
                     obj_reg=obj_reg,
-                    method_name=method_name,
+                    method_name=FuncName(method_name),
                     args=tuple(arg_regs),
                 ),
                 node=node,
@@ -132,7 +133,9 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
 
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+            CallFunction(
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            ),
             node=node,
         )
         return reg
@@ -267,7 +270,7 @@ def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallCtorFunction(
             result_reg=reg,
-            func_name=type_name,
+            func_name=FuncName(type_name),
             type_hint=scalar(type_name),
             args=(operand_reg,),
         ),
@@ -303,7 +306,9 @@ def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=reg, func_name="type_assert", args=(expr_reg, type_text)
+            result_reg=reg,
+            func_name=FuncName("type_assert"),
+            args=(expr_reg, type_text),
         ),
         node=node,
     )
@@ -339,7 +344,7 @@ def lower_slice_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="slice",
+            func_name=FuncName("slice"),
             args=(obj_reg, start_reg, end_reg),
         ),
         node=node,

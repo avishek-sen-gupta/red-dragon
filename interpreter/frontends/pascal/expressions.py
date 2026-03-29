@@ -18,6 +18,7 @@ from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     Binop,
@@ -84,7 +85,9 @@ def lower_pascal_call(ctx: TreeSitterEmitContext, node) -> Register:
         func_name = ctx.node_text(id_node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
+            CallFunction(
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            ),
             node=node,
         )
         return reg
@@ -223,7 +226,7 @@ def lower_pascal_range(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = [ctx.lower_expr(c) for c in nums]
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="range", args=tuple(arg_regs)),
+        CallFunction(result_reg=reg, func_name=FuncName("range"), args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -240,7 +243,9 @@ def lower_pascal_inherited_expr(ctx: TreeSitterEmitContext, node) -> Register:
         method_name = "inherited"
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="inherited", args=(method_name,)),
+        CallFunction(
+            result_reg=reg, func_name=FuncName("inherited"), args=(method_name,)
+        ),
         node=node,
     )
     return reg

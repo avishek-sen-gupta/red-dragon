@@ -19,6 +19,7 @@ from interpreter.cobol.ir_encoders import (
     build_string_split_ir,
 )
 from interpreter.operator_kind import resolve_binop
+from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction
 from interpreter.register import Register
 
@@ -53,7 +54,7 @@ def lower_string(
             ctx.emit_inst(
                 CallFunction(
                     result_reg=find_pos,
-                    func_name=BuiltinName.STRING_FIND,
+                    func_name=FuncName(BuiltinName.STRING_FIND),
                     args=(Register(str(src_str_reg)), Register(str(delim_reg))),
                 ),
             )
@@ -61,7 +62,7 @@ def lower_string(
             ctx.emit_inst(
                 CallFunction(
                     result_reg=parts,
-                    func_name=BuiltinName.STRING_SPLIT,
+                    func_name=FuncName(BuiltinName.STRING_SPLIT),
                     args=(Register(str(src_str_reg)), Register(str(delim_reg))),
                 ),
             )
@@ -69,7 +70,7 @@ def lower_string(
             ctx.emit_inst(
                 CallFunction(
                     result_reg=first_part,
-                    func_name=BuiltinName.LIST_GET,
+                    func_name=FuncName(BuiltinName.LIST_GET),
                     args=(Register(str(parts)), 0),
                 ),
             )
@@ -86,7 +87,7 @@ def lower_string(
             ctx.emit_inst(
                 CallFunction(
                     result_reg=new_concat,
-                    func_name=BuiltinName.STRING_CONCAT_PAIR,
+                    func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
                     args=(Register(str(concat_reg)), Register(str(next_reg))),
                 ),
             )
@@ -132,7 +133,7 @@ def lower_unstring(
         ctx.emit_inst(
             CallFunction(
                 result_reg=part_reg,
-                func_name=BuiltinName.LIST_GET,
+                func_name=FuncName(BuiltinName.LIST_GET),
                 args=(Register(str(parts_reg)), Register(str(idx_reg))),
             ),
         )

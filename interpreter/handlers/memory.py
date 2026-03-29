@@ -83,7 +83,7 @@ def _find_method_missing(
 
 def _resolve_method_delegation_target(
     addr: str,
-    method_name: str,
+    method_name: FuncName,
     vm: VMState,
     registry: FunctionRegistry,
     cfg: CFG,
@@ -110,7 +110,7 @@ def _resolve_method_delegation_target(
         if not inner_addr or inner_addr not in vm.heap:
             return None
         inner_type = str(vm.heap[inner_addr].type_hint or "")
-        if registry.lookup_methods(inner_type, FuncName(method_name)):
+        if registry.lookup_methods(inner_type, method_name):
             return (inner_addr, inner_tv)
         # Inner object might itself be a Box — continue the chain
         current_addr = inner_addr

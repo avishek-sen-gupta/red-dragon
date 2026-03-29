@@ -8,6 +8,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AddressOf,
     Binop,
@@ -81,7 +82,7 @@ def _lower_box_new(ctx: TreeSitterEmitContext, args_node, call_node) -> Register
     arg_regs = extract_call_args(ctx, args_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="Box", args=tuple(arg_regs)),
+        CallFunction(result_reg=reg, func_name=FuncName("Box"), args=tuple(arg_regs)),
         node=call_node,
     )
     return reg
@@ -102,7 +103,9 @@ def _lower_some(ctx: TreeSitterEmitContext, args_node, call_node) -> Register:
     arg_regs = extract_call_args(ctx, args_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="Option", args=tuple(arg_regs)),
+        CallFunction(
+            result_reg=reg, func_name=FuncName("Option"), args=tuple(arg_regs)
+        ),
         node=call_node,
     )
     return reg
@@ -557,7 +560,7 @@ def lower_macro_invocation(ctx: TreeSitterEmitContext, node) -> Register:
     macro_name = ctx.node_text(node).split("!")[0] + "!"
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=macro_name, args=()), node=node
+        CallFunction(result_reg=reg, func_name=FuncName(macro_name), args=()), node=node
     )
     return reg
 
@@ -614,7 +617,7 @@ def _lower_range_slice(
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="slice",
+            func_name=FuncName("slice"),
             args=(
                 collection_reg,
                 start_reg,
@@ -670,7 +673,9 @@ def lower_try_expr(ctx: TreeSitterEmitContext, node) -> Register:
     inner_reg = ctx.lower_expr(inner) if inner else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="try_unwrap", args=(inner_reg,)),
+        CallFunction(
+            result_reg=reg, func_name=FuncName("try_unwrap"), args=(inner_reg,)
+        ),
         node=node,
     )
     return reg
@@ -690,7 +695,8 @@ def lower_await_expr(ctx: TreeSitterEmitContext, node) -> Register:
     inner_reg = ctx.lower_expr(inner) if inner else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name="await", args=(inner_reg,)), node=node
+        CallFunction(result_reg=reg, func_name=FuncName("await"), args=(inner_reg,)),
+        node=node,
     )
     return reg
 
@@ -706,7 +712,7 @@ def lower_type_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="as",
+            func_name=FuncName("as"),
             args=(
                 expr_reg,
                 type_name,
@@ -736,7 +742,7 @@ def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         CallFunction(
             result_reg=reg,
-            func_name="range",
+            func_name=FuncName("range"),
             args=(
                 start_reg,
                 end_reg,

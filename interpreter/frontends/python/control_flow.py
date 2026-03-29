@@ -15,6 +15,7 @@ from interpreter.frontends.python.expressions import (
 )
 from interpreter.frontends.python.node_types import PythonNodeType
 from interpreter.operator_kind import resolve_binop
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -126,7 +127,9 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
+    )
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
@@ -262,7 +265,7 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
             CallMethod(
                 result_reg=enter_reg,
                 obj_reg=ctx_reg,
-                method_name="__enter__",
+                method_name=FuncName("__enter__"),
                 args=(),
             ),
             node=item,
@@ -280,7 +283,7 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
             CallMethod(
                 result_reg=exit_reg,
                 obj_reg=ctx_reg,
-                method_name="__exit__",
+                method_name=FuncName("__exit__"),
                 args=(),
             ),
             node=node,
@@ -322,7 +325,11 @@ def lower_decorated_def(ctx: TreeSitterEmitContext, node) -> None:
         dec_reg = ctx.lower_expr(dec_expr)
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(result_reg=result_reg, func_name=dec_reg, args=(func_reg,)),
+            CallFunction(
+                result_reg=result_reg,
+                func_name=FuncName(str(dec_reg)),
+                args=(func_reg,),
+            ),
             node=dec,
         )
         ctx.emit_inst(StoreVar(name=VarName(func_name), value_reg=result_reg))
@@ -337,7 +344,9 @@ def lower_assert(ctx: TreeSitterEmitContext, node) -> None:
     arg_regs = [ctx.lower_expr(c) for c in named_children]
     ctx.emit_inst(
         CallFunction(
-            result_reg=ctx.fresh_reg(), func_name="assert", args=tuple(arg_regs)
+            result_reg=ctx.fresh_reg(),
+            func_name=FuncName("assert"),
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -359,7 +368,7 @@ def lower_delete(ctx: TreeSitterEmitContext, node) -> None:
                     ctx.emit_inst(
                         CallFunction(
                             result_reg=ctx.fresh_reg(),
-                            func_name="del",
+                            func_name=FuncName("del"),
                             args=(target_reg,),
                         ),
                         node=node,
@@ -369,7 +378,7 @@ def lower_delete(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit_inst(
                 CallFunction(
                     result_reg=ctx.fresh_reg(),
-                    func_name="del",
+                    func_name=FuncName("del"),
                     args=(target_reg,),
                 ),
                 node=node,
@@ -385,7 +394,9 @@ def lower_import(ctx: TreeSitterEmitContext, node) -> None:
     module_name = ctx.node_text(name_node) if name_node else "unknown"
     import_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=import_reg, func_name="import", args=(module_name,)),
+        CallFunction(
+            result_reg=import_reg, func_name=FuncName("import"), args=(module_name,)
+        ),
         node=node,
     )
     # Store using the top-level module name (e.g., 'os' for 'os.path')
@@ -414,7 +425,7 @@ def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(
             CallFunction(
                 result_reg=import_reg,
-                func_name="import",
+                func_name=FuncName("import"),
                 args=(f"from {module_name} import {imported_name}",),
             ),
             node=node,

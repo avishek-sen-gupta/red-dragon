@@ -29,6 +29,7 @@ from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.operator_kind import resolve_binop
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -345,7 +346,7 @@ def lower_display(
     ctx.emit_inst(
         CallFunction(
             result_reg=ctx.fresh_reg(),
-            func_name="print",
+            func_name=FuncName("print"),
             args=(Register(str(display_reg)),),
         )
     )
