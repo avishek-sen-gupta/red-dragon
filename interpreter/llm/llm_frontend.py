@@ -11,6 +11,7 @@ from typing import Any
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -334,7 +335,7 @@ def _convert_llm_class_refs(
                 parents_str = m.group(3) or ""
                 parents = tuple(p for p in parents_str.split(",") if p)
                 class_symbol_table[label] = ClassRef(
-                    name=name, label=label, parents=parents
+                    name=ClassName(name), label=label, parents=parents
                 )
                 instructions[i] = dataclasses.replace(t, value=str(label))
 

@@ -6,6 +6,7 @@ from interpreter.cfg import build_cfg
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.registry import build_registry, _scan_classes
 
@@ -27,7 +28,7 @@ class TestScanClassesOverloads:
         }
         class_st = {
             "class_Foo_0": ClassRef(
-                name="Foo", label=CodeLabel("class_Foo_0"), parents=()
+                name=ClassName("Foo"), label=CodeLabel("class_Foo_0"), parents=()
             ),
         }
         _classes, class_methods, _parents = _scan_classes(
@@ -53,7 +54,7 @@ class TestScanClassesOverloads:
         }
         class_st = {
             "class_Foo_0": ClassRef(
-                name="Foo", label=CodeLabel("class_Foo_0"), parents=()
+                name=ClassName("Foo"), label=CodeLabel("class_Foo_0"), parents=()
             ),
         }
         _classes, class_methods, _parents = _scan_classes(
@@ -82,7 +83,7 @@ class TestScanClassesOverloads:
         }
         class_st = {
             "class_Foo_0": ClassRef(
-                name="Foo", label=CodeLabel("class_Foo_0"), parents=()
+                name=ClassName("Foo"), label=CodeLabel("class_Foo_0"), parents=()
             ),
         }
         _classes, class_methods, _parents = _scan_classes(
@@ -107,7 +108,7 @@ class TestScanClassesOverloads:
         }
         class_st = {
             "class_Calc_0": ClassRef(
-                name="Calc", label=CodeLabel("class_Calc_0"), parents=()
+                name=ClassName("Calc"), label=CodeLabel("class_Calc_0"), parents=()
             ),
         }
         _classes, class_methods, _parents = _scan_classes(

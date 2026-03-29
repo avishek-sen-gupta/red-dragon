@@ -14,6 +14,7 @@ from typing import Any, Callable
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
+from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
@@ -241,7 +242,7 @@ class TreeSitterEmitContext:
         maps class_label -> ClassRef(name, label, parents) for downstream consumers.
         """
         self.class_symbol_table[class_label] = ClassRef(
-            name=class_name, label=class_label, parents=tuple(parents)
+            name=ClassName(class_name), label=class_label, parents=tuple(parents)
         )
         return self.emit_inst(
             Const(result_reg=result_reg, value=str(class_label)),
