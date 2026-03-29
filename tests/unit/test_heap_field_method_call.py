@@ -55,11 +55,14 @@ def _build_callable_field_vm():
     func_ref = FuncRef(name="greet", label=CodeLabel("__func__greet"))
     bound = BoundFuncRef(func_ref=func_ref, closure_id="")
 
-    vm.heap["obj_0"] = HeapObject(
-        type_hint="table",
-        fields={
-            FieldName("greet"): typed_from_runtime(bound),
-        },
+    vm.heap_set(
+        Address("obj_0"),
+        HeapObject(
+            type_hint="table",
+            fields={
+                FieldName("greet"): typed_from_runtime(bound),
+            },
+        ),
     )
     ptr = Pointer(base=Address("obj_0"), offset=0)
     vm.call_stack.append(
@@ -95,7 +98,9 @@ class TestHeapFieldMethodCall:
         """CALL_METHOD on a field that's not callable should fall back to resolver."""
         vm, cfg, registry = _build_callable_field_vm()
         # Overwrite greet with a non-callable value
-        vm.heap["obj_0"].fields[FieldName("greet")] = typed_from_runtime(42)
+        vm.heap_get(Address("obj_0")).fields[FieldName("greet")] = typed_from_runtime(
+            42
+        )
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
             result_reg="%result",

@@ -254,9 +254,9 @@ def main():
     print(f"  All numeric variables: {[(n, v) for n, v in arr_candidates]}")
 
     # Check heap for array objects
-    if vm.heap:
-        print(f"\n  Heap objects ({len(vm.heap)}):")
-        for addr, obj in vm.heap.items():
+    if vm.heap_count():
+        print(f"\n  Heap objects ({vm.heap_count()}):")
+        for addr, obj in vm.heap_items():
             unwrapped = {k: v.value for k, v in obj.fields.items()}
             print(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
 
@@ -264,7 +264,7 @@ def main():
     sorted_result = []
 
     # Strategy 1: look for arr[0]..arr[4] or ARR[0]..ARR[4] in heap
-    for addr, obj in vm.heap.items():
+    for addr, obj in vm.heap_items():
         fields = obj.fields
         if any(str(i) in fields for i in range(5)):
             sorted_result = [fields.get(str(i)).value for i in range(5)]
@@ -306,7 +306,7 @@ def main():
         print(f"\n  Variables:")
         _show_vars(vm)
         print(f"\n  Heap:")
-        for addr, obj in vm.heap.items():
+        for addr, obj in vm.heap_items():
             unwrapped = {k: v.value for k, v in obj.fields.items()}
             print(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
 

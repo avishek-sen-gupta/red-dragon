@@ -1,5 +1,6 @@
 """Tests for execute_cfg_traced and execute_traced — traced execution with step snapshots."""
 
+from interpreter.address import Address
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.cfg import build_cfg
@@ -96,7 +97,7 @@ class TestExecuteCfgTracedBasic:
         vm, trace = execute_cfg_traced(cfg, "entry", registry)
 
         assert trace.initial_state is not None
-        assert trace.initial_state.heap == {}
+        assert trace.initial_state.heap_count() == 0
         assert len(trace.initial_state.call_stack) == 1
         assert trace.initial_state.call_stack[0].function_name == "<main>"
 

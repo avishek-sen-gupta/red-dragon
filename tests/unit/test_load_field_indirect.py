@@ -5,6 +5,7 @@ the field name comes from a register (not a static operand).  This is
 needed by __method_missing__ to forward field access by dynamic name.
 """
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.instructions import InstructionBase
@@ -67,10 +68,13 @@ class TestLoadFieldIndirect:
         """Heap object has field 'x'=42; %name register holds 'x'. Result is 42."""
         vm = _make_vm()
         # Put an object on the heap with field x=42
-        addr = "obj_0"
-        vm.heap[addr] = HeapObject(
-            type_hint="TestObj",
-            fields={FieldName("x"): typed_from_runtime(42)},
+        addr = Address("obj_0")
+        vm.heap_set(
+            addr,
+            HeapObject(
+                type_hint="TestObj",
+                fields={FieldName("x"): typed_from_runtime(42)},
+            ),
         )
         _set_reg(vm, "%obj", addr)
         _set_reg(vm, "%name", "x")
@@ -87,10 +91,13 @@ class TestLoadFieldIndirect:
     def test_missing_field_returns_symbolic(self):
         """Heap object exists but field 'y' is absent — result is SymbolicValue."""
         vm = _make_vm()
-        addr = "obj_0"
-        vm.heap[addr] = HeapObject(
-            type_hint="TestObj",
-            fields={FieldName("x"): typed_from_runtime(42)},
+        addr = Address("obj_0")
+        vm.heap_set(
+            addr,
+            HeapObject(
+                type_hint="TestObj",
+                fields={FieldName("x"): typed_from_runtime(42)},
+            ),
         )
         _set_reg(vm, "%obj", addr)
         _set_reg(vm, "%name", "y")
@@ -126,14 +133,17 @@ class TestLoadFieldIndirect:
     def test_method_missing_dispatches_function_call(self):
         """Object has __method_missing__ with BoundFuncRef — triggers call dispatch."""
         vm = _make_vm()
-        addr = "obj_0"
+        addr = Address("obj_0")
         mm_label = CodeLabel("func_mm_0")
         mm_func_ref = FuncRef(name="__method_missing__", label=mm_label)
         mm_bound = BoundFuncRef(func_ref=mm_func_ref, closure_id="")
 
-        vm.heap[addr] = HeapObject(
-            type_hint="TestObj",
-            fields={FieldName(METHOD_MISSING): typed(mm_bound, UNKNOWN)},
+        vm.heap_set(
+            addr,
+            HeapObject(
+                type_hint="TestObj",
+                fields={FieldName(METHOD_MISSING): typed(mm_bound, UNKNOWN)},
+            ),
         )
         _set_reg(vm, "%obj", addr)
         _set_reg(vm, "%name", "nonexistent")

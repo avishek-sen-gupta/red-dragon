@@ -8,7 +8,7 @@ from interpreter.vm.vm_types import VMState, HeapObject, NO_HEAP_OBJECT
 class TestVMStateHeapAccessors:
     def test_heap_get_found(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject()
+        vm.heap_set(Address("obj_0"), HeapObject())
         assert vm.heap_get(Address("obj_0")) is not None
 
     def test_heap_get_not_found_returns_null(self):
@@ -19,7 +19,7 @@ class TestVMStateHeapAccessors:
 
     def test_heap_get_found_is_present(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject()
+        vm.heap_set(Address("obj_0"), HeapObject())
         assert vm.heap_get(Address("obj_0")).is_present()
 
     def test_heap_set_and_get(self):
@@ -30,7 +30,7 @@ class TestVMStateHeapAccessors:
 
     def test_heap_contains(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject()
+        vm.heap_set(Address("obj_0"), HeapObject())
         assert vm.heap_contains(Address("obj_0"))
         assert not vm.heap_contains(Address("missing"))
 
@@ -58,15 +58,15 @@ class TestVMStateHeapAccessors:
         vm.heap_set(Address("obj_0"), obj)
         items = list(vm.heap_items())
         assert len(items) == 1
-        assert items[0] == ("obj_0", obj)
+        assert items[0] == (Address("obj_0"), obj)
 
     def test_heap_keys(self):
         vm = VMState()
         vm.heap_set(Address("obj_0"), HeapObject())
         vm.heap_set(Address("arr_1"), HeapObject())
         keys = list(vm.heap_keys())
-        assert "obj_0" in keys
-        assert "arr_1" in keys
+        assert Address("obj_0") in keys
+        assert Address("arr_1") in keys
 
     def test_region_set_and_get(self):
         vm = VMState()

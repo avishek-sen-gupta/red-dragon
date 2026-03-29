@@ -5,6 +5,7 @@ non-existent field should dispatch through that function instead of returning
 a symbolic value.
 """
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.func_name import FuncName
 from interpreter.cfg import CFG
@@ -40,8 +41,8 @@ def _make_vm_with_method_missing(
     vm.call_stack.append(StackFrame(function_name="<test>"))
 
     # Inner object
-    inner_addr = "obj_0"
-    vm.heap[inner_addr] = HeapObject(type_hint="Inner", fields=inner_fields)
+    inner_addr = Address("obj_0")
+    vm.heap_set(inner_addr, HeapObject(type_hint="Inner", fields=inner_fields))
 
     # __method_missing__ function: takes (self, name) -> LOAD_FIELD_INDIRECT(self.BOXED_FIELD, name)
     mm_label = CodeLabel("func_mm_0")
@@ -74,13 +75,16 @@ def _make_vm_with_method_missing(
     )
 
     # Outer object: BOXED_FIELD -> inner_addr, __method_missing__ -> func_ref
-    outer_addr = "obj_1"
-    vm.heap[outer_addr] = HeapObject(
-        type_hint="Outer",
-        fields={
-            FieldName(BOXED_FIELD): typed(inner_addr, scalar("Object")),
-            FieldName(METHOD_MISSING): typed(mm_func_ref, UNKNOWN),
-        },
+    outer_addr = Address("obj_1")
+    vm.heap_set(
+        outer_addr,
+        HeapObject(
+            type_hint="Outer",
+            fields={
+                FieldName(BOXED_FIELD): typed(inner_addr, scalar("Object")),
+                FieldName(METHOD_MISSING): typed(mm_func_ref, UNKNOWN),
+            },
+        ),
     )
     vm.call_stack[-1].registers[Register("%outer")] = typed(
         outer_addr, scalar("Object")
@@ -133,17 +137,22 @@ class TestMethodMissingLoadField:
 
         assert result.handled
         assert result.update.call_push is None
-        assert unwrap(result.update.register_writes[Register("%result")]) == "obj_0"
+        assert unwrap(result.update.register_writes[Register("%result")]) == Address(
+            "obj_0"
+        )
 
     def test_no_method_missing_falls_through_to_symbolic(self):
         """Object WITHOUT __method_missing__; missing field returns SymbolicValue."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="<test>"))
 
-        addr = "obj_0"
-        vm.heap[addr] = HeapObject(
-            type_hint="Plain",
-            fields={FieldName("x"): typed_from_runtime(10)},
+        addr = Address("obj_0")
+        vm.heap_set(
+            addr,
+            HeapObject(
+                type_hint="Plain",
+                fields={FieldName("x"): typed_from_runtime(10)},
+            ),
         )
         vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
 
@@ -174,10 +183,13 @@ class TestFindMethodMissingRegistryPath:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="<test>"))
 
-        addr = "obj_0"
-        vm.heap[addr] = HeapObject(
-            type_hint="BoxType",
-            fields={FieldName(BOXED_FIELD): typed("inner_0", scalar("Object"))},
+        addr = Address("obj_0")
+        vm.heap_set(
+            addr,
+            HeapObject(
+                type_hint="BoxType",
+                fields={FieldName(BOXED_FIELD): typed("inner_0", scalar("Object"))},
+            ),
         )
         vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
 
@@ -232,10 +244,13 @@ class TestFindMethodMissingRegistryPath:
             closure_id="",
         )
 
-        addr = "obj_0"
-        vm.heap[addr] = HeapObject(
-            type_hint="DualBox",
-            fields={FieldName(METHOD_MISSING): typed(instance_mm_ref, UNKNOWN)},
+        addr = Address("obj_0")
+        vm.heap_set(
+            addr,
+            HeapObject(
+                type_hint="DualBox",
+                fields={FieldName(METHOD_MISSING): typed(instance_mm_ref, UNKNOWN)},
+            ),
         )
         vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
 

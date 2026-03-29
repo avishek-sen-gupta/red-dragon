@@ -4,6 +4,7 @@ DECL_VAR always creates/overwrites in the current frame (declaration).
 STORE_VAR walks the scope chain to update existing variables (assignment).
 """
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
@@ -151,9 +152,9 @@ class TestImplicitThisFieldResolution:
         """Create a VM with a heap object and 'this' pointing to it."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="<main>"))
-        addr = "obj_0"
+        addr = Address("obj_0")
         heap_fields = {FieldName(k): typed(v, UNKNOWN) for k, v in fields.items()}
-        vm.heap[addr] = HeapObject(fields=heap_fields)
+        vm.heap_set(addr, HeapObject(fields=heap_fields))
         vm.current_frame.local_vars[VarName("this")] = typed(addr, UNKNOWN)
         return vm
 
@@ -225,4 +226,4 @@ class TestImplicitThisFieldResolution:
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["doubled", "%v"]),
             field_fallback=self.FALLBACK,
         )
-        assert unwrap(vm.heap["obj_0"].fields[FieldName("doubled")]) == 42
+        assert unwrap(vm.heap_get(Address("obj_0")).fields[FieldName("doubled")]) == 42
