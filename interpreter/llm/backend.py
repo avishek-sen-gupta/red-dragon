@@ -103,8 +103,8 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
                 str(k): _serialize_value(v) for k, v in frame.local_vars.items()
             },
         }
-        if state.heap:
-            compact_state["heap"] = {k: v.to_dict() for k, v in state.heap_items()}
+        if state.heap_count():
+            compact_state["heap"] = {str(k): v.to_dict() for k, v in state.heap_items()}
         if state.path_conditions:
             compact_state["path_conditions"] = state.path_conditions
 

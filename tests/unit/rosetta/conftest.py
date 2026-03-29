@@ -3,6 +3,7 @@
 import logging
 import statistics
 
+from interpreter.address import Address
 from interpreter.cfg import build_cfg
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.types.typed_value import TypedValue
@@ -233,11 +234,11 @@ def extract_array(
     stored = frame.local_vars[name]
     raw_val = stored.value if isinstance(stored, TypedValue) else stored
     heap_addr = _heap_addr(raw_val)
-    assert heap_addr and str(heap_addr) in vm.heap, (
+    assert heap_addr and vm.heap_contains(heap_addr), (
         f"[{language}] expected heap address '{raw_val}' in heap, "
-        f"got: {sorted(vm.heap.keys())}"
+        f"got: {sorted(vm.heap_keys())}"
     )
-    obj = vm.heap[str(heap_addr)]
+    obj = vm.heap_get(heap_addr)
     # Lua uses 1-based indexing; detect by checking for key "0"
     start_index = 0 if FieldName("0", FieldKind.INDEX) in obj.fields else 1
     return [

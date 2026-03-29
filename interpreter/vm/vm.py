@@ -325,6 +325,8 @@ def _heap_addr(val: Any) -> Address:
     constructor calls — and SymbolicValue objects (using ``.name``).
     Returns NO_ADDRESS if *val* doesn't reference a heap address.
     """
+    if isinstance(val, Address):
+        return val
     if isinstance(val, Pointer):
         return val.base
     if isinstance(val, str):

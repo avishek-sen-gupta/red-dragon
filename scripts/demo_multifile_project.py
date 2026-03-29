@@ -298,7 +298,7 @@ def main():
                     continue
                 print(f"    {var} = {_format_val(val)}")
 
-        print(f"\n  Heap objects       : {len(vm.heap)}")
+        print(f"\n  Heap objects       : {vm.heap_count()}")
         print(f"  Time               : {exec_time * 1000:.1f}ms")
 
         # ── Phase 6: Interprocedural analysis ──

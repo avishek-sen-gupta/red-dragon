@@ -7,6 +7,7 @@ write time — so str(2) == "2" matches on both store and load.
 
 from types import MappingProxyType
 
+from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 
@@ -182,7 +183,7 @@ class TestFloatIndexHeapKeyMismatch:
         )
 
         arr_addr = _heap_addr(unwrap(vm.current_frame.registers[Register("%arr")]))
-        heap_obj = vm.heap[str(arr_addr)]
+        heap_obj = vm.heap_get(arr_addr)
         assert (
             FieldName("2", FieldKind.INDEX) in heap_obj.fields
         ), "Expected int key '2' in heap fields"

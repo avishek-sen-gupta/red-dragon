@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from interpreter.address import Address
 from interpreter.cfg import build_cfg
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_frontend import CobolFrontend
@@ -104,9 +105,9 @@ class TestHelloWorldFixture:
         vm = _execute_straight_line(instructions)
 
         # Should have at least one region
-        assert len(vm.regions) >= 1
-        region_addr = list(vm.regions.keys())[0]
-        region = vm.regions[region_addr]
+        assert vm.region_count() >= 1
+        region_addr = list(vm.region_keys())[0]
+        region = vm.region_get(region_addr)
 
         # Region should have 11 bytes written (EBCDIC-encoded "HELLO WORLD")
         assert len(region) == 11
@@ -161,8 +162,8 @@ class TestArithmeticFixture:
 
         vm = _execute_straight_line(instructions)
 
-        region_addr = list(vm.regions.keys())[0]
-        region = vm.regions[region_addr]
+        region_addr = list(vm.region_keys())[0]
+        region = vm.region_get(region_addr)
         assert len(region) == 5  # 9(5)
         # Straight-line execution runs DATA + PROCEDURE: 100 + 50 - 25 = 125
         assert (
@@ -182,9 +183,9 @@ class TestPerformReturnFixture:
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         # Execution should have completed (hit STOP RUN)
-        assert len(vm.regions) >= 1
-        region_addr = list(vm.regions.keys())[0]
-        region = vm.regions[region_addr]
+        assert vm.region_count() >= 1
+        region_addr = list(vm.region_keys())[0]
+        region = vm.region_get(region_addr)
         # WS-RESULT at offset 0, PIC 9(3): MOVE 42 should yield 42
         assert (
             _decode_zoned_unsigned(region, 0, 3) == 42
@@ -237,8 +238,8 @@ class TestPerformReturnFixture:
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=300))
 
         assert stats.steps < 300
-        assert len(vm.regions) >= 1
-        region = vm.regions[list(vm.regions.keys())[0]]
+        assert vm.region_count() >= 1
+        region = vm.region_get(list(vm.region_keys())[0])
         # PARA-A: MOVE 10 → PERFORM PARA-B (MOVE 99) → MOVE 42
         # Final WS-VAL == 42 proves PARA-B returned to PARA-A and PARA-A continued
         assert _decode_zoned_unsigned(region, 0, 3) == 42
@@ -283,9 +284,9 @@ class TestPerformReturnFixture:
 
         # Should complete within steps (hit STOP RUN in SECOND-PARA)
         assert stats.steps < 200
-        assert len(vm.regions) >= 1
+        assert vm.region_count() >= 1
         # WS-A should be 2: FIRST-PARA MOVEs 1, then fall-through to SECOND-PARA MOVEs 2
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 3) == 2
 
 
@@ -400,9 +401,9 @@ class TestIfElseExecution:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
         assert stats.steps < 200
-        assert len(vm.regions) >= 1
+        assert vm.region_count() >= 1
         # WS-RESULT should be 1 (THEN branch: MOVE 1 TO WS-RESULT)
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 3, 3) == 1
 
     def test_if_false_branch_taken(self):
@@ -454,9 +455,9 @@ class TestIfElseExecution:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
         assert stats.steps < 200
-        assert len(vm.regions) >= 1
+        assert vm.region_count() >= 1
         # WS-RESULT should be 2 (ELSE branch: MOVE 2 TO WS-RESULT)
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 3, 3) == 2
 
 
@@ -504,9 +505,9 @@ class TestPerformTimesExecution:
 
         # Should complete within step limit
         assert stats.steps < 500
-        assert len(vm.regions) >= 1
+        assert vm.region_count() >= 1
         # WS-CTR should be 3 after ADD 1 executed 3 times
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 3) == 3
 
 
@@ -554,9 +555,9 @@ class TestPerformUntilExecution:
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         assert stats.steps < 500
-        assert len(vm.regions) >= 1
+        assert vm.region_count() >= 1
         # WS-A should be 3: test-before loops ADD 1 three times (0→1→2→3), then exits
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 3) == 3
 
 
@@ -618,10 +619,10 @@ class TestPerformVaryingExecution:
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
 
         assert stats.steps < 1000
-        assert len(vm.regions) >= 1
+        assert vm.region_count() >= 1
         # WS-SUM should be 6: VARYING WS-IDX from 1 by 1 until > 3
         # adds 1+2+3 = 6
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 3, 5) == 6
 
 
@@ -670,7 +671,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 3) == 42
 
     def test_add_two_values(self):
@@ -713,7 +714,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 10  # WS-A unchanged
         assert _decode_zoned_unsigned(region, 4, 4) == 15  # WS-B = 10 + 5
 
@@ -757,7 +758,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 7  # WS-A = 10 - 3
 
     def test_add_literal_to_field(self):
@@ -792,7 +793,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 25
 
     def test_perform_times_accumulation(self):
@@ -834,7 +835,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 3
 
     def test_initial_value_encoding(self):
@@ -868,7 +869,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 123
 
     def test_multiple_adds_accumulate(self):
@@ -904,7 +905,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 15
 
     def test_paragraph_perform_times_accumulation(self):
@@ -954,7 +955,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 30
 
     def test_move_then_perform_times_accumulation(self):
@@ -1005,7 +1006,7 @@ class TestNumericValueVerification:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 130
 
 
@@ -1056,9 +1057,9 @@ class TestSectionFallThrough:
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         assert stats.steps < 200
-        assert len(vm.regions) >= 1
+        assert vm.region_count() >= 1
         # Fall-through: FIRST-PARA sets WS-A=1, SECOND-PARA overwrites to 2
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 3) == 2
 
 
@@ -1116,7 +1117,7 @@ class TestNestedPerformNumericValues:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 111
 
     def test_nested_perform_times(self):
@@ -1178,7 +1179,7 @@ class TestNestedPerformNumericValues:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=2000))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 6
 
 
@@ -1230,7 +1231,7 @@ class TestGotoInsidePerform:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 11
 
     def test_goto_skips_code_in_paragraph(self):
@@ -1284,7 +1285,7 @@ class TestGotoInsidePerform:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 11
 
     def test_goto_exits_performed_paragraph(self):
@@ -1343,7 +1344,7 @@ class TestGotoInsidePerform:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
-        region = vm.regions[list(vm.regions.keys())[0]]
+        region = vm.region_get(list(vm.region_keys())[0])
         # WORK-PARA adds 10, GO TO jumps to EXIT-PARA which adds 100.
         # The GO TO bypasses WORK-PARA's end label, so the PERFORM
         # continuation is never triggered — control does NOT return to

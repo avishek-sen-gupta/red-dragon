@@ -300,7 +300,7 @@ def handle_run_to_end() -> dict[str, Any]:
                 "type": str(obj.type_hint),
                 "fields": {k: format_typed_value(v) for k, v in obj.fields.items()},
             }
-            for addr, obj in session.vm.heap.items()
+            for addr, obj in session.vm.heap_items()
         },
         "done": True,
     }
@@ -337,7 +337,7 @@ def handle_get_state() -> dict[str, Any]:
                 "type": str(obj.type_hint),
                 "fields": {k: format_typed_value(v) for k, v in obj.fields.items()},
             }
-            for addr, obj in vm_state.heap.items()
+            for addr, obj in vm_state.heap_items()
         },
     }
 

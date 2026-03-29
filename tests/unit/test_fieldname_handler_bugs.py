@@ -67,8 +67,11 @@ class TestNumericStringIndexUsesIndexKind:
         """LOAD_INDEX where index register holds string '0' must match a
         FieldName('0', INDEX) field — not return symbolic."""
         vm = _make_vm()
-        vm.heap["arr_0"] = HeapObject(
-            fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(42)}
+        vm.heap_set(
+            Address("arr_0"),
+            HeapObject(
+                fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(42)}
+            ),
         )
         vm.current_frame.registers[Register("%arr")] = typed_from_runtime("arr_0")
         vm.current_frame.registers[Register("%idx")] = typed_from_runtime("0")
@@ -85,8 +88,11 @@ class TestNumericStringIndexUsesIndexKind:
     def test_load_index_with_string_index_does_not_return_symbolic(self):
         """A string numeric index must resolve to the stored value, never symbolic."""
         vm = _make_vm()
-        vm.heap["arr_1"] = HeapObject(
-            fields={FieldName("3", FieldKind.INDEX): typed_from_runtime(99)}
+        vm.heap_set(
+            Address("arr_1"),
+            HeapObject(
+                fields={FieldName("3", FieldKind.INDEX): typed_from_runtime(99)}
+            ),
         )
         vm.current_frame.registers[Register("%arr")] = typed_from_runtime("arr_1")
         vm.current_frame.registers[Register("%idx")] = typed_from_runtime("3")
@@ -111,9 +117,12 @@ class TestLoadIndirectIndexToPropertyFallback:
         exists at the pointer offset — simulating Box::new(value) layout."""
         vm = _make_vm()
         # Box stores its inner value via store_field → PROPERTY kind at "0"
-        vm.heap["box_0"] = HeapObject(
-            type_hint="Box",
-            fields={FieldName("0", FieldKind.PROPERTY): typed_from_runtime(77)},
+        vm.heap_set(
+            Address("box_0"),
+            HeapObject(
+                type_hint="Box",
+                fields={FieldName("0", FieldKind.PROPERTY): typed_from_runtime(77)},
+            ),
         )
         ptr = Pointer(base=Address("box_0"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
@@ -128,11 +137,14 @@ class TestLoadIndirectIndexToPropertyFallback:
     def test_load_indirect_prefers_index_kind_when_both_present(self):
         """When both INDEX and PROPERTY fields exist at the same key, INDEX wins."""
         vm = _make_vm()
-        vm.heap["mem_0"] = HeapObject(
-            fields={
-                FieldName("0", FieldKind.INDEX): typed_from_runtime(10),
-                FieldName("0", FieldKind.PROPERTY): typed_from_runtime(20),
-            }
+        vm.heap_set(
+            Address("mem_0"),
+            HeapObject(
+                fields={
+                    FieldName("0", FieldKind.INDEX): typed_from_runtime(10),
+                    FieldName("0", FieldKind.PROPERTY): typed_from_runtime(20),
+                }
+            ),
         )
         ptr = Pointer(base=Address("mem_0"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)
@@ -147,9 +159,14 @@ class TestLoadIndirectIndexToPropertyFallback:
     def test_load_indirect_does_not_return_symbolic_for_property_field(self):
         """LOAD_INDIRECT on a Box-style heap object must not return symbolic."""
         vm = _make_vm()
-        vm.heap["box_1"] = HeapObject(
-            type_hint="Box",
-            fields={FieldName("0", FieldKind.PROPERTY): typed_from_runtime("hello")},
+        vm.heap_set(
+            Address("box_1"),
+            HeapObject(
+                type_hint="Box",
+                fields={
+                    FieldName("0", FieldKind.PROPERTY): typed_from_runtime("hello")
+                },
+            ),
         )
         ptr = Pointer(base=Address("box_1"), offset=0)
         vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(ptr)

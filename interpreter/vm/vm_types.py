@@ -139,12 +139,12 @@ def _serialize_value(v: Any) -> Any:
 
 @dataclass
 class VMState:
-    heap: dict[str, HeapObject] = field(default_factory=dict)
+    _heap: dict[Address, HeapObject] = field(default_factory=dict)
     call_stack: list[StackFrame] = field(default_factory=list)
     path_conditions: list[str] = field(default_factory=list)
     symbolic_counter: int = 0
     closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
-    regions: dict[str, bytearray] = field(default_factory=dict)
+    _regions: dict[Address, bytearray] = field(default_factory=dict)
     continuations: dict[str, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     data_layout: dict[str, dict] = field(default_factory=dict)
@@ -154,38 +154,57 @@ class VMState:
 
     def heap_get(self, addr: Address) -> HeapObject:
         """Get heap object by address. Returns NO_HEAP_OBJECT if not found."""
-        return self.heap.get(str(addr), NO_HEAP_OBJECT)
+        return self._heap.get(addr, NO_HEAP_OBJECT)
 
     def heap_set(self, addr: Address, obj: HeapObject) -> None:
         """Set heap object at address."""
-        self.heap[str(addr)] = obj
+        self._heap[addr] = obj
 
     def heap_contains(self, addr: Address) -> bool:
         """Check if address exists in heap."""
-        return str(addr) in self.heap
+        return addr in self._heap
 
     def heap_ensure(self, addr: Address) -> HeapObject:
         """Get or create a HeapObject at addr (type_hint=UNKNOWN)."""
-        key = str(addr)
-        if key not in self.heap:
-            self.heap[key] = HeapObject()
-        return self.heap[key]
+        if addr not in self._heap:
+            self._heap[addr] = HeapObject()
+        return self._heap[addr]
 
     def heap_items(self):
         """Iterate over all (address, HeapObject) pairs."""
-        return self.heap.items()
+        return self._heap.items()
 
     def heap_keys(self):
         """Iterate over all heap addresses."""
-        return self.heap.keys()
+        return self._heap.keys()
 
     def region_get(self, addr: Address) -> bytearray | None:
         """Get region data by address."""
-        return self.regions.get(str(addr))
+        return self._regions.get(addr)
 
     def region_set(self, addr: Address, data: bytearray) -> None:
         """Set region data at address."""
-        self.regions[str(addr)] = data
+        self._regions[addr] = data
+
+    def region_items(self):
+        """Iterate over all (address, bytearray) pairs."""
+        return self._regions.items()
+
+    def region_keys(self):
+        """Iterate over all region addresses."""
+        return self._regions.keys()
+
+    def region_count(self) -> int:
+        """Number of regions."""
+        return len(self._regions)
+
+    def heap_count(self) -> int:
+        """Number of heap objects."""
+        return len(self._heap)
+
+    def heap_values(self):
+        """Iterate over all HeapObjects."""
+        return self._heap.values()
 
     def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
         name = f"sym_{self.symbolic_counter}"
@@ -198,7 +217,7 @@ class VMState:
 
     def to_dict(self) -> dict:
         result: dict[str, Any] = {
-            "heap": {k: v.to_dict() for k, v in self.heap.items()},
+            "heap": {str(k): v.to_dict() for k, v in self._heap.items()},
             "call_stack": [f.to_dict() for f in self.call_stack],
             "path_conditions": self.path_conditions,
             "symbolic_counter": self.symbolic_counter,
@@ -207,9 +226,9 @@ class VMState:
             result["closures"] = {
                 label: env.to_dict() for label, env in self.closures.items()
             }
-        if self.regions:
+        if self._regions:
             result["regions"] = {
-                addr: list(data) for addr, data in self.regions.items()
+                str(addr): list(data) for addr, data in self._regions.items()
             }
         if self.continuations:
             result["continuations"] = {k: str(v) for k, v in self.continuations.items()}
