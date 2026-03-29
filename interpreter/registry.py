@@ -20,29 +20,29 @@ class FunctionRegistry:
     # func_label → ordered list of parameter names
     func_params: dict[CodeLabel, list[str]] = field(default_factory=dict)
     # class_name → {method_name → [func_label, ...]}  (supports overloads)
-    class_methods: dict[str, dict[str, list[CodeLabel]]] = field(default_factory=dict)
+    class_methods: dict[str, dict[FuncName, list[CodeLabel]]] = field(
+        default_factory=dict
+    )
     # class_name → class_body_label
     classes: dict[str, CodeLabel] = field(default_factory=dict)
     # class_name → linearized parent chain (MRO, excluding self)
     class_parents: dict[str, list[str]] = field(default_factory=dict)
     # function_name → FuncRef (name→label mapping for call resolution)
-    func_refs: dict[str, FuncRef] = field(default_factory=dict)
+    func_refs: dict[FuncName, FuncRef] = field(default_factory=dict)
 
     def lookup_func(self, name: FuncName) -> FuncRef | None:
-        return self.func_refs.get(str(name))
+        return self.func_refs.get(name)
 
     def lookup_methods(self, class_name: str, name: FuncName) -> list[CodeLabel]:
-        return self.class_methods.get(class_name, {}).get(str(name), [])
+        return self.class_methods.get(class_name, {}).get(name, [])
 
     def register_func(self, name: FuncName, ref: FuncRef) -> None:
-        self.func_refs[str(name)] = ref
+        self.func_refs[name] = ref
 
     def register_method(
         self, class_name: str, name: FuncName, label: CodeLabel
     ) -> None:
-        self.class_methods.setdefault(class_name, {}).setdefault(str(name), []).append(
-            label
-        )
+        self.class_methods.setdefault(class_name, {}).setdefault(name, []).append(label)
 
 
 def _is_func_label(label: str | CodeLabel) -> bool:
@@ -105,7 +105,9 @@ def _scan_classes(
     func_symbol_table: dict[CodeLabel, FuncRef] = {},
     class_symbol_table: dict[CodeLabel, ClassRef] = {},
 ) -> tuple[
-    dict[str, CodeLabel], dict[str, dict[str, list[CodeLabel]]], dict[str, list[str]]
+    dict[str, CodeLabel],
+    dict[str, dict[FuncName, list[CodeLabel]]],
+    dict[str, list[str]],
 ]:
     """Scan IR to find classes, their methods, and parent chains.
 
@@ -115,7 +117,7 @@ def _scan_classes(
     - class_parents: class_name → linearized parent chain (MRO, excluding self)
     """
     classes: dict[str, CodeLabel] = {}
-    class_methods: dict[str, dict[str, list[CodeLabel]]] = {}
+    class_methods: dict[str, dict[FuncName, list[CodeLabel]]] = {}
     class_parents: dict[str, list[str]] = {}
 
     # First pass: populate from class_symbol_table (new path).
@@ -150,7 +152,9 @@ def _scan_classes(
             operand = str(t.value)
             if operand in func_symbol_table:
                 ref = func_symbol_table[operand]
-                class_methods[in_class].setdefault(ref.name, []).append(ref.label)
+                class_methods[in_class].setdefault(FuncName(ref.name), []).append(
+                    ref.label
+                )
 
     return classes, class_methods, class_parents
 
@@ -192,5 +196,5 @@ def build_registry(
         instructions, func_symbol_table, class_symbol_table
     )
     reg.class_parents = _expand_parent_chains(direct_parents)
-    reg.func_refs = {ref.name: ref for ref in func_symbol_table.values()}
+    reg.func_refs = {FuncName(ref.name): ref for ref in func_symbol_table.values()}
     return reg

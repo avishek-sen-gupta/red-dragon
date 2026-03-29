@@ -1,5 +1,6 @@
 """Tests for primitive byte-manipulation builtins."""
 
+from interpreter.func_name import FuncName
 from interpreter.cobol.byte_builtins import (
     _builtin_nibble_get,
     _builtin_nibble_set,
@@ -362,11 +363,12 @@ class TestByteBuiltinsRegistration:
             "__bytes_to_float",
             "__cobol_blank_when_zero",
         ]
-        for name in expected_names:
+        expected_func_names = [FuncName(n) for n in expected_names]
+        for name in expected_func_names:
             assert name in BYTE_BUILTINS, f"{name} not in BYTE_BUILTINS"
-        assert set(expected_names) == set(BYTE_BUILTINS.keys()), (
-            f"Mismatch: expected {set(expected_names) - set(BYTE_BUILTINS.keys())} missing, "
-            f"unexpected {set(BYTE_BUILTINS.keys()) - set(expected_names)} extra"
+        assert set(expected_func_names) == set(BYTE_BUILTINS.keys()), (
+            f"Mismatch: expected {set(expected_func_names) - set(BYTE_BUILTINS.keys())} missing, "
+            f"unexpected {set(BYTE_BUILTINS.keys()) - set(expected_func_names)} extra"
         )
 
     def test_builtins_merged_into_table(self):
@@ -1406,4 +1408,4 @@ class TestCobolBlankWhenZero:
         )
 
     def test_registered_in_builtins(self):
-        assert "__cobol_blank_when_zero" in BYTE_BUILTINS
+        assert FuncName("__cobol_blank_when_zero") in BYTE_BUILTINS
