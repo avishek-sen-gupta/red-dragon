@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from interpreter.cfg import BasicBlock, CFG
+from interpreter.field_name import FieldName
 from interpreter.dataflow import Definition
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.interprocedural.types import (
@@ -155,15 +156,15 @@ class TestFlowEndpoints:
     def test_field_endpoint_construction(self):
         base = VariableEndpoint(name="obj", definition=NO_DEFINITION)
         loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
-        fe = FieldEndpoint(base=base, field="name", location=loc)
+        fe = FieldEndpoint(base=base, field=FieldName("name"), location=loc)
         assert fe.base.name == "obj"
-        assert fe.field == "name"
+        assert fe.field == FieldName("name")
 
     def test_field_endpoint_hashable(self):
         base = VariableEndpoint(name="obj", definition=NO_DEFINITION)
         loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
-        fe1 = FieldEndpoint(base=base, field="name", location=loc)
-        fe2 = FieldEndpoint(base=base, field="name", location=loc)
+        fe1 = FieldEndpoint(base=base, field=FieldName("name"), location=loc)
+        fe2 = FieldEndpoint(base=base, field=FieldName("name"), location=loc)
         s = {fe1, fe2}
         assert len(s) == 1
 
@@ -186,7 +187,7 @@ class TestFlowEndpoints:
         ve: FlowEndpoint = VariableEndpoint(name="x", definition=NO_DEFINITION)
         fe: FlowEndpoint = FieldEndpoint(
             base=VariableEndpoint(name="obj", definition=NO_DEFINITION),
-            field="f",
+            field=FieldName("f"),
             location=InstructionLocation(
                 block_label=CodeLabel("b"), instruction_index=0
             ),
