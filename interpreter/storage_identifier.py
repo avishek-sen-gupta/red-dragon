@@ -13,9 +13,6 @@ class StorageIdentifier(Protocol):
     Use isinstance(x, StorageIdentifier) for runtime checks.
     """
 
-    @property
-    def value(self) -> str: ...
-
     def is_present(self) -> bool: ...
 
     def __str__(self) -> str: ...

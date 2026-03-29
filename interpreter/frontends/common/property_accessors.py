@@ -45,7 +45,7 @@ def emit_field_load_or_getter(
         ctx.emit_inst(
             CallMethod(
                 result_reg=reg,
-                obj_reg=str(obj_reg),
+                obj_reg=obj_reg,
                 method_name=FuncName(f"__get_{field_name}__"),
                 args=(),
             ),
@@ -56,7 +56,7 @@ def emit_field_load_or_getter(
     ctx.emit_inst(
         LoadField(
             result_reg=reg,
-            obj_reg=str(obj_reg),
+            obj_reg=obj_reg,
             field_name=FieldName(field_name),
         ),
         node=node,
@@ -77,18 +77,18 @@ def emit_field_store_or_setter(
         ctx.emit_inst(
             CallMethod(
                 result_reg=ctx.fresh_reg(),
-                obj_reg=str(obj_reg),
+                obj_reg=obj_reg,
                 method_name=FuncName(f"__set_{field_name}__"),
-                args=(str(val_reg),),
+                args=(val_reg,),
             ),
             node=node,
         )
         return
     ctx.emit_inst(
         StoreField(
-            obj_reg=str(obj_reg),
+            obj_reg=obj_reg,
             field_name=FieldName(field_name),
-            value_reg=str(val_reg),
+            value_reg=val_reg,
         ),
         node=node,
     )
