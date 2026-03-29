@@ -20,6 +20,7 @@ from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
 from interpreter.registry import FunctionRegistry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, typed, unwrap
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.constants import METHOD_MISSING
@@ -135,7 +136,7 @@ class TestLoadFieldIndirect:
         vm = _make_vm()
         addr = Address("obj_0")
         mm_label = CodeLabel("func_mm_0")
-        mm_func_ref = FuncRef(name="__method_missing__", label=mm_label)
+        mm_func_ref = FuncRef(name=FuncName("__method_missing__"), label=mm_label)
         mm_bound = BoundFuncRef(func_ref=mm_func_ref, closure_id="")
 
         vm.heap_set(

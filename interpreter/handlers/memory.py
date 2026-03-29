@@ -76,7 +76,9 @@ def _find_method_missing(
     mm_labels = registry.lookup_methods(type_name, FuncName(constants.METHOD_MISSING))
     if mm_labels and mm_labels[0] in cfg.blocks:
         return BoundFuncRef(
-            func_ref=FuncRef(name=constants.METHOD_MISSING, label=mm_labels[0]),
+            func_ref=FuncRef(
+                name=FuncName(constants.METHOD_MISSING), label=mm_labels[0]
+            ),
             closure_id="",
         )
     return None

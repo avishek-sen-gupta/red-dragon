@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 
 
@@ -11,7 +12,7 @@ from interpreter.ir import CodeLabel
 class FuncRef:
     """Compile-time function reference. Lives in the symbol table."""
 
-    name: str  # "add", "new", "__lambda"
+    name: FuncName  # FuncName("add"), FuncName("new"), FuncName("__lambda")
     label: CodeLabel  # CodeLabel("func_add_0")
 
 

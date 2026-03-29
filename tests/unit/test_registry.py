@@ -21,7 +21,9 @@ class TestScanClassesOverloads:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
         ]
         func_st = {
-            "func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0"))
+            "func_greet_0": FuncRef(
+                name=FuncName("greet"), label=CodeLabel("func_greet_0")
+            )
         }
         class_st = {
             "class_Foo_0": ClassRef(
@@ -42,8 +44,12 @@ class TestScanClassesOverloads:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
         ]
         func_st = {
-            "func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0")),
-            "func_greet_1": FuncRef(name="greet", label=CodeLabel("func_greet_1")),
+            "func_greet_0": FuncRef(
+                name=FuncName("greet"), label=CodeLabel("func_greet_0")
+            ),
+            "func_greet_1": FuncRef(
+                name=FuncName("greet"), label=CodeLabel("func_greet_1")
+            ),
         }
         class_st = {
             "class_Foo_0": ClassRef(
@@ -67,9 +73,11 @@ class TestScanClassesOverloads:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
         ]
         func_st = {
-            "func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0")),
+            "func_greet_0": FuncRef(
+                name=FuncName("greet"), label=CodeLabel("func_greet_0")
+            ),
             "func_farewell_0": FuncRef(
-                name="farewell", label=CodeLabel("func_farewell_0")
+                name=FuncName("farewell"), label=CodeLabel("func_farewell_0")
             ),
         }
         class_st = {
@@ -93,9 +101,9 @@ class TestScanClassesOverloads:
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Calc_0")),
         ]
         func_st = {
-            "func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0")),
-            "func_add_1": FuncRef(name="add", label=CodeLabel("func_add_1")),
-            "func_add_2": FuncRef(name="add", label=CodeLabel("func_add_2")),
+            "func_add_0": FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0")),
+            "func_add_1": FuncRef(name=FuncName("add"), label=CodeLabel("func_add_1")),
+            "func_add_2": FuncRef(name=FuncName("add"), label=CodeLabel("func_add_2")),
         }
         class_st = {
             "class_Calc_0": ClassRef(
