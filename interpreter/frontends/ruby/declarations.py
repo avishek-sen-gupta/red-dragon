@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from interpreter.var_name import VarName
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 
 from interpreter.instructions import (
     Branch,
@@ -242,8 +245,8 @@ def _extract_ruby_initialize_fields(body) -> "dict[str, FieldInfo]":
         if lhs is None or lhs.type != RubyNodeType.INSTANCE_VARIABLE:
             continue
         field_name = lhs.text.decode().lstrip("@")
-        fields[field_name] = FieldInfo(
-            name=field_name, type_hint="", has_initializer=True
+        fields[FieldName(field_name)] = FieldInfo(
+            name=FieldName(field_name), type_hint="", has_initializer=True
         )
     return fields
 
@@ -267,16 +270,20 @@ def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
             None,
         )
         if parent_name_node is not None:
-            parents = (parent_name_node.text.decode(),)
+            parents = (ClassName(parent_name_node.text.decode()),)
 
     body = node.child_by_field_name("body")
     if body is None:
         return class_name, ClassInfo(
-            name=class_name, fields={}, methods={}, constants={}, parents=parents
+            name=ClassName(class_name),
+            fields={},
+            methods={},
+            constants={},
+            parents=parents,
         )
 
-    fields: dict[str, FieldInfo] = {}
-    methods: dict[str, FunctionInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
 
     for child in body.children:
         if child.type == RubyNodeType.METHOD:
@@ -294,18 +301,24 @@ def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
                 if params_node is not None
                 else ()
             )
-            methods[mname] = FunctionInfo(name=mname, params=params, return_type="")
+            methods[FuncName(mname)] = FunctionInfo(
+                name=FuncName(mname), params=params, return_type=""
+            )
             if mname == "initialize":
                 mbody = child.child_by_field_name("body")
                 if mbody is not None:
                     fields.update(_extract_ruby_initialize_fields(mbody))
 
     return class_name, ClassInfo(
-        name=class_name, fields=fields, methods=methods, constants={}, parents=parents
+        name=ClassName(class_name),
+        fields=fields,
+        methods=methods,
+        constants={},
+        parents=parents,
     )
 
 
-def _collect_ruby_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+def _collect_ruby_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all class nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -313,7 +326,7 @@ def _collect_ruby_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
         result = _extract_ruby_class(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_ruby_classes(child, accumulator)
 
@@ -322,6 +335,6 @@ def extract_ruby_symbols(root) -> "SymbolTable":
     """Walk the Ruby AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_ruby_classes(root, classes)
     return SymbolTable(classes=classes)

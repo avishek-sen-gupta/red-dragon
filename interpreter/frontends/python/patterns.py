@@ -17,6 +17,7 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.python.node_types import PythonNodeType
+from interpreter.class_name import ClassName
 
 _WILDCARD = "_"
 
@@ -134,7 +135,7 @@ def parse_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
                 positional.append(parse_pattern(ctx, child))
         # Resolve positional args via __match_args__ if available
         if positional:
-            class_info = ctx.symbol_table.classes.get(class_name)
+            class_info = ctx.symbol_table.classes.get(ClassName(class_name))
             match_args = list(class_info.match_args) if class_info else []
             if match_args:
                 keyword.extend(

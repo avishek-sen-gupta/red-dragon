@@ -9,6 +9,7 @@ from interpreter import constants
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -599,7 +600,7 @@ def _extract_scala_primary_ctor_fields(class_params_node) -> "dict[str, FieldInf
     """Extract val/var class parameters as fields from a class_parameters node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     for child in class_params_node.children:
         if child.type != NT.CLASS_PARAMETER:
             continue
@@ -614,8 +615,8 @@ def _extract_scala_primary_ctor_fields(class_params_node) -> "dict[str, FieldInf
             continue
         fname = name_node.text.decode()
         type_hint = type_node.text.decode() if type_node is not None else ""
-        fields[fname] = FieldInfo(
-            name=fname, type_hint=type_hint, has_initializer=False
+        fields[FieldName(fname)] = FieldInfo(
+            name=FieldName(fname), type_hint=type_hint, has_initializer=False
         )
     return fields
 
@@ -633,15 +634,15 @@ def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
     extends_clause = next(
         (c for c in node.children if c.type == NT.EXTENDS_CLAUSE), None
     )
-    parents: tuple[str, ...] = ()
+    parents: tuple[ClassName, ...] = ()
     if extends_clause is not None:
         parents = tuple(
-            c.text.decode().split("[")[0]
+            ClassName(c.text.decode().split("[")[0])
             for c in extends_clause.children
             if c.type in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER)
         )
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
 
     # Primary constructor parameters with val/var
     class_params = node.child_by_field_name("class_parameters")
@@ -651,10 +652,14 @@ def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
     body = next((c for c in node.children if c.type == NT.TEMPLATE_BODY), None)
     if body is None:
         return class_name, ClassInfo(
-            name=class_name, fields=fields, methods={}, constants={}, parents=parents
+            name=ClassName(class_name),
+            fields=fields,
+            methods={},
+            constants={},
+            parents=parents,
         )
 
-    methods: dict[str, FunctionInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
 
     for child in body.children:
         if child.type in (NT.VAL_DEFINITION, NT.VAR_DEFINITION):
@@ -666,8 +671,8 @@ def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
             if pname_node is not None:
                 fname = pname_node.text.decode()
                 type_hint = ptype_node.text.decode() if ptype_node is not None else ""
-                fields[fname] = FieldInfo(
-                    name=fname, type_hint=type_hint, has_initializer=True
+                fields[FieldName(fname)] = FieldInfo(
+                    name=FieldName(fname), type_hint=type_hint, has_initializer=True
                 )
         elif child.type == NT.FUNCTION_DEFINITION:
             mname_node = child.child_by_field_name("name")
@@ -684,12 +689,12 @@ def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
             )
             ret_node = child.child_by_field_name("return_type")
             return_type = ret_node.text.decode() if ret_node is not None else ""
-            methods[mname] = FunctionInfo(
-                name=mname, params=params, return_type=return_type
+            methods[FuncName(mname)] = FunctionInfo(
+                name=FuncName(mname), params=params, return_type=return_type
             )
 
     return class_name, ClassInfo(
-        name=class_name,
+        name=ClassName(class_name),
         fields=fields,
         methods=methods,
         constants={},
@@ -697,7 +702,7 @@ def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_scala_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+def _collect_scala_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all class/case class definition nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -705,7 +710,7 @@ def _collect_scala_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
         result = _extract_scala_class(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_scala_classes(child, accumulator)
 
@@ -714,6 +719,6 @@ def extract_scala_symbols(root) -> "SymbolTable":
     """Walk the Scala AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_scala_classes(root, classes)
     return SymbolTable(classes=classes)

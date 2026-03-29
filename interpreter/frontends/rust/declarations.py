@@ -7,6 +7,8 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.class_name import ClassName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -510,21 +512,25 @@ def _register_prelude_in_symbol_table(ctx: TreeSitterEmitContext) -> None:
     """Register Option and Box in symbol table with match_args for pattern matching."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo
 
-    ctx.symbol_table.classes["Option"] = ClassInfo(
-        name="Option",
+    ctx.symbol_table.classes[ClassName("Option")] = ClassInfo(
+        name=ClassName("Option"),
         fields={
-            "value": FieldInfo(name="value", type_hint="Any", has_initializer=True)
+            FieldName("value"): FieldInfo(
+                name=FieldName("value"), type_hint="Any", has_initializer=True
+            )
         },
         methods={},
         constants={},
         parents=(),
         match_args=("value",),
     )
-    ctx.symbol_table.classes["Box"] = ClassInfo(
-        name="Box",
+    ctx.symbol_table.classes[ClassName("Box")] = ClassInfo(
+        name=ClassName("Box"),
         fields={
-            constants.BOXED_FIELD: FieldInfo(
-                name=constants.BOXED_FIELD, type_hint="Any", has_initializer=True
+            FieldName(constants.BOXED_FIELD): FieldInfo(
+                name=FieldName(constants.BOXED_FIELD),
+                type_hint="Any",
+                has_initializer=True,
             )
         },
         methods={},
@@ -690,11 +696,11 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_rust_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
+def _extract_rust_struct_fields(field_declaration_list) -> "dict[FieldName, FieldInfo]":
     """Extract fields from a Rust field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     for child in field_declaration_list.children:
         if child.type != "field_declaration":
             continue
@@ -703,13 +709,13 @@ def _extract_rust_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]
         if name_node is not None:
             fname = name_node.text.decode()
             type_hint = type_node.text.decode() if type_node is not None else ""
-            fields[fname] = FieldInfo(
-                name=fname, type_hint=type_hint, has_initializer=False
+            fields[FieldName(fname)] = FieldInfo(
+                name=FieldName(fname), type_hint=type_hint, has_initializer=False
             )
     return fields
 
 
-def _extract_rust_struct(node) -> "tuple[str, ClassInfo] | None":
+def _extract_rust_struct(node) -> "tuple[ClassName, ClassInfo] | None":
     """Extract a ClassInfo from a Rust struct_item node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo
 
@@ -722,18 +728,18 @@ def _extract_rust_struct(node) -> "tuple[str, ClassInfo] | None":
         (c for c in node.children if c.type == "field_declaration_list"),
         None,
     )
-    fields: dict[str, FieldInfo] = (
+    fields: dict[FieldName, FieldInfo] = (
         _extract_rust_struct_fields(field_list) if field_list is not None else {}
     )
-    return struct_name, ClassInfo(
-        name=struct_name, fields=fields, methods={}, constants={}, parents=()
+    return ClassName(struct_name), ClassInfo(
+        name=ClassName(struct_name), fields=fields, methods={}, constants={}, parents=()
     )
 
 
 def _collect_rust_structs_and_impls(
     node,
-    classes: "dict[str, ClassInfo]",
-    functions: "dict[str, FunctionInfo]",
+    classes: "dict[ClassName, ClassInfo]",
+    functions: "dict[FuncName, FunctionInfo]",
 ) -> None:
     """Walk AST to collect struct definitions and impl blocks (methods)."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo
@@ -746,7 +752,7 @@ def _collect_rust_structs_and_impls(
     elif node.type == RustNodeType.IMPL_ITEM:
         type_node = node.child_by_field_name("type")
         if type_node is not None:
-            impl_type = type_node.text.decode().split("<")[0]
+            impl_type = ClassName(type_node.text.decode().split("<")[0])
             body = node.child_by_field_name("body")
             if body is not None:
                 for child in body.children:
@@ -754,7 +760,7 @@ def _collect_rust_structs_and_impls(
                         fname_node = child.child_by_field_name("name")
                         params_node = child.child_by_field_name("parameters")
                         if fname_node is not None:
-                            mname = fname_node.text.decode()
+                            mname = FuncName(fname_node.text.decode())
                             params = (
                                 tuple(
                                     p.child_by_field_name("pattern").text.decode()
@@ -778,7 +784,7 @@ def _collect_rust_structs_and_impls(
         # Only top-level functions — impl methods are handled in the impl_item branch
         fname_node = node.child_by_field_name("name")
         if fname_node is not None:
-            fname = fname_node.text.decode()
+            fname = FuncName(fname_node.text.decode())
             params_node = node.child_by_field_name("parameters")
             params = (
                 tuple(
@@ -799,7 +805,7 @@ def extract_rust_symbols(root) -> "SymbolTable":
     """Walk the Rust AST and return a SymbolTable of all struct definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 
-    classes: dict[str, ClassInfo] = {}
-    functions: dict[str, FunctionInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
+    functions: dict[FuncName, FunctionInfo] = {}
     _collect_rust_structs_and_impls(root, classes, functions)
     return SymbolTable(classes=classes, functions=functions)

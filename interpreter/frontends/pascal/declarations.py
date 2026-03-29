@@ -21,6 +21,7 @@ from interpreter.types.type_expr import EnumType, scalar
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
+from interpreter.class_name import ClassName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -814,17 +815,17 @@ def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None"
     class_name = id_node.text.decode()
 
     # Extract parent from class definition (first type identifier after kClass)
-    parents: tuple[str, ...] = ()
+    parents: tuple[ClassName, ...] = ()
     found_class_kw = False
     for child in class_node.children:
         if child.type == PascalNodeType.K_CLASS:
             found_class_kw = True
         elif found_class_kw and child.type in (PascalNodeType.IDENTIFIER, "typeref"):
-            parents = (child.text.decode(),)
+            parents = (ClassName(child.text.decode()),)
             break
 
-    fields: dict[str, FieldInfo] = {}
-    methods: dict[str, FunctionInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
+    methods: dict[FuncName, FunctionInfo] = {}
 
     # Collect fields/methods from both direct children and declSection children
     members = list(class_node.children)
@@ -841,8 +842,10 @@ def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None"
             for sub in child.children:
                 if sub.type == PascalNodeType.IDENTIFIER:
                     fname = sub.text.decode()
-                    fields[fname] = FieldInfo(
-                        name=fname, type_hint=type_hint, has_initializer=False
+                    fields[FieldName(fname)] = FieldInfo(
+                        name=FieldName(fname),
+                        type_hint=type_hint,
+                        has_initializer=False,
                     )
         elif child.type in (PascalNodeType.DECL_PROC, PascalNodeType.DEF_PROC):
             mname_node = next(
@@ -851,10 +854,12 @@ def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None"
             )
             if mname_node is not None:
                 mname = mname_node.text.decode()
-                methods[mname] = FunctionInfo(name=mname, params=(), return_type="")
+                methods[FuncName(mname)] = FunctionInfo(
+                    name=FuncName(mname), params=(), return_type=""
+                )
 
     return class_name, ClassInfo(
-        name=class_name,
+        name=ClassName(class_name),
         fields=fields,
         methods=methods,
         constants={},
@@ -862,7 +867,7 @@ def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None"
     )
 
 
-def _collect_pascal_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+def _collect_pascal_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all declType nodes containing declClass."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -870,7 +875,7 @@ def _collect_pascal_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
         result = _extract_pascal_class_from_decl_type(node)
         if result is not None:
             class_name, class_info = result
-            accumulator[class_name] = class_info
+            accumulator[ClassName(class_name)] = class_info
     for child in node.children:
         _collect_pascal_classes(child, accumulator)
 
@@ -879,6 +884,6 @@ def extract_pascal_symbols(root) -> "SymbolTable":
     """Walk the Pascal AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
-    classes: dict[str, ClassInfo] = {}
+    classes: dict[ClassName, ClassInfo] = {}
     _collect_pascal_classes(root, classes)
     return SymbolTable(classes=classes)
