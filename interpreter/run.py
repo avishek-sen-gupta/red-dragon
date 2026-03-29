@@ -767,6 +767,6 @@ def _format_val(v: Any) -> str:
         return f"<function:{v.func_ref.name}@{v.func_ref.label}>"
     if isinstance(v, ClassRef):
         if v.parents:
-            return f"<class:{v.name}@{v.label}:{','.join(v.parents)}>"
+            return f"<class:{v.name}@{v.label}:{','.join(str(p) for p in v.parents)}>"
         return f"<class:{v.name}@{v.label}>"
     return repr(v)

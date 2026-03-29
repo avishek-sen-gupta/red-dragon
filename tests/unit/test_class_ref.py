@@ -20,15 +20,19 @@ class TestClassRef:
 
     def test_construction_with_parents(self):
         ref = ClassRef(
-            name=ClassName("Dog"), label=CodeLabel("class_Dog_0"), parents=("Animal",)
+            name=ClassName("Dog"),
+            label=CodeLabel("class_Dog_0"),
+            parents=(ClassName("Animal"),),
         )
-        assert ref.parents == ("Animal",)
+        assert ref.parents == (ClassName("Animal"),)
 
     def test_multiple_parents(self):
         ref = ClassRef(
-            name=ClassName("C"), label=CodeLabel("class_C_0"), parents=("A", "B")
+            name=ClassName("C"),
+            label=CodeLabel("class_C_0"),
+            parents=(ClassName("A"), ClassName("B")),
         )
-        assert ref.parents == ("A", "B")
+        assert ref.parents == (ClassName("A"), ClassName("B"))
 
     def test_frozen(self):
         ref = ClassRef(
@@ -39,10 +43,14 @@ class TestClassRef:
 
     def test_equality(self):
         a = ClassRef(
-            name=ClassName("Dog"), label=CodeLabel("class_Dog_0"), parents=("Animal",)
+            name=ClassName("Dog"),
+            label=CodeLabel("class_Dog_0"),
+            parents=(ClassName("Animal"),),
         )
         b = ClassRef(
-            name=ClassName("Dog"), label=CodeLabel("class_Dog_0"), parents=("Animal",)
+            name=ClassName("Dog"),
+            label=CodeLabel("class_Dog_0"),
+            parents=(ClassName("Animal"),),
         )
         assert a == b
 
@@ -62,7 +70,9 @@ class TestClassRef:
     def test_parents_is_tuple(self):
         """Parents must be a tuple, not a list, for immutability."""
         ref = ClassRef(
-            name=ClassName("Dog"), label=CodeLabel("class_Dog_0"), parents=("Animal",)
+            name=ClassName("Dog"),
+            label=CodeLabel("class_Dog_0"),
+            parents=(ClassName("Animal"),),
         )
         assert isinstance(ref.parents, tuple)
 
