@@ -25,11 +25,11 @@ class TestRegistryLookupFunc:
         reg.register_func(FuncName("add"), ref2)
         assert reg.lookup_func(FuncName("add")) == ref2
 
-    def test_register_func_stores_str_key(self):
+    def test_register_func_stores_func_name_key(self):
         reg = FunctionRegistry()
         ref = FuncRef(name="sub", label=CodeLabel("func_sub_0"))
         reg.register_func(FuncName("sub"), ref)
-        assert reg.func_refs["sub"] == ref
+        assert reg.func_refs[FuncName("sub")] == ref
 
 
 class TestRegistryLookupMethods:
@@ -51,6 +51,14 @@ class TestRegistryLookupMethods:
         reg.register_method("Bar", FuncName("get"), l2)
         assert reg.lookup_methods("Bar", FuncName("get")) == [l1, l2]
 
+    def test_register_method_stores_func_name_key(self):
+        reg = FunctionRegistry()
+        label = CodeLabel("func_get_0")
+        reg.register_method("MyClass", FuncName("get"), label)
+        inner = reg.class_methods["MyClass"]
+        for key in inner:
+            assert isinstance(key, FuncName), f"inner key {key!r} should be FuncName"
+
 
 class TestBuiltinsLookupBuiltin:
     def test_lookup_builtin_found(self):
@@ -64,6 +72,12 @@ class TestBuiltinsLookupBuiltin:
 
         assert Builtins.lookup_builtin(FuncName("nonexistent_func")) is None
 
+    def test_table_keys_are_func_name(self):
+        from interpreter.vm.builtins import Builtins
+
+        for key in Builtins.TABLE:
+            assert isinstance(key, FuncName), f"TABLE key {key!r} should be FuncName"
+
 
 class TestBuiltinsLookupMethodBuiltin:
     def test_lookup_method_builtin_found(self):
@@ -76,6 +90,14 @@ class TestBuiltinsLookupMethodBuiltin:
         from interpreter.vm.builtins import Builtins
 
         assert Builtins.lookup_method_builtin(FuncName("nonexistent_method")) is None
+
+    def test_method_table_keys_are_func_name(self):
+        from interpreter.vm.builtins import Builtins
+
+        for key in Builtins.METHOD_TABLE:
+            assert isinstance(
+                key, FuncName
+            ), f"METHOD_TABLE key {key!r} should be FuncName"
 
 
 class TestInferenceContextAccessors:

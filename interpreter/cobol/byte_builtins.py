@@ -9,6 +9,7 @@ from __future__ import annotations
 import struct
 from typing import Any
 
+from interpreter.func_name import FuncName
 from interpreter.cobol.cobol_constants import (
     BuiltinName,
     ByteConstants,
@@ -494,30 +495,30 @@ def _builtin_cobol_blank_when_zero(args: list[TypedValue], vm: Any) -> BuiltinRe
     )
 
 
-BYTE_BUILTINS: dict[str, Any] = {
-    BuiltinName.NIBBLE_GET: _builtin_nibble_get,
-    BuiltinName.NIBBLE_SET: _builtin_nibble_set,
-    BuiltinName.BYTE_FROM_INT: _builtin_byte_from_int,
-    BuiltinName.INT_FROM_BYTE: _builtin_int_from_byte,
-    BuiltinName.BYTES_TO_STRING: _builtin_bytes_to_string,
-    BuiltinName.STRING_TO_BYTES: _builtin_string_to_bytes,
-    BuiltinName.LIST_GET: _builtin_list_get,
-    BuiltinName.LIST_SET: _builtin_list_set,
-    BuiltinName.LIST_LEN: _builtin_list_len,
-    BuiltinName.LIST_SLICE: _builtin_list_slice,
-    BuiltinName.LIST_CONCAT: _builtin_list_concat,
-    BuiltinName.MAKE_LIST: _builtin_make_list,
-    BuiltinName.COBOL_PREPARE_DIGITS: _builtin_cobol_prepare_digits,
-    BuiltinName.COBOL_PREPARE_SIGN: _builtin_cobol_prepare_sign,
-    BuiltinName.STRING_FIND: _builtin_string_find,
-    BuiltinName.STRING_SPLIT: _builtin_string_split,
-    BuiltinName.STRING_COUNT: _builtin_string_count,
-    BuiltinName.STRING_REPLACE: _builtin_string_replace,
-    BuiltinName.STRING_CONCAT: _builtin_string_concat,
-    BuiltinName.STRING_CONCAT_PAIR: _builtin_string_concat_pair,
-    BuiltinName.INT_TO_BINARY_BYTES: _builtin_int_to_binary_bytes,
-    BuiltinName.BINARY_BYTES_TO_INT: _builtin_binary_bytes_to_int,
-    BuiltinName.FLOAT_TO_BYTES: _builtin_float_to_bytes,
-    BuiltinName.BYTES_TO_FLOAT: _builtin_bytes_to_float,
-    BuiltinName.COBOL_BLANK_WHEN_ZERO: _builtin_cobol_blank_when_zero,
+BYTE_BUILTINS: dict[FuncName, Any] = {
+    FuncName(BuiltinName.NIBBLE_GET): _builtin_nibble_get,
+    FuncName(BuiltinName.NIBBLE_SET): _builtin_nibble_set,
+    FuncName(BuiltinName.BYTE_FROM_INT): _builtin_byte_from_int,
+    FuncName(BuiltinName.INT_FROM_BYTE): _builtin_int_from_byte,
+    FuncName(BuiltinName.BYTES_TO_STRING): _builtin_bytes_to_string,
+    FuncName(BuiltinName.STRING_TO_BYTES): _builtin_string_to_bytes,
+    FuncName(BuiltinName.LIST_GET): _builtin_list_get,
+    FuncName(BuiltinName.LIST_SET): _builtin_list_set,
+    FuncName(BuiltinName.LIST_LEN): _builtin_list_len,
+    FuncName(BuiltinName.LIST_SLICE): _builtin_list_slice,
+    FuncName(BuiltinName.LIST_CONCAT): _builtin_list_concat,
+    FuncName(BuiltinName.MAKE_LIST): _builtin_make_list,
+    FuncName(BuiltinName.COBOL_PREPARE_DIGITS): _builtin_cobol_prepare_digits,
+    FuncName(BuiltinName.COBOL_PREPARE_SIGN): _builtin_cobol_prepare_sign,
+    FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
+    FuncName(BuiltinName.STRING_SPLIT): _builtin_string_split,
+    FuncName(BuiltinName.STRING_COUNT): _builtin_string_count,
+    FuncName(BuiltinName.STRING_REPLACE): _builtin_string_replace,
+    FuncName(BuiltinName.STRING_CONCAT): _builtin_string_concat,
+    FuncName(BuiltinName.STRING_CONCAT_PAIR): _builtin_string_concat_pair,
+    FuncName(BuiltinName.INT_TO_BINARY_BYTES): _builtin_int_to_binary_bytes,
+    FuncName(BuiltinName.BINARY_BYTES_TO_INT): _builtin_binary_bytes_to_int,
+    FuncName(BuiltinName.FLOAT_TO_BYTES): _builtin_float_to_bytes,
+    FuncName(BuiltinName.BYTES_TO_FLOAT): _builtin_bytes_to_float,
+    FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,
 }
