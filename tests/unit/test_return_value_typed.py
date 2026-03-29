@@ -12,6 +12,7 @@ from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm.vm import materialize_raw_update
 from interpreter.vm.vm_types import StateUpdate, SymbolicValue, VMState, StackFrame
 from interpreter.register import Register
+from interpreter.func_name import FuncName
 
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),
@@ -25,7 +26,7 @@ class TestHandleReturnTypedValue:
 
     def test_return_with_int_operand(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         vm.current_frame.registers[Register("%0")] = typed(42, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
         result = _handle_return(inst, vm, _default_handler_context())
@@ -36,7 +37,7 @@ class TestHandleReturnTypedValue:
     def test_return_with_none_operand(self):
         """return None -> typed(None, UNKNOWN), distinguishable from Void."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         vm.current_frame.registers[Register("%0")] = typed(None, UNKNOWN)
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
         result = _handle_return(inst, vm, _default_handler_context())
@@ -49,7 +50,7 @@ class TestHandleReturnTypedValue:
     def test_return_without_operands_is_void(self):
         """RETURN with no operands -> typed(None, scalar('Void'))."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         inst = IRInstruction(opcode=Opcode.RETURN, operands=[])
         result = _handle_return(inst, vm, _default_handler_context())
         rv = result.update.return_value
@@ -60,7 +61,7 @@ class TestHandleReturnTypedValue:
     def test_void_and_none_are_distinguishable(self):
         """Void and None return values have different types."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("main")))
 
         # Void (no operands)
         void_inst = IRInstruction(opcode=Opcode.RETURN, operands=[])
@@ -83,7 +84,7 @@ class TestMaterializeReturnValue:
 
     def test_raw_int_return_value_materialized(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         raw = StateUpdate(return_value=42, call_pop=True, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         rv = result.return_value
@@ -94,7 +95,7 @@ class TestMaterializeReturnValue:
     def test_default_return_value_is_void(self):
         """StateUpdate without explicit return_value defaults to Void."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         raw = StateUpdate(reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         assert isinstance(result.return_value, TypedValue)
@@ -102,7 +103,7 @@ class TestMaterializeReturnValue:
 
     def test_symbolic_dict_return_value_materialized(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         sym_dict = {"__symbolic__": True, "name": "sym_0", "type_hint": "Int"}
         raw = StateUpdate(return_value=sym_dict, call_pop=True, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
@@ -113,7 +114,7 @@ class TestMaterializeReturnValue:
 
     def test_already_typed_return_value_passes_through(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         tv = typed(42, scalar(TypeName.INT))
         raw = StateUpdate(return_value=tv, call_pop=True, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)

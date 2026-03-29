@@ -11,6 +11,7 @@ from interpreter.llm.llm_client import LLMClient
 from interpreter.register import Register
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm.vm import VMState, StackFrame
+from interpreter.func_name import FuncName
 
 
 class FakeLLMClient(LLMClient):
@@ -33,7 +34,7 @@ class FakeLLMClient(LLMClient):
 
 def _make_vm_with_frame() -> VMState:
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<main>"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
     return vm
 
 

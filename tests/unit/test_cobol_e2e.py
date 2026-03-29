@@ -19,6 +19,7 @@ from interpreter.registry import build_registry
 from interpreter.run import VMConfig, execute_cfg
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame
+from interpreter.func_name import FuncName
 from interpreter.vm.executor import (
     LocalExecutor,
     HandlerContext,
@@ -55,7 +56,7 @@ def _execute_straight_line(
     paragraph label (``para_`` prefix), running only the Data Division.
     """
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<main>"))
+    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
     cfg = build_cfg(instructions)
     registry = build_registry(instructions, cfg)
     from dataclasses import replace

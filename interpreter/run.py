@@ -10,6 +10,7 @@ from types import MappingProxyType
 from typing import Any
 
 from interpreter.constants import Language, TypeName
+from interpreter.func_name import FuncName
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
@@ -236,7 +237,7 @@ def _handle_return_flow(
             logger.info("[step %d] Top-level return/throw. Stopping.", step)
         return _StopExecution()
 
-    if return_frame.function_name == constants.MAIN_FRAME_NAME:
+    if return_frame.function_name == FuncName(constants.MAIN_FRAME_NAME):
         if verbose:
             logger.info("[step %d] Top-level return/throw. Stopping.", step)
         return _StopExecution()
@@ -286,7 +287,7 @@ def execute_cfg(
     entry = _find_entry_point(cfg, entry_point)
 
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
+    vm.call_stack.append(StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME)))
     vm.io_provider = config.io_provider
 
     llm = None  # lazy — only created if local executor can't handle an instruction
@@ -436,7 +437,7 @@ def execute_cfg_traced(
     entry = _find_entry_point(cfg, entry_point)
 
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
+    vm.call_stack.append(StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME)))
     vm.io_provider = config.io_provider
     initial_state = copy.deepcopy(vm)
 
