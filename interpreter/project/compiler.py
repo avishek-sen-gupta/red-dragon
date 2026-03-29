@@ -12,6 +12,8 @@ from pathlib import Path
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
 from interpreter.func_name import FuncName
+from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.frontend import get_frontend
 from interpreter.ir import CodeLabel
 from interpreter.instructions import InstructionBase, DeclVar, StoreVar, Label_
@@ -44,7 +46,7 @@ def build_export_table(
     classes = {ref.name: ref.label for ref in class_symbol_table.values()}
 
     # Scan for top-level DECL_VARs (those outside func/class scopes).
-    variables: dict[str, str] = {}
+    variables: dict[VarName, Register] = {}
     in_scope = True  # True while at module top-level
     for inst in ir:
         typed = inst
@@ -59,13 +61,12 @@ def build_export_table(
                 in_scope = True
 
         if in_scope and isinstance(typed, (DeclVar, StoreVar)):
-            var_name = str(typed.name)
             # Don't duplicate names already in functions or classes
             if (
-                FuncName(var_name) not in functions
-                and ClassName(var_name) not in classes
+                FuncName(str(typed.name)) not in functions
+                and ClassName(str(typed.name)) not in classes
             ):
-                variables[var_name] = str(typed.value_reg)
+                variables[typed.name] = typed.value_reg
 
     return ExportTable(functions=functions, classes=classes, variables=variables)
 
