@@ -598,7 +598,7 @@ def build_execution_strategies(
         class_symbol_table=frontend.class_symbol_table,
     )
     class_nodes = tuple(
-        TypeNode(name=cls, parents=tuple(parents))
+        TypeNode(name=str(cls), parents=tuple(str(p) for p in parents))
         for cls, parents in registry.class_parents.items()
     )
     type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)

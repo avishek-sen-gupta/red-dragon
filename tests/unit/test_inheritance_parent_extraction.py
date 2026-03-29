@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.class_name import ClassName
 from interpreter.constants import Language
 from interpreter.frontends import get_deterministic_frontend
 from interpreter.cfg import build_cfg
@@ -31,60 +32,60 @@ class TestPythonParentExtraction:
     def test_single_parent(self):
         source = "class Animal:\n" "  pass\n" "class Dog(Animal):\n" "  pass\n"
         parents = _extract_parents(source, Language.PYTHON)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])
 
 
 class TestCSharpParentExtraction:
     def test_single_parent(self):
         source = "class Animal { }\n" "class Dog : Animal { }\n"
         parents = _extract_parents(source, Language.CSHARP)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])
 
 
 class TestKotlinParentExtraction:
     def test_single_parent(self):
         source = "open class Animal { }\n" "class Dog : Animal() { }\n"
         parents = _extract_parents(source, Language.KOTLIN)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])
 
 
 class TestRubyParentExtraction:
     def test_single_parent(self):
         source = "class Animal\n" "end\n" "class Dog < Animal\n" "end\n"
         parents = _extract_parents(source, Language.RUBY)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])
 
 
 class TestJavaScriptParentExtraction:
     def test_single_parent(self):
         source = "class Animal { }\n" "class Dog extends Animal { }\n"
         parents = _extract_parents(source, Language.JAVASCRIPT)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])
 
 
 class TestTypeScriptParentExtraction:
     def test_single_parent(self):
         source = "class Animal { }\n" "class Dog extends Animal { }\n"
         parents = _extract_parents(source, Language.TYPESCRIPT)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])
 
 
 class TestScalaParentExtraction:
     def test_single_parent(self):
         source = "class Animal { }\n" "class Dog extends Animal { }\n"
         parents = _extract_parents(source, Language.SCALA)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])
 
 
 class TestPHPParentExtraction:
     def test_single_parent(self):
         source = "<?php\n" "class Animal { }\n" "class Dog extends Animal { }\n"
         parents = _extract_parents(source, Language.PHP)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])
 
 
 class TestCppParentExtraction:
     def test_single_parent(self):
         source = "class Animal { };\n" "class Dog : public Animal { };\n"
         parents = _extract_parents(source, Language.CPP)
-        assert "Animal" in parents.get("Dog", [])
+        assert ClassName("Animal") in parents.get(ClassName("Dog"), [])

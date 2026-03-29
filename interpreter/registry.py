@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from interpreter.ir import CodeLabel
 from interpreter.instructions import Const, InstructionBase, Label_, Symbolic
 from interpreter.cfg import CFG
+from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -20,27 +21,27 @@ class FunctionRegistry:
     # func_label → ordered list of parameter names
     func_params: dict[CodeLabel, list[str]] = field(default_factory=dict)
     # class_name → {method_name → [func_label, ...]}  (supports overloads)
-    class_methods: dict[str, dict[FuncName, list[CodeLabel]]] = field(
+    class_methods: dict[ClassName, dict[FuncName, list[CodeLabel]]] = field(
         default_factory=dict
     )
     # class_name → class_body_label
-    classes: dict[str, CodeLabel] = field(default_factory=dict)
+    classes: dict[ClassName, CodeLabel] = field(default_factory=dict)
     # class_name → linearized parent chain (MRO, excluding self)
-    class_parents: dict[str, list[str]] = field(default_factory=dict)
+    class_parents: dict[ClassName, list[ClassName]] = field(default_factory=dict)
     # function_name → FuncRef (name→label mapping for call resolution)
     func_refs: dict[FuncName, FuncRef] = field(default_factory=dict)
 
     def lookup_func(self, name: FuncName) -> FuncRef | None:
         return self.func_refs.get(name)
 
-    def lookup_methods(self, class_name: str, name: FuncName) -> list[CodeLabel]:
+    def lookup_methods(self, class_name: ClassName, name: FuncName) -> list[CodeLabel]:
         return self.class_methods.get(class_name, {}).get(name, [])
 
     def register_func(self, name: FuncName, ref: FuncRef) -> None:
         self.func_refs[name] = ref
 
     def register_method(
-        self, class_name: str, name: FuncName, label: CodeLabel
+        self, class_name: ClassName, name: FuncName, label: CodeLabel
     ) -> None:
         self.class_methods.setdefault(class_name, {}).setdefault(name, []).append(label)
 
@@ -122,9 +123,9 @@ def _scan_classes(
 
     # First pass: populate from class_symbol_table (new path).
     for label, cref in class_symbol_table.items():
-        classes[str(cref.name)] = cref.label
+        classes[cref.name] = cref.label
         if cref.parents:
-            class_parents[str(cref.name)] = [str(p) for p in cref.parents]
+            class_parents[cref.name] = list(cref.parents)
 
     # Second pass: identify class scopes and their methods.
     # Python emits methods inside the class scope (class_X ... end_class_X).
@@ -132,7 +133,7 @@ def _scan_classes(
     # level for field initializers and static blocks). To handle both layouts,
     # we keep in_class set after end_class — the next class_X label for a
     # *different* class will reset it.
-    in_class: str = ""
+    in_class: ClassName | str = ""
     for inst in instructions:
         if isinstance(inst, Label_) and inst.label.is_present():
             is_class_start = inst.label.is_class()
@@ -158,17 +159,18 @@ def _scan_classes(
 
 
 def _expand_parent_chains(
-    class_parents: dict[str, list[str]],
-) -> dict[str, list[str]]:
+    class_parents: dict[ClassName, list[ClassName]],
+) -> dict[ClassName, list[ClassName]]:
     """Expand direct parent lists into full linearized MRO chains.
 
     For single inheritance, if Dog -> Animal -> Object, then
-    class_parents["Dog"] should be ["Animal", "Object"], not just ["Animal"].
+    class_parents[ClassName("Dog")] should be
+    [ClassName("Animal"), ClassName("Object")], not just [ClassName("Animal")].
     """
-    expanded: dict[str, list[str]] = {}
+    expanded: dict[ClassName, list[ClassName]] = {}
     for cls in class_parents:
-        chain: list[str] = []
-        seen: set[str] = set()
+        chain: list[ClassName] = []
+        seen: set[ClassName] = set()
         queue = list(class_parents.get(cls, []))
         while queue:
             parent = queue.pop(0)

@@ -79,15 +79,15 @@ class TestConvertLLMClassRefs:
 
 class TestExpandParentChains:
     def test_single_level(self):
-        direct = {"Dog": ["Animal"]}
+        direct = {ClassName("Dog"): [ClassName("Animal")]}
         expanded = _expand_parent_chains(direct)
-        assert expanded["Dog"] == ["Animal"]
+        assert expanded[ClassName("Dog")] == [ClassName("Animal")]
 
     def test_multi_level(self):
-        direct = {"C": ["B"], "B": ["A"]}
+        direct = {ClassName("C"): [ClassName("B")], ClassName("B"): [ClassName("A")]}
         expanded = _expand_parent_chains(direct)
-        assert expanded["C"] == ["B", "A"]
-        assert expanded["B"] == ["A"]
+        assert expanded[ClassName("C")] == [ClassName("B"), ClassName("A")]
+        assert expanded[ClassName("B")] == [ClassName("A")]
 
     def test_diamond(self):
         """Diamond: D extends B, C; B extends A; C extends A.
@@ -95,9 +95,17 @@ class TestExpandParentChains:
         BFS traversal: B first (direct parent), then C (direct parent),
         then A (shared grandparent, deduplicated).
         """
-        direct = {"D": ["B", "C"], "B": ["A"], "C": ["A"]}
+        direct = {
+            ClassName("D"): [ClassName("B"), ClassName("C")],
+            ClassName("B"): [ClassName("A")],
+            ClassName("C"): [ClassName("A")],
+        }
         expanded = _expand_parent_chains(direct)
-        assert expanded["D"] == ["B", "C", "A"]
+        assert expanded[ClassName("D")] == [
+            ClassName("B"),
+            ClassName("C"),
+            ClassName("A"),
+        ]
 
     def test_no_parents(self):
         expanded = _expand_parent_chains({})
@@ -133,8 +141,8 @@ class TestRegistryClassParents:
         }
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg, class_symbol_table=class_st)
-        assert registry.class_parents.get("Dog") == ["Animal"]
-        assert registry.class_parents.get("Animal", []) == []
+        assert registry.class_parents.get(ClassName("Dog")) == [ClassName("Animal")]
+        assert registry.class_parents.get(ClassName("Animal"), []) == []
 
     def test_multi_level_parents_expanded(self):
         """C extends B extends A — class_parents['C'] should be ['B', 'A']."""
@@ -158,5 +166,8 @@ class TestRegistryClassParents:
         }
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg, class_symbol_table=class_st)
-        assert registry.class_parents["C"] == ["B", "A"]
-        assert registry.class_parents["B"] == ["A"]
+        assert registry.class_parents[ClassName("C")] == [
+            ClassName("B"),
+            ClassName("A"),
+        ]
+        assert registry.class_parents[ClassName("B")] == [ClassName("A")]
