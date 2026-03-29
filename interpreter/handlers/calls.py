@@ -131,10 +131,11 @@ def _try_class_constructor_call(
     if not isinstance(func_val, ClassRef):
         return ExecutionResult.not_handled()
     class_name, class_label = func_val.name, func_val.label
+    class_name_str = str(class_name)
 
-    init_labels = registry.lookup_methods(class_name, FuncName("__init__"))
+    init_labels = registry.lookup_methods(class_name_str, FuncName("__init__"))
     if init_labels:
-        init_sigs = type_env.method_signatures.get(scalar(class_name), {}).get(
+        init_sigs = type_env.method_signatures.get(scalar(class_name_str), {}).get(
             "__init__", []
         )
         if len(init_sigs) != len(init_labels):
@@ -149,7 +150,7 @@ def _try_class_constructor_call(
     # Allocate heap object
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    resolved_type = type_hint if type_hint else scalar(class_name)
+    resolved_type = type_hint if type_hint else scalar(class_name_str)
     vm.heap_set(Address(addr), HeapObject(type_hint=resolved_type))
     ptr_tv = typed(Pointer(base=Address(addr), offset=0), pointer(resolved_type))
 
@@ -463,7 +464,7 @@ def _handle_call_method(
     # Static method dispatch: Class.method() where object is a ClassRef
     if isinstance(obj_val.value, ClassRef):
         class_name = obj_val.value.name
-        func_labels = ctx.registry.lookup_methods(class_name, method_name)
+        func_labels = ctx.registry.lookup_methods(str(class_name), method_name)
         if func_labels:
             func_label = func_labels[0]
             bound_ref = BoundFuncRef(

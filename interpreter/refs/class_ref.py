@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.class_name import ClassName, NO_CLASS_NAME
 from interpreter.ir import CodeLabel, NO_LABEL
 
 
@@ -15,12 +16,12 @@ class ClassRef:
     equivalent — they are purely compile-time records.
     """
 
-    name: str  # "Dog", "Counter", "__anon_class_0"
+    name: ClassName  # ClassName("Dog"), ClassName("Counter")
     label: CodeLabel  # CodeLabel("class_Dog_0")
     parents: tuple[str, ...]  # ("Animal",) or () for no parents
 
 
-NO_CLASS_REF = ClassRef(name="", label=NO_LABEL, parents=())
+NO_CLASS_REF = ClassRef(name=NO_CLASS_NAME, label=NO_LABEL, parents=())
 """Null object sentinel for failed symbol table lookups.
 
 Consumer sites use ``table.get(label, NO_CLASS_REF)`` and check
