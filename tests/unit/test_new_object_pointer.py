@@ -15,6 +15,7 @@ from interpreter.register import Register
 
 
 from dataclasses import replace as _replace
+from interpreter.func_name import FuncName
 
 
 def _ctx(**overrides) -> HandlerContext:
@@ -28,7 +29,7 @@ def _empty_cfg_and_registry() -> tuple[CFG, FunctionRegistry]:
 class TestNewObjectPointer:
     def test_result_is_pointer(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="<main>"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
         cfg, registry = _empty_cfg_and_registry()
         inst = IRInstruction(
             opcode=Opcode.NEW_OBJECT,
@@ -47,7 +48,7 @@ class TestNewObjectPointer:
 
     def test_no_type_hint_uses_object(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="<main>"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
         cfg, registry = _empty_cfg_and_registry()
         inst = IRInstruction(
             opcode=Opcode.NEW_OBJECT,

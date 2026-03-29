@@ -68,7 +68,7 @@ class TestBuiltinPrint:
 class TestBuiltinSlice:
     def test_slice_native_list(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_slice(
             [typed_from_runtime([10, 20, 30, 40]), typed_from_runtime(1)], vm
         )
@@ -81,7 +81,7 @@ class TestBuiltinSlice:
 
     def test_slice_native_list_from_index_2(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_slice(
             [typed_from_runtime([1, 2, 3, 4, 5]), typed_from_runtime(2)], vm
         )
@@ -92,7 +92,7 @@ class TestBuiltinSlice:
 
     def test_slice_heap_array(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         addr = Address("<arr:0>")
         vm.heap_set(
             addr,
@@ -125,7 +125,7 @@ class TestBuiltinSlice:
     def test_slice_with_stop_native_list(self):
         """slice(collection, start, stop) should return elements [start:stop]."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_slice(
             [
                 typed_from_runtime([10, 20, 30, 40, 50]),
@@ -143,7 +143,7 @@ class TestBuiltinSlice:
     def test_slice_with_stop_heap_array(self):
         """slice(heap_arr, 1, 3) should return elements at indices 1 and 2."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         addr = Address("<arr:0>")
         vm.heap_set(
             addr,
@@ -173,7 +173,7 @@ class TestBuiltinSlice:
     def test_slice_with_step(self):
         """slice(collection, start, stop, step) with step=2."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_slice(
             [
                 typed_from_runtime([0, 1, 2, 3, 4, 5]),
@@ -193,7 +193,7 @@ class TestBuiltinSlice:
     def test_slice_with_none_stop(self):
         """slice(collection, 2, 'None') should slice from index 2 to end."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_slice(
             [
                 typed_from_runtime([10, 20, 30, 40]),
@@ -211,7 +211,7 @@ class TestBuiltinSlice:
     def test_slice_with_none_start(self):
         """slice(collection, 'None', 2) should slice from beginning to index 2."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_slice(
             [
                 typed_from_runtime([10, 20, 30, 40]),
@@ -229,7 +229,7 @@ class TestBuiltinSlice:
     def test_slice_negative_start(self):
         """slice(collection, -2) should slice last 2 elements."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         result = _builtin_slice(
             [typed_from_runtime([10, 20, 30, 40]), typed_from_runtime(-2)], vm
         )
@@ -260,7 +260,7 @@ class TestBuiltinSlice:
 class TestBuiltinObjectRest:
     def test_object_rest_excludes_keys(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         addr = Address("<obj:0>")
         vm.heap_set(
             addr,
@@ -287,7 +287,7 @@ class TestBuiltinObjectRest:
 
     def test_object_rest_excludes_multiple_keys(self):
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         addr = Address("<obj:0>")
         vm.heap_set(
             addr,
@@ -333,7 +333,7 @@ class TestMethodBuiltins:
     def test_sublist_delegates_to_slice(self):
         """subList should call slice(obj, start, stop)."""
         vm = VMState()
-        vm.call_stack.append(StackFrame(function_name="test"))
+        vm.call_stack.append(StackFrame(function_name=FuncName("test")))
         addr = Address("<arr:0>")
         vm.heap_set(
             addr,

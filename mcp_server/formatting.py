@@ -72,7 +72,7 @@ def format_state_update(update: StateUpdate) -> dict[str, Any]:
     if update.next_label:
         result["next_block"] = str(update.next_label)
     if update.call_push:
-        result["call_push"] = update.call_push.function_name
+        result["call_push"] = str(update.call_push.function_name)
     if update.call_pop:
         result["call_pop"] = True
     if update.reasoning:
@@ -83,7 +83,7 @@ def format_state_update(update: StateUpdate) -> dict[str, Any]:
 def format_vm_state_frame(frame) -> dict[str, Any]:
     """Convert a StackFrame to a JSON dict."""
     return {
-        "function": frame.function_name,
+        "function": str(frame.function_name),
         "variables": {
             str(k): format_typed_value(v) for k, v in frame.local_vars.items()
         },

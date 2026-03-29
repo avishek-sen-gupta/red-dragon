@@ -8,6 +8,7 @@ from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg_traced, VMConfig
 from interpreter.trace_types import TraceStep, ExecutionTrace
 from interpreter.types.typed_value import unwrap
+from interpreter.func_name import FuncName
 
 
 def _make_instructions(*specs):
@@ -99,7 +100,7 @@ class TestExecuteCfgTracedBasic:
         assert trace.initial_state is not None
         assert trace.initial_state.heap_count() == 0
         assert len(trace.initial_state.call_stack) == 1
-        assert trace.initial_state.call_stack[0].function_name == "<main>"
+        assert trace.initial_state.call_stack[0].function_name == FuncName("<main>")
 
     def test_step_indices_are_sequential(self):
         instructions = _make_instructions(
