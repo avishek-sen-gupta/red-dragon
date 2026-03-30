@@ -150,13 +150,13 @@ def compile_project(
         import_graph[file_path] = []
 
         for ref in refs:
-            resolved = resolver.resolve(ref, project_root)
-            if resolved.is_resolved():
-                target = resolved.resolved_path.resolve()
-                if target not in import_graph.get(file_path, []):
-                    import_graph[file_path].append(target)
-                if target not in discovered:
-                    queue.append(target)
+            for resolved in resolver.resolve(ref, project_root):
+                if resolved.is_resolved():
+                    target = resolved.resolved_path.resolve()
+                    if target not in import_graph.get(file_path, []):
+                        import_graph[file_path].append(target)
+                    if target not in discovered:
+                        queue.append(target)
 
     # Phase 2: Topological sort
     topo_order = topological_sort(import_graph)
