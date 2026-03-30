@@ -311,7 +311,7 @@
   <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
   <h2 style="color: #90a4ae;">Multi-language LLM-assisted symbolic execution and dataflow analysis</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
-  <p class="small dim" style="margin-top: 40px;">~85K LOC &middot; 33 opcodes &middot; 15 frontends &middot; 13,100+ tests &middot; 4 LLM providers</p>
+  <p class="small dim" style="margin-top: 40px;">~85K LOC &middot; 33 opcodes &middot; 16 frontends &middot; 13,100+ tests &middot; 4 LLM providers</p>
   <aside class="notes">
     This is an end-to-end technical deep dive into RedDragon's architecture.
     The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
@@ -370,7 +370,7 @@
 <section>
   <h2>Architecture Overview</h2>
   <div class="arch-flow" style="margin-top: 30px;">
-    <div class="arch-box fragment" data-fragment-index="1">Source<br><span class="small dim">15 languages</span></div>
+    <div class="arch-box fragment" data-fragment-index="1">Source<br><span class="small dim">16 languages</span></div>
     <span class="arch-arrow fragment" data-fragment-index="2">&rarr;</span>
     <div class="arch-box fragment" data-fragment-index="2">Parse<br><span class="small dim">tree-sitter</span></div>
     <span class="arch-arrow fragment" data-fragment-index="3">&rarr;</span>
@@ -514,9 +514,9 @@ BINOP     t11, t9, "==", t10</code></pre>
 <!-- ACT 3: FRONTEND SYSTEM                                       -->
 <!-- ============================================================ -->
 
-<!-- Slide 8: 15 Language Frontends -->
+<!-- Slide 8: 16 Language Frontends -->
 <section>
-  <h2>15 Language Frontends</h2>
+  <h2>16 Language Frontends</h2>
   <div class="lang-grid">
     <div class="lang-cell"><strong>Python</strong></div>
     <div class="lang-cell"><strong>JavaScript</strong></div>
@@ -533,8 +533,9 @@ BINOP     t11, t9, "==", t10</code></pre>
     <div class="lang-cell"><strong>Scala</strong></div>
     <div class="lang-cell"><strong>Lua</strong></div>
     <div class="lang-cell"><strong>Pascal</strong></div>
+    <div class="lang-cell" style="border-color: var(--accent3);"><strong>COBOL</strong><br><span class="small dim">ProLeap</span></div>
   </div>
-  <p class="fragment">All share the same <code class="accent">BaseFrontend</code> architecture</p>
+  <p class="fragment">15 tree-sitter frontends share the same <code class="accent">BaseFrontend</code> architecture; COBOL uses a <code class="accent3">ProLeap bridge</code></p>
   <p class="fragment">All lower to the same <code class="accent2">33-opcode IR</code></p>
   <p class="fragment small dim">+ <code>LLMFrontend</code>: language-agnostic, sends raw source to LLM &rarr; IR JSON</p>
   <aside class="notes">
@@ -1622,7 +1623,7 @@ p = Point(3, 4)
     </div>
     <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
       <strong class="accent4">Language-agnostic</strong><br>
-      <span class="small dim">Same 33 opcodes for all 15 languages &rarr; one VM, one analysis framework</span>
+      <span class="small dim">Same 33 opcodes for all 16 languages &rarr; one VM, one analysis framework</span>
     </div>
   </div>
 </section>
@@ -1753,7 +1754,7 @@ vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
       <div class="label">IR opcodes</div>
     </div>
     <div class="stat-card">
-      <div class="number">15</div>
+      <div class="number">16</div>
       <div class="label">language frontends</div>
     </div>
     <div class="stat-card">
