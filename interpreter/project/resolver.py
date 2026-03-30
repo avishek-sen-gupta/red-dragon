@@ -18,13 +18,20 @@ from interpreter.project.types import CyclicImportError, ImportKind, ImportRef
 # ── Resolution result ────────────────────────────────────────────
 
 
+NO_PATH = Path("")
+
+
 @dataclass(frozen=True)
 class ResolvedImport:
     """Result of resolving an ImportRef to a file path."""
 
     ref: ImportRef
-    resolved_path: Path | None  # None = unresolvable
+    resolved_path: Path = NO_PATH
     is_external: bool = False  # True for system / third-party imports
+
+    def is_resolved(self) -> bool:
+        """True if this import resolved to a concrete local file."""
+        return self.resolved_path != NO_PATH and not self.is_external
 
 
 # ── Resolver protocol ────────────────────────────────────────────
@@ -44,7 +51,7 @@ class NullImportResolver(ImportResolver):
     """Marks everything as external — used for unsupported languages."""
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
-        return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+        return ResolvedImport(ref=ref, is_external=True)
 
 
 # ── Python resolver ──────────────────────────────────────────────
@@ -55,7 +62,7 @@ class PythonImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         if ref.is_relative:
             return self._resolve_relative(ref, project_root)
@@ -73,7 +80,7 @@ class PythonImportResolver(ImportResolver):
 
         # For 'from X import Y' where module_path is empty but names has content,
         # this shouldn't happen in absolute imports.
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
     def _resolve_relative(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         """Resolve relative imports: 'from . import utils', 'from ..models import User'."""
@@ -100,7 +107,7 @@ class PythonImportResolver(ImportResolver):
                     if candidate.exists():
                         return ResolvedImport(ref=ref, resolved_path=candidate)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
     @staticmethod
     def _candidates(base: Path, parts: list[str]) -> list[Path]:
@@ -122,11 +129,11 @@ class JavaScriptImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         if not ref.is_relative:
             # Bare specifiers (no . or /) are npm packages → external
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         # Relative path resolution
         base = ref.source_file.parent
@@ -150,7 +157,7 @@ class JavaScriptImportResolver(ImportResolver):
                 if candidate.exists():
                     return ResolvedImport(ref=ref, resolved_path=candidate.resolve())
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── Java resolver ────────────────────────────────────────────────
@@ -161,7 +168,7 @@ class JavaImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         # com.example.Utils → com/example/Utils.java
         parts = ref.module_path.split(".")
@@ -180,7 +187,7 @@ class JavaImportResolver(ImportResolver):
             if candidate.exists():
                 return ResolvedImport(ref=ref, resolved_path=candidate)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── Go resolver ──────────────────────────────────────────────────
@@ -191,7 +198,7 @@ class GoImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         if ref.is_relative:
             base = ref.source_file.parent
@@ -203,9 +210,9 @@ class GoImportResolver(ImportResolver):
                     return ResolvedImport(ref=ref, resolved_path=go_files[0])
         else:
             # External package (github.com/...) — skip
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── Rust resolver ────────────────────────────────────────────────
@@ -216,7 +223,7 @@ class RustImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         if ref.kind == ImportKind.MOD:
             # mod helpers; → helpers.rs or helpers/mod.rs
@@ -228,10 +235,10 @@ class RustImportResolver(ImportResolver):
             for c in candidates:
                 if c.exists():
                     return ResolvedImport(ref=ref, resolved_path=c)
-            return ResolvedImport(ref=ref, resolved_path=None)
+            return ResolvedImport(ref=ref)
 
         if not ref.is_relative:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         # crate::utils → src/utils.rs or src/utils/mod.rs
         path = ref.module_path
@@ -242,7 +249,7 @@ class RustImportResolver(ImportResolver):
 
         parts = path.split("::")
         if not parts:
-            return ResolvedImport(ref=ref, resolved_path=None)
+            return ResolvedImport(ref=ref)
 
         # Try relative to source file (for self::) or src/ (for crate::)
         if ref.module_path.startswith("crate::"):
@@ -261,7 +268,7 @@ class RustImportResolver(ImportResolver):
             if c.exists():
                 return ResolvedImport(ref=ref, resolved_path=c)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── C / C++ resolver ────────────────────────────────────────────
@@ -272,7 +279,7 @@ class CIncludeResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         base = ref.source_file.parent
         candidates = [
@@ -285,7 +292,7 @@ class CIncludeResolver(ImportResolver):
             if c.exists():
                 return ResolvedImport(ref=ref, resolved_path=c)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── C# resolver ─────────────────────────────────────────────────
@@ -296,7 +303,7 @@ class CSharpImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         # MyNamespace.MyClass → MyNamespace/MyClass.cs
         parts = ref.module_path.split(".")
@@ -309,7 +316,7 @@ class CSharpImportResolver(ImportResolver):
             if c.exists():
                 return ResolvedImport(ref=ref, resolved_path=c)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── JVM resolver (Kotlin/Scala) ─────────────────────────────────
@@ -320,7 +327,7 @@ class JvmImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         parts = ref.module_path.split(".")
         rel_path = Path(*parts)
@@ -340,7 +347,7 @@ class JvmImportResolver(ImportResolver):
                 if candidate.exists():
                     return ResolvedImport(ref=ref, resolved_path=candidate)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── Ruby resolver ────────────────────────────────────────────────
@@ -351,7 +358,7 @@ class RubyImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         path = ref.module_path
         if ref.is_relative or ref.kind == ImportKind.REQUIRE:
@@ -364,7 +371,7 @@ class RubyImportResolver(ImportResolver):
                 if c.exists():
                     return ResolvedImport(ref=ref, resolved_path=c)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── PHP resolver ─────────────────────────────────────────────────
@@ -375,7 +382,7 @@ class PhpImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         if ref.kind in (ImportKind.REQUIRE, ImportKind.INCLUDE):
             base = ref.source_file.parent
@@ -397,7 +404,7 @@ class PhpImportResolver(ImportResolver):
                 if c.exists():
                     return ResolvedImport(ref=ref, resolved_path=c)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── Lua resolver ─────────────────────────────────────────────────
@@ -408,7 +415,7 @@ class LuaImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         path = ref.module_path.replace(".", "/")
         base = ref.source_file.parent
@@ -421,7 +428,7 @@ class LuaImportResolver(ImportResolver):
             if c.exists():
                 return ResolvedImport(ref=ref, resolved_path=c)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── Pascal resolver ──────────────────────────────────────────────
@@ -432,7 +439,7 @@ class PascalImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         base = ref.source_file.parent
         name = ref.module_path
@@ -446,7 +453,7 @@ class PascalImportResolver(ImportResolver):
             if c.exists():
                 return ResolvedImport(ref=ref, resolved_path=c)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── COBOL resolver ───────────────────────────────────────────────
@@ -465,7 +472,7 @@ class CobolImportResolver(ImportResolver):
 
     def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         if ref.is_system:
-            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+            return ResolvedImport(ref=ref, is_external=True)
 
         base = ref.source_file.parent
         name = ref.module_path
@@ -502,7 +509,7 @@ class CobolImportResolver(ImportResolver):
                     if candidate.exists():
                         return ResolvedImport(ref=ref, resolved_path=candidate)
 
-        return ResolvedImport(ref=ref, resolved_path=None)
+        return ResolvedImport(ref=ref)
 
 
 # ── Resolver registry ────────────────────────────────────────────

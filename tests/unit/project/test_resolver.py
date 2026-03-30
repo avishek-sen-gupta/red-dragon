@@ -11,6 +11,7 @@ from interpreter.project.resolver import (
     NullImportResolver,
     PythonImportResolver,
     get_resolver,
+    NO_PATH,
 )
 from interpreter.constants import Language
 
@@ -20,8 +21,9 @@ class TestNullImportResolver:
         resolver = NullImportResolver()
         ref = ImportRef(source_file=Path("main.py"), module_path="utils")
         result = resolver.resolve(ref, Path("/project"))
-        assert result.resolved_path is None
+        assert result.resolved_path == NO_PATH
         assert result.is_external is True
+        assert result.is_resolved() is False
 
 
 class TestGetResolver:
@@ -36,7 +38,7 @@ class TestGetResolver:
         resolver = NullImportResolver()
         ref = ImportRef(source_file=Path("main.txt"), module_path="utils")
         result = resolver.resolve(ref, Path("/project"))
-        assert result.resolved_path is None
+        assert result.resolved_path == NO_PATH
         assert result.is_external is True
 
 
@@ -134,17 +136,18 @@ class TestPythonImportResolver:
             is_system=True,
         )
         result = resolver.resolve(ref, project)
-        assert result.resolved_path is None
+        assert result.resolved_path == NO_PATH
         assert result.is_external is True
 
-    def test_nonexistent_module_returns_none(self, project):
+    def test_nonexistent_module_returns_no_path(self, project):
         resolver = PythonImportResolver()
         ref = ImportRef(
             source_file=project / "main.py",
             module_path="does_not_exist",
         )
         result = resolver.resolve(ref, project)
-        assert result.resolved_path is None
+        assert result.resolved_path == NO_PATH
+        assert result.is_resolved() is False
 
     def test_deeply_nested_dotted(self, project):
         resolver = PythonImportResolver()
@@ -154,3 +157,27 @@ class TestPythonImportResolver:
         )
         result = resolver.resolve(ref, project)
         assert result.resolved_path == project / "pkg" / "sub" / "helpers.py"
+
+
+class TestResolvedImport:
+    def test_is_resolved_true_for_real_path(self):
+        ref = ImportRef(source_file=Path("main.java"), module_path="com.example.Foo")
+        result = ResolvedImport(ref=ref, resolved_path=Path("/project/Foo.java"))
+        assert result.is_resolved() is True
+
+    def test_is_resolved_false_for_no_path(self):
+        ref = ImportRef(source_file=Path("main.java"), module_path="com.example.Foo")
+        result = ResolvedImport(ref=ref)
+        assert result.is_resolved() is False
+
+    def test_is_resolved_false_for_external(self):
+        ref = ImportRef(source_file=Path("main.java"), module_path="java.util.List")
+        result = ResolvedImport(
+            ref=ref, resolved_path=Path("/jdk/List.java"), is_external=True
+        )
+        assert result.is_resolved() is False
+
+    def test_default_resolved_path_is_no_path(self):
+        ref = ImportRef(source_file=Path("main.java"), module_path="com.example.Foo")
+        result = ResolvedImport(ref=ref)
+        assert result.resolved_path == NO_PATH
