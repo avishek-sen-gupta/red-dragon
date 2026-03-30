@@ -82,7 +82,6 @@ def _find_method_missing(
             func_ref=FuncRef(
                 name=FuncName(constants.METHOD_MISSING), label=mm_labels[0]
             ),
-            closure_id="",
         )
     return None
 
