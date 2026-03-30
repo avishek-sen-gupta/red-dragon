@@ -17,6 +17,7 @@ from interpreter.field_name import FieldName
 from interpreter.frontend import get_frontend
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.types import (
+    DereferenceEndpoint,
     FieldEndpoint,
     InterproceduralResult,
     ReturnEndpoint,
@@ -528,3 +529,68 @@ class TestParamToReturnFlowsRust:
             if isinstance(src, VariableEndpoint) and isinstance(dst, ReturnEndpoint)
         }
         assert param_names == {"a", "b"}
+
+
+class TestCPointerPassing:
+    """C: pointer parameter modified by callee — the ntnx bug."""
+
+    SOURCE = """\
+void set_val(int *p) {
+    *p = 99;
+}
+
+int main() {
+    int x = 10;
+    set_val(&x);
+    return x;
+}
+"""
+
+    def test_call_graph_resolves_set_val(self):
+        result = _analyze_source(self.SOURCE, Language.C)
+        callee_labels = {
+            str(c.label) for site in result.call_graph.call_sites for c in site.callees
+        }
+        assert any(
+            "set_val" in label for label in callee_labels
+        ), f"Expected set_val in callees, got {callee_labels}"
+
+    def test_set_val_summary_has_flows(self):
+        result = _analyze_source(self.SOURCE, Language.C)
+        set_val_summaries = [
+            s for s in result.summaries.values() if "set_val" in s.function.label
+        ]
+        assert len(set_val_summaries) > 0, "Expected summary for set_val"
+        assert (
+            len(set_val_summaries[0].flows) > 0
+        ), "Expected non-empty flows for set_val (STORE_INDIRECT should produce deref flows)"
+
+    def test_set_val_summary_has_deref_endpoint(self):
+        result = _analyze_source(self.SOURCE, Language.C)
+        set_val_summaries = [
+            s for s in result.summaries.values() if "set_val" in s.function.label
+        ]
+        assert len(set_val_summaries) > 0
+        deref_dsts = [
+            dst
+            for _, dst in set_val_summaries[0].flows
+            if isinstance(dst, DereferenceEndpoint)
+        ]
+        assert len(deref_dsts) > 0, "Expected DereferenceEndpoint in set_val flows"
+
+    def test_whole_program_graph_is_nonempty(self):
+        result = _analyze_source(self.SOURCE, Language.C)
+        assert (
+            len(result.whole_program_graph) > 0
+        ), "Expected non-empty whole-program graph for pointer-passing program"
+
+    def test_x_appears_in_whole_program_graph(self):
+        result = _analyze_source(self.SOURCE, Language.C)
+        all_names = set()
+        for src, dsts in result.whole_program_graph.items():
+            if isinstance(src, VariableEndpoint):
+                all_names.add(src.name)
+            for dst in dsts:
+                if isinstance(dst, VariableEndpoint):
+                    all_names.add(dst.name)
+        assert "x" in all_names, f"Expected 'x' in whole-program graph, got {all_names}"
