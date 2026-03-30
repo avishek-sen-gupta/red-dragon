@@ -12,6 +12,7 @@ from interpreter.interprocedural.types import (
     CallContext,
     CallGraph,
     CallSite,
+    DereferenceEndpoint,
     FieldEndpoint,
     FlowEndpoint,
     FunctionEntry,
@@ -207,6 +208,46 @@ class TestFlowEndpoints:
         assert isinstance(ve, VariableEndpoint | FieldEndpoint | ReturnEndpoint)
         assert isinstance(fe, VariableEndpoint | FieldEndpoint | ReturnEndpoint)
         assert isinstance(re, VariableEndpoint | FieldEndpoint | ReturnEndpoint)
+
+    def test_dereference_endpoint_construction(self):
+        base = VariableEndpoint(name="p", definition=NO_DEFINITION)
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=4)
+        de = DereferenceEndpoint(base=base, location=loc)
+        assert de.base.name == "p"
+        assert de.location == loc
+
+    def test_dereference_endpoint_hashable(self):
+        base = VariableEndpoint(name="p", definition=NO_DEFINITION)
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=4)
+        de1 = DereferenceEndpoint(base=base, location=loc)
+        de2 = DereferenceEndpoint(base=base, location=loc)
+        s = {de1, de2}
+        assert len(s) == 1
+
+    def test_dereference_endpoint_equality(self):
+        base = VariableEndpoint(name="p", definition=NO_DEFINITION)
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=4)
+        de1 = DereferenceEndpoint(base=base, location=loc)
+        de2 = DereferenceEndpoint(base=base, location=loc)
+        assert de1 == de2
+
+    def test_dereference_endpoint_inequality_different_base(self):
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=4)
+        de1 = DereferenceEndpoint(
+            base=VariableEndpoint(name="p", definition=NO_DEFINITION), location=loc
+        )
+        de2 = DereferenceEndpoint(
+            base=VariableEndpoint(name="q", definition=NO_DEFINITION), location=loc
+        )
+        assert de1 != de2
+
+    def test_dereference_endpoint_in_flow_endpoint_union(self):
+        base = VariableEndpoint(name="p", definition=NO_DEFINITION)
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=4)
+        de: FlowEndpoint = DereferenceEndpoint(base=base, location=loc)
+        assert isinstance(
+            de, VariableEndpoint | FieldEndpoint | ReturnEndpoint | DereferenceEndpoint
+        )
 
 
 class TestCallSite:
