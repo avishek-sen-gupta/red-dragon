@@ -14,6 +14,7 @@ from interpreter.instructions import (
     TryPush,
     WriteRegion,
 )
+from interpreter.continuation_name import ContinuationName
 from interpreter.operator_kind import BinopKind
 from interpreter.ir import CodeLabel, NO_LABEL, SpreadArguments
 from interpreter.register import Register
@@ -146,10 +147,12 @@ class TestMapLabels:
         assert mapped.end_label == CodeLabel("mod.end_try")
 
     def test_set_continuation(self):
-        inst = SetContinuation(name="__cont", target_label=CodeLabel("L_resume"))
+        inst = SetContinuation(
+            name=ContinuationName("__cont"), target_label=CodeLabel("L_resume")
+        )
         mapped = inst.map_labels(_ns)
         assert mapped.target_label == CodeLabel("mod.L_resume")
-        assert mapped.name == "__cont"  # str field — unchanged
+        assert mapped.name == ContinuationName("__cont")
 
     def test_no_label_unchanged(self):
         inst = Const(result_reg=Register("%r0"), value="42")

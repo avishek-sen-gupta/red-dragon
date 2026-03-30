@@ -38,6 +38,7 @@ from interpreter.field_name import FieldName, FieldKind, NO_FIELD_NAME
 from interpreter.func_name import FuncName, NO_FUNC_NAME
 from interpreter.storage_identifier import StorageIdentifier
 from interpreter.var_name import NO_VAR_NAME, VarName
+from interpreter.continuation_name import ContinuationName, NO_CONTINUATION_NAME
 
 
 def _is_union(origin: object) -> bool:
@@ -1027,7 +1028,7 @@ class WriteRegion(InstructionBase):
 class SetContinuation(InstructionBase):
     """SET_CONTINUATION: associate a name with a target label."""
 
-    name: str = ""
+    name: ContinuationName = NO_CONTINUATION_NAME
     target_label: CodeLabel = NO_LABEL
 
     # ── IRInstruction-compat fields ──
@@ -1051,7 +1052,7 @@ class SetContinuation(InstructionBase):
 class ResumeContinuation(InstructionBase):
     """RESUME_CONTINUATION: branch to the label associated with a name."""
 
-    name: str = ""
+    name: ContinuationName = NO_CONTINUATION_NAME
 
     # ── IRInstruction-compat fields ──
     result_reg: Register = NO_REGISTER
@@ -1419,7 +1420,7 @@ def _write_region(inst: IRInstruction) -> WriteRegion:
 def _set_continuation(inst: IRInstruction) -> SetContinuation:
     ops = inst.operands
     return SetContinuation(
-        name=str(ops[0]) if len(ops) >= 1 else "",
+        name=ContinuationName(str(ops[0])) if len(ops) >= 1 else NO_CONTINUATION_NAME,
         target_label=ops[1] if len(ops) >= 2 else NO_LABEL,
         source_location=inst.source_location,
     )
@@ -1427,7 +1428,11 @@ def _set_continuation(inst: IRInstruction) -> SetContinuation:
 
 def _resume_continuation(inst: IRInstruction) -> ResumeContinuation:
     return ResumeContinuation(
-        name=str(inst.operands[0]) if inst.operands else "",
+        name=(
+            ContinuationName(str(inst.operands[0]))
+            if inst.operands
+            else NO_CONTINUATION_NAME
+        ),
         source_location=inst.source_location,
     )
 
