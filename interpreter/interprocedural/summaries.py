@@ -283,6 +283,26 @@ def _make_var_endpoint(name: VarName, dataflow: DataflowResult) -> VariableEndpo
     return VariableEndpoint(name=str(name), definition=defn)
 
 
+def _find_load_indirect_source(register: str, cfg: CFG) -> str | None:
+    """If register was produced by LOAD_INDIRECT, return the ptr_reg. Else None."""
+    for block in cfg.blocks.values():
+        for inst in block.instructions:
+            if isinstance(inst, LoadIndirect) and str(inst.result_reg) == register:
+                return str(inst.ptr_reg)
+    return None
+
+
+def _find_instruction_location(
+    result_register: str, cfg: CFG, inst_type: type
+) -> InstructionLocation | None:
+    """Find the location of an instruction that produces a given register."""
+    for label, block in cfg.blocks.items():
+        for idx, inst in enumerate(block.instructions):
+            if isinstance(inst, inst_type) and str(inst.result_reg) == result_register:
+                return InstructionLocation(block_label=label, instruction_index=idx)
+    return None
+
+
 def _build_return_flows(
     cfg: CFG,
     dataflow: DataflowResult,
@@ -303,6 +323,20 @@ def _build_return_flows(
 
         # Trace the return operand to find which variable it was loaded from
         source_var = _find_register_source_var(ret_operand, cfg)
+
+        # Check if return operand was produced by LOAD_INDIRECT (dereference read)
+        deref_source = _find_load_indirect_source(ret_operand, cfg)
+        if deref_source is not None:
+            ptr_var = _find_register_source_var(deref_source, cfg)
+            if ptr_var is not None and ptr_var in param_names:
+                deref_loc = _find_instruction_location(ret_operand, cfg, LoadIndirect)
+                if deref_loc is not None:
+                    deref_endpoint = DereferenceEndpoint(
+                        base=_make_var_endpoint(ptr_var, dataflow),
+                        location=deref_loc,
+                    )
+                    flows.append((deref_endpoint, ret_endpoint))
+                    continue
 
         if source_var is not None and source_var in param_names:
             # Direct param → return
