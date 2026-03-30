@@ -15,6 +15,7 @@ from interpreter.ir import CodeLabel
 from interpreter.register import Register, NO_REGISTER
 from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed
+from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
 from interpreter.continuation_name import ContinuationName, NO_CONTINUATION_NAME
 from interpreter.var_name import VarName
 
@@ -104,7 +105,7 @@ class StackFrame:
     result_reg: Register = field(
         default_factory=lambda: NO_REGISTER
     )  # caller's register for return value
-    closure_env_id: str = ""
+    closure_env_id: ClosureId = NO_CLOSURE_ID
     captured_var_names: frozenset[VarName] = field(default_factory=frozenset)
     var_heap_aliases: dict[VarName, Pointer] = field(default_factory=dict)
     is_ctor: bool = False
@@ -121,7 +122,7 @@ class StackFrame:
             "return_label": str(self.return_label) if self.return_label else None,
         }
         if self.closure_env_id:
-            d["closure_env_id"] = self.closure_env_id
+            d["closure_env_id"] = str(self.closure_env_id)
         return d
 
 
@@ -145,7 +146,7 @@ class VMState:
     call_stack: list[StackFrame] = field(default_factory=list)
     path_conditions: list[str] = field(default_factory=list)
     symbolic_counter: int = 0
-    closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
+    closures: dict[ClosureId, ClosureEnvironment] = field(default_factory=dict)
     _regions: dict[Address, bytearray] = field(default_factory=dict)
     continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
@@ -226,7 +227,7 @@ class VMState:
         }
         if self.closures:
             result["closures"] = {
-                label: env.to_dict() for label, env in self.closures.items()
+                str(label): env.to_dict() for label, env in self.closures.items()
             }
         if self._regions:
             result["regions"] = {
@@ -279,7 +280,7 @@ class BuiltinResult:
 class StackFramePush(BaseModel):
     function_name: FuncName
     return_label: CodeLabel | None = None
-    closure_env_id: str = ""
+    closure_env_id: ClosureId = NO_CLOSURE_ID
     captured_var_names: list[VarName] = []
     is_ctor: bool = False
 
