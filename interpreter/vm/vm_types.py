@@ -15,6 +15,7 @@ from interpreter.ir import CodeLabel
 from interpreter.register import Register, NO_REGISTER
 from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed
+from interpreter.continuation_name import ContinuationName, NO_CONTINUATION_NAME
 from interpreter.var_name import VarName
 
 # ── Data types ───────────────────────────────────────────────────
@@ -146,7 +147,7 @@ class VMState:
     symbolic_counter: int = 0
     closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
     _regions: dict[Address, bytearray] = field(default_factory=dict)
-    continuations: dict[str, CodeLabel] = field(default_factory=dict)
+    continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     data_layout: dict[str, dict] = field(default_factory=dict)
     io_provider: Any = (
@@ -232,7 +233,9 @@ class VMState:
                 str(addr): list(data) for addr, data in self._regions.items()
             }
         if self.continuations:
-            result["continuations"] = {k: str(v) for k, v in self.continuations.items()}
+            result["continuations"] = {
+                str(k): str(v) for k, v in self.continuations.items()
+            }
         if self.data_layout:
             result["data_layout"] = dict(self.data_layout)
         return result
@@ -291,8 +294,8 @@ class StateUpdate(BaseModel):
     new_objects: list[NewObject] = []
     region_writes: list[RegionWrite] = []
     new_regions: dict[str, int] = {}
-    continuation_writes: dict[str, CodeLabel] = {}
-    continuation_clear: str = ""
+    continuation_writes: dict[ContinuationName, CodeLabel] = {}
+    continuation_clear: ContinuationName = NO_CONTINUATION_NAME
     next_label: CodeLabel | None = None
     call_push: StackFramePush | None = None
     call_pop: bool = False
