@@ -33,7 +33,7 @@ Frontend (ABC)                     # interpreter/frontend.py
 ```python
 class Frontend(ABC):
     @abstractmethod
-    def lower(self, source: bytes) -> list[IRInstruction]: ...
+    def lower(self, source: bytes) -> list[InstructionBase]: ...
 ```
 
 ### Constructor
@@ -150,7 +150,7 @@ These return pure data -- a `GrammarConstants` dataclass, two dispatch dicts map
 |---|---|
 | **Configuration** | `source`, `language`, `constants`, `type_map`, `stmt_dispatch`, `expr_dispatch`, `block_scoped` |
 | **Counters** | `reg_counter`, `label_counter` |
-| **Output** | `instructions: list[IRInstruction]` |
+| **Output** | `instructions: list[InstructionBase]` |
 | **Loop tracking** | `loop_stack`, `break_target_stack` |
 | **Type info** | `type_env_builder`, `_current_func_label`, `_current_class_name` |
 | **Block scopes** | `_block_scope_stack`, `_scope_counter`, `_var_scope_metadata`, `_base_declared_vars` |
@@ -159,9 +159,9 @@ These return pure data -- a `GrammarConstants` dataclass, two dispatch dicts map
 
 | Method | Signature | Purpose |
 |---|---|---|
-| `fresh_reg()` | `→ str` | Generate `%0`, `%1`, ... (SSA-style, each call unique) |
-| `fresh_label(prefix)` | `→ str` | Generate `if_true_0`, `while_cond_1`, ... |
-| `emit(opcode, ...)` | `→ IRInstruction` | Emit instruction, auto-derive source location from AST node |
+| `fresh_reg()` | `→ Register` | Generate `Register("%0")`, `Register("%1")`, ... (SSA-style, each call unique) |
+| `fresh_label(prefix)` | `→ CodeLabel` | Generate `CodeLabel("if_true_0")`, `CodeLabel("while_cond_1")`, ... |
+| `emit_inst(instruction)` | `→ InstructionBase` | Emit a typed instruction (e.g., `Const(...)`, `Binop(...)`) |
 | `node_text(node)` | `→ str` | Extract source text from tree-sitter node |
 | `source_loc(node)` | `→ SourceLocation` | Extract AST span (0-based rows → 1-based lines) |
 
