@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 
@@ -21,4 +22,4 @@ class BoundFuncRef:
     """Runtime function reference with closure binding. Stored in registers."""
 
     func_ref: FuncRef
-    closure_id: str  # "closure_42" or "" for non-closures
+    closure_id: ClosureId = NO_CLOSURE_ID
