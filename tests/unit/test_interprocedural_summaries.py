@@ -93,3 +93,65 @@ class TestStoreIndirectSummary:
         ]
         assert len(deref_dsts) > 0
         assert deref_dsts[0].base.name == "p"
+
+
+def _build_deref_return_cfg() -> tuple[CFG, FunctionEntry]:
+    """Build CFG for: int deref(int *p) { return *p; }
+
+    IR:
+      SYMBOLIC %0 param:p
+      DECL_VAR p, %0
+      LOAD_VAR %1, p
+      LOAD_INDIRECT %2, %1   # %2 = *p
+      RETURN %2
+    """
+    from interpreter.instructions import LoadIndirect
+
+    instructions = [
+        Symbolic(result_reg=Register("%0"), hint=f"{PARAM_PREFIX}p"),
+        DeclVar(name=VarName("p"), value_reg=Register("%0")),
+        LoadVar(result_reg=Register("%1"), name=VarName("p")),
+        LoadIndirect(result_reg=Register("%2"), ptr_reg=Register("%1")),
+        Return_(value_reg=Register("%2")),
+    ]
+    block = BasicBlock(
+        label=CodeLabel("func_deref_0"),
+        instructions=instructions,
+        successors=[],
+        predecessors=[],
+    )
+    cfg = CFG(
+        blocks={CodeLabel("func_deref_0"): block},
+        entry=CodeLabel("func_deref_0"),
+    )
+    entry = FunctionEntry(label=CodeLabel("func_deref_0"), params=("p",))
+    return cfg, entry
+
+
+class TestLoadIndirectReturnFlow:
+    def test_deref_return_produces_flow(self):
+        """return *p should produce DereferenceEndpoint(p) -> ReturnEndpoint."""
+        cfg, entry = _build_deref_return_cfg()
+        summary = build_summary(cfg, entry, ROOT_CONTEXT)
+        assert len(summary.flows) > 0, "Expected at least one flow for return *p"
+
+    def test_deref_return_source_is_deref_endpoint(self):
+        cfg, entry = _build_deref_return_cfg()
+        summary = build_summary(cfg, entry, ROOT_CONTEXT)
+        sources = {src for src, _ in summary.flows}
+        deref_srcs = [s for s in sources if isinstance(s, DereferenceEndpoint)]
+        assert (
+            len(deref_srcs) > 0
+        ), f"Expected DereferenceEndpoint source, got {sources}"
+        assert deref_srcs[0].base.name == "p"
+
+    def test_deref_return_destination_is_return_endpoint(self):
+        from interpreter.interprocedural.types import ReturnEndpoint
+
+        cfg, entry = _build_deref_return_cfg()
+        summary = build_summary(cfg, entry, ROOT_CONTEXT)
+        destinations = {dst for _, dst in summary.flows}
+        ret_dsts = [d for d in destinations if isinstance(d, ReturnEndpoint)]
+        assert (
+            len(ret_dsts) > 0
+        ), f"Expected ReturnEndpoint destination, got {destinations}"
