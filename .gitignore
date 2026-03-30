@@ -24,6 +24,14 @@ proleap-bridge/.settings/
 # Claude Code
 .claude/*
 !.claude/skills/
+!.claude/project-context.md
+!.claude/workflow.md
+!.claude/design-principles.md
+!.claude/testing-patterns.md
+!.claude/code-review.md
+!.claude/implementation.md
+!.claude/tools.md
+!.claude/refactoring.md
 
 # Dolt database files (added by bd init)
 .dolt/
