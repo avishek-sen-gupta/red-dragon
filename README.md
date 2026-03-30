@@ -28,7 +28,7 @@ Concretely, RedDragon does the following:
 
 ### Type system
 
-RedDragon has a three-phase type system: **frontend extraction**, **static inference**, and **runtime coercion**. All types are represented as `TypeExpr` algebraic data types (`ScalarType`, `ParameterizedType`, `UnionType`, `FunctionType`, `TypeVar`, `UnknownType`) with no string roundtrips. 13 statically-typed frontends extract type annotations during lowering; `infer_types()` propagates types to fixpoint across 15 opcodes (covering self/this typing, generics, union widening, overload resolution, interface hierarchies, and 60+ builtin return types); and an immutable `TypeEnvironment` drives write-time coercion at runtime via pluggable `TypeConversionRules`. All VM storage uses domain-typed keys — `registers` (keyed by `Register`), `local_vars` (keyed by `VarName`), `HeapObject.fields` (keyed by `FieldName` with `FieldKind` tags), `ClosureEnvironment.bindings` (keyed by `VarName`) — and stores `TypedValue` exclusively, and `_resolve_reg()` returns `TypedValue` directly — preserving parameterized type information (e.g. `pointer(scalar("Dog"))`) through the register→handler→storage pipeline.
+RedDragon has a three-phase type system: **frontend extraction**, **static inference**, and **runtime coercion**. All types are represented as `TypeExpr` algebraic data types (`ScalarType`, `ParameterizedType`, `UnionType`, `FunctionType`, `TypeVar`, `UnknownType`) with no string roundtrips. 13 statically-typed frontends extract type annotations during lowering; `infer_types()` propagates types to fixpoint across 15 opcodes (covering self/this typing, generics, union widening, overload resolution, interface hierarchies, and 60+ builtin return types); and an immutable `TypeEnvironment` drives write-time coercion at runtime via pluggable `TypeConversionRules`. All VM storage uses domain-typed keys — `registers` (keyed by `Register`), `local_vars` (keyed by `VarName`), `HeapObject.fields` (keyed by `FieldName` with `FieldKind` tags), `ClosureEnvironment.bindings` (keyed by `VarName`), and the heap/regions (keyed by `Address`) — and stores `TypedValue` exclusively. The heap and regions are private (`_heap`, `_regions`) with accessor methods (`heap_get`, `heap_set`, `heap_contains`, etc.) and a `NO_HEAP_OBJECT` null-object sentinel. `_resolve_reg()` returns `TypedValue` directly — preserving parameterized type information (e.g. `pointer(scalar("Dog"))`) through the register→handler→storage pipeline. All 33 IR instruction classes implement a `StorageIdentifier` protocol with `reads()`/`writes()` methods for dataflow analysis, replacing opcode-conditional logic.
 
 9 block-scoped frontends use LLVM-style name mangling to disambiguate shadowed variables in nested blocks, loops, and catch clauses. Function-scoped languages (Python, JavaScript `var`, Ruby, etc.) bypass this. See the full [Type System Design Document](docs/type-system.md) for architecture, algorithms, per-opcode inference rules, and runtime coercion details.
 
@@ -67,7 +67,7 @@ The VM executes programs deterministically, tracking data flow through incomplet
 
 </details>
 
-The execution engine is split into focused modules: `vm_types.py`, `cfg_types.py`, `run_types.py`, `registry.py`, `builtins.py`, `executor.py` (opcode handlers), and `cobol/` (COBOL type system, EBCDIC tables, IR encoder/decoder builders).
+The execution engine is split into focused modules under `interpreter/vm/`: `vm_types.py` (state model with domain-typed keys), `vm.py` (`apply_update`, operators, register resolution), `executor.py` (33 opcode handlers dispatched by instruction type), `builtins.py` (built-in function table), `unresolved_call.py` (symbolic/LLM call resolution), and `field_fallback.py` (field access chain). Supporting modules: `cfg_types.py`, `run_types.py`, `registry.py`, and `cobol/` (COBOL type system, EBCDIC tables, IR encoder/decoder builders). All 33 IR opcodes are defined as frozen dataclasses in `interpreter/instructions.py`, with domain-typed fields (`Register`, `CodeLabel`, `VarName`, `FieldName`, `FuncName`, `BinopKind`/`UnopKind`) and `reads()`/`writes()` methods for dataflow analysis.
 
 ## How it works
 
@@ -359,7 +359,7 @@ vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
 
 | Function | Returns | Purpose |
 |---|---|---|
-| `lower_source(source, language, frontend_type, backend)` | `list[InstructionBase]` | Parse + lower source to IR |
+| `lower_source(source, language, frontend_type, backend)` | `list[InstructionBase]` | Parse + lower source to IR (33 per-opcode frozen dataclasses) |
 | `lower_and_infer(source, language, frontend_type, backend)` | `(list[InstructionBase], TypeEnvironment)` | Lower + type inference with frontend type seeds |
 | `dump_ir(source, language, frontend_type, backend)` | `str` | IR text output |
 | `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
@@ -507,7 +507,7 @@ The VM also handles — all deterministically:
 - **Data layout preservation** — COBOL field names, offsets, lengths, and type metadata attached to `VMState.data_layout` after execution
 - **Builtins** — `len`, `range`, `print`, `int`, `str`, `slice`, `arrayOf`/`listOf`, byte-manipulation primitives, etc. Method builtins (`subList`, `substring`, `slice`, `length`/`size`/`Length`, `toString`) dispatch through `METHOD_TABLE` for cross-language collection and string operations. All builtins return a `BuiltinResult(value, new_objects, heap_writes)` (defined in `vm_types.py`) instead of raw values — no builtin directly mutates `vm.heap`. Heap mutations are expressed as data in the result and applied uniformly via `StateUpdate`, keeping builtins pure and side-effect-free.
 
-The execution engine is split into focused modules: `vm_types.py`, `cfg_types.py`, `run_types.py`, `registry.py`, `builtins.py`, `executor.py` (opcode handlers), and `cobol/` (COBOL type system, EBCDIC tables, IR encoder/decoder builders).
+The execution engine is split into focused modules under `interpreter/vm/`: `vm_types.py`, `vm.py`, `executor.py` (33 opcode handlers), `builtins.py`, `unresolved_call.py`, and `field_fallback.py`. Supporting modules: `cfg_types.py`, `run_types.py`, `registry.py`, and `cobol/` (COBOL type system, EBCDIC tables, IR encoder/decoder builders).
 
 ## Handling incomplete programs
 
