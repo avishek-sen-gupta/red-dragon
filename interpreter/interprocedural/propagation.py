@@ -11,12 +11,13 @@ from collections import defaultdict
 
 from interpreter import constants
 from interpreter.cfg_types import CFG
-from interpreter.instructions import LoadVar, DeclVar, StoreVar
+from interpreter.instructions import LoadVar, DeclVar, StoreVar, AddressOf
 from interpreter.interprocedural.summaries import build_summary
 from interpreter.interprocedural.types import (
     CallContext,
     CallGraph,
     CallSite,
+    DereferenceEndpoint,
     FieldEndpoint,
     FlowEndpoint,
     FunctionEntry,
@@ -168,6 +169,11 @@ def _trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
         t = inst
         if isinstance(t, (DeclVar, StoreVar)) and str(t.value_reg) == reg:
             return str(t.name)
+    # Scan for ADDRESS_OF that produces this register
+    for inst in block.instructions:
+        t = inst
+        if isinstance(t, AddressOf) and str(t.result_reg) == reg:
+            return str(t.var_name)
     return reg
 
 
@@ -200,6 +206,14 @@ def _substitute_endpoint(
         result_reg = _call_site_result_reg(call_site, cfg)
         traced_name = _trace_reg_to_var(result_reg, cfg, call_site.location.block_label)
         return VariableEndpoint(name=traced_name, definition=NO_DEFINITION)
+
+    if isinstance(endpoint, DereferenceEndpoint):
+        new_base = _substitute_endpoint(
+            endpoint.base, param_to_actual, callee, call_site, cfg
+        )
+        assert isinstance(new_base, VariableEndpoint)
+        # Dereferencing a pointer-to-x = accessing x itself
+        return VariableEndpoint(name=new_base.name, definition=NO_DEFINITION)
 
     # Exhaustive — all FlowEndpoint variants handled
     raise TypeError(f"Unknown endpoint type: {type(endpoint)}")
