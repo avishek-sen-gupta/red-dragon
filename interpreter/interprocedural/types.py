@@ -96,7 +96,25 @@ class ReturnEndpoint:
     location: InstructionLocation
 
 
-FlowEndpoint = Union[VariableEndpoint, FieldEndpoint, ReturnEndpoint]
+@dataclass(frozen=True)
+class DereferenceEndpoint:
+    """A pointer dereference (*ptr) — read or write through a pointer variable."""
+
+    base: VariableEndpoint
+    location: InstructionLocation
+
+    def __hash__(self) -> int:
+        return hash((self.base, self.location))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, DereferenceEndpoint):
+            return NotImplemented
+        return self.base == other.base and self.location == other.location
+
+
+FlowEndpoint = Union[
+    VariableEndpoint, FieldEndpoint, ReturnEndpoint, DereferenceEndpoint
+]
 
 
 # ---------------------------------------------------------------------------
