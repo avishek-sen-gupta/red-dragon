@@ -54,7 +54,7 @@ def _build_callable_field_vm():
 
     vm = VMState()
     func_ref = FuncRef(name=FuncName("greet"), label=CodeLabel("__func__greet"))
-    bound = BoundFuncRef(func_ref=func_ref, closure_id="")
+    bound = BoundFuncRef(func_ref=func_ref)
 
     vm.heap_set(
         Address("obj_0"),
