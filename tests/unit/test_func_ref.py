@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
+from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
 
 
 class TestFuncRef:
@@ -39,19 +40,19 @@ class TestFuncRef:
 class TestBoundFuncRef:
     def test_construction_with_closure(self):
         fr = FuncRef(name=FuncName("inner"), label=CodeLabel("func_inner_0"))
-        bound = BoundFuncRef(func_ref=fr, closure_id="closure_42")
+        bound = BoundFuncRef(func_ref=fr, closure_id=ClosureId("closure_42"))
         assert bound.func_ref.name == FuncName("inner")
         assert bound.func_ref.label == "func_inner_0"
-        assert bound.closure_id == "closure_42"
+        assert bound.closure_id == ClosureId("closure_42")
 
     def test_construction_without_closure(self):
         fr = FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0"))
-        bound = BoundFuncRef(func_ref=fr, closure_id="")
-        assert bound.closure_id == ""
+        bound = BoundFuncRef(func_ref=fr)
+        assert bound.closure_id == NO_CLOSURE_ID
 
     def test_frozen(self):
         fr = FuncRef(name=FuncName("add"), label=CodeLabel("func_add_0"))
-        bound = BoundFuncRef(func_ref=fr, closure_id="")
+        bound = BoundFuncRef(func_ref=fr)
         import pytest
 
         with pytest.raises(AttributeError):
