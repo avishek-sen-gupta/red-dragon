@@ -184,6 +184,36 @@ class TestExecuteCfgBasic:
         assert stats.llm_calls == 0
         assert unwrap(vm.current_frame.local_vars[VarName("sum")]) == 8
 
+    def test_execute_cfg_accepts_prebuilt_vm(self):
+        """execute_cfg should reuse a pre-built VM instead of creating a fresh one."""
+        source = "x = 42"
+        from interpreter.frontend import get_frontend
+        from interpreter.constants import Language
+
+        frontend = get_frontend(Language.PYTHON)
+        instructions = frontend.lower(source.encode("utf-8"))
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        # Pre-build a VM with a variable already set
+        from interpreter.vm.vm import VMState, StackFrame
+        from interpreter.func_name import FuncName
+        from interpreter.var_name import VarName
+        from interpreter.types.typed_value import typed
+        from interpreter.types.type_expr import UNKNOWN
+
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name=FuncName("__main__")))
+        vm.current_frame.local_vars[VarName("preexisting")] = typed("hello", UNKNOWN)
+
+        vm_out, stats = execute_cfg(cfg, "entry", registry, vm=vm)
+
+        # The preexisting variable should still be in scope
+        assert VarName("preexisting") in vm_out.current_frame.local_vars
+        assert vm_out.current_frame.local_vars[VarName("preexisting")].value == "hello"
+        # And the new variable from execution should also be there
+        assert VarName("x") in vm_out.current_frame.local_vars
+
     def test_verbose_mode_produces_step_log(self, caplog):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
