@@ -4,17 +4,34 @@ RedDragon uses a flattened high-level three-address code IR. Every program — r
 
 ## Instruction format
 
-Each opcode has a dedicated frozen dataclass with named, typed fields. All share an `InstructionBase` with `source_location`. Register-holding fields are `Register` objects, label-holding fields are `CodeLabel` objects. The `Instruction` union type is the discriminant; dispatch uses `isinstance` checks.
+Each opcode has a dedicated frozen dataclass in `interpreter/instructions.py` (33 classes total). All share an `InstructionBase` with `source_location`. All fields use domain types:
+
+- **Register-holding fields**: `Register` objects (e.g., `result_reg`, `left`, `right`)
+- **Label-holding fields**: `CodeLabel` objects (e.g., `label`, `true_label`, `false_label`)
+- **Variable names**: `VarName` objects (e.g., `name` on `LoadVar`/`StoreVar`/`DeclVar`)
+- **Field names**: `FieldName` objects (e.g., `field_name` on `LoadField`/`StoreField`)
+- **Function/method names**: `FuncName` objects (e.g., `func_name` on `CallFunction`, `method_name` on `CallMethod`)
+- **Operators**: `BinopKind`/`UnopKind` enums (e.g., `operator` on `Binop`/`Unop`)
+
+Each instruction implements `reads()` and `writes()` methods returning `StorageIdentifier` values (either `Register` or `VarName`) for dataflow analysis.
 
 ```python
 # Example: Binop instruction
 @dataclass(frozen=True)
 class Binop(InstructionBase):
     result_reg: Register
-    operator: BinopKind  # (UnopKind for Unop)
+    operator: BinopKind
     left: Register
     right: Register
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.left, self.right]
+
+    def writes(self) -> list[StorageIdentifier]:
+        return [self.result_reg]
 ```
+
+The legacy `IRInstruction` name is now a factory function that returns the appropriate typed subclass, maintaining backward compatibility with existing call sites.
 
 Text representation: `%0 = const 42` or `store_var x %0` or `entry:` (for labels).
 

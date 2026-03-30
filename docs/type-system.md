@@ -697,7 +697,7 @@ for scope_dict in self.scoped_var_types.values():
 
 ```python
 def infer_types(
-    instructions: list[IRInstruction],
+    instructions: list[InstructionBase],
     type_resolver: TypeResolver,
     type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
 ) -> TypeEnvironment:
@@ -763,7 +763,7 @@ flowchart TD
 
 ### Per-Opcode Inference Rules
 
-The inference walk dispatches each instruction to a handler via the `_DISPATCH` table (22 opcodes handled). Each handler has the signature `(inst: IRInstruction, ctx: _InferenceContext, type_resolver: TypeResolver) → None`.
+The inference walk dispatches each instruction to a handler via the `_DISPATCH` table (22 opcodes handled). Each handler has the signature `(inst: InstructionBase, ctx: _InferenceContext, type_resolver: TypeResolver) → None`.
 
 #### LABEL — Scope Tracking
 

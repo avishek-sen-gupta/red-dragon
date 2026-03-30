@@ -120,16 +120,22 @@ The `Opcode` enum (`interpreter/ir.py:11`) defines 33 opcodes in six categories:
 
 ### Instruction structure
 
-Each instruction is a Pydantic model (`interpreter/ir.py:63`):
+Each opcode has a dedicated frozen dataclass in `interpreter/instructions.py`. All share an `InstructionBase` with `source_location`. The legacy `IRInstruction` name is now a factory function that returns the appropriate typed subclass.
 
 ```python
-class IRInstruction(BaseModel):
-    opcode: Opcode
-    result_reg: str | None = None          # e.g., "%0", "%1"
-    operands: list[Any] = []               # resolved operands
-    label: str | None = None               # for LABEL / branch targets
+@dataclass(frozen=True)
+class InstructionBase:
     source_location: SourceLocation = NO_SOURCE_LOCATION
+
+@dataclass(frozen=True)
+class Binop(InstructionBase):
+    result_reg: Register           # typed: Register, not str
+    operator: BinopKind            # typed: BinopKind enum, not str
+    left: Register
+    right: Register
 ```
+
+There are 33 per-opcode frozen dataclasses (e.g., `Const`, `LoadVar`, `StoreVar`, `Binop`, `CallFunction`, `NewObject`, etc.), each with named typed fields. All register-holding fields are `Register` objects, all label-holding fields are `CodeLabel` objects, variable names are `VarName`, field names are `FieldName`, function/method names are `FuncName`, and operators are `BinopKind`/`UnopKind` enums. Each instruction implements `reads()` and `writes()` methods returning `StorageIdentifier` values for dataflow analysis.
 
 **Key design choice**: registers use SSA-like naming (`%0`, `%1`, ...) for temporaries, while named variables use string names (`x`, `total`). The `STORE_VAR` / `LOAD_VAR` opcodes bridge between registers and variables. For block-scoped languages, variable names may be mangled by the frontend (e.g. `x$1`) to disambiguate shadowed declarations — see the [Type System doc](type-system.md#block-scope-tracking-llvm-style) for details.
 
@@ -282,30 +288,39 @@ All VM state types live in `interpreter/vm_types.py`. The state model is designe
 
 ```
 VMState
-├── heap: dict[str, HeapObject]          (keys: address strings like 'obj_0', 'arr_3')
+├── _heap: dict[Address, HeapObject]     (PRIVATE — access via heap_get/heap_set/heap_contains)
 │   └── HeapObject
 │       ├── type_hint: TypeExpr    (e.g., scalar("Point"))
 │       └── fields: dict[FieldName, TypedValue]  (FieldName with FieldKind: PROPERTY/INDEX/SPECIAL)
 │
+├── _regions: dict[Address, bytearray]   (PRIVATE — access via region_get/region_set)
+│
 ├── call_stack: list[StackFrame]
 │   └── StackFrame
-│       ├── function_name: str     (e.g., "factorial", "<main>")
-│       ├── registers: dict        (%0 → value)
+│       ├── function_name: FuncName      (domain type, not str)
+│       ├── registers: dict[Register, TypedValue]
 │       ├── local_vars: dict[VarName, TypedValue]
 │       ├── var_heap_aliases: dict[VarName, Pointer]  (for &x aliasing)
-│       ├── return_label: str      (caller's block to resume at)
+│       ├── return_label: CodeLabel | None
 │       ├── return_ip: int         (instruction index in caller's block)
-│       ├── result_reg: str        (caller's register for return value)
+│       ├── result_reg: Register   (caller's register for return value)
 │       ├── closure_env_id: str    (shared environment ID)
-│       └── captured_var_names: frozenset[VarName]
+│       ├── captured_var_names: frozenset[VarName]
+│       └── is_ctor: bool          (true if executing a constructor)
 │
 ├── path_conditions: list[str]     (assumptions from symbolic branches)
 ├── symbolic_counter: int          (gensym: sym_0, sym_1, ...)
 │
-└── closures: dict[str, ClosureEnvironment]
-    └── ClosureEnvironment
-        └── bindings: dict[str, Any]  (shared mutable captured vars)
+├── closures: dict[str, ClosureEnvironment]
+│   └── ClosureEnvironment
+│       └── bindings: dict[VarName, TypedValue]
+│
+├── continuations: dict[str, CodeLabel]  (COBOL PERFORM return points)
+├── exception_stack: list[ExceptionHandler]
+└── data_layout: dict[str, dict]   (COBOL field metadata)
 ```
+
+**Heap privatization:** The heap and regions are private (`_heap`, `_regions`) — all access goes through accessor methods: `heap_get(addr)`, `heap_set(addr, obj)`, `heap_contains(addr)`, `heap_ensure(addr)`, `heap_items()`, `heap_keys()`, `heap_count()`, `heap_values()`, and corresponding `region_*` methods. `heap_get` returns `NO_HEAP_OBJECT` (null object sentinel) for missing addresses — no `KeyError`, no `None` checks. Keys are `Address` domain type objects, not bare strings.
 
 ### SymbolicValue
 
@@ -340,16 +355,19 @@ Every instruction (whether locally executed or LLM-interpreted) produces a `Stat
 
 ```python
 class StateUpdate(BaseModel):
-    register_writes: dict[str, Any] = {}     # {"%0": 42}
-    var_writes: dict[str, Any] = {}          # {"x": 42}
-    heap_writes: list[HeapWrite] = []        # [{obj_addr, field, value}]
-    new_objects: list[NewObject] = []         # [{addr, type_hint: TypeExpr}]
-    next_label: str | None = None            # branch target
-    call_push: StackFramePush | None = None  # push new call frame
-    call_pop: bool = False                   # pop current frame
-    return_value: Any | None = None          # value to return to caller
-    path_condition: str | None = None        # assumption for symbolic branches
-    reasoning: str = ""                      # human-readable explanation
+    register_writes: dict[Register, Any] = {}     # {Register("%0"): 42}
+    var_writes: dict[VarName, Any] = {}            # {VarName("x"): 42}
+    heap_writes: list[HeapWrite] = []              # [{obj_addr: Address, field: FieldName, value}]
+    new_objects: list[NewObject] = []               # [{addr: Address, type_hint: TypeExpr}]
+    region_writes: list[RegionWrite] = []           # COBOL byte-addressed regions
+    new_regions: dict[str, int] = {}                # region allocations
+    continuation_writes: dict[str, CodeLabel] = {}  # COBOL PERFORM
+    next_label: CodeLabel | None = None             # branch target
+    call_push: StackFramePush | None = None         # push new call frame
+    call_pop: bool = False                          # pop current frame
+    return_value: Any | None = None                 # value to return to caller
+    path_condition: str | None = None               # assumption for symbolic branches
+    reasoning: str = ""                             # human-readable explanation
 ```
 
 This is the **central communication contract** between the executor and the VM. Both local execution and LLM fallback produce `StateUpdate`; the VM doesn't know or care which produced it.
@@ -421,21 +439,21 @@ flowchart TD
 
 ### apply_update — the state mutator
 
-`apply_update()` (`interpreter/vm.py:21`) is the **only function that mutates the VM**. The order of operations is critical and carefully designed:
+`apply_update()` (`interpreter/vm/vm.py`) is the **only function that mutates the VM**. The order of operations is critical and carefully designed:
 
 ```python
 def apply_update(vm: VMState, update: StateUpdate):
-    # 1. Create new heap objects
+    # 1. Create new heap objects (via accessor)
     for obj in update.new_objects:
-        vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)
+        vm.heap_set(obj.addr, HeapObject(type_hint=obj.type_hint))
 
     # 2. Register writes → CURRENT (caller's) frame
     for reg, val in update.register_writes.items():
         frame.registers[reg] = _deserialize_value(val, vm)
 
-    # 3. Heap writes
+    # 3. Heap writes (via accessor)
     for hw in update.heap_writes:
-        vm.heap[hw.obj_addr].fields[hw.field] = _deserialize_value(hw.value, vm)
+        vm.heap_ensure(hw.obj_addr).fields[hw.field] = _deserialize_value(hw.value, vm)
 
     # 4. Path conditions
     if update.path_condition:
@@ -462,26 +480,26 @@ def apply_update(vm: VMState, update: StateUpdate):
 
 ### Dispatch table
 
-The local executor (`interpreter/executor.py`) uses a static dispatch table mapping opcodes to handler functions:
+The local executor (`interpreter/vm/executor.py`) uses a static dispatch table mapping instruction types to handler functions:
 
 ```python
 class LocalExecutor:
-    DISPATCH: dict[Opcode, Any] = {
-        Opcode.CONST: _handle_const,
-        Opcode.LOAD_VAR: _handle_load_var,
-        Opcode.STORE_VAR: _handle_store_var,
-        Opcode.BRANCH: _handle_branch,
-        Opcode.BRANCH_IF: _handle_branch_if,
-        Opcode.BINOP: _handle_binop,
-        Opcode.UNOP: _handle_unop,
-        Opcode.ADDRESS_OF: _handle_address_of,
-        Opcode.CALL_FUNCTION: _handle_call_function,
-        Opcode.CALL_METHOD: _handle_call_method,
-        ... # all 33 opcodes covered
+    DISPATCH: dict[type, Any] = {
+        Const: _handle_const,
+        LoadVar: _handle_load_var,
+        DeclVar: _handle_decl_var,
+        StoreVar: _handle_store_var,
+        Binop: _handle_binop,
+        Unop: _handle_unop,
+        AddressOf: _handle_address_of,
+        CallFunction: _handle_call_function,
+        CallMethod: _handle_call_method,
+        CallCtorFunction: _handle_call_ctor,
+        ... # all 33 instruction types covered
     }
 ```
 
-The entry point `_try_execute_locally()` (`interpreter/executor.py:830`) looks up the handler and calls it. If the opcode isn't in the table, it returns `ExecutionResult.not_handled()`, triggering LLM fallback.
+Dispatch uses `type(instruction)` lookup (not `Opcode` enum), matching the per-opcode dataclass type directly. If the type isn't in the table, it returns `ExecutionResult.not_handled()`, triggering LLM fallback.
 
 ---
 
@@ -785,13 +803,13 @@ The VM supports **capture-by-reference** closures with shared mutable environmen
 
 ### ClosureEnvironment
 
-Defined in `interpreter/vm_types.py:43`:
+Defined in `interpreter/vm/vm_types.py`:
 
 ```python
 @dataclass
 class ClosureEnvironment:
     """Shared mutable environment for closure capture-by-reference."""
-    bindings: dict[str, Any] = field(default_factory=dict)
+    bindings: dict[VarName, TypedValue] = field(default_factory=dict)
 ```
 
 ### Capture mechanism
@@ -867,12 +885,12 @@ After `get()`:        reads `env_0.bindings["count"] → 1`
 
 ## 10. Pointer Aliasing (C/Rust)
 
-The VM implements a **KLEE-inspired promote-on-address-of** memory model for languages with pointer semantics (C, Rust). The core abstraction is the `Pointer` dataclass (`interpreter/vm_types.py`):
+The VM implements a **KLEE-inspired promote-on-address-of** memory model for languages with pointer semantics (C, Rust). The core abstraction is the `Pointer` dataclass (`interpreter/vm/vm_types.py`):
 
 ```python
 @dataclass(frozen=True)
 class Pointer:
-    base: str       # heap object address (e.g., "mem_0", "arr_0")
+    base: Address   # heap object address (Address domain type, e.g., Address("mem_0"))
     offset: int = 0 # element offset within the object
 ```
 
@@ -1023,14 +1041,16 @@ The system prompt (`interpreter/backend.py:16`) defines the `StateUpdate` JSON s
 
 ## 13. Function and Class Registry
 
-The `FunctionRegistry` (`interpreter/registry.py:62`) is built by scanning IR instructions and the CFG:
+The `FunctionRegistry` (`interpreter/registry.py`) is built by scanning IR instructions and the CFG. Access is through accessor methods — callers never index dicts directly:
 
 ```python
 @dataclass
 class FunctionRegistry:
-    func_params: dict[str, list[str]] = ...   # func_label → ["x", "y"]
-    class_methods: dict[str, dict[str, str]] = ...  # "Point" → {"__init__": "func___init___4"}
-    classes: dict[str, str] = ...             # "Point" → "class_Point_0"
+    # Internal storage uses domain-typed keys:
+    # _func_params: dict[CodeLabel, list[VarName]]
+    # _class_methods: dict[ClassName, dict[FuncName, ...]]
+    # _func_refs: dict[FuncName, BoundFuncRef]
+    # Access via: get_func_params(), lookup_method(), lookup_func_ref(), etc.
 ```
 
 ### Building the registry
@@ -1072,23 +1092,25 @@ LABEL func_factorial_0
 ```python
 @dataclass(frozen=True)
 class Definition:
-    variable: str               # "x", "%0"
-    block_label: str
+    variable: StorageIdentifier  # Register or VarName (domain-typed)
+    block_label: CodeLabel
     instruction_index: int
-    instruction: IRInstruction
+    instruction: InstructionBase
 
 @dataclass(frozen=True)
 class Use:
-    variable: str
-    block_label: str
+    variable: StorageIdentifier  # Register or VarName (domain-typed)
+    block_label: CodeLabel
     instruction_index: int
-    instruction: IRInstruction
+    instruction: InstructionBase
 
 @dataclass(frozen=True)
 class DefUseLink:
     definition: Definition
     use: Use
 ```
+
+`StorageIdentifier` is a runtime-checkable `Protocol` requiring a `name` property. Both `Register` and `VarName` implement it. Each instruction class provides `reads()` and `writes()` methods that return lists of `StorageIdentifier` values, replacing the old opcode-conditional logic in the dataflow module.
 
 ### Reaching definitions
 
@@ -1142,24 +1164,42 @@ Both graphs are returned in `DataflowResult`: `raw_dependency_graph` (direct edg
 
 ```
 interpreter/
-├── ir.py                    IR instruction format, Opcode enum, SourceLocation
-├── vm_types.py              VM data types (SymbolicValue, HeapObject, VMState, StateUpdate, ...)
-├── vm.py                    apply_update(), helpers (Operators, _parse_const [canonical forms only], _resolve_reg [returns TypedValue], ...)
+├── ir.py                    Opcode enum, Register, CodeLabel, SourceLocation, IRInstruction factory
+├── instructions.py          33 per-opcode frozen dataclasses + InstructionBase + StorageIdentifier
+├── register.py              Register domain type
+├── var_name.py              VarName domain type
+├── field_name.py            FieldName domain type (with FieldKind enum)
+├── func_name.py             FuncName domain type
+├── class_name.py            ClassName domain type
+├── address.py               Address domain type (heap/region keys)
+├── operator_kind.py         BinopKind/UnopKind enums
+├── storage_identifier.py    StorageIdentifier protocol for dataflow
 ├── cfg_types.py             BasicBlock, CFG
 ├── cfg.py                   build_cfg(), cfg_to_mermaid(), extract_function_instructions()
 ├── run_types.py             VMConfig, ExecutionStats, PipelineStats
 ├── run.py                   execute_cfg(), run() — orchestration and step loop
-├── executor.py              LocalExecutor dispatch table, all 31 opcode handlers
-├── builtins.py              Built-in function table (len, range, print, ...)
 ├── registry.py              FunctionRegistry, function/class scanning
-├── backend.py               LLMBackend ABC + LLMInterpreterBackend (via LiteLLM)
-├── llm_client.py            LLMClient ABC + LiteLLMClient (unified provider access)
+├── dataflow.py              Reaching definitions, def-use chains, dependency graphs
 ├── parser.py                tree-sitter parser wrapper
 ├── frontend.py              Frontend ABC + factory, language routing
 ├── frontends/               15 language-specific tree-sitter frontends
-├── dataflow.py              Reaching definitions, def-use chains, dependency graphs
 ├── constants.py             All magic strings/numbers as named constants
 ├── api.py                   Composable public API (lower_source, dump_ir, ...)
+├── refs/                    FuncRef, ClassRef (structured function/class references)
+├── types/                   TypeExpr ADT, type inference, coercion rules
+├── overload/                Overload resolution (arity + type scoring)
+├── vm/                      VM execution engine
+│   ├── vm_types.py          VM data types (SymbolicValue, HeapObject, VMState, StateUpdate, ...)
+│   ├── vm.py                apply_update(), helpers (Operators, _parse_const, _resolve_reg → TypedValue)
+│   ├── executor.py          LocalExecutor dispatch table, all 33 opcode handlers
+│   ├── builtins.py          Built-in function table (len, range, print, ...)
+│   ├── unresolved_call.py   Symbolic/LLM call resolution strategies
+│   └── field_fallback.py    Field access fallback chain
+├── llm/                     LLM integration (backends, clients, frontends)
+├── interprocedural/         Call graph, function summaries, whole-program analysis
+├── project/                 Multi-file support (compiler, resolver, linker)
+├── handlers/                Shared instruction handler utilities
+├── cobol/                   COBOL type system, EBCDIC tables, IR encoder/decoder
 └── __init__.py              Package exports
 ```
 
@@ -1169,19 +1209,20 @@ interpreter/
 flowchart BT
     constants["constants.py"]
     ir["ir.py"] --> constants
+    instructions["instructions.py"] --> ir
+    domain["domain types\n(register, var_name, field_name,\nfunc_name, address, operator_kind)"]
+    instructions --> domain
     cfg_types["cfg_types.py"] --> ir & constants
     cfg["cfg.py"] --> cfg_types & ir & constants
-    vm_types["vm_types.py\n(standalone, pydantic only)"]
-    vm["vm.py"] --> vm_types
+    vm_types["vm/vm_types.py\n(standalone, pydantic only)"] --> domain
+    vm["vm/vm.py"] --> vm_types
     registry["registry.py"] --> ir & cfg & constants
-    builtins["builtins.py"] --> vm
-    executor["executor.py"] --> ir & cfg & vm & registry & builtins & constants
-    llm_client["llm_client.py"]
-    backend["backend.py"] --> ir & vm & llm_client
-    run["run.py"] --> executor & backend
+    builtins["vm/builtins.py"] --> vm
+    executor["vm/executor.py"] --> instructions & cfg & vm & registry & builtins & constants
+    run["run.py"] --> executor
 ```
 
-The new `*_types.py` files are **pure data** with no business-logic imports, ensuring they sit at the bottom of the dependency graph with zero risk of circular imports.
+Domain type files (`register.py`, `var_name.py`, `field_name.py`, `func_name.py`, `address.py`, `operator_kind.py`) and `*_types.py` files are **pure data** with no business-logic imports, ensuring they sit at the bottom of the dependency graph with zero risk of circular imports.
 
 ---
 
@@ -1317,4 +1358,6 @@ Final state:
 | **Scope chain resolution** | Variables resolved by walking call stack backwards |
 | **Lazy materialisation** | Symbolic heap entries created on first access, then cached |
 | **Shared environments** | Closures from same scope share one `ClosureEnvironment` |
+| **Domain types over primitives** | `Register`, `VarName`, `FieldName`, `FuncName`, `Address`, `CodeLabel`, `BinopKind` — no bare strings in instruction fields or VM storage keys |
+| **Private heap with accessors** | `_heap`/`_regions` accessed only via `heap_get`/`heap_set` etc.; `NO_HEAP_OBJECT` null sentinel |
 | **Convention over configuration** | Structured label names (`func_`, `class_`, `end_`) encode semantics |

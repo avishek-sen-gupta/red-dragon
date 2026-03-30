@@ -38,7 +38,7 @@ flowchart TD
     CFG --> S1 --> S2 --> S3 --> S4 --> S5 --> DR
 ```
 
-The analysis is **forward**, **may** (over-approximate), and **intraprocedural** (single function/module scope). It operates on the same `BasicBlock`/`CFG` structures and `IRInstruction` objects used by the VM.
+The analysis is **forward**, **may** (over-approximate), and **intraprocedural** (single function/module scope). It operates on the same `BasicBlock`/`CFG` structures and typed instruction objects (`InstructionBase` subclasses) used by the VM.
 
 ---
 
@@ -53,25 +53,25 @@ A single point where a variable or register is assigned:
 ```python
 @dataclass(frozen=True)
 class Definition:
-    variable: str              # "x", "%0", "%3"
-    block_label: str           # "entry", "if_true_1"
-    instruction_index: int     # position within the block
-    instruction: IRInstruction # the instruction that creates the def
+    variable: StorageIdentifier   # Register or VarName (domain-typed)
+    block_label: CodeLabel         # "entry", "if_true_1"
+    instruction_index: int         # position within the block
+    instruction: InstructionBase   # the typed instruction that creates the def
 ```
 
-Frozen (immutable and hashable) so it can be stored in sets. Equality is based on `(variable, block_label, instruction_index)`, not the instruction object.
+Frozen (immutable and hashable) so it can be stored in sets. Equality is based on `(variable, block_label, instruction_index)`, not the instruction object. `StorageIdentifier` is a runtime-checkable protocol implemented by both `Register` and `VarName`.
 
-### Use (`interpreter/dataflow.py:59`)
+### Use (`interpreter/dataflow.py`)
 
 A single point where a variable or register is read:
 
 ```python
 @dataclass(frozen=True)
 class Use:
-    variable: str
-    block_label: str
+    variable: StorageIdentifier
+    block_label: CodeLabel
     instruction_index: int
-    instruction: IRInstruction
+    instruction: InstructionBase
 ```
 
 Parallel structure to `Definition`. Same equality/hash semantics.
@@ -137,46 +137,41 @@ _VALUE_PRODUCERS: frozenset[Opcode] = frozenset({
 _VAR_DEFINERS: frozenset[Opcode] = frozenset({Opcode.STORE_VAR})
 ```
 
-### _defs_of(instruction) (`interpreter/dataflow.py:109`)
+### instruction.writes() — StorageIdentifier protocol
 
-Returns the variable/register names defined by an instruction:
+Each typed instruction class implements `writes()` returning `list[StorageIdentifier]`:
 
 ```python
-def _defs_of(instruction: IRInstruction) -> list[str]:
-    if instruction.opcode == Opcode.STORE_VAR and len(instruction.operands) >= 1:
-        return [instruction.operands[0]]                    # named variable
-    if instruction.opcode in _VALUE_PRODUCERS and instruction.result_reg is not None:
-        return [instruction.result_reg]                     # register
-    if instruction.opcode == Opcode.SYMBOLIC and instruction.result_reg is not None:
-        return [instruction.result_reg]                     # parameter register
-    return []
+# Example: StoreVar defines the named variable
+class StoreVar(InstructionBase):
+    def writes(self) -> list[StorageIdentifier]:
+        return [self.name]       # VarName
+
+# Example: Binop defines the result register
+class Binop(InstructionBase):
+    def writes(self) -> list[StorageIdentifier]:
+        return [self.result_reg]  # Register
 ```
 
-Note the distinction: `STORE_VAR x %0` defines the named variable `x`; `%0 = CONST 42` defines the register `%0`. Both are tracked.
+Note the distinction: `STORE_VAR x %0` defines the named variable `x` (VarName); `%0 = CONST 42` defines the register `%0` (Register). Both implement `StorageIdentifier` and are tracked uniformly.
 
-### _uses_of(instruction) (`interpreter/dataflow.py:120`)
+### instruction.reads() — StorageIdentifier protocol
 
-Returns the variable/register names read by an instruction. This is a comprehensive case analysis:
+Each typed instruction class implements `reads()` returning `list[StorageIdentifier]`:
 
 ```python
-def _uses_of(instruction: IRInstruction) -> list[str]:
-    op = instruction.opcode
-    operands = instruction.operands
+# Example: Binop reads two operand registers
+class Binop(InstructionBase):
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.left, self.right]  # [Register, Register]
 
-    if op == Opcode.CONST:              return []           # constants don't read anything
-    if op == Opcode.LOAD_VAR:           return [operands[0]]       # reads the variable
-    if op == Opcode.STORE_VAR:          return [operands[1]]       # reads the RHS register
-    if op == Opcode.LOAD_FIELD:         return [operands[0]]       # reads object register
-    if op == Opcode.STORE_FIELD:        return [operands[0], operands[2]]  # object + value
-    if op == Opcode.LOAD_INDEX:         return [operands[0], operands[1]]  # array + index
-    if op == Opcode.STORE_INDEX:        return [operands[0], operands[1], operands[2]]
-    if op == Opcode.BINOP:              return [operands[1], operands[2]]  # lhs + rhs
-    if op == Opcode.UNOP:               return [operands[1]]       # operand
-    if op in (Opcode.CALL_FUNCTION, ...): return list(operands[1:]) # args (skip func name)
-    if op == Opcode.BRANCH_IF:          return [operands[0]]       # condition
-    if op == Opcode.RETURN:             return [operands[0]]       # return value
-    if op == Opcode.THROW:              return [operands[0]]
-    return []
+# Example: StoreVar reads the value register
+class StoreVar(InstructionBase):
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.value_reg]  # Register
+```
+
+This replaces the old opcode-conditional `_defs_of()`/`_uses_of()` functions. Each instruction knows its own dataflow semantics — no central dispatch table needed.
 ```
 
 ### collect_all_definitions(cfg) (`interpreter/dataflow.py:154`)
@@ -559,8 +554,8 @@ The dataflow analysis operates on **exactly the same** data structures used by t
 
 - `CFG` from `interpreter/cfg_types.py` — blocks, edges, entry point
 - `BasicBlock` — label, instructions, successors, predecessors
-- `IRInstruction` from `interpreter/ir.py` — opcode, result_reg, operands
-- `Opcode` enum — determines which instructions define/use variables
+- `InstructionBase` subclasses from `interpreter/instructions.py` — 33 per-opcode frozen dataclasses with typed fields
+- Each instruction implements `reads()` and `writes()` returning `list[StorageIdentifier]` — the dataflow module uses these directly
 
 This means dataflow analysis can run on CFGs built from any frontend (deterministic or LLM).
 
@@ -744,7 +739,8 @@ interpreter/
 │
 ├── cfg_types.py         BasicBlock, CFG (input to analysis)
 ├── cfg.py               build_cfg() (produces CFG from IR)
-├── ir.py                IRInstruction, Opcode (what analysis examines)
+├── ir.py                Opcode enum, Register, CodeLabel
+├── instructions.py      33 per-opcode dataclasses with reads()/writes()
 └── constants.py         DATAFLOW_MAX_ITERATIONS = 1000
 
 tests/unit/
@@ -767,7 +763,7 @@ cfg_types.py ← ir.py, constants.py
     ↑
 cfg.py ← cfg_types.py
     ↑
-dataflow.py ← constants.py, cfg_types.py (BasicBlock, CFG), ir.py (IRInstruction, Opcode)
+dataflow.py ← constants.py, cfg_types.py (BasicBlock, CFG), instructions.py (InstructionBase, StorageIdentifier)
 ```
 
 The dataflow module has **no dependency** on the VM, executor, backend, or any frontend. It is a pure analysis pass over the CFG.
