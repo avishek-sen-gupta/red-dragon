@@ -20,12 +20,15 @@ from interpreter.instructions import (
     StoreField,
     LoadField,
     LoadVar,
+    StoreIndirect,
+    LoadIndirect,
 )
 from interpreter import constants
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.interprocedural.types import (
     CallContext,
+    DereferenceEndpoint,
     FieldEndpoint,
     FlowEndpoint,
     FunctionEntry,
@@ -155,6 +158,19 @@ def _find_store_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
         if isinstance((t := inst), StoreField)
+    ]
+
+
+def _find_store_indirects(cfg: CFG) -> list[tuple[CodeLabel, int, str, str]]:
+    """Find all STORE_INDIRECT instructions.
+
+    Returns list of (block_label, instruction_index, ptr_reg, value_reg).
+    """
+    return [
+        (label, idx, str(t.ptr_reg), str(t.value_reg))
+        for label, block in cfg.blocks.items()
+        for idx, inst in enumerate(block.instructions)
+        if isinstance((t := inst), StoreIndirect)
     ]
 
 
@@ -394,6 +410,50 @@ def _build_field_write_flows(
     return flows
 
 
+def _build_deref_write_flows(
+    cfg: CFG,
+    dataflow: DataflowResult,
+    param_names: frozenset[VarName],
+) -> list[tuple[FlowEndpoint, FlowEndpoint]]:
+    """Build flows from params to STORE_INDIRECT instructions (pointer dereference writes)."""
+    store_indirects = _find_store_indirects(cfg)
+    flows: list[tuple[FlowEndpoint, FlowEndpoint]] = []
+
+    for si_label, si_idx, si_ptr_reg, si_val_reg in store_indirects:
+        location = InstructionLocation(block_label=si_label, instruction_index=si_idx)
+
+        # Find which named variable the pointer register was loaded from
+        ptr_var = _find_register_source_var(si_ptr_reg, cfg)
+        if ptr_var is None or ptr_var not in param_names:
+            continue
+
+        ptr_endpoint = _make_var_endpoint(ptr_var, dataflow)
+        deref_endpoint = DereferenceEndpoint(base=ptr_endpoint, location=location)
+
+        # Always: param controls the dereference write target
+        flows.append((ptr_endpoint, deref_endpoint))
+
+        # If value also traces to a param, add that flow too
+        val_var = _find_register_source_var(si_val_reg, cfg)
+        if val_var is not None and val_var in param_names and val_var != ptr_var:
+            flows.append((_make_var_endpoint(val_var, dataflow), deref_endpoint))
+        elif val_var is not None and val_var not in param_names:
+            # Check transitive deps
+            param_deps = _trace_register_to_params(
+                val_var,
+                dataflow.dependency_graph,
+                dataflow.raw_dependency_graph,
+                param_names,
+            )
+            flows.extend(
+                (_make_var_endpoint(p, dataflow), deref_endpoint)
+                for p in param_deps
+                if p != ptr_var
+            )
+
+    return flows
+
+
 def build_summary(
     cfg: CFG, function_entry: FunctionEntry, context: CallContext
 ) -> FunctionSummary:
@@ -413,8 +473,9 @@ def build_summary(
 
     return_flows = _build_return_flows(sub_cfg, dataflow, param_names, function_entry)
     field_write_flows = _build_field_write_flows(sub_cfg, dataflow, param_names)
+    deref_write_flows = _build_deref_write_flows(sub_cfg, dataflow, param_names)
 
-    all_flows = frozenset(return_flows + field_write_flows)
+    all_flows = frozenset(return_flows + field_write_flows + deref_write_flows)
 
     logger.info("Built summary for %s: %d flows", function_entry.label, len(all_flows))
 
