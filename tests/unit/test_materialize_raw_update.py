@@ -3,6 +3,7 @@
 from types import MappingProxyType
 
 from interpreter.address import Address
+from interpreter.closure_id import ClosureId
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.types.type_environment import TypeEnvironment
@@ -190,11 +191,11 @@ class TestApplyUpdateTypedPath:
 
         vm = VMState()
         env = ClosureEnvironment(bindings={})
-        vm.closures["env_0"] = env
+        vm.closures[ClosureId("env_0")] = env
         vm.call_stack.append(
             StackFrame(
                 function_name=FuncName("inner"),
-                closure_env_id="env_0",
+                closure_env_id=ClosureId("env_0"),
                 captured_var_names=frozenset({VarName("x")}),
             )
         )
