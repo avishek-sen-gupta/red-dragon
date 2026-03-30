@@ -20,7 +20,7 @@ class TestNullImportResolver:
     def test_everything_is_external(self):
         resolver = NullImportResolver()
         ref = ImportRef(source_file=Path("main.py"), module_path="utils")
-        result = resolver.resolve(ref, Path("/project"))
+        [result] = resolver.resolve(ref, Path("/project"))
         assert result.resolved_path == NO_PATH
         assert result.is_external is True
         assert result.is_resolved() is False
@@ -37,7 +37,7 @@ class TestGetResolver:
         # Since all Language enum members are covered, test with NullImportResolver directly.
         resolver = NullImportResolver()
         ref = ImportRef(source_file=Path("main.txt"), module_path="utils")
-        result = resolver.resolve(ref, Path("/project"))
+        [result] = resolver.resolve(ref, Path("/project"))
         assert result.resolved_path == NO_PATH
         assert result.is_external is True
 
@@ -70,7 +70,7 @@ class TestPythonImportResolver:
             source_file=project / "main.py",
             module_path="utils",
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == project / "utils.py"
         assert result.is_external is False
 
@@ -80,7 +80,7 @@ class TestPythonImportResolver:
             source_file=project / "main.py",
             module_path="pkg",
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == project / "pkg" / "__init__.py"
 
     def test_resolves_dotted_module(self, project):
@@ -89,7 +89,7 @@ class TestPythonImportResolver:
             source_file=project / "main.py",
             module_path="pkg.models",
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == project / "pkg" / "models.py"
 
     def test_resolves_relative_single_dot(self, project):
@@ -101,7 +101,7 @@ class TestPythonImportResolver:
             is_relative=True,
             relative_level=1,  # from . import sub (same directory as models.py)
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == project / "pkg" / "sub" / "__init__.py"
 
     def test_resolves_relative_double_dot(self, project):
@@ -113,7 +113,7 @@ class TestPythonImportResolver:
             is_relative=True,
             relative_level=2,  # from .. import models (go up from pkg/sub/ to pkg/)
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == project / "pkg" / "models.py"
 
     def test_relative_single_dot_module(self, project):
@@ -125,7 +125,7 @@ class TestPythonImportResolver:
             is_relative=True,
             relative_level=1,  # from .models import User
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == project / "pkg" / "models.py"
 
     def test_system_import_is_external(self, project):
@@ -135,7 +135,7 @@ class TestPythonImportResolver:
             module_path="os",
             is_system=True,
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == NO_PATH
         assert result.is_external is True
 
@@ -145,7 +145,7 @@ class TestPythonImportResolver:
             source_file=project / "main.py",
             module_path="does_not_exist",
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == NO_PATH
         assert result.is_resolved() is False
 
@@ -155,7 +155,7 @@ class TestPythonImportResolver:
             source_file=project / "main.py",
             module_path="pkg.sub.helpers",
         )
-        result = resolver.resolve(ref, project)
+        [result] = resolver.resolve(ref, project)
         assert result.resolved_path == project / "pkg" / "sub" / "helpers.py"
 
 
@@ -181,3 +181,22 @@ class TestResolvedImport:
         ref = ImportRef(source_file=Path("main.java"), module_path="com.example.Foo")
         result = ResolvedImport(ref=ref)
         assert result.resolved_path == NO_PATH
+
+
+class TestResolverReturnType:
+    def test_null_resolver_returns_list(self):
+        resolver = NullImportResolver()
+        ref = ImportRef(source_file=Path("main.py"), module_path="utils")
+        result = resolver.resolve(ref, Path("/project"))
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0].is_external is True
+
+    def test_python_resolver_returns_list(self, tmp_path):
+        (tmp_path / "utils.py").write_text("x = 1\n")
+        resolver = PythonImportResolver()
+        ref = ImportRef(source_file=tmp_path / "main.py", module_path="utils")
+        result = resolver.resolve(ref, tmp_path)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0].is_resolved() is True
