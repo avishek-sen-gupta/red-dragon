@@ -9,6 +9,7 @@ from interpreter.cobol.asg_types import (
     CobolSection,
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
+from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import InstructionBase, AllocRegion, Const
 from interpreter.cobol.cobol_statements import (
     AcceptStatement,
@@ -390,7 +391,7 @@ class TestProcedureDivisionLowering:
         # Should emit SET_CONTINUATION before the BRANCH
         set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
         assert len(set_conts) >= 1
-        assert set_conts[0].operands[0] == "para_WORK-PARA_end"
+        assert set_conts[0].operands[0] == ContinuationName("para_WORK-PARA_end")
 
         branches = _find_opcodes(instructions, Opcode.BRANCH)
         perform_branches = [
@@ -416,7 +417,7 @@ class TestProcedureDivisionLowering:
         resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
         assert len(resume_conts) >= 1
         resume_names = [inst.operands[0] for inst in resume_conts]
-        assert "para_MAIN_end" in resume_names
+        assert ContinuationName("para_MAIN_end") in resume_names
 
     def test_perform_thru_sets_continuation_at_thru_endpoint(self):
         fields = [
@@ -428,7 +429,7 @@ class TestProcedureDivisionLowering:
         set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
         assert len(set_conts) >= 1
         # Continuation should be keyed to the THRU paragraph's end, not the start
-        assert set_conts[0].operands[0] == "para_LAST-PARA_end"
+        assert set_conts[0].operands[0] == ContinuationName("para_LAST-PARA_end")
 
         branches = _find_opcodes(instructions, Opcode.BRANCH)
         perform_branches = [
@@ -845,7 +846,9 @@ class TestSectionPerform:
         # Should set continuation at section end
         set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
         section_conts = [
-            s for s in set_conts if s.operands[0] == "section_WORK-SECTION_end"
+            s
+            for s in set_conts
+            if s.operands[0] == ContinuationName("section_WORK-SECTION_end")
         ]
         assert len(section_conts) >= 1
 
@@ -874,7 +877,7 @@ class TestSectionPerform:
 
         resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
         resume_names = [inst.operands[0] for inst in resume_conts]
-        assert "section_MY-SECTION_end" in resume_names
+        assert ContinuationName("section_MY-SECTION_end") in resume_names
 
 
 class TestTier1Lowering:
