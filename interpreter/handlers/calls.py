@@ -48,6 +48,7 @@ from interpreter.types.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, 
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter import constants
 from interpreter.handlers._common import _resolve_call_args, _symbolic_name
+from interpreter.closure_id import NO_CLOSURE_ID
 from interpreter.handlers.memory import (
     _find_method_missing,
     _resolve_method_delegation_target,
@@ -237,7 +238,7 @@ def _try_user_function_call(
     if captured:
         logger.debug("Injecting closure vars for %s: %s", fname, list(captured.keys()))
 
-    closure_env_id = func_val.closure_id if closure_env else ""
+    closure_env_id = func_val.closure_id if closure_env else NO_CLOSURE_ID
     captured_var_names = (
         [VarName(k) if isinstance(k, str) else k for k in captured.keys()]
         if closure_env
@@ -469,7 +470,6 @@ def _handle_call_method(
             func_label = func_labels[0]
             bound_ref = BoundFuncRef(
                 func_ref=FuncRef(name=FuncName(str(method_name)), label=func_label),
-                closure_id="",
             )
             return _try_user_function_call(
                 bound_ref, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label

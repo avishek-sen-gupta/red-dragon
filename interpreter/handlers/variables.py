@@ -31,6 +31,7 @@ from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter import constants
 from interpreter.handlers._common import _write_var_to_frame
+from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ def _handle_const(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResu
         func_ref_entry = func_symbol_table[val]
 
     if func_ref_entry is not None:
-        closure_id = ""
+        closure_id = NO_CLOSURE_ID
         if len(vm.call_stack) > 1:
             enclosing = vm.current_frame
             env_id = enclosing.closure_env_id
@@ -60,13 +61,13 @@ def _handle_const(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResu
                     if k not in env.bindings:
                         env.bindings[k] = v
             else:
-                env_id = f"{constants.ENV_ID_PREFIX}{vm.symbolic_counter}"
+                env_id = ClosureId(f"{constants.ENV_ID_PREFIX}{vm.symbolic_counter}")
                 vm.symbolic_counter += 1
                 env = ClosureEnvironment(bindings=dict(enclosing.local_vars))
                 vm.closures[env_id] = env
                 enclosing.closure_env_id = env_id
                 enclosing.captured_var_names = frozenset(enclosing.local_vars.keys())
-            closure_id = f"closure_{vm.symbolic_counter}"
+            closure_id = ClosureId(f"closure_{vm.symbolic_counter}")
             vm.symbolic_counter += 1
             vm.closures[closure_id] = env
             logger.debug(
