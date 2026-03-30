@@ -316,14 +316,14 @@ This is one continuous stream. The VM:
 class ModuleUnit:
     path: Path
     language: Language
-    ir: tuple[IRInstruction, ...]    # raw, un-namespaced (immutable)
+    ir: tuple[InstructionBase, ...]    # raw, un-namespaced (immutable)
     exports: ExportTable
     imports: tuple[ImportRef, ...]
 
 @dataclass
 class LinkedProgram:
     modules: dict[Path, ModuleUnit]
-    merged_ir: list[IRInstruction]
+    merged_ir: list[InstructionBase]
     merged_cfg: CFG
     merged_registry: FunctionRegistry
     entry_module: Path

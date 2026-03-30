@@ -28,7 +28,7 @@ CobolFrontend (this file)
   │  PROCEDURE DIV  → statement-by-statement IR lowering
   │
   ▼
-RedDragon IR (list[IRInstruction])
+RedDragon IR (list[InstructionBase])
 ```
 
 The pipeline has three layers, each independently testable:
@@ -74,7 +74,7 @@ The DATA DIVISION is lowered to byte-addressed memory regions:
 | `S9(n) COMP-3` | Packed decimal — two digits per byte, sign nibble in last byte | ⌈(n+1)/2⌉ | `PIC S9(5) COMP-3` → 3 bytes |
 | `X(n)` | Alphanumeric — one byte per character (ASCII or EBCDIC) | n | `PIC X(10)` → 10 bytes |
 
-Encoding/decoding is performed via composable IR instruction builders in `ir_encoders.py`. Each builder returns a `list[IRInstruction]` using parameter registers (`%p_data`, `%p_digits`, etc.) that are inlined at the lowering site via `_inline_ir()`.
+Encoding/decoding is performed via composable IR instruction builders in `ir_encoders.py`. Each builder returns a `list[InstructionBase]` using parameter registers (`%p_data`, `%p_digits`, etc.) that are inlined at the lowering site via `_inline_ir()`.
 
 ## Statement Coverage
 
