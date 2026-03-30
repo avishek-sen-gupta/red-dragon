@@ -53,11 +53,23 @@ if printf '%s' "$LOWER" | grep -qiw \
   TESTING=1; SKILLS=1
 fi
 
-# Output matching files
-[ "$DESIGN" = 1 ] && [ -f "$COND_DIR/design-principles.md" ] && cat "$COND_DIR/design-principles.md"
-[ "$TESTING" = 1 ] && [ -f "$COND_DIR/testing-patterns.md" ] && cat "$COND_DIR/testing-patterns.md"
-[ "$REVIEW" = 1 ] && [ -f "$COND_DIR/code-review.md" ] && cat "$COND_DIR/code-review.md"
-[ "$REFACTORING" = 1 ] && [ -f "$COND_DIR/refactoring.md" ] && cat "$COND_DIR/refactoring.md"
-[ "$SKILLS" = 1 ] && [ -f "$COND_DIR/tools-skills.md" ] && cat "$COND_DIR/tools-skills.md"
+# Build summary of which invariants are being injected
+INJECTED=""
+[ "$DESIGN" = 1 ] && INJECTED="${INJECTED} design-principles"
+[ "$TESTING" = 1 ] && INJECTED="${INJECTED} testing-patterns"
+[ "$REVIEW" = 1 ] && INJECTED="${INJECTED} code-review"
+[ "$REFACTORING" = 1 ] && INJECTED="${INJECTED} refactoring"
+[ "$SKILLS" = 1 ] && INJECTED="${INJECTED} tools-skills"
+
+# Output summary header + matching files
+if [ -n "$INJECTED" ]; then
+  echo "[invariants injected:${INJECTED}]"
+  echo ""
+  [ "$DESIGN" = 1 ] && [ -f "$COND_DIR/design-principles.md" ] && cat "$COND_DIR/design-principles.md"
+  [ "$TESTING" = 1 ] && [ -f "$COND_DIR/testing-patterns.md" ] && cat "$COND_DIR/testing-patterns.md"
+  [ "$REVIEW" = 1 ] && [ -f "$COND_DIR/code-review.md" ] && cat "$COND_DIR/code-review.md"
+  [ "$REFACTORING" = 1 ] && [ -f "$COND_DIR/refactoring.md" ] && cat "$COND_DIR/refactoring.md"
+  [ "$SKILLS" = 1 ] && [ -f "$COND_DIR/tools-skills.md" ] && cat "$COND_DIR/tools-skills.md"
+fi
 
 exit 0
