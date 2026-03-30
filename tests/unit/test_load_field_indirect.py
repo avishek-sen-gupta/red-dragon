@@ -137,7 +137,7 @@ class TestLoadFieldIndirect:
         addr = Address("obj_0")
         mm_label = CodeLabel("func_mm_0")
         mm_func_ref = FuncRef(name=FuncName("__method_missing__"), label=mm_label)
-        mm_bound = BoundFuncRef(func_ref=mm_func_ref, closure_id="")
+        mm_bound = BoundFuncRef(func_ref=mm_func_ref)
 
         vm.heap_set(
             addr,
