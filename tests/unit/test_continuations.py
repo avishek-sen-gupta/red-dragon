@@ -11,6 +11,7 @@ _CTX = _default_handler_context()
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame, StateUpdate
+from interpreter.continuation_name import ContinuationName
 from interpreter.func_name import FuncName
 from interpreter.register import Register
 
@@ -32,7 +33,7 @@ class TestHandleSetContinuation:
 
         assert result.handled
         assert result.update.continuation_writes == {
-            "para_WORK_end": "perform_return_0"
+            ContinuationName("para_WORK_end"): CodeLabel("perform_return_0")
         }
 
     def test_last_writer_wins(self):
@@ -45,7 +46,7 @@ class TestHandleSetContinuation:
         )
         result1 = _handle_set_continuation(inst1, vm, _CTX)
         apply_update(vm, result1.update)
-        assert vm.continuations["para_X_end"] == "return_A"
+        assert vm.continuations[ContinuationName("para_X_end")] == "return_A"
 
         inst2 = IRInstruction(
             opcode=Opcode.SET_CONTINUATION,
@@ -53,13 +54,15 @@ class TestHandleSetContinuation:
         )
         result2 = _handle_set_continuation(inst2, vm, _CTX)
         apply_update(vm, result2.update)
-        assert vm.continuations["para_X_end"] == "return_B"
+        assert vm.continuations[ContinuationName("para_X_end")] == "return_B"
 
 
 class TestHandleResumeContinuation:
     def test_branches_when_set(self):
         vm = _make_vm()
-        vm.continuations["para_WORK_end"] = CodeLabel("perform_return_0")
+        vm.continuations[ContinuationName("para_WORK_end")] = CodeLabel(
+            "perform_return_0"
+        )
 
         inst = IRInstruction(
             opcode=Opcode.RESUME_CONTINUATION,
@@ -69,7 +72,7 @@ class TestHandleResumeContinuation:
 
         assert result.handled
         assert result.update.next_label == "perform_return_0"
-        assert result.update.continuation_clear == "para_WORK_end"
+        assert result.update.continuation_clear == ContinuationName("para_WORK_end")
 
     def test_falls_through_when_not_set(self):
         vm = _make_vm()
@@ -82,32 +85,38 @@ class TestHandleResumeContinuation:
 
         assert result.handled
         assert result.update.next_label is None
-        assert result.update.continuation_clear == "para_WORK_end"
+        assert result.update.continuation_clear == ContinuationName("para_WORK_end")
 
 
 class TestApplyUpdateContinuations:
     def test_writes_continuation(self):
         vm = _make_vm()
         update = StateUpdate(
-            continuation_writes={"para_X_end": CodeLabel("return_label")},
+            continuation_writes={
+                ContinuationName("para_X_end"): CodeLabel("return_label")
+            },
             reasoning="test",
         )
         apply_update(vm, update)
-        assert vm.continuations["para_X_end"] == "return_label"
+        assert vm.continuations[ContinuationName("para_X_end")] == "return_label"
 
     def test_clears_continuation(self):
         vm = _make_vm()
-        vm.continuations["para_X_end"] = CodeLabel("return_label")
+        vm.continuations[ContinuationName("para_X_end")] = CodeLabel("return_label")
 
-        update = StateUpdate(continuation_clear="para_X_end", reasoning="test")
+        update = StateUpdate(
+            continuation_clear=ContinuationName("para_X_end"), reasoning="test"
+        )
         apply_update(vm, update)
-        assert "para_X_end" not in vm.continuations
+        assert ContinuationName("para_X_end") not in vm.continuations
 
     def test_clear_nonexistent_is_noop(self):
         vm = _make_vm()
-        update = StateUpdate(continuation_clear="para_NONEXIST_end", reasoning="test")
+        update = StateUpdate(
+            continuation_clear=ContinuationName("para_NONEXIST_end"), reasoning="test"
+        )
         apply_update(vm, update)
-        assert "para_NONEXIST_end" not in vm.continuations
+        assert ContinuationName("para_NONEXIST_end") not in vm.continuations
 
 
 class TestCFGBuilderResumeContinuation:
