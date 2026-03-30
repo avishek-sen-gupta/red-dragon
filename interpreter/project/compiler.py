@@ -151,7 +151,7 @@ def compile_project(
 
         for ref in refs:
             resolved = resolver.resolve(ref, project_root)
-            if resolved.resolved_path is not None:
+            if resolved.is_resolved():
                 target = resolved.resolved_path.resolve()
                 if target not in import_graph.get(file_path, []):
                     import_graph[file_path].append(target)
