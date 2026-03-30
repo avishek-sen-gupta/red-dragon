@@ -1,6 +1,7 @@
 """Test that typed instructions expose the same interface as IRInstruction."""
 
 from interpreter.instructions import *
+from interpreter.continuation_name import ContinuationName
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel, NO_LABEL, Opcode
 from interpreter.operator_kind import BinopKind, UnopKind
@@ -54,10 +55,15 @@ class TestOpcodeProperty:
                 Opcode.WRITE_REGION,
             ),
             (
-                SetContinuation(name="c", target_label=CodeLabel("L")),
+                SetContinuation(
+                    name=ContinuationName("c"), target_label=CodeLabel("L")
+                ),
                 Opcode.SET_CONTINUATION,
             ),
-            (ResumeContinuation(name="c"), Opcode.RESUME_CONTINUATION),
+            (
+                ResumeContinuation(name=ContinuationName("c")),
+                Opcode.RESUME_CONTINUATION,
+            ),
         ]
         for inst, expected_opcode in cases:
             assert inst.opcode == expected_opcode, f"{type(inst).__name__}.opcode"
@@ -81,8 +87,8 @@ class TestResultRegDefault:
             TryPush(),
             TryPop(),
             WriteRegion(region_reg="%0", offset_reg="%1", length=4, value_reg="%2"),
-            SetContinuation(name="c", target_label=CodeLabel("L")),
-            ResumeContinuation(name="c"),
+            SetContinuation(name=ContinuationName("c"), target_label=CodeLabel("L")),
+            ResumeContinuation(name=ContinuationName("c")),
         ]:
             assert (
                 inst.result_reg == NO_REGISTER
