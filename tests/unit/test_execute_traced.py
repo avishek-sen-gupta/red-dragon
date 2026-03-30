@@ -197,3 +197,30 @@ class TestExecuteCfgTracedBasic:
         assert len(then_steps) == 3  # CONST, STORE_VAR, RETURN
         else_steps = [s for s in trace.steps if s.block_label == "else_block"]
         assert len(else_steps) == 0
+
+
+class TestExecuteCfgTraced:
+    def test_execute_cfg_traced_accepts_prebuilt_vm(self):
+        """execute_cfg_traced should reuse a pre-built VM."""
+        source = "x = 42"
+        from interpreter.frontend import get_frontend
+        from interpreter.constants import Language
+
+        frontend = get_frontend(Language.PYTHON)
+        instructions = frontend.lower(source.encode("utf-8"))
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        from interpreter.vm.vm import VMState, StackFrame
+        from interpreter.types.typed_value import typed
+        from interpreter.types.type_expr import UNKNOWN
+
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name=FuncName("__main__")))
+        vm.current_frame.local_vars[VarName("preexisting")] = typed("hello", UNKNOWN)
+
+        vm_out, trace = execute_cfg_traced(cfg, "entry", registry, vm=vm)
+
+        assert VarName("preexisting") in vm_out.current_frame.local_vars
+        assert vm_out.current_frame.local_vars[VarName("preexisting")].value == "hello"
+        assert VarName("x") in vm_out.current_frame.local_vars
