@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from interpreter.project.imports import extract_imports
+from interpreter.project.resolver import NO_PATH
 from interpreter.project.types import ImportKind, ImportRef
 from interpreter.constants import Language
 
@@ -121,4 +122,4 @@ class TestCobolResolver:
             kind=ImportKind.INCLUDE,
         )
         result = resolver.resolve(ref, cobol_project)
-        assert result.resolved_path is None
+        assert result.resolved_path == NO_PATH
