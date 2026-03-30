@@ -7,6 +7,7 @@ import logging
 from interpreter.cobol.asg_types import CobolASG, CobolParagraph, CobolSection
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import Label_, ResumeContinuation
 from interpreter.ir import CodeLabel
 
@@ -45,7 +46,9 @@ def lower_section(
         ctx.lower_statement(stmt, layout, region_reg)
     for para in section.paragraphs:
         lower_paragraph(ctx, para, layout, region_reg)
-    ctx.emit_inst(ResumeContinuation(name=f"section_{section.name}_end"))
+    ctx.emit_inst(
+        ResumeContinuation(name=ContinuationName(f"section_{section.name}_end"))
+    )
 
 
 def lower_paragraph(
@@ -57,4 +60,4 @@ def lower_paragraph(
     ctx.emit_inst(Label_(label=CodeLabel(f"para_{para.name}")))
     for stmt in para.statements:
         ctx.lower_statement(stmt, layout, region_reg)
-    ctx.emit_inst(ResumeContinuation(name=f"para_{para.name}_end"))
+    ctx.emit_inst(ResumeContinuation(name=ContinuationName(f"para_{para.name}_end")))

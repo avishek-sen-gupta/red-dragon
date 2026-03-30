@@ -23,6 +23,7 @@ from interpreter.instructions import (
     SetContinuation,
     StoreVar,
 )
+from interpreter.continuation_name import ContinuationName
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
 
@@ -87,7 +88,9 @@ def emit_perform_branch(
     branch_label, continuation_key = resolve_perform_target(ctx, stmt)
     return_label = ctx.fresh_label("perform_return")
     ctx.emit_inst(
-        SetContinuation(name=str(continuation_key), target_label=return_label)
+        SetContinuation(
+            name=ContinuationName(str(continuation_key)), target_label=return_label
+        )
     )
     ctx.emit_inst(Branch(label=branch_label))
     ctx.emit_inst(Label_(label=return_label))
