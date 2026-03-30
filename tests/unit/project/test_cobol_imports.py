@@ -97,7 +97,7 @@ class TestCobolResolver:
             module_path="CUSTOMER-REC",
             kind=ImportKind.INCLUDE,
         )
-        result = resolver.resolve(ref, cobol_project)
+        [result] = resolver.resolve(ref, cobol_project)
         assert result.resolved_path == cobol_project / "CUSTOMER-REC.cpy"
 
     def test_resolves_called_program(self, cobol_project):
@@ -109,7 +109,7 @@ class TestCobolResolver:
             module_path="VALIDATE",
             kind=ImportKind.REQUIRE,
         )
-        result = resolver.resolve(ref, cobol_project)
+        [result] = resolver.resolve(ref, cobol_project)
         assert result.resolved_path == cobol_project / "VALIDATE.cbl"
 
     def test_nonexistent_copybook(self, cobol_project):
@@ -121,5 +121,5 @@ class TestCobolResolver:
             module_path="MISSING-COPY",
             kind=ImportKind.INCLUDE,
         )
-        result = resolver.resolve(ref, cobol_project)
+        [result] = resolver.resolve(ref, cobol_project)
         assert result.resolved_path == NO_PATH
