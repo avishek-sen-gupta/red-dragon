@@ -311,7 +311,7 @@
   <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
   <h2 style="color: #90a4ae;">Multi-language LLM-assisted symbolic execution and dataflow analysis</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
-  <p class="small dim" style="margin-top: 40px;">~82K LOC &middot; 27 opcodes &middot; 15 frontends &middot; 8,496+ tests &middot; 4 LLM providers</p>
+  <p class="small dim" style="margin-top: 40px;">~85K LOC &middot; 33 opcodes &middot; 15 frontends &middot; 13,100+ tests &middot; 4 LLM providers</p>
   <aside class="notes">
     This is an end-to-end technical deep dive into RedDragon's architecture.
     The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
@@ -376,7 +376,7 @@
     <span class="arch-arrow fragment" data-fragment-index="3">&rarr;</span>
     <div class="arch-box green fragment" data-fragment-index="3">Lower<br><span class="small dim">Frontend</span></div>
     <span class="arch-arrow fragment" data-fragment-index="4">&rarr;</span>
-    <div class="arch-box green fragment" data-fragment-index="4">IR<br><span class="small dim">27 opcodes</span></div>
+    <div class="arch-box green fragment" data-fragment-index="4">IR<br><span class="small dim">33 opcodes</span></div>
     <span class="arch-arrow fragment" data-fragment-index="5">&rarr;</span>
     <div class="arch-box fragment" data-fragment-index="5">CFG<br><span class="small dim">dataflow</span></div>
     <span class="arch-arrow fragment" data-fragment-index="6">&rarr;</span>
@@ -404,7 +404,7 @@
   <p>Flat <strong class="accent">3-address code</strong> with infinite virtual registers</p>
   <div class="two-col" style="margin-top: 20px;">
     <div>
-      <h3>Value Producers (11)</h3>
+      <h3>Value Producers (12)</h3>
       <span class="opcode-cat value">CONST</span>
       <span class="opcode-cat value">LOAD_VAR</span>
       <span class="opcode-cat value">LOAD_FIELD</span>
@@ -416,9 +416,11 @@
       <span class="opcode-cat value">CALL_FUNCTION</span>
       <span class="opcode-cat value">CALL_METHOD</span>
       <span class="opcode-cat value">CALL_UNKNOWN</span>
+      <span class="opcode-cat value">CALL_CTOR</span>
     </div>
     <div>
-      <h3>Control &amp; Storage (9)</h3>
+      <h3>Control &amp; Storage (10)</h3>
+      <span class="opcode-cat control">DECL_VAR</span>
       <span class="opcode-cat control">STORE_VAR</span>
       <span class="opcode-cat control">STORE_FIELD</span>
       <span class="opcode-cat control">STORE_INDEX</span>
@@ -428,7 +430,12 @@
       <span class="opcode-cat control">THROW</span>
       <span class="opcode-cat control">TRY_PUSH</span>
       <span class="opcode-cat control">TRY_POP</span>
-      <h3 style="margin-top: 15px;">Special (7)</h3>
+      <h3 style="margin-top: 15px;">Pointer (4)</h3>
+      <span class="opcode-cat special">ADDRESS_OF</span>
+      <span class="opcode-cat special">LOAD_INDIRECT</span>
+      <span class="opcode-cat special">LOAD_FIELD_INDIRECT</span>
+      <span class="opcode-cat special">STORE_INDIRECT</span>
+      <h3 style="margin-top: 15px;">Special &amp; Region (7)</h3>
       <span class="opcode-cat special">SYMBOLIC</span>
       <span class="opcode-cat special">LABEL</span>
       <span class="opcode-cat special">ALLOC_REGION</span>
@@ -442,7 +449,7 @@
     No expression trees. No register allocation. Each instruction has an explicit destination register.
   </p>
   <aside class="notes">
-    27 opcodes total. The IR is deliberately flat — no nested expressions.
+    33 opcodes total. The IR is deliberately flat — no nested expressions.
     Every value has a named register. This makes dataflow analysis trivial.
   </aside>
 </section>
@@ -528,7 +535,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     <div class="lang-cell"><strong>Pascal</strong></div>
   </div>
   <p class="fragment">All share the same <code class="accent">BaseFrontend</code> architecture</p>
-  <p class="fragment">All lower to the same <code class="accent2">27-opcode IR</code></p>
+  <p class="fragment">All lower to the same <code class="accent2">33-opcode IR</code></p>
   <p class="fragment small dim">+ <code>LLMFrontend</code>: language-agnostic, sends raw source to LLM &rarr; IR JSON</p>
   <aside class="notes">
     Every frontend produces identical IR. The VM doesn't know or care what
@@ -632,7 +639,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     <div>
       <h3>The Prompt Contract</h3>
       <ul style="font-size: 0.75em;">
-        <li class="fragment">System prompt is a <strong>full IR specification</strong>: all 27 opcodes with their operand schemas</li>
+        <li class="fragment">System prompt is a <strong>full IR specification</strong>: all 33 opcodes with their operand schemas</li>
         <li class="fragment">Includes <strong>exact patterns</strong> for functions, classes, if/else, loops &mdash; not prose descriptions, but concrete JSON examples</li>
         <li class="fragment">Full worked example: <code>fib(n)</code> &rarr; 30-instruction IR listing</li>
         <li class="fragment">User prompt is just: <em>"Lower this {language} source into IR"</em></li>
@@ -868,7 +875,7 @@ Chunk errors          : 0</code></pre>
       <pre><code class="language-python">@dataclass
 class BasicBlock:
     label: str
-    instructions: list[IRInstruction]
+    instructions: list[InstructionBase]
     successors: list[str]
     predecessors: list[str]
 
@@ -1458,12 +1465,13 @@ class SymbolicValue:
 <!-- Slide 20: LocalExecutor -->
 <section>
   <h2>LocalExecutor</h2>
-  <p>Full dispatch table: <strong class="accent">27 opcode handlers + 10 builtins</strong></p>
+  <p>Full dispatch table: <strong class="accent">33 opcode handlers + 10 builtins</strong></p>
   <div class="two-col" style="font-size: 0.85em;">
     <div>
       <pre><code class="language-python">DISPATCH = {
   CONST:         _handle_const,
   LOAD_VAR:      _handle_load_var,
+  DECL_VAR:      _handle_decl_var,
   STORE_VAR:     _handle_store_var,
   BINOP:         _handle_binop,
   UNOP:          _handle_unop,
@@ -1474,20 +1482,17 @@ class SymbolicValue:
   CALL_FUNCTION: _handle_call_function,
   CALL_METHOD:   _handle_call_method,
   CALL_UNKNOWN:  _handle_call_unknown,
+  CALL_CTOR:     _handle_call_ctor,
   NEW_OBJECT:    _handle_new_object,
   NEW_ARRAY:     _handle_new_array,
+  ADDRESS_OF:    _handle_address_of,
+  LOAD_INDIRECT: _handle_load_indirect,
+  STORE_INDIRECT:_handle_store_indirect,
   BRANCH:        _handle_branch,
   BRANCH_IF:     _handle_branch_if,
   RETURN:        _handle_return,
   THROW:         _handle_throw,
-  TRY_PUSH:      _handle_try_push,
-  TRY_POP:       _handle_try_pop,
-  SYMBOLIC:      _handle_symbolic,
-  ALLOC_REGION:  _handle_alloc_region,
-  WRITE_REGION:  _handle_write_region,
-  LOAD_REGION:   _handle_load_region,
-  SET_CONTINUATION:    ...,
-  RESUME_CONTINUATION: ...,
+  ... # + TRY, REGION, CONTINUATION
 }</code></pre>
     </div>
     <div>
@@ -1617,7 +1622,7 @@ p = Point(3, 4)
     </div>
     <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
       <strong class="accent4">Language-agnostic</strong><br>
-      <span class="small dim">Same 27 opcodes for all 15 languages &rarr; one VM, one analysis framework</span>
+      <span class="small dim">Same 33 opcodes for all 15 languages &rarr; one VM, one analysis framework</span>
     </div>
   </div>
 </section>
@@ -1684,18 +1689,17 @@ p = Point(3, 4)
 <section>
   <h2>Source Location Traceability</h2>
   <p>Every IR instruction from deterministic frontends carries its originating AST span:</p>
-  <pre><code class="language-python">@dataclass
+  <pre><code class="language-python">@dataclass(frozen=True)
 class SourceLocation:
-    file: str
     start_line: int
-    start_column: int
+    start_col: int
     end_line: int
-    end_column: int
+    end_col: int
 
-class IRInstruction:
-    opcode: Opcode
-    ...
-    source_location: SourceLocation  # from tree-sitter AST node</code></pre>
+@dataclass(frozen=True)
+class InstructionBase:          # 33 per-opcode frozen subclasses
+    source_location: SourceLocation
+    # e.g. Binop(result_reg, operator, left, right, ...)</code></pre>
   <ul style="margin-top: 15px;">
     <li class="fragment">Deterministic frontends &rarr; <strong class="accent2">precise spans</strong> from tree-sitter AST nodes</li>
     <li class="fragment">LLM frontends &rarr; <code class="accent4">NO_SOURCE_LOCATION</code> (sentinel &mdash; no AST to reference)</li>
@@ -1721,7 +1725,7 @@ vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
   <div class="fragment" style="margin-top: 15px;">
     <table style="font-size: 0.7em;">
       <tr><th>Function</th><th>Returns</th></tr>
-      <tr><td><code>lower_source()</code></td><td><code>list[IRInstruction]</code></td></tr>
+      <tr><td><code>lower_source()</code></td><td><code>list[InstructionBase]</code></td></tr>
       <tr><td><code>dump_ir()</code> / <code>dump_cfg()</code> / <code>dump_mermaid()</code></td><td><code>str</code></td></tr>
       <tr><td><code>build_cfg_from_source()</code></td><td><code>CFG</code></td></tr>
       <tr><td><code>ir_stats()</code></td><td><code>dict[str, int]</code></td></tr>
@@ -1741,11 +1745,11 @@ vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
   <h2>By The Numbers</h2>
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="number">~82K</div>
+      <div class="number">~85K</div>
       <div class="label">lines of code</div>
     </div>
     <div class="stat-card">
-      <div class="number">27</div>
+      <div class="number">33</div>
       <div class="label">IR opcodes</div>
     </div>
     <div class="stat-card">
@@ -1753,7 +1757,7 @@ vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
       <div class="label">language frontends</div>
     </div>
     <div class="stat-card">
-      <div class="number">8,496+</div>
+      <div class="number">13,100+</div>
       <div class="label">tests</div>
     </div>
     <div class="stat-card">

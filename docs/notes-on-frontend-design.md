@@ -2,7 +2,7 @@
 
 This document describes the design of the frontend subsystem — the pipeline stages that transform source code into the universal IR consumed by the VM, CFG builder, and dataflow analysis. It is intended for senior technical leads coming to the codebase from scratch.
 
-For exhaustive per-file documentation of the deterministic (tree-sitter) frontends, see [frontend-design/](frontend-design/README.md).
+For per-language frontend documentation (one document per language), see [frontend-design/](frontend-design/).
 
 ---
 
@@ -34,7 +34,7 @@ The frontend subsystem converts source code in any language into a universal fla
 | **LLM** | Raw source text | Prompt an LLM to emit IR as JSON | Seconds | Any language |
 | **Chunked LLM** | tree-sitter AST + raw source | Split into chunks via AST, LLM each chunk | Seconds × N | Any language |
 
-All three produce the same `list[IRInstruction]` output, making the downstream VM, CFG, and dataflow analysis completely frontend-agnostic.
+All three produce the same `list[InstructionBase]` output, making the downstream VM, CFG, and dataflow analysis completely frontend-agnostic.
 
 ```mermaid
 flowchart TD
@@ -54,7 +54,7 @@ flowchart TD
     llm --> llm_impl
     chunked --> chunked_impl
 
-    ir["list[IRInstruction]"]
+    ir["list[InstructionBase]"]
 
     det_impl --> ir
     llm_impl --> ir
@@ -70,7 +70,7 @@ The abstract interface is a single method defined in `interpreter/frontend.py`:
 ```python
 class Frontend(ABC):
     @abstractmethod
-    def lower(self, source: bytes) -> list[IRInstruction]: ...
+    def lower(self, source: bytes) -> list[InstructionBase]: ...
 ```
 
 Returns a flat list of IR instructions, always starting with `LABEL "entry"`. Any frontend strategy — AST-based, LLM-based, or hybrid — plugs in identically.
@@ -207,7 +207,7 @@ class LLMFrontend(Frontend):
     def __init__(self, llm_client: LLMClient, language: str = "python",
                  max_tokens: int = ..., max_retries: int = ...): ...
 
-    def lower(self, tree: Any, source: bytes) -> list[IRInstruction]: ...
+    def lower(self, tree: Any, source: bytes) -> list[InstructionBase]: ...
 ```
 
 The `tree` parameter is **ignored** — the LLM works from raw source text only. This means it can handle any language, not just the 15 with tree-sitter grammars.
@@ -256,7 +256,7 @@ flowchart TD
     parse["json.loads()\n← parse JSON array"]
     single["_parse_single_instruction()\n← per item: validate opcode,\nbuild IRInstruction"]
     validate["_validate_ir()\n← ensure non-empty,\nauto-prepend entry label if missing"]
-    result["list[IRInstruction]"]
+    result["list[InstructionBase]"]
 
     raw --> strip --> parse --> single --> validate --> result
 ```
@@ -476,7 +476,7 @@ The symbol table is available during lowering for:
 
 ```python
 # BaseFrontend lifecycle (simplified)
-def lower(self, source: bytes) -> list[IRInstruction]:
+def lower(self, source: bytes) -> list[InstructionBase]:
     tree = self._parse(source)
     symbol_table = self._extract_symbols(tree, source)  # Phase 2 pre-pass
     return self._lower_with_context(tree, source, symbol_table=symbol_table)
