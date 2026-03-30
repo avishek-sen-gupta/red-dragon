@@ -11,6 +11,7 @@ from typing import Any
 
 from interpreter.constants import Language, TypeName
 from interpreter.func_name import FuncName
+from interpreter.var_name import VarName
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
@@ -173,6 +174,23 @@ def _find_entry_point(cfg: CFG, entry_point: str) -> CodeLabel:
     )
 
 
+def _resolve_entry_function(vm: VMState, entry_point: str, cfg: CFG) -> CodeLabel:
+    """Look up an entry_point function in the VM scope after module preamble.
+
+    Checks vm.current_frame.local_vars for a FuncRef or BoundFuncRef matching
+    the entry_point name. Falls back to _find_entry_point label matching.
+    """
+    key = VarName(entry_point)
+    if key in vm.current_frame.local_vars:
+        val = vm.current_frame.local_vars[key]
+        raw = val.value if isinstance(val, TypedValue) else val
+        if isinstance(raw, BoundFuncRef):
+            return raw.func_ref.label
+        if isinstance(raw, FuncRef):
+            return raw.label
+    return _find_entry_point(cfg, entry_point)
+
+
 def _log_update(
     step: int,
     current_label: CodeLabel,
@@ -264,10 +282,11 @@ def _handle_return_flow(
 
 def execute_cfg(
     cfg: CFG,
-    entry_point: str,
+    entry_point: str | CodeLabel,
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
     strategies: ExecutionStrategies = ExecutionStrategies(),
+    vm: VMState | None = None,
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -280,15 +299,19 @@ def execute_cfg(
         registry: Pre-built function/class registry.
         config: Execution configuration (backend, max_steps, verbose).
         strategies: Language-specific execution strategies (type env, coercion, etc.).
+        vm: Pre-built VM state to continue from. If None, a fresh VM is created.
 
     Returns:
         Tuple of (final VMState, ExecutionStats).
     """
     entry = _find_entry_point(cfg, entry_point)
 
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME)))
-    vm.io_provider = config.io_provider
+    if vm is None:
+        vm = VMState()
+        vm.call_stack.append(
+            StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))
+        )
+        vm.io_provider = config.io_provider
 
     llm = None  # lazy — only created if local executor can't handle an instruction
     call_resolver = _create_resolver(config)
@@ -418,6 +441,7 @@ def execute_cfg_traced(
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
     strategies: ExecutionStrategies = ExecutionStrategies(),
+    vm: VMState | None = None,
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -430,15 +454,19 @@ def execute_cfg_traced(
         registry: Pre-built function/class registry.
         config: Execution configuration (backend, max_steps, verbose).
         strategies: Language-specific execution strategies (type env, coercion, etc.).
+        vm: Optional pre-built VMState to reuse; a fresh one is created if None.
 
     Returns:
         Tuple of (final VMState, ExecutionTrace with per-step snapshots).
     """
     entry = _find_entry_point(cfg, entry_point)
 
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME)))
-    vm.io_provider = config.io_provider
+    if vm is None:
+        vm = VMState()
+        vm.call_stack.append(
+            StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))
+        )
+        vm.io_provider = config.io_provider
     initial_state = copy.deepcopy(vm)
 
     llm = None  # lazy — only created if local executor can't handle an instruction
@@ -728,7 +756,33 @@ def run(
         unresolved_call_strategy=unresolved_call_strategy,
     )
     exec_start = time.perf_counter()
-    vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config, strategies)
+
+    module_entry = _find_entry_point(cfg, "")
+    if entry_point and entry != module_entry:
+        # Phase 1: run module preamble to populate ClassRefs/FuncRefs in scope
+        vm, preamble_stats = execute_cfg(
+            cfg, module_entry, registry, vm_config, strategies
+        )
+
+        # Look up entry_point function in scope
+        func_label = _resolve_entry_function(vm, entry_point, cfg)
+
+        # Phase 2: dispatch into target function
+        remaining = max_steps - preamble_stats.steps
+        phase2_config = replace(vm_config, max_steps=max(remaining, 0))
+        vm, phase2_stats = execute_cfg(
+            cfg, func_label, registry, phase2_config, strategies, vm=vm
+        )
+        exec_stats = ExecutionStats(
+            steps=preamble_stats.steps + phase2_stats.steps,
+            llm_calls=preamble_stats.llm_calls + phase2_stats.llm_calls,
+            final_heap_objects=phase2_stats.final_heap_objects,
+            final_symbolic_count=phase2_stats.final_symbolic_count,
+            closures_captured=phase2_stats.closures_captured,
+        )
+    else:
+        vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config, strategies)
+
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
 
