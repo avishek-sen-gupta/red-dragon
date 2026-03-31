@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 from interpreter.cfg_types import CFG
 from interpreter.class_name import ClassName
@@ -167,3 +167,14 @@ class LinkedProgram:
     unresolved_imports: list[ImportRef] = field(default_factory=list)
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
+
+    def entry_points(
+        self,
+        predicate: Callable[[FuncRef], bool] = lambda _: True,
+    ) -> list[FuncRef]:
+        """Query available entry point functions.
+
+        Returns FuncRefs from the func_symbol_table matching the predicate.
+        Default predicate returns all functions.
+        """
+        return [ref for ref in self.func_symbol_table.values() if predicate(ref)]
