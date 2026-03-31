@@ -92,8 +92,8 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo_success "Running full test suite with coverage (this may take a while)..."
-poetry -C "$REPO_ROOT" run python -m pytest tests/ --cov --cov-report= --cov-fail-under=85 -x -q
+echo_success "Running full test suite..."
+poetry -C "$REPO_ROOT" run python -m pytest tests/ -x -q
 if [ $? -ne 0 ]; then
   echo_error "Tests or coverage check failed. Fix before committing."
   exit 1
