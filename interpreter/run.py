@@ -750,7 +750,7 @@ def run_linked(
 def run(
     source: str,
     language: str | Language = Language.PYTHON,
-    entry_point: str | EntryPoint = "",
+    entry_point: EntryPoint = EntryPoint.top_level(),
     backend: str = LLMProvider.CLAUDE,
     max_steps: int = 100,
     verbose: bool = False,
@@ -766,7 +766,7 @@ def run(
     Args:
         source: Raw source code string.
         language: Source language name.
-        entry_point: How to enter — str (legacy) or EntryPoint (new).
+        entry_point: How to enter the program (default: top-level execution).
         backend: LLM backend for interpreter fallback ("claude" or "openai").
         max_steps: Maximum interpretation steps.
         verbose: Print IR, CFG, and step-by-step info.
@@ -774,15 +774,6 @@ def run(
         llm_client: Pre-built LLMClient for DI/testing (used by LLM frontend).
         unresolved_call_strategy: Resolution strategy for unknown calls.
     """
-    # Bridge: accept both str (legacy) and EntryPoint (new)
-    if isinstance(entry_point, str):
-        if entry_point:
-            entry_point = EntryPoint.function(
-                lambda f, _name=FuncName(entry_point): f.name == _name
-            )
-        else:
-            entry_point = EntryPoint.top_level()
-
     lang = Language(language)
     pipeline_start = time.perf_counter()
     stats = PipelineStats(

@@ -5,11 +5,12 @@ from __future__ import annotations
 from interpreter.var_name import VarName
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_program(source: str, max_steps: int = 200) -> dict:
     """Run a program and return the main frame's local_vars."""
-    vm = run(source, max_steps=max_steps)
+    vm = run(source, max_steps=max_steps, entry_point=EntryPoint.top_level())
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 
@@ -208,7 +209,7 @@ def add(a, b):
 
 result = add(3, 4)
 """
-        vm = run(source, max_steps=100)
+        vm = run(source, max_steps=100, entry_point=EntryPoint.top_level())
         assert unwrap(vm.call_stack[0].local_vars[VarName("result")]) == 7
         assert len(vm.closures) == 0
 
@@ -222,6 +223,6 @@ def factorial(n):
 
 result = factorial(5)
 """
-        vm = run(source, max_steps=200)
+        vm = run(source, max_steps=200, entry_point=EntryPoint.top_level())
         assert unwrap(vm.call_stack[0].local_vars[VarName("result")]) == 120
         assert len(vm.closures) == 0
