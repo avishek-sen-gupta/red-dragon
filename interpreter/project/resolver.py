@@ -202,10 +202,20 @@ class JavaImportResolver(ImportResolver):
             return self._resolve_wildcard(ref, rel_path, search_roots)
 
         # Specific: import com.example.Utils → find Utils.java
+        # Try names appended to the package path first (e.g. module_path='com.math',
+        # names=('Adder',) → com/math/Adder.java), then fall back to treating the
+        # last segment of module_path as the class name (module_path='com.math.Adder').
+        candidates: list[Path] = []
+        if ref.names and ref.names != ("*",):
+            for name in ref.names:
+                candidates.append(rel_path / f"{name}.java")
+        candidates.append(rel_path.with_suffix(".java"))
+
         for root in search_roots:
-            candidate = root / rel_path.with_suffix(".java")
-            if candidate.exists():
-                return [ResolvedImport(ref=ref, resolved_path=candidate)]
+            for candidate_rel in candidates:
+                candidate = root / candidate_rel
+                if candidate.exists():
+                    return [ResolvedImport(ref=ref, resolved_path=candidate)]
 
         return [ResolvedImport(ref=ref)]
 
