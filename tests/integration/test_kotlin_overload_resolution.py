@@ -8,6 +8,7 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap
+from interpreter.project.entry_point import EntryPoint
 
 
 class TestKotlinOverloadResolutionByArity:
@@ -22,7 +23,12 @@ class Calc {
 val c = Calc()
 val x = c.add(5)
 """
-        vm = run(source, language=Language.KOTLIN, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.KOTLIN,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("x"))) == 5
 
     def test_unary_vs_binary_picks_binary(self):
@@ -34,7 +40,12 @@ class Calc {
 val c = Calc()
 val y = c.add(3, 4)
 """
-        vm = run(source, language=Language.KOTLIN, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.KOTLIN,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("y"))) == 7
 
     def test_three_arity_overloads(self):
@@ -49,7 +60,12 @@ val r1 = c.add(5)
 val r2 = c.add(3, 4)
 val r3 = c.add(1, 2, 3)
 """
-        vm = run(source, language=Language.KOTLIN, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.KOTLIN,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         lv = vm.call_stack[0].local_vars
         assert unwrap(lv.get(VarName("r1"))) == 5
         assert unwrap(lv.get(VarName("r2"))) == 7
@@ -68,7 +84,12 @@ class Printer {
 val p = Printer()
 val result = p.show(42)
 """
-        vm = run(source, language=Language.KOTLIN, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.KOTLIN,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == 43
 
     def test_int_vs_string_picks_string(self):
@@ -80,5 +101,10 @@ class Printer {
 val p = Printer()
 val result = p.show("hello")
 """
-        vm = run(source, language=Language.KOTLIN, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.KOTLIN,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "str:hello"

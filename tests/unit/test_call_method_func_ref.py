@@ -15,11 +15,17 @@ from interpreter.frontends import get_deterministic_frontend
 from interpreter.ir import Opcode
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_program(source: str, language: Language, max_steps: int = 200) -> dict:
     """Run a program and return the main frame's local_vars."""
-    vm = run(source, language=language, max_steps=max_steps)
+    vm = run(
+        source,
+        language=language,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 

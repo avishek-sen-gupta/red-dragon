@@ -12,10 +12,16 @@ from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.types.type_expr import scalar
 from interpreter.vm.vm import _heap_addr
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_python(source: str, max_steps: int = 500):
-    vm = run(source, language=Language.PYTHON, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.PYTHON,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return vm, unwrap_locals(vm.call_stack[0].local_vars)
 
 

@@ -15,6 +15,8 @@ from interpreter.api import (
 )
 from interpreter.run import run
 from interpreter import constants
+from interpreter.project.entry_point import EntryPoint
+from interpreter.func_name import FuncName
 
 
 def main():
@@ -113,10 +115,15 @@ result = factorial(5)
         return
 
     # Full run
+    entry = (
+        EntryPoint.function(lambda f, _name=FuncName(args.entry): f.name == _name)
+        if args.entry
+        else EntryPoint.top_level()
+    )
     vm = run(
         source,
         language=args.language,
-        entry_point=args.entry,
+        entry_point=entry,
         backend=args.backend,
         max_steps=args.max_steps,
         verbose=args.verbose,
