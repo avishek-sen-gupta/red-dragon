@@ -81,12 +81,9 @@ if [ $? -ne 0 ]; then exit 1; fi
 # ---------------------------------------------------------------------------
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-echo_success "Running Black formatting check..."
-poetry -C "$REPO_ROOT" run python -m black --check .
-if [ $? -ne 0 ]; then
-  echo_error "Black check failed. Run: poetry run python -m black ."
-  exit 1
-fi
+echo_success "Running Black (auto-fix)..."
+poetry -C "$REPO_ROOT" run python -m black .
+git -C "$REPO_ROOT" add -u
 
 echo_success "Running import-linter architectural contracts..."
 poetry -C "$REPO_ROOT" run lint-imports
