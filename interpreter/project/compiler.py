@@ -181,9 +181,9 @@ def compile_project(
     linked = link_modules(
         modules=modules,
         import_graph=import_graph,
-        entry_module=entry_file,
         project_root=project_root,
         topo_order=topo_order,
+        language=language,
     )
 
     return linked
@@ -252,7 +252,7 @@ def compile_directory(
     return link_modules(
         modules=modules,
         import_graph=import_graph,
-        entry_module=entry_file,
         project_root=directory,
         topo_order=topo_order,
+        language=language,
     )

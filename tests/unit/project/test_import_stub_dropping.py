@@ -35,9 +35,9 @@ class TestImportStubDropping:
         return link_modules(
             modules=modules,
             import_graph=import_graph,
-            entry_module=entry_module.path,
             project_root=Path("/project"),
             topo_order=[dep_module.path, entry_module.path],
+            language=Language.PYTHON,
         )
 
     def test_adjacent_stub_is_dropped(self):

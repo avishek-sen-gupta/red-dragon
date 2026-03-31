@@ -18,6 +18,8 @@ from interpreter.func_name import FuncName
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.class_name import ClassName
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.frontends.symbol_table import SymbolTable
 
 # ── ImportRef ────────────────────────────────────────────────────
 
@@ -264,13 +266,31 @@ class TestLinkedProgram:
             merged_ir=[IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))],
             merged_cfg=CFG(),
             merged_registry=FunctionRegistry(),
-            entry_module=Path("main.py"),
+            language=Language.PYTHON,
             import_graph={Path("main.py"): [Path("utils.py")], Path("utils.py"): []},
+            type_env_builder=TypeEnvironmentBuilder(),
+            symbol_table=SymbolTable.empty(),
         )
         assert len(lp.modules) == 2
-        assert lp.entry_module == Path("main.py")
+        assert lp.language == Language.PYTHON
         assert len(lp.import_graph) == 2
         assert lp.unresolved_imports == []
+
+    def test_language_field_present(self):
+        from interpreter.cfg_types import CFG
+        from interpreter.registry import FunctionRegistry
+
+        lp = LinkedProgram(
+            modules={},
+            merged_ir=[],
+            merged_cfg=CFG(),
+            merged_registry=FunctionRegistry(),
+            language=Language.PYTHON,
+            import_graph={},
+            type_env_builder=TypeEnvironmentBuilder(),
+            symbol_table=SymbolTable.empty(),
+        )
+        assert lp.language == Language.PYTHON
 
     def test_unresolved_imports_default_empty(self):
         from interpreter.cfg_types import CFG
@@ -281,10 +301,47 @@ class TestLinkedProgram:
             merged_ir=[],
             merged_cfg=CFG(),
             merged_registry=FunctionRegistry(),
-            entry_module=Path("main.py"),
+            language=Language.PYTHON,
             import_graph={},
+            type_env_builder=TypeEnvironmentBuilder(),
+            symbol_table=SymbolTable.empty(),
         )
         assert lp.unresolved_imports == []
+
+    def test_data_layout_default_empty(self):
+        from interpreter.cfg_types import CFG
+        from interpreter.registry import FunctionRegistry
+
+        lp = LinkedProgram(
+            modules={},
+            merged_ir=[],
+            merged_cfg=CFG(),
+            merged_registry=FunctionRegistry(),
+            language=Language.PYTHON,
+            import_graph={},
+            type_env_builder=TypeEnvironmentBuilder(),
+            symbol_table=SymbolTable.empty(),
+        )
+        assert lp.data_layout == {}
+
+    def test_type_env_builder_and_symbol_table_stored(self):
+        from interpreter.cfg_types import CFG
+        from interpreter.registry import FunctionRegistry
+
+        teb = TypeEnvironmentBuilder()
+        st = SymbolTable.empty()
+        lp = LinkedProgram(
+            modules={},
+            merged_ir=[],
+            merged_cfg=CFG(),
+            merged_registry=FunctionRegistry(),
+            language=Language.JAVA,
+            import_graph={},
+            type_env_builder=teb,
+            symbol_table=st,
+        )
+        assert lp.type_env_builder is teb
+        assert lp.symbol_table is st
 
 
 # ── CyclicImportError ────────────────────────────────────────────

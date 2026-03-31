@@ -22,6 +22,8 @@ from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.instructions import InstructionBase
 from interpreter.registry import FunctionRegistry
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.frontends.symbol_table import SymbolTable
 
 # ── Errors ───────────────────────────────────────────────────────
 
@@ -157,8 +159,11 @@ class LinkedProgram:
     merged_ir: list[InstructionBase]
     merged_cfg: CFG
     merged_registry: FunctionRegistry
-    entry_module: Path
+    language: Language
     import_graph: dict[Path, list[Path]]
+    type_env_builder: TypeEnvironmentBuilder
+    symbol_table: SymbolTable
+    data_layout: dict[str, dict] = field(default_factory=dict)
     unresolved_imports: list[ImportRef] = field(default_factory=list)
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)

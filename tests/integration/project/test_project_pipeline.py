@@ -103,7 +103,7 @@ class TestCompileProjectPython:
 
         assert isinstance(linked, LinkedProgram)
         assert len(linked.modules) == 2
-        assert linked.entry_module == two_file_project / "main.py"
+        assert linked.language == Language.PYTHON
         assert len(linked.merged_ir) > 0
         assert len(linked.merged_cfg.blocks) > 0
 

@@ -35,10 +35,13 @@ from interpreter.instructions import (
     Const,
     Label_,
 )
+from interpreter.constants import Language
 from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.registry import build_registry
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter import constants
 
 # ── Public helpers (tested individually) ─────────────────────────
@@ -233,9 +236,12 @@ def _collect_resolved_imports(
 def link_modules(
     modules: dict[Path, ModuleUnit],
     import_graph: dict[Path, list[Path]],
-    entry_module: Path,
     project_root: Path,
     topo_order: list[Path],
+    language: Language,
+    type_env_builder: TypeEnvironmentBuilder | None = None,
+    symbol_table: SymbolTable | None = None,
+    data_layout: dict[str, dict] | None = None,
 ) -> LinkedProgram:
     """Link compiled modules into a single program.
 
@@ -248,13 +254,18 @@ def link_modules(
         [dep2 function bodies]
         [entry function bodies]
     """
+    if type_env_builder is None:
+        type_env_builder = TypeEnvironmentBuilder()
+    if symbol_table is None:
+        symbol_table = SymbolTable.empty()
+    if data_layout is None:
+        data_layout = {}
+
     prefixes = {path: module_prefix(path, project_root) for path in modules}
     resolved = _collect_resolved_imports(modules, import_graph)
 
-    # Processing order: dependencies first (topo order), entry module last
-    processing_order = [p for p in topo_order if p != entry_module and p in modules] + [
-        entry_module
-    ]
+    # Processing order: topo_order already has deps first, entry last
+    processing_order = [p for p in topo_order if p in modules]
 
     # Build merged IR with a single entry label
     all_ir: list[InstructionBase] = [Label_(label=CodeLabel("entry"))]
@@ -284,8 +295,11 @@ def link_modules(
         merged_ir=all_ir,
         merged_cfg=merged_cfg,
         merged_registry=merged_registry,
-        entry_module=entry_module,
+        language=language,
         import_graph=import_graph,
+        type_env_builder=type_env_builder,
+        symbol_table=symbol_table,
+        data_layout=data_layout,
         func_symbol_table=merged_func_symbols,
         class_symbol_table=merged_class_symbols,
     )
