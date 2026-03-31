@@ -37,6 +37,7 @@ class BinopKind(str, Enum):
     BIT_XOR_LUA = "~"
     LSHIFT = "<<"
     RSHIFT = ">>"
+    UNSIGNED_RSHIFT = ">>>"
     # String concat
     CONCAT_LUA = ".."
     CONCAT_PASCAL = "."
