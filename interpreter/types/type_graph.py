@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeGraph — DAG of types with subtype queries and least-upper-bound."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# pyright: standard
 """FunctionSignature — immutable record of a function's parameter types and return type."""
 
 from __future__ import annotations

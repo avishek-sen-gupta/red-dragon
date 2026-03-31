@@ -1,3 +1,4 @@
+# pyright: standard
 """VarScopeInfo — metadata for mangled block-scoped variable names."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeEnvironmentBuilder — mutable accumulator for type seeds from frontends.
 
 Frontends populate this during lowering; ``infer_types()`` receives it
