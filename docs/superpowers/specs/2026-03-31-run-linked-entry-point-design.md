@@ -39,7 +39,7 @@ def run_linked(
 
 **Refactored `run()`**
 
-- `entry_point` parameter changes from `str` to `Callable[[FuncRef], bool] | None`. When `None` (default), execution runs the full module preamble without dispatching into any function — preserving current no-entry-point behavior.
+- `entry_point` parameter changes from `str` to `Callable[[FuncRef], bool]`. Required — every execution must target a specific function.
 - Internally: lower source string into a single-module `LinkedProgram`, then delegate to `run_linked()`.
 - `LinkedProgram` becomes the universal intermediate between compilation and execution, whether from a single source string or a multi-module directory.
 
@@ -58,13 +58,22 @@ def entry_points(
 
 ### 3. Caller Migration
 
-26 existing call sites change from string entry points to predicates:
+**145 call sites across 74 files.** Two categories:
+
+1. **26 sites already passing `entry_point="main"` etc.** — change string to predicate.
+2. **~119 sites passing no `entry_point`** — must now provide a predicate since `entry_point` is required. These currently run from module start; they need a predicate that selects the appropriate top-level function (or the test programs need a named entry function added).
 
 ```python
-# Before
+# Before (with entry_point)
 run(source, language=Language.PYTHON, entry_point="main")
 
-# After
+# After (with entry_point)
+run(source, language=Language.PYTHON, entry_point=lambda f: f.name == FuncName("main"))
+
+# Before (no entry_point — ran from module start)
+run(source, language=Language.PYTHON)
+
+# After (must specify entry function)
 run(source, language=Language.PYTHON, entry_point=lambda f: f.name == FuncName("main"))
 ```
 
@@ -101,6 +110,6 @@ Document in `docs/architectural-design-decisions.md`:
 | `compile_project()` (project/compiler.py) | Remove |
 | `run()` (run.py) | `entry_point: str` -> `Callable[[FuncRef], bool]`, build single-module LinkedProgram, delegate to `run_linked()` |
 | `run_linked()` (run.py) | New function: LinkedProgram + predicate -> VMState |
-| 26 call sites | String entry points -> predicates |
+| 145 call sites (74 files) | String/missing entry points -> predicates |
 | ADRs | Document consolidation and rationale |
 | Integration tests | 16 new per-frontend multi-module test files |
