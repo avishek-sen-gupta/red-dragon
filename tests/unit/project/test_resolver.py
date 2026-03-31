@@ -10,6 +10,7 @@ from interpreter.project.resolver import (
     ResolvedImport,
     NullImportResolver,
     PythonImportResolver,
+    JavaImportResolver,
     get_resolver,
     NO_PATH,
 )
@@ -200,3 +201,88 @@ class TestResolverReturnType:
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0].is_resolved() is True
+
+
+class TestJavaImportResolverMultiRoot:
+    def test_resolves_specific_import_across_roots(self, tmp_path):
+        """Specific import found in a non-primary source root."""
+        root_a = tmp_path / "module-a" / "src" / "main" / "java"
+        root_b = tmp_path / "module-b" / "src" / "main" / "java"
+        (root_b / "com" / "example").mkdir(parents=True)
+        (root_b / "com" / "example" / "Utils.java").write_text("class Utils {}")
+
+        resolver = JavaImportResolver(source_roots=[root_a, root_b])
+        ref = ImportRef(
+            source_file=tmp_path / "App.java", module_path="com.example.Utils"
+        )
+        results = resolver.resolve(ref, tmp_path)
+        assert len(results) == 1
+        assert results[0].is_resolved()
+        assert results[0].resolved_path == root_b / "com" / "example" / "Utils.java"
+
+    def test_wildcard_resolves_all_files_in_package(self, tmp_path):
+        """Wildcard import returns one ResolvedImport per .java file."""
+        root = tmp_path / "src" / "main" / "java"
+        pkg = root / "com" / "example"
+        pkg.mkdir(parents=True)
+        (pkg / "Foo.java").write_text("class Foo {}")
+        (pkg / "Bar.java").write_text("class Bar {}")
+        (pkg / "Baz.java").write_text("class Baz {}")
+
+        resolver = JavaImportResolver(source_roots=[root])
+        ref = ImportRef(
+            source_file=tmp_path / "App.java",
+            module_path="com.example",
+            names=("*",),
+        )
+        results = resolver.resolve(ref, tmp_path)
+        resolved_names = sorted(
+            r.resolved_path.name for r in results if r.is_resolved()
+        )
+        assert resolved_names == ["Bar.java", "Baz.java", "Foo.java"]
+
+    def test_wildcard_across_roots(self, tmp_path):
+        """Wildcard should find files in the first root that has the package."""
+        root_a = tmp_path / "a" / "src" / "main" / "java"
+        root_b = tmp_path / "b" / "src" / "main" / "java"
+        pkg_b = root_b / "com" / "utils"
+        pkg_b.mkdir(parents=True)
+        (pkg_b / "Helper.java").write_text("class Helper {}")
+        (pkg_b / "Util.java").write_text("class Util {}")
+
+        resolver = JavaImportResolver(source_roots=[root_a, root_b])
+        ref = ImportRef(
+            source_file=tmp_path / "App.java",
+            module_path="com.utils",
+            names=("*",),
+        )
+        results = resolver.resolve(ref, tmp_path)
+        resolved_names = sorted(
+            r.resolved_path.name for r in results if r.is_resolved()
+        )
+        assert resolved_names == ["Helper.java", "Util.java"]
+
+    def test_no_source_roots_falls_back_to_project_root(self, tmp_path):
+        """When no source_roots provided, uses the old 4-pattern search."""
+        java_root = tmp_path / "src" / "main" / "java"
+        (java_root / "com" / "example").mkdir(parents=True)
+        (java_root / "com" / "example" / "App.java").write_text("class App {}")
+
+        resolver = JavaImportResolver()
+        ref = ImportRef(
+            source_file=tmp_path / "Main.java", module_path="com.example.App"
+        )
+        results = resolver.resolve(ref, tmp_path)
+        assert len(results) == 1
+        assert results[0].is_resolved()
+
+    def test_system_import_returns_external(self):
+        resolver = JavaImportResolver()
+        ref = ImportRef(
+            source_file=Path("App.java"),
+            module_path="java.util.List",
+            is_system=True,
+        )
+        results = resolver.resolve(ref, Path("/project"))
+        assert len(results) == 1
+        assert results[0].is_external is True
