@@ -44,10 +44,10 @@ class EntryPoint:
         Raises ValueError if zero or multiple matches.
         """
         matches = [f for f in candidates if self._predicate(f)]
-        if len(matches) == 0:
+        if not matches:
             names = [str(f.name) for f in candidates]
             raise ValueError(
-                f"No function matched the entry_point predicate. " f"Available: {names}"
+                f"No function matched the entry_point predicate. Available: {names}"
             )
         if len(matches) > 1:
             names = [str(f.name) for f in matches]
