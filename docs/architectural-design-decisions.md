@@ -2563,3 +2563,23 @@ compilation. No chaining, no import tables, no special variable handling.
 5. Fix `AddressOf.reads()` to return the variable name (dataflow tracking gap)
 
 **Consequences:** Adding a new opcode only requires implementing `reads()`/`writes()` on its class — no changes to dataflow, interprocedural analysis, or any other consumer. The `StorageIdentifier` protocol provides a common interface for both register references and variable names in dataflow chains. ~100 changes across ~15 files.
+
+---
+
+### ADR-130: EntryPoint type and compilation consolidation (2026-03-31)
+
+**Context:** `compile_project()` performed BFS import-tracing to discover files, while `compile_directory()` compiled all files in a directory. The BFS machinery added complexity without benefit — preamble ordering doesn't affect correctness since all modules register symbols via CONST+DECL_VAR. Meanwhile, `run()` used `entry_point: str = ""` where empty string implicitly meant "run top-to-bottom" — a stringly-typed convention.
+
+**Decision:**
+1. Remove `compile_project()`. `compile_directory(directory, language)` is the sole compilation entry point (no `entry_file` parameter).
+2. Introduce `EntryPoint` type (`interpreter/project/entry_point.py`) with `function(predicate)` and `top_level()` factory methods, replacing stringly-typed entry point selection.
+3. Add `run_linked(linked, entry_point)` as the universal execution function. `run()` builds a single-module `LinkedProgram` from the frontend and delegates to it.
+4. `LinkedProgram` drops `entry_module`, gains `language`, `type_env_builder`, `symbol_table`, `data_layout`, and `entry_points(predicate)` discovery method. It is now a self-contained execution unit.
+
+**Implementation:**
+1. `EntryPoint` frozen dataclass with `function(predicate: Callable[[FuncRef], bool])` and `top_level()` factory methods, plus `resolve(candidates) -> FuncRef`
+2. `run_linked()` handles both modes: top-level runs from `merged_cfg.entry`; function mode does two-phase (preamble then dispatch into matched function)
+3. `run()` builds `LinkedProgram` from frontend data, delegates to `run_linked()`
+4. 145 call sites across 74 files migrated from string entry points to `EntryPoint`
+
+**Consequences:** Every caller explicitly states execution intent — no implicit empty-string conventions. Import-tracing utilities (`ImportResolver`, `topological_sort`, `extract_imports`) remain available for analysis but are not in the compilation path. `LinkedProgram` is the universal intermediate between compilation and execution, whether from a single source string or a multi-module directory. 13,217 tests passing.
