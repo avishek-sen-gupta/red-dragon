@@ -5,6 +5,7 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
+from interpreter.project.entry_point import EntryPoint
 
 
 def _typed_locals(vm):
@@ -14,7 +15,10 @@ def _typed_locals(vm):
 class TestNewObjectProducesPointer:
     def test_java_new_object_is_pointer(self):
         vm = run(
-            "class Dog {} Dog d = new Dog();", language=Language.JAVA, max_steps=100
+            "class Dog {} Dog d = new Dog();",
+            language=Language.JAVA,
+            max_steps=100,
+            entry_point=EntryPoint.top_level(),
         )
         tv = _typed_locals(vm)[VarName("d")]
         assert isinstance(tv.value, Pointer)
@@ -25,6 +29,7 @@ class TestNewObjectProducesPointer:
             "class Cat:\n  pass\nc = Cat()\n",
             language=Language.PYTHON,
             max_steps=100,
+            entry_point=EntryPoint.top_level(),
         )
         tv = _typed_locals(vm)[VarName("c")]
         assert isinstance(tv.value, Pointer)
@@ -35,6 +40,7 @@ class TestNewObjectProducesPointer:
             "struct Point { x: i32 }\nlet p = Point { x: 42 };\n",
             language=Language.RUST,
             max_steps=200,
+            entry_point=EntryPoint.top_level(),
         )
         tv = _typed_locals(vm)[VarName("p")]
         assert isinstance(tv.value, Pointer)
@@ -48,7 +54,10 @@ class TestNewObjectProducesPointer:
     def test_heap_object_accessible_via_pointer_base(self):
         """Pointer.base should be a valid heap key."""
         vm = run(
-            "class Dog {} Dog d = new Dog();", language=Language.JAVA, max_steps=100
+            "class Dog {} Dog d = new Dog();",
+            language=Language.JAVA,
+            max_steps=100,
+            entry_point=EntryPoint.top_level(),
         )
         tv = _typed_locals(vm)[VarName("d")]
         assert vm.heap_contains(tv.value.base)

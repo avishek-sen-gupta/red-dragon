@@ -1094,11 +1094,13 @@ class TestJavaStringLengthExecution:
         """s.length() on a concrete string should return a concrete int."""
         from interpreter.run import run
         from interpreter.types.typed_value import unwrap_locals
+        from interpreter.project.entry_point import EntryPoint
 
         vm = run(
             'class M { static int result = "hello".length(); }',
             language="java",
             max_steps=100,
+            entry_point=EntryPoint.top_level(),
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] == 5

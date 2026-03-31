@@ -5,11 +5,17 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.vm.vm_types import Pointer
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 class TestBuiltinArrayPointer:
     def test_kotlin_array_of_produces_pointer(self):
-        vm = run("val arr = arrayOf(1, 2, 3)", language=Language.KOTLIN, max_steps=100)
+        vm = run(
+            "val arr = arrayOf(1, 2, 3)",
+            language=Language.KOTLIN,
+            max_steps=100,
+            entry_point=EntryPoint.top_level(),
+        )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert isinstance(locals_[VarName("arr")], Pointer)
         assert locals_[VarName("arr")].base.startswith("arr_")
@@ -19,6 +25,7 @@ class TestBuiltinArrayPointer:
             "let a = [1, 2, 3]; let b = [...a, 4];",
             language=Language.JAVASCRIPT,
             max_steps=200,
+            entry_point=EntryPoint.top_level(),
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert isinstance(locals_[VarName("b")], Pointer)

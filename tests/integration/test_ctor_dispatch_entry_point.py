@@ -9,6 +9,8 @@ in the scope chain and falls through to symbolic.
 
 from interpreter.constants import Language
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
+from interpreter.project.entry_point import EntryPoint
 from interpreter.refs.class_ref import ClassRef
 from interpreter.run import run
 from interpreter.var_name import VarName
@@ -32,7 +34,12 @@ public class Dog {
     }
 }
 """
-        vm = run(source, language=Language.JAVA, entry_point="main", max_steps=50)
+        vm = run(
+            source,
+            language=Language.JAVA,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=50,
+        )
         d_val = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(
             d_val.value, Pointer
@@ -52,7 +59,12 @@ public class Dog {
     }
 }
 """
-        vm = run(source, language=Language.JAVA, entry_point="main", max_steps=50)
+        vm = run(
+            source,
+            language=Language.JAVA,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=50,
+        )
         d_val = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(
             d_val.value, Pointer
@@ -80,7 +92,12 @@ public class App {
     }
 }
 """
-        vm = run(source, language=Language.JAVA, entry_point="main", max_steps=50)
+        vm = run(
+            source,
+            language=Language.JAVA,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=50,
+        )
         p_val = vm.current_frame.local_vars[VarName("p")]
         assert isinstance(
             p_val.value, Pointer
@@ -97,7 +114,12 @@ public class Cat {
     }
 }
 """
-        vm = run(source, language=Language.JAVA, max_steps=50)
+        vm = run(
+            source,
+            language=Language.JAVA,
+            max_steps=50,
+            entry_point=EntryPoint.top_level(),
+        )
         # Module-level code should have declared 'Cat' as a ClassRef
         cat_val = vm.current_frame.local_vars[VarName("Cat")]
         assert isinstance(
@@ -140,7 +162,12 @@ public class Dog {
     }
 }
 """
-        vm = run(source, language=Language.JAVA, entry_point="main", max_steps=200)
+        vm = run(
+            source,
+            language=Language.JAVA,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=200,
+        )
 
         # Both dogs are heap-allocated Pointers
         d1 = vm.current_frame.local_vars[VarName("d1")]
@@ -178,7 +205,12 @@ def main():
     d = Dog("Buddy", 3)
     n = d.get_name()
 """
-        vm = run(source, language=Language.PYTHON, entry_point="main", max_steps=100)
+        vm = run(
+            source,
+            language=Language.PYTHON,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=100,
+        )
 
         d = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(d.value, Pointer)
@@ -204,7 +236,12 @@ fun main() {
     val n = d.getName()
 }
 """
-        vm = run(source, language=Language.KOTLIN, entry_point="main", max_steps=100)
+        vm = run(
+            source,
+            language=Language.KOTLIN,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=100,
+        )
 
         d = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(d.value, Pointer)
@@ -238,7 +275,12 @@ public class Counter {
     }
 }
 """
-        vm = run(source, language=Language.JAVA, entry_point="main", max_steps=200)
+        vm = run(
+            source,
+            language=Language.JAVA,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=200,
+        )
 
         c = vm.current_frame.local_vars[VarName("c")]
         assert isinstance(c.value, Pointer)
@@ -261,7 +303,12 @@ class Dog {
     }
 }
 """
-        vm = run(source, language=Language.CSHARP, entry_point="Main", max_steps=150)
+        vm = run(
+            source,
+            language=Language.CSHARP,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("Main")),
+            max_steps=150,
+        )
 
         d = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(d.value, Pointer)
@@ -286,7 +333,12 @@ object Main {
     }
 }
 """
-        vm = run(source, language=Language.SCALA, entry_point="main", max_steps=150)
+        vm = run(
+            source,
+            language=Language.SCALA,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=150,
+        )
 
         d = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(d.value, Pointer)
@@ -318,7 +370,10 @@ function main() {
 }
 """
         vm = run(
-            source, language=Language.TYPESCRIPT, entry_point="main", max_steps=150
+            source,
+            language=Language.TYPESCRIPT,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=150,
         )
 
         d = vm.current_frame.local_vars[VarName("d")]
@@ -349,7 +404,10 @@ function main() {
 }
 """
         vm = run(
-            source, language=Language.JAVASCRIPT, entry_point="main", max_steps=150
+            source,
+            language=Language.JAVASCRIPT,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=150,
         )
 
         d = vm.current_frame.local_vars[VarName("d")]
@@ -379,7 +437,12 @@ def main
     n = d.get_name
 end
 """
-        vm = run(source, language=Language.RUBY, entry_point="main", max_steps=150)
+        vm = run(
+            source,
+            language=Language.RUBY,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=150,
+        )
 
         d = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(d.value, Pointer)
@@ -406,7 +469,12 @@ function main() {
     $n = $d->getName();
 }
 """
-        vm = run(source, language=Language.PHP, entry_point="main", max_steps=150)
+        vm = run(
+            source,
+            language=Language.PHP,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=150,
+        )
 
         d = vm.current_frame.local_vars[VarName("$d")]
         assert isinstance(d.value, Pointer)
@@ -435,7 +503,12 @@ public class Geometry {
     }
 }
 """
-        vm = run(source, language=Language.JAVA, entry_point="main", max_steps=100)
+        vm = run(
+            source,
+            language=Language.JAVA,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=100,
+        )
 
         p = vm.current_frame.local_vars[VarName("p")]
         assert isinstance(p.value, Pointer)

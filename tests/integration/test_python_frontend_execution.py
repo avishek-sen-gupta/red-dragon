@@ -6,6 +6,7 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 class TestPythonFutureImportExecution:
@@ -15,6 +16,7 @@ class TestPythonFutureImportExecution:
             "from __future__ import annotations\nx = 42\nanswer = x",
             language=Language.PYTHON,
             max_steps=200,
+            entry_point=EntryPoint.top_level(),
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("answer")] == 42
@@ -27,6 +29,11 @@ x = 10
 y = x + 5
 answer = y
 """
-        vm = run(source, language=Language.PYTHON, max_steps=200)
+        vm = run(
+            source,
+            language=Language.PYTHON,
+            max_steps=200,
+            entry_point=EntryPoint.top_level(),
+        )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("answer")] == 15

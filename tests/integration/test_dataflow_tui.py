@@ -14,6 +14,7 @@ from viz.panels.dataflow_graph_panel import (
     find_top_level_call_sites,
 )
 from viz.pipeline import run_pipeline
+from interpreter.project.entry_point import EntryPoint
 
 
 def _collect_labels(nodes: list[ChainNode]) -> list[str]:
@@ -243,7 +244,7 @@ result = quadruple(5)
         from interpreter.run import run
 
         # Runtime: result == 20 (5 * 2 * 2)
-        vm = run(self.SOURCE, language="python")
+        vm = run(self.SOURCE, language="python", entry_point=EntryPoint.top_level())
         runtime_result = vm.current_frame.local_vars[VarName("result")]
         assert (
             runtime_result.value == 20

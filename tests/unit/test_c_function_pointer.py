@@ -19,6 +19,7 @@ from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _parse_and_lower(source: str):
@@ -32,7 +33,12 @@ def _find_all(instructions, opcode):
 
 def _run_c(source: str, max_steps: int = 300) -> dict:
     """Run a C program and return the top-level frame's local_vars."""
-    vm = run(source, language=Language.C, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.C,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 

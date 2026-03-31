@@ -7,6 +7,7 @@ the correct overload based on call-site argument arity and types.
 from interpreter.var_name import VarName
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap
+from interpreter.project.entry_point import EntryPoint
 
 
 class TestJavaOverloadResolutionByArity:
@@ -25,7 +26,9 @@ class Greeter {
 Greeter g = new Greeter();
 String result = g.greet();
 """
-        vm = run(source, language="java", max_steps=2000)
+        vm = run(
+            source, language="java", max_steps=2000, entry_point=EntryPoint.top_level()
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "hello"
 
     def test_nullary_vs_unary_picks_unary(self):
@@ -41,7 +44,9 @@ class Greeter {
 Greeter g = new Greeter();
 String result = g.greet("world");
 """
-        vm = run(source, language="java", max_steps=2000)
+        vm = run(
+            source, language="java", max_steps=2000, entry_point=EntryPoint.top_level()
+        )
         assert (
             unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "hello world"
         )
@@ -58,7 +63,9 @@ int r1 = c.add(5);
 int r2 = c.add(3, 4);
 int r3 = c.add(1, 2, 3);
 """
-        vm = run(source, language="java", max_steps=2000)
+        vm = run(
+            source, language="java", max_steps=2000, entry_point=EntryPoint.top_level()
+        )
         lv = vm.call_stack[0].local_vars
         assert unwrap(lv.get(VarName("r1"))) == 5
         assert unwrap(lv.get(VarName("r2"))) == 7
@@ -81,7 +88,9 @@ class Printer {
 Printer p = new Printer();
 int result = p.show(42);
 """
-        vm = run(source, language="java", max_steps=2000)
+        vm = run(
+            source, language="java", max_steps=2000, entry_point=EntryPoint.top_level()
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == 43
 
     def test_int_vs_string_picks_string(self):
@@ -97,7 +106,9 @@ class Printer {
 Printer p = new Printer();
 String result = p.show("hello");
 """
-        vm = run(source, language="java", max_steps=2000)
+        vm = run(
+            source, language="java", max_steps=2000, entry_point=EntryPoint.top_level()
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "str:hello"
 
 
@@ -122,7 +133,9 @@ Point p = new Point(3, 4);
 int px = p.x;
 int py = p.y;
 """
-        vm = run(source, language="java", max_steps=2000)
+        vm = run(
+            source, language="java", max_steps=2000, entry_point=EntryPoint.top_level()
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("px"))) == 3
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("py"))) == 4
 
@@ -142,5 +155,7 @@ Dog d = new Dog();
 Kennel k = new Kennel();
 String result = k.accept(d);
 """
-        vm = run(source, language="java", max_steps=2000)
+        vm = run(
+            source, language="java", max_steps=2000, entry_point=EntryPoint.top_level()
+        )
         assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "dog"

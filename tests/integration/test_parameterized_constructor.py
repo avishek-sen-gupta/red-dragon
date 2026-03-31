@@ -7,6 +7,7 @@ from interpreter.types.type_expr import ScalarType
 from interpreter.types.typed_value import TypedValue
 from interpreter.run import run
 from interpreter.constants import Language
+from interpreter.project.entry_point import EntryPoint
 
 
 class TestParameterizedCallFunction:
@@ -18,7 +19,12 @@ struct Node { value: i32 }
 let n = Node { value: 42 };
 let b = Box::new(n);
 """
-        vm = run(source, language=Language.RUST, max_steps=300)
+        vm = run(
+            source,
+            language=Language.RUST,
+            max_steps=300,
+            entry_point=EntryPoint.top_level(),
+        )
         locals_ = {
             k: v.value if isinstance(v, TypedValue) else v
             for k, v in vm.call_stack[0].local_vars.items()
@@ -39,7 +45,12 @@ let b = Box::new(n);
     def test_option_constructor_creates_heap_object(self):
         """Option(42) should create a HeapObject with Option type_hint."""
         source = "let opt = Some(42);"
-        vm = run(source, language=Language.RUST, max_steps=300)
+        vm = run(
+            source,
+            language=Language.RUST,
+            max_steps=300,
+            entry_point=EntryPoint.top_level(),
+        )
         locals_ = {
             k: v.value if isinstance(v, TypedValue) else v
             for k, v in vm.call_stack[0].local_vars.items()
