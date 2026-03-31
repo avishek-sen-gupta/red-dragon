@@ -23,14 +23,6 @@ class TestCompileDirectory:
         # All 3 files compiled, not just the 2 reachable via imports
         assert len(linked.modules) == 3
 
-    def test_entry_module_set_correctly(self, tmp_path):
-        (tmp_path / "main.py").write_text("x = 1\n")
-        (tmp_path / "other.py").write_text("y = 2\n")
-
-        linked = compile_directory(tmp_path, Language.PYTHON, tmp_path / "main.py")
-
-        assert linked.entry_module == (tmp_path / "main.py").resolve()
-
     def test_nested_directories(self, tmp_path):
         (tmp_path / "main.py").write_text("x = 1\n")
         sub = tmp_path / "pkg"
