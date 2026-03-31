@@ -24,15 +24,16 @@ Classify before starting. This determines how much ceremony is needed.
 
 ### Verification gate
 
-Run all three before every commit, in this order:
+Run all four before every commit, in this order:
 
 ```bash
 poetry run python -m black .         # formatting
 poetry run lint-imports               # architectural contracts
+poetry run pyright interpreter/ mcp_server/  # type checking (basic mode initially)
 poetry run python -m pytest tests/    # ALL tests (unit + integration), not just tests/unit/
 ```
 
-Do not commit if any check fails. Fix, then re-run all three. Non-negotiable.
+Do not commit if any check fails. Fix, then re-run all four. Non-negotiable.
 
 ### Commits and state
 
