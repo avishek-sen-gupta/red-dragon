@@ -968,6 +968,29 @@ class TestRustMutPattern:
         assert any("x" in inst.operands for inst in stores)
 
 
+class TestRustVecMacro:
+    def test_vec_macro_emits_new_array(self):
+        """vec![1, 2, 3] should emit NEW_ARRAY, not CALL_FUNCTION."""
+        ir = _parse_rust("let v = vec![1, 2, 3];")
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes, "expected NEW_ARRAY for vec![]"
+        call_funcs = _find_all(ir, Opcode.CALL_FUNCTION)
+        vec_calls = [c for c in call_funcs if "vec!" in str(c.operands)]
+        assert vec_calls == [], f"expected no vec! CallFunction, got {vec_calls}"
+
+    def test_vec_macro_emits_store_index_per_element(self):
+        """vec![1, 2, 3] should emit one STORE_INDEX per element."""
+        ir = _parse_rust("let v = vec![1, 2, 3];")
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(stores) == 3, f"expected 3 STORE_INDEX, got {len(stores)}"
+
+    def test_vec_macro_result_bound_to_variable(self):
+        """The array register should be bound to v via DECL_VAR."""
+        ir = _parse_rust("let v = vec![1, 2, 3];")
+        decls = _find_all(ir, Opcode.DECL_VAR)
+        assert any("v" in str(inst.operands) for inst in decls)
+
+
 class TestRustRangeSlice:
     def test_range_slice_emits_call_function(self):
         """arr[1..3] should emit CALL_FUNCTION('slice')."""
