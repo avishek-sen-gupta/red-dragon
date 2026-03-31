@@ -335,6 +335,36 @@ def _builtin_list_append(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return result
 
 
+def _builtin_dict_contains_key(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """dict_contains_key(dict_ptr, key) — check if a heap-backed dict contains key.
+
+    Used by java.util.HashMap containsKey stub. BinopKind.IN on a heap object
+    (which is a Pointer) returns UNCOMPUTABLE because Pointer has no __contains__.
+    This builtin resolves the address and inspects the heap fields directly.
+    """
+    if len(args) < 2:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    dict_val = args[0].value
+    key = args[1].value
+    if _is_symbolic(dict_val):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if _is_symbolic(key):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    addr = _heap_addr(dict_val)
+    if not addr or not vm.heap_contains(addr):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    heap_obj = vm.heap_get(addr)
+    # String keys that are not purely numeric are stored as FieldKind.PROPERTY.
+    # Numeric-string or int keys are stored as FieldKind.INDEX.
+    key_str = str(key)
+    try:
+        int(key_str)
+        field = FieldName(key_str, FieldKind.INDEX)
+    except ValueError:
+        field = FieldName(key_str, FieldKind.PROPERTY)
+    return BuiltinResult(value=field in heap_obj.fields)
+
+
 def _builtin_str_upper(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     # Precondition: args[0].value must be a raw Python str.
     # The caller (String stub IR) extracts the raw value via LoadField before calling.
@@ -444,6 +474,7 @@ class Builtins:
         FuncName("str_lower"): _builtin_str_lower,
         FuncName("str_strip"): _builtin_str_strip,
         FuncName("list_append"): _builtin_list_append,
+        FuncName("dict_contains_key"): _builtin_dict_contains_key,
         **BYTE_BUILTINS,
     }
 
