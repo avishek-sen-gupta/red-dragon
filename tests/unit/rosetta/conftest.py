@@ -16,7 +16,12 @@ from interpreter.frontends import (
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg, ExecutionStrategies
+from interpreter.constants import Language
+from interpreter.run import (
+    execute_cfg,
+    ExecutionStrategies,
+    _function_scoping_for_language,
+)
 from interpreter.run_types import ExecutionStats, VMConfig
 from interpreter.vm.vm_types import VMState
 
@@ -187,6 +192,7 @@ def execute_for_language(
         ExecutionStrategies(
             func_symbol_table=func_symbol_table,
             class_symbol_table=class_symbol_table,
+            function_scoping=_function_scoping_for_language(Language(language)),
         ),
     )
     logger.info(

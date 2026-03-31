@@ -140,12 +140,8 @@ def _handle_decl_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
     assert isinstance(t, DeclVar)
     name = t.name
     tv = _resolve_reg(vm, t.value_reg)
-    return ExecutionResult.success(
-        StateUpdate(
-            var_writes={name: tv},
-            reasoning=f"decl {name} = {tv.value!r}",
-        )
-    )
+    _write_var_to_frame(vm, vm.current_frame, name, tv, ctx)
+    return ExecutionResult.success(StateUpdate(reasoning=f"decl {name} = {tv.value!r}"))
 
 
 def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
@@ -178,11 +174,9 @@ def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
             )
         )
     # Not found anywhere — create in current frame (new variable).
+    _write_var_to_frame(vm, vm.current_frame, name, tv, ctx)
     return ExecutionResult.success(
-        StateUpdate(
-            var_writes={name: tv},
-            reasoning=f"store {name} = {tv.value!r}",
-        )
+        StateUpdate(reasoning=f"store {name} = {tv.value!r}")
     )
 
 
