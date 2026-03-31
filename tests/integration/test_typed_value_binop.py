@@ -11,10 +11,16 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
 from interpreter.vm.vm_types import SymbolicValue
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_java(source: str, max_steps: int = 2000) -> dict:
-    vm = run(source, language=Language.JAVA, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.JAVA,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 
@@ -78,6 +84,11 @@ class TestDefaultNonCoercion:
         source = """\
 x = "count:" + 5
 """
-        vm = run(source, language=Language.PYTHON, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.PYTHON,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         result = unwrap(vm.call_stack[0].local_vars.get(VarName("x")))
         assert isinstance(result, SymbolicValue)

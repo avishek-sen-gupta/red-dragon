@@ -6,10 +6,16 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run(source: str, language: Language, max_steps: int = 2000) -> dict:
-    vm = run(source, language=language, max_steps=max_steps)
+    vm = run(
+        source,
+        language=language,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 

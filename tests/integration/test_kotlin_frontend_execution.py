@@ -10,10 +10,16 @@ from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.func_name import FuncName
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_kotlin(source: str, max_steps: int = 500) -> dict:
-    vm = run(source, language=Language.KOTLIN, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.KOTLIN,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 

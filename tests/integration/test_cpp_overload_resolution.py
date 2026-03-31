@@ -8,6 +8,7 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 class TestCppOverloadResolutionByArity:
@@ -23,7 +24,12 @@ public:
 Calc c;
 int x = c.add(5);
 """
-        vm = run(source, language=Language.CPP, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.CPP,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         lv = unwrap_locals(vm.call_stack[0].local_vars)
         assert lv[VarName("x")] == 5
 
@@ -37,7 +43,12 @@ public:
 Calc c;
 int y = c.add(3, 4);
 """
-        vm = run(source, language=Language.CPP, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.CPP,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         lv = unwrap_locals(vm.call_stack[0].local_vars)
         assert lv[VarName("y")] == 7
 
@@ -54,7 +65,12 @@ int r1 = c.add(5);
 int r2 = c.add(3, 4);
 int r3 = c.add(1, 2, 3);
 """
-        vm = run(source, language=Language.CPP, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.CPP,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         lv = unwrap_locals(vm.call_stack[0].local_vars)
         assert lv[VarName("r1")] == 5
         assert lv[VarName("r2")] == 7
@@ -74,7 +90,12 @@ public:
 Printer p;
 int result = p.show(42);
 """
-        vm = run(source, language=Language.CPP, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.CPP,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         lv = unwrap_locals(vm.call_stack[0].local_vars)
         assert lv[VarName("result")] == 43
 
@@ -88,6 +109,11 @@ public:
 Printer p;
 std::string result = p.show("hello");
 """
-        vm = run(source, language=Language.CPP, max_steps=2000)
+        vm = run(
+            source,
+            language=Language.CPP,
+            max_steps=2000,
+            entry_point=EntryPoint.top_level(),
+        )
         lv = unwrap_locals(vm.call_stack[0].local_vars)
         assert lv[VarName("result")] == "str:hello"

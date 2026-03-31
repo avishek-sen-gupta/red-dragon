@@ -13,6 +13,7 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.frontends.c import CFrontend
 from interpreter.ir import Opcode
+from interpreter.project.entry_point import EntryPoint
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
@@ -29,7 +30,12 @@ def _find_all(instructions, opcode):
 
 def _run_c(source: str, max_steps: int = 300) -> dict:
     """Run a C program and return the top-level frame's local_vars."""
-    vm = run(source, language=Language.C, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.C,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 

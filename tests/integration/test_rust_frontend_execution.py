@@ -11,10 +11,16 @@ from interpreter.vm.vm_types import Pointer
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_rust(source: str, max_steps: int = 200):
-    vm = run(source, language=Language.RUST, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.RUST,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return vm, unwrap_locals(vm.call_stack[0].local_vars)
 
 

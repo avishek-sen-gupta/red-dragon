@@ -6,6 +6,7 @@ import sys
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy
+from interpreter.project.entry_point import EntryPoint
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue, _serialize_value
 
@@ -47,6 +48,7 @@ def main():
         language=Language.PYTHON,
         verbose=True,
         unresolved_call_strategy=UnresolvedCallStrategy.SYMBOLIC,
+        entry_point=EntryPoint.top_level(),
     )
     print("\nFinal variables:")
     _show_vars(vm_sym)
@@ -60,6 +62,7 @@ def main():
         language=Language.PYTHON,
         verbose=True,
         unresolved_call_strategy=UnresolvedCallStrategy.LLM,
+        entry_point=EntryPoint.top_level(),
     )
     print("\nFinal variables:")
     _show_vars(vm_llm)
