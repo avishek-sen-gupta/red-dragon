@@ -60,6 +60,10 @@ from interpreter.vm.field_fallback import (
     FieldFallbackStrategy,
     NoFieldFallback,
 )
+from interpreter.vm.function_scoping import (
+    FunctionScopingStrategy,
+    LocalFunctionScopingStrategy,
+)
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter import constants
 
@@ -92,6 +96,7 @@ class HandlerContext:
     func_symbol_table: dict[CodeLabel, FuncRef]
     class_symbol_table: dict[CodeLabel, ClassRef]
     field_fallback: FieldFallbackStrategy
+    function_scoping: FunctionScopingStrategy
     symbol_table: SymbolTable
 
 
@@ -110,6 +115,7 @@ def _default_handler_context() -> HandlerContext:
         func_symbol_table={},
         class_symbol_table={},
         field_fallback=_NO_FIELD_FALLBACK,
+        function_scoping=LocalFunctionScopingStrategy(),
         symbol_table=SymbolTable.empty(),
     )
 
