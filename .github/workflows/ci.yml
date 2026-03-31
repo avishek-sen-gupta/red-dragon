@@ -49,7 +49,7 @@ jobs:
       - name: Run tests
         env:
           PROLEAP_BRIDGE_JAR: ${{ github.workspace }}/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
-        run: poetry run pytest tests/ -v
+        run: poetry run python -m pytest tests/ --cov --cov-report=term-missing --cov-fail-under=85 -q
 
   analysis:
     name: Code quality analysis
