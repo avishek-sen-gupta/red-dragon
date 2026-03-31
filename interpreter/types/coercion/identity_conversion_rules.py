@@ -1,3 +1,4 @@
+# pyright: standard
 """IdentityConversionRules — null-object TypeConversionRules that never coerces."""
 
 from __future__ import annotations
@@ -27,5 +28,5 @@ class IdentityConversionRules(TypeConversionRules):
 
     def coerce_assignment(
         self, value_type: TypeExpr, target_type: TypeExpr
-    ) -> Callable[[Any], Any]:
+    ) -> Callable[[Any], Any]:  # Any: display boundary — see pre_triage issue
         return _identity

@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeConversionRules — ABC for type-driven operator and assignment coercion."""
 
 from __future__ import annotations
@@ -23,7 +24,9 @@ class TypeConversionRules(ABC):
     @abstractmethod
     def coerce_assignment(
         self, value_type: TypeExpr, target_type: TypeExpr
-    ) -> Callable[[Any], Any]:
+    ) -> Callable[
+        [Any], Any
+    ]:  # Any: display boundary — coerces heterogeneous runtime values
         """Return a function that coerces a value of value_type into target_type.
 
         For example, Float → Int returns math.trunc, Int → Float returns float().

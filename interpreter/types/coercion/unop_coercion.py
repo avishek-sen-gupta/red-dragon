@@ -1,3 +1,4 @@
+# pyright: standard
 """UnopCoercionStrategy — injectable language-specific pre-operation type coercion for unary ops."""
 
 from __future__ import annotations
