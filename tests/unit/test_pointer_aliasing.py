@@ -250,6 +250,60 @@ class TestPointerDereference:
 
         assert unwrap(vm.current_frame.registers[Register("%val")]) == 42
 
+    def test_load_indirect_on_obj_pointer_with_no_field_zero_returns_identity(self):
+        """LOAD_INDIRECT on an obj_* Pointer with no field '0' returns the Pointer itself.
+
+        This covers C# `ref Box b` byref params: ADDRESS_OF returns the
+        existing obj_* Pointer (identity), so LOAD_INDIRECT must return it
+        unchanged rather than SymbolicValue.
+        """
+        vm = _make_vm()
+        obj_ptr = Pointer(Address("obj_0"), 0)
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="Box",
+                fields={FieldName("value", FieldKind.PROPERTY): typed_from_runtime(42)},
+            ),
+        )
+        vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(obj_ptr)
+
+        inst = _make_inst(
+            Opcode.LOAD_INDIRECT, result_reg=Register("%val"), operands=["%ptr"]
+        )
+        result = _handle_load_indirect(inst, vm, _CTX)
+        _apply(vm, result)
+
+        val = unwrap(vm.current_frame.registers[Register("%val")])
+        assert isinstance(val, Pointer)
+        assert val == obj_ptr
+
+    def test_load_indirect_on_arr_pointer_with_no_field_zero_returns_identity(self):
+        """LOAD_INDIRECT on an arr_* Pointer with no field '0' returns the Pointer itself."""
+        vm = _make_vm()
+        arr_ptr = Pointer(Address("arr_0"), 0)
+        vm.heap_set(
+            Address("arr_0"),
+            HeapObject(
+                type_hint="list",
+                fields={
+                    FieldName("1", FieldKind.INDEX): typed_from_runtime(10),
+                    FieldName("2", FieldKind.INDEX): typed_from_runtime(20),
+                },
+            ),
+        )
+        vm.current_frame.registers[Register("%ptr")] = typed_from_runtime(arr_ptr)
+
+        inst = _make_inst(
+            Opcode.LOAD_INDIRECT, result_reg=Register("%val"), operands=["%ptr"]
+        )
+        result = _handle_load_indirect(inst, vm, _CTX)
+        _apply(vm, result)
+
+        val = unwrap(vm.current_frame.registers[Register("%val")])
+        assert isinstance(val, Pointer)
+        assert val == arr_ptr
+
     def test_store_indirect_writes_through_pointer(self):
         """STORE_INDIRECT ptr, 99 should write to heap."""
         vm = _make_vm(x=42)
