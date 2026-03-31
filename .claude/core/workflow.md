@@ -29,11 +29,12 @@ Run all four before every commit, in this order:
 ```bash
 poetry run python -m black .         # formatting
 poetry run lint-imports               # architectural contracts
-poetry run pyright interpreter/ mcp_server/  # type checking (basic mode initially)
+poetry run pyright interpreter/ mcp_server/  # type checking (basic mode; errors expected until per-file # pyright: standard promotion is complete)
 poetry run python -m pytest tests/    # ALL tests (unit + integration), not just tests/unit/
 ```
 
 Do not commit if any check fails. Fix, then re-run all four. Non-negotiable.
+**Exception:** During the type annotation migration (Tasks 2–17 of the type-hints plan), pyright will report errors on unannotated files — this is expected. Each file is promoted to `# pyright: standard` as it is annotated; only promoted files are held to zero-error standard.
 
 ### Commits and state
 
