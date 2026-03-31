@@ -300,6 +300,42 @@ def _method_length(
     return _builtin_len([obj], vm)
 
 
+def _builtin_str_upper(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Builtin: str_upper(s) → s.upper().  Used by java.lang.String stub."""
+    if not args:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    val = args[0].value
+    if _is_symbolic(val):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if isinstance(val, str):
+        return BuiltinResult(value=val.upper())
+    return BuiltinResult(value=_UNCOMPUTABLE)
+
+
+def _builtin_str_lower(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Builtin: str_lower(s) → s.lower().  Used by java.lang.String stub."""
+    if not args:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    val = args[0].value
+    if _is_symbolic(val):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if isinstance(val, str):
+        return BuiltinResult(value=val.lower())
+    return BuiltinResult(value=_UNCOMPUTABLE)
+
+
+def _builtin_str_strip(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Builtin: str_strip(s) → s.strip().  Used by java.lang.String stub."""
+    if not args:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    val = args[0].value
+    if _is_symbolic(val):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if isinstance(val, str):
+        return BuiltinResult(value=val.strip())
+    return BuiltinResult(value=_UNCOMPUTABLE)
+
+
 _PRIMITIVE_TYPE_MAP: dict[str, type] = {
     "int": int,
     "Int": int,
@@ -363,6 +399,9 @@ class Builtins:
         FuncName("clone"): _builtin_clone,
         FuncName("isinstance"): _builtin_isinstance,
         FuncName("object_rest"): _builtin_object_rest,
+        FuncName("str_upper"): _builtin_str_upper,
+        FuncName("str_lower"): _builtin_str_lower,
+        FuncName("str_strip"): _builtin_str_strip,
         **BYTE_BUILTINS,
     }
 
