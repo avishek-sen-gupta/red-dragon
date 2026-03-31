@@ -13,11 +13,17 @@ from interpreter.ir import Opcode
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
 from interpreter.vm.vm_types import Pointer
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_program(source: str, language: str = "python", max_steps: int = 300) -> dict:
     """Run a program and return the main frame's local_vars."""
-    vm = run(source, language=language, max_steps=max_steps)
+    vm = run(
+        source,
+        language=language,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 
@@ -32,7 +38,9 @@ class Dog:
 d = Dog("Rex")
 answer = 42
 """
-        vm = run(source, language="python", max_steps=300)
+        vm = run(
+            source, language="python", max_steps=300, entry_point=EntryPoint.top_level()
+        )
         vars_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert vars_[VarName("answer")] == 42
         assert VarName("d") in vars_
@@ -95,7 +103,9 @@ class Dog {
 Dog d = new Dog("Rex");
 int answer = 42;
 """
-        vm = run(source, language="java", max_steps=300)
+        vm = run(
+            source, language="java", max_steps=300, entry_point=EntryPoint.top_level()
+        )
         vars_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert vars_[VarName("answer")] == 42
         # d should be a Pointer to a heap address, not symbolic
@@ -116,7 +126,9 @@ class Dog {
 Dog d = new Dog("Rex");
 int answer = 42;
 """
-        vm = run(source, language="java", max_steps=300)
+        vm = run(
+            source, language="java", max_steps=300, entry_point=EntryPoint.top_level()
+        )
         obj_ptr = unwrap(vm.call_stack[0].local_vars[VarName("d")])
         assert isinstance(obj_ptr, Pointer)
         assert vm.heap_contains(obj_ptr.base)
@@ -176,7 +188,12 @@ class Dog {
 let d = new Dog("Rex");
 let answer = 42;
 """
-        vm = run(source, language="javascript", max_steps=300)
+        vm = run(
+            source,
+            language="javascript",
+            max_steps=300,
+            entry_point=EntryPoint.top_level(),
+        )
         vars_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert vars_[VarName("answer")] == 42
         assert isinstance(vars_[VarName("d")], Pointer)

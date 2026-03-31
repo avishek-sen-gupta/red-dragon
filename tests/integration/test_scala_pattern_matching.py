@@ -8,11 +8,17 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_scala(source: str, max_steps: int = 500):
     """Run a Scala program and return frame.local_vars."""
-    vm = run(source, language=Language.SCALA, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.SCALA,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 
