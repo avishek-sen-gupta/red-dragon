@@ -9,7 +9,7 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.var_name import VarName
-from interpreter.project.compiler import compile_module, compile_project
+from interpreter.project.compiler import compile_module, compile_directory
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.func_name import FuncName
 from interpreter.class_name import ClassName
@@ -60,7 +60,7 @@ class TestCompileModulePython:
         assert FuncName("area") in unit.exports.functions
 
 
-class TestCompileProjectPython:
+class TestCompileDirectoryPython:
     """Test full multi-file Python project compilation and linking."""
 
     @pytest.fixture
@@ -95,10 +95,9 @@ class TestCompileProjectPython:
         return tmp_path
 
     def test_two_file_links(self, two_file_project):
-        linked = compile_project(
-            two_file_project / "main.py",
+        linked = compile_directory(
+            two_file_project,
             Language.PYTHON,
-            project_root=two_file_project,
         )
 
         assert isinstance(linked, LinkedProgram)
@@ -108,10 +107,9 @@ class TestCompileProjectPython:
         assert len(linked.merged_cfg.blocks) > 0
 
     def test_two_file_merged_registry_has_both(self, two_file_project):
-        linked = compile_project(
-            two_file_project / "main.py",
+        linked = compile_directory(
+            two_file_project,
             Language.PYTHON,
-            project_root=two_file_project,
         )
 
         # The merged registry should contain the helper function (namespaced)
@@ -119,23 +117,21 @@ class TestCompileProjectPython:
         assert any("helper" in label for label in func_labels)
 
     def test_three_file_chain(self, three_file_chain):
-        linked = compile_project(
-            three_file_chain / "main.py",
+        linked = compile_directory(
+            three_file_chain,
             Language.PYTHON,
-            project_root=three_file_chain,
         )
 
         assert len(linked.modules) == 3
         # All three files should be in the import graph
-        assert three_file_chain / "main.py" in linked.import_graph
-        assert three_file_chain / "utils.py" in linked.import_graph
-        assert three_file_chain / "constants.py" in linked.import_graph
+        assert (three_file_chain / "main.py").resolve() in linked.import_graph
+        assert (three_file_chain / "utils.py").resolve() in linked.import_graph
+        assert (three_file_chain / "constants.py").resolve() in linked.import_graph
 
     def test_package_project(self, package_project):
-        linked = compile_project(
-            package_project / "main.py",
+        linked = compile_directory(
+            package_project,
             Language.PYTHON,
-            project_root=package_project,
         )
 
         assert (
@@ -148,20 +144,18 @@ class TestCompileProjectPython:
             "import os\nimport sys\n\ndef main():\n    return os.getcwd()\n"
         )
 
-        linked = compile_project(
-            tmp_path / "main.py",
+        linked = compile_directory(
+            tmp_path,
             Language.PYTHON,
-            project_root=tmp_path,
         )
 
         # Only main.py should be compiled (os/sys are system)
         assert len(linked.modules) == 1
 
     def test_merged_cfg_has_entry(self, two_file_project):
-        linked = compile_project(
-            two_file_project / "main.py",
+        linked = compile_directory(
+            two_file_project,
             Language.PYTHON,
-            project_root=two_file_project,
         )
 
         assert linked.merged_cfg.entry is not None
@@ -186,10 +180,9 @@ class TestCompileModuleJavaScript:
             'import { helper } from "./utils.js";\nvar result = helper(42);\n'
         )
 
-        linked = compile_project(
-            tmp_path / "main.js",
+        linked = compile_directory(
+            tmp_path,
             Language.JAVASCRIPT,
-            project_root=tmp_path,
         )
 
         assert len(linked.modules) == 2
@@ -214,10 +207,9 @@ class TestCompileModuleC:
             '#include "helper.h"\nint main() { return helper(42); }\n'
         )
 
-        linked = compile_project(
-            tmp_path / "main.c",
+        linked = compile_directory(
+            tmp_path,
             Language.C,
-            project_root=tmp_path,
         )
 
         assert len(linked.modules) == 2

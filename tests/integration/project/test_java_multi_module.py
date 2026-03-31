@@ -16,7 +16,7 @@ import pytest
 
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
-from interpreter.project.compiler import compile_project
+from interpreter.project.compiler import compile_directory
 from interpreter.project.types import LinkedProgram
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
@@ -171,9 +171,8 @@ class TestJavaMultiModuleLinking:
     """Full end-to-end multi-module Java project tests."""
 
     def test_linked_ir_contains_all_modules(self, java_project: Path):
-        """After compile_project(), merged IR should contain classes from all modules."""
-        entry = java_project / "app/src/main/java/com/app/Main.java"
-        linked = compile_project(entry, Language.JAVA, project_root=java_project)
+        """After compile_directory(), merged IR should contain classes from all modules."""
+        linked = compile_directory(java_project, Language.JAVA)
 
         assert isinstance(linked, LinkedProgram)
 
@@ -205,8 +204,7 @@ class TestJavaMultiModuleLinking:
 
     def test_cross_module_constructor_and_method_dispatch(self, java_project: Path):
         """Execute the linked program and verify cross-module dispatch."""
-        entry = java_project / "app/src/main/java/com/app/Main.java"
-        linked = compile_project(entry, Language.JAVA, project_root=java_project)
+        linked = compile_directory(java_project, Language.JAVA)
 
         strategies = ExecutionStrategies(
             func_symbol_table=linked.func_symbol_table,

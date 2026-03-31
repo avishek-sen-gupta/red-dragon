@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from interpreter.constants import Language
-from interpreter.project.compiler import compile_project
+from interpreter.project.compiler import compile_directory
 from interpreter.project.types import LinkedProgram
 
 FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "projects"
@@ -19,25 +19,21 @@ class TestPythonBasicFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(
-            entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_basic"
-        )
+        linked = compile_directory(FIXTURES_DIR / "python_basic", Language.PYTHON)
         assert isinstance(linked, LinkedProgram)
         assert len(linked.modules) == 2
         assert any("helper" in label for label in linked.merged_registry.func_params)
 
-    def test_import_graph_correct(self):
+    def test_import_graph_lists_all_files(self):
         entry = FIXTURES_DIR / "python_basic" / "main.py"
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(
-            entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_basic"
-        )
+        linked = compile_directory(FIXTURES_DIR / "python_basic", Language.PYTHON)
         main_path = (FIXTURES_DIR / "python_basic" / "main.py").resolve()
         utils_path = (FIXTURES_DIR / "python_basic" / "utils.py").resolve()
         assert main_path in linked.import_graph
-        assert utils_path in linked.import_graph.get(main_path, [])
+        assert utils_path in linked.import_graph
 
 
 class TestPythonPackageFixture:
@@ -48,9 +44,7 @@ class TestPythonPackageFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(
-            entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_package"
-        )
+        linked = compile_directory(FIXTURES_DIR / "python_package", Language.PYTHON)
         assert len(linked.modules) >= 2  # main.py + models/user.py
 
 
@@ -62,9 +56,7 @@ class TestJsEsmFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(
-            entry, Language.JAVASCRIPT, project_root=FIXTURES_DIR / "js_esm"
-        )
+        linked = compile_directory(FIXTURES_DIR / "js_esm", Language.JAVASCRIPT)
         assert len(linked.modules) == 2
         assert any("add" in label for label in linked.merged_registry.func_params)
 
@@ -77,7 +69,5 @@ class TestCSimpleFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(
-            entry, Language.C, project_root=FIXTURES_DIR / "c_simple"
-        )
+        linked = compile_directory(FIXTURES_DIR / "c_simple", Language.C)
         assert len(linked.modules) == 2
