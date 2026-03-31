@@ -1,3 +1,4 @@
+# pyright: standard
 """BinopCoercionStrategy — injectable language-specific pre-operation type coercion."""
 
 from __future__ import annotations

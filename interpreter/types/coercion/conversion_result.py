@@ -1,3 +1,4 @@
+# pyright: standard
 """ConversionResult — describes how to coerce operands and override operators."""
 
 from __future__ import annotations
@@ -8,7 +9,9 @@ from typing import Any, Callable
 from interpreter.types.type_expr import TypeExpr, UNKNOWN
 
 
-def _identity(x: Any) -> Any:
+def _identity(
+    x: Any,
+) -> Any:  # Any: display boundary — coerces heterogeneous runtime values
     return x
 
 
@@ -27,8 +30,12 @@ class ConversionResult:
     """
 
     result_type: TypeExpr = UNKNOWN
-    left_coercer: Callable[[Any], Any] = _identity
-    right_coercer: Callable[[Any], Any] = _identity
+    left_coercer: Callable[[Any], Any] = (
+        _identity  # Any: display boundary — see pre_triage issue
+    )
+    right_coercer: Callable[[Any], Any] = (
+        _identity  # Any: display boundary — see pre_triage issue
+    )
     operator_override: str = ""
 
 
