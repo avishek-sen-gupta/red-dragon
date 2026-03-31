@@ -60,3 +60,5 @@ fileignoreconfig:
   checksum: 18a41d9dbcafc6a8f04d9301b030c32e629c3aab2c0002e0a804e528a12776b3
 - filename: .beads/backup/issues.jsonl
   checksum: a5c4471e3d8be2c1a758320893321ea2a5311593b20dc62cd4ed798df0ed1462
+- filename: docs/superpowers/specs/2026-03-31-type-hints-design.md
+  checksum: c3822da3cf994a9b2415bda5440a5557c42e1a400eaf515432953a9de77e7057
