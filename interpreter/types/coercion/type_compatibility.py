@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeCompatibility — scores how well a runtime arg matches a declared parameter type."""
 
 from __future__ import annotations

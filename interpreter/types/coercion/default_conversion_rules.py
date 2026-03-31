@@ -1,3 +1,4 @@
+# pyright: standard
 """DefaultTypeConversionRules — sensible type coercion for the default type ontology."""
 
 from __future__ import annotations
@@ -21,15 +22,21 @@ _ARITHMETIC_OPS = frozenset({"+", "-", "*"})
 _COMPARISON_OPS = frozenset({"==", "!=", "<", ">", "<=", ">="})
 
 
-def _to_float(x: Any) -> float:
+def _to_float(
+    x: Any,
+) -> float:  # Any: display boundary — coerces heterogeneous runtime values
     return float(x)
 
 
-def _to_int(x: Any) -> int:
+def _to_int(
+    x: Any,
+) -> int:  # Any: display boundary — coerces heterogeneous runtime values
     return int(x)
 
 
-def _truncate_to_int(x: Any) -> int:
+def _truncate_to_int(
+    x: Any,
+) -> int:  # Any: display boundary — coerces heterogeneous runtime values
     """Truncate toward zero — matches C/Java/COBOL integer assignment semantics."""
     return math.trunc(x)
 
@@ -129,7 +136,7 @@ class DefaultTypeConversionRules(TypeConversionRules):
 
     def coerce_assignment(
         self, value_type: TypeExpr, target_type: TypeExpr
-    ) -> Callable[[Any], Any]:
+    ) -> Callable[[Any], Any]:  # Any: display boundary — see pre_triage issue
         if value_type == target_type:
             return _identity
 
