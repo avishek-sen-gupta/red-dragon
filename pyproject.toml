@@ -26,7 +26,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-n auto -m 'not external'"
+addopts = "-n auto --dist=worksteal -m 'not external'"
 markers = [
     "external: tests requiring external services (LLM APIs); run with -m external",
 ]
