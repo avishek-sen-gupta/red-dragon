@@ -223,8 +223,16 @@ def _handle_load_indirect(
             FieldName(offset_str, FieldKind.INDEX)
         ) or heap_obj.fields.get(FieldName(offset_str, FieldKind.PROPERTY))
         if tv is None:
-            sym = vm.fresh_symbolic(hint=f"*{obj_val}")
-            tv = typed(sym, UNKNOWN)
+            # For direct heap objects (obj_/arr_), the indirection is a no-op:
+            # ADDRESS_OF returned identity, so the ref IS the object pointer.
+            base_str = str(obj_val.base)
+            if base_str.startswith(constants.OBJ_ADDR_PREFIX) or base_str.startswith(
+                constants.ARR_ADDR_PREFIX
+            ):
+                tv = typed(obj_val, scalar(constants.TypeName.POINTER))
+            else:
+                sym = vm.fresh_symbolic(hint=f"*{obj_val}")
+                tv = typed(sym, UNKNOWN)
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={t.result_reg: tv},
