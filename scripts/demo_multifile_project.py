@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.api import analyze_project, run_project
 from interpreter.constants import Language
-from interpreter.project.compiler import compile_module, compile_project
+from interpreter.project.compiler import compile_module, compile_directory
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import get_resolver
 from interpreter.types.typed_value import TypedValue
@@ -251,7 +251,7 @@ def main():
         # ── Phase 4: Linking ──
         _print_header("Phase 3: Compile + Link Project")
         t1 = time.perf_counter()
-        linked = compile_project(entry_file, language, project_root=tmp_dir)
+        linked = compile_directory(tmp_dir, language)
         link_time = time.perf_counter() - t1
 
         print(f"  Modules compiled  : {len(linked.modules)}")
