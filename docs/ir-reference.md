@@ -47,10 +47,10 @@ These opcodes write a result into `result_reg`.
 
 Load a constant value.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[value_string]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `value` | `str` | literal value string |
 
 The value string is parsed at execution time: integers, floats, booleans (`True`/`False`), `None`, quoted strings (`"hello"`), function references (`<function:foo@func_foo_0>`), class references (`<class:Foo@class_Foo_0>`).
 
@@ -65,10 +65,10 @@ The value string is parsed at execution time: integers, floats, booleans (`True`
 
 Read a named variable.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[var_name]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `name` | `VarName` | variable name |
 
 Searches the call stack from the current frame backwards. If the variable is not found, the VM creates a fresh symbolic value.
 
@@ -84,10 +84,11 @@ For block-scoped languages, `var_name` may be a mangled name (e.g. `x$1`) produc
 
 Read a field from a heap object.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[obj_reg, field_name]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `obj_reg` | `Register` | object pointer |
+| `field_name` | `FieldName` | field to read |
 
 Resolves `obj_reg` to a `Pointer`, extracts the base heap address via `_heap_addr()`, then looks up `field_name` in the object's fields. Returns a fresh symbolic value if the field does not exist.
 
@@ -99,10 +100,11 @@ Resolves `obj_reg` to a `Pointer`, extracts the base heap address via `_heap_add
 
 Read an element by index or key.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[arr_reg, index_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `arr_reg` | `Register` | array/map pointer |
+| `index_reg` | `Register` | index or key |
 
 Resolves both registers. For native Python lists/strings, performs direct indexing. For heap arrays, looks up `str(index)` in the object's fields. Returns a fresh symbolic value if the key does not exist.
 
@@ -114,10 +116,10 @@ Resolves both registers. For native Python lists/strings, performs direct indexi
 
 Allocate a new heap object.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register (receives a `Pointer(base=heap_addr, offset=0)` wrapped in `TypedValue` with parameterized type, e.g. `pointer(scalar("Point"))`) |
-| `operands` | `[type_name]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register (receives `Pointer(base=heap_addr, offset=0)` typed e.g. `pointer(scalar("Point"))`) |
+| `type_hint` | `TypeExpr` | type of the new object |
 
 Creates a new entry in the heap with the given type hint. Fields are initially empty. The result is a `Pointer` dataclass, not a bare string address.
 
@@ -129,10 +131,11 @@ Creates a new entry in the heap with the given type hint. Fields are initially e
 
 Allocate a new heap array.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register (receives a `Pointer(base=heap_addr, offset=0)` wrapped in `TypedValue` with parameterized type, e.g. `pointer(scalar("int[]"))`) |
-| `operands` | `[type_name]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register (receives `Pointer(base=heap_addr, offset=0)` typed e.g. `pointer(scalar("int[]"))`) |
+| `type_hint` | `TypeExpr` | element type hint |
+| `size_reg` | `Register` | optional initial size (may be `NO_REGISTER`) |
 
 Like `NEW_OBJECT` but semantically represents an array/list. Elements are stored as fields keyed by stringified indices (`"0"`, `"1"`, ...). The result is a `Pointer` dataclass, not a bare string address.
 
@@ -144,10 +147,12 @@ Like `NEW_OBJECT` but semantically represents an array/list. Elements are stored
 
 Binary operation.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[operator, lhs_reg, rhs_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `operator` | `BinopKind` | operator enum |
+| `left` | `Register` | left operand |
+| `right` | `Register` | right operand |
 
 Resolves both operand registers. If either is symbolic, produces a symbolic result with a constraint. Otherwise evaluates concretely.
 
@@ -167,10 +172,11 @@ Operators: `+`, `-`, `*`, `/`, `//`, `%`, `mod`, `**`, `==`, `!=`, `~=`, `<`, `>
 
 Unary operation.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[operator, operand_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `operator` | `UnopKind` | operator enum |
+| `operand` | `Register` | operand |
 
 Operators: `-`, `+`, `not`, `~`, `#` (length), `!`, `!!`.
 
@@ -183,10 +189,10 @@ Operators: `-`, `+`, `not`, `~`, `#` (length), `!`, `!!`.
 
 Take the address of a named variable (pointer creation).
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register (receives a `Pointer`) |
-| `operands` | `[var_name]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register (receives a `Pointer`) |
+| `var_name` | `VarName` | variable whose address is taken |
 
 Implements the `&x` operator for C and Rust. The operand is a **variable name** (not a register), because the VM needs the variable's identity to set up aliasing.
 
@@ -205,10 +211,10 @@ Taking `&x` twice on the same variable returns the same `Pointer` (idempotent).
 
 Read through a pointer (pointer dereference).
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[ptr_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `ptr_reg` | `Register` | pointer to dereference |
 
 Resolves `ptr_reg` to a `Pointer`, then reads `heap[base].fields[str(offset)]`. If the resolved value is a `BoundFuncRef`, returns it unchanged (identity). If the resolved value is not a `Pointer` but is on the heap, returns a fresh symbolic value. This is how C and Rust lower `*ptr` in read context.
 
@@ -220,10 +226,11 @@ Resolves `ptr_reg` to a `Pointer`, then reads `heap[base].fields[str(offset)]`. 
 
 Load a field from a heap object where the field name is in a register (dynamic field access).
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[obj_reg, name_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `obj_reg` | `Register` | object pointer |
+| `name_reg` | `Register` | register holding the field name string |
 
 Resolves `obj_reg` to a `Pointer` and extracts the base heap address via `_heap_addr()`, then resolves `name_reg` to a field name string. If the object is on the heap and the field exists, returns the field value. If the field is missing, checks for a `__method_missing__` method on the object and dispatches to it with `(self, field_name)`. If no `__method_missing__` exists or the object is not on the heap, returns a fresh symbolic value. Used by `__method_missing__` implementations to forward field access by dynamic name.
 
@@ -235,10 +242,10 @@ Resolves `obj_reg` to a `Pointer` and extracts the base heap address via `_heap_
 
 Write through a pointer (pointer dereference write).
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | None |
-| `operands` | `[ptr_reg, val_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `ptr_reg` | `Register` | pointer to write through |
+| `value_reg` | `Register` | value to write |
 
 Resolves `ptr_reg` to a `Pointer`, then writes `val_reg` to `heap[base].fields[str(offset)]`. This is how C and Rust lower `*ptr = val`.
 
@@ -250,10 +257,11 @@ store_indirect %ptr %val       // *ptr = val → writes through the pointer
 
 Call a named function.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register (receives return value) |
-| `operands` | `[func_name, arg1_reg, arg2_reg, ...]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register (receives return value) |
+| `func_name` | `FuncName` | function to call |
+| `args` | `tuple[Register \| SpreadArguments, ...]` | arguments |
 
 Arguments may include `SpreadArguments(register)` operands. When the VM encounters a `SpreadArguments` in the operand list, it reads the heap array at that register's pointer and inlines the elements as individual arguments. This supports spread/splat syntax across all 5 supported languages (`*args` in Python/Ruby/Kotlin, `...arr` in JS, `...$arr` in PHP).
 
@@ -269,10 +277,12 @@ Resolution order: I/O provider, builtins (print, len, range, ...), local variabl
 
 Call a method on an object.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[obj_reg, method_name, arg1_reg, ...]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `obj_reg` | `Register` | receiver object |
+| `method_name` | `FuncName` | method to call |
+| `args` | `tuple[Register \| SpreadArguments, ...]` | arguments |
 
 Arguments (after `method_name`) may include `SpreadArguments` operands, expanded the same way as in CALL_FUNCTION.
 
@@ -287,10 +297,11 @@ Resolution order: method builtins, class registry lookup, **heap field callable 
 
 Call a dynamically-resolved callable.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[target_reg, arg1_reg, ...]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `target_reg` | `Register` | register holding the callable |
+| `args` | `tuple[Register \| SpreadArguments, ...]` | arguments |
 
 Used for higher-order functions and dynamic dispatch. Resolves `target_reg` — if it's a function reference, dispatches as a user function. Otherwise delegates to the unresolved call resolver.
 
@@ -325,9 +336,10 @@ These opcodes have `result_reg = null`.
 
 Declare a new variable in the current scope.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[var_name, value_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `VarName` | variable name |
+| `value_reg` | `Register` | initial value |
 
 Always creates (or overwrites) the variable in the **current** call frame's `local_vars`. Used for all declaration-site bindings: `let`/`var`/`const`/`val` declarations, function/class definitions, parameter bindings, catch variables, and for-loop variable initializations.
 
@@ -339,9 +351,10 @@ decl_var x %5
 
 Assign a value to an existing variable.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[var_name, value_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `VarName` | variable name |
+| `value_reg` | `Register` | value to assign |
 
 Walks the **scope chain** (call stack in reverse) to find an existing binding for `var_name`, then writes to that frame. If no existing binding is found, falls back to creating in the current frame. Used for bare assignments (`x = 10`), augmented assignments, and any write to an already-declared variable.
 
@@ -359,9 +372,11 @@ store_var x %5
 
 Write a value into a heap object field.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[obj_reg, field_name, value_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `obj_reg` | `Register` | object pointer |
+| `field_name` | `FieldName` | field to write |
+| `value_reg` | `Register` | value to store |
 
 Resolves `obj_reg` to a `Pointer`, extracts the base heap address via `_heap_addr()`, then writes `value_reg` into the object's field. All heap references are `Pointer` objects — there is no separate bare-string code path.
 
@@ -373,9 +388,11 @@ store_field %obj "name" %val
 
 Write a value into an array/map at an index.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[arr_reg, index_reg, value_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `arr_reg` | `Register` | array/map pointer |
+| `index_reg` | `Register` | index or key |
+| `value_reg` | `Register \| SpreadArguments` | value to store |
 
 ```
 store_index %arr %i %val
@@ -385,10 +402,10 @@ store_index %arr %i %val
 
 Conditional branch.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[cond_reg]` |
-| `label` | `"true_label,false_label"` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `cond_reg` | `Register` | condition register |
+| `branch_targets` | `tuple[CodeLabel, ...]` | `(true_label, false_label)` |
 
 Resolves `cond_reg`. If concrete, evaluates `bool(value)` and branches accordingly. If symbolic, deterministically takes the true branch and records a path condition.
 
@@ -400,10 +417,9 @@ branch_if %cond if_true_0,if_false_0
 
 Unconditional jump.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[]` |
-| `label` | target label |
+| Field | Type | Description |
+|-------|------|-------------|
+| `label` | `CodeLabel` | target label |
 
 ```
 branch end_if_0
@@ -413,9 +429,9 @@ branch end_if_0
 
 Return from the current function.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[value_reg]` (or `[]` for implicit None return) |
+| Field | Type | Description |
+|-------|------|-------------|
+| `value_reg` | `Register \| None` | return value (`None` for implicit void return) |
 
 Pops the call frame and delivers the value to the caller's result register.
 
@@ -427,9 +443,9 @@ return %result
 
 Throw an exception.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[value_reg]` (or `[]`) |
+| Field | Type | Description |
+|-------|------|-------------|
+| `value_reg` | `Register \| None` | exception value |
 
 Checks the exception stack. If a handler exists, pops it and branches to the catch label. If no handler exists, the throw is uncaught.
 
@@ -441,9 +457,11 @@ throw %exc
 
 Push an exception handler.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[catch_labels_csv, finally_label, end_label]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `catch_labels` | `tuple[CodeLabel, ...]` | catch block labels |
+| `finally_label` | `CodeLabel` | finally block label |
+| `end_label` | `CodeLabel` | end of try/catch |
 
 Pushes a handler onto the exception stack. `catch_labels_csv` is a comma-separated list of catch block labels. The handler remains active until a matching `TRY_POP`.
 
@@ -455,9 +473,7 @@ try_push catch_0,catch_1 finally_0 end_try_0
 
 Pop the current exception handler.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[]` |
+_(no fields)_
 
 ```
 try_pop
@@ -471,10 +487,10 @@ try_pop
 
 Create a symbolic (unknown) value.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register |
-| `operands` | `[hint_string]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register |
+| `hint` | `str` | descriptive hint (e.g. `"param:x"`, `"unsupported:node_type"`) |
 
 Primarily used for function parameters with the convention `"param:name"`. When the VM encounters a `param:` hint and the parameter has already been bound by the caller, it uses the bound value instead of creating a fresh symbolic.
 
@@ -489,10 +505,9 @@ Also emitted as a fallback for unsupported AST node types (`"unsupported:node_ty
 
 Branch target (pseudo-instruction).
 
-| Field | Value |
-|-------|-------|
-| `label` | label name |
-| `operands` | `[]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `label` | `CodeLabel` | label name |
 
 Not executed — marks a position that `BRANCH`, `BRANCH_IF`, and call dispatch can jump to.
 
@@ -512,10 +527,10 @@ Byte-addressed memory for languages with explicit memory layout (COBOL).
 
 Allocate a named byte region.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register (receives region address like `rgn_0`) |
-| `operands` | `[size]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register (receives region address like `rgn_0`) |
+| `size_reg` | `Register` | register holding allocation size in bytes |
 
 Allocates a zeroed `bytearray` of the given size.
 
@@ -527,9 +542,12 @@ Allocates a zeroed `bytearray` of the given size.
 
 Write bytes into a region.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[region_reg, offset_reg, length, value_reg]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `region_reg` | `Register` | region address |
+| `offset_reg` | `Register` | byte offset |
+| `length` | `int` | byte count (compile-time constant from PIC clause) |
+| `value_reg` | `Register` | value to write |
 
 Writes `value_reg[0:length]` into `region[offset:offset+length]`. No-op if any argument is symbolic.
 
@@ -541,10 +559,12 @@ write_region %rgn %off 4 %data
 
 Read bytes from a region.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register (receives `list[int]`) |
-| `operands` | `[region_reg, offset_reg, length]` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register (receives `list[int]`) |
+| `region_reg` | `Register` | region address |
+| `offset_reg` | `Register` | byte offset |
+| `length` | `int` | byte count (compile-time constant from PIC clause) |
 
 ```
 %result = load_region %rgn %off 4
@@ -560,11 +580,12 @@ Named return points for paragraph-based control flow (COBOL PERFORM).
 
 Save a return point.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[continuation_name, return_label]` |
+| Field | Type | Value |
+|-------|------|-------|
+| `name` | `ContinuationName` | name key for the continuation |
+| `target_label` | `CodeLabel` | label to jump to on resume |
 
-Stores the mapping `name -> label`. Used before branching to a paragraph so execution knows where to return.
+Stores the mapping `name → target_label`. Used before branching to a paragraph so execution knows where to return.
 
 ```
 set_continuation para_WORK_end perform_return_0
@@ -574,9 +595,9 @@ set_continuation para_WORK_end perform_return_0
 
 Jump to a saved return point.
 
-| Field | Value |
-|-------|-------|
-| `operands` | `[continuation_name]` |
+| Field | Type | Value |
+|-------|------|-------|
+| `name` | `ContinuationName` | name key to look up |
 
 Looks up the continuation and branches to its label. If no continuation is set, falls through. Clears the continuation after use.
 
