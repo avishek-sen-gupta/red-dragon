@@ -45,6 +45,13 @@ Do not commit if any check fails. Fix, then re-run all three. Non-negotiable.
 - When test counts are mentioned (e.g., "all 625 tests passing"), verify that count hasn't regressed.
 - When generating output directories, attach a timestamp and technique used.
 
+### Data security
+
+- **NEVER reference external codebases under analysis** (names, APIs, domains, packages, class names, organisation names) in any tracked artifact: commit messages, issues, specs, plans, docs, code comments, test names, screenshots.
+- Use generic examples (`com.example.utils`, `class Foo`) instead of real names from codebases being analysed.
+- Keep external-codebase-specific context in untracked experiment directories only.
+- The consequences of leaking proprietary identifiers into public git history are catastrophic.
+
 ### Documentation
 
 - Record salient architectural decisions as timestamped ADRs in `docs/architectural-design-decisions.md`.
