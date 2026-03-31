@@ -28,6 +28,7 @@ class TestBinopKind:
 
         assert resolve_binop("+") == BinopKind.ADD
         assert resolve_binop("==") == BinopKind.EQ
+        assert resolve_binop(">>>") == BinopKind.UNSIGNED_RSHIFT
 
     def test_resolve_binop_rejects_unknown(self):
         from interpreter.operator_kind import resolve_binop
