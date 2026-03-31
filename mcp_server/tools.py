@@ -407,7 +407,7 @@ def handle_load_project(
 
         return {
             "modules": len(linked.modules),
-            "entry": str(linked.entry_module),
+            "language": str(linked.language.value),
             "import_graph": {
                 str(k): [str(v) for v in vs] for k, vs in linked.import_graph.items()
             },
