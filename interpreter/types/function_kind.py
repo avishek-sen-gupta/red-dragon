@@ -1,3 +1,4 @@
+# pyright: standard
 """FunctionKind — classifies functions as unbound, instance, or static."""
 
 from __future__ import annotations

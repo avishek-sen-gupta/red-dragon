@@ -1,3 +1,4 @@
+# pyright: standard
 """TypedValue — wraps raw Python values with TypeExpr type metadata."""
 
 from __future__ import annotations
@@ -16,7 +17,9 @@ _PYTHON_TYPE_TO_TYPE_NAME: dict[type, str] = {
 }
 
 
-def runtime_type_name(val: Any) -> str:
+def runtime_type_name(
+    val: Any,
+) -> str:  # Any: display boundary — raw VM value of unknown Python type
     """Map a Python runtime value to its canonical TypeName.
 
     bool must be checked before int because ``isinstance(True, int)`` is True.
@@ -30,28 +33,36 @@ def runtime_type_name(val: Any) -> str:
 class TypedValue:
     """Immutable wrapper pairing a raw value with its declared/inferred type."""
 
-    value: Any
+    value: Any  # Any: display boundary — raw VM value (int, str, list, object, etc.)
     type: TypeExpr
 
 
-def typed(value: Any, type_expr: TypeExpr = UNKNOWN) -> TypedValue:
+def typed(
+    value: Any, type_expr: TypeExpr = UNKNOWN
+) -> TypedValue:  # Any: display boundary — raw VM value
     """Wrap a raw value with type info."""
     return TypedValue(value=value, type=type_expr)
 
 
-def unwrap(val: Any) -> Any:
+def unwrap(
+    val: Any,
+) -> Any:  # Any: display boundary — raw VM value in, raw VM value out
     """Unwrap a TypedValue to its raw value; pass-through for non-TypedValue."""
     if isinstance(val, TypedValue):
         return val.value
     return val
 
 
-def unwrap_locals(local_vars: dict) -> dict:
+def unwrap_locals(
+    local_vars: dict[str, Any],
+) -> dict[str, Any]:  # Any: display boundary — raw VM values
     """Unwrap all TypedValue entries in a local_vars dict to raw values."""
     return {k: unwrap(v) for k, v in local_vars.items()}
 
 
-def typed_from_runtime(value: Any) -> TypedValue:
+def typed_from_runtime(
+    value: Any,
+) -> TypedValue:  # Any: display boundary — raw VM value
     """Wrap a raw value, inferring type from Python runtime type.
 
     Uses runtime_type_name to map int->Int, str->String, float->Float, bool->Bool.

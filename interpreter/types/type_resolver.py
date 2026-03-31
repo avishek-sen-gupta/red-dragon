@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeResolver — composes TypeConversionRules to resolve BINOP and assignment coercion."""
 
 from __future__ import annotations
@@ -51,7 +52,9 @@ class TypeResolver:
 
     def resolve_assignment(
         self, value_hint: TypeExpr, target_hint: TypeExpr
-    ) -> Callable[[Any], Any]:
+    ) -> Callable[
+        [Any], Any
+    ]:  # Any: display boundary — coercion function over raw VM values
         if not value_hint or not target_hint:
             return _identity
 

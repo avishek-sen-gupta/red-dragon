@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeEnvironment — immutable result of the static type inference pass."""
 
 from __future__ import annotations

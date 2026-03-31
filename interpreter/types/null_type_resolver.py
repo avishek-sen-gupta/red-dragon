@@ -1,3 +1,4 @@
+# pyright: standard
 """NullTypeResolver — always returns identity, preserving current VM behavior."""
 
 from __future__ import annotations
@@ -31,5 +32,7 @@ class NullTypeResolver(TypeResolver):
 
     def resolve_assignment(
         self, value_hint: TypeExpr, target_hint: TypeExpr
-    ) -> Callable[[Any], Any]:
+    ) -> Callable[
+        [Any], Any
+    ]:  # Any: display boundary — coercion function over raw VM values
         return _identity
