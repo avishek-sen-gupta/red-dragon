@@ -12,10 +12,13 @@ from interpreter.project.types import (
     LinkedProgram,
     CyclicImportError,
 )
+from interpreter.cfg_types import CFG
 from interpreter.constants import Language
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.func_name import FuncName
+from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
+from interpreter.registry import FunctionRegistry
 from interpreter.var_name import VarName
 from interpreter.class_name import ClassName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
@@ -358,6 +361,44 @@ class TestCyclicImportError:
         cycle = [Path("a.py"), Path("b.py"), Path("a.py")]
         err = CyclicImportError(cycle)
         assert err.cycle == cycle
+
+
+class TestLinkedProgramEntryPoints:
+    def _make_linked_with_funcs(self, func_names: list[str]) -> LinkedProgram:
+        """Build a LinkedProgram with FuncRefs in the func_symbol_table."""
+        func_symbol_table = {
+            CodeLabel(f"func_{name}"): FuncRef(
+                name=FuncName(name), label=CodeLabel(f"func_{name}")
+            )
+            for name in func_names
+        }
+        return LinkedProgram(
+            modules={},
+            merged_ir=[],
+            merged_cfg=CFG(blocks={}, entry=CodeLabel("entry")),
+            merged_registry=FunctionRegistry(),
+            language=Language.PYTHON,
+            import_graph={},
+            type_env_builder=TypeEnvironmentBuilder(),
+            symbol_table=SymbolTable.empty(),
+            func_symbol_table=func_symbol_table,
+        )
+
+    def test_entry_points_returns_all_by_default(self):
+        lp = self._make_linked_with_funcs(["main", "helper", "setup"])
+        result = lp.entry_points()
+        assert len(result) == 3
+
+    def test_entry_points_with_predicate(self):
+        lp = self._make_linked_with_funcs(["main", "helper", "setup"])
+        result = lp.entry_points(lambda f: f.name == FuncName("main"))
+        assert len(result) == 1
+        assert result[0].name == FuncName("main")
+
+    def test_entry_points_empty_when_no_match(self):
+        lp = self._make_linked_with_funcs(["helper", "setup"])
+        result = lp.entry_points(lambda f: f.name == FuncName("main"))
+        assert result == []
 
 
 class TestImportKind:
