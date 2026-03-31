@@ -1,5 +1,7 @@
 """Tests for EntryPoint type."""
 
+import pytest
+
 from interpreter.func_name import FuncName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.refs.func_ref import FuncRef
@@ -18,6 +20,12 @@ class TestEntryPointTopLevel:
     def test_is_not_function(self):
         ep = EntryPoint.top_level()
         assert ep.is_function is False
+
+    def test_resolve_on_top_level_raises(self):
+        ep = EntryPoint.top_level()
+        candidates = [_make_func_ref("main")]
+        with pytest.raises(ValueError, match="No function matched"):
+            ep.resolve(candidates)
 
 
 class TestEntryPointFunction:
@@ -38,15 +46,16 @@ class TestEntryPointFunction:
     def test_resolve_no_match_raises(self):
         ep = EntryPoint.function(lambda f: f.name == FuncName("main"))
         candidates = [_make_func_ref("helper")]
-        import pytest
-
         with pytest.raises(ValueError, match="No function matched"):
             ep.resolve(candidates)
 
     def test_resolve_multiple_matches_raises(self):
         ep = EntryPoint.function(lambda f: f.name == FuncName("main"))
         candidates = [_make_func_ref("main"), _make_func_ref("main")]
-        import pytest
-
         with pytest.raises(ValueError, match="Multiple functions matched"):
             ep.resolve(candidates)
+
+    def test_resolve_empty_candidates_raises(self):
+        ep = EntryPoint.function(lambda f: f.name == FuncName("main"))
+        with pytest.raises(ValueError, match="No function matched"):
+            ep.resolve([])
