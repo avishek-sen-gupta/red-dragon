@@ -9,3 +9,4 @@
 {"key":"compaction_enabled","value":"false"}
 {"key":"issue_prefix","value":"red-dragon"}
 {"key":"schema_version","value":"9"}
+{"key":"status.custom","value":"pre_triage:frozen"}
