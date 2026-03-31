@@ -10,10 +10,16 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_csharp(source: str, max_steps: int = 500) -> dict:
-    vm = run(source, language=Language.CSHARP, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.CSHARP,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     frame = vm.call_stack[0]
     result = unwrap_locals(frame.local_vars)
     # Resolve heap aliases (e.g. ADDRESS_OF-promoted variables from out/ref params)

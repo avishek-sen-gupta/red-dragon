@@ -8,10 +8,16 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.project.entry_point import EntryPoint
 
 
 def _run_csharp(source: str, max_steps: int = 1000) -> dict:
-    vm = run(source, language=Language.CSHARP, max_steps=max_steps)
+    vm = run(
+        source,
+        language=Language.CSHARP,
+        max_steps=max_steps,
+        entry_point=EntryPoint.top_level(),
+    )
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 

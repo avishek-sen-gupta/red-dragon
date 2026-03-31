@@ -28,6 +28,7 @@ from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
+from interpreter.project.entry_point import EntryPoint
 
 SAMPLE_SOURCE = """\
 import math
@@ -105,6 +106,7 @@ def main():
         frontend_type=constants.FRONTEND_LLM,
         verbose=args.verbose,
         unresolved_call_strategy=UnresolvedCallStrategy.SYMBOLIC,
+        entry_point=EntryPoint.top_level(),
     )
     t_frontend = time.perf_counter() - t0
 
@@ -123,6 +125,7 @@ def main():
         frontend_type=constants.FRONTEND_DETERMINISTIC,
         verbose=args.verbose,
         unresolved_call_strategy=UnresolvedCallStrategy.LLM,
+        entry_point=EntryPoint.top_level(),
     )
     t_backend = time.perf_counter() - t0
 
