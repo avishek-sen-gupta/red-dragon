@@ -558,13 +558,34 @@ def lower_struct_instantiation(ctx: TreeSitterEmitContext, node) -> Register:
 
 
 def lower_macro_invocation(ctx: TreeSitterEmitContext, node) -> Register:
-    """Lower macro_invocation: println!(...) -> CALL_FUNCTION."""
+    """Lower macro_invocation: vec![...] -> NEW_ARRAY; others -> CALL_FUNCTION."""
     macro_name = ctx.node_text(node).split("!")[0] + "!"
+    if macro_name == "vec!":
+        return _lower_vec_macro(ctx, node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(result_reg=reg, func_name=FuncName(macro_name), args=()), node=node
     )
     return reg
+
+
+def _lower_vec_macro(ctx: TreeSitterEmitContext, node) -> Register:
+    """Lower vec![e1, e2, ...] -> NEW_ARRAY + STORE_INDEX per element."""
+    token_tree = next(c for c in node.children if c.type == "token_tree")
+    elems = [c for c in token_tree.children if c.is_named]
+    arr_reg = ctx.fresh_reg()
+    size_reg = ctx.fresh_reg()
+    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(
+        NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
+        node=node,
+    )
+    for i, elem in enumerate(elems):
+        val_reg = ctx.lower_expr(elem)
+        idx_reg = ctx.fresh_reg()
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
+    return arr_reg
 
 
 def lower_index_expr(ctx: TreeSitterEmitContext, node) -> Register:
