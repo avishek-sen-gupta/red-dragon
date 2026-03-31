@@ -13,7 +13,7 @@ import pytest
 from interpreter.address import Address
 from interpreter.var_name import VarName
 from interpreter.constants import Language
-from interpreter.project.compiler import compile_project
+from interpreter.project.compiler import compile_directory
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
@@ -26,8 +26,7 @@ def _run_project_vm(tmp_path, files, entry, language):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
 
-    entry_path = tmp_path / entry
-    linked = compile_project(entry_path, language, project_root=tmp_path)
+    linked = compile_directory(tmp_path, language)
     strategies = ExecutionStrategies(
         func_symbol_table=linked.func_symbol_table,
         class_symbol_table=linked.class_symbol_table,
