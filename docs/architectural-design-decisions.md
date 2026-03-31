@@ -2583,3 +2583,23 @@ compilation. No chaining, no import tables, no special variable handling.
 4. 145 call sites across 74 files migrated from string entry points to `EntryPoint`
 
 **Consequences:** Every caller explicitly states execution intent — no implicit empty-string conventions. Import-tracing utilities (`ImportResolver`, `topological_sort`, `extract_imports`) remain available for analysis but are not in the compilation path. `LinkedProgram` is the universal intermediate between compilation and execution, whether from a single source string or a multi-module directory. 13,217 tests passing.
+
+---
+
+### ADR-131: Rust vec![] macro lowering to NEW_ARRAY + STORE_INDEX (2026-03-31)
+
+**Context:** Rust `vec![e1, e2, ...]` macro invocations were routed through the generic `macro_invocation` handler, which called `vec!` as a zero-argument function. The macro's `token_tree` child (which contains the actual elements) was ignored, producing `SymbolicValue('sym_0', type_hint='vec!()')` instead of a concrete array.
+
+**Decision:** In `lower_macro_invocation` (`interpreter/frontends/rust/expressions.py`), detect `macro_name == "vec!"` and dispatch to a dedicated `lower_vec_macro` handler. This handler extracts the `token_tree` child, lowers each named child node as an expression, and emits `NEW_ARRAY` followed by `STORE_INDEX` per element — the same pattern used for tuple and array literals.
+
+**Consequences:** `vec![e1, e2, ...]` now produces correct array IR. The general `macro_invocation` handler continues to handle all other macros as unresolved calls. The `token_tree` → element extraction pattern is reusable for future macro lowering (e.g. `assert!`, `format!`). 13,245 tests passing.
+
+---
+
+### ADR-132: LOAD_INDIRECT identity for obj_/arr_ heap pointers (2026-03-31)
+
+**Context:** C# `ref`/`out`/`in` parameters use `ADDRESS_OF` to take a reference, then `LOAD_INDIRECT` on the receiver before method dispatch. When the referenced value is an object already on the heap (address prefixed `obj_` or `arr_`), `ADDRESS_OF` correctly returns the existing heap pointer. However, `LOAD_INDIRECT` then attempted to read `heap[base].fields["0"]`, which does not exist for direct heap objects (only promoted primitives have a `"0"` field). This produced a fresh symbolic value instead of the original object, causing method dispatch on the receiver to fail.
+
+**Decision:** In `_handle_load_indirect` (`interpreter/handlers/memory.py`), after failing to find `fields["0"]` (by both `INDEX` and `PROPERTY` kind), check whether the base address starts with `OBJ_ADDR_PREFIX` or `ARR_ADDR_PREFIX`. If so, return the pointer identity (the `Pointer` itself typed as `scalar("pointer")`) — the reference IS the object, so the dereference is a no-op.
+
+**Consequences:** C# byref parameters whose type is a class/struct correctly propagate the object identity through dereference. The existing behavior for pointer-to-primitive (field `"0"` present) and pointer-to-unknown (symbolic fallback) is unchanged. 13,245 tests passing.

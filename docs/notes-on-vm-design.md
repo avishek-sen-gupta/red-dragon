@@ -908,7 +908,7 @@ After promotion, all reads (`LOAD_VAR`) and writes (`STORE_VAR`) for that variab
 
 | Operation | IR pattern | Executor behaviour |
 |---|---|---|
-| **Dereference read** (`*ptr`) | `LOAD_INDIRECT %ptr` | Reads `heap[ptr.base].fields[str(ptr.offset)]` |
+| **Dereference read** (`*ptr`) | `LOAD_INDIRECT %ptr` | Reads `heap[ptr.base].fields[str(ptr.offset)]` (INDEX then PROPERTY kind). If field absent and base is `obj_`/`arr_` prefix, returns the pointer identity (no-op for object references). Otherwise produces a symbolic. |
 | **Dereference write** (`*ptr = val`) | `STORE_INDIRECT %ptr %val` | Writes to `heap[ptr.base].fields[str(ptr.offset)]` |
 | **Pointer + int** | `BINOP "+" %ptr %n` | `Pointer(base=ptr.base, offset=ptr.offset + n)` |
 | **Pointer - int** | `BINOP "-" %ptr %n` | `Pointer(base=ptr.base, offset=ptr.offset - n)` |

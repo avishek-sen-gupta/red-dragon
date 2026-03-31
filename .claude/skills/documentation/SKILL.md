@@ -34,13 +34,15 @@ Work through these in order. For each: read the current doc, read the relevant s
 - Key areas: `LOAD_INDIRECT`, `ADDRESS_OF`, `NEW_ARRAY`, `CALL_METHOD`, `STORE_INDEX`
 
 ### 5. `docs/ir-reference.md`
-- One entry per opcode with signature, semantics, and example IR
-- Add any opcodes present in `interpreter/ir.py` that are missing from the reference
+- One entry per opcode with **domain-typed field tables** (`Register`, `VarName`, `FieldName`, `FuncName`, `BinopKind`/`UnopKind`, `CodeLabel`, `ContinuationName`)
+- Add any opcodes present in `interpreter/instructions.py` that are missing
 - Update descriptions where behaviour changed
+- Source of truth: `interpreter/instructions.py` (dataclass field names and types)
 
 ### 6. `docs/type-system.md`
 - `TypeExpr` ADT, coercion rules, overload resolution, type inference pipeline
-- Update if `interpreter/types/` changed
+- Also covers `TypedValue`, `TypeEnvironment`, `BinopCoercionStrategy`/`UnopCoercionStrategy`, `TypeConversionRules`
+- Update if `interpreter/types/` changed — especially `type_expr.py`, `type_inference.py`, `coercion/`
 
 ### 7. `docs/linker-design.md`
 - Multi-file linking, import resolution, two-phase compilation
@@ -72,7 +74,7 @@ Work through these in order. For each: read the current doc, read the relevant s
 | Doc | Source to read |
 |-----|---------------|
 | VM design | `interpreter/vm/vm.py`, `interpreter/vm/executor.py` |
-| IR reference | `interpreter/ir.py` (opcode definitions) |
+| IR reference | `interpreter/instructions.py` (dataclass field names and types) |
 | Type system | `interpreter/types/` |
 | Linker | `interpreter/project/` |
 | Frontend design | `interpreter/frontends/<lang>_frontend.py` |

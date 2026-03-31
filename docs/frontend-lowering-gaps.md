@@ -1,6 +1,6 @@
 # Frontend Lowering Gap Analysis
 
-**Date**: 2026-03-22 (updated from 2026-03-10)
+**Date**: 2026-03-31 (updated from 2026-03-22)
 **Method**: Cross-referenced each frontend's `_build_stmt_dispatch()` / `_build_expr_dispatch()` tables against tree-sitter `node-types.json` grammar definitions. Unhandled named node types (excluding punctuation, structural/internal nodes consumed by parent handlers, and comment/noise types) are classified as gaps.
 
 **Totals: 25 P0 (ALL DONE), ~40+ P1 DONE, ~326 P2 across 15 frontends**
@@ -210,6 +210,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `foreign_mod_item` | `extern "C" { ... }` FFI blocks | DONE |
 | `union_item` | `union` type definitions | DONE |
 | `macro_definition` | `macro_rules!` definitions | DONE |
+| `macro_invocation` (vec!) | `vec![e1, e2, ...]` array macro | DONE (ADR-131) |
 | `raw_string_literal` | `r"..."` and `r#"..."#` raw strings | DONE |
 | `negative_literal` | Negative number patterns like `-1` | DONE |
 | `mut_pattern` | `mut x` mutable binding in patterns | DONE |
