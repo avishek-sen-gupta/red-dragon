@@ -62,3 +62,5 @@ fileignoreconfig:
   checksum: a5c4471e3d8be2c1a758320893321ea2a5311593b20dc62cd4ed798df0ed1462
 - filename: docs/superpowers/specs/2026-03-31-type-hints-design.md
   checksum: c3822da3cf994a9b2415bda5440a5557c42e1a400eaf515432953a9de77e7057
+- filename: docs/superpowers/plans/2026-03-31-type-hints.md
+  checksum: 1ac8660340d4f618e26698eb8f57b59daa1880913c499c8137169b54ea6d1ad3
