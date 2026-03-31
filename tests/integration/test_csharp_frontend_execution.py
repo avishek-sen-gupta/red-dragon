@@ -381,28 +381,33 @@ int answer = x;
         assert locals_[VarName("answer")] == 3
 
     def test_byref_param_as_method_receiver(self):
-        """Byref param used as method receiver should dereference first."""
+        """Byref param used as method receiver and field access both dereference correctly."""
         locals_ = _run_csharp(
             """\
 class Box {
     int value;
     Box(int v) { this.value = v; }
-    int GetValue() { return value; }
+    int GetValue() { return this.value; }
 }
 class Wrapper {
     int dummy;
     Wrapper() { this.dummy = 0; }
-    int Extract(ref Box b) {
+    int ExtractViaMethod(ref Box b) {
         return b.GetValue();
+    }
+    int ExtractViaField(ref Box b) {
+        return b.value;
     }
 }
 Wrapper w = new Wrapper();
 Box box = new Box(42);
-int answer = w.Extract(ref box);
+int answer_method = w.ExtractViaMethod(ref box);
+int answer_field = w.ExtractViaField(ref box);
 """,
-            max_steps=1500,
+            max_steps=2000,
         )
-        assert locals_[VarName("answer")] == 42
+        assert locals_[VarName("answer_method")] == 42
+        assert locals_[VarName("answer_field")] == 42
 
 
 class TestCSharpRefLocalExecution:
