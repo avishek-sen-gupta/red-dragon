@@ -146,8 +146,8 @@ Document in `docs/architectural-design-decisions.md`:
 
 | Component | Change |
 |---|---|
-| `EntryPoint` (new, project/types.py) | New type: `function(predicate)` and `top_level()` factory methods |
-| `LinkedProgram` (project/types.py) | Drop `entry_module`, add `entry_points(predicate)` |
+| `EntryPoint` (new, project/entry_point.py) | New type: `function(predicate)` and `top_level()` factory methods |
+| `LinkedProgram` (project/types.py) | Drop `entry_module`, add `entry_points(predicate)`, add `language`, `type_env_builder`, `symbol_table`, `data_layout` — self-contained execution unit |
 | `compile_directory()` (project/compiler.py) | Drop `entry_file` param |
 | `compile_project()` (project/compiler.py) | Remove |
 | `run()` (run.py) | `entry_point: str` -> `EntryPoint`, build single-module LinkedProgram, delegate to `run_linked()` |
