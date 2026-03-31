@@ -27,6 +27,8 @@ proleap-bridge/.settings/
 !.claude/core/
 !.claude/conditional/
 !.claude/classify-prompt.sh
+!.claude/inject-for-code-review.sh
+!.claude/hooks/
 !.claude/settings.json
 
 # Dolt database files (added by bd init)
