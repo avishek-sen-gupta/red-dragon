@@ -1,7 +1,7 @@
-"""Per-module compiler and full project compilation orchestrator.
+"""Per-module compiler and directory compilation orchestrator.
 
 compile_module(): file → ModuleUnit
-compile_project(): entry_file → LinkedProgram (discover → compile → link)
+compile_directory(): directory → LinkedProgram (scan → compile → link)
 build_export_table(): IR + symbol tables → ExportTable
 """
 
@@ -17,13 +17,11 @@ from interpreter.var_name import VarName
 from interpreter.frontend import get_frontend
 from interpreter.ir import CodeLabel
 from interpreter.instructions import InstructionBase, DeclVar, StoreVar, Label_
-from interpreter.project.types import ExportTable, ImportRef, ModuleUnit, LinkedProgram
+from interpreter.project.types import ExportTable, ModuleUnit, LinkedProgram
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import (
     get_resolver,
-    infer_project_root,
     topological_sort,
-    ResolvedImport,
     JavaImportResolver,
 )
 from interpreter.project.source_roots import MavenSourceRootDiscovery
@@ -112,83 +110,6 @@ def compile_module(
     )
 
 
-def compile_project(
-    entry_file: Path,
-    language: Language,
-    project_root: Path | None = None,
-) -> LinkedProgram:
-    """Compile a multi-file project: discover → compile → link.
-
-    Args:
-        entry_file: Path to the entry point file (e.g. main.py).
-        language: Source language for all files in the project.
-        project_root: Root directory. Inferred from entry_file if not given.
-
-    Returns:
-        A LinkedProgram ready for execution or analysis.
-    """
-    entry_file = entry_file.resolve()
-
-    if project_root is None:
-        project_root = infer_project_root(entry_file)
-    else:
-        project_root = project_root.resolve()
-
-    if language == Language.JAVA:
-        discovered_roots = MavenSourceRootDiscovery().discover(project_root)
-        resolver = (
-            JavaImportResolver(source_roots=discovered_roots)
-            if discovered_roots
-            else get_resolver(language)
-        )
-    else:
-        resolver = get_resolver(language)
-
-    # Phase 1: BFS import discovery
-    discovered: dict[Path, list[ImportRef]] = {}
-    import_graph: dict[Path, list[Path]] = {}
-    queue: list[Path] = [entry_file]
-
-    while queue:
-        file_path = queue.pop(0)
-        if file_path in discovered:
-            continue
-
-        source = file_path.read_bytes()
-        refs = extract_imports(source, file_path, language)
-        discovered[file_path] = refs
-        import_graph[file_path] = []
-
-        for ref in refs:
-            for resolved in resolver.resolve(ref, project_root):
-                if resolved.is_resolved():
-                    target = resolved.resolved_path.resolve()
-                    if target not in import_graph.get(file_path, []):
-                        import_graph[file_path].append(target)
-                    if target not in discovered:
-                        queue.append(target)
-
-    # Phase 2: Topological sort
-    topo_order = topological_sort(import_graph)
-
-    # Phase 3: Compile each module
-    modules: dict[Path, ModuleUnit] = {}
-    for file_path in topo_order:
-        if file_path not in modules:
-            modules[file_path] = compile_module(file_path, language)
-
-    # Phase 4: Link
-    linked = link_modules(
-        modules=modules,
-        import_graph=import_graph,
-        project_root=project_root,
-        topo_order=topo_order,
-        language=language,
-    )
-
-    return linked
-
-
 # ── File extension mapping ───────────────────────────────────────
 
 _LANGUAGE_EXTENSIONS: dict[Language, tuple[str, ...]] = {
@@ -214,24 +135,25 @@ _LANGUAGE_EXTENSIONS: dict[Language, tuple[str, ...]] = {
 def compile_directory(
     directory: Path,
     language: Language,
-    entry_file: Path,
 ) -> LinkedProgram:
     """Compile all source files in a directory tree.
 
-    Unlike compile_project (which discovers files via import BFS), this
-    compiles every file matching the language's extensions. Catches
+    Compiles every file matching the language's extensions — catches
     orphaned modules, test files, and files not reachable via imports.
 
     Args:
         directory: Root directory to scan recursively.
         language: Source language — determines which file extensions to include.
-        entry_file: Entry point file — its code runs first.
 
     Returns:
         A LinkedProgram with all files compiled and linked.
+
+    Raises:
+        FileNotFoundError: If the directory does not exist.
     """
     directory = directory.resolve()
-    entry_file = entry_file.resolve()
+    if not directory.is_dir():
+        raise FileNotFoundError(f"Directory not found: {directory}")
 
     extensions = _LANGUAGE_EXTENSIONS.get(language, ())
     source_files = sorted(
@@ -243,11 +165,27 @@ def compile_directory(
 
     modules = {path: compile_module(path, language) for path in source_files}
 
-    # Build a flat import graph — no import-based edges, just all files listed
-    import_graph = {path: [] for path in source_files}
+    # Build import graph from modules' resolved imports
+    if language == Language.JAVA:
+        discovered_roots = MavenSourceRootDiscovery().discover(directory)
+        resolver = (
+            JavaImportResolver(source_roots=discovered_roots)
+            if discovered_roots
+            else get_resolver(language)
+        )
+    else:
+        resolver = get_resolver(language)
 
-    # Topo order: entry file last, everything else in sorted order
-    topo_order = [p for p in source_files if p != entry_file] + [entry_file]
+    import_graph: dict[Path, list[Path]] = {path: [] for path in source_files}
+    for path, module in modules.items():
+        for ref in module.imports:
+            for resolved in resolver.resolve(ref, directory):
+                if resolved.is_resolved():
+                    target = resolved.resolved_path.resolve()
+                    if target in import_graph and target not in import_graph[path]:
+                        import_graph[path].append(target)
+
+    topo_order = topological_sort(import_graph)
 
     return link_modules(
         modules=modules,

@@ -389,14 +389,14 @@ def handle_load_project(
     """
     from pathlib import Path
 
-    from interpreter.project.compiler import compile_project
+    from interpreter.project.compiler import compile_directory
     from interpreter.interprocedural.analyze import analyze_interprocedural
 
     try:
         lang = Language(language)
         entry_path = Path(entry_file)
 
-        linked = compile_project(entry_path, lang)
+        linked = compile_directory(entry_path.parent, lang)
 
         interprocedural = analyze_interprocedural(
             linked.merged_cfg, linked.merged_registry
