@@ -11,6 +11,16 @@
         ]
       },
       {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); skill=$(echo \"$input\" | jq -r '.tool_input.skill // \"\"'); if [[ \"$skill\" == \"superpowers:writing-plans\" ]]; then content=$(printf 'When writing out the implementation plan, include the following guidelines:\\n\\n'; cat .claude/conditional/testing-patterns.md); echo \"{}\" | jq --arg ctx \"$content\" '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": $ctx}}'; fi",
+            "statusMessage": "Injecting TDD guidelines for plan..."
+          }
+        ]
+      },
+      {
         "matcher": "Grep",
         "hooks": [
           {
