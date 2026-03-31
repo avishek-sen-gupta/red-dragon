@@ -59,7 +59,16 @@ def _builtin_range(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 
 
 def _builtin_print(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    logger.info("[VM print] %s", " ".join(str(a.value) for a in args))
+    msg = " ".join(str(a.value) for a in args)
+    logger.info("[VM print] %s", msg)
+    print(msg, end="")
+    return BuiltinResult(value=None)
+
+
+def _builtin_println(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """println(msg) — print msg to stdout with a newline. Used by java.io.PrintStream stub."""
+    msg = " ".join(str(a.value) for a in args)
+    print(msg)
     return BuiltinResult(value=None)
 
 
@@ -453,6 +462,7 @@ class Builtins:
         FuncName("strlen"): _builtin_len,
         FuncName("range"): _builtin_range,
         FuncName("print"): _builtin_print,
+        FuncName("println"): _builtin_println,
         FuncName("int"): _builtin_int,
         FuncName("float"): _builtin_float,
         FuncName("str"): _builtin_str,
