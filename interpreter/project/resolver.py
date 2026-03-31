@@ -166,27 +166,60 @@ class JavaScriptImportResolver(ImportResolver):
 
 
 class JavaImportResolver(ImportResolver):
-    """Resolve Java imports to source files using package path convention."""
+    """Resolve Java imports to source files using package path convention.
+
+    When source_roots are provided (from SourceRootDiscovery), searches
+    those roots first. Falls back to standard patterns under project_root.
+    Supports wildcard imports (import com.example.*) by globbing the
+    package directory.
+    """
+
+    _STANDARD_ROOTS = [
+        Path("."),
+        Path("src"),
+        Path("src") / "main" / "java",
+        Path("src") / "main" / "kotlin",
+    ]
+
+    def __init__(self, source_roots: list[Path] = ()):
+        self._source_roots = list(source_roots)
 
     def resolve(self, ref: ImportRef, project_root: Path) -> list[ResolvedImport]:
         if ref.is_system:
             return [ResolvedImport(ref=ref, is_external=True)]
-        # com.example.Utils → com/example/Utils.java
+
         parts = ref.module_path.split(".")
         rel_path = Path(*parts)
 
-        # Try common Java source root patterns
-        search_roots = [
-            project_root,
-            project_root / "src",
-            project_root / "src" / "main" / "java",
-            project_root / "src" / "main" / "kotlin",
-        ]
+        search_roots = (
+            self._source_roots
+            if self._source_roots
+            else [project_root / r for r in self._STANDARD_ROOTS]
+        )
 
+        # Wildcard: import com.example.* → find all .java files in the package dir
+        if ref.names == ("*",):
+            return self._resolve_wildcard(ref, rel_path, search_roots)
+
+        # Specific: import com.example.Utils → find Utils.java
         for root in search_roots:
             candidate = root / rel_path.with_suffix(".java")
             if candidate.exists():
                 return [ResolvedImport(ref=ref, resolved_path=candidate)]
+
+        return [ResolvedImport(ref=ref)]
+
+    def _resolve_wildcard(
+        self, ref: ImportRef, rel_path: Path, search_roots: list[Path]
+    ) -> list[ResolvedImport]:
+        """Resolve a wildcard import to all .java files in the package directory."""
+        for root in search_roots:
+            pkg_dir = root / rel_path
+            if pkg_dir.is_dir():
+                return [
+                    ResolvedImport(ref=ref, resolved_path=f)
+                    for f in sorted(pkg_dir.glob("*.java"))
+                ]
         return [ResolvedImport(ref=ref)]
 
 
