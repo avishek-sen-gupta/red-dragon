@@ -8,7 +8,7 @@ from interpreter.project.source_roots import (
     ExplicitSourceRootDiscovery,
     MavenSourceRootDiscovery,
 )
-from interpreter.project.compiler import compile_project
+from interpreter.project.compiler import compile_directory
 from interpreter.constants import Language
 
 
@@ -69,9 +69,9 @@ class TestMavenSourceRootDiscovery:
         assert roots == []
 
 
-class TestCompileProjectMultiRoot:
-    def test_compile_project_discovers_maven_roots(self, tmp_path):
-        """compile_project should discover sibling Maven modules and resolve
+class TestCompileDirectoryMultiRoot:
+    def test_compile_directory_discovers_maven_roots(self, tmp_path):
+        """compile_directory should discover sibling Maven modules and resolve
         cross-module imports."""
         # module-a/src/main/java/com/math/Adder.java
         math_pkg = tmp_path / "module-a" / "src" / "main" / "java" / "com" / "math"
@@ -99,17 +99,7 @@ public class Main {
 }
 """)
 
-        entry = (
-            tmp_path
-            / "module-b"
-            / "src"
-            / "main"
-            / "java"
-            / "com"
-            / "app"
-            / "Main.java"
-        )
-        linked = compile_project(entry, Language.JAVA, project_root=tmp_path)
+        linked = compile_directory(tmp_path, Language.JAVA)
 
         # Both modules should be linked
         assert len(linked.merged_ir) > 0
