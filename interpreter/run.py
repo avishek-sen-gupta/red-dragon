@@ -50,6 +50,7 @@ from interpreter.vm.field_fallback import (
     NoFieldFallback,
     ImplicitThisFieldFallback,
 )
+from interpreter.vm.function_scoping import LocalFunctionScopingStrategy
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue
@@ -338,6 +339,7 @@ def execute_cfg(
         func_symbol_table=strategies.func_symbol_table,
         class_symbol_table=strategies.class_symbol_table,
         field_fallback=strategies.field_fallback,
+        function_scoping=LocalFunctionScopingStrategy(),
         symbol_table=strategies.symbol_table,
     )
 
@@ -495,6 +497,7 @@ def execute_cfg_traced(
         func_symbol_table=strategies.func_symbol_table,
         class_symbol_table=strategies.class_symbol_table,
         field_fallback=strategies.field_fallback,
+        function_scoping=LocalFunctionScopingStrategy(),
         symbol_table=strategies.symbol_table,
     )
 
