@@ -1,5 +1,5 @@
 {
-    "include": ["interpreter"],
+    "include": ["interpreter", "mcp_server"],
     "exclude": ["**/grammars/**", "**/__pycache__/**"],
     "typeCheckingMode": "basic",
     "pythonVersion": "3.13",
