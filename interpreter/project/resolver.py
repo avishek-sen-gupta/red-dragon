@@ -7,6 +7,7 @@ file path on disk (or marks it as external/unresolvable).
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from pathlib import Path
 
 from interpreter.constants import Language
 from interpreter.project.types import CyclicImportError, ImportKind, ImportRef
+
+logger = logging.getLogger(__name__)
 
 # ── Resolution result ────────────────────────────────────────────
 
@@ -602,9 +605,15 @@ def topological_sort(graph: dict[Path, list[Path]]) -> list[Path]:
                 queue.append(dependent)
 
     if len(result) != len(in_degree):
-        remaining = set(in_degree) - set(result)
-        cycle = _find_cycle(graph, remaining)
-        raise CyclicImportError(cycle)
+        remaining = sorted(
+            (n for n in in_degree if n not in set(result)),
+            key=lambda p: str(p),
+        )
+        logger.warning(
+            "Cyclic imports detected — %d files in cycles, forced into arbitrary order",
+            len(remaining),
+        )
+        result.extend(remaining)
 
     return result
 
