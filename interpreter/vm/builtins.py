@@ -300,6 +300,41 @@ def _method_length(
     return _builtin_len([obj], vm)
 
 
+def _builtin_list_append(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """list_append(arr_ptr, element) — append element to a heap-backed array.
+
+    Adds the element at the next numeric index and updates the
+    FieldName("length", FieldKind.SPECIAL) counter so that len() and size()
+    return the correct count.
+    """
+    if len(args) < 2:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    arr_val = args[0].value
+    element = args[1]
+    addr = _heap_addr(arr_val)
+    if not addr or not vm.heap_contains(addr):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    heap_obj = vm.heap_get(addr)
+    # Count existing numeric-index entries to determine next index.
+    length_field = FieldName("length", FieldKind.SPECIAL)
+    current_len_tv = heap_obj.fields.get(length_field)
+    if current_len_tv is not None and isinstance(current_len_tv.value, int):
+        current_len = current_len_tv.value
+    else:
+        current_len = sum(1 for k in heap_obj.fields if k.kind == FieldKind.INDEX)
+    new_idx_field = FieldName(str(current_len), FieldKind.INDEX)
+    new_len = current_len + 1
+    new_len_tv = typed(new_len, scalar("int"))
+    result = BuiltinResult(
+        value=None,
+        heap_writes=[
+            HeapWrite(obj_addr=addr, field=new_idx_field, value=element),
+            HeapWrite(obj_addr=addr, field=length_field, value=new_len_tv),
+        ],
+    )
+    return result
+
+
 def _builtin_str_upper(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     # Precondition: args[0].value must be a raw Python str.
     # The caller (String stub IR) extracts the raw value via LoadField before calling.
@@ -408,6 +443,7 @@ class Builtins:
         FuncName("str_upper"): _builtin_str_upper,
         FuncName("str_lower"): _builtin_str_lower,
         FuncName("str_strip"): _builtin_str_strip,
+        FuncName("list_append"): _builtin_list_append,
         **BYTE_BUILTINS,
     }
 
