@@ -2,6 +2,7 @@
 
 import pytest
 
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
@@ -105,7 +106,6 @@ class TestArrayPointerTypes:
         assert isinstance(locals_[VarName("arr")], Pointer)
         assert locals_[VarName("arr")].base.startswith("arr_")
 
-    @pytest.mark.xfail(reason="Rust vec![] macro → SymbolicValue — red-dragon-cjkr")
     def test_rust_vec_produces_pointer(self):
         vm = run(
             "let v = vec![1, 2, 3];\n",
@@ -114,7 +114,12 @@ class TestArrayPointerTypes:
             entry_point=EntryPoint.top_level(),
         )
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert isinstance(locals_[VarName("v")], Pointer)
+        ptr = locals_[VarName("v")]
+        assert isinstance(ptr, Pointer)
+        heap_obj = vm.heap_get(ptr.base)
+        assert heap_obj.fields[FieldName("0", FieldKind.INDEX)].value == 1
+        assert heap_obj.fields[FieldName("1", FieldKind.INDEX)].value == 2
+        assert heap_obj.fields[FieldName("2", FieldKind.INDEX)].value == 3
 
     def test_c_array_produces_pointer(self):
         vm = run(
