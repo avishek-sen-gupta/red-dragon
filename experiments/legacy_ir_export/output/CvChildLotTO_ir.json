@@ -1,0 +1,3066 @@
+{
+  "_meta": {
+    "format_version": 1,
+    "source_file": "/Users/asgupta/code/legacy-app/legacy_sample/commons_module/src/main/java/sg/gov/agency/legacy/sta/common/to/CvChildLotTO.java",
+    "language": "java",
+    "exported_at": "2026-03-31T01:36:45",
+    "instruction_count": 216,
+    "cfg_block_count": 43
+  },
+  "instructions": [
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "entry",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "entry:"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_class_CvChildLotTO_1",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 5,
+        "start_col": 0,
+        "end_line": 32,
+        "end_col": 1
+      },
+      "_type": "Branch",
+      "_str": "branch end_class_CvChildLotTO_1  # 5:0-32:1"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "class_CvChildLotTO_0",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "class_CvChildLotTO_0:"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_class_CvChildLotTO_1",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_class_CvChildLotTO_1:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%0",
+      "operands": [
+        "class_CvChildLotTO_0"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%0 = const class_CvChildLotTO_0"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "CvChildLotTO",
+        "%0"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var CvChildLotTO %0"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getCvNum_3",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 16,
+        "start_col": 4,
+        "end_line": 16,
+        "end_col": 46
+      },
+      "_type": "Branch",
+      "_str": "branch end_getCvNum_3  # 16:4-16:46"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getCvNum_2",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getCvNum_2:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%1",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%1 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%1"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %1"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%2",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 16,
+        "start_col": 38,
+        "end_line": 16,
+        "end_col": 43
+      },
+      "_type": "LoadVar",
+      "_str": "%2 = load_var this  # 16:38-16:43"
+    },
+    {
+      "opcode": "LOAD_FIELD",
+      "result_reg": "%3",
+      "operands": [
+        "%2",
+        "cvNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 16,
+        "start_col": 38,
+        "end_line": 16,
+        "end_col": 43
+      },
+      "_type": "LoadField",
+      "_str": "%3 = load_field %2 cvNum  # 16:38-16:43"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%3"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 16,
+        "start_col": 31,
+        "end_line": 16,
+        "end_col": 44
+      },
+      "_type": "Return_",
+      "_str": "return %3  # 16:31-16:44"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%4",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%4 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%4"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %4"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getCvNum_3",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getCvNum_3:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%5",
+      "operands": [
+        "func_getCvNum_2"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%5 = const func_getCvNum_2"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getCvNum",
+        "%5"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getCvNum %5"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setCvNum_5",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 4,
+        "end_line": 17,
+        "end_col": 62
+      },
+      "_type": "Branch",
+      "_str": "branch end_setCvNum_5  # 17:4-17:62"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_setCvNum_4",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_setCvNum_4:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%6",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%6 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%6"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %6"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%7",
+      "operands": [
+        "param:cvNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 25,
+        "end_line": 17,
+        "end_col": 37
+      },
+      "_type": "Symbolic",
+      "_str": "%7 = symbolic param:cvNum  # 17:25-17:37"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "cvNum",
+        "%7"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var cvNum %7"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%8",
+      "operands": [
+        "cvNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 54,
+        "end_line": 17,
+        "end_col": 59
+      },
+      "_type": "LoadVar",
+      "_str": "%8 = load_var cvNum  # 17:54-17:59"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%9",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 41,
+        "end_line": 17,
+        "end_col": 45
+      },
+      "_type": "LoadVar",
+      "_str": "%9 = load_var this  # 17:41-17:45"
+    },
+    {
+      "opcode": "STORE_FIELD",
+      "result_reg": null,
+      "operands": [
+        "%9",
+        "cvNum",
+        "%8"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 41,
+        "end_line": 17,
+        "end_col": 59
+      },
+      "_type": "StoreField",
+      "_str": "store_field %9 cvNum %8  # 17:41-17:59"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%10",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%10 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%10"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %10"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setCvNum_5",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_setCvNum_5:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%11",
+      "operands": [
+        "func_setCvNum_4"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%11 = const func_setCvNum_4"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "setCvNum",
+        "%11"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var setCvNum %11"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildGrpNum_7",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 18,
+        "start_col": 4,
+        "end_line": 18,
+        "end_col": 59
+      },
+      "_type": "Branch",
+      "_str": "branch end_getChildGrpNum_7  # 18:4-18:59"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getChildGrpNum_6",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getChildGrpNum_6:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%12",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%12 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%12"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %12"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%13",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 18,
+        "start_col": 45,
+        "end_line": 18,
+        "end_col": 56
+      },
+      "_type": "LoadVar",
+      "_str": "%13 = load_var this  # 18:45-18:56"
+    },
+    {
+      "opcode": "LOAD_FIELD",
+      "result_reg": "%14",
+      "operands": [
+        "%13",
+        "childGrpNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 18,
+        "start_col": 45,
+        "end_line": 18,
+        "end_col": 56
+      },
+      "_type": "LoadField",
+      "_str": "%14 = load_field %13 childGrpNum  # 18:45-18:56"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%14"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 18,
+        "start_col": 38,
+        "end_line": 18,
+        "end_col": 57
+      },
+      "_type": "Return_",
+      "_str": "return %14  # 18:38-18:57"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%15",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%15 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%15"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %15"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildGrpNum_7",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getChildGrpNum_7:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%16",
+      "operands": [
+        "func_getChildGrpNum_6"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%16 = const func_getChildGrpNum_6"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getChildGrpNum",
+        "%16"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getChildGrpNum %16"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildGrpNum_9",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 19,
+        "start_col": 4,
+        "end_line": 19,
+        "end_col": 87
+      },
+      "_type": "Branch",
+      "_str": "branch end_setChildGrpNum_9  # 19:4-19:87"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_setChildGrpNum_8",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_setChildGrpNum_8:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%17",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%17 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%17"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %17"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%18",
+      "operands": [
+        "param:childGrpNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 19,
+        "start_col": 31,
+        "end_line": 19,
+        "end_col": 50
+      },
+      "_type": "Symbolic",
+      "_str": "%18 = symbolic param:childGrpNum  # 19:31-19:50"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "childGrpNum",
+        "%18"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var childGrpNum %18"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%19",
+      "operands": [
+        "childGrpNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 19,
+        "start_col": 73,
+        "end_line": 19,
+        "end_col": 84
+      },
+      "_type": "LoadVar",
+      "_str": "%19 = load_var childGrpNum  # 19:73-19:84"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%20",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 19,
+        "start_col": 54,
+        "end_line": 19,
+        "end_col": 58
+      },
+      "_type": "LoadVar",
+      "_str": "%20 = load_var this  # 19:54-19:58"
+    },
+    {
+      "opcode": "STORE_FIELD",
+      "result_reg": null,
+      "operands": [
+        "%20",
+        "childGrpNum",
+        "%19"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 19,
+        "start_col": 54,
+        "end_line": 19,
+        "end_col": 84
+      },
+      "_type": "StoreField",
+      "_str": "store_field %20 childGrpNum %19  # 19:54-19:84"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%21",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%21 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%21"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %21"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildGrpNum_9",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_setChildGrpNum_9:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%22",
+      "operands": [
+        "func_setChildGrpNum_8"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%22 = const func_setChildGrpNum_8"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "setChildGrpNum",
+        "%22"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var setChildGrpNum %22"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildStatusCde_11",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 20,
+        "start_col": 4,
+        "end_line": 20,
+        "end_col": 64
+      },
+      "_type": "Branch",
+      "_str": "branch end_getChildStatusCde_11  # 20:4-20:64"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getChildStatusCde_10",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getChildStatusCde_10:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%23",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%23 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%23"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %23"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%24",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 20,
+        "start_col": 47,
+        "end_line": 20,
+        "end_col": 61
+      },
+      "_type": "LoadVar",
+      "_str": "%24 = load_var this  # 20:47-20:61"
+    },
+    {
+      "opcode": "LOAD_FIELD",
+      "result_reg": "%25",
+      "operands": [
+        "%24",
+        "childStatusCde"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 20,
+        "start_col": 47,
+        "end_line": 20,
+        "end_col": 61
+      },
+      "_type": "LoadField",
+      "_str": "%25 = load_field %24 childStatusCde  # 20:47-20:61"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%25"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 20,
+        "start_col": 40,
+        "end_line": 20,
+        "end_col": 62
+      },
+      "_type": "Return_",
+      "_str": "return %25  # 20:40-20:62"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%26",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%26 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%26"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %26"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildStatusCde_11",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getChildStatusCde_11:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%27",
+      "operands": [
+        "func_getChildStatusCde_10"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%27 = const func_getChildStatusCde_10"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getChildStatusCde",
+        "%27"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getChildStatusCde %27"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildStatusCde_13",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 21,
+        "start_col": 4,
+        "end_line": 21,
+        "end_col": 98
+      },
+      "_type": "Branch",
+      "_str": "branch end_setChildStatusCde_13  # 21:4-21:98"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_setChildStatusCde_12",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_setChildStatusCde_12:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%28",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%28 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%28"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %28"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%29",
+      "operands": [
+        "param:childStatusCde"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 21,
+        "start_col": 34,
+        "end_line": 21,
+        "end_col": 55
+      },
+      "_type": "Symbolic",
+      "_str": "%29 = symbolic param:childStatusCde  # 21:34-21:55"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "childStatusCde",
+        "%29"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var childStatusCde %29"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%30",
+      "operands": [
+        "childStatusCde"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 21,
+        "start_col": 81,
+        "end_line": 21,
+        "end_col": 95
+      },
+      "_type": "LoadVar",
+      "_str": "%30 = load_var childStatusCde  # 21:81-21:95"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%31",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 21,
+        "start_col": 59,
+        "end_line": 21,
+        "end_col": 63
+      },
+      "_type": "LoadVar",
+      "_str": "%31 = load_var this  # 21:59-21:63"
+    },
+    {
+      "opcode": "STORE_FIELD",
+      "result_reg": null,
+      "operands": [
+        "%31",
+        "childStatusCde",
+        "%30"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 21,
+        "start_col": 59,
+        "end_line": 21,
+        "end_col": 95
+      },
+      "_type": "StoreField",
+      "_str": "store_field %31 childStatusCde %30  # 21:59-21:95"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%32",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%32 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%32"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %32"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildStatusCde_13",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_setChildStatusCde_13:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%33",
+      "operands": [
+        "func_setChildStatusCde_12"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%33 = const func_setChildStatusCde_12"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "setChildStatusCde",
+        "%33"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var setChildStatusCde %33"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildGrpEndrse_15",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 22,
+        "start_col": 4,
+        "end_line": 22,
+        "end_col": 64
+      },
+      "_type": "Branch",
+      "_str": "branch end_getChildGrpEndrse_15  # 22:4-22:64"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getChildGrpEndrse_14",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getChildGrpEndrse_14:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%34",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%34 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%34"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %34"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%35",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 22,
+        "start_col": 47,
+        "end_line": 22,
+        "end_col": 61
+      },
+      "_type": "LoadVar",
+      "_str": "%35 = load_var this  # 22:47-22:61"
+    },
+    {
+      "opcode": "LOAD_FIELD",
+      "result_reg": "%36",
+      "operands": [
+        "%35",
+        "childGrpEndrse"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 22,
+        "start_col": 47,
+        "end_line": 22,
+        "end_col": 61
+      },
+      "_type": "LoadField",
+      "_str": "%36 = load_field %35 childGrpEndrse  # 22:47-22:61"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%36"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 22,
+        "start_col": 40,
+        "end_line": 22,
+        "end_col": 62
+      },
+      "_type": "Return_",
+      "_str": "return %36  # 22:40-22:62"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%37",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%37 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%37"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %37"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildGrpEndrse_15",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getChildGrpEndrse_15:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%38",
+      "operands": [
+        "func_getChildGrpEndrse_14"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%38 = const func_getChildGrpEndrse_14"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getChildGrpEndrse",
+        "%38"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getChildGrpEndrse %38"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildGrpEndrse_17",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 23,
+        "start_col": 4,
+        "end_line": 23,
+        "end_col": 98
+      },
+      "_type": "Branch",
+      "_str": "branch end_setChildGrpEndrse_17  # 23:4-23:98"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_setChildGrpEndrse_16",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_setChildGrpEndrse_16:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%39",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%39 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%39"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %39"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%40",
+      "operands": [
+        "param:childGrpEndrse"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 23,
+        "start_col": 34,
+        "end_line": 23,
+        "end_col": 55
+      },
+      "_type": "Symbolic",
+      "_str": "%40 = symbolic param:childGrpEndrse  # 23:34-23:55"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "childGrpEndrse",
+        "%40"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var childGrpEndrse %40"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%41",
+      "operands": [
+        "childGrpEndrse"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 23,
+        "start_col": 81,
+        "end_line": 23,
+        "end_col": 95
+      },
+      "_type": "LoadVar",
+      "_str": "%41 = load_var childGrpEndrse  # 23:81-23:95"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%42",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 23,
+        "start_col": 59,
+        "end_line": 23,
+        "end_col": 63
+      },
+      "_type": "LoadVar",
+      "_str": "%42 = load_var this  # 23:59-23:63"
+    },
+    {
+      "opcode": "STORE_FIELD",
+      "result_reg": null,
+      "operands": [
+        "%42",
+        "childGrpEndrse",
+        "%41"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 23,
+        "start_col": 59,
+        "end_line": 23,
+        "end_col": 95
+      },
+      "_type": "StoreField",
+      "_str": "store_field %42 childGrpEndrse %41  # 23:59-23:95"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%43",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%43 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%43"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %43"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildGrpEndrse_17",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_setChildGrpEndrse_17:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%44",
+      "operands": [
+        "func_setChildGrpEndrse_16"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%44 = const func_setChildGrpEndrse_16"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "setChildGrpEndrse",
+        "%44"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var setChildGrpEndrse %44"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildLotNum_19",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 24,
+        "start_col": 4,
+        "end_line": 24,
+        "end_col": 58
+      },
+      "_type": "Branch",
+      "_str": "branch end_getChildLotNum_19  # 24:4-24:58"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getChildLotNum_18",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getChildLotNum_18:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%45",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%45 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%45"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %45"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%46",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 24,
+        "start_col": 44,
+        "end_line": 24,
+        "end_col": 55
+      },
+      "_type": "LoadVar",
+      "_str": "%46 = load_var this  # 24:44-24:55"
+    },
+    {
+      "opcode": "LOAD_FIELD",
+      "result_reg": "%47",
+      "operands": [
+        "%46",
+        "childLotNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 24,
+        "start_col": 44,
+        "end_line": 24,
+        "end_col": 55
+      },
+      "_type": "LoadField",
+      "_str": "%47 = load_field %46 childLotNum  # 24:44-24:55"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%47"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 24,
+        "start_col": 37,
+        "end_line": 24,
+        "end_col": 56
+      },
+      "_type": "Return_",
+      "_str": "return %47  # 24:37-24:56"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%48",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%48 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%48"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %48"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildLotNum_19",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getChildLotNum_19:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%49",
+      "operands": [
+        "func_getChildLotNum_18"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%49 = const func_getChildLotNum_18"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getChildLotNum",
+        "%49"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getChildLotNum %49"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildLotNum_21",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 4,
+        "end_line": 25,
+        "end_col": 86
+      },
+      "_type": "Branch",
+      "_str": "branch end_setChildLotNum_21  # 25:4-25:86"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_setChildLotNum_20",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_setChildLotNum_20:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%50",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%50 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%50"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %50"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%51",
+      "operands": [
+        "param:childLotNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 31,
+        "end_line": 25,
+        "end_col": 49
+      },
+      "_type": "Symbolic",
+      "_str": "%51 = symbolic param:childLotNum  # 25:31-25:49"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "childLotNum",
+        "%51"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var childLotNum %51"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%52",
+      "operands": [
+        "childLotNum"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 72,
+        "end_line": 25,
+        "end_col": 83
+      },
+      "_type": "LoadVar",
+      "_str": "%52 = load_var childLotNum  # 25:72-25:83"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%53",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 53,
+        "end_line": 25,
+        "end_col": 57
+      },
+      "_type": "LoadVar",
+      "_str": "%53 = load_var this  # 25:53-25:57"
+    },
+    {
+      "opcode": "STORE_FIELD",
+      "result_reg": null,
+      "operands": [
+        "%53",
+        "childLotNum",
+        "%52"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 53,
+        "end_line": 25,
+        "end_col": 83
+      },
+      "_type": "StoreField",
+      "_str": "store_field %53 childLotNum %52  # 25:53-25:83"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%54",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%54 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%54"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %54"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildLotNum_21",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_setChildLotNum_21:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%55",
+      "operands": [
+        "func_setChildLotNum_20"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%55 = const func_setChildLotNum_20"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "setChildLotNum",
+        "%55"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var setChildLotNum %55"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildLotArea_23",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 26,
+        "start_col": 4,
+        "end_line": 26,
+        "end_col": 60
+      },
+      "_type": "Branch",
+      "_str": "branch end_getChildLotArea_23  # 26:4-26:60"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getChildLotArea_22",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getChildLotArea_22:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%56",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%56 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%56"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %56"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%57",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 26,
+        "start_col": 45,
+        "end_line": 26,
+        "end_col": 57
+      },
+      "_type": "LoadVar",
+      "_str": "%57 = load_var this  # 26:45-26:57"
+    },
+    {
+      "opcode": "LOAD_FIELD",
+      "result_reg": "%58",
+      "operands": [
+        "%57",
+        "childLotArea"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 26,
+        "start_col": 45,
+        "end_line": 26,
+        "end_col": 57
+      },
+      "_type": "LoadField",
+      "_str": "%58 = load_field %57 childLotArea  # 26:45-26:57"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%58"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 26,
+        "start_col": 38,
+        "end_line": 26,
+        "end_col": 58
+      },
+      "_type": "Return_",
+      "_str": "return %58  # 26:38-26:58"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%59",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%59 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%59"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %59"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getChildLotArea_23",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getChildLotArea_23:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%60",
+      "operands": [
+        "func_getChildLotArea_22"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%60 = const func_getChildLotArea_22"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getChildLotArea",
+        "%60"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getChildLotArea %60"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildLotArea_25",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 27,
+        "start_col": 4,
+        "end_line": 27,
+        "end_col": 90
+      },
+      "_type": "Branch",
+      "_str": "branch end_setChildLotArea_25  # 27:4-27:90"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_setChildLotArea_24",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_setChildLotArea_24:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%61",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%61 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%61"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %61"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%62",
+      "operands": [
+        "param:childLotArea"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 27,
+        "start_col": 32,
+        "end_line": 27,
+        "end_col": 51
+      },
+      "_type": "Symbolic",
+      "_str": "%62 = symbolic param:childLotArea  # 27:32-27:51"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "childLotArea",
+        "%62"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var childLotArea %62"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%63",
+      "operands": [
+        "childLotArea"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 27,
+        "start_col": 75,
+        "end_line": 27,
+        "end_col": 87
+      },
+      "_type": "LoadVar",
+      "_str": "%63 = load_var childLotArea  # 27:75-27:87"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%64",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 27,
+        "start_col": 55,
+        "end_line": 27,
+        "end_col": 59
+      },
+      "_type": "LoadVar",
+      "_str": "%64 = load_var this  # 27:55-27:59"
+    },
+    {
+      "opcode": "STORE_FIELD",
+      "result_reg": null,
+      "operands": [
+        "%64",
+        "childLotArea",
+        "%63"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 27,
+        "start_col": 55,
+        "end_line": 27,
+        "end_col": 87
+      },
+      "_type": "StoreField",
+      "_str": "store_field %64 childLotArea %63  # 27:55-27:87"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%65",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%65 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%65"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %65"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setChildLotArea_25",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_setChildLotArea_25:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%66",
+      "operands": [
+        "func_setChildLotArea_24"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%66 = const func_setChildLotArea_24"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "setChildLotArea",
+        "%66"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var setChildLotArea %66"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getUpdInd_27",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 28,
+        "start_col": 4,
+        "end_line": 28,
+        "end_col": 48
+      },
+      "_type": "Branch",
+      "_str": "branch end_getUpdInd_27  # 28:4-28:48"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getUpdInd_26",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getUpdInd_26:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%67",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%67 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%67"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %67"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%68",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 28,
+        "start_col": 39,
+        "end_line": 28,
+        "end_col": 45
+      },
+      "_type": "LoadVar",
+      "_str": "%68 = load_var this  # 28:39-28:45"
+    },
+    {
+      "opcode": "LOAD_FIELD",
+      "result_reg": "%69",
+      "operands": [
+        "%68",
+        "updInd"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 28,
+        "start_col": 39,
+        "end_line": 28,
+        "end_col": 45
+      },
+      "_type": "LoadField",
+      "_str": "%69 = load_field %68 updInd  # 28:39-28:45"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%69"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 28,
+        "start_col": 32,
+        "end_line": 28,
+        "end_col": 46
+      },
+      "_type": "Return_",
+      "_str": "return %69  # 28:32-28:46"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%70",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%70 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%70"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %70"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getUpdInd_27",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getUpdInd_27:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%71",
+      "operands": [
+        "func_getUpdInd_26"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%71 = const func_getUpdInd_26"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getUpdInd",
+        "%71"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getUpdInd %71"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setUpdInd_29",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 29,
+        "start_col": 4,
+        "end_line": 29,
+        "end_col": 66
+      },
+      "_type": "Branch",
+      "_str": "branch end_setUpdInd_29  # 29:4-29:66"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_setUpdInd_28",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_setUpdInd_28:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%72",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%72 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%72"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %72"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%73",
+      "operands": [
+        "param:updInd"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 29,
+        "start_col": 26,
+        "end_line": 29,
+        "end_col": 39
+      },
+      "_type": "Symbolic",
+      "_str": "%73 = symbolic param:updInd  # 29:26-29:39"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "updInd",
+        "%73"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var updInd %73"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%74",
+      "operands": [
+        "updInd"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 29,
+        "start_col": 57,
+        "end_line": 29,
+        "end_col": 63
+      },
+      "_type": "LoadVar",
+      "_str": "%74 = load_var updInd  # 29:57-29:63"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%75",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 29,
+        "start_col": 43,
+        "end_line": 29,
+        "end_col": 47
+      },
+      "_type": "LoadVar",
+      "_str": "%75 = load_var this  # 29:43-29:47"
+    },
+    {
+      "opcode": "STORE_FIELD",
+      "result_reg": null,
+      "operands": [
+        "%75",
+        "updInd",
+        "%74"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 29,
+        "start_col": 43,
+        "end_line": 29,
+        "end_col": 63
+      },
+      "_type": "StoreField",
+      "_str": "store_field %75 updInd %74  # 29:43-29:63"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%76",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%76 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%76"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %76"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setUpdInd_29",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_setUpdInd_29:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%77",
+      "operands": [
+        "func_setUpdInd_28"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%77 = const func_setUpdInd_28"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "setUpdInd",
+        "%77"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var setUpdInd %77"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getNewCV_31",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 30,
+        "start_col": 4,
+        "end_line": 30,
+        "end_col": 46
+      },
+      "_type": "Branch",
+      "_str": "branch end_getNewCV_31  # 30:4-30:46"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getNewCV_30",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getNewCV_30:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%78",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%78 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%78"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %78"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%79",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 30,
+        "start_col": 38,
+        "end_line": 30,
+        "end_col": 43
+      },
+      "_type": "LoadVar",
+      "_str": "%79 = load_var this  # 30:38-30:43"
+    },
+    {
+      "opcode": "LOAD_FIELD",
+      "result_reg": "%80",
+      "operands": [
+        "%79",
+        "newCV"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 30,
+        "start_col": 38,
+        "end_line": 30,
+        "end_col": 43
+      },
+      "_type": "LoadField",
+      "_str": "%80 = load_field %79 newCV  # 30:38-30:43"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%80"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 30,
+        "start_col": 31,
+        "end_line": 30,
+        "end_col": 44
+      },
+      "_type": "Return_",
+      "_str": "return %80  # 30:31-30:44"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%81",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%81 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%81"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %81"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getNewCV_31",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getNewCV_31:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%82",
+      "operands": [
+        "func_getNewCV_30"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%82 = const func_getNewCV_30"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getNewCV",
+        "%82"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getNewCV %82"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setNewCV_33",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 31,
+        "start_col": 4,
+        "end_line": 31,
+        "end_col": 62
+      },
+      "_type": "Branch",
+      "_str": "branch end_setNewCV_33  # 31:4-31:62"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_setNewCV_32",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_setNewCV_32:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%83",
+      "operands": [
+        "param:this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Symbolic",
+      "_str": "%83 = symbolic param:this"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "this",
+        "%83"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var this %83"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%84",
+      "operands": [
+        "param:newCV"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 31,
+        "start_col": 25,
+        "end_line": 31,
+        "end_col": 37
+      },
+      "_type": "Symbolic",
+      "_str": "%84 = symbolic param:newCV  # 31:25-31:37"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "newCV",
+        "%84"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var newCV %84"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%85",
+      "operands": [
+        "newCV"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 31,
+        "start_col": 54,
+        "end_line": 31,
+        "end_col": 59
+      },
+      "_type": "LoadVar",
+      "_str": "%85 = load_var newCV  # 31:54-31:59"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%86",
+      "operands": [
+        "this"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 31,
+        "start_col": 41,
+        "end_line": 31,
+        "end_col": 45
+      },
+      "_type": "LoadVar",
+      "_str": "%86 = load_var this  # 31:41-31:45"
+    },
+    {
+      "opcode": "STORE_FIELD",
+      "result_reg": null,
+      "operands": [
+        "%86",
+        "newCV",
+        "%85"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 31,
+        "start_col": 41,
+        "end_line": 31,
+        "end_col": 59
+      },
+      "_type": "StoreField",
+      "_str": "store_field %86 newCV %85  # 31:41-31:59"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%87",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%87 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%87"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %87"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_setNewCV_33",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_setNewCV_33:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%88",
+      "operands": [
+        "func_setNewCV_32"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%88 = const func_setNewCV_32"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "setNewCV",
+        "%88"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var setNewCV %88"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%89",
+      "operands": [
+        "1L"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 6,
+        "start_col": 49,
+        "end_line": 6,
+        "end_col": 51
+      },
+      "_type": "Const",
+      "_str": "%89 = const 1L  # 6:49-6:51"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "serialVersionUID",
+        "%89"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 6,
+        "start_col": 4,
+        "end_line": 6,
+        "end_col": 52
+      },
+      "_type": "DeclVar",
+      "_str": "decl_var serialVersionUID %89  # 6:4-6:52"
+    }
+  ],
+  "cfg_entry_label": "entry",
+  "registry": {
+    "func_params": {
+      "func_getCvNum_2": [
+        "this"
+      ],
+      "func_setCvNum_4": [
+        "this",
+        "cvNum"
+      ],
+      "func_getChildGrpNum_6": [
+        "this"
+      ],
+      "func_setChildGrpNum_8": [
+        "this",
+        "childGrpNum"
+      ],
+      "func_getChildStatusCde_10": [
+        "this"
+      ],
+      "func_setChildStatusCde_12": [
+        "this",
+        "childStatusCde"
+      ],
+      "func_getChildGrpEndrse_14": [
+        "this"
+      ],
+      "func_setChildGrpEndrse_16": [
+        "this",
+        "childGrpEndrse"
+      ],
+      "func_getChildLotNum_18": [
+        "this"
+      ],
+      "func_setChildLotNum_20": [
+        "this",
+        "childLotNum"
+      ],
+      "func_getChildLotArea_22": [
+        "this"
+      ],
+      "func_setChildLotArea_24": [
+        "this",
+        "childLotArea"
+      ],
+      "func_getUpdInd_26": [
+        "this"
+      ],
+      "func_setUpdInd_28": [
+        "this",
+        "updInd"
+      ],
+      "func_getNewCV_30": [
+        "this"
+      ],
+      "func_setNewCV_32": [
+        "this",
+        "newCV"
+      ]
+    },
+    "classes": {
+      "CvChildLotTO": {
+        "fields": [],
+        "methods": [],
+        "parent": null
+      }
+    }
+  },
+  "vm_state": {
+    "heap": {},
+    "call_stack": [
+      {
+        "function_name": "<main>",
+        "registers": {
+          "%0": "ClassRef(name=ClassName(value='CvChildLotTO'), label=CodeLabel(value='class_CvChildLotTO_0'), parents=(ClassName(value='BaseTO'),))",
+          "%5": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getCvNum'), label=CodeLabel(value='func_getCvNum_2')), closure_id=NoClosureId(value=''))",
+          "%11": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setCvNum'), label=CodeLabel(value='func_setCvNum_4')), closure_id=NoClosureId(value=''))",
+          "%16": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildGrpNum'), label=CodeLabel(value='func_getChildGrpNum_6')), closure_id=NoClosureId(value=''))",
+          "%22": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildGrpNum'), label=CodeLabel(value='func_setChildGrpNum_8')), closure_id=NoClosureId(value=''))",
+          "%27": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildStatusCde'), label=CodeLabel(value='func_getChildStatusCde_10')), closure_id=NoClosureId(value=''))",
+          "%33": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildStatusCde'), label=CodeLabel(value='func_setChildStatusCde_12')), closure_id=NoClosureId(value=''))",
+          "%38": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildGrpEndrse'), label=CodeLabel(value='func_getChildGrpEndrse_14')), closure_id=NoClosureId(value=''))",
+          "%44": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildGrpEndrse'), label=CodeLabel(value='func_setChildGrpEndrse_16')), closure_id=NoClosureId(value=''))",
+          "%49": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildLotNum'), label=CodeLabel(value='func_getChildLotNum_18')), closure_id=NoClosureId(value=''))",
+          "%55": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildLotNum'), label=CodeLabel(value='func_setChildLotNum_20')), closure_id=NoClosureId(value=''))",
+          "%60": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildLotArea'), label=CodeLabel(value='func_getChildLotArea_22')), closure_id=NoClosureId(value=''))",
+          "%66": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildLotArea'), label=CodeLabel(value='func_setChildLotArea_24')), closure_id=NoClosureId(value=''))",
+          "%71": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getUpdInd'), label=CodeLabel(value='func_getUpdInd_26')), closure_id=NoClosureId(value=''))",
+          "%77": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setUpdInd'), label=CodeLabel(value='func_setUpdInd_28')), closure_id=NoClosureId(value=''))",
+          "%82": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getNewCV'), label=CodeLabel(value='func_getNewCV_30')), closure_id=NoClosureId(value=''))",
+          "%88": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setNewCV'), label=CodeLabel(value='func_setNewCV_32')), closure_id=NoClosureId(value=''))",
+          "%89": "1L"
+        },
+        "local_vars": {
+          "CvChildLotTO": "ClassRef(name=ClassName(value='CvChildLotTO'), label=CodeLabel(value='class_CvChildLotTO_0'), parents=(ClassName(value='BaseTO'),))",
+          "getCvNum": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getCvNum'), label=CodeLabel(value='func_getCvNum_2')), closure_id=NoClosureId(value=''))",
+          "setCvNum": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setCvNum'), label=CodeLabel(value='func_setCvNum_4')), closure_id=NoClosureId(value=''))",
+          "getChildGrpNum": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildGrpNum'), label=CodeLabel(value='func_getChildGrpNum_6')), closure_id=NoClosureId(value=''))",
+          "setChildGrpNum": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildGrpNum'), label=CodeLabel(value='func_setChildGrpNum_8')), closure_id=NoClosureId(value=''))",
+          "getChildStatusCde": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildStatusCde'), label=CodeLabel(value='func_getChildStatusCde_10')), closure_id=NoClosureId(value=''))",
+          "setChildStatusCde": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildStatusCde'), label=CodeLabel(value='func_setChildStatusCde_12')), closure_id=NoClosureId(value=''))",
+          "getChildGrpEndrse": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildGrpEndrse'), label=CodeLabel(value='func_getChildGrpEndrse_14')), closure_id=NoClosureId(value=''))",
+          "setChildGrpEndrse": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildGrpEndrse'), label=CodeLabel(value='func_setChildGrpEndrse_16')), closure_id=NoClosureId(value=''))",
+          "getChildLotNum": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildLotNum'), label=CodeLabel(value='func_getChildLotNum_18')), closure_id=NoClosureId(value=''))",
+          "setChildLotNum": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildLotNum'), label=CodeLabel(value='func_setChildLotNum_20')), closure_id=NoClosureId(value=''))",
+          "getChildLotArea": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getChildLotArea'), label=CodeLabel(value='func_getChildLotArea_22')), closure_id=NoClosureId(value=''))",
+          "setChildLotArea": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setChildLotArea'), label=CodeLabel(value='func_setChildLotArea_24')), closure_id=NoClosureId(value=''))",
+          "getUpdInd": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getUpdInd'), label=CodeLabel(value='func_getUpdInd_26')), closure_id=NoClosureId(value=''))",
+          "setUpdInd": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setUpdInd'), label=CodeLabel(value='func_setUpdInd_28')), closure_id=NoClosureId(value=''))",
+          "getNewCV": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getNewCV'), label=CodeLabel(value='func_getNewCV_30')), closure_id=NoClosureId(value=''))",
+          "setNewCV": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='setNewCV'), label=CodeLabel(value='func_setNewCV_32')), closure_id=NoClosureId(value=''))",
+          "serialVersionUID": "1L"
+        },
+        "return_label": null
+      }
+    ],
+    "path_conditions": [],
+    "symbolic_counter": 0
+  },
+  "execution": {
+    "steps": 54,
+    "llm_calls": 0,
+    "final_heap_objects": 0,
+    "final_symbolic_count": 0
+  }
+}

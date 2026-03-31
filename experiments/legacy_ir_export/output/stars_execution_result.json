@@ -1,0 +1,149 @@
+{
+  "survey_summary": {
+    "total_files": 472,
+    "successful": 460,
+    "errors": 12,
+    "total_instructions": 713415,
+    "total_functions": 14351,
+    "total_classes": 1013,
+    "opcode_distribution": {
+      "CONST": 186191,
+      "LOAD_VAR": 83536,
+      "LABEL": 72560,
+      "DECL_VAR": 52726,
+      "STORE_INDEX": 52157,
+      "LOAD_FIELD": 50472,
+      "BRANCH": 36412,
+      "RETURN": 30994,
+      "SYMBOLIC": 29004,
+      "CALL_METHOD": 26810,
+      "CALL_FUNCTION": 24818,
+      "NEW_ARRAY": 21506,
+      "BRANCH_IF": 14014,
+      "BINOP": 13440,
+      "STORE_FIELD": 5645,
+      "LOAD_INDEX": 4657,
+      "CALL_CTOR": 3151,
+      "STORE_VAR": 2208,
+      "UNOP": 902,
+      "THROW": 758,
+      "TRY_PUSH": 726,
+      "TRY_POP": 726,
+      "NEW_OBJECT": 2
+    },
+    "error_details": [
+      {
+        "file": "Legacy_sample/Legacy_sample/src/main/java/sg/gov/agency/legacy/sta/tfp/Tfppz211.java",
+        "error": "Unknown binary operator: '// R-Nlegacy-app-201302002 - Erlinda - added ACCV and RO\\r'"
+      },
+      {
+        "file": "Legacy_sample/src/main/java/sg/gov/agency/legacy/sta/tfp/Tfppz211.java",
+        "error": "Unknown binary operator: '// R-Nlegacy-app-201302002 - Erlinda - added ACCV and RO\\r'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/legacydb/LegacyDB.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/legacydb/LegacyDBCB.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/support/IVal.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/support/NaturalLibrary.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/support/NaturalProgram.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "vendor_framework_sample/src/main/java/com/vendorsoftware/legacydb/LegacyDB.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "vendor_framework_sample/src/main/java/com/vendorsoftware/legacydb/LegacyDBCB.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "vendor_framework_sample/src/main/java/com/vendorsoftware/support/IVal.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "vendor_framework_sample/src/main/java/com/vendorsoftware/support/NaturalLibrary.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "vendor_framework_sample/src/main/java/com/vendorsoftware/support/NaturalProgram.java",
+        "error": "Unknown binary operator: '>>>'"
+      }
+    ]
+  },
+  "link_result": {
+    "modules_compiled": 460,
+    "compile_errors": 12,
+    "error_details": [
+      {
+        "file": "Legacy_sample/Legacy_sample/src/main/java/sg/gov/agency/legacy/sta/tfp/Tfppz211.java",
+        "error": "Unknown binary operator: '// R-Nlegacy-app-201302002 - Erlinda - added ACCV and RO\\r'"
+      },
+      {
+        "file": "Legacy_sample/src/main/java/sg/gov/agency/legacy/sta/tfp/Tfppz211.java",
+        "error": "Unknown binary operator: '// R-Nlegacy-app-201302002 - Erlinda - added ACCV and RO\\r'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/legacydb/LegacyDB.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/legacydb/LegacyDBCB.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/support/IVal.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/support/NaturalLibrary.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "Legacy_sample/vendor_framework_sample/src/main/java/com/vendorsoftware/support/NaturalProgram.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "vendor_framework_sample/src/main/java/com/vendorsoftware/legacydb/LegacyDB.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "vendor_framework_sample/src/main/java/com/vendorsoftware/legacydb/LegacyDBCB.java",
+        "error": "Unknown binary operator: '>>>'"
+      },
+      {
+        "file": "vendor_framework_sample/src/main/java/com/vendorsoftware/support/IVal.java",
+        "error": "Unknown binary operator: '>>>'"
+      }
+    ],
+    "package_mappings": 1085,
+    "import_edges": 24572,
+    "merged_instructions": 713415,
+    "entry": "/Users/asgupta/code/legacy-app/legacy_sample/Legacy_sample/src/main/java/sg/gov/agency/legacy/LegacyDBQueryTest.java"
+  },
+  "execution": {
+    "success": true,
+    "steps": 37,
+    "llm_calls": 0,
+    "heap_objects": 2,
+    "symbolic_count": 22,
+    "call_stack_depth": 1,
+    "vars": {
+      "args": "TypedValue(value=SymbolicValue(name='sym_0', type_hint='param:args', constraints=[]), type=UnionType(members=frozenset({ScalarType(name='Acqpu600'), ScalarType(name='SpecialTokenizer'), ScalarType(name='HashMap<Thread, String[]>'), ScalarType(name='IValInt'), ScalarType(name='NValInt'), ScalarType(name='DataElsTmpIntLandAffDtls'), ScalarType(name='ArrayList<Object>'), ScalarType(name='StringTokenizer'), ScalarType(name='DataInputStream'), ScalarType(name='AcqGazLotView'), ScalarType(name='PValMem'), ScalarType(name=<TypeName.BOOL: 'Bool'>), ScalarType(name='Date'), ScalarType(name='DatabaseCondition'), ScalarType(name='ArrayList<File>'), ScalarType(name='ReturnObjectTO'), ScalarType(name='BulkLoadManager'), ScalarType(name='Script'), ScalarType(name='XSSFWorkbook'), ScalarType(name='PcReader'), ScalarType(name='ArrayList<TitLotMuTO>'), ScalarType(name='TPInstRansferorDtlsTO'), ScalarType(name='PropertyConfigurator'), ScalarType(name='TPInstStateTitleTO'), ScalarType(name='LValMem'), ScalarType(name='LinkedList<String>'), ScalarType(name='FileReader'), ScalarType(name='TitEdtLogDAOImpl'), ScalarType(name='RedefinedAValMem'), ScalarType(name='CvPrivateLeaseHoldTO'), ScalarType(name='ByteArrayHolder'), ScalarType(name='TPInstChildLot'), ScalarType(name='Socket'), ScalarType(name=<TypeName.ARRAY: 'Array'>), ScalarType(name='ArithmeticException'), ScalarType(name='NValLong'), ScalarType(name='DataRedefine__pssTransDteL_7'), ScalarType(name='FileInputStream'), ScalarType(name='TPInstNatureTO'), ScalarType(name='ValidationMessageTO'), ScalarType(name='FileOutputStream'), ScalarType(name='DataElsTmpPartyDtls'), ScalarType(name='TitInstTO'), ScalarType(name='DataStaTitInst'), ScalarType(name='Rempe401'), ScalarType(name='Hashtable<String, String>'), ScalarType(name='Gdamlaw'), ScalarType(name='File'), ScalarType(name='HashMap<String,Integer>'), ScalarType(name='HashMap<String, List>'), ScalarType(name='Object'), ScalarType(name='BValMem'), ScalarType(name='DataStaTitInst_1'), ScalarType(name='CValInt'), ScalarType(name='ArrayList<tableRowVo>'), ScalarType(name='DataRedefine__instVideStatusDteTme_49'), ScalarType(name='CvProjectNameTO'), ScalarType(name='NValBigDecimal'), ScalarType(name='CvTitleDocuTO'), ScalarType(name='TStaInstParTO'), ScalarType(name='Application'), ScalarType(name='URL'), ScalarType(name='TPInstTransfereeDtlsTO'), ScalarType(name='BufferedInputStream'), ScalarType(name='LinkedHashMap<>'), ScalarType(name='HashMap<>'), ScalarType(name='TPInstPrivateLeaseholdTO'), ScalarType(name='InitialContext'), ScalarType(name='LinkedList<Object>'), ScalarType(name='TPInstrumentTO'), ScalarType(name='DisplayControl'), ScalarType(name='TitleSuppIssueDateTO'), ScalarType(name='Exception'), ScalarType(name=<TypeName.STRING: 'String'>), ScalarType(name='CvPptyAddrTO'), ScalarType(name='NaturalLibrary'), ScalarType(name='BufferedWriter'), ScalarType(name='CvStateTitleTO'), ScalarType(name='IValLong'), ScalarType(name='ArrayList<String>'), ScalarType(name='DataRedefine__titDischargeDteTmeV131_30'), ScalarType(name='StringBuilder'), ScalarType(name='DataStaInstEndrse_3'), ScalarType(name='ByteArrayOutputStream'), ScalarType(name='DataRedefine__lotNumber_4'), ScalarType(name='com.vendorsoftware.support.Environment'), ScalarType(name='DValInt'), ScalarType(name='HashMap<String,Object>'), ScalarType(name='PValLong'), ScalarType(name='StringBuffer'), ScalarType(name='BufferedOutputStream'), ScalarType(name=<TypeName.INT: 'Int'>), ScalarType(name='LegacyDBCB'), ScalarType(name='TPInstPriceContractTO'), ScalarType(name='SimpleDateFormat'), ScalarType(name='PValInt'), ScalarType(name='CaveatTO'), ScalarType(name='WorkFile'), ScalarType(name='NValMem'), ScalarType(name='TPInstTitleDocuTO'), ScalarType(name='ArrayList<TitInstTO>'), ScalarType(name='CvPriceContractTO'), ScalarType(name='DataStaInstPptyLot'), ScalarType(name='TPInstParentPptyTO'), ScalarType(name='WorkFileReaderImpl'), ScalarType(name='Data_Totals'), ScalarType(name='CS'), ScalarType(name='Error'), ScalarType(name='TPInstSsctShareTO'), ScalarType(name='tableRowVo'), ScalarType(name='java.util.Date'), ScalarType(name='CvRegisterPropDtlsTO'), EnumType(name='Sensitivity'), ScalarType(name='PS'), ScalarType(name='TStaInstDetailedTO'), ScalarType(name='ProcessCommandRecord'), ScalarType(name='AValMem')})))",
+      "runDate": "TypedValue(value=SymbolicValue(name='sym_5', type_hint='sym_4.convertDateToStr(sym_1, sym_3)', constraints=['sym_4.convertDateToStr(sym_1, sym_3)']), type=ScalarType(name=<TypeName.BOOL: 'Bool'>))",
+      "outputFileName": "TypedValue(value=SymbolicValue(name='sym_15', type_hint=\"sym_14 BinopKind.ADD '.csv'\", constraints=[\"sym_14 BinopKind.ADD '.csv'\"]), type=UnionType(members=frozenset({ScalarType(name='Hashtable<String, String>'), ScalarType(name='HashMap<>'), ScalarType(name=<TypeName.STRING: 'String'>), ScalarType(name='java.util.Date'), ScalarType(name='ArrayList<Object>')})))",
+      "job": "TypedValue(value=SymbolicValue(name='sym_19', type_hint='GenerateMortgageesSummaryReportJob()', constraints=['GenerateMortgageesSummaryReportJob()']), type=UnionType(members=frozenset({ScalarType(name='Hashtable<String, String>'), ScalarType(name='HashMap<>'), ScalarType(name=<TypeName.STRING: 'String'>), ScalarType(name='java.util.Date'), ScalarType(name='ArrayList<Object>')})))"
+    }
+  }
+}

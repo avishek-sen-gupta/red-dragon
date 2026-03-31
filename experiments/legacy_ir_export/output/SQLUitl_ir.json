@@ -1,0 +1,1239 @@
+{
+  "_meta": {
+    "format_version": 1,
+    "source_file": "/Users/asgupta/code/legacy-app/legacy_sample/commons_module/src/main/java/sg/gov/agency/legacy/sta/common/util/SQLUitl.java",
+    "language": "java",
+    "exported_at": "2026-03-31T01:35:56",
+    "instruction_count": 81,
+    "cfg_block_count": 21
+  },
+  "instructions": [
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "entry",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "entry:"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_class_SQLUitl_1",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 6,
+        "start_col": 0,
+        "end_line": 31,
+        "end_col": 1
+      },
+      "_type": "Branch",
+      "_str": "branch end_class_SQLUitl_1  # 6:0-31:1"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "class_SQLUitl_0",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "class_SQLUitl_0:"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_class_SQLUitl_1",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_class_SQLUitl_1:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%0",
+      "operands": [
+        "class_SQLUitl_0"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%0 = const class_SQLUitl_0"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "SQLUitl",
+        "%0"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var SQLUitl %0"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getInteger_3",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 8,
+        "start_col": 4,
+        "end_line": 14,
+        "end_col": 5
+      },
+      "_type": "Branch",
+      "_str": "branch end_getInteger_3  # 8:4-14:5"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getInteger_2",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getInteger_2:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%1",
+      "operands": [
+        "param:columnName"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 8,
+        "start_col": 37,
+        "end_line": 8,
+        "end_col": 54
+      },
+      "_type": "Symbolic",
+      "_str": "%1 = symbolic param:columnName  # 8:37-8:54"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "columnName",
+        "%1"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var columnName %1"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%2",
+      "operands": [
+        "param:rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 8,
+        "start_col": 56,
+        "end_line": 8,
+        "end_col": 68
+      },
+      "_type": "Symbolic",
+      "_str": "%2 = symbolic param:rs  # 8:56-8:68"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "rs",
+        "%2"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var rs %2"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%3",
+      "operands": [
+        "columnName"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 9,
+        "start_col": 30,
+        "end_line": 9,
+        "end_col": 40
+      },
+      "_type": "LoadVar",
+      "_str": "%3 = load_var columnName  # 9:30-9:40"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%4",
+      "operands": [
+        "rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 9,
+        "start_col": 20,
+        "end_line": 9,
+        "end_col": 22
+      },
+      "_type": "LoadVar",
+      "_str": "%4 = load_var rs  # 9:20-9:22"
+    },
+    {
+      "opcode": "CALL_METHOD",
+      "result_reg": "%5",
+      "operands": [
+        "%4",
+        "getInt",
+        "%3"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 9,
+        "start_col": 20,
+        "end_line": 9,
+        "end_col": 41
+      },
+      "_type": "CallMethod",
+      "_str": "%5 = call_method %4 getInt %3  # 9:20-9:41"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "value",
+        "%5"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 9,
+        "start_col": 8,
+        "end_line": 9,
+        "end_col": 42
+      },
+      "_type": "DeclVar",
+      "_str": "decl_var value %5  # 9:8-9:42"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%6",
+      "operands": [
+        "rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 10,
+        "start_col": 12,
+        "end_line": 10,
+        "end_col": 14
+      },
+      "_type": "LoadVar",
+      "_str": "%6 = load_var rs  # 10:12-10:14"
+    },
+    {
+      "opcode": "CALL_METHOD",
+      "result_reg": "%7",
+      "operands": [
+        "%6",
+        "wasNull"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 10,
+        "start_col": 12,
+        "end_line": 10,
+        "end_col": 24
+      },
+      "_type": "CallMethod",
+      "_str": "%7 = call_method %6 wasNull  # 10:12-10:24"
+    },
+    {
+      "opcode": "BRANCH_IF",
+      "result_reg": null,
+      "operands": [
+        "%7"
+      ],
+      "label": null,
+      "branch_targets": [
+        "if_true_4",
+        "if_end_6"
+      ],
+      "source_location": {
+        "start_line": 10,
+        "start_col": 8,
+        "end_line": 12,
+        "end_col": 9
+      },
+      "_type": "BranchIf",
+      "_str": "branch_if %7 if_true_4,if_end_6  # 10:8-12:9"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_true_4",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "if_true_4:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%8",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 11,
+        "start_col": 19,
+        "end_line": 11,
+        "end_col": 23
+      },
+      "_type": "Const",
+      "_str": "%8 = const None  # 11:19-11:23"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%8"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 11,
+        "start_col": 12,
+        "end_line": 11,
+        "end_col": 24
+      },
+      "_type": "Return_",
+      "_str": "return %8  # 11:12-11:24"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_end_6",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Branch",
+      "_str": "branch if_end_6"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_end_6",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "if_end_6:"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%9",
+      "operands": [
+        "value"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 13,
+        "start_col": 15,
+        "end_line": 13,
+        "end_col": 20
+      },
+      "_type": "LoadVar",
+      "_str": "%9 = load_var value  # 13:15-13:20"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%9"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 13,
+        "start_col": 8,
+        "end_line": 13,
+        "end_col": 21
+      },
+      "_type": "Return_",
+      "_str": "return %9  # 13:8-13:21"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%10",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%10 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%10"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %10"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getInteger_3",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getInteger_3:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%11",
+      "operands": [
+        "func_getInteger_2"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%11 = const func_getInteger_2"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getInteger",
+        "%11"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getInteger %11"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getLong_8",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 16,
+        "start_col": 4,
+        "end_line": 22,
+        "end_col": 5
+      },
+      "_type": "Branch",
+      "_str": "branch end_getLong_8  # 16:4-22:5"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getLong_7",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getLong_7:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%12",
+      "operands": [
+        "param:columnName"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 16,
+        "start_col": 31,
+        "end_line": 16,
+        "end_col": 48
+      },
+      "_type": "Symbolic",
+      "_str": "%12 = symbolic param:columnName  # 16:31-16:48"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "columnName",
+        "%12"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var columnName %12"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%13",
+      "operands": [
+        "param:rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 16,
+        "start_col": 50,
+        "end_line": 16,
+        "end_col": 62
+      },
+      "_type": "Symbolic",
+      "_str": "%13 = symbolic param:rs  # 16:50-16:62"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "rs",
+        "%13"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var rs %13"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%14",
+      "operands": [
+        "columnName"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 32,
+        "end_line": 17,
+        "end_col": 42
+      },
+      "_type": "LoadVar",
+      "_str": "%14 = load_var columnName  # 17:32-17:42"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%15",
+      "operands": [
+        "rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 21,
+        "end_line": 17,
+        "end_col": 23
+      },
+      "_type": "LoadVar",
+      "_str": "%15 = load_var rs  # 17:21-17:23"
+    },
+    {
+      "opcode": "CALL_METHOD",
+      "result_reg": "%16",
+      "operands": [
+        "%15",
+        "getLong",
+        "%14"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 21,
+        "end_line": 17,
+        "end_col": 43
+      },
+      "_type": "CallMethod",
+      "_str": "%16 = call_method %15 getLong %14  # 17:21-17:43"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "value",
+        "%16"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 17,
+        "start_col": 8,
+        "end_line": 17,
+        "end_col": 44
+      },
+      "_type": "DeclVar",
+      "_str": "decl_var value %16  # 17:8-17:44"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%17",
+      "operands": [
+        "rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 18,
+        "start_col": 12,
+        "end_line": 18,
+        "end_col": 14
+      },
+      "_type": "LoadVar",
+      "_str": "%17 = load_var rs  # 18:12-18:14"
+    },
+    {
+      "opcode": "CALL_METHOD",
+      "result_reg": "%18",
+      "operands": [
+        "%17",
+        "wasNull"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 18,
+        "start_col": 12,
+        "end_line": 18,
+        "end_col": 24
+      },
+      "_type": "CallMethod",
+      "_str": "%18 = call_method %17 wasNull  # 18:12-18:24"
+    },
+    {
+      "opcode": "BRANCH_IF",
+      "result_reg": null,
+      "operands": [
+        "%18"
+      ],
+      "label": null,
+      "branch_targets": [
+        "if_true_9",
+        "if_end_11"
+      ],
+      "source_location": {
+        "start_line": 18,
+        "start_col": 8,
+        "end_line": 20,
+        "end_col": 9
+      },
+      "_type": "BranchIf",
+      "_str": "branch_if %18 if_true_9,if_end_11  # 18:8-20:9"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_true_9",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "if_true_9:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%19",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 19,
+        "start_col": 19,
+        "end_line": 19,
+        "end_col": 23
+      },
+      "_type": "Const",
+      "_str": "%19 = const None  # 19:19-19:23"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%19"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 19,
+        "start_col": 12,
+        "end_line": 19,
+        "end_col": 24
+      },
+      "_type": "Return_",
+      "_str": "return %19  # 19:12-19:24"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_end_11",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Branch",
+      "_str": "branch if_end_11"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_end_11",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "if_end_11:"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%20",
+      "operands": [
+        "value"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 21,
+        "start_col": 15,
+        "end_line": 21,
+        "end_col": 20
+      },
+      "_type": "LoadVar",
+      "_str": "%20 = load_var value  # 21:15-21:20"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%20"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 21,
+        "start_col": 8,
+        "end_line": 21,
+        "end_col": 21
+      },
+      "_type": "Return_",
+      "_str": "return %20  # 21:8-21:21"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%21",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%21 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%21"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %21"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getLong_8",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getLong_8:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%22",
+      "operands": [
+        "func_getLong_7"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%22 = const func_getLong_7"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getLong",
+        "%22"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getLong %22"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getDouble_13",
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 24,
+        "start_col": 4,
+        "end_line": 30,
+        "end_col": 5
+      },
+      "_type": "Branch",
+      "_str": "branch end_getDouble_13  # 24:4-30:5"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "func_getDouble_12",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "func_getDouble_12:"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%23",
+      "operands": [
+        "param:columnName"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 24,
+        "start_col": 35,
+        "end_line": 24,
+        "end_col": 52
+      },
+      "_type": "Symbolic",
+      "_str": "%23 = symbolic param:columnName  # 24:35-24:52"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "columnName",
+        "%23"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var columnName %23"
+    },
+    {
+      "opcode": "SYMBOLIC",
+      "result_reg": "%24",
+      "operands": [
+        "param:rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 24,
+        "start_col": 54,
+        "end_line": 24,
+        "end_col": 66
+      },
+      "_type": "Symbolic",
+      "_str": "%24 = symbolic param:rs  # 24:54-24:66"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "rs",
+        "%24"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var rs %24"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%25",
+      "operands": [
+        "columnName"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 36,
+        "end_line": 25,
+        "end_col": 46
+      },
+      "_type": "LoadVar",
+      "_str": "%25 = load_var columnName  # 25:36-25:46"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%26",
+      "operands": [
+        "rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 23,
+        "end_line": 25,
+        "end_col": 25
+      },
+      "_type": "LoadVar",
+      "_str": "%26 = load_var rs  # 25:23-25:25"
+    },
+    {
+      "opcode": "CALL_METHOD",
+      "result_reg": "%27",
+      "operands": [
+        "%26",
+        "getDouble",
+        "%25"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 23,
+        "end_line": 25,
+        "end_col": 47
+      },
+      "_type": "CallMethod",
+      "_str": "%27 = call_method %26 getDouble %25  # 25:23-25:47"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "value",
+        "%27"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 25,
+        "start_col": 8,
+        "end_line": 25,
+        "end_col": 48
+      },
+      "_type": "DeclVar",
+      "_str": "decl_var value %27  # 25:8-25:48"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%28",
+      "operands": [
+        "rs"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 26,
+        "start_col": 12,
+        "end_line": 26,
+        "end_col": 14
+      },
+      "_type": "LoadVar",
+      "_str": "%28 = load_var rs  # 26:12-26:14"
+    },
+    {
+      "opcode": "CALL_METHOD",
+      "result_reg": "%29",
+      "operands": [
+        "%28",
+        "wasNull"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 26,
+        "start_col": 12,
+        "end_line": 26,
+        "end_col": 24
+      },
+      "_type": "CallMethod",
+      "_str": "%29 = call_method %28 wasNull  # 26:12-26:24"
+    },
+    {
+      "opcode": "BRANCH_IF",
+      "result_reg": null,
+      "operands": [
+        "%29"
+      ],
+      "label": null,
+      "branch_targets": [
+        "if_true_14",
+        "if_end_16"
+      ],
+      "source_location": {
+        "start_line": 26,
+        "start_col": 8,
+        "end_line": 28,
+        "end_col": 9
+      },
+      "_type": "BranchIf",
+      "_str": "branch_if %29 if_true_14,if_end_16  # 26:8-28:9"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_true_14",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "if_true_14:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%30",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 27,
+        "start_col": 19,
+        "end_line": 27,
+        "end_col": 23
+      },
+      "_type": "Const",
+      "_str": "%30 = const None  # 27:19-27:23"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%30"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 27,
+        "start_col": 12,
+        "end_line": 27,
+        "end_col": 24
+      },
+      "_type": "Return_",
+      "_str": "return %30  # 27:12-27:24"
+    },
+    {
+      "opcode": "BRANCH",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_end_16",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Branch",
+      "_str": "branch if_end_16"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "if_end_16",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "if_end_16:"
+    },
+    {
+      "opcode": "LOAD_VAR",
+      "result_reg": "%31",
+      "operands": [
+        "value"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 29,
+        "start_col": 15,
+        "end_line": 29,
+        "end_col": 20
+      },
+      "_type": "LoadVar",
+      "_str": "%31 = load_var value  # 29:15-29:20"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%31"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": {
+        "start_line": 29,
+        "start_col": 8,
+        "end_line": 29,
+        "end_col": 21
+      },
+      "_type": "Return_",
+      "_str": "return %31  # 29:8-29:21"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%32",
+      "operands": [
+        "None"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%32 = const None"
+    },
+    {
+      "opcode": "RETURN",
+      "result_reg": null,
+      "operands": [
+        "%32"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Return_",
+      "_str": "return %32"
+    },
+    {
+      "opcode": "LABEL",
+      "result_reg": null,
+      "operands": [],
+      "label": "end_getDouble_13",
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Label_",
+      "_str": "end_getDouble_13:"
+    },
+    {
+      "opcode": "CONST",
+      "result_reg": "%33",
+      "operands": [
+        "func_getDouble_12"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "Const",
+      "_str": "%33 = const func_getDouble_12"
+    },
+    {
+      "opcode": "DECL_VAR",
+      "result_reg": null,
+      "operands": [
+        "getDouble",
+        "%33"
+      ],
+      "label": null,
+      "branch_targets": [],
+      "source_location": null,
+      "_type": "DeclVar",
+      "_str": "decl_var getDouble %33"
+    }
+  ],
+  "cfg_entry_label": "entry",
+  "registry": {
+    "func_params": {
+      "func_getInteger_2": [
+        "columnName",
+        "rs"
+      ],
+      "func_getLong_7": [
+        "columnName",
+        "rs"
+      ],
+      "func_getDouble_12": [
+        "columnName",
+        "rs"
+      ]
+    },
+    "classes": {
+      "SQLUitl": {
+        "fields": [],
+        "methods": [],
+        "parent": null
+      }
+    }
+  },
+  "vm_state": {
+    "heap": {},
+    "call_stack": [
+      {
+        "function_name": "<main>",
+        "registers": {
+          "%0": "ClassRef(name=ClassName(value='SQLUitl'), label=CodeLabel(value='class_SQLUitl_0'), parents=())",
+          "%11": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getInteger'), label=CodeLabel(value='func_getInteger_2')), closure_id=NoClosureId(value=''))",
+          "%22": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getLong'), label=CodeLabel(value='func_getLong_7')), closure_id=NoClosureId(value=''))",
+          "%33": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getDouble'), label=CodeLabel(value='func_getDouble_12')), closure_id=NoClosureId(value=''))"
+        },
+        "local_vars": {
+          "SQLUitl": "ClassRef(name=ClassName(value='SQLUitl'), label=CodeLabel(value='class_SQLUitl_0'), parents=())",
+          "getInteger": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getInteger'), label=CodeLabel(value='func_getInteger_2')), closure_id=NoClosureId(value=''))",
+          "getLong": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getLong'), label=CodeLabel(value='func_getLong_7')), closure_id=NoClosureId(value=''))",
+          "getDouble": "BoundFuncRef(func_ref=FuncRef(name=FuncName(value='getDouble'), label=CodeLabel(value='func_getDouble_12')), closure_id=NoClosureId(value=''))"
+        },
+        "return_label": null
+      }
+    ],
+    "path_conditions": [],
+    "symbolic_counter": 0
+  },
+  "execution": {
+    "steps": 13,
+    "llm_calls": 0,
+    "final_heap_objects": 0,
+    "final_symbolic_count": 0
+  }
+}
