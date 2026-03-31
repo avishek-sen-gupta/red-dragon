@@ -585,13 +585,6 @@ class TestNestedFunctionLeakyScoping:
             result == EXPECTED_RESULT
         ), f"[{lang}] expected result={EXPECTED_RESULT}, got {result}"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "VM enforces frame-based scoping; in real Ruby/PHP/Lua, "
-            "inner functions leak to enclosing/global scope — red-dragon-crds"
-        ),
-    )
     def test_inner_leaks_outside_outer(self, leaky_result):
         lang, vm, _stats = leaky_result
         leaked = _extract_var(vm, "leaked", lang)
