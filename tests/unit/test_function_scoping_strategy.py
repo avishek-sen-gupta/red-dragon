@@ -17,6 +17,8 @@ from interpreter.vm.vm_types import StackFrame
 from interpreter.func_name import FuncName
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import CodeLabel
+from interpreter.handlers._common import _write_var_to_frame
+from interpreter.vm.executor import HandlerContext, _default_handler_context
 
 
 def _make_func_ref_value() -> TypedValue:
@@ -80,3 +82,38 @@ class TestGlobalLeakFunctionScopingStrategy:
         GlobalLeakFunctionScopingStrategy().register_func(NAME, value, vm, frame)
         assert frame.local_vars[NAME] == value
         assert vm.call_stack[0].local_vars[NAME] == value
+
+
+class TestWriteVarToFrameDelegation:
+    def test_funcref_written_to_global_frame_via_strategy(self):
+        """_write_var_to_frame must call the strategy for FuncRef values."""
+        vm, frame = _make_vm_with_depth(2)
+        value = _make_func_ref_value()
+        default_ctx = _default_handler_context()
+        ctx = HandlerContext(
+            cfg=default_ctx.cfg,
+            registry=default_ctx.registry,
+            current_label=default_ctx.current_label,
+            ip=default_ctx.ip,
+            call_resolver=default_ctx.call_resolver,
+            overload_resolver=default_ctx.overload_resolver,
+            type_env=default_ctx.type_env,
+            binop_coercion=default_ctx.binop_coercion,
+            unop_coercion=default_ctx.unop_coercion,
+            func_symbol_table=default_ctx.func_symbol_table,
+            class_symbol_table=default_ctx.class_symbol_table,
+            field_fallback=default_ctx.field_fallback,
+            symbol_table=default_ctx.symbol_table,
+            function_scoping=GlobalLeakFunctionScopingStrategy(),
+        )
+        _write_var_to_frame(vm, frame, NAME, value, ctx)
+        assert vm.call_stack[0].local_vars[NAME] == value
+
+    def test_non_funcref_not_delegated_to_strategy(self):
+        """Plain values bypass the strategy entirely."""
+        vm, frame = _make_vm_with_depth(2)
+        plain = typed(42, scalar("int"))
+        ctx = _default_handler_context()
+        _write_var_to_frame(vm, frame, NAME, plain, ctx)
+        assert frame.local_vars[NAME] == plain
+        assert NAME not in vm.call_stack[0].local_vars
