@@ -380,9 +380,6 @@ int answer = x;
         )
         assert locals_[VarName("answer")] == 3
 
-    @pytest.mark.xfail(
-        reason="C# byref param as method receiver — red-dragon-5b8w: LOAD_FIELD '*' on heap object Pointer needs work"
-    )
     def test_byref_param_as_method_receiver(self):
         """Byref param used as method receiver should dereference first."""
         locals_ = _run_csharp(
