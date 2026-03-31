@@ -80,6 +80,8 @@ from interpreter.trace_types import TraceStep, ExecutionTrace
 from interpreter.llm.backend import get_backend
 from interpreter import constants
 from interpreter.constants import LLMProvider
+from interpreter.project.entry_point import EntryPoint
+from interpreter.project.types import LinkedProgram
 
 logger = logging.getLogger(__name__)
 
@@ -646,10 +648,109 @@ def build_execution_strategies(
     )
 
 
+def _build_strategies_from_linked(linked: LinkedProgram) -> ExecutionStrategies:
+    """Build ExecutionStrategies from a LinkedProgram's data."""
+    conversion_rules = DefaultTypeConversionRules()
+    type_resolver = TypeResolver(conversion_rules)
+    type_env = infer_types(
+        linked.merged_ir,
+        type_resolver,
+        type_env_builder=linked.type_env_builder,
+        func_symbol_table=linked.func_symbol_table,
+        class_symbol_table=linked.class_symbol_table,
+    )
+    class_nodes = tuple(
+        TypeNode(name=str(cls), parents=tuple(str(p) for p in parents))
+        for cls, parents in linked.merged_registry.class_parents.items()
+    )
+    type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
+    overload_resolver = OverloadResolver(
+        ArityThenTypeStrategy(DefaultTypeCompatibility(type_graph)),
+        FallbackFirstWithWarning(),
+    )
+    return ExecutionStrategies(
+        type_env=type_env,
+        conversion_rules=conversion_rules,
+        overload_resolver=overload_resolver,
+        binop_coercion=_binop_coercion_for_language(linked.language),
+        func_symbol_table=linked.func_symbol_table,
+        class_symbol_table=linked.class_symbol_table,
+        field_fallback=_field_fallback_for_language(linked.language),
+        symbol_table=linked.symbol_table,
+    )
+
+
+def run_linked(
+    linked: LinkedProgram,
+    entry_point: EntryPoint,
+    max_steps: int = 100,
+    verbose: bool = False,
+    backend: str = LLMProvider.CLAUDE,
+    unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
+) -> VMState:
+    """Execute a LinkedProgram with the given entry point.
+
+    Args:
+        linked: Pre-compiled program (single-module or multi-module).
+        entry_point: How to enter — EntryPoint.top_level() or EntryPoint.function(pred).
+        max_steps: Maximum interpretation steps.
+        verbose: Print IR, CFG, and step-by-step info.
+        backend: LLM backend for interpreter fallback.
+        unresolved_call_strategy: Resolution strategy for unknown calls.
+    """
+    strategies = _build_strategies_from_linked(linked)
+
+    vm_config = VMConfig(
+        backend=backend,
+        max_steps=max_steps,
+        verbose=verbose,
+        source_language=linked.language,
+        unresolved_call_strategy=unresolved_call_strategy,
+    )
+
+    if entry_point.is_top_level:
+        vm, exec_stats = execute_cfg(
+            linked.merged_cfg,
+            linked.merged_cfg.entry,
+            linked.merged_registry,
+            vm_config,
+            strategies,
+        )
+    else:
+        # Phase 1: preamble
+        module_entry = linked.merged_cfg.entry
+        vm, preamble_stats = execute_cfg(
+            linked.merged_cfg,
+            module_entry,
+            linked.merged_registry,
+            vm_config,
+            strategies,
+        )
+
+        # Resolve entry point function via predicate
+        func_ref = entry_point.resolve(list(linked.func_symbol_table.values()))
+        func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
+
+        # Phase 2: dispatch into target function
+        remaining = max_steps - preamble_stats.steps
+        phase2_config = replace(vm_config, max_steps=max(remaining, 0))
+        vm, phase2_stats = execute_cfg(
+            linked.merged_cfg,
+            func_label,
+            linked.merged_registry,
+            phase2_config,
+            strategies,
+            vm=vm,
+        )
+
+    vm.data_layout = linked.data_layout
+    return vm
+
+
 def run(
     source: str,
     language: str | Language = Language.PYTHON,
-    entry_point: str = "",
+    entry_point: str | EntryPoint = "",
     backend: str = LLMProvider.CLAUDE,
     max_steps: int = 100,
     verbose: bool = False,
@@ -657,12 +758,15 @@ def run(
     llm_client: Any = None,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
 ) -> VMState:
-    """End-to-end: parse → lower → CFG → LLM interpret.
+    """End-to-end: parse → lower → build LinkedProgram → run_linked.
+
+    Convenience wrapper that compiles a single source string into a
+    LinkedProgram and delegates execution to run_linked().
 
     Args:
         source: Raw source code string.
         language: Source language name.
-        entry_point: Entry point label or function name.
+        entry_point: How to enter — str (legacy) or EntryPoint (new).
         backend: LLM backend for interpreter fallback ("claude" or "openai").
         max_steps: Maximum interpretation steps.
         verbose: Print IR, CFG, and step-by-step info.
@@ -670,6 +774,15 @@ def run(
         llm_client: Pre-built LLMClient for DI/testing (used by LLM frontend).
         unresolved_call_strategy: Resolution strategy for unknown calls.
     """
+    # Bridge: accept both str (legacy) and EntryPoint (new)
+    if isinstance(entry_point, str):
+        if entry_point:
+            entry_point = EntryPoint.function(
+                lambda f, _name=FuncName(entry_point): f.name == _name
+            )
+        else:
+            entry_point = EntryPoint.top_level()
+
     lang = Language(language)
     pipeline_start = time.perf_counter()
     stats = PipelineStats(
@@ -719,7 +832,7 @@ def run(
             logger.info("  %s", inst)
         logger.info("")
 
-    # 3. Build CFG
+    # 2. Build CFG
     t0 = time.perf_counter()
     cfg = build_cfg(instructions)
     stats.cfg_time = time.perf_counter() - t0
@@ -729,10 +842,7 @@ def run(
         logger.info("═══ CFG ═══")
         logger.info("%s", cfg)
 
-    # 4. Pick entry
-    entry = _find_entry_point(cfg, entry_point)
-
-    # 4b. Build function registry
+    # 3. Build function registry
     t0 = time.perf_counter()
     registry = build_registry(
         instructions,
@@ -744,53 +854,32 @@ def run(
     stats.registry_functions = len(registry.func_params)
     stats.registry_classes = len(registry.classes)
 
-    # 4c. Type inference + execution strategies
-    strategies = build_execution_strategies(frontend, instructions, registry, lang)
+    # 4. Build single-module LinkedProgram
+    linked = LinkedProgram(
+        modules={},
+        merged_ir=list(instructions),
+        merged_cfg=cfg,
+        merged_registry=registry,
+        language=lang,
+        import_graph={},
+        type_env_builder=frontend.type_env_builder,
+        symbol_table=frontend.symbol_table,
+        data_layout=frontend.data_layout,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+    )
 
-    # 5. Execute
-    vm_config = VMConfig(
-        backend=backend,
+    # 5. Execute via run_linked
+    exec_start = time.perf_counter()
+    vm = run_linked(
+        linked,
+        entry_point=entry_point,
         max_steps=max_steps,
         verbose=verbose,
-        source_language=lang,
+        backend=backend,
         unresolved_call_strategy=unresolved_call_strategy,
     )
-    exec_start = time.perf_counter()
-
-    module_entry = _find_entry_point(cfg, "")
-    if entry_point and entry != module_entry:
-        # Phase 1: run module preamble to populate ClassRefs/FuncRefs in scope
-        vm, preamble_stats = execute_cfg(
-            cfg, module_entry, registry, vm_config, strategies
-        )
-
-        # Look up entry_point function in scope
-        func_label = _resolve_entry_function(vm, entry_point, cfg)
-
-        # Phase 2: dispatch into target function
-        remaining = max_steps - preamble_stats.steps
-        phase2_config = replace(vm_config, max_steps=max(remaining, 0))
-        vm, phase2_stats = execute_cfg(
-            cfg, func_label, registry, phase2_config, strategies, vm=vm
-        )
-        exec_stats = ExecutionStats(
-            steps=preamble_stats.steps + phase2_stats.steps,
-            llm_calls=preamble_stats.llm_calls + phase2_stats.llm_calls,
-            final_heap_objects=phase2_stats.final_heap_objects,
-            final_symbolic_count=phase2_stats.final_symbolic_count,
-            closures_captured=phase2_stats.closures_captured,
-        )
-    else:
-        vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config, strategies)
-
-    vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
-
-    stats.execution_steps = exec_stats.steps
-    stats.llm_calls = exec_stats.llm_calls
-    stats.final_heap_objects = exec_stats.final_heap_objects
-    stats.final_symbolic_count = exec_stats.final_symbolic_count
-    stats.closures_captured = exec_stats.closures_captured
     stats.total_time = time.perf_counter() - pipeline_start
 
     if verbose:
