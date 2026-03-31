@@ -350,15 +350,13 @@ def analyze_project(
     Returns:
         An InterproceduralResult with cross-module analysis.
     """
-    from interpreter.project.compiler import compile_project
+    from interpreter.project.compiler import compile_directory
     from interpreter.interprocedural.analyze import analyze_interprocedural
 
     lang = Language(language)
-    linked = compile_project(
-        Path(entry_file),
-        lang,
-        project_root=Path(project_root) if project_root else None,
-    )
+    entry_path = Path(entry_file)
+    directory = Path(project_root) if project_root else entry_path.parent
+    linked = compile_directory(directory, lang)
     return analyze_interprocedural(linked.merged_cfg, linked.merged_registry)
 
 
@@ -383,16 +381,14 @@ def run_project(
     Returns:
         The final VMState after execution.
     """
-    from interpreter.project.compiler import compile_project
+    from interpreter.project.compiler import compile_directory
     from interpreter.run import execute_cfg, build_execution_strategies
     from interpreter.vm.vm import VMState
 
     lang = Language(language)
-    linked = compile_project(
-        Path(entry_file),
-        lang,
-        project_root=Path(project_root) if project_root else None,
-    )
+    entry_path = Path(entry_file)
+    directory = Path(project_root) if project_root else entry_path.parent
+    linked = compile_directory(directory, lang)
 
     config = VMConfig(max_steps=max_steps, verbose=verbose)
 

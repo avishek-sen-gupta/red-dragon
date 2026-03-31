@@ -17,7 +17,7 @@ class TestCompileDirectory:
         (tmp_path / "utils.py").write_text("def helper(x):\n    return x + 1\n")
         (tmp_path / "orphan.py").write_text("CONSTANT = 99\n")
 
-        linked = compile_directory(tmp_path, Language.PYTHON, tmp_path / "main.py")
+        linked = compile_directory(tmp_path, Language.PYTHON)
 
         assert isinstance(linked, LinkedProgram)
         # All 3 files compiled, not just the 2 reachable via imports
@@ -29,7 +29,7 @@ class TestCompileDirectory:
         sub.mkdir()
         (sub / "mod.py").write_text("y = 2\n")
 
-        linked = compile_directory(tmp_path, Language.PYTHON, tmp_path / "main.py")
+        linked = compile_directory(tmp_path, Language.PYTHON)
 
         assert len(linked.modules) == 2
 
@@ -38,7 +38,7 @@ class TestCompileDirectory:
         (tmp_path / "readme.md").write_text("# hello\n")
         (tmp_path / "data.json").write_text("{}\n")
 
-        linked = compile_directory(tmp_path, Language.PYTHON, tmp_path / "main.py")
+        linked = compile_directory(tmp_path, Language.PYTHON)
 
         assert len(linked.modules) == 1
 
@@ -46,14 +46,14 @@ class TestCompileDirectory:
         (tmp_path / "main.js").write_text("var x = 1;\n")
         (tmp_path / "utils.js").write_text("function helper() {}\n")
 
-        linked = compile_directory(tmp_path, Language.JAVASCRIPT, tmp_path / "main.js")
+        linked = compile_directory(tmp_path, Language.JAVASCRIPT)
 
         assert len(linked.modules) == 2
 
     def test_merged_cfg_has_entry(self, tmp_path):
         (tmp_path / "main.py").write_text("x = 42\n")
 
-        linked = compile_directory(tmp_path, Language.PYTHON, tmp_path / "main.py")
+        linked = compile_directory(tmp_path, Language.PYTHON)
 
         assert linked.merged_cfg.entry is not None
         assert linked.merged_cfg.entry in linked.merged_cfg.blocks
