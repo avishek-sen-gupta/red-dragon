@@ -64,3 +64,9 @@ fileignoreconfig:
   checksum: c3822da3cf994a9b2415bda5440a5557c42e1a400eaf515432953a9de77e7057
 - filename: docs/superpowers/plans/2026-03-31-type-hints.md
   checksum: 1ac8660340d4f618e26698eb8f57b59daa1880913c499c8137169b54ea6d1ad3
+- filename: interpreter/types/type_environment.py
+  checksum: 0ad78c061eb1ba3af6d84c45631f89e781f6d6f328e7f49d1479f94ee70e98d1
+- filename: interpreter/types/type_environment_builder.py
+  checksum: 56fd368b7d8105239a22eca2018891ab949f86fc8fec9b0258b2b6f1de15efbf
+- filename: interpreter/types/type_inference.py
+  checksum: 20cd6a0a6588b7cb99048a607ab991fb0a0328384aa1e8b47e99fb6604c9a21c

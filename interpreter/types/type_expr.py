@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeExpr — algebraic data type for structured type representations.
 
 Supports scalar types (``Int``, ``String``), parameterized types
