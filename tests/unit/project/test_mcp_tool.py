@@ -24,7 +24,7 @@ class TestHandleLoadProject:
     def test_has_expected_keys(self, python_project):
         result = handle_load_project(str(python_project / "main.py"), "python")
         assert "modules" in result
-        assert "entry" in result
+        assert "language" in result
         assert "import_graph" in result
         assert "cfg_blocks" in result
         assert "functions" in result
