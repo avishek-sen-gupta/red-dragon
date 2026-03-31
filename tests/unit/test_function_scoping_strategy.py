@@ -27,8 +27,9 @@ def _make_func_ref_value() -> TypedValue:
 def _make_vm_with_depth(depth: int) -> tuple[VMState, StackFrame]:
     """Create a VMState with `depth` frames. Returns (vm, top_frame)."""
     vm = VMState()
-    for i in range(depth):
-        vm.call_stack.append(StackFrame(function_name=FuncName(f"frame_{i}")))
+    vm.call_stack = [
+        StackFrame(function_name=FuncName(f"frame_{i}")) for i in range(depth)
+    ]
     return vm, vm.call_stack[-1]
 
 

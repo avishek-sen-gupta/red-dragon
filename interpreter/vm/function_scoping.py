@@ -17,6 +17,8 @@ from interpreter.var_name import VarName
 from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import StackFrame
 
+_GLOBAL_FRAME_DEPTH = 1
+
 
 class FunctionScopingStrategy(ABC):
     """Strategy for registering function-ref values when executing STORE_VAR/DECL_VAR."""
@@ -56,5 +58,5 @@ class GlobalLeakFunctionScopingStrategy(FunctionScopingStrategy):
         current_frame: StackFrame,
     ) -> None:
         current_frame.local_vars[name] = value
-        if len(vm.call_stack) > 1:
+        if len(vm.call_stack) > _GLOBAL_FRAME_DEPTH:
             vm.call_stack[0].local_vars[name] = value
