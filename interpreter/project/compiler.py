@@ -24,7 +24,9 @@ from interpreter.project.resolver import (
     infer_project_root,
     topological_sort,
     ResolvedImport,
+    JavaImportResolver,
 )
+from interpreter.project.source_roots import MavenSourceRootDiscovery
 from interpreter.project.linker import link_modules
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -132,7 +134,15 @@ def compile_project(
     else:
         project_root = project_root.resolve()
 
-    resolver = get_resolver(language)
+    if language == Language.JAVA:
+        discovered_roots = MavenSourceRootDiscovery().discover(project_root)
+        resolver = (
+            JavaImportResolver(source_roots=discovered_roots)
+            if discovered_roots
+            else get_resolver(language)
+        )
+    else:
+        resolver = get_resolver(language)
 
     # Phase 1: BFS import discovery
     discovered: dict[Path, list[ImportRef]] = {}
