@@ -1,3 +1,4 @@
+# pyright: standard
 """Static type inference pass — walks IR instructions and builds a TypeEnvironment.
 
 **Type representation:** The entire type pipeline operates on ``TypeExpr``
@@ -16,6 +17,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import Callable
 
 from interpreter import constants
 from interpreter.register import Register
@@ -24,7 +26,7 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
-from interpreter.ir import CodeLabel
+from interpreter.ir import CodeLabel, SpreadArguments
 from interpreter.instructions import (
     InstructionBase,
     Const,
@@ -73,7 +75,7 @@ from interpreter.var_name import VarName
 logger = logging.getLogger(__name__)
 
 
-def _reg_key(val: Register | str) -> Register:
+def _reg_key(val: Register | str | SpreadArguments) -> Register:
     """Normalize a register value (which may be a string from frontend) to Register."""
     if isinstance(val, Register):
         return val
@@ -547,7 +549,7 @@ def _infer_const(
     # Symbol table lookup: plain label operands → FuncRef
     func_name, func_label = "", ""
     if raw in ctx.func_symbol_table:
-        ref = ctx.func_symbol_table[raw]
+        ref = ctx.func_symbol_table[CodeLabel(raw)]
         func_name, func_label = ref.name, str(ref.label)
     if func_name and func_label:
         # Only populate flat (name-keyed) dicts for standalone functions.
@@ -609,12 +611,20 @@ def _infer_load_var(
     if inst.result_reg.is_present() and var_type:
         ctx.register_types[inst.result_reg] = var_type
     # Propagate array element types from variable to register
-    if inst.result_reg.is_present() and name in ctx.var_array_element_types:
+    if (
+        inst.result_reg.is_present()
+        and name is not None
+        and name in ctx.var_array_element_types
+    ):
         ctx.array_element_types[str(inst.result_reg)] = ctx.var_array_element_types[
             name
         ]
     # Propagate tuple element types from variable to register
-    if inst.result_reg.is_present() and name in ctx.var_tuple_element_types:
+    if (
+        inst.result_reg.is_present()
+        and name is not None
+        and name in ctx.var_tuple_element_types
+    ):
         ctx.tuple_element_types[str(inst.result_reg)] = ctx.var_tuple_element_types[
             name
         ]
@@ -935,7 +945,7 @@ def _infer_store_indirect(
     pass
 
 
-_DISPATCH: dict[type, callable] = {
+_DISPATCH: dict[type, Callable[..., None]] = {
     Label_: _infer_label,
     Symbolic: _infer_symbolic,
     Const: _infer_const,

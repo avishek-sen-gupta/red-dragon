@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeNode — a node in the type hierarchy DAG."""
 
 from __future__ import annotations
