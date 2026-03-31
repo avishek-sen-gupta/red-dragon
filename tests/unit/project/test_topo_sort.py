@@ -50,33 +50,45 @@ class TestTopologicalSort:
         assert set(result) == {Path("a.py"), Path("b.py"), Path("c.py")}
         assert len(result) == 3
 
-    def test_cycle_raises_error(self):
-        """a → b → a: should raise CyclicImportError."""
+    def test_cycle_includes_all_members(self):
+        """a → b → a: both files should appear in the result."""
         graph = {
             Path("a.py"): [Path("b.py")],
             Path("b.py"): [Path("a.py")],
         }
-        with pytest.raises(CyclicImportError) as exc_info:
-            topological_sort(graph)
-        assert len(exc_info.value.cycle) > 0
+        result = topological_sort(graph)
+        assert set(result) == {Path("a.py"), Path("b.py")}
 
-    def test_three_node_cycle_raises_error(self):
-        """a → b → c → a: should raise CyclicImportError."""
+    def test_three_node_cycle_includes_all_members(self):
+        """a → b → c → a: all three files should appear in the result."""
         graph = {
             Path("a.py"): [Path("b.py")],
             Path("b.py"): [Path("c.py")],
             Path("c.py"): [Path("a.py")],
         }
-        with pytest.raises(CyclicImportError):
-            topological_sort(graph)
+        result = topological_sort(graph)
+        assert set(result) == {Path("a.py"), Path("b.py"), Path("c.py")}
 
-    def test_self_cycle_raises_error(self):
-        """a → a: self-import should raise CyclicImportError."""
+    def test_self_cycle_includes_node(self):
+        """a → a: self-import should still include the node."""
         graph = {
             Path("a.py"): [Path("a.py")],
         }
-        with pytest.raises(CyclicImportError):
-            topological_sort(graph)
+        result = topological_sort(graph)
+        assert result == [Path("a.py")]
+
+    def test_mixed_cycle_and_acyclic(self):
+        """d → a, a → b → a: d should come before cycle members."""
+        graph = {
+            Path("d.py"): [Path("a.py")],
+            Path("a.py"): [Path("b.py")],
+            Path("b.py"): [Path("a.py")],
+        }
+        result = topological_sort(graph)
+        assert set(result) == {Path("a.py"), Path("b.py"), Path("d.py")}
+        # Cycle members (a, b) are in the result
+        assert Path("a.py") in result
+        assert Path("b.py") in result
 
     def test_all_nodes_present_in_result(self):
         graph = {
