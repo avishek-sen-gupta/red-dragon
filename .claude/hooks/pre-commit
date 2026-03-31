@@ -1,0 +1,124 @@
+#!/bin/bash
+shopt -s extglob
+
+# set TALISMAN_DEBUG="some-non-empty-value" in the env to get verbose output
+function echo_debug() {
+	MSG="$@"
+	[[ -n "${TALISMAN_DEBUG}" ]] && echo "${MSG}"
+}
+
+function echo_warning() {
+	echo -ne $(tput setaf 3) >&2
+	echo "$1" >&2
+	echo -ne $(tput sgr0) >&2
+}
+
+function echo_error() {
+	echo -ne $(tput setaf 1) >&2
+	echo "$1" >&2
+	echo -ne $(tput sgr0) >&2
+}
+
+function echo_success() {
+	echo -ne $(tput setaf 2)
+	echo "$1" >&2
+	echo -ne $(tput sgr0)
+}
+
+# ---------------------------------------------------------------------------
+# Talisman (secret detection)
+# ---------------------------------------------------------------------------
+declare HOOKNAME="pre-commit"
+NAME=$(basename $0)
+ORG_REPO=${ORG_REPO:-'thoughtworks/talisman'}
+
+case "$NAME" in
+pre-commit* | pre-push*) HOOKNAME="${NAME}" ;;
+talisman_hook_script)
+	if [[ $# -gt 0 && $1 =~ pre-push.* ]]; then
+		HOOKNAME="pre-push"
+	fi
+	;;
+*)
+	echo "Unexpected invocation. Please check invocation name and parameters"
+	exit 1
+	;;
+esac
+
+function check_and_upgrade_talisman_binary() {
+	if [ -n "${TALISMAN_HOME:-}" ]; then
+		LATEST_VERSION=$(curl -Is https://github.com/${ORG_REPO}/releases/latest | grep -E "Location" | grep -o '[^/]\+$' | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+		CURRENT_VERSION=$(/Users/asgupta/.talisman/bin/talisman_darwin_arm64 --version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+		if [ ! -z "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "$CURRENT_VERSION" ]; then
+			echo ""
+			echo_warning "Your version of Talisman is outdated. Updating Talisman to v${LATEST_VERSION}"
+			curl --silent https://raw.githubusercontent.com/${ORG_REPO}/master/global_install_scripts/update_talisman.bash >/tmp/update_talisman.bash && /bin/bash /tmp/update_talisman.bash talisman-binary
+		fi
+	fi
+}
+
+check_and_upgrade_talisman_binary
+echo_debug "Firing ${HOOKNAME} hook"
+
+if [[ -f .talisman_skip || -f .talisman_skip.${HOOKNAME} ]]; then
+	echo_debug "Found skip file. Not performing checks"
+	exit 0
+fi
+
+DEBUG_OPTS=""
+[[ -n "${TALISMAN_DEBUG}" ]] && DEBUG_OPTS="-d"
+INTERACTIVE=""
+[[ -n "${TALISMAN_INTERACTIVE}" ]] && INTERACTIVE="-i"
+
+CMD="/Users/asgupta/.talisman/bin/talisman_darwin_arm64 ${DEBUG_OPTS} --githook ${HOOKNAME} ${INTERACTIVE}"
+echo_debug "ARGS are $@"
+echo_debug "Executing: ${CMD}"
+${CMD}
+if [ $? -ne 0 ]; then exit 1; fi
+
+# ---------------------------------------------------------------------------
+# Quality gates
+# ---------------------------------------------------------------------------
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+echo_success "Running Black formatting check..."
+poetry -C "$REPO_ROOT" run python -m black --check .
+if [ $? -ne 0 ]; then
+  echo_error "Black check failed. Run: poetry run python -m black ."
+  exit 1
+fi
+
+echo_success "Running import-linter architectural contracts..."
+poetry -C "$REPO_ROOT" run lint-imports
+if [ $? -ne 0 ]; then
+  echo_error "import-linter check failed. Fix architectural contract violations before committing."
+  exit 1
+fi
+
+echo_success "Running full test suite with coverage (this may take a while)..."
+poetry -C "$REPO_ROOT" run python -m pytest tests/ --cov --cov-report=term-missing --cov-fail-under=85 -x -q
+if [ $? -ne 0 ]; then
+  echo_error "Tests or coverage check failed. Fix before committing."
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Beads backup + integration
+# ---------------------------------------------------------------------------
+if command -v bd >/dev/null 2>&1; then
+  echo_success "Backing up Beads issue tracker..."
+  bd backup
+  if [ $? -ne 0 ]; then
+    echo_error "Beads backup failed."
+    exit 1
+  fi
+fi
+
+# --- BEGIN BEADS INTEGRATION v0.59.0 ---
+# This section is managed by beads. Do not remove these markers.
+if command -v bd >/dev/null 2>&1; then
+  export BD_GIT_HOOK=1
+  bd hooks run pre-commit "$@"
+  _bd_exit=$?; if [ $_bd_exit -ne 0 ]; then exit $_bd_exit; fi
+fi
+# --- END BEADS INTEGRATION v0.59.0 ---
