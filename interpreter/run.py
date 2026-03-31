@@ -50,7 +50,11 @@ from interpreter.vm.field_fallback import (
     NoFieldFallback,
     ImplicitThisFieldFallback,
 )
-from interpreter.vm.function_scoping import LocalFunctionScopingStrategy
+from interpreter.vm.function_scoping import (
+    FunctionScopingStrategy,
+    LocalFunctionScopingStrategy,
+    GlobalLeakFunctionScopingStrategy,
+)
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue
@@ -118,6 +122,9 @@ class ExecutionStrategies:
     field_fallback: FieldFallbackStrategy = dataclass_field(
         default_factory=NoFieldFallback
     )
+    function_scoping: FunctionScopingStrategy = dataclass_field(
+        default_factory=LocalFunctionScopingStrategy
+    )
     symbol_table: SymbolTable = dataclass_field(default_factory=SymbolTable.empty)
 
 
@@ -152,6 +159,22 @@ def _field_fallback_for_language(lang: Language) -> FieldFallbackStrategy:
     if lang in _IMPLICIT_THIS_LANGS:
         return ImplicitThisFieldFallback()
     return NoFieldFallback()
+
+
+_LEAKY_SCOPING_LANGS: frozenset[Language] = frozenset(
+    {Language.RUBY, Language.PHP, Language.LUA}
+)
+
+
+def _function_scoping_for_language(lang: Language) -> FunctionScopingStrategy:
+    """Select FunctionScopingStrategy based on source language.
+
+    Ruby, PHP, and Lua leak inner function definitions to global scope.
+    All other languages use lexical (local) scoping for inner functions.
+    """
+    if lang in _LEAKY_SCOPING_LANGS:
+        return GlobalLeakFunctionScopingStrategy()
+    return LocalFunctionScopingStrategy()
 
 
 def _binop_coercion_for_language(lang: Language) -> BinopCoercionStrategy:
@@ -339,7 +362,7 @@ def execute_cfg(
         func_symbol_table=strategies.func_symbol_table,
         class_symbol_table=strategies.class_symbol_table,
         field_fallback=strategies.field_fallback,
-        function_scoping=LocalFunctionScopingStrategy(),
+        function_scoping=strategies.function_scoping,
         symbol_table=strategies.symbol_table,
     )
 
@@ -497,7 +520,7 @@ def execute_cfg_traced(
         func_symbol_table=strategies.func_symbol_table,
         class_symbol_table=strategies.class_symbol_table,
         field_fallback=strategies.field_fallback,
-        function_scoping=LocalFunctionScopingStrategy(),
+        function_scoping=strategies.function_scoping,
         symbol_table=strategies.symbol_table,
     )
 
@@ -647,6 +670,7 @@ def build_execution_strategies(
         func_symbol_table=frontend.func_symbol_table,
         class_symbol_table=frontend.class_symbol_table,
         field_fallback=_field_fallback_for_language(lang),
+        function_scoping=_function_scoping_for_language(lang),
         symbol_table=frontend.symbol_table,
     )
 
@@ -679,6 +703,7 @@ def _build_strategies_from_linked(linked: LinkedProgram) -> ExecutionStrategies:
         func_symbol_table=linked.func_symbol_table,
         class_symbol_table=linked.class_symbol_table,
         field_fallback=_field_fallback_for_language(linked.language),
+        function_scoping=_function_scoping_for_language(linked.language),
         symbol_table=linked.symbol_table,
     )
 
