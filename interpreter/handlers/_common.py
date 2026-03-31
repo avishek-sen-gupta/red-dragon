@@ -57,14 +57,18 @@ def _symbolic_type_hint(val: Any) -> TypeExpr:
 
 
 def _write_var_to_frame(
-    vm: VMState, frame: StackFrame, name: VarName, tv: TypedValue
+    vm: VMState, frame: StackFrame, name: VarName, tv: TypedValue, ctx: Any = None
 ) -> None:
     """Write a variable to a specific frame, handling aliases and closure envs."""
+    from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+
     alias_ptr = frame.var_heap_aliases.get(name)
     if alias_ptr and vm.heap_contains(alias_ptr.base):
         vm.heap_get(alias_ptr.base).fields[
             FieldName(str(alias_ptr.offset), FieldKind.INDEX)
         ] = tv
+    elif ctx is not None and isinstance(tv.value, (FuncRef, BoundFuncRef)):
+        ctx.function_scoping.register_func(name, tv, vm, frame)
     else:
         frame.local_vars[name] = tv
     if frame.closure_env_id and name in frame.captured_var_names:

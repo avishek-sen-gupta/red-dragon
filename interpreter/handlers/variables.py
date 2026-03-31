@@ -157,7 +157,7 @@ def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
     # Walk scope chain: if variable exists in a parent frame, update it there.
     for frame in reversed(vm.call_stack):
         if name in frame.local_vars:
-            _write_var_to_frame(vm, frame, name, tv)
+            _write_var_to_frame(vm, frame, name, tv, ctx)
             return ExecutionResult.success(
                 StateUpdate(reasoning=f"store {name} = {tv.value!r} (scope chain)")
             )
