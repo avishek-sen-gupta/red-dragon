@@ -317,7 +317,9 @@ function main() {
     let n = d.getName();
 }
 """
-        vm = run(source, language=Language.TYPESCRIPT, entry_point="main", max_steps=150)
+        vm = run(
+            source, language=Language.TYPESCRIPT, entry_point="main", max_steps=150
+        )
 
         d = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(d.value, Pointer)
@@ -346,7 +348,9 @@ function main() {
     let n = d.getName();
 }
 """
-        vm = run(source, language=Language.JAVASCRIPT, entry_point="main", max_steps=150)
+        vm = run(
+            source, language=Language.JAVASCRIPT, entry_point="main", max_steps=150
+        )
 
         d = vm.current_frame.local_vars[VarName("d")]
         assert isinstance(d.value, Pointer)
@@ -385,7 +389,7 @@ end
 
     def test_php_constructor_and_method_via_entry_point(self):
         """PHP class with entry_point='main'."""
-        source = '''<?php
+        source = """<?php
 class Dog {
     public $name;
     public $age;
@@ -401,7 +405,7 @@ function main() {
     $d = new Dog("Buddy", 3);
     $n = $d->getName();
 }
-'''
+"""
         vm = run(source, language=Language.PHP, entry_point="main", max_steps=150)
 
         d = vm.current_frame.local_vars[VarName("$d")]
