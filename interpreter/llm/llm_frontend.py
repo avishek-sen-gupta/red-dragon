@@ -1,3 +1,4 @@
+# pyright: standard
 """LLM-based frontend — sends raw source to an LLM to produce IR instructions."""
 
 from __future__ import annotations
@@ -286,8 +287,8 @@ def _validate_ir(instructions: list[InstructionBase]) -> list[InstructionBase]:
 
     first = instructions[0]
     has_entry_label = (
-        isinstance(first, Label_) or first.opcode == Opcode.LABEL
-    ) and first.label.is_entry()
+        isinstance(first, Label_) or first.opcode == Opcode.LABEL  # type: ignore[attr-defined]  # see red-dragon-4ei7
+    ) and first.label.is_entry()  # type: ignore[attr-defined]  # see red-dragon-4ei7
 
     if not has_entry_label:
         logger.warning("LLM response missing entry label — auto-prepending")
@@ -307,7 +308,7 @@ def _convert_llm_func_refs(
     This is the ONLY place regex is used for function references — at the LLM boundary.
     """
     for i, inst in enumerate(instructions):
-        if inst.opcode == Opcode.CONST and inst.operands:
+        if inst.opcode == Opcode.CONST and inst.operands:  # type: ignore[attr-defined]  # see red-dragon-4ei7
             t = inst
             assert isinstance(t, Const)
             operand = str(t.value)
@@ -328,7 +329,7 @@ def _convert_llm_class_refs(
     This is the ONLY place regex is used for class references — at the LLM boundary.
     """
     for i, inst in enumerate(instructions):
-        if inst.opcode == Opcode.CONST and inst.operands:
+        if inst.opcode == Opcode.CONST and inst.operands:  # type: ignore[attr-defined]  # see red-dragon-4ei7
             t = inst
             assert isinstance(t, Const)
             operand = str(t.value)
@@ -398,7 +399,7 @@ class LLMFrontend(Frontend):
             source=source_text,
         )
 
-        last_error: IRParsingError | None = None
+        last_error: IRParsingError = IRParsingError("No attempts were made")
         for attempt in range(1, self._max_retries + 1):
             raw_response = self._llm_client.complete(
                 system_prompt=LLMFrontendPrompts.SYSTEM_PROMPT,
@@ -429,4 +430,4 @@ class LLMFrontend(Frontend):
             logger.info("LLMFrontend: produced %d IR instructions", len(instructions))
             return instructions
 
-        raise last_error  # type: ignore[misc]
+        raise last_error
