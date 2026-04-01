@@ -1,3 +1,4 @@
+# pyright: standard
 """Alphanumeric encoding/decoding — reference implementation.
 
 Ported from smojol's AlphanumericDataTypeSpec.java.

@@ -1,3 +1,4 @@
+# pyright: standard
 """Named constants for COBOL encoding/decoding — eliminates magic hex values and strings."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# pyright: standard
 """COBOL figurative constants — maps COBOL keywords to Python string equivalents."""
 
 from __future__ import annotations
