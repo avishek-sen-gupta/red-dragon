@@ -1,3 +1,4 @@
+# pyright: standard
 """Observer protocol for frontend parse/lower timing."""
 
 from __future__ import annotations

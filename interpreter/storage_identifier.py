@@ -1,3 +1,4 @@
+# pyright: standard
 """StorageIdentifier — protocol for named storage locations (variables and registers)."""
 
 from __future__ import annotations

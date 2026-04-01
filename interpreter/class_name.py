@@ -1,3 +1,4 @@
+# pyright: standard
 """ClassName — typed class/type name."""
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ class ClassName:
 
     value: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.value, str):
             raise TypeError(
                 f"ClassName.value must be str, got {type(self.value).__name__}: {self.value!r}"
