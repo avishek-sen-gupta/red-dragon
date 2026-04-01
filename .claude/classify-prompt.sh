@@ -10,8 +10,11 @@ COND_DIR="$SCRIPT_DIR/conditional"
 # Extract prompt from JSON stdin (lightweight — no jq dependency)
 PROMPT=$(cat | sed -n 's/.*"prompt" *: *"\(.*\)"/\1/p' | head -1)
 
-# Lowercase for matching
-LOWER=$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')
+# Require explicit workflow sentinel; inject nothing otherwise
+printf '%s' "$PROMPT" | grep -q '@@wf' || exit 0
+
+# Lowercase for matching (strip sentinel first so it doesn't affect classification)
+LOWER=$(printf '%s' "$PROMPT" | sed 's/@@wf//g' | tr '[:upper:]' '[:lower:]')
 
 # Track which files to inject (avoid duplicates)
 DESIGN=0
