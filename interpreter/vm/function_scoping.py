@@ -1,3 +1,4 @@
+# pyright: standard
 """Function scoping strategies — controls where FuncRef/BoundFuncRef values are registered.
 
 LocalFunctionScopingStrategy (default):

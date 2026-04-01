@@ -24,16 +24,26 @@ Classify before starting. This determines how much ceremony is needed.
 
 ### Verification gate
 
-Run all four before every commit, in this order:
+A deterministic pre-commit hook at `.claude/hooks/pre-commit` runs all gates automatically on every commit:
+
+- **Talisman** — secret detection
+- **Black** — formatting (auto-fixes and re-stages)
+- **import-linter** — architectural contracts
+- **pytest** — full test suite (unit + integration)
+- **bd backup** — Beads issue tracker backup
+
+**When ready to commit, just commit.** You do not need to run these gates manually first — the hook enforces them. If any gate fails, the commit is rejected and you must fix the issue before retrying.
+
+You may run individual gates to check specific parts of your work in progress:
 
 ```bash
-poetry run python -m black .         # formatting
-poetry run lint-imports               # architectural contracts
-poetry run pyright interpreter/ mcp_server/  # type checking (basic mode; errors expected until per-file # pyright: standard promotion is complete)
-poetry run python -m pytest tests/    # ALL tests (unit + integration), not just tests/unit/
+poetry run python -m black .                              # formatting only
+poetry run lint-imports                                   # architectural contracts only
+poetry run pyright interpreter/ mcp_server/               # type checking only (not in hook)
+poetry run python -m pytest tests/                        # tests only
 ```
 
-Do not commit if any check fails. Fix, then re-run all four. Non-negotiable.
+**Pyright is not in the pre-commit hook** — run it manually when working on type annotations.
 **Exception:** During the type annotation migration (Tasks 2–17 of the type-hints plan), pyright will report errors on unannotated files — this is expected. Each file is promoted to `# pyright: standard` as it is annotated; only promoted files are held to zero-error standard.
 
 ### Commits and state
@@ -41,7 +51,6 @@ Do not commit if any check fails. Fix, then re-run all four. Non-negotiable.
 - One logical unit per commit. Each commit must have its own tests.
 - Push to `main` unless otherwise instructed.
 - Update README and other living docs (ADRs, linker-design.md, type-system.md, etc.) if the diff changes public behavior, adds features, or modifies architecture. This is part of the commit, not a follow-up.
-- `bd backup` before every commit.
 - Leave the working directory clean. No uncommitted files.
 - Prefer a committed partial result over an uncommitted complete attempt. If a session may end, commit what's done with a `WIP:` prefix and file an issue for the remainder.
 - When test counts are mentioned (e.g., "all 625 tests passing"), verify that count hasn't regressed.

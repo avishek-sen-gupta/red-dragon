@@ -1,3 +1,4 @@
+# pyright: standard
 """Unresolved call resolvers — pluggable strategies for unknown function/method calls."""
 
 from __future__ import annotations
@@ -11,7 +12,9 @@ from litellm.exceptions import OpenAIError
 
 from interpreter.address import Address
 from interpreter.field_name import FieldName
+from interpreter.instructions import InstructionBase
 from interpreter.llm.llm_client import LLMClient
+from interpreter.register import Register
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.var_name import VarName
@@ -79,7 +82,7 @@ class SymbolicResolver(UnresolvedCallResolver):
         logger.debug("Unknown function %s — creating symbolic %s", func_name, sym.name)
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},  # type: ignore[attr-defined]  # see red-dragon-q0xu
                 reasoning=f"unknown function {func_name}({args_desc}) → symbolic {sym.name}",
             )
         )
@@ -104,7 +107,7 @@ class SymbolicResolver(UnresolvedCallResolver):
         )
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},  # type: ignore[attr-defined]  # see red-dragon-q0xu
                 reasoning=f"unknown method {call_desc} → symbolic {sym.name}",
             )
         )
@@ -159,7 +162,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         msg: dict[str, Any] = {
             "call": call_desc,
             "args": [_serialize_value(a) for a in args],
-            "result_reg": inst.result_reg,
+            "result_reg": inst.result_reg,  # type: ignore[attr-defined]  # see red-dragon-q0xu
             "state": compact_state,
         }
         if self._source_language:
@@ -179,9 +182,9 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         value = data.get("value")
         reasoning = data.get("reasoning", "LLM plausible value")
 
-        register_writes: dict[str, TypedValue] = {}
-        if inst.result_reg.is_present():
-            register_writes[inst.result_reg] = typed_from_runtime(value)
+        register_writes: dict[Register, TypedValue] = {}
+        if inst.result_reg.is_present():  # type: ignore[attr-defined]  # see red-dragon-q0xu
+            register_writes[inst.result_reg] = typed_from_runtime(value)  # type: ignore[attr-defined]  # see red-dragon-q0xu
 
         heap_writes = [
             HeapWrite(

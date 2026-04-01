@@ -1,3 +1,4 @@
+# pyright: standard
 """Field fallback strategies for implicit this.field resolution.
 
 When LOAD_VAR or STORE_VAR cannot find a variable in the scope chain,
@@ -58,7 +59,7 @@ class ImplicitThisFieldFallback(FieldFallbackStrategy):
                 return str(addr)
         return None
 
-    def _heap_addr(self, value: object) -> str | None:
+    def _heap_addr(self, value: object) -> Address | None:
         addr = shared_heap_addr(value)
         if addr and addr.startswith(constants.OBJ_ADDR_PREFIX):
             return addr
