@@ -1,3 +1,4 @@
+# pyright: standard
 """Composable API functions for the LLM Symbolic Interpreter pipelines.
 
 Each function corresponds to a CLI workflow (--ir-only, --cfg-only, --mermaid)
@@ -8,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from tree_sitter import Node
 
@@ -19,6 +20,7 @@ from interpreter.cfg import (
     extract_function_instructions,
 )
 from interpreter.constants import Language
+from interpreter.instructions import InstructionBase
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
@@ -26,7 +28,7 @@ from interpreter.frontend import get_frontend
 from interpreter.ir_stats import count_opcodes
 from interpreter.parser import Parser, TreeSitterParserFactory
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg_traced
+from interpreter.run import execute_cfg_traced, build_execution_strategies
 from interpreter.run_types import VMConfig
 from interpreter.trace_types import ExecutionTrace
 from interpreter.types.type_environment import TypeEnvironment
@@ -34,6 +36,10 @@ from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter import constants
 from interpreter.constants import LLMProvider
+
+if TYPE_CHECKING:
+    from interpreter.interprocedural.types import InterproceduralResult
+    from interpreter.vm.vm import VMState
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +228,7 @@ def ir_stats(
         A dict mapping opcode name strings to their occurrence counts.
     """
     instructions = lower_source(source, language, frontend_type, backend)
-    return count_opcodes(instructions)
+    return count_opcodes(instructions)  # type: ignore[arg-type]  # list[InstructionBase] assignable to list[Instruction] at runtime
 
 
 def execute_traced(
@@ -286,7 +292,11 @@ def _find_function_node(node: Node, name: str) -> Optional[Node]:
     """Recursively walk the AST to find a function/method node matching *name*."""
     if node.type in _FUNCTION_NODE_TYPES:
         name_node = node.child_by_field_name("name")
-        if name_node is not None and name_node.text.decode("utf-8") == name:
+        if (
+            name_node is not None
+            and name_node.text is not None
+            and name_node.text.decode("utf-8") == name
+        ):
             return node
 
     return next(
@@ -321,7 +331,7 @@ def extract_function_source(
         ValueError: If no function with the given name is found.
     """
     logger.info("Extracting function source for '%s' (%s)", function_name, language)
-    tree = Parser(TreeSitterParserFactory()).parse(source, language)
+    tree = Parser(TreeSitterParserFactory()).parse(source, Language(language))
     source_bytes = source.encode("utf-8")
     match = _find_function_node(tree.root_node, function_name)
     if match is None:

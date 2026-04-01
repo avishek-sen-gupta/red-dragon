@@ -1,8 +1,10 @@
+# pyright: standard
 """Function & Class Registry — scanning IR/CFG to catalogue functions and classes."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from interpreter.ir import CodeLabel
 from interpreter.instructions import Const, InstructionBase, Label_, Symbolic
@@ -93,8 +95,7 @@ def _scan_func_params(cfg: CFG) -> dict[CodeLabel, list[str]]:
         params = [
             str(t.hint)[len(constants.PARAM_PREFIX) :]
             for inst in block.instructions
-            if inst.operands
-            and isinstance((t := inst), Symbolic)
+            if isinstance((t := inst), Symbolic)
             and str(t.hint).startswith(constants.PARAM_PREFIX)
         ]
         result[label] = params
@@ -106,9 +107,9 @@ def _scan_classes(
     func_symbol_table: dict[CodeLabel, FuncRef] = {},
     class_symbol_table: dict[CodeLabel, ClassRef] = {},
 ) -> tuple[
-    dict[str, CodeLabel],
-    dict[str, dict[FuncName, list[CodeLabel]]],
-    dict[str, list[str]],
+    dict[ClassName, CodeLabel],
+    dict[ClassName, dict[FuncName, list[CodeLabel]]],
+    dict[ClassName, list[ClassName]],
 ]:
     """Scan IR to find classes, their methods, and parent chains.
 
@@ -117,9 +118,9 @@ def _scan_classes(
     - class_methods: class_name → {method_name → [func_label, ...]}
     - class_parents: class_name → linearized parent chain (MRO, excluding self)
     """
-    classes: dict[str, CodeLabel] = {}
-    class_methods: dict[str, dict[FuncName, list[CodeLabel]]] = {}
-    class_parents: dict[str, list[str]] = {}
+    classes: dict[ClassName, CodeLabel] = {}
+    class_methods: dict[ClassName, dict[FuncName, list[CodeLabel]]] = {}
+    class_parents: dict[ClassName, list[ClassName]] = {}
 
     # First pass: populate from class_symbol_table (new path).
     for label, cref in class_symbol_table.items():
@@ -133,7 +134,7 @@ def _scan_classes(
     # level for field initializers and static blocks). To handle both layouts,
     # we keep in_class set after end_class — the next class_X label for a
     # *different* class will reset it.
-    in_class: ClassName | str = ""
+    in_class: ClassName | None = None
     for inst in instructions:
         if isinstance(inst, Label_) and inst.label.is_present():
             is_class_start = inst.label.is_class()
@@ -149,10 +150,14 @@ def _scan_classes(
                 # Keep in_class set — hoisted methods may follow end_class
                 pass
 
-        if in_class and inst.operands and isinstance((t := inst), Const):
+        raw_inst: Any = (
+            inst  # InstructionBase subclasses have operands  # see red-dragon-4ei7
+        )
+        if in_class is not None and raw_inst.operands and isinstance(inst, Const):
+            t = inst
             operand = str(t.value)
-            if operand in func_symbol_table:
-                ref = func_symbol_table[operand]
+            if operand in func_symbol_table:  # type: ignore[operator]  # str used as CodeLabel key by design
+                ref = func_symbol_table[operand]  # type: ignore[index]  # str used as CodeLabel key by design
                 class_methods[in_class].setdefault(ref.name, []).append(ref.label)
 
     return classes, class_methods, class_parents
