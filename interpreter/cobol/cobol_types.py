@@ -1,3 +1,4 @@
+# pyright: standard
 """COBOL type descriptors — pure dataclasses for type metadata."""
 
 from __future__ import annotations

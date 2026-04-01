@@ -1,3 +1,4 @@
+# pyright: standard
 """Condition name types for COBOL level-88 condition names.
 
 A level-88 entry defines named conditions on a parent field. Each condition

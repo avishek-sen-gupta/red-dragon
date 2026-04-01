@@ -1,3 +1,4 @@
+# pyright: standard
 """EBCDIC ↔ ASCII bidirectional lookup tables.
 
 Ported from smojol's ByteConverter.java — 256-entry mapping between

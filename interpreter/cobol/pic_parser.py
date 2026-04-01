@@ -1,3 +1,4 @@
+# pyright: standard
 """PIC clause parser — ANTLR visitor that walks the parse tree.
 
 Parses COBOL PIC strings (e.g. "S9(5)V99", "X(8)") into
@@ -9,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Any
 
 from antlr4 import CommonTokenStream, InputStream
 
@@ -100,15 +102,15 @@ class _PicVisitor(CobolDataTypesVisitor):
         if ctx.charTypeIndicator():
             self.alphanumeric_length += 1
         elif ctx.nchars():
-            numberof_ctx = ctx.nchars().numberOf()
-            self.alphanumeric_length += _extract_repeat_count(numberof_ctx.getText())
+            numberof_ctx = ctx.nchars().numberOf()  # type: ignore[union-attr]  # see red-dragon-ax5h
+            self.alphanumeric_length += _extract_repeat_count(numberof_ctx.getText())  # type: ignore[union-attr]  # see red-dragon-ax5h
         return None
 
     def visitLeftSideAlphanumericIndicator(
         self, ctx: CobolDataTypes.LeftSideAlphanumericIndicatorContext
     ):
         if ctx.alphaNumericIndicator():
-            return self.visitAlphaNumericIndicator(ctx.alphaNumericIndicator())
+            return self.visitAlphaNumericIndicator(ctx.alphaNumericIndicator())  # type: ignore[arg-type]  # see red-dragon-ax5h
         if ctx.digitIndicator():
             self.alphanumeric_length += self._count_single_digit_indicator(
                 ctx.digitIndicator()
@@ -119,20 +121,20 @@ class _PicVisitor(CobolDataTypesVisitor):
         self, ctx: CobolDataTypes.RightSideAlphanumericIndicatorContext
     ):
         if ctx.alphaNumericIndicator():
-            return self.visitAlphaNumericIndicator(ctx.alphaNumericIndicator())
+            return self.visitAlphaNumericIndicator(ctx.alphaNumericIndicator())  # type: ignore[arg-type]  # see red-dragon-ax5h
         if ctx.digitIndicator():
             self.alphanumeric_length += self._count_single_digit_indicator(
                 ctx.digitIndicator()
             )
         return None
 
-    def _count_digits(self, ctx) -> int:
+    def _count_digits(self, ctx: Any) -> int:  # type: ignore[misc]  # ANTLR node — no stubs
         """Count total digit positions from digitIndicator children."""
         return sum(
             self._count_single_digit_indicator(di) for di in ctx.digitIndicator()
         )
 
-    def _count_single_digit_indicator(self, di_ctx) -> int:
+    def _count_single_digit_indicator(self, di_ctx: Any) -> int:  # type: ignore[misc]  # ANTLR node — no stubs
         """Count digits from a single digitIndicator (bare 9 or 9(N))."""
         if di_ctx.ndigits():
             numberof_ctx = di_ctx.ndigits().numberOf()

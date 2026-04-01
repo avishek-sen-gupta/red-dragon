@@ -1,3 +1,4 @@
+# pyright: standard
 """Injectable I/O provider for COBOL statement execution.
 
 Provides a pluggable strategy for COBOL I/O operations (ACCEPT, READ, WRITE,
@@ -49,7 +50,9 @@ class CobolIOProvider(ABC):
     def dispatch(self, name: FuncName) -> str | None:
         return _COBOL_IO_DISPATCH.get(name)
 
-    def handle_call(self, func_name: FuncName, args: list[TypedValue]) -> Any:
+    def handle_call(
+        self, func_name: FuncName, args: list[TypedValue]
+    ) -> Any:  # Any: str | int | _Uncomputable — VM I/O boundary
         """Route a __cobol_* call to the appropriate method.
 
         Returns a concrete value or UNCOMPUTABLE if unhandled.
@@ -62,7 +65,9 @@ class CobolIOProvider(ABC):
         return method(*[a.value for a in args])
 
     @abstractmethod
-    def _accept(self, from_device: str) -> Any:
+    def _accept(
+        self, from_device: str
+    ) -> Any:  # Any: str | _Uncomputable — VM I/O boundary
         """ACCEPT — read input from a device (e.g. CONSOLE)."""
         ...
 

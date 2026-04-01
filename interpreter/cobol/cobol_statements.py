@@ -1,3 +1,4 @@
+# pyright: standard
 """Typed COBOL statement hierarchy — discriminated union of frozen dataclasses.
 
 Replaces the flat CobolStatement god class with specific types per

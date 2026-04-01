@@ -1,3 +1,4 @@
+# pyright: standard
 """PROCEDURE DIVISION lowering — sections, paragraphs, and statement iteration."""
 
 from __future__ import annotations
