@@ -1,3 +1,4 @@
+# pyright: standard
 """Local execution — opcode handlers and dispatch table."""
 
 from __future__ import annotations
@@ -229,7 +230,7 @@ class LocalExecutor:
         vm: VMState,
         ctx: HandlerContext,
     ) -> ExecutionResult:
-        handler = cls.DISPATCH.get(inst.opcode)
+        handler = cls.DISPATCH.get(inst.opcode)  # type: ignore[attr-defined]  # see red-dragon-4ei7
         if not handler:
             return ExecutionResult.not_handled()
         return handler(inst=inst, vm=vm, ctx=ctx)
