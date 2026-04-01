@@ -1,3 +1,4 @@
+# pyright: standard
 """Tool handler implementations for the RedDragon MCP server.
 
 Each handle_* function is a pure function that returns a JSON-serializable dict.
@@ -10,17 +11,20 @@ import logging
 from typing import Any
 
 from interpreter.cfg import build_cfg
+from interpreter.cfg_types import CFG
 from interpreter.constants import Language
+from interpreter.instructions import InstructionBase
 from interpreter.frontend import get_frontend
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.summaries import extract_sub_cfg
 from interpreter.interprocedural.types import (
     FunctionEntry,
+    InterproceduralResult,
     ReturnEndpoint,
     FieldEndpoint,
     VariableEndpoint,
 )
-from interpreter.registry import build_registry
+from interpreter.registry import FunctionRegistry, build_registry
 from mcp_server.formatting import (
     format_chain_node,
     format_flow_endpoint,
@@ -44,7 +48,9 @@ from viz.panels.dataflow_summary_panel import (
 logger = logging.getLogger(__name__)
 
 
-def _run_analysis(source: str, language: str):
+def _run_analysis(
+    source: str, language: str
+) -> tuple[CFG, FunctionRegistry, InterproceduralResult, list[InstructionBase]]:
     """Run pipeline + interprocedural analysis. Returns (cfg, registry, interprocedural)."""
     lang = Language(language)
     frontend = get_frontend(lang)
@@ -62,7 +68,7 @@ def _run_analysis(source: str, language: str):
 
 def _find_function_entry(
     name: str,
-    interprocedural,
+    interprocedural: InterproceduralResult,
 ) -> FunctionEntry:
     """Find a FunctionEntry by name or label. Raises ValueError if not found."""
     for f in interprocedural.call_graph.functions:
@@ -96,7 +102,7 @@ def handle_analyze_program(source: str, language: str) -> dict[str, Any]:
             for f in sorted(call_graph.functions, key=lambda f: str(f.label))
         ],
         "call_graph": [
-            {"caller": s.caller.label, "callees": sorted(c.label for c in s.callees)}
+            {"caller": s.caller.label, "callees": sorted(c.label for c in s.callees)}  # type: ignore[type-var]  # see red-dragon-1la4
             for s in call_graph.call_sites
         ],
         "summary_counts": {
@@ -181,7 +187,7 @@ def handle_get_call_chain(
     chains = []
     func_by_label = {f.label: f for f in interprocedural.call_graph.functions}
     for call in top_calls:
-        callee = func_by_label.get(call.callee_label)
+        callee = func_by_label.get(call.callee_label)  # type: ignore[arg-type]  # see red-dragon-m889
         if not callee:
             callee = next(
                 (
@@ -331,13 +337,13 @@ def handle_get_state() -> dict[str, Any]:
             if session.step_index > 0
             else 0
         ),
-        "call_stack": [format_vm_state_frame(f) for f in vm_state.call_stack],
+        "call_stack": [format_vm_state_frame(f) for f in vm_state.call_stack],  # type: ignore[union-attr]  # vm_state is non-None: load_session always populates initial_state
         "heap": {
             addr: {
                 "type": str(obj.type_hint),
                 "fields": {k: format_typed_value(v) for k, v in obj.fields.items()},
             }
-            for addr, obj in vm_state.heap_items()
+            for addr, obj in vm_state.heap_items()  # type: ignore[union-attr]  # same as above
         },
     }
 

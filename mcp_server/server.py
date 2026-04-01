@@ -1,3 +1,4 @@
+# pyright: standard
 """RedDragon MCP server — registers tools and resources on a FastMCP instance."""
 
 from __future__ import annotations
