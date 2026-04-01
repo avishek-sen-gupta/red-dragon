@@ -1,3 +1,4 @@
+# pyright: standard
 """Shared LLM client infrastructure — used by both frontend and backend."""
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 _ROLE_SYSTEM = "system"
 _ROLE_USER = "user"
 
-_LAZY_IMPORT = object()
+_LAZY_IMPORT: Any = object()  # Any: litellm.completion() boundary — no stubs
 
 
 class LLMClient(ABC):
@@ -128,7 +129,7 @@ class LiteLLMClient(LLMClient):
             kwargs["api_base"] = self._api_base
 
         response = self._completion_fn(**kwargs)
-        return response.choices[0].message.content
+        return response.choices[0].message.content  # type: ignore[union-attr,return-value]  # litellm boundary — no stubs
 
 
 def get_llm_client(
@@ -145,7 +146,7 @@ def get_llm_client(
         completion_fn: Callable matching litellm.completion() signature for DI/testing
         base_url: Base URL for Ollama/HuggingFace/custom endpoints
     """
-    litellm_model, api_base = _resolve_model(provider, model, base_url)
+    litellm_model, api_base = _resolve_model(provider, model, base_url)  # type: ignore[arg-type]  # provider is str; _resolve_model validates and raises ValueError for unknown values
     return LiteLLMClient(
         model=litellm_model,
         api_base=api_base,

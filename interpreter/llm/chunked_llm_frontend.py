@@ -1,3 +1,4 @@
+# pyright: standard
 """Chunked LLM frontend — decomposes large files into top-level chunks for LLM lowering."""
 
 from __future__ import annotations
@@ -180,18 +181,17 @@ class IRRenumberer:
         """
 
         def _renumber_inst(inst: InstructionBase) -> InstructionBase:
+            i: Any = inst  # type: ignore[misc]  # see red-dragon-4ei7 — subclass attrs not visible on InstructionBase
             new_operands = [
                 self._renumber_operand(op, reg_offset, label_suffix)
-                for op in inst.operands
+                for op in i.operands
             ]
             return IRInstruction(
-                opcode=inst.opcode,
-                result_reg=self._renumber_reg(inst.result_reg, reg_offset),
+                opcode=i.opcode,
+                result_reg=self._renumber_reg(i.result_reg, reg_offset),
                 operands=new_operands,
-                label=self._renumber_label(inst.label, label_suffix),
-                branch_targets=[
-                    t.with_suffix(label_suffix) for t in inst.branch_targets
-                ],
+                label=self._renumber_label(i.label, label_suffix),
+                branch_targets=[t.with_suffix(label_suffix) for t in i.branch_targets],
                 source_location=inst.source_location,
             )
 
@@ -200,7 +200,7 @@ class IRRenumberer:
         all_reg_numbers = [
             self._extract_reg_number(token)
             for inst in result
-            for token in [inst.result_reg, *inst.operands]
+            for token in [inst.result_reg, *inst.operands]  # type: ignore[attr-defined]  # see red-dragon-4ei7
         ]
         max_reg = max(all_reg_numbers, default=-1)
         next_offset = max_reg + 1 if max_reg >= 0 else reg_offset
@@ -284,7 +284,7 @@ class ChunkedLLMFrontend(Frontend):
         source_bytes = source if isinstance(source, bytes) else source.encode("utf-8")
 
         parser = self._parser_factory.get_parser(self._language)
-        tree = parser.parse(source_bytes)
+        tree = parser.parse(source_bytes)  # type: ignore[attr-defined]  # get_parser return type unannotated (tree-sitter-language-pack has no stubs)
 
         chunks = self._chunk_extractor.extract_chunks(
             tree, source_bytes, self._language
@@ -333,8 +333,8 @@ class ChunkedLLMFrontend(Frontend):
                 inst
                 for inst in chunk_instructions
                 if not (
-                    (isinstance(inst, Label_) or inst.opcode == Opcode.LABEL)
-                    and inst.label.is_entry()
+                    (isinstance(inst, Label_) or inst.opcode == Opcode.LABEL)  # type: ignore[attr-defined]  # see red-dragon-4ei7
+                    and inst.label.is_entry()  # type: ignore[attr-defined]  # see red-dragon-4ei7
                 )
             ]
 
