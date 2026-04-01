@@ -1,7 +1,9 @@
+# pyright: standard
 """Symbolic VM — state update application and helpers."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from types import MappingProxyType
 from typing import Any
 
@@ -43,7 +45,7 @@ _IDENTITY_RULES = IdentityConversionRules()
 
 def _coerce_value(
     val: Any,
-    reg: str,
+    reg: str | Register,
     type_env: TypeEnvironment,
     conversion_rules: TypeConversionRules,
 ) -> Any:
@@ -52,13 +54,16 @@ def _coerce_value(
     Returns *val* unchanged when no coercion is needed (no declared type,
     runtime type already matches, or the register name is not in the env).
     """
+    reg_key: Register
     if isinstance(reg, str):
         if not reg.startswith("%"):
             return val
-        reg = Register(reg)
-    elif not isinstance(reg, Register):
+        reg_key = Register(reg)
+    elif isinstance(reg, Register):
+        reg_key = reg
+    else:
         return val
-    target_type = type_env.register_types.get(reg, UNKNOWN)
+    target_type = type_env.register_types.get(reg_key, UNKNOWN)
     if not target_type:
         return val
     rt_type_name = runtime_type_name(val)
@@ -71,7 +76,7 @@ def _coerce_value(
 def _materialize_single_register(
     val: Any,
     vm: VMState,
-    reg: str,
+    reg: str | Register,
     type_env: TypeEnvironment,
     conversion_rules: TypeConversionRules,
 ) -> TypedValue:
@@ -99,7 +104,7 @@ def _materialize_single_var(
 
 def _coerce_typed_register(
     tv: TypedValue,
-    reg: str,
+    reg: str | Register,
     type_env: TypeEnvironment,
     conversion_rules: TypeConversionRules,
 ) -> TypedValue:
@@ -354,8 +359,8 @@ def _resolve_reg(vm: VMState, operand: str | Register) -> TypedValue:
         frame = vm.current_frame
         val = frame.registers.get(operand)
         if val is None:
-            # Fallback: try string key
-            val = frame.registers.get(str(operand), str(operand))
+            # Fallback: try string key (legacy dict may have str keys)
+            val = frame.registers.get(str(operand), str(operand))  # type: ignore[call-overload]  # see red-dragon-sxyc
         if isinstance(val, TypedValue):
             return val
         return typed_from_runtime(val)
@@ -420,41 +425,43 @@ class Operators:
 
     UNCOMPUTABLE = _Uncomputable()
 
-    BINOP_TABLE: dict[str, Any] = {
-        "+": lambda a, b: a + b,
-        "-": lambda a, b: a - b,
-        "*": lambda a, b: a * b,
-        "/": lambda a, b: a / b if b != 0 else Operators.UNCOMPUTABLE,
-        "//": lambda a, b: a // b if b != 0 else Operators.UNCOMPUTABLE,
-        "%": lambda a, b: a % b if b != 0 else Operators.UNCOMPUTABLE,
-        "mod": lambda a, b: a % b if b != 0 else Operators.UNCOMPUTABLE,
-        "**": lambda a, b: a**b,
-        "==": lambda a, b: a == b,
-        "!=": lambda a, b: a != b,
-        "~=": lambda a, b: a != b,
-        "<": lambda a, b: a < b,
-        ">": lambda a, b: a > b,
-        "<=": lambda a, b: a <= b,
-        ">=": lambda a, b: a >= b,
-        "and": lambda a, b: a and b,
-        "or": lambda a, b: a or b,
-        "in": lambda a, b: (
-            a in b if hasattr(b, "__contains__") else Operators.UNCOMPUTABLE
-        ),
-        "&": lambda a, b: a & b,
-        "|": lambda a, b: a | b,
-        "^": lambda a, b: a ^ b,
-        "~": lambda a, b: a ^ b,  # Lua bitwise XOR
-        "<<": lambda a, b: a << b,
-        ">>": lambda a, b: a >> b,
-        "..": lambda a, b: str(a) + str(b),
-        ".": lambda a, b: str(a) + str(b),
-        "===": lambda a, b: a == b,
-        "?:": lambda a, b: a if a is not None else b,
-        "??": lambda a, b: a if a is not None else b,
-        "||": lambda a, b: a or b,
-        "&&": lambda a, b: a and b,
-    }
+    BINOP_TABLE: dict[str, Callable[..., Any]] = (
+        {  # Any: operator dispatch — heterogeneous runtime values
+            "+": lambda a, b: a + b,
+            "-": lambda a, b: a - b,
+            "*": lambda a, b: a * b,
+            "/": lambda a, b: a / b if b != 0 else Operators.UNCOMPUTABLE,
+            "//": lambda a, b: a // b if b != 0 else Operators.UNCOMPUTABLE,
+            "%": lambda a, b: a % b if b != 0 else Operators.UNCOMPUTABLE,
+            "mod": lambda a, b: a % b if b != 0 else Operators.UNCOMPUTABLE,
+            "**": lambda a, b: a**b,
+            "==": lambda a, b: a == b,
+            "!=": lambda a, b: a != b,
+            "~=": lambda a, b: a != b,
+            "<": lambda a, b: a < b,
+            ">": lambda a, b: a > b,
+            "<=": lambda a, b: a <= b,
+            ">=": lambda a, b: a >= b,
+            "and": lambda a, b: a and b,
+            "or": lambda a, b: a or b,
+            "in": lambda a, b: (
+                a in b if hasattr(b, "__contains__") else Operators.UNCOMPUTABLE
+            ),
+            "&": lambda a, b: a & b,
+            "|": lambda a, b: a | b,
+            "^": lambda a, b: a ^ b,
+            "~": lambda a, b: a ^ b,  # Lua bitwise XOR
+            "<<": lambda a, b: a << b,
+            ">>": lambda a, b: a >> b,
+            "..": lambda a, b: str(a) + str(b),
+            ".": lambda a, b: str(a) + str(b),
+            "===": lambda a, b: a == b,
+            "?:": lambda a, b: a if a is not None else b,
+            "??": lambda a, b: a if a is not None else b,
+            "||": lambda a, b: a or b,
+            "&&": lambda a, b: a and b,
+        }
+    )
 
     @classmethod
     def eval_binop(cls, op: str, lhs: Any, rhs: Any) -> Any:
