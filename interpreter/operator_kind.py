@@ -1,3 +1,4 @@
+# pyright: standard
 """Typed operator enums for BINOP and UNOP instructions."""
 
 from __future__ import annotations

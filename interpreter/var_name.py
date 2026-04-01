@@ -1,3 +1,4 @@
+# pyright: standard
 """VarName — typed variable name with domain semantics."""
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ class VarName:
 
     value: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.value, str):
             raise TypeError(
                 f"VarName.value must be str, got {type(self.value).__name__}: {self.value!r}"

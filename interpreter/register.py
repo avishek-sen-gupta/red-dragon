@@ -1,3 +1,4 @@
+# pyright: standard
 """Typed register references — replaces stringly-typed result_reg."""
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ class Register:
 
     name: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.name, str):
             raise TypeError(
                 f"Register.name must be str, got {type(self.name).__name__}: {self.name!r}"
@@ -42,11 +43,15 @@ class Register:
         return NotImplemented
 
     @classmethod
-    def __get_pydantic_core_schema__(cls, _source: Any, _handler: Any) -> Any:
+    def __get_pydantic_core_schema__(
+        cls, _source: Any, _handler: Any
+    ) -> Any:  # Any: display boundary — pydantic core_schema API
         """Allow Pydantic to coerce str | None → Register/NoRegister."""
         from pydantic_core import core_schema
 
-        def _coerce(value: Any) -> Register:
+        def _coerce(
+            value: Any,
+        ) -> Register:  # Any: display boundary — pydantic validator input
             if isinstance(value, NoRegister):
                 return value
             if isinstance(value, Register):

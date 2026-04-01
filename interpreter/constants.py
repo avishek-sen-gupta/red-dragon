@@ -1,3 +1,4 @@
+# pyright: standard
 """Named constants — eliminates magic strings across the codebase."""
 
 from __future__ import annotations
