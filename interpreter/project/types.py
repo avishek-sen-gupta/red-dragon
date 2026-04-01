@@ -1,3 +1,4 @@
+# pyright: standard
 """Data types for multi-file project support.
 
 Defines ImportRef, ExportTable, ModuleUnit, LinkedProgram — the core
@@ -138,7 +139,7 @@ class ModuleUnit:
 
     path: Path
     language: Language
-    ir: tuple[...]
+    ir: tuple[InstructionBase, ...]
     exports: ExportTable
     imports: tuple[ImportRef, ...]
 

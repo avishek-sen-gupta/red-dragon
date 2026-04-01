@@ -1,3 +1,4 @@
+# pyright: standard
 """Linker — namespace, rebase, and merge multi-module IR.
 
 The linker's job is simple: produce a single IR stream that looks exactly
@@ -22,6 +23,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from pathlib import Path
+from typing import Any
 
 from interpreter.cfg import build_cfg
 from interpreter.class_name import ClassName
@@ -29,7 +31,6 @@ from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 from interpreter.instructions import (
     InstructionBase,
-    Instruction,
     CallFunction,
     DeclVar,
     Const,
@@ -73,15 +74,18 @@ def rebase_register(operand: str, offset: int) -> str:
     return operand
 
 
-def max_register_number(ir: tuple[...] | list[InstructionBase]) -> int:
+def max_register_number(ir: tuple[InstructionBase, ...] | list[InstructionBase]) -> int:
     """Find the highest register number used in an IR sequence. Returns -1 if none."""
     max_reg = -1
     for inst in ir:
-        if inst.result_reg.is_present():
-            m = _REGISTER_RE.match(str(inst.result_reg))
+        raw: Any = (
+            inst  # InstructionBase subclasses have result_reg/operands; not in base  # see red-dragon-4ei7
+        )
+        if raw.result_reg.is_present():
+            m = _REGISTER_RE.match(str(raw.result_reg))
             if m:
                 max_reg = max(max_reg, int(m.group(1)))
-        for op in inst.operands:
+        for op in raw.operands:
             m = _REGISTER_RE.match(str(op))
             if m:
                 max_reg = max(max_reg, int(m.group(1)))
@@ -95,7 +99,7 @@ def _transform_instruction(
     inst: InstructionBase,
     prefix: str,
     reg_offset: int,
-) -> Instruction:
+) -> InstructionBase:
     """Namespace labels, rebase registers, namespace CONST func/class refs."""
     typed = inst
 
@@ -159,10 +163,13 @@ def _transform_module(
             continue
 
         # Drop import stubs for resolved names
-        if _is_import_call(inst) and inst.result_reg.is_present():
+        raw_inst: Any = (
+            inst  # InstructionBase subclasses have result_reg; not in base  # see red-dragon-4ei7
+        )
+        if _is_import_call(inst) and raw_inst.result_reg.is_present():
             # Peek: the next DECL_VAR will tell us the name. We can't peek
             # here, so mark the register and decide at the DECL_VAR.
-            skip_next_decl_for_reg = rebase_register(inst.result_reg, reg_offset)
+            skip_next_decl_for_reg = rebase_register(raw_inst.result_reg, reg_offset)
             # Tentatively add the instruction — remove it if DECL_VAR matches
             result.append(_transform_instruction(inst, prefix, reg_offset))
             continue

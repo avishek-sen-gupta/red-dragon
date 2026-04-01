@@ -1,3 +1,4 @@
+# pyright: standard
 """Import resolution — maps ImportRef → file path.
 
 Each language provides an ImportResolver strategy. The resolver receives
@@ -184,8 +185,8 @@ class JavaImportResolver(ImportResolver):
         Path("src") / "main" / "kotlin",
     ]
 
-    def __init__(self, source_roots: list[Path] = ()):
-        self._source_roots = list(source_roots)
+    def __init__(self, source_roots: list[Path] | None = None):
+        self._source_roots = list(source_roots) if source_roots is not None else []
 
     def resolve(self, ref: ImportRef, project_root: Path) -> list[ResolvedImport]:
         if ref.is_system:

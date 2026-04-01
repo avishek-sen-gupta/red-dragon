@@ -1,3 +1,4 @@
+# pyright: standard
 """Source root discovery — finds source directories in multi-module projects.
 
 Each language/build system can have its own discovery strategy. The
