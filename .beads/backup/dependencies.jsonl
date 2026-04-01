@@ -259,6 +259,7 @@
 {"created_at":"2026-03-23T19:43:54Z","created_by":"avishek-sen-gupta","depends_on_id":"red-dragon-gvu.2.2","issue_id":"red-dragon-rrpr","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-03-29T22:27:53Z","created_by":"avishek-sen-gupta","depends_on_id":"red-dragon-y7zx","issue_id":"red-dragon-rywq","metadata":"{}","type":"blocks"}
 {"created_at":"2026-04-01T01:01:12Z","created_by":"avishek-sen-gupta","depends_on_id":"red-dragon-r32l","issue_id":"red-dragon-spkr","metadata":"{}","type":"parent-child"}
+{"created_at":"2026-04-01T09:32:50Z","created_by":"avishek-sen-gupta","depends_on_id":"red-dragon-r32l","issue_id":"red-dragon-sxyc","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-03-24T01:04:52Z","created_by":"avishek-sen-gupta","depends_on_id":"red-dragon-7eq9","issue_id":"red-dragon-thw7","metadata":"{}","type":"discovered-from"}
 {"created_at":"2026-03-12T23:53:00Z","created_by":"avishek-sen-gupta","depends_on_id":"red-dragon-132","issue_id":"red-dragon-uws","metadata":"{}","type":"discovered-from"}
 {"created_at":"2026-03-29T23:01:12Z","created_by":"avishek-sen-gupta","depends_on_id":"red-dragon-y7zx","issue_id":"red-dragon-w04c","metadata":"{}","type":"blocks"}
