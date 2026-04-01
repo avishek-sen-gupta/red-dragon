@@ -1,9 +1,14 @@
 """Control flow opcode handlers: BRANCH, BRANCH_IF, RETURN, THROW, TRY_PUSH, TRY_POP,
 SET_CONTINUATION, RESUME_CONTINUATION."""
 
+# pyright: standard
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.vm.executor import HandlerContext
 
 from interpreter.instructions import (
     InstructionBase,
@@ -31,7 +36,9 @@ from interpreter import constants
 from interpreter.handlers._common import _symbolic_name
 
 
-def _handle_branch(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_branch(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, Branch)
     return ExecutionResult.success(
@@ -42,7 +49,9 @@ def _handle_branch(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionRes
     )
 
 
-def _handle_branch_if(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_branch_if(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, BranchIf)
     cond_val = _resolve_reg(vm, t.cond_reg).value
@@ -70,7 +79,9 @@ def _handle_branch_if(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
     )
 
 
-def _handle_return(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_return(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, Return_)
     if vm.current_frame.is_ctor:
@@ -88,7 +99,9 @@ def _handle_return(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionRes
     )
 
 
-def _handle_throw(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_throw(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, Throw_)
     val = _resolve_reg(vm, t.value_reg).value if t.value_reg is not None else None
@@ -108,7 +121,9 @@ def _handle_throw(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResu
     return ExecutionResult.success(StateUpdate(reasoning=f"throw {val!r} (uncaught)"))
 
 
-def _handle_try_push(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_try_push(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, TryPush)
     catch_labels: tuple[CodeLabel, ...] = t.catch_labels
@@ -126,7 +141,9 @@ def _handle_try_push(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
     )
 
 
-def _handle_try_pop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_try_pop(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, TryPop)
     vm.exception_stack.pop()
@@ -134,7 +151,7 @@ def _handle_try_pop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionRe
 
 
 def _handle_set_continuation(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """SET_CONTINUATION: operands = [name, label]. Write name → label into continuation table."""
     t = inst
@@ -150,7 +167,7 @@ def _handle_set_continuation(
 
 
 def _handle_resume_continuation(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """RESUME_CONTINUATION: operands = [name]. Branch to label if set, else fall through."""
     t = inst

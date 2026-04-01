@@ -1,10 +1,15 @@
 """Memory-related opcode handlers: LOAD_FIELD, STORE_FIELD, LOAD_INDEX, STORE_INDEX,
 LOAD_INDIRECT, STORE_INDIRECT, ADDRESS_OF, LOAD_FIELD_INDIRECT."""
 
+# pyright: standard
+
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.vm.executor import HandlerContext
 
 from interpreter.instructions import (
     InstructionBase,
@@ -45,7 +50,7 @@ from interpreter.handlers._common import _symbolic_name, _symbolic_type_hint
 logger = logging.getLogger(__name__)
 
 
-def _infer_index_kind(idx_val: Any) -> FieldKind:
+def _infer_index_kind(idx_val: str | int) -> FieldKind:
     """Determine whether an index value represents a numeric index or a named property.
 
     Numeric indices (int or string representation of a non-negative integer)
@@ -124,7 +129,9 @@ def _resolve_method_delegation_target(
     return None
 
 
-def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_address_of(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     """ADDRESS_OF var_name: promote variable to heap and return a Pointer."""
     t = inst
     assert isinstance(t, AddressOf)
@@ -190,7 +197,7 @@ def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
     vm.heap_set(
         Address(mem_addr),
         HeapObject(
-            type_hint=None,
+            type_hint=None,  # type: ignore[reportArgumentType]  # HeapObject.type_hint should accept None
             fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(current_val)},
         ),
     )
@@ -208,7 +215,7 @@ def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
 
 
 def _handle_load_indirect(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """LOAD_INDIRECT %ptr: read through a Pointer (dereference)."""
     t = inst
@@ -268,7 +275,7 @@ def _handle_load_indirect(
 def _handle_load_field_indirect(
     inst: InstructionBase,
     vm: VMState,
-    ctx: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     """LOAD_FIELD_INDIRECT %obj %name: load field whose name is in a register."""
     from interpreter.handlers.calls import _try_user_function_call
@@ -321,7 +328,7 @@ def _handle_load_field_indirect(
 
 
 def _handle_store_indirect(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """STORE_INDIRECT %ptr %val: write through a Pointer (dereference)."""
     t = inst
@@ -346,13 +353,13 @@ def _handle_store_indirect(
     logger.debug("store_indirect on non-pointer %s", obj_desc)
     return ExecutionResult.success(
         StateUpdate(
-            reasoning=f"store_indirect on {obj_desc} = {val!r} (non-pointer, no-op)",
+            reasoning=f"store_indirect on {obj_desc} = {val!r} (non-pointer, no-op)",  # type: ignore[reportUndefinedVariable]  # val undefined, should be tv.value
         )
     )
 
 
 def _handle_store_field(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     t = inst
     assert isinstance(t, StoreField)
@@ -393,7 +400,7 @@ def _handle_store_field(
 def _handle_load_field(
     inst: InstructionBase,
     vm: VMState,
-    ctx: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     from interpreter.handlers.calls import _try_user_function_call
 
@@ -474,13 +481,13 @@ def _handle_load_field(
 
 
 def _handle_store_index(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     t = inst
     assert isinstance(t, StoreIndex)
     arr_val = _resolve_reg(vm, t.arr_reg).value
     idx_val = _resolve_reg(vm, t.index_reg).value
-    tv = _resolve_reg(vm, t.value_reg)
+    tv = _resolve_reg(vm, t.value_reg)  # type: ignore[reportArgumentType]  # value_reg: Register | SpreadArguments vs str | Register
     addr = _heap_addr(arr_val)
     if addr and not vm.heap_contains(addr):
         # Materialise a synthetic heap entry for symbolic arrays so that
@@ -509,7 +516,9 @@ def _handle_store_index(
     )
 
 
-def _handle_load_index(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_load_index(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, LoadIndex)
     arr_val = _resolve_reg(vm, t.arr_reg).value

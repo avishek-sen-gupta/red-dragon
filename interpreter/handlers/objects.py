@@ -1,8 +1,13 @@
 """Object creation opcode handlers: NEW_OBJECT, NEW_ARRAY."""
 
+# pyright: standard
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.vm.executor import HandlerContext
 
 from interpreter.instructions import InstructionBase, NewObject as NewObjectInst
 from interpreter.instructions import NewArray
@@ -21,7 +26,9 @@ from interpreter import constants
 from interpreter.var_name import VarName
 
 
-def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_new_object(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, NewObjectInst)
     obj_type = (
@@ -56,7 +63,9 @@ def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
     )
 
 
-def _handle_new_array(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_new_array(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, NewArray)
     addr = f"{constants.ARR_ADDR_PREFIX}{vm.symbolic_counter}"
