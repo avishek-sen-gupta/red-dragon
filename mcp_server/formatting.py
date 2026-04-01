@@ -1,8 +1,9 @@
+# pyright: standard
 """Convert internal RedDragon types to JSON-serializable dicts for MCP tool responses."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from interpreter.interprocedural.types import (
     FieldEndpoint,
@@ -13,8 +14,13 @@ from interpreter.interprocedural.types import (
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import StateUpdate
 
+if TYPE_CHECKING:
+    from viz.panels.dataflow_graph_panel import ChainNode
 
-def format_typed_value(tv: Any) -> Any:
+
+def format_typed_value(
+    tv: Any,
+) -> Any:  # Any: display boundary — accepts any runtime value
     """Convert a TypedValue to a JSON-friendly representation."""
     if isinstance(tv, (int, float, str, bool)):
         return tv
@@ -36,7 +42,7 @@ def format_flow_endpoint(ep: FlowEndpoint) -> dict[str, str]:
     return {"value": str(ep), "type": "unknown"}
 
 
-def format_chain_node(node) -> dict:
+def format_chain_node(node: ChainNode) -> dict[str, object]:
     """Convert a ChainNode tree to nested JSON."""
     return {
         "label": node.label,
@@ -80,7 +86,9 @@ def format_state_update(update: StateUpdate) -> dict[str, Any]:
     return result
 
 
-def format_vm_state_frame(frame) -> dict[str, Any]:
+def format_vm_state_frame(
+    frame: Any,
+) -> dict[str, Any]:  # Any: StackFrame accessed via duck typing
     """Convert a StackFrame to a JSON dict."""
     return {
         "function": str(frame.function_name),
