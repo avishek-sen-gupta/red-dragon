@@ -8,6 +8,7 @@ from mcp_server.tools import (
     handle_analyze_program,
     handle_get_function_summary,
     handle_get_call_chain,
+    handle_list_opcodes,
     handle_load_program,
     handle_step,
     handle_run_to_end,
@@ -146,3 +147,100 @@ class TestGetIr:
         blocks = result["blocks"]
         assert len(blocks) >= 1
         assert any("f" in b["label"] for b in blocks)
+
+
+class TestListOpcodes:
+    def setup_method(self):
+        self.result = handle_list_opcodes()
+        self.opcodes = self.result["opcodes"]
+        self.by_name = {o["name"]: o for o in self.opcodes}
+
+    def test_returns_all_33_opcodes(self):
+        assert len(self.opcodes) == 33
+
+    def test_sorted_alphabetically(self):
+        names = [o["name"] for o in self.opcodes]
+        assert names == sorted(names)
+
+    def test_every_entry_has_required_keys(self):
+        for entry in self.opcodes:
+            assert set(entry.keys()) == {
+                "name",
+                "category",
+                "description",
+                "fields",
+                "notes",
+            }
+
+    def test_source_location_excluded_from_fields(self):
+        for entry in self.opcodes:
+            field_names = [f["name"] for f in entry["fields"]]
+            assert "source_location" not in field_names
+
+    def test_every_field_has_name_and_type(self):
+        for entry in self.opcodes:
+            for f in entry["fields"]:
+                assert "name" in f
+                assert "type" in f
+                assert isinstance(f["name"], str)
+                assert isinstance(f["type"], str)
+
+    def test_binop_fields(self):
+        binop = self.by_name["BINOP"]
+        field_names = [f["name"] for f in binop["fields"]]
+        assert "operator" in field_names
+        assert "left" in field_names
+        assert "right" in field_names
+        assert "result_reg" in field_names
+
+    def test_binop_category(self):
+        assert self.by_name["BINOP"]["category"] == "arithmetic"
+
+    def test_call_function_category(self):
+        assert self.by_name["CALL_FUNCTION"]["category"] == "calls"
+
+    def test_label_category(self):
+        assert self.by_name["LABEL"]["category"] == "control_flow"
+
+    def test_new_object_category(self):
+        assert self.by_name["NEW_OBJECT"]["category"] == "heap"
+
+    def test_alloc_region_category(self):
+        assert self.by_name["ALLOC_REGION"]["category"] == "memory"
+
+    def test_set_continuation_category(self):
+        assert self.by_name["SET_CONTINUATION"]["category"] == "continuations"
+
+    def test_const_category(self):
+        assert self.by_name["CONST"]["category"] == "variables"
+
+    def test_descriptions_are_non_empty_strings(self):
+        for entry in self.opcodes:
+            assert isinstance(entry["description"], str)
+            assert len(entry["description"]) > 10
+
+    def test_notes_are_non_empty_strings(self):
+        for entry in self.opcodes:
+            assert isinstance(entry["notes"], str)
+            assert len(entry["notes"]) > 20
+
+    def test_label_has_no_opcode_specific_fields(self):
+        # LABEL only has base fields: result_reg, label, branch_targets
+        label = self.by_name["LABEL"]
+        field_names = [f["name"] for f in label["fields"]]
+        assert set(field_names) == {"result_reg", "label", "branch_targets"}
+
+    def test_try_push_has_exception_fields(self):
+        tp = self.by_name["TRY_PUSH"]
+        field_names = [f["name"] for f in tp["fields"]]
+        assert "catch_labels" in field_names
+        assert "finally_label" in field_names
+        assert "end_label" in field_names
+
+    def test_fields_and_indices_category(self):
+        assert self.by_name["LOAD_FIELD"]["category"] == "fields_and_indices"
+
+    def test_binop_operator_type_string(self):
+        binop = self.by_name["BINOP"]
+        op_field = next(f for f in binop["fields"] if f["name"] == "operator")
+        assert "BinopKind" in op_field["type"]

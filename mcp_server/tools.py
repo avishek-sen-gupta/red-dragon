@@ -6,13 +6,15 @@ The server module registers these as MCP tools.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
-from typing import Any
+import re
+from typing import Any, get_type_hints
 
 from interpreter.cfg import build_cfg
+from interpreter.instructions import _TO_TYPED, InstructionBase
 from interpreter.cfg_types import CFG
 from interpreter.constants import Language
-from interpreter.instructions import InstructionBase
 from interpreter.frontend import get_frontend
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.summaries import extract_sub_cfg
@@ -426,3 +428,257 @@ def handle_load_project(
     except Exception as e:
         logger.exception("handle_load_project failed")
         return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Opcode catalogue
+# ---------------------------------------------------------------------------
+
+
+def _type_str(t: object) -> str:
+    """Return a human-readable type name for MCP consumers."""
+    if isinstance(t, type):
+        return t.__name__
+    # Strip module prefixes from generic alias strings (e.g. interpreter.ir.CodeLabel -> CodeLabel)
+    return re.sub(r"[\w\.]*\.(\w+)", r"\1", str(t))
+
+
+_OPCODE_CATEGORIES: dict[str, str] = {
+    "CONST": "variables",
+    "LOAD_VAR": "variables",
+    "DECL_VAR": "variables",
+    "STORE_VAR": "variables",
+    "SYMBOLIC": "variables",
+    "BINOP": "arithmetic",
+    "UNOP": "arithmetic",
+    "CALL_FUNCTION": "calls",
+    "CALL_METHOD": "calls",
+    "CALL_UNKNOWN": "calls",
+    "CALL_CTOR": "calls",
+    "LOAD_FIELD": "fields_and_indices",
+    "STORE_FIELD": "fields_and_indices",
+    "LOAD_FIELD_INDIRECT": "fields_and_indices",
+    "LOAD_INDEX": "fields_and_indices",
+    "STORE_INDEX": "fields_and_indices",
+    "LABEL": "control_flow",
+    "BRANCH": "control_flow",
+    "BRANCH_IF": "control_flow",
+    "RETURN": "control_flow",
+    "THROW": "control_flow",
+    "TRY_PUSH": "control_flow",
+    "TRY_POP": "control_flow",
+    "NEW_OBJECT": "heap",
+    "NEW_ARRAY": "heap",
+    "ALLOC_REGION": "memory",
+    "LOAD_REGION": "memory",
+    "WRITE_REGION": "memory",
+    "ADDRESS_OF": "memory",
+    "LOAD_INDIRECT": "memory",
+    "STORE_INDIRECT": "memory",
+    "SET_CONTINUATION": "continuations",
+    "RESUME_CONTINUATION": "continuations",
+}
+
+_OPCODE_NOTES: dict[str, str] = {
+    "CONST": (
+        "value holds a Python literal: int, float, str, bool, None, or a list for "
+        "array literals. result_reg receives the boxed value. Used for every literal "
+        "expression in every frontend."
+    ),
+    "LOAD_VAR": (
+        "Reads the variable named by name from the current frame's variable store. "
+        "If the variable is absent from the current frame, the VM walks up the scope "
+        "chain until it finds a frame that owns it. result_reg receives the value."
+    ),
+    "DECL_VAR": (
+        "Declares name in the *current* frame and assigns value_reg to it. "
+        "Deliberately shadows any outer-scope variable with the same name. "
+        "result_reg is unused (NO_REGISTER). Use STORE_VAR for subsequent assignments."
+    ),
+    "STORE_VAR": (
+        "Assigns value_reg to an already-declared variable named name. Unlike "
+        "DECL_VAR, STORE_VAR walks up the scope chain to find the nearest frame that "
+        "owns name and writes there. result_reg is unused."
+    ),
+    "SYMBOLIC": (
+        "Placeholder instruction emitted for function parameters before VM execution. "
+        "hint is a display name only and carries no runtime meaning. Any SYMBOLIC "
+        "remaining at execution time indicates an unresolved parameter value. "
+        "result_reg receives the symbolic register."
+    ),
+    "BINOP": (
+        "Applies a binary operator to registers left and right; result lands in "
+        "result_reg. operator is a BinopKind: ADD, SUB, MUL, DIV, MOD, EQ, NEQ, LT, "
+        "LTE, GT, GTE, AND, OR, BITAND, BITOR, BITXOR, SHL, SHR. Integer and float "
+        "operands are both accepted — the VM does not distinguish at the IR level. "
+        "Comparison operators produce a boolean-valued register."
+    ),
+    "UNOP": (
+        "Applies a unary operator to operand; result lands in result_reg. operator is "
+        "a UnopKind: NEG (arithmetic negation), NOT (boolean negation), BITNOT "
+        "(bitwise complement)."
+    ),
+    "CALL_FUNCTION": (
+        "Calls the function named func_name with positional arguments in args. Each "
+        "element of args is either a Register (normal argument) or a SpreadArguments "
+        "wrapper (for *args splat). result_reg receives the return value; NO_REGISTER "
+        "if the call is for side effects only. The callee must be resolvable in the "
+        "function registry."
+    ),
+    "CALL_METHOD": (
+        "Dispatches a method call dynamically. obj_reg holds the receiver object; "
+        "method_name is the FieldName of the method. The VM looks up method_name on "
+        "the object's class at runtime. result_reg receives the return value. Used for "
+        "all object method calls across all languages."
+    ),
+    "CALL_UNKNOWN": (
+        "Calls a first-class callable value stored in target_reg. Used for closures, "
+        "higher-order functions, callbacks, and any call where the callee cannot be "
+        "resolved at IR-lowering time. result_reg receives the return value."
+    ),
+    "CALL_CTOR": (
+        "Allocates a new object of type type_hint and invokes its constructor. "
+        "Distinct from CALL_FUNCTION because constructor semantics require the VM to "
+        "initialise 'self' before dispatch. result_reg receives the newly constructed "
+        "object. type_hint is the TypeExpr describing the class."
+    ),
+    "LOAD_FIELD": (
+        "Reads field field_name from the object in obj_reg. result_reg receives the "
+        "value. Raises a runtime error if the field does not exist on the object. "
+        "Used for attribute access (obj.field) in all object-oriented frontends."
+    ),
+    "STORE_FIELD": (
+        "Writes value_reg into field field_name on the object in obj_reg. Creates the "
+        "field if it does not already exist (duck-typed object model). result_reg is "
+        "unused. Used for attribute assignment (obj.field = value)."
+    ),
+    "LOAD_FIELD_INDIRECT": (
+        "Like LOAD_FIELD but the field name is itself a runtime value in name_reg "
+        "rather than a compile-time constant. Used for computed property access such "
+        "as obj[expr] in property-bag patterns and dynamic dispatch tables."
+    ),
+    "LOAD_INDEX": (
+        "Reads arr_reg[index_reg]. Supports lists, dicts, strings, and any object "
+        "whose runtime type provides __getitem__ semantics in the VM's builtin layer. "
+        "result_reg receives the element."
+    ),
+    "STORE_INDEX": (
+        "Writes value_reg to arr_reg[index_reg]. Supports lists and dicts. "
+        "result_reg is unused. Used for indexed assignment (arr[i] = v)."
+    ),
+    "LOAD_INDIRECT": (
+        "Dereferences the Pointer value in ptr_reg and places the pointed-to value "
+        "in result_reg. Used for C- and Pascal-style pointer semantics. The pointer "
+        "must have been created by ADDRESS_OF."
+    ),
+    "STORE_INDIRECT": (
+        "Writes value_reg to the memory address held in the Pointer in ptr_reg. "
+        "result_reg is unused. Paired with ADDRESS_OF and LOAD_INDIRECT for pointer "
+        "read-modify-write patterns."
+    ),
+    "ADDRESS_OF": (
+        "Takes the address of the variable named var_name and stores a Pointer object "
+        "in result_reg. The Pointer can later be passed to LOAD_INDIRECT or "
+        "STORE_INDIRECT. Used to emulate pass-by-reference and C pointer semantics."
+    ),
+    "NEW_OBJECT": (
+        "Allocates an empty heap object (HeapObject) tagged with type_hint. "
+        "result_reg receives the object. Does NOT call a constructor — use CALL_CTOR "
+        "for construction with initialisation. type_hint is a TypeExpr and may be "
+        "UNKNOWN for dynamically-typed languages."
+    ),
+    "NEW_ARRAY": (
+        "Allocates a new list of size_reg elements (initialised to None). type_hint "
+        "is optional and may be UNKNOWN. result_reg receives the list. Used for "
+        "fixed-size array allocation in statically-typed frontends; dynamically-typed "
+        "frontends typically emit CONST with a list literal instead."
+    ),
+    "LABEL": (
+        "Pseudo-instruction marking a basic block entry point. label holds the "
+        "CodeLabel that other instructions branch to. Carries no runtime action — the "
+        "VM uses LABEL instructions only during CFG construction. Every basic block "
+        "begins with exactly one LABEL."
+    ),
+    "BRANCH": (
+        "Unconditional jump to the target in label. Control never falls through to "
+        "the next instruction in the flat IR list. Used to close a basic block that "
+        "ends with a jump (loop back-edge, else/end-if merge)."
+    ),
+    "BRANCH_IF": (
+        "Conditional branch on cond_reg. Jumps to branch_targets[0] if cond_reg is "
+        "truthy, otherwise to branch_targets[1]. Exactly two branch targets are "
+        "required. Used for if/else, while, and ternary expressions."
+    ),
+    "RETURN": (
+        "Returns value_reg to the caller and pops the current stack frame. If "
+        "value_reg is NO_REGISTER, the function returns None implicitly. Every "
+        "function must have at least one RETURN on every exit path."
+    ),
+    "THROW": (
+        "Raises value_reg as an exception and begins stack unwinding. The VM searches "
+        "up the call stack for a matching TRY_PUSH handler. If none is found, the "
+        "program terminates with an unhandled exception."
+    ),
+    "TRY_PUSH": (
+        "Pushes an exception handler onto the VM's exception stack. catch_labels is "
+        "a tuple of CodeLabel, one per catch clause in source order. finally_label "
+        "is the finally block entry point (NO_LABEL if the try has no finally). "
+        "end_label marks the end of the entire try/catch/finally construct. Must be "
+        "paired with TRY_POP on the non-exception exit path."
+    ),
+    "TRY_POP": (
+        "Pops the top exception handler from the VM's exception stack. Emitted at "
+        "the end of a try block on the normal (non-exception) execution path. Every "
+        "TRY_PUSH must have exactly one corresponding TRY_POP."
+    ),
+    "ALLOC_REGION": (
+        "Allocates a raw memory region of size_reg bytes and returns an opaque region "
+        "handle in result_reg. Used to emulate fixed-size structs (Pascal records, C "
+        "structs). The region is accessed via LOAD_REGION and WRITE_REGION using byte "
+        "offsets."
+    ),
+    "LOAD_REGION": (
+        "Reads length bytes from the region in region_reg starting at byte offset "
+        "offset_reg. result_reg receives the extracted value. length is an integer "
+        "literal (not a register) representing the field width in bytes."
+    ),
+    "WRITE_REGION": (
+        "Writes value_reg into region_reg at byte offset offset_reg for length bytes. "
+        "length is an integer literal. result_reg is unused. Paired with ALLOC_REGION "
+        "and LOAD_REGION for struct field access."
+    ),
+    "SET_CONTINUATION": (
+        "Registers a named continuation re-entry point. name is a ContinuationName; "
+        "target_label is the CodeLabel the VM will jump to when the continuation is "
+        "resumed. Used to implement yield, coroutines, generators, and iterator "
+        "protocols across multiple languages."
+    ),
+    "RESUME_CONTINUATION": (
+        "Transfers control to the continuation registered under name. Paired with "
+        "SET_CONTINUATION. Used to resume a suspended generator or coroutine from the "
+        "point where SET_CONTINUATION was executed."
+    ),
+}
+
+
+def handle_list_opcodes() -> dict[str, Any]:
+    """Return all IR opcodes with descriptions, categories, fields, and notes."""
+    entries = []
+    for opcode, builder in _TO_TYPED.items():
+        hints = get_type_hints(builder)
+        cls = hints["return"]
+        fields = [
+            {"name": f.name, "type": _type_str(get_type_hints(cls).get(f.name, f.type))}
+            for f in dataclasses.fields(cls)
+            if f.name != "source_location"
+        ]
+        entries.append(
+            {
+                "name": opcode.value,
+                "category": _OPCODE_CATEGORIES[opcode.value],
+                "description": (cls.__doc__ or "").strip(),
+                "fields": fields,
+                "notes": _OPCODE_NOTES[opcode.value],
+            }
+        )
+    return {"opcodes": sorted(entries, key=lambda e: e["name"])}
