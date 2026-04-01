@@ -1,6 +1,9 @@
+# pyright: standard
 """Ruby-specific assignment lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -14,7 +17,9 @@ from interpreter.frontends.ruby.expressions import lower_ruby_store_target
 from interpreter.frontends.ruby.node_types import RubyNodeType
 
 
-def lower_ruby_return(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_return(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby return statement."""
     children = [
         c
@@ -31,15 +36,19 @@ def lower_ruby_return(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Return_(value_reg=val_reg), node=node)
 
 
-def lower_ruby_assignment(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby assignment using Ruby-specific store target."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_ruby_store_target(ctx, left, val_reg, node)
+    lower_ruby_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
 
 
-def lower_ruby_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_augmented_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby operator_assignment using Ruby-specific store target."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -57,4 +66,4 @@ def lower_ruby_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
         ),
         node=node,
     )
-    lower_ruby_store_target(ctx, left, result, node)
+    lower_ruby_store_target(ctx, left, result, node)  # type: ignore[misc]  # see red-dragon-hzmm

@@ -1,6 +1,9 @@
+# pyright: standard
 """C#-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -41,20 +44,24 @@ from interpreter.frontends.symbol_table import (
 from interpreter.class_name import ClassName
 
 
-def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_local_decl_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower local_declaration_statement -> variable_declaration -> variable_declarator."""
     for child in node.children:
         if child.type == NT.VARIABLE_DECLARATION:
             lower_variable_declaration(ctx, child)
 
 
-def lower_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_variable_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a variable_declaration node with one or more declarators."""
     type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
     is_ref = any(child.type == NT.REF_TYPE for child in node.children)
     for child in node.children:
         if child.type == NT.VARIABLE_DECLARATOR:
-            _lower_csharp_declarator(ctx, child, type_hint=type_hint, is_ref=is_ref)
+            _lower_csharp_declarator(ctx, child, type_hint=type_hint, is_ref=is_ref)  # type: ignore[arg-type]  # see red-dragon-hzmm
 
 
 def _lower_csharp_declarator(
@@ -88,7 +95,7 @@ def _lower_csharp_declarator(
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
-    ctx.seed_var_type(var_name, type_hint)
+    ctx.seed_var_type(var_name, type_hint)  # type: ignore[arg-type]  # see red-dragon-hzmm
     if is_ref:
         ctx.byref_params.add(var_name)
 
@@ -104,7 +111,9 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.seed_var_type("this", class_type)
 
 
-def _has_static_modifier(ctx: TreeSitterEmitContext, node) -> bool:
+def _has_static_modifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> bool:  # Any: tree-sitter node — untyped at Python boundary
     """Return True if *node* has a ``static`` modifier."""
     return any(
         c.type == NT.MODIFIER and ctx.node_text(c) == "static" for c in node.children
@@ -147,7 +156,7 @@ def lower_method_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -193,11 +202,13 @@ def lower_constructor_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def _lower_constructor_initializer(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_constructor_initializer(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``: this(args)`` as CALL_METHOD on this for __init__."""
     target = next(
         (c for c in node.children if c.type == NT.THIS),
@@ -235,7 +246,9 @@ _CLASS_BODY_SKIP_TYPES = frozenset(
 )
 
 
-def _lower_class_body(ctx: TreeSitterEmitContext, node) -> list:
+def _lower_class_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list:  # Any: tree-sitter node — untyped at Python boundary
     """Collect class-body children for top-level hoisting. Methods first, then rest."""
     methods: list = []
     rest: list = []
@@ -263,7 +276,9 @@ def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
         ctx.lower_stmt(child)
 
 
-def _extract_csharp_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_csharp_parents(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parent class/interface names from a C# class_declaration node."""
     base_list = next((c for c in node.children if c.type == NT.BASE_LIST), None)
     if base_list is None:
@@ -275,7 +290,9 @@ def _extract_csharp_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
-def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_class_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
@@ -292,7 +309,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -323,7 +340,9 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx._current_class_name = saved_class
 
 
-def _collect_csharp_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
+def _collect_csharp_field_inits(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[FieldInit]:  # Any: tree-sitter node — untyped at Python boundary
     """Collect (field_name, value_node) pairs from a C# field_declaration.
 
     Does NOT emit any IR — callers pass the result to
@@ -349,14 +368,18 @@ def _collect_csharp_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldI
     return inits
 
 
-def lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_field_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a field declaration inside a class body."""
     for child in node.children:
         if child.type == NT.VARIABLE_DECLARATION:
             lower_variable_declaration(ctx, child)
 
 
-def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_property_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a property declaration as STORE_FIELD on this."""
     name_node = node.child_by_field_name("name")
     if not name_node:
@@ -396,7 +419,9 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.lower_block(body_block)
 
 
-def _find_property_initializer(ctx: TreeSitterEmitContext, node) -> object | None:
+def _find_property_initializer(
+    ctx: TreeSitterEmitContext, node: Any
+) -> object | None:  # Any: tree-sitter node — untyped at Python boundary
     """Find the initializer expression after ``=`` in a property_declaration."""
     found_eq = False
     for child in node.children:
@@ -408,7 +433,9 @@ def _find_property_initializer(ctx: TreeSitterEmitContext, node) -> object | Non
     return None
 
 
-def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_interface_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower interface_declaration as CLASS block with method definitions.
 
     Mirrors lower_class_def so that interface method return types are seeded
@@ -429,7 +456,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -439,7 +466,9 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx._current_class_name = saved_class
 
 
-def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_enum_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower enum_declaration as NEW_OBJECT with STORE_INDEX per member."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = next(
@@ -473,14 +502,18 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=obj_reg))
 
 
-def lower_namespace(ctx: TreeSitterEmitContext, node) -> None:
+def lower_namespace(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower namespace as a block -- descend into its body."""
     body_node = node.child_by_field_name("body")
     if body_node:
         ctx.lower_block(body_node)
 
 
-def lower_file_scoped_namespace(ctx: TreeSitterEmitContext, node) -> None:
+def lower_file_scoped_namespace(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `namespace Foo;` — lower all child declarations (no body block)."""
     for child in node.children:
         if (
@@ -491,7 +524,9 @@ def lower_file_scoped_namespace(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_local_function_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower local functions inside method bodies -- like method_declaration."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     if name_node is None:
@@ -527,18 +562,22 @@ def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_event_field_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_event_field_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower event_field_declaration by delegating to variable_declaration child."""
     for child in node.children:
         if child.type == NT.VARIABLE_DECLARATION:
             lower_variable_declaration(ctx, child)
 
 
-def lower_event_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_event_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower event_declaration: extract name, CONST + STORE_VAR."""
     name_node = node.child_by_field_name("name")
     if not name_node:
@@ -549,7 +588,9 @@ def lower_event_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(DeclVar(name=VarName(event_name), value_reg=val_reg), node=node)
 
 
-def lower_delegate_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_delegate_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `public delegate void Notify(string message);` as function stub."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node) if name_node else "__delegate"
@@ -565,7 +606,7 @@ def lower_delegate_declaration(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -635,7 +676,7 @@ def _extract_csharp_class_parents(node) -> tuple[str, ...]:
     base_list = next((c for c in node.children if c.type == NT.BASE_LIST), None)
     if base_list is None:
         return ()
-    return tuple(
+    return tuple(  # type: ignore[return-value]  # see red-dragon-hzmm
         ClassName(c.text.decode())
         for c in base_list.children
         if c.type == NT.IDENTIFIER
@@ -657,7 +698,7 @@ def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
             fields={},
             methods={},
             constants={},
-            parents=parents,
+            parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
         )
 
     fields: dict[FieldName, FieldInfo] = {}
@@ -686,7 +727,7 @@ def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
         fields=fields,
         methods=methods,
         constants=constants_map,
-        parents=parents,
+        parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
     )
 
 

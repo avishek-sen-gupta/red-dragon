@@ -1,6 +1,9 @@
+# pyright: standard
 """C++-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -35,7 +38,9 @@ from interpreter.types.type_expr import ScalarType
 from interpreter.register import Register
 
 
-def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_new_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower new T(args) as CALL_CTOR."""
     type_node = node.child_by_field_name("type")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -47,7 +52,7 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
             result_reg=reg,
             func_name=FuncName(type_name),
             type_hint=scalar(type_name),
-            args=tuple(arg_regs),
+            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
@@ -55,7 +60,9 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_delete_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_delete_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower delete ptr as CALL_FUNCTION delete(ptr_reg)."""
     named_children = [c for c in node.children if c.is_named]
     operand_node = named_children[0] if named_children else None
@@ -68,7 +75,9 @@ def lower_delete_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_lambda(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower lambda_expression like an arrow function."""
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
     params_node = node.child_by_field_name("declarator")
@@ -102,11 +111,13 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return func_reg
 
 
-def lower_qualified_id(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_qualified_id(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower qualified_identifier (e.g., std::cout) as LOAD_VAR."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(ctx.node_text(node))), node=node)
@@ -131,7 +142,9 @@ def _extract_scoped_parts(node) -> tuple[str, str] | None:
     return ns_node.text.decode("utf-8"), member_node.text.decode("utf-8")
 
 
-def lower_cpp_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_cpp_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower call_expression, promoting Class::method(args) to CALL_METHOD.
 
     For ``Util::square(5)``, tree-sitter produces::
@@ -172,7 +185,7 @@ def lower_cpp_call(ctx: TreeSitterEmitContext, node) -> Register:
                     result_reg=result_reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(arg_regs),
+                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=node,
             )
@@ -181,7 +194,9 @@ def lower_cpp_call(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_call_impl(ctx, func_node, args_node, node)
 
 
-def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_throw_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower throw as an expression (C++ throw can appear in expressions)."""
     children = [
         c for c in node.children if c.type != CppNodeType.THROW_KEYWORD and c.is_named
@@ -197,7 +212,9 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return val_reg
 
 
-def lower_cpp_cast(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_cpp_cast(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower static_cast<T>(expr) etc. — pass through the value."""
     value_node = node.child_by_field_name("value")
     if value_node:
@@ -208,7 +225,9 @@ def lower_cpp_cast(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def lower_condition_clause(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_condition_clause(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Unwrap condition_clause to reach the inner expression.
 
     Skips init_statement children (handled by the enclosing if/while lowerer).
@@ -223,7 +242,9 @@ def lower_condition_clause(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def lower_cpp_subscript_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_cpp_subscript_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower subscript_expression — C++ wraps index in subscript_argument_list."""
     arr_node = node.child_by_field_name("argument")
     idx_node = node.child_by_field_name("index")
@@ -253,12 +274,14 @@ def lower_cpp_subscript_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_cpp_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_cpp_assignment_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower assignment_expression with C++ subscript support."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_cpp_store_target(ctx, left, val_reg, node)
+    lower_cpp_store_target(ctx, left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
     return val_reg
 
 
@@ -293,7 +316,7 @@ def lower_cpp_store_target(
         else:
             idx_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+            StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
     else:

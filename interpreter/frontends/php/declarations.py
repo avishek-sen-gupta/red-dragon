@@ -1,6 +1,9 @@
+# pyright: standard
 """PHP-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -124,7 +127,9 @@ def _has_static_modifier(node) -> bool:
     return any(c.type == PHPNodeType.STATIC_MODIFIER for c in node.children)
 
 
-def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_func_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function definition."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
@@ -153,11 +158,13 @@ def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_method_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower method declaration inside a class."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
@@ -189,11 +196,13 @@ def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def _lower_php_class_body(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_php_class_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower declaration_list body of a PHP class."""
     for child in node.children:
         if child.type == PHPNodeType.METHOD_DECLARATION:
@@ -211,7 +220,9 @@ def _lower_php_class_body(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def _extract_php_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_php_parents(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parent class name from a PHP class declaration."""
     base_clause = next(
         (c for c in node.children if c.type == PHPNodeType.BASE_CLAUSE), None
@@ -255,11 +266,13 @@ def _emit_php_synthetic_constructor(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_class(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower class declaration."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -321,11 +334,13 @@ def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
-def lower_php_interface(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_interface(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower interface_declaration like a class: BRANCH, LABEL, body, end."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -343,11 +358,13 @@ def lower_php_interface(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
 
-def lower_php_trait(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_trait(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower trait_declaration like a class: BRANCH, LABEL, body, end."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -365,11 +382,13 @@ def lower_php_trait(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(trait_name), value_reg=cls_reg))
 
 
-def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_function_static(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower static $x = val; declarations inside functions."""
     for child in node.children:
         if child.type == PHPNodeType.STATIC_VARIABLE_DECLARATION:
@@ -392,7 +411,9 @@ def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
                 )
 
 
-def lower_php_enum(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_enum(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower enum_declaration like a class: BRANCH, LABEL, body, end."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -410,7 +431,7 @@ def lower_php_enum(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(enum_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(enum_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=cls_reg))
 
 
@@ -446,11 +467,13 @@ def _lower_php_constructor_with_field_inits(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def _collect_php_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
+def _collect_php_field_inits(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[FieldInit]:  # Any: tree-sitter node — untyped at Python boundary
     """Collect (field_name, value_node) pairs from a PHP property_declaration.
 
     Does NOT emit any IR — callers pass the result to
@@ -478,7 +501,9 @@ def _collect_php_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit
     return inits
 
 
-def lower_php_property_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_property_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower property declarations inside classes, e.g. public $x = 10;
 
     Emits LOAD_VAR $this + STORE_FIELD for each property element.
@@ -521,7 +546,9 @@ def lower_php_property_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 )
 
 
-def lower_php_use_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_use_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``use SomeTrait;`` inside classes -- no-op / SYMBOLIC."""
     named = [c for c in node.children if c.is_named]
     trait_names = [ctx.node_text(c) for c in named]
@@ -532,12 +559,16 @@ def lower_php_use_declaration(ctx: TreeSitterEmitContext, node) -> None:
         )
 
 
-def lower_php_namespace_use_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_namespace_use_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``use Some\\Namespace;`` -- no-op."""
     pass
 
 
-def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_enum_case(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower enum case inside an enum_declaration as STORE_FIELD."""
     name_node = node.child_by_field_name("name")
     value_node = next(
@@ -561,7 +592,9 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
         )
 
 
-def lower_php_const_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_const_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``const FOO = 1, BAR = 2;`` -- STORE_VAR for each const_element."""
     for child in node.children:
         if child.type == PHPNodeType.CONST_ELEMENT:
@@ -575,7 +608,9 @@ def lower_php_const_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 )
 
 
-def lower_php_global_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_global_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``global $config;`` -- STORE_VAR for each variable."""
     for child in node.children:
         if child.type == PHPNodeType.VARIABLE_NAME:
@@ -590,7 +625,7 @@ def lower_php_global_declaration(ctx: TreeSitterEmitContext, node) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":
+def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract a FunctionInfo from a PHP method_declaration node."""
     from interpreter.frontends.symbol_table import FunctionInfo
 
@@ -612,7 +647,7 @@ def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":
     return name, FunctionInfo(name=FuncName(name), params=params, return_type="")
 
 
-def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":
+def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract a ClassInfo from a PHP class_declaration node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -705,7 +740,7 @@ def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_php_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_php_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:  # type: ignore[name-defined]  # see red-dragon-545a
     """Recursively walk the AST and collect all class_declaration nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -718,7 +753,7 @@ def _collect_php_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> Non
         _collect_php_classes(child, accumulator)
 
 
-def extract_php_symbols(root) -> "SymbolTable":
+def extract_php_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
     """Walk the PHP AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

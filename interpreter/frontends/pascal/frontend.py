@@ -1,10 +1,13 @@
+# pyright: standard
 """PascalFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.pascal import expressions as pascal_expr
@@ -51,18 +54,20 @@ class PascalFrontend(BaseFrontend):
 
     def _emit_prelude(self, ctx) -> None:
         """Initialize Pascal-specific mutable state on the context."""
-        ctx._pascal_current_function_name = ""
-        ctx._pascal_record_types = set()
-        ctx._pascal_var_types = {}
+        ctx._pascal_current_function_name = ""  # type: ignore[attr-defined]  # see red-dragon-zznx
+        ctx._pascal_record_types = set()  # type: ignore[attr-defined]  # see red-dragon-zznx
+        ctx._pascal_var_types = {}  # type: ignore[attr-defined]  # see red-dragon-zznx
 
     def _build_context(self, source: bytes) -> TreeSitterEmitContext:
-        ctx = super()._build_context(source)
+        ctx = super()._build_context(source)  # type: ignore[attr-defined]  # see red-dragon-zznx
         # Pascal-specific mutable state stored on the context
-        ctx._pascal_current_function_name = ""
-        ctx._pascal_record_types = set()
+        ctx._pascal_current_function_name = ""  # type: ignore[attr-defined]  # see red-dragon-zznx
+        ctx._pascal_record_types = set()  # type: ignore[attr-defined]  # see red-dragon-zznx
         return ctx
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             PascalNodeType.IDENTIFIER: common_expr.lower_identifier,
             PascalNodeType.LITERAL_NUMBER: common_expr.lower_const_literal,
@@ -82,7 +87,9 @@ class PascalFrontend(BaseFrontend):
             PascalNodeType.TYPEREF: common_expr.lower_const_literal,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             PascalNodeType.ROOT: pascal_cf.lower_pascal_root,
             PascalNodeType.PROGRAM: pascal_cf.lower_pascal_program,
@@ -117,8 +124,7 @@ class PascalFrontend(BaseFrontend):
             PascalNodeType.DECL_LABELS: pascal_cf.lower_pascal_noop,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.pascal.declarations import extract_pascal_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_pascal_symbols(root)

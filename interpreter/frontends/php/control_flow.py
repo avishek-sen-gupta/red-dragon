@@ -1,6 +1,9 @@
+# pyright: standard
 """PHP-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -30,7 +33,9 @@ from interpreter.frontends.php.node_types import PHPNodeType
 logger = logging.getLogger(__name__)
 
 
-def lower_php_compound(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_compound(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower compound_statement (block with braces)."""
     for child in node.children:
         if (
@@ -40,7 +45,9 @@ def lower_php_compound(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_php_return(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_return(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower return statement with PHP-specific filtering."""
     children = [c for c in node.children if c.type != PHPNodeType.RETURN and c.is_named]
     if children:
@@ -53,7 +60,9 @@ def lower_php_return(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Return_(value_reg=val_reg), node=node)
 
 
-def lower_php_echo(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_echo(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower echo statement as CALL_FUNCTION('echo', args)."""
     children = [c for c in node.children if c.type != PHPNodeType.ECHO and c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in children]
@@ -64,7 +73,9 @@ def lower_php_echo(ctx: TreeSitterEmitContext, node) -> None:
     )
 
 
-def lower_php_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower PHP if statement with else_clause / else_if_clause support."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name("body")
@@ -98,15 +109,17 @@ def lower_php_if(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Branch(label=end_label))
 
     if else_clauses:
-        ctx.emit_inst(Label_(label=false_label))
+        ctx.emit_inst(Label_(label=false_label))  # type: ignore[misc]  # see red-dragon-hzmm
         for clause in else_clauses:
-            _lower_php_else_clause(ctx, clause, end_label)
+            _lower_php_else_clause(ctx, clause, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
 
 
-def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
+def _lower_php_else_clause(
+    ctx: TreeSitterEmitContext, node: Any, end_label: str
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower else_if_clause or else_clause."""
     if node.type == PHPNodeType.ELSE_IF_CLAUSE:
         cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
@@ -123,7 +136,7 @@ def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> 
         ctx.emit_inst(Label_(label=true_label))
         if body_node:
             lower_php_compound(ctx, body_node)
-        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
 
         ctx.emit_inst(Label_(label=false_label))
     elif node.type == PHPNodeType.ELSE_CLAUSE:
@@ -143,7 +156,9 @@ def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> 
                     ctx.lower_stmt(child)
 
 
-def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_foreach(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower foreach ($arr as $v) or foreach ($arr as $k => $v) as index-based loop."""
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
@@ -200,7 +215,7 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(DeclVar(name=VarName(value_var), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("foreach_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -220,12 +235,16 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_php_throw(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_throw(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower throw statement."""
     lower_raise_or_throw(ctx, node, keyword="throw")
 
 
-def lower_php_try(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_try(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower try/catch/finally."""
     body_node = node.child_by_field_name("body")
     catch_clauses: list[dict] = []
@@ -267,7 +286,9 @@ def lower_php_try(ctx: TreeSitterEmitContext, node) -> None:
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
 
 
-def lower_php_switch(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_switch(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower switch(expr) { case ... } as an if/else chain."""
     cond_node = node.child_by_field_name("condition")
     body_node = node.child_by_field_name("body")
@@ -275,7 +296,7 @@ def lower_php_switch(ctx: TreeSitterEmitContext, node) -> None:
     subject_reg = ctx.lower_expr(cond_node) if cond_node else ctx.fresh_reg()
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)
+    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     cases = (
         [
@@ -323,7 +344,9 @@ def lower_php_switch(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_php_do(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_do(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower do { body } while (condition);"""
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
@@ -333,7 +356,7 @@ def lower_php_do(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)
+    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -351,7 +374,9 @@ def lower_php_do(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_php_namespace(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_namespace(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower namespace definition: just lower the body compound_statement."""
     body_node = next(
         (c for c in node.children if c.type == PHPNodeType.COMPOUND_STATEMENT), None
@@ -360,7 +385,9 @@ def lower_php_namespace(ctx: TreeSitterEmitContext, node) -> None:
         lower_php_compound(ctx, body_node)
 
 
-def lower_php_named_label(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_named_label(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower name: as LABEL user_{name}."""
     name_node = node.child_by_field_name("name")
     if not name_node:
@@ -374,7 +401,9 @@ def lower_php_named_label(ctx: TreeSitterEmitContext, node) -> None:
         )
 
 
-def lower_php_goto(ctx: TreeSitterEmitContext, node) -> None:
+def lower_php_goto(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower goto name; as BRANCH user_{name}."""
     name_node = node.child_by_field_name("label")
     if not name_node:

@@ -1,11 +1,14 @@
+# pyright: standard
 """JavaScriptFrontend — thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -32,8 +35,10 @@ class JavaScriptFrontend(BaseFrontend):
             for_update_field="increment",
         )
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
-        return {
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
+        return {  # type: ignore[return-value]  # see red-dragon-rke4
             JSN.IDENTIFIER: common_expr.lower_identifier,
             JSN.NUMBER: common_expr.lower_const_literal,
             JSN.STRING: common_expr.lower_const_literal,
@@ -78,7 +83,9 @@ class JavaScriptFrontend(BaseFrontend):
             JSN.CLASS: js_decl.lower_js_class_expression,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             JSN.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             JSN.LEXICAL_DECLARATION: js_decl.lower_js_var_declaration,
@@ -105,10 +112,9 @@ class JavaScriptFrontend(BaseFrontend):
             JSN.WITH_STATEMENT: js_cf.lower_with_statement,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.javascript.declarations import (
             extract_javascript_symbols,
         )
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_javascript_symbols(root)

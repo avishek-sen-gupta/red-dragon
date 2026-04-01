@@ -1,6 +1,9 @@
+# pyright: standard
 """Java-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -32,7 +35,9 @@ from interpreter.frontends.common.declarations import (
 from interpreter.types.type_expr import AnnotationType, EnumType, ScalarType, scalar
 
 
-def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_local_var_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
     for child in node.children:
         if child.type == JavaNodeType.VARIABLE_DECLARATOR:
@@ -110,11 +115,13 @@ def lower_method_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_method_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_method_decl_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Statement-dispatch wrapper: method_declaration as statement."""
     lower_method_decl(ctx, node)
 
@@ -131,7 +138,9 @@ _CLASS_BODY_SKIP_TYPES = frozenset(
 )
 
 
-def _lower_class_body(ctx: TreeSitterEmitContext, node) -> list:
+def _lower_class_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list:  # Any: tree-sitter node — untyped at Python boundary
     """Collect class-body children for top-level hoisting. Methods first, then rest."""
     methods: list = []
     rest: list = []
@@ -159,7 +168,9 @@ def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
         ctx.lower_stmt(child)
 
 
-def _extract_java_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_java_parents(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parent class and interface names from a Java class_declaration node."""
     parents: list[str] = []
     superclass_node = next(
@@ -195,7 +206,9 @@ def _extract_java_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     return parents
 
 
-def _extract_java_interfaces(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_java_interfaces(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract interface names from super_interfaces clause."""
     interfaces_node = next(
         (c for c in node.children if c.type == JavaNodeType.SUPER_INTERFACES), None
@@ -215,7 +228,9 @@ def _extract_java_interfaces(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
-def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_class_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
@@ -233,7 +248,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -267,7 +282,9 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx._current_class_name = saved_class
 
 
-def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_record_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower record_declaration with primary constructor from record header params.
 
     Java records automatically generate an ``__init__`` from their header
@@ -291,7 +308,7 @@ def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(record_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(record_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(record_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -338,7 +355,9 @@ def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx._current_class_name = saved_class
 
 
-def _extract_record_params(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_record_params(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parameter names from a record header: record Foo(int x, int y) → ["x", "y"]."""
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node is None:
@@ -397,7 +416,7 @@ def _emit_record_init(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -432,16 +451,20 @@ def _lower_constructor_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_field_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a (static) field declaration as STORE_VAR — used for static fields."""
     lower_local_var_decl(ctx, node)
 
 
-def _collect_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
+def _collect_field_inits(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[FieldInit]:  # Any: tree-sitter node — untyped at Python boundary
     """Collect (field_name, value_node) pairs from a field_declaration.
 
     Does NOT emit any IR — callers must pass the result to
@@ -461,7 +484,9 @@ def _collect_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
     return inits
 
 
-def _lower_static_initializer(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_static_initializer(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower static { ... } — find the block child and lower it."""
     block_node = next(
         (c for c in node.children if c.type == JavaNodeType.BLOCK),
@@ -471,7 +496,9 @@ def _lower_static_initializer(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(block_node)
 
 
-def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_interface_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower interface_declaration as CLASS block with method definitions.
 
     Mirrors lower_class_def so that interface method return types are seeded
@@ -492,7 +519,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -502,7 +529,9 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx._current_class_name = saved_class
 
 
-def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_enum_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower enum_declaration as NEW_OBJECT with STORE_INDEX per member."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -533,7 +562,9 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=obj_reg))
 
 
-def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_annotation_type_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower @interface Name { ... } like interface declaration."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if not name_node:
@@ -660,7 +691,7 @@ def _extract_java_class_parents(node) -> tuple[str, ...]:
     )
     if type_id is None:
         return ()
-    return (ClassName(type_id.text.decode()),)
+    return (ClassName(type_id.text.decode()),)  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
 def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
@@ -681,7 +712,7 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
             fields={},
             methods={},
             constants={},
-            parents=parents,
+            parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
         )
 
     fields: dict[FieldName, FieldInfo] = {}
@@ -710,7 +741,7 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
         fields=fields,
         methods=methods,
         constants=constants_map,
-        parents=parents,
+        parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
     )
 
 

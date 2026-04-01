@@ -1,6 +1,9 @@
+# pyright: standard
 """C-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -17,7 +20,9 @@ from interpreter.instructions import (
 logger = logging.getLogger(__name__)
 
 
-def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
+def lower_do_while(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower do { body } while (cond);"""
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
@@ -27,7 +32,7 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)
+    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -45,7 +50,9 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
+def lower_switch(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower switch(expr) { case ... } as an if/else chain."""
     cond_node = node.child_by_field_name("condition")
     body_node = node.child_by_field_name("body")
@@ -53,7 +60,7 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
     subject_reg = ctx.lower_expr(cond_node)
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)
+    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     cases = (
         [c for c in body_node.children if c.type == CNodeType.CASE_STATEMENT]
@@ -103,7 +110,9 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_case_as_block(ctx: TreeSitterEmitContext, node) -> None:
+def lower_case_as_block(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Defensive handler for case_statement encountered via lower_block.
 
     In normal flow, case_statement is consumed by lower_switch which
@@ -116,7 +125,9 @@ def lower_case_as_block(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
+def lower_goto(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower goto_statement as BRANCH user_{label}."""
     label_node = next(
         (c for c in node.children if c.type == CNodeType.STATEMENT_IDENTIFIER), None
@@ -128,7 +139,9 @@ def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
         logger.warning("goto without label: %s", ctx.node_text(node)[:40])
 
 
-def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_labeled_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower labeled_statement: emit label then lower the inner statement."""
     label_node = next(
         (c for c in node.children if c.type == CNodeType.STATEMENT_IDENTIFIER), None
@@ -141,7 +154,9 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_linkage_spec(ctx: TreeSitterEmitContext, node) -> None:
+def lower_linkage_spec(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower extern 'C' { ... } — just lower the body declarations."""
     for child in node.children:
         if child.is_named and child.type != CNodeType.STRING_LITERAL:

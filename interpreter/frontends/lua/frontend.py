@@ -1,11 +1,14 @@
+# pyright: standard
 """LuaFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -28,7 +31,9 @@ class LuaFrontend(BaseFrontend):
             paren_expr_type=LuaNodeType.PARENTHESIZED_EXPRESSION,
         )
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             LuaNodeType.IDENTIFIER: common_expr.lower_identifier,
             LuaNodeType.NUMBER: common_expr.lower_const_literal,
@@ -51,7 +56,9 @@ class LuaFrontend(BaseFrontend):
             LuaNodeType.ESCAPE_SEQUENCE: common_expr.lower_const_literal,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             LuaNodeType.VARIABLE_DECLARATION: lua_decl.lower_lua_variable_declaration,
             LuaNodeType.ASSIGNMENT_STATEMENT: lua_decl.lower_lua_assignment,
@@ -68,8 +75,7 @@ class LuaFrontend(BaseFrontend):
             LuaNodeType.LABEL_STATEMENT: lua_cf.lower_lua_label,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.lua.declarations import extract_lua_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_lua_symbols(root)

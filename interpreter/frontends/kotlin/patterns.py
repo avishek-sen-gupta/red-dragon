@@ -1,6 +1,9 @@
+# pyright: standard
 """Parse tree-sitter Kotlin when-condition nodes into Pattern ADT."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.common.patterns import (
     CapturePattern,
@@ -15,7 +18,9 @@ from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 _STRING_CONTENT = "string_content"
 
 
-def parse_kotlin_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def parse_kotlin_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Map a tree-sitter Kotlin when-condition inner node to the Pattern ADT."""
     node_type = node.type
     text = ctx.node_text(node)
@@ -46,7 +51,9 @@ def parse_kotlin_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     raise ValueError(f"Unsupported Kotlin pattern node type: {node_type!r} ({text!r})")
 
 
-def _parse_type_check(ctx: TreeSitterEmitContext, node) -> ClassPattern:
+def _parse_type_check(
+    ctx: TreeSitterEmitContext, node: Any
+) -> ClassPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse `is Type` as ClassPattern for isinstance check.
 
     Tree-sitter structure:

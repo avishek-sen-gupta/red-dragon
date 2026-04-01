@@ -1,6 +1,9 @@
+# pyright: standard
 """Kotlin-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -46,7 +49,9 @@ def _extract_property_name(ctx: TreeSitterEmitContext, var_decl_node) -> str:
     return ctx.node_text(id_node) if id_node else "__unknown"
 
 
-def _find_property_value(ctx: TreeSitterEmitContext, node) -> object | None:
+def _find_property_value(
+    ctx: TreeSitterEmitContext, node: Any
+) -> object | None:  # Any: tree-sitter node — untyped at Python boundary
     """Find the value expression after '=' in a property_declaration."""
     found_eq = False
     for child in node.children:
@@ -85,7 +90,9 @@ def _lower_multi_variable_destructure(
         )
 
 
-def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_property_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     multi_var_decl = next(
         (c for c in node.children if c.type == KNT.MULTI_VARIABLE_DECLARATION),
         None,
@@ -120,7 +127,7 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
-    ctx.seed_var_type(var_name, type_hint)
+    ctx.seed_var_type(var_name, type_hint)  # type: ignore[arg-type]  # see red-dragon-hzmm
 
 
 # -- function declaration ----------------------------------------------
@@ -208,7 +215,7 @@ def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> Register:
                 last_reg = ""
             else:
                 last_reg = ctx.lower_expr(child)
-    return last_reg
+    return last_reg  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
 def lower_function_decl(
@@ -260,14 +267,16 @@ def lower_function_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 # -- class declaration -------------------------------------------------
 
 
-def _collect_kotlin_field_init(ctx: TreeSitterEmitContext, node) -> FieldInit | None:
+def _collect_kotlin_field_init(
+    ctx: TreeSitterEmitContext, node: Any
+) -> FieldInit | None:  # Any: tree-sitter node — untyped at Python boundary
     """Extract (field_name, value_node) from a property_declaration, or None.
 
     Only collects properties with initializers (``var x: Int = 0``).
@@ -320,7 +329,7 @@ def _emit_synthetic_getter(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -371,7 +380,7 @@ def _emit_synthetic_setter(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -434,7 +443,9 @@ def _lower_class_body_with_companions(
         emit_synthetic_init(ctx, field_inits)
 
 
-def _lower_companion_object(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_companion_object(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower companion object by lowering its class_body child as a block."""
     body_node = next(
         (c for c in node.children if c.type == KNT.CLASS_BODY),
@@ -444,7 +455,9 @@ def _lower_companion_object(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
 
 
-def _lower_enum_class_body(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_enum_class_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower enum_class_body: create NEW_OBJECT + STORE_VAR for each entry."""
     for child in node.children:
         if child.type == KNT.ENUM_ENTRY:
@@ -453,7 +466,9 @@ def _lower_enum_class_body(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def _lower_enum_entry(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_enum_entry(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a single enum_entry as NEW_OBJECT('enum:Name') + STORE_VAR."""
     name_node = next(
         (c for c in node.children if c.type == KNT.SIMPLE_IDENTIFIER),
@@ -465,7 +480,9 @@ def _lower_enum_entry(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(DeclVar(name=VarName(entry_name), value_reg=reg))
 
 
-def _extract_kotlin_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_kotlin_parents(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parent class/interface names from a Kotlin class_declaration."""
     parents: list[str] = []
     for child in node.children:
@@ -503,7 +520,9 @@ def _extract_kotlin_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     return parents
 
 
-def _extract_primary_constructor_params(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_primary_constructor_params(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract field names from a Kotlin primary constructor's class_parameter nodes."""
     ctor_node = next(
         (c for c in node.children if c.type == KNT.PRIMARY_CONSTRUCTOR),
@@ -552,7 +571,7 @@ def _emit_primary_constructor_init(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -606,7 +625,7 @@ def lower_secondary_constructor(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -651,7 +670,9 @@ def _emit_constructor_delegation(
         emit_field_initializers(ctx, field_inits)
 
 
-def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_class_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     name_node = next(
         (c for c in node.children if c.type == KNT.TYPE_IDENTIFIER),
         None,
@@ -682,14 +703,16 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 # -- object declaration (singleton) ------------------------------------
 
 
-def lower_object_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_object_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower object declaration (Kotlin singleton) like a class."""
     name_node = next(
         (c for c in node.children if c.type == KNT.TYPE_IDENTIFIER),
@@ -720,7 +743,7 @@ def lower_object_decl(ctx: TreeSitterEmitContext, node) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
+def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract val/var params from a Kotlin primary_constructor as fields."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -747,10 +770,10 @@ def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
         fields[FieldName(fname)] = FieldInfo(
             name=FieldName(fname), type_hint=type_hint, has_initializer=has_default
         )
-    return fields
+    return fields  # type: ignore[name-defined]  # see red-dragon-545a
 
 
-def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
+def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract a ClassInfo from a Kotlin class_declaration node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -802,7 +825,7 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
         (c for c in node.children if c.type == KNT.PRIMARY_CONSTRUCTOR), None
     )
     if primary_ctor is not None:
-        fields.update(_extract_kotlin_primary_ctor_fields(primary_ctor))
+        fields.update(_extract_kotlin_primary_ctor_fields(primary_ctor))  # type: ignore[name-defined]  # see red-dragon-545a
 
     body = next((c for c in node.children if c.type == KNT.CLASS_BODY), None)
     if body is None:
@@ -900,7 +923,7 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:  # type: ignore[name-defined]  # see red-dragon-545a
     """Recursively walk the AST and collect all class_declaration nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -913,7 +936,7 @@ def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> 
         _collect_kotlin_classes(child, accumulator)
 
 
-def extract_kotlin_symbols(root) -> "SymbolTable":
+def extract_kotlin_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
     """Walk the Kotlin AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

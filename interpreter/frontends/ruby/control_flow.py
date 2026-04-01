@@ -1,6 +1,9 @@
+# pyright: standard
 """Ruby-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.var_name import VarName
@@ -34,7 +37,9 @@ logger = logging.getLogger(__name__)
 # ── unless (inverted if) ────────────────────────────────────────────
 
 
-def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
+def lower_unless(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower unless — inverted if."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -68,7 +73,7 @@ def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
-        _lower_ruby_alternative(ctx, alt_node, end_label)
+        _lower_ruby_alternative(ctx, alt_node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -77,7 +82,9 @@ def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
 # ── until (inverted while) ──────────────────────────────────────────
 
 
-def lower_until(ctx: TreeSitterEmitContext, node) -> None:
+def lower_until(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower until — inverted while."""
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
@@ -99,7 +106,7 @@ def lower_until(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     ctx.lower_block(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -110,7 +117,9 @@ def lower_until(ctx: TreeSitterEmitContext, node) -> None:
 # ── for loop ────────────────────────────────────────────────────────
 
 
-def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_for(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby for-in loop."""
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
@@ -160,7 +169,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -183,7 +192,9 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
 # ── case/when ───────────────────────────────────────────────────────
 
 
-def lower_case(ctx: TreeSitterEmitContext, node) -> None:
+def lower_case(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `case expr; when val; ...; else; ...; end` as if/else chain."""
     value_node = node.child_by_field_name("value")
     val_reg = ctx.lower_expr(value_node) if value_node else ""
@@ -266,7 +277,9 @@ def lower_case(ctx: TreeSitterEmitContext, node) -> None:
 # ── if with elsif handling ──────────────────────────────────────────
 
 
-def lower_ruby_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby if statement with elsif support."""
     from interpreter.frontends.common.control_flow import lower_if
 
@@ -297,7 +310,7 @@ def lower_ruby_if(ctx: TreeSitterEmitContext, node) -> None:
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
-        _lower_ruby_alternative(ctx, alt_node, end_label)
+        _lower_ruby_alternative(ctx, alt_node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -321,7 +334,9 @@ def _lower_ruby_alternative(
         ctx.lower_block(alt_node)
 
 
-def _lower_ruby_elsif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
+def _lower_ruby_elsif(
+    ctx: TreeSitterEmitContext, node: Any, end_label: str
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower elsif clause."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -332,30 +347,34 @@ def _lower_ruby_elsif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     false_label = ctx.fresh_label("elsif_false") if alt_node else end_label
 
     ctx.emit_inst(
-        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)), node=node
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)), node=node  # type: ignore[arg-type]  # see red-dragon-hzmm
     )
 
     ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
 
     if alt_node:
-        ctx.emit_inst(Label_(label=false_label))
+        ctx.emit_inst(Label_(label=false_label))  # type: ignore[misc]  # see red-dragon-hzmm
         _lower_ruby_alternative(ctx, alt_node, end_label)
-        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
 
 
-def lower_ruby_elsif_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_elsif_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Handle elsif appearing as a top-level statement (fallback)."""
     end_label = ctx.fresh_label("elsif_end")
-    _lower_ruby_elsif(ctx, node, end_label)
+    _lower_ruby_elsif(ctx, node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
     ctx.emit_inst(Label_(label=end_label))
 
 
 # ── if_modifier (body if condition) ─────────────────────────────────
 
 
-def lower_ruby_if_modifier(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_if_modifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `body if condition` — modifier-form if."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -382,7 +401,9 @@ def lower_ruby_if_modifier(ctx: TreeSitterEmitContext, node) -> None:
 # ── unless_modifier (body unless condition) ─────────────────────────
 
 
-def lower_ruby_unless_modifier(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_unless_modifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `body unless condition` — inverted modifier-form if."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -416,7 +437,9 @@ def lower_ruby_unless_modifier(ctx: TreeSitterEmitContext, node) -> None:
 # ── while_modifier (body while condition) ───────────────────────────
 
 
-def lower_ruby_while_modifier(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_while_modifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `body while condition` — modifier-form while loop."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -439,7 +462,7 @@ def lower_ruby_while_modifier(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     ctx.lower_stmt(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -450,7 +473,9 @@ def lower_ruby_while_modifier(ctx: TreeSitterEmitContext, node) -> None:
 # ── until_modifier (body until condition) ───────────────────────────
 
 
-def lower_ruby_until_modifier(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_until_modifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `body until condition` — inverted modifier-form while loop."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -479,7 +504,7 @@ def lower_ruby_until_modifier(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     ctx.lower_stmt(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -490,7 +515,9 @@ def lower_ruby_until_modifier(ctx: TreeSitterEmitContext, node) -> None:
 # ── begin/rescue/else/ensure ────────────────────────────────────────
 
 
-def lower_begin(ctx: TreeSitterEmitContext, node) -> None:
+def lower_begin(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower begin...rescue...else...ensure...end."""
     container = node
     body_stmt = next(
@@ -643,18 +670,20 @@ def _extract_case_match_arms(node) -> list:
     return arms
 
 
-def _case_match_pattern_of(ctx: TreeSitterEmitContext, arm) -> "Pattern":
+def _case_match_pattern_of(ctx: TreeSitterEmitContext, arm) -> "Pattern":  # type: ignore[misc]  # see red-dragon-hzmm
     """Extract and parse the pattern from an in_clause or synthetic else arm."""
     from interpreter.frontends.common.patterns import WildcardPattern
     from interpreter.frontends.ruby.patterns import parse_ruby_pattern
 
     if isinstance(arm, tuple) and arm[0] == "__else__":
         return WildcardPattern()
-    pattern_node = arm.child_by_field_name("pattern")
+    pattern_node = arm.child_by_field_name("pattern")  # type: ignore[misc]  # see red-dragon-hzmm
     return parse_ruby_pattern(ctx, pattern_node)
 
 
-def _case_match_guard_of(ctx: TreeSitterEmitContext, arm):
+def _case_match_guard_of(
+    ctx: TreeSitterEmitContext, arm: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Ruby case/in guards are out of scope — always None."""
     return None
 
@@ -665,21 +694,21 @@ def _case_match_body_of(ctx: TreeSitterEmitContext, arm) -> str:
         else_node = arm[1]
         body_children = [c for c in else_node.children if c.is_named]
         # Lower the last named child as the expression result
-        return ctx.lower_expr(body_children[-1]) if body_children else ctx.fresh_reg()
+        return ctx.lower_expr(body_children[-1]) if body_children else ctx.fresh_reg()  # type: ignore[return-value]  # see red-dragon-hzmm
 
-    body_node = arm.child_by_field_name("body")
+    body_node = arm.child_by_field_name("body")  # type: ignore[misc]  # see red-dragon-hzmm
     # body is a `then` node; its named children (excluding `then` keyword) are body exprs
     body_exprs = [c for c in body_node.children if c.is_named]
     # Lower all but the last as statements, return the last as expression
     for expr in body_exprs[:-1]:
         ctx.lower_stmt(expr)
-    return ctx.lower_expr(body_exprs[-1]) if body_exprs else ctx.fresh_reg()
+    return ctx.lower_expr(body_exprs[-1]) if body_exprs else ctx.fresh_reg()  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
 _RUBY_CASE_MATCH_SPEC = None  # lazy init to avoid circular imports
 
 
-def _get_case_match_spec():
+def _get_case_match_spec() -> Any:
     global _RUBY_CASE_MATCH_SPEC
     if _RUBY_CASE_MATCH_SPEC is None:
         from interpreter.frontends.common.match_expr import MatchArmSpec
@@ -693,16 +722,20 @@ def _get_case_match_spec():
     return _RUBY_CASE_MATCH_SPEC
 
 
-def lower_case_match(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_case_match(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby case/in using unified match framework."""
     from interpreter.frontends.common.match_expr import lower_match_as_expr
 
     subject_node = node.child_by_field_name("value")
     subject_reg = ctx.lower_expr(subject_node)
-    return lower_match_as_expr(ctx, subject_reg, node, _get_case_match_spec())
+    return lower_match_as_expr(ctx, subject_reg, node, _get_case_match_spec())  # type: ignore[arg-type]  # see red-dragon-hzmm
 
 
-def lower_case_match_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_case_match_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby case/in at statement level."""
     lower_case_match(ctx, node)
 
@@ -710,7 +743,9 @@ def lower_case_match_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # ── in clause (case/in pattern matching) ────────────────────────────
 
 
-def lower_ruby_in_clause(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_in_clause(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `in pattern then body` clause — treated as a when-like arm."""
     named_children = [
         c
@@ -727,7 +762,9 @@ def lower_ruby_in_clause(ctx: TreeSitterEmitContext, node) -> None:
 # ── retry ───────────────────────────────────────────────────────────
 
 
-def lower_ruby_retry(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_retry(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `retry` as CALL_FUNCTION('retry')."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -738,7 +775,9 @@ def lower_ruby_retry(ctx: TreeSitterEmitContext, node) -> None:
 # ── rescue_modifier (expr rescue fallback) ────────────────────────
 
 
-def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_rescue_modifier_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``expr rescue fallback`` as an expression — inline exception handling.
 
     Wraps the body expression in TRY_PUSH / TRY_POP; on exception,
@@ -779,6 +818,8 @@ def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> Registe
     return reg
 
 
-def lower_ruby_rescue_modifier(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_rescue_modifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``expr rescue fallback`` at statement level."""
     lower_ruby_rescue_modifier_expr(ctx, node)
