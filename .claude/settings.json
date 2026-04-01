@@ -5,7 +5,7 @@
       {
         "hooks": [
           {
-            "command": ".claude/inject-for-code-review.sh",
+            "command": "~/.claude/plugins/context-injector/hooks/pre-tool-use.sh",
             "type": "command"
           }
         ]
