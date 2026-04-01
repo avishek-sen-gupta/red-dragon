@@ -75,7 +75,7 @@ from interpreter.var_name import VarName
 logger = logging.getLogger(__name__)
 
 
-def _reg_key(val: Register | str | SpreadArguments) -> Register:
+def _reg_key(val: Register | str) -> Register:
     """Normalize a register value (which may be a string from frontend) to Register."""
     if isinstance(val, Register):
         return val
@@ -549,7 +549,7 @@ def _infer_const(
     # Symbol table lookup: plain label operands → FuncRef
     func_name, func_label = "", ""
     if raw in ctx.func_symbol_table:
-        ref = ctx.func_symbol_table[CodeLabel(raw)]
+        ref = ctx.func_symbol_table[raw]  # type: ignore[index]  # see red-dragon-gqra
         func_name, func_label = ref.name, str(ref.label)
     if func_name and func_label:
         # Only populate flat (name-keyed) dicts for standalone functions.
@@ -613,20 +613,18 @@ def _infer_load_var(
     # Propagate array element types from variable to register
     if (
         inst.result_reg.is_present()
-        and name is not None
-        and name in ctx.var_array_element_types
+        and name in ctx.var_array_element_types  # type: ignore[operator]  # see red-dragon-2x42
     ):
         ctx.array_element_types[str(inst.result_reg)] = ctx.var_array_element_types[
-            name
+            name  # type: ignore[index]  # see red-dragon-2x42
         ]
     # Propagate tuple element types from variable to register
     if (
         inst.result_reg.is_present()
-        and name is not None
-        and name in ctx.var_tuple_element_types
+        and name in ctx.var_tuple_element_types  # type: ignore[operator]  # see red-dragon-2x42
     ):
         ctx.tuple_element_types[str(inst.result_reg)] = ctx.var_tuple_element_types[
-            name
+            name  # type: ignore[index]  # see red-dragon-2x42
         ]
         ctx.tuple_registers.add(str(inst.result_reg))
 
@@ -876,7 +874,7 @@ def _infer_store_index(
 ) -> None:
     arr_reg = str(inst.arr_reg)
     index_reg = str(inst.index_reg)
-    value_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)
+    value_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)  # type: ignore[arg-type]  # see red-dragon-13y9
     if not value_type:
         return
     if arr_reg in ctx.tuple_registers:
