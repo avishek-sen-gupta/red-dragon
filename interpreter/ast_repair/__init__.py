@@ -1,3 +1,4 @@
+# pyright: standard
 """LLM-assisted AST repair for deterministic frontends."""
 
 from interpreter.ast_repair.error_span import ErrorSpan

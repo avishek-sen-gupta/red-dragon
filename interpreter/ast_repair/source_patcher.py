@@ -1,3 +1,4 @@
+# pyright: standard
 """Pure function to apply repaired fragments to source bytes."""
 
 from __future__ import annotations
