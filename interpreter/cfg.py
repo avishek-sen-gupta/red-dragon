@@ -1,3 +1,4 @@
+# pyright: standard
 """CFG Builder."""
 
 from __future__ import annotations
@@ -113,7 +114,7 @@ def _instruction_summary(inst: InstructionBase, max_len: int = 60) -> str:
     return _escape_mermaid(truncated)
 
 
-def _node_id(label: CodeLabel) -> str:
+def _node_id(label: CodeLabel | str) -> str:
     """Sanitise a block label into a valid Mermaid node ID."""
     return str(label).replace(" ", "_").replace("-", "_")
 
@@ -380,7 +381,7 @@ def extract_function_instructions(
     return instructions[start_idx : end_idx + 1]
 
 
-def _add_edge(cfg: CFG, src: CodeLabel, dst: CodeLabel):
+def _add_edge(cfg: CFG, src: CodeLabel, dst: CodeLabel) -> None:
     if dst not in cfg.blocks[src].successors:
         cfg.blocks[src].successors.append(dst)
     if src not in cfg.blocks[dst].predecessors:
