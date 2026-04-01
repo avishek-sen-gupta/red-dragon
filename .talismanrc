@@ -57,9 +57,9 @@ fileignoreconfig:
 - filename: scripts/paper-results-code/05_execution_equivalence.py
   checksum: 9afc1f1c5d20daf4d8d088b6093472339584ca4ca3c4a444f1400d107185513d
 - filename: .beads/backup/backup_state.json
-  checksum: 18a41d9dbcafc6a8f04d9301b030c32e629c3aab2c0002e0a804e528a12776b3
+  checksum: 177c90ab63e1a087f4733bb97b257c198713995051cf3d3dbcae3779a84ca25f
 - filename: .beads/backup/issues.jsonl
-  checksum: a5c4471e3d8be2c1a758320893321ea2a5311593b20dc62cd4ed798df0ed1462
+  checksum: c5afbe60a07b25acae13b2aa38fcc333ada8bab78f89db612fe9243bab7064c7
 - filename: docs/superpowers/specs/2026-03-31-type-hints-design.md
   checksum: c3822da3cf994a9b2415bda5440a5557c42e1a400eaf515432953a9de77e7057
 - filename: docs/superpowers/plans/2026-03-31-type-hints.md
@@ -69,4 +69,4 @@ fileignoreconfig:
 - filename: interpreter/types/type_environment_builder.py
   checksum: 56fd368b7d8105239a22eca2018891ab949f86fc8fec9b0258b2b6f1de15efbf
 - filename: interpreter/types/type_inference.py
-  checksum: 20cd6a0a6588b7cb99048a607ab991fb0a0328384aa1e8b47e99fb6604c9a21c
+  checksum: f831570ddb956ef32e5dc6305681dfdff74c5a68434803215f538d52ba11fbc3
