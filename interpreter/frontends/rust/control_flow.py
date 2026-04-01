@@ -1,4 +1,3 @@
-# pyright: standard
 """Rust-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -78,7 +77,7 @@ def _lower_while_let(
 
     ctx.emit_inst(Label_(label=body_label))
     compile_pattern_bindings(ctx, subject_reg, pattern)
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     ctx.lower_block(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -95,7 +94,7 @@ def lower_loop(
     end_label = ctx.fresh_label("loop_end")
 
     ctx.emit_inst(Label_(label=loop_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -148,7 +147,7 @@ def lower_for(
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()

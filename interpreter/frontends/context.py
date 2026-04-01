@@ -1,4 +1,3 @@
-# pyright: standard
 """TreeSitterEmitContext — shared mutable state for tree-sitter IR lowering.
 
 Analogous to COBOL's EmitContext. Holds registers, labels, instructions,
@@ -207,14 +206,14 @@ class TreeSitterEmitContext:
         self.instructions.append(inst)
 
         if isinstance(inst, DeclVar):
-            self._method_declared_names.add(inst.name)  # type: ignore[arg-type]  # see red-dragon-2us7
+            self._method_declared_names.add(inst.name)
         return inst
 
     def emit_decl_var(
         self, name: str, val_reg: str, *, node: Any = None
     ) -> Instruction:
         """Emit DECL_VAR: declare a new variable in the current scope."""
-        return self.emit_inst(DeclVar(name=VarName(name), value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-2us7
+        return self.emit_inst(DeclVar(name=VarName(name), value_reg=val_reg), node=node)
 
     def emit_func_ref(
         self,
@@ -232,7 +231,7 @@ class TreeSitterEmitContext:
             name=FuncName(func_name), label=func_label
         )
         return self.emit_inst(
-            Const(result_reg=result_reg, value=str(func_label)),  # type: ignore[arg-type]  # see red-dragon-2us7
+            Const(result_reg=result_reg, value=str(func_label)),
             node=node,
         )
 
@@ -255,7 +254,7 @@ class TreeSitterEmitContext:
             parents=tuple(ClassName(p) for p in parents),
         )
         return self.emit_inst(
-            Const(result_reg=result_reg, value=str(class_label)),  # type: ignore[arg-type]  # see red-dragon-2us7
+            Const(result_reg=result_reg, value=str(class_label)),
             node=node,
         )
 

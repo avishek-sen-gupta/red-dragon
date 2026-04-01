@@ -1,4 +1,3 @@
-# pyright: standard
 """Python-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -68,9 +67,9 @@ def lower_tuple_unpack(
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+            LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg)
         )
-        lower_store_target(ctx, child, elem_reg, parent_node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        lower_store_target(ctx, child, elem_reg, parent_node)
 
 
 # ── call ──────────────────────────────────────────────────────
@@ -308,7 +307,7 @@ def _lower_comprehension_loop(
         var_name = ctx.declare_block_var(ctx.node_text(loop_var))
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
     else:
-        lower_store_target(ctx, loop_var, elem_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        lower_store_target(ctx, loop_var, elem_reg, node)
 
     if remaining_fors:
         # Recurse for nested for-clauses (filters apply at innermost level)
@@ -332,7 +331,7 @@ def _lower_comprehension_loop(
             ctx.emit_inst(
                 BranchIf(
                     cond_reg=filter_reg,
-                    branch_targets=(store_label, skip_label),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    branch_targets=(store_label, skip_label),
                 )
             )
 
@@ -362,7 +361,7 @@ def _lower_comprehension_loop(
     ctx.exit_block_scope()
 
     # Increment source index
-    _emit_for_increment(ctx, idx_reg, loop_label)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    _emit_for_increment(ctx, idx_reg, loop_label)
 
     ctx.emit_inst(Label_(label=loop_end_label))
 
@@ -386,7 +385,7 @@ def lower_dict_comprehension(
     ctx.emit_inst(NewObject(result_reg=result_obj, type_hint=scalar("dict")), node=node)
 
     # Extract loop var and iterable from for_in_clause
-    clause_named = [c for c in for_clause.children if c.is_named]  # type: ignore[attr-defined]  # see red-dragon-zznx
+    clause_named = [c for c in for_clause.children if c.is_named]
     loop_var = clause_named[0] if clause_named else None
     iterable_node = clause_named[1] if len(clause_named) > 1 else None
 
@@ -429,7 +428,7 @@ def lower_dict_comprehension(
         var_name = ctx.declare_block_var(ctx.node_text(loop_var))
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
     else:
-        lower_store_target(ctx, loop_var, elem_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        lower_store_target(ctx, loop_var, elem_reg, node)
 
     # Handle if clause (filter)
     store_label = ctx.fresh_label("dcomp_store")
@@ -438,7 +437,7 @@ def lower_dict_comprehension(
         filter_expr = next((c for c in if_clauses[0].children if c.is_named), None)
         filter_reg = ctx.lower_expr(filter_expr)
         ctx.emit_inst(
-            BranchIf(cond_reg=filter_reg, branch_targets=(store_label, skip_label))  # type: ignore[arg-type]  # see red-dragon-hzmm
+            BranchIf(cond_reg=filter_reg, branch_targets=(store_label, skip_label))
         )
 
     ctx.emit_inst(Label_(label=store_label))
@@ -459,7 +458,7 @@ def lower_dict_comprehension(
     ctx.exit_block_scope()
 
     # Increment source index
-    _emit_for_increment(ctx, idx_reg, loop_label)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    _emit_for_increment(ctx, idx_reg, loop_label)
 
     ctx.emit_inst(Label_(label=end_label))
     return result_obj
@@ -507,7 +506,7 @@ def lower_lambda(
 
     # Reference to the lambda function
     ref_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg, node=node)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg, node=node)
     return ref_reg
 
 
@@ -779,7 +778,7 @@ def lower_python_subscript(
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
     if idx_node.type == PythonNodeType.SLICE:
-        return _lower_slice_with_collection(ctx, idx_node, obj_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        return _lower_slice_with_collection(ctx, idx_node, obj_reg)
     idx_reg = ctx.lower_expr(idx_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -847,7 +846,7 @@ def _lower_slice_with_collection(
         CallFunction(
             result_reg=reg,
             func_name=FuncName("slice"),
-            args=(collection_reg, start_reg, stop_reg, step_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=(collection_reg, start_reg, stop_reg, step_reg),
         ),
         node=slice_node,
     )
@@ -959,13 +958,13 @@ def lower_python_string(
     parts: list[str] = []
     for child in node.children:
         if child.type == PythonNodeType.INTERPOLATION:
-            parts.append(lower_interpolation(ctx, child))  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(lower_interpolation(ctx, child))
         elif child.type == PythonNodeType.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
-            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(frag_reg)
         # skip string_start, string_end delimiters
 
     return lower_interpolated_string_parts(ctx, parts, node)
@@ -998,8 +997,8 @@ def _emit_for_increment(
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
-            result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg  # type: ignore[misc]  # see red-dragon-hzmm
+            result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
     ctx.emit_inst(StoreVar(name=VarName("__for_idx"), value_reg=new_idx))
-    ctx.emit_inst(Branch(label=loop_label))  # type: ignore[misc]  # see red-dragon-hzmm
+    ctx.emit_inst(Branch(label=loop_label))

@@ -1,4 +1,3 @@
-# pyright: standard
 """Common expression lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend. Every function returns the register holding
@@ -283,7 +282,7 @@ def lower_call_impl(
                     result_reg=reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(  # type: ignore[arg-type]  # see red-dragon-2us7
+                    args=tuple(
                         str(a) if not isinstance(a, SpreadArguments) else a
                         for a in arg_regs
                     ),
@@ -300,7 +299,7 @@ def lower_call_impl(
             CallFunction(
                 result_reg=reg,
                 func_name=FuncName(func_name),
-                args=tuple(  # type: ignore[arg-type]  # see red-dragon-2us7
+                args=tuple(
                     str(a) if not isinstance(a, SpreadArguments) else a
                     for a in arg_regs
                 ),
@@ -325,7 +324,7 @@ def lower_call_impl(
         CallUnknown(
             result_reg=reg,
             target_reg=target_reg,
-            args=tuple(  # type: ignore[arg-type]  # see red-dragon-2us7
+            args=tuple(
                 str(a) if not isinstance(a, SpreadArguments) else a for a in arg_regs
             ),
         ),
@@ -340,7 +339,7 @@ def extract_call_args(
     """Extract argument registers from a call arguments node."""
     if args_node is None:
         return []
-    return [  # type: ignore[return-value]  # see red-dragon-2us7
+    return [
         ctx.lower_expr(c)
         for c in args_node.children
         if c.type
@@ -375,9 +374,9 @@ def extract_call_args_unwrap(
                 None,
             )
             if inner:
-                regs.append(ctx.lower_expr(inner))  # type: ignore[arg-type]  # see red-dragon-2us7
+                regs.append(ctx.lower_expr(inner))
         elif c.is_named:
-            regs.append(ctx.lower_expr(c))  # type: ignore[arg-type]  # see red-dragon-2us7
+            regs.append(ctx.lower_expr(c))
     return regs
 
 
@@ -442,13 +441,13 @@ def lower_interpolated_string_parts(
             Binop(
                 result_reg=new_reg,
                 operator=resolve_binop("+"),
-                left=str(result),  # type: ignore[arg-type]  # see red-dragon-2us7
-                right=str(part),  # type: ignore[arg-type]  # see red-dragon-2us7
+                left=str(result),
+                right=str(part),
             ),
             node=node,
         )
         result = new_reg
-    return result  # type: ignore[return-value]  # see red-dragon-2us7
+    return result
 
 
 def lower_update_expr(
@@ -474,7 +473,7 @@ def lower_update_expr(
         ),
         node=node,
     )
-    lower_store_target(ctx, operand, result_reg, node)  # type: ignore[arg-type]  # see red-dragon-2us7
+    lower_store_target(ctx, operand, result_reg, node)
     return result_reg
 
 
@@ -562,7 +561,7 @@ def lower_store_target(
         ctx.emit_inst(
             StoreVar(
                 name=VarName(ctx.resolve_var(ctx.node_text(target))),
-                value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                value_reg=val_reg,
             ),
             node=parent_node,
         )
@@ -585,7 +584,7 @@ def lower_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(attr_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -599,7 +598,7 @@ def lower_store_target(
                 StoreIndex(
                     arr_reg=obj_reg,
                     index_reg=idx_reg,
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -608,7 +607,7 @@ def lower_store_target(
         ctx.emit_inst(
             StoreVar(
                 name=VarName(ctx.node_text(target)),
-                value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                value_reg=val_reg,
             ),
             node=parent_node,
         )

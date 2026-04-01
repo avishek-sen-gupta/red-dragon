@@ -1,4 +1,3 @@
-# pyright: standard
 """PHP-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -158,7 +157,7 @@ def lower_php_func_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -196,7 +195,7 @@ def lower_php_method_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -266,7 +265,7 @@ def _emit_php_synthetic_constructor(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -334,7 +333,7 @@ def lower_php_class(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
@@ -358,7 +357,7 @@ def lower_php_interface(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
 
@@ -382,7 +381,7 @@ def lower_php_trait(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(trait_name), value_reg=cls_reg))
 
 
@@ -431,7 +430,7 @@ def lower_php_enum(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(enum_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(enum_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=cls_reg))
 
 
@@ -467,7 +466,7 @@ def _lower_php_constructor_with_field_inits(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -625,7 +624,7 @@ def lower_php_global_declaration(
 # ---------------------------------------------------------------------------
 
 
-def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":
     """Extract a FunctionInfo from a PHP method_declaration node."""
     from interpreter.frontends.symbol_table import FunctionInfo
 
@@ -647,7 +646,7 @@ def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":  # type: ign
     return name, FunctionInfo(name=FuncName(name), params=params, return_type="")
 
 
-def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":
     """Extract a ClassInfo from a PHP class_declaration node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -740,7 +739,7 @@ def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[
     )
 
 
-def _collect_php_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:  # type: ignore[name-defined]  # see red-dragon-545a
+def _collect_php_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all class_declaration nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -753,7 +752,7 @@ def _collect_php_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> Non
         _collect_php_classes(child, accumulator)
 
 
-def extract_php_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
+def extract_php_symbols(root) -> "SymbolTable":
     """Walk the PHP AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

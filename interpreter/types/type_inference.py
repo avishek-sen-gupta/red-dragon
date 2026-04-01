@@ -1,4 +1,3 @@
-# pyright: standard
 """Static type inference pass — walks IR instructions and builds a TypeEnvironment.
 
 **Type representation:** The entire type pipeline operates on ``TypeExpr``
@@ -549,7 +548,7 @@ def _infer_const(
     # Symbol table lookup: plain label operands → FuncRef
     func_name, func_label = "", ""
     if raw in ctx.func_symbol_table:
-        ref = ctx.func_symbol_table[raw]  # type: ignore[index]  # see red-dragon-gqra
+        ref = ctx.func_symbol_table[raw]
         func_name, func_label = ref.name, str(ref.label)
     if func_name and func_label:
         # Only populate flat (name-keyed) dicts for standalone functions.
@@ -611,20 +610,14 @@ def _infer_load_var(
     if inst.result_reg.is_present() and var_type:
         ctx.register_types[inst.result_reg] = var_type
     # Propagate array element types from variable to register
-    if (
-        inst.result_reg.is_present()
-        and name in ctx.var_array_element_types  # type: ignore[operator]  # see red-dragon-2x42
-    ):
+    if inst.result_reg.is_present() and name in ctx.var_array_element_types:
         ctx.array_element_types[str(inst.result_reg)] = ctx.var_array_element_types[
-            name  # type: ignore[index]  # see red-dragon-2x42
+            name
         ]
     # Propagate tuple element types from variable to register
-    if (
-        inst.result_reg.is_present()
-        and name in ctx.var_tuple_element_types  # type: ignore[operator]  # see red-dragon-2x42
-    ):
+    if inst.result_reg.is_present() and name in ctx.var_tuple_element_types:
         ctx.tuple_element_types[str(inst.result_reg)] = ctx.var_tuple_element_types[
-            name  # type: ignore[index]  # see red-dragon-2x42
+            name
         ]
         ctx.tuple_registers.add(str(inst.result_reg))
 
@@ -874,7 +867,7 @@ def _infer_store_index(
 ) -> None:
     arr_reg = str(inst.arr_reg)
     index_reg = str(inst.index_reg)
-    value_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)  # type: ignore[arg-type]  # see red-dragon-13y9
+    value_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)
     if not value_type:
         return
     if arr_reg in ctx.tuple_registers:

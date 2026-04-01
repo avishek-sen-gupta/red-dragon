@@ -1,4 +1,3 @@
-# pyright: standard
 """C-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -152,7 +151,7 @@ def _lower_init_declarator(
         from interpreter.frontends.cpp.control_flow import _lower_structured_binding
 
         rhs_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
-        _lower_structured_binding(ctx, decl_node, rhs_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        _lower_structured_binding(ctx, decl_node, rhs_reg)
         return
 
     raw_name = extract_declarator_name(ctx, decl_node) if decl_node else "__anon"
@@ -189,7 +188,7 @@ def _lower_init_declarator(
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, effective_type)
 
 
@@ -207,22 +206,22 @@ def _extract_struct_field_names(
     field_names: list[str] = []
     for inst in ctx.instructions:
         if (
-            inst.opcode == Opcode.LABEL  # type: ignore[union-attr]  # see red-dragon-hzmm
-            and inst.label.is_present()  # type: ignore[union-attr]  # see red-dragon-hzmm
-            and inst.label.starts_with(class_prefix)  # type: ignore[union-attr]  # see red-dragon-hzmm
+            inst.opcode == Opcode.LABEL
+            and inst.label.is_present()
+            and inst.label.starts_with(class_prefix)
         ):
             in_body = True
             continue
         if (
-            inst.opcode == Opcode.LABEL  # type: ignore[union-attr]  # see red-dragon-hzmm
-            and inst.label.is_present()  # type: ignore[union-attr]  # see red-dragon-hzmm
-            and inst.label.starts_with(end_prefix)  # type: ignore[union-attr]  # see red-dragon-hzmm
+            inst.opcode == Opcode.LABEL
+            and inst.label.is_present()
+            and inst.label.starts_with(end_prefix)
         ):
             break
-        if in_body and inst.opcode == Opcode.STORE_FIELD:  # type: ignore[union-attr]  # see red-dragon-hzmm
+        if in_body and inst.opcode == Opcode.STORE_FIELD:
             t = inst
             assert isinstance(t, StoreField)
-            field_names.append(t.field_name)  # type: ignore[arg-type]  # see red-dragon-y5bm
+            field_names.append(t.field_name)
     return field_names
 
 
@@ -289,7 +288,7 @@ def _lower_struct_initializer_list(
                 node=elem,
             )
 
-    return obj_reg  # type: ignore[return-value]  # see red-dragon-hzmm
+    return obj_reg
 
 
 def _find_function_declarator(node) -> object | None:
@@ -384,8 +383,8 @@ def lower_function_def_c(
             # Check for nested function_declarator (e.g. function-pointer return types)
             inner_decl = _find_innermost_function_declarator(declarator_node)
             target_decl = inner_decl if inner_decl else declarator_node
-            name_node = target_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
-            params_node = target_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
+            name_node = target_decl.child_by_field_name("declarator")
+            params_node = target_decl.child_by_field_name(
                 ctx.constants.func_params_field
             )
             func_name = (
@@ -394,8 +393,8 @@ def lower_function_def_c(
         else:
             func_decl = _find_innermost_function_declarator(declarator_node)
             if func_decl:
-                name_node = func_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
-                params_node = func_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
+                name_node = func_decl.child_by_field_name("declarator")
+                params_node = func_decl.child_by_field_name(
                     ctx.constants.func_params_field
                 )
                 func_name = (
@@ -426,7 +425,7 @@ def lower_function_def_c(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -452,7 +451,7 @@ def lower_struct_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(struct_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(struct_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(struct_name), value_reg=cls_reg))
 
 
@@ -563,7 +562,7 @@ def lower_union_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(union_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(union_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(union_name), value_reg=cls_reg))
 
 
@@ -632,7 +631,7 @@ def lower_preproc_function_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -659,7 +658,7 @@ def _extract_c_declarator_name_no_ctx(decl_node) -> "str | None":
     return id_node.text.decode() if id_node is not None else None
 
 
-def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":
     """Extract fields from a C struct field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -675,13 +674,13 @@ def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":  # type
                 fields[FieldName(fname)] = FieldInfo(
                     name=FieldName(fname), type_hint=type_hint, has_initializer=False
                 )
-    return fields  # type: ignore[name-defined]  # see red-dragon-545a
+    return fields
 
 
 def _collect_c_structs_and_functions(
     node,
-    classes: "dict[ClassName, ClassInfo]",  # type: ignore[name-defined]  # see red-dragon-545a
-    functions: "dict[FuncName, FunctionInfo]",  # type: ignore[name-defined]  # see red-dragon-545a
+    classes: "dict[ClassName, ClassInfo]",
+    functions: "dict[FuncName, FunctionInfo]",
 ) -> None:
     """Walk AST to collect struct_specifier nodes as ClassInfo and top-level function_definition nodes."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
@@ -696,7 +695,7 @@ def _collect_c_structs_and_functions(
             )
             classes[ClassName(struct_name)] = ClassInfo(
                 name=ClassName(struct_name),
-                fields=fields,  # type: ignore[name-defined]  # see red-dragon-545a
+                fields=fields,
                 methods={},
                 constants={},
                 parents=(),
@@ -725,7 +724,7 @@ def _collect_c_structs_and_functions(
         _collect_c_structs_and_functions(child, classes, functions)
 
 
-def extract_c_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
+def extract_c_symbols(root) -> "SymbolTable":
     """Walk the C AST and return a SymbolTable of all struct and function definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 

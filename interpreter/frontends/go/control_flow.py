@@ -1,4 +1,3 @@
-# pyright: standard
 """Go-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -151,7 +150,7 @@ def _lower_go_for_clause(ctx: TreeSitterEmitContext, clause, body_node, parent) 
 
     ctx.emit_inst(Label_(label=body_label))
     update_label = ctx.fresh_label("for_update") if update_node else loop_label
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -215,7 +214,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
         ctx.emit_inst(DeclVar(name=VarName(var_names[1]), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("range_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -271,7 +270,7 @@ def _lower_go_bare_for(
         ctx.emit_inst(Branch(label=body_label))
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -303,7 +302,7 @@ def lower_go_inc(
         ),
         node=node,
     )
-    lower_go_store_target(ctx, operand, result_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_go_store_target(ctx, operand, result_reg, node)
 
 
 def lower_go_dec(
@@ -326,7 +325,7 @@ def lower_go_dec(
         ),
         node=node,
     )
-    lower_go_store_target(ctx, operand, result_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_go_store_target(ctx, operand, result_reg, node)
 
 
 # -- Go: return statement --------------------------------------------------
@@ -349,7 +348,7 @@ def lower_go_return(
     else:
         regs = [ctx.lower_expr(c) for c in children]
     for reg in regs:
-        ctx.emit_inst(Return_(value_reg=reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        ctx.emit_inst(Return_(value_reg=reg), node=node)
 
 
 # -- Go: defer statement ---------------------------------------------------
@@ -428,7 +427,7 @@ def lower_expression_switch(
         if c.type in (GoNodeType.EXPRESSION_CASE, GoNodeType.DEFAULT_CASE)
     ]
 
-    ctx.push_loop(end_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(end_label, end_label)
     for case in cases:
         if case.type == GoNodeType.DEFAULT_CASE:
             body_children = [c for c in case.children if c.is_named]
@@ -450,8 +449,8 @@ def lower_expression_switch(
                         Binop(
                             result_reg=cmp_reg,
                             operator=resolve_binop("=="),
-                            left=val_reg,  # type: ignore[misc]  # see red-dragon-hzmm
-                            right=case_exprs[0],  # type: ignore[misc]  # see red-dragon-hzmm
+                            left=val_reg,
+                            right=case_exprs[0],
                         ),
                         node=case,
                     )
@@ -488,7 +487,7 @@ def _make_const_val(ctx: TreeSitterEmitContext, value: str) -> str:
     """Emit a CONST and return its register."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=reg, value=value))
-    return reg  # type: ignore[return-value]  # see red-dragon-hzmm
+    return reg
 
 
 # -- Go: type switch statement ---------------------------------------------
@@ -514,7 +513,7 @@ def lower_type_switch(
         if c.type in (GoNodeType.TYPE_CASE, GoNodeType.DEFAULT_CASE)
     ]
 
-    ctx.push_loop(end_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(end_label, end_label)
     for case in cases:
         if case.type == GoNodeType.DEFAULT_CASE:
             body_children = [c for c in case.children if c.is_named]
@@ -537,7 +536,7 @@ def lower_type_switch(
                     CallFunction(
                         result_reg=check_reg,
                         func_name=FuncName("type_check"),
-                        args=(expr_reg, type_text),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                        args=(expr_reg, type_text),
                     ),
                     node=case,
                 )

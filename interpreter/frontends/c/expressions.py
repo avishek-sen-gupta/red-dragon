@@ -1,4 +1,3 @@
-# pyright: standard
 """C-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -86,7 +85,7 @@ def lower_assignment_expr(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_c_store_target(ctx, left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    lower_c_store_target(ctx, left, val_reg, node)
     return val_reg
 
 
@@ -103,13 +102,13 @@ def lower_c_store_target(
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
                 ),
                 node=parent_node,
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node
             )
     elif target.type == CNodeType.FIELD_EXPRESSION:
         obj_node = target.child_by_field_name("argument")
@@ -120,7 +119,7 @@ def lower_c_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -131,7 +130,7 @@ def lower_c_store_target(
             arr_reg = ctx.lower_expr(arr_node)
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == CNodeType.POINTER_EXPRESSION:
@@ -141,11 +140,11 @@ def lower_c_store_target(
             operand_node = next((c for c in target.children if c.is_named), None)
         ptr_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
         ctx.emit_inst(
-            StoreIndirect(ptr_reg=ptr_reg, value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreIndirect(ptr_reg=ptr_reg, value_reg=val_reg), node=parent_node
         )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 

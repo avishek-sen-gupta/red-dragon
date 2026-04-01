@@ -1,4 +1,3 @@
-# pyright: standard
 """Arithmetic and control-flow statement lowering — MOVE, ADD/SUB/MUL/DIV,
 COMPUTE, IF, EVALUATE, CONTINUE, EXIT, INITIALIZE, SET, DISPLAY, STOP RUN, GO TO.
 """
@@ -111,7 +110,7 @@ def lower_arithmetic(
         )
     )
 
-    result_str_reg = ctx.emit_to_string(result_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
+    result_str_reg = ctx.emit_to_string(result_reg)
     ctx.emit_encode_and_write(
         region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
     )
@@ -147,7 +146,7 @@ def lower_arithmetic_giving(
 
     for giving_name in stmt.giving:
         giving_ref = ctx.resolve_field_ref(giving_name, layout, region_reg)
-        result_str_reg = ctx.emit_to_string(result_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
+        result_str_reg = ctx.emit_to_string(result_reg)
         ctx.emit_encode_and_write(
             region_reg, giving_ref.fl, result_str_reg, giving_ref.offset_reg
         )
@@ -321,7 +320,7 @@ def lower_set(
                     right=Register(str(step_reg)),
                 )
             )
-            result_str_reg = ctx.emit_to_string(result_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
+            result_str_reg = ctx.emit_to_string(result_reg)
             ctx.emit_encode_and_write(
                 region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
             )
@@ -360,7 +359,7 @@ def lower_stop_run(
 ) -> None:
     """STOP RUN."""
     zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=zero_reg, value=0))  # type: ignore[arg-type]  # see red-dragon-0qgg
+    ctx.emit_inst(Const(result_reg=zero_reg, value=0))
     ctx.emit_inst(Return_(value_reg=zero_reg))
 
 

@@ -1,4 +1,3 @@
-# pyright: standard
 """Go-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -51,7 +50,7 @@ def lower_go_iota(
 logger = logging.getLogger(__name__)
 
 
-def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> "TypeExpr":  # type: ignore[arg-type]  # see red-dragon-hzmm
+def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> "TypeExpr":
     """Convert a Go tree-sitter type node into a TypeExpr.
 
     Handles slice_type ([]T → Array[T]), map_type (map[K]V → Map[K, V]),
@@ -128,7 +127,7 @@ def lower_go_call(
                     result_reg=reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    args=tuple(arg_regs),
                 ),
                 node=node,
             )
@@ -141,7 +140,7 @@ def lower_go_call(
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
             ),
             node=node,
         )
@@ -151,7 +150,7 @@ def lower_go_call(
     target_reg = ctx.lower_expr(func_node) if func_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -327,7 +326,7 @@ def lower_type_assertion(
         CallFunction(
             result_reg=reg,
             func_name=FuncName("type_assert"),
-            args=(expr_reg, type_text),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=(expr_reg, type_text),
         ),
         node=node,
     )
@@ -404,7 +403,7 @@ def lower_func_literal(
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
     return reg
 
 
@@ -444,12 +443,12 @@ def lower_expression_list(
     if node is None:
         return []
     if node.type == GoNodeType.EXPRESSION_LIST:
-        return [  # type: ignore[return-value]  # see red-dragon-hzmm
+        return [
             ctx.lower_expr(c)
             for c in node.children
             if c.type not in (GoNodeType.COMMA,) and c.is_named
         ]
-    return [ctx.lower_expr(node)]  # type: ignore[return-value]  # see red-dragon-hzmm
+    return [ctx.lower_expr(node)]
 
 
 # -- Go: store target with selector_expression -----------------------------
@@ -460,7 +459,7 @@ def lower_go_store_target(
 ) -> None:
     if target.type == GoNodeType.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == GoNodeType.SELECTOR_EXPRESSION:
@@ -472,7 +471,7 @@ def lower_go_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -483,11 +482,11 @@ def lower_go_store_target(
             obj_reg = ctx.lower_expr(operand_node)
             idx_reg = ctx.lower_expr(index_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )

@@ -1,4 +1,3 @@
-# pyright: standard
 """PythonFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
@@ -54,7 +53,7 @@ class PythonFrontend(BaseFrontend):
     def _build_expr_dispatch(
         self,
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
-        return {  # type: ignore[return-value]  # see red-dragon-rke4
+        return {
             PythonNodeType.IDENTIFIER: common_expr.lower_identifier,
             PythonNodeType.INTEGER: common_expr.lower_const_literal,
             PythonNodeType.FLOAT: common_expr.lower_const_literal,

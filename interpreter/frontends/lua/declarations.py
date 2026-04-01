@@ -1,4 +1,3 @@
-# pyright: standard
 """Lua-specific declaration and assignment lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -80,7 +79,7 @@ def lower_lua_assignment(
         val_reg = val_regs[i] if i < len(val_regs) else ctx.fresh_reg()
         if i >= len(val_regs):
             ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-        lower_lua_store_target(ctx, target, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+        lower_lua_store_target(ctx, target, val_reg, node)
 
 
 def lower_lua_store_target(
@@ -89,7 +88,7 @@ def lower_lua_store_target(
     """Lua-specific store target supporting dot_index and bracket_index."""
     if target.type == LuaNodeType.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == LuaNodeType.DOT_INDEX_EXPRESSION:
@@ -101,7 +100,7 @@ def lower_lua_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -112,12 +111,12 @@ def lower_lua_store_target(
             obj_reg = ctx.lower_expr(obj_node)
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 
@@ -165,9 +164,9 @@ def lower_lua_function_declaration(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
 
-    if is_dotted and table_name:  # type: ignore[misc]  # see red-dragon-hzmm
+    if is_dotted and table_name:
         obj_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=obj_reg, name=VarName(table_name)))
         ctx.emit_inst(
@@ -202,7 +201,7 @@ def lower_lua_return(
 # straightforward without heuristic analysis. Return an empty SymbolTable.
 
 
-def extract_lua_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
+def extract_lua_symbols(root) -> "SymbolTable":
     """Return an empty SymbolTable — Lua table-based OOP has no extractable class syntax."""
     from interpreter.frontends.symbol_table import SymbolTable
 

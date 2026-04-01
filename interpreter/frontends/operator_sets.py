@@ -1,4 +1,3 @@
-# pyright: standard
 """Per-language valid operator sets and lint pass.
 
 Each language frontend may only emit operators from its valid set.
@@ -208,7 +207,7 @@ def lint_operators(
     violations: list[OperatorViolation] = []
 
     for idx, inst in enumerate(instructions):
-        if inst.opcode == Opcode.BINOP and isinstance(inst, Binop):  # type: ignore[union-attr]  # see red-dragon-tvis
+        if inst.opcode == Opcode.BINOP and isinstance(inst, Binop):
             if (
                 isinstance(inst.operator, BinopKind)
                 and inst.operator not in valid_binops
@@ -218,7 +217,7 @@ def lint_operators(
                         kind="binop", operator=inst.operator, instruction_index=idx
                     )
                 )
-        elif inst.opcode == Opcode.UNOP and isinstance(inst, Unop):  # type: ignore[union-attr]  # see red-dragon-tvis
+        elif inst.opcode == Opcode.UNOP and isinstance(inst, Unop):
             if isinstance(inst.operator, UnopKind) and inst.operator not in valid_unops:
                 violations.append(
                     OperatorViolation(

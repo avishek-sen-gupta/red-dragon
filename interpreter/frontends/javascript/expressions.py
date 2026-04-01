@@ -1,4 +1,3 @@
-# pyright: standard
 """JavaScript-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -59,7 +58,7 @@ def _emit_optional_guard(
         Binop(
             result_reg=cmp_reg,
             operator=resolve_binop("=="),
-            left=obj_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+            left=obj_reg,
             right=null_reg,
         )
     )
@@ -106,7 +105,7 @@ def lower_js_subscript(
         return reg
 
     if _has_optional_chain(node):
-        return _emit_optional_guard(ctx, obj_reg, emit_access)  # type: ignore[misc]  # see red-dragon-hzmm
+        return _emit_optional_guard(ctx, obj_reg, emit_access)
     return emit_access()
 
 
@@ -131,7 +130,7 @@ def lower_js_attribute(
         return reg
 
     if _has_optional_chain(node):
-        return _emit_optional_guard(ctx, obj_reg, emit_access)  # type: ignore[misc]  # see red-dragon-hzmm
+        return _emit_optional_guard(ctx, obj_reg, emit_access)
     return emit_access()
 
 
@@ -156,14 +155,14 @@ def lower_js_call(
                         result_reg=reg,
                         obj_reg=obj_reg,
                         method_name=FuncName(method_name),
-                        args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                        args=tuple(arg_regs),
                     ),
                     node=node,
                 )
                 return reg
 
             if _has_optional_chain(func_node):
-                return _emit_optional_guard(ctx, obj_reg, emit_method_call)  # type: ignore[misc]  # see red-dragon-hzmm
+                return _emit_optional_guard(ctx, obj_reg, emit_method_call)
             return emit_method_call()
 
     if func_node and func_node.type == JSN.IDENTIFIER:
@@ -171,7 +170,7 @@ def lower_js_call(
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
             ),
             node=node,
         )
@@ -180,7 +179,7 @@ def lower_js_call(
     target_reg = ctx.lower_expr(func_node) if func_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -189,7 +188,7 @@ def lower_js_call(
 def _extract_js_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     if args_node is None:
         return []
-    return [  # type: ignore[return-value]  # see red-dragon-hzmm
+    return [
         ctx.lower_expr(c)
         for c in args_node.children
         if c.type not in (JSN.OPEN_PAREN, JSN.CLOSE_PAREN, JSN.COMMA) and c.is_named
@@ -201,7 +200,7 @@ def lower_js_store_target(
 ) -> None:
     if target.type == JSN.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == JSN.MEMBER_EXPRESSION:
@@ -213,7 +212,7 @@ def lower_js_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(prop_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -224,12 +223,12 @@ def lower_js_store_target(
             obj_reg = ctx.lower_expr(obj_node)
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 
@@ -240,7 +239,7 @@ def lower_assignment_expr(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_js_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_js_store_target(ctx, left, val_reg, node)
     return val_reg
 
 
@@ -313,7 +312,7 @@ def lower_arrow_function(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
@@ -367,7 +366,7 @@ def lower_new_expression(
             result_reg=ctor_reg,
             obj_reg=obj_reg,
             method_name=FuncName("constructor"),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -461,7 +460,7 @@ def lower_function_expression(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
@@ -477,14 +476,14 @@ def lower_template_string(
     parts: list[str] = []
     for child in node.children:
         if child.type == JSN.TEMPLATE_SUBSTITUTION:
-            parts.append(lower_template_substitution(ctx, child))  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(lower_template_substitution(ctx, child))
         elif child.is_named:
-            parts.append(ctx.lower_expr(child))  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(ctx.lower_expr(child))
         elif child.type not in (JSN.BACKTICK,):
             # String fragment
             frag_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=frag_reg, value=ctx.node_text(child)))
-            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(frag_reg)
 
     if not parts:
         return lower_const_literal(ctx, node)
@@ -493,12 +492,12 @@ def lower_template_string(
         new_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
-                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part  # type: ignore[misc]  # see red-dragon-hzmm
+                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part
             ),
             node=node,
         )
         result = new_reg
-    return result  # type: ignore[return-value]  # see red-dragon-hzmm
+    return result
 
 
 def lower_template_substitution(

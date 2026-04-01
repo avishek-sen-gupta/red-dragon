@@ -1,4 +1,3 @@
-# pyright: standard
 """JavaScriptFrontend — thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ class JavaScriptFrontend(BaseFrontend):
     def _build_expr_dispatch(
         self,
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
-        return {  # type: ignore[return-value]  # see red-dragon-rke4
+        return {
             JSN.IDENTIFIER: common_expr.lower_identifier,
             JSN.NUMBER: common_expr.lower_const_literal,
             JSN.STRING: common_expr.lower_const_literal,
