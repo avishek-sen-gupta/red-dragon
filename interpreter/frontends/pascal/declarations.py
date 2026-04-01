@@ -1,6 +1,9 @@
+# pyright: standard
 """Pascal-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -56,7 +59,9 @@ def _resolve_object_class(ctx: TreeSitterEmitContext, obj_node) -> str:
     return ""
 
 
-def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower assignment -- children: target, kAssign, expression."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -110,7 +115,7 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
         obj_class = _resolve_object_class(ctx, obj_node)
         if obj_class:
             emit_field_store_or_setter(
-                ctx, obj_reg, obj_class, field_name, val_reg, node
+                ctx, obj_reg, obj_class, field_name, val_reg, node  # type: ignore[misc]  # see red-dragon-hzmm
             )
         else:
             ctx.emit_inst(
@@ -130,14 +135,18 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
             )
 
 
-def lower_pascal_decl_vars(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_decl_vars(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower declVars -- contains multiple declVar children."""
     for child in node.children:
         if child.type == PascalNodeType.DECL_VAR:
             lower_pascal_decl_var(ctx, child)
 
 
-def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_decl_var(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower declVar -- identifier : type."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -157,7 +166,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
         )
         record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
         if elem_type in record_types:
-            _populate_array_with_records(ctx, arr_reg, array_size, elem_type, node)
+            _populate_array_with_records(ctx, arr_reg, array_size, elem_type, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=arr_reg), node=node)
     else:
         type_name = _pascal_var_type_name(ctx, type_node) if type_node else ""
@@ -181,7 +190,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
         pascal_var_types: dict = getattr(ctx, "_pascal_var_types", {})
         if type_name in record_types:
             pascal_var_types[var_name] = type_name
-            ctx._pascal_var_types = pascal_var_types
+            ctx._pascal_var_types = pascal_var_types  # type: ignore[misc]  # see red-dragon-hzmm
 
 
 def _populate_array_with_records(
@@ -201,7 +210,7 @@ def _populate_array_with_records(
             node=node,
         )
         ctx.emit_inst(
-            StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=obj_reg),
+            StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=obj_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=node,
         )
 
@@ -252,7 +261,9 @@ def _pascal_var_type_name(ctx: TreeSitterEmitContext, type_node) -> str:
     return ctx.node_text(id_node) if id_node else ""
 
 
-def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_proc(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower defProc/declProc -- contains kFunction/kProcedure, identifier, declArgs, type, block."""
     decl_node = next(
         (c for c in node.children if c.type == PascalNodeType.DECL_PROC), None
@@ -309,7 +320,7 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
         _lower_pascal_params(ctx, args_node)
 
     prev_func_name = getattr(ctx, "_pascal_current_function_name", "")
-    ctx._pascal_current_function_name = func_name
+    ctx._pascal_current_function_name = func_name  # type: ignore[misc]  # see red-dragon-hzmm
     prev_class_name = getattr(ctx, "_current_class_name", "")
     if class_name:
         ctx._current_class_name = class_name
@@ -318,7 +329,7 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
             lower_pascal_proc(ctx, child)
     if body_node:
         lower_pascal_block(ctx, body_node)
-    ctx._pascal_current_function_name = prev_func_name
+    ctx._pascal_current_function_name = prev_func_name  # type: ignore[misc]  # see red-dragon-hzmm
     ctx._current_class_name = prev_class_name
 
     # Pascal functions return via the 'Result' variable. Procedures return None.
@@ -336,7 +347,7 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -405,19 +416,23 @@ def _lower_pascal_single_param(
         pascal_var_types: dict = getattr(ctx, "_pascal_var_types", {})
         if type_name in record_types:
             pascal_var_types[pname] = type_name
-            ctx._pascal_var_types = pascal_var_types
+            ctx._pascal_var_types = pascal_var_types  # type: ignore[misc]  # see red-dragon-hzmm
         param_index += 1
     return param_index
 
 
-def lower_pascal_decl_consts(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_decl_consts(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower declConsts -- iterate declConst children."""
     for child in node.children:
         if child.type == PascalNodeType.DECL_CONST:
             lower_pascal_decl_const(ctx, child)
 
 
-def lower_pascal_decl_const(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_decl_const(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower declConst -- extract name + defaultValue child, lower value, DECL_VAR."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -447,14 +462,18 @@ def lower_pascal_decl_const(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
 
 
-def lower_pascal_decl_types(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_decl_types(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower declTypes -- iterate individual declType children."""
     for child in node.children:
         if child.type == PascalNodeType.DECL_TYPE:
             lower_pascal_decl_type(ctx, child)
 
 
-def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_decl_type(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower declType -- emit CLASS_REF for class/record types with body traversal."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -487,7 +506,7 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
         return
     record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
     record_types.add(type_name)
-    ctx._pascal_record_types = record_types
+    ctx._pascal_record_types = record_types  # type: ignore[misc]  # see red-dragon-hzmm
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{type_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{type_name}")
 
@@ -512,7 +531,7 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=cls_reg))
 
 
@@ -560,7 +579,7 @@ def _emit_synthetic_init_for_fields(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref("__init__", func_label, result_reg=func_reg)
+    ctx.emit_func_ref("__init__", func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName("__init__"), value_reg=func_reg))
 
 
@@ -578,7 +597,9 @@ def _lower_pascal_class_section(
             _lower_pascal_property(ctx, child, class_name, field_names)
 
 
-def _lower_pascal_method(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_pascal_method(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a declProc inside a class -- forward declaration with `this` injected."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -710,7 +731,7 @@ def _emit_property_getter(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(getter_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(getter_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(getter_name), value_reg=func_reg))
 
     register_property_accessor(ctx, class_name, prop_name, "get")
@@ -770,7 +791,7 @@ def _emit_property_setter(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(setter_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(setter_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(setter_name), value_reg=func_reg))
 
     register_property_accessor(ctx, class_name, prop_name, "set")
@@ -800,11 +821,11 @@ def _lower_pascal_enum(
         key_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=key_reg, value=member_name))
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=i))
+        ctx.emit_inst(Const(result_reg=val_reg, value=i))  # type: ignore[misc]  # see red-dragon-hzmm
         ctx.emit_inst(StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg))
         # Declare each member as a top-level variable with ordinal value
         ord_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=ord_reg, value=i))
+        ctx.emit_inst(Const(result_reg=ord_reg, value=i))  # type: ignore[misc]  # see red-dragon-hzmm
         ctx.emit_inst(DeclVar(name=VarName(member_name), value_reg=ord_reg))
     ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=obj_reg))
 
@@ -814,7 +835,7 @@ def _lower_pascal_enum(
 # ---------------------------------------------------------------------------
 
 
-def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None":
+def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract a ClassInfo from a Pascal declType node that contains a declClass."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -882,7 +903,7 @@ def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None"
     )
 
 
-def _collect_pascal_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_pascal_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:  # type: ignore[name-defined]  # see red-dragon-545a
     """Recursively walk the AST and collect all declType nodes containing declClass."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -895,7 +916,7 @@ def _collect_pascal_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> 
         _collect_pascal_classes(child, accumulator)
 
 
-def extract_pascal_symbols(root) -> "SymbolTable":
+def extract_pascal_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
     """Walk the Pascal AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

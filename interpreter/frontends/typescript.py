@@ -1,3 +1,4 @@
+# pyright: standard
 """TypeScriptFrontend — tree-sitter TypeScript AST -> IR lowering.
 
 Extends JavaScriptFrontend, adding TS-specific node handlers and
@@ -6,7 +7,7 @@ skipping type annotations.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.context import GrammarConstants
@@ -47,6 +48,7 @@ from interpreter.types.type_expr import (
     scalar,
 )
 from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
 
 
 class TypeScriptFrontend(JavaScriptFrontend):
@@ -81,10 +83,12 @@ class TypeScriptFrontend(JavaScriptFrontend):
             "object": "Object",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         dispatch = super()._build_expr_dispatch()
-        dispatch.update(
-            {
+        dispatch.update(  # type: ignore[arg-type]  # see red-dragon-q5jm
+            {  # type: ignore[arg-type]  # see red-dragon-q5jm
                 TypeScriptNodeType.TYPE_IDENTIFIER: common_expr.lower_identifier,
                 TypeScriptNodeType.PREDEFINED_TYPE: common_expr.lower_const_literal,
                 TypeScriptNodeType.AS_EXPRESSION: lower_as_expression,
@@ -101,7 +105,9 @@ class TypeScriptFrontend(JavaScriptFrontend):
         )
         return dispatch
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         dispatch = super()._build_stmt_dispatch()
         dispatch[TypeScriptNodeType.FUNCTION_DECLARATION] = lower_ts_function_def
         dispatch[TypeScriptNodeType.CLASS_DECLARATION] = lower_ts_class_def
@@ -123,11 +129,10 @@ class TypeScriptFrontend(JavaScriptFrontend):
         )
         return dispatch
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.javascript.declarations import (
             extract_javascript_symbols,
         )
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_javascript_symbols(root)
 
@@ -135,7 +140,9 @@ class TypeScriptFrontend(JavaScriptFrontend):
 # ── TS-specific expression lowerers (pure functions) ─────────────
 
 
-def lower_as_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_as_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     # x as Type -> just lower x, ignore the type
     children = [c for c in node.children if c.is_named]
     if children:
@@ -143,7 +150,9 @@ def lower_as_expression(ctx: TreeSitterEmitContext, node) -> Register:
     return common_expr.lower_const_literal(ctx, node)
 
 
-def lower_non_null_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_non_null_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     # x! -> just lower x
     children = [c for c in node.children if c.is_named]
     if children:
@@ -151,14 +160,18 @@ def lower_non_null_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return common_expr.lower_const_literal(ctx, node)
 
 
-def lower_satisfies_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_satisfies_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[0])
     return common_expr.lower_const_literal(ctx, node)
 
 
-def lower_instantiation_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_instantiation_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `fn<Type>` -> lower fn, discard type arguments (type erasure)."""
     func_node = next(
         (c for c in node.children if c.is_named and c.type != "type_arguments"),
@@ -169,7 +182,9 @@ def lower_instantiation_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return common_expr.lower_const_literal(ctx, node)
 
 
-def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_type_assertion(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `<Type>expr` -> just lower expr, ignore the type."""
     children = [c for c in node.children if c.is_named]
     # type_assertion: <Type>expr — type is first child, expression is last
@@ -183,7 +198,9 @@ def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
 # ── TS-specific statement lowerers (pure functions) ──────────────
 
 
-def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_interface_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower interface_declaration as CLASS block with method stubs.
 
     Mirrors lower_ts_class_def so that interface method return types are seeded
@@ -217,12 +234,14 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.seed_var_type(iface_name, metatype(ScalarType(iface_name)))
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
 
-def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_ts_interface_method(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a method_signature inside an interface as a function stub with return type."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node) if name_node else "__iface_method"
@@ -242,11 +261,13 @@ def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_ts_interface_property(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a property_signature inside an interface as STORE_VAR with type seeding.
 
     Seeds type info so ADR-100 chain walk can resolve property types on
@@ -262,7 +283,9 @@ def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
     ctx.seed_var_type(prop_name, type_hint)
 
 
-def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_enum_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if name_node:
@@ -285,7 +308,9 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=obj_reg))
 
 
-def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ts_field_definition(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `public name: type` or `public name = expr` as STORE_VAR."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     if name_node is None:
@@ -309,13 +334,17 @@ def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(DeclVar(name=VarName(field_name), value_reg=val_reg), node=node)
 
 
-def lower_ts_export_statement(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ts_export_statement(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     for child in node.children:
         if child.is_named and child.type != TypeScriptNodeType.EXPORT:
             ctx.lower_stmt(child)
 
 
-def _extract_ts_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_ts_parents(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parent class name from a TS class declaration."""
     heritage = next(
         (c for c in node.children if c.type == TypeScriptNodeType.CLASS_HERITAGE),
@@ -333,7 +362,9 @@ def _extract_ts_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
-def _extract_ts_interfaces(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_ts_interfaces(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract interface names from implements_clause in a TS class declaration."""
     heritage = next(
         (c for c in node.children if c.type == TypeScriptNodeType.CLASS_HERITAGE),
@@ -351,7 +382,9 @@ def _extract_ts_interfaces(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
-def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ts_class_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower class_declaration using TS-specific param handling for methods."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -388,12 +421,14 @@ def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
-def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_ts_method_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower method_definition using TS-specific param handling."""
     from interpreter.frontends.javascript.declarations import (
         _emit_this_param,
@@ -430,11 +465,13 @@ def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ts_abstract_method(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `abstract speak(): string` as a function stub."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node) if name_node else "__abstract"
@@ -450,11 +487,13 @@ def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_ts_internal_module(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ts_internal_module(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `namespace Geometry { ... }` -- descend into body."""
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if body_node:
@@ -562,7 +601,9 @@ def lower_ts_params(ctx: TreeSitterEmitContext, params_node) -> None:
         param_index += 1
 
 
-def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ts_arrow_function(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower arrow function using TS-specific param handling."""
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -593,11 +634,13 @@ def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return func_reg
 
 
-def lower_ts_function_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ts_function_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower anonymous function expression using TS-specific param handling."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
@@ -622,11 +665,13 @@ def lower_ts_function_expression(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return func_reg
 
 
-def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ts_function_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function_declaration using TS-specific param handling."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
@@ -656,11 +701,13 @@ def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
+def lower_import_alias(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower import_alias: import Foo = Bar.Baz → LOAD_VAR/LOAD_FIELD + STORE_VAR.
 
     TypeScript namespace import. At runtime compiles to var Foo = Bar.Baz.
@@ -674,7 +721,9 @@ def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(StoreVar(name=VarName(alias_name), value_reg=target_reg), node=node)
 
 
-def _lower_nested_identifier(ctx: TreeSitterEmitContext, node) -> Register:
+def _lower_nested_identifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a nested_identifier (Bar.Baz) or plain identifier to a register."""
     if node.type == "identifier":
         return ctx.lower_expr(node)

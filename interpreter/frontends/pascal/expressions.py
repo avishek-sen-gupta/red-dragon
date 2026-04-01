@@ -1,6 +1,9 @@
+# pyright: standard
 """Pascal-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -35,7 +38,9 @@ from interpreter.instructions import (
 logger = logging.getLogger(__name__)
 
 
-def lower_pascal_binop(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_binop(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower exprBinary -- children: lhs, operator_keyword, rhs."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
@@ -71,7 +76,9 @@ def lower_pascal_binop(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_pascal_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower exprCall -- children: identifier, (, exprArgs, )."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -86,7 +93,7 @@ def lower_pascal_call(ctx: TreeSitterEmitContext, node) -> Register:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -96,7 +103,7 @@ def lower_pascal_call(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
@@ -106,14 +113,16 @@ def _extract_pascal_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     """Extract argument registers from exprArgs node."""
     if args_node is None:
         return []
-    return [
+    return [  # type: ignore[return-value]  # see red-dragon-hzmm
         ctx.lower_expr(c)
         for c in args_node.children
         if c.is_named and c.type not in KEYWORD_NOISE
     ]
 
 
-def lower_pascal_paren(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_paren(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower exprParens -- unwrap inner expression."""
     inner = next(
         (c for c in node.children if c.type not in ("(", ")")),
@@ -124,7 +133,9 @@ def lower_pascal_paren(ctx: TreeSitterEmitContext, node) -> Register:
     return ctx.lower_expr(inner)
 
 
-def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_dot(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower exprDot -- first child = object, last child = field name.
 
     If the object is a class-typed variable with a registered property getter,
@@ -143,7 +154,7 @@ def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> Register:
     # Check if obj is a class-typed variable for property interception
     obj_class = _resolve_object_class(ctx, obj_node)
     if obj_class:
-        return emit_field_load_or_getter(ctx, obj_reg, obj_class, field_name, node)
+        return emit_field_load_or_getter(ctx, obj_reg, obj_class, field_name, node)  # type: ignore[misc]  # see red-dragon-hzmm
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -153,7 +164,9 @@ def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_pascal_subscript(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_subscript(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower exprSubscript -- object followed by exprArgs containing index."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -180,7 +193,9 @@ def lower_pascal_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     return obj_reg
 
 
-def lower_pascal_unary(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_unary(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower exprUnary -- operator keyword + operand."""
     op_symbol = "?"
     for child in node.children:
@@ -202,7 +217,9 @@ def lower_pascal_unary(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_pascal_brackets(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_brackets(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower exprBrackets (set literal) as NEW_ARRAY + STORE_INDEX per element."""
     elems = [c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE]
     arr_reg = ctx.fresh_reg()
@@ -220,7 +237,9 @@ def lower_pascal_brackets(ctx: TreeSitterEmitContext, node) -> Register:
     return arr_reg
 
 
-def lower_pascal_range(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_range(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `4..10` as CALL_FUNCTION('range', lo, hi)."""
     nums = [c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE]
     arg_regs = [ctx.lower_expr(c) for c in nums]
@@ -232,7 +251,9 @@ def lower_pascal_range(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_pascal_inherited_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pascal_inherited_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `inherited Create` as CALL_FUNCTION('inherited', method)."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -244,7 +265,7 @@ def lower_pascal_inherited_expr(ctx: TreeSitterEmitContext, node) -> Register:
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=reg, func_name=FuncName("inherited"), args=(method_name,)
+            result_reg=reg, func_name=FuncName("inherited"), args=(method_name,)  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )

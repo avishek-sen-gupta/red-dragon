@@ -1,11 +1,14 @@
+# pyright: standard
 """RustFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -62,7 +65,9 @@ class RustFrontend(BaseFrontend):
             "&str": "String",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             RustNodeType.IDENTIFIER: common_expr.lower_identifier,
             RustNodeType.INTEGER_LITERAL: common_expr.lower_const_literal,
@@ -123,7 +128,9 @@ class RustFrontend(BaseFrontend):
 
         emit_prelude(ctx)
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             RustNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             RustNodeType.LET_DECLARATION: rust_decl.lower_let_decl,
@@ -155,8 +162,7 @@ class RustFrontend(BaseFrontend):
             RustNodeType.MACRO_DEFINITION: lambda ctx, node: None,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.rust.declarations import extract_rust_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_rust_symbols(root)

@@ -1,3 +1,4 @@
+# pyright: standard
 """JavaScript frontend package."""
 
 from interpreter.frontends.javascript.frontend import JavaScriptFrontend

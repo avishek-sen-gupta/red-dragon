@@ -1,11 +1,14 @@
+# pyright: standard
 """GoFrontend — thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -59,7 +62,9 @@ class GoFrontend(BaseFrontend):
             "string": "String",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             GoNodeType.IDENTIFIER: common_expr.lower_identifier,
             GoNodeType.INT_LITERAL: common_expr.lower_const_literal,
@@ -92,7 +97,9 @@ class GoFrontend(BaseFrontend):
             GoNodeType.IOTA: go_expr.lower_go_iota,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             GoNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             GoNodeType.SHORT_VAR_DECLARATION: go_decl.lower_short_var_decl,
@@ -124,8 +131,7 @@ class GoFrontend(BaseFrontend):
             GoNodeType.RECEIVE_STATEMENT: go_cf.lower_receive_stmt,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.go.declarations import extract_go_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_go_symbols(root)

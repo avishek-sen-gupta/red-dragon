@@ -1,3 +1,4 @@
+# pyright: standard
 """Scala tree-sitter node type constants."""
 
 

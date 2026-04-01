@@ -1,3 +1,4 @@
+# pyright: standard
 """Scala frontend package."""
 
 from interpreter.frontends.scala.frontend import ScalaFrontend

@@ -1,6 +1,9 @@
+# pyright: standard
 """Kotlin-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -39,7 +42,9 @@ logger = logging.getLogger(__name__)
 # -- assignment --------------------------------------------------------
 
 
-def lower_kotlin_assignment(ctx: TreeSitterEmitContext, node) -> None:
+def lower_kotlin_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name("directly_assignable_expression")
     right = node.child_by_field_name("expression")
     # Fallback: walk children
@@ -51,18 +56,22 @@ def lower_kotlin_assignment(ctx: TreeSitterEmitContext, node) -> None:
         else:
             return
     val_reg = ctx.lower_expr(right)
-    lower_kotlin_store_target(ctx, left, val_reg, node)
+    lower_kotlin_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
 
 
 # -- if statement ------------------------------------------------------
 
 
-def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_if_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower if as a statement (discard result)."""
     lower_if_expr(ctx, node)
 
 
-def lower_when_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_when_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower when as a statement (discard result)."""
     lower_when_expr(ctx, node)
 
@@ -70,7 +79,9 @@ def lower_when_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- while statement ---------------------------------------------------
 
 
-def lower_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_while_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     named_children = [c for c in node.children if c.is_named]
     # First named child is condition, last is body
     cond_node = named_children[0] if named_children else None
@@ -94,7 +105,7 @@ def lower_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -106,7 +117,9 @@ def lower_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- for statement -----------------------------------------------------
 
 
-def _find_for_iterable(ctx: TreeSitterEmitContext, node) -> object | None:
+def _find_for_iterable(
+    ctx: TreeSitterEmitContext, node: Any
+) -> object | None:  # Any: tree-sitter node — untyped at Python boundary
     """Find the iterable expression in a for statement (after 'in' keyword)."""
     found_in = False
     for child in node.children:
@@ -144,7 +157,7 @@ def _lower_for_multi_destructure(
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),
+            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=var_decl,
         )
         ctx.emit_inst(
@@ -152,7 +165,9 @@ def _lower_for_multi_destructure(
         )
 
 
-def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_for_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     named_children = [c for c in node.children if c.is_named]
     # Typically: variable_declaration, iterable expression, control_structure_body
     # May also be multi_variable_declaration for destructuring
@@ -215,13 +230,13 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
 
     if is_destructure:
-        _lower_for_multi_destructure(ctx, multi_var_node, elem_reg)
+        _lower_for_multi_destructure(ctx, multi_var_node, elem_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
     else:
         var_name = ctx.declare_block_var(raw_name)
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -245,7 +260,9 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- jump expression (return, break, continue, throw) ------------------
 
 
-def lower_jump_expr(ctx: TreeSitterEmitContext, node) -> None:
+def lower_jump_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     text = ctx.node_text(node)
     if text.startswith("return"):
         children = [c for c in node.children if c.type != KNT.RETURN]
@@ -270,7 +287,9 @@ def lower_jump_expr(ctx: TreeSitterEmitContext, node) -> None:
 # -- do-while statement ------------------------------------------------
 
 
-def lower_do_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_do_while_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower do { body } while (cond) loop."""
     body_node = next(
         (c for c in node.children if c.type == KNT.CONTROL_STRUCTURE_BODY),
@@ -291,7 +310,7 @@ def lower_do_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)
+    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -307,7 +326,11 @@ def lower_do_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- try/catch/finally -------------------------------------------------
 
 
-def _extract_try_parts(ctx: TreeSitterEmitContext, node):
+def _extract_try_parts(
+    ctx: TreeSitterEmitContext, node: Any
+) -> tuple[
+    Any, list[Any], Any | None
+]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract body, catch clauses, and finally from a try_expression."""
     # First named child that's a statements block is the body
     body_node = next(
@@ -353,6 +376,8 @@ def _extract_try_parts(ctx: TreeSitterEmitContext, node):
     return body_node, catch_clauses, finally_node
 
 
-def lower_try_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_try_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     body_node, catch_clauses, finally_node = _extract_try_parts(ctx, node)
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)

@@ -1,6 +1,9 @@
+# pyright: standard
 """Ruby-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.var_name import VarName
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -37,7 +40,7 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
         and c.type not in ctx.constants.noise_types
     ]
     if not children:
-        return ""
+        return ""  # type: ignore[return-value]  # see red-dragon-hzmm
     *init, last = children
     for child in init:
         ctx.lower_stmt(child)
@@ -47,7 +50,7 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
     )
     if is_stmt:
         ctx.lower_stmt(last)
-        return ""
+        return ""  # type: ignore[return-value]  # see red-dragon-hzmm
     return ctx.lower_expr(last)
 
 
@@ -101,16 +104,20 @@ def lower_ruby_method(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_ruby_method_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_method_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby method as a statement (no inject_self)."""
     lower_ruby_method(ctx, node, inject_self=False)
 
 
-def _extract_ruby_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_ruby_parents(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parent class name from a Ruby class definition (single inheritance)."""
     superclass_node = next(
         (c for c in node.children if c.type == RubyNodeType.SUPERCLASS), None
@@ -124,7 +131,9 @@ def _extract_ruby_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     return [ctx.node_text(parent_id)] if parent_id else []
 
 
-def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_class(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby class definition with method body handling."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -145,11 +154,13 @@ def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
-def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_singleton_class(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `class << obj ... end` — lower the body."""
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     value_node = node.child_by_field_name("value")
@@ -169,7 +180,9 @@ def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_singleton_method(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `def self.method_name(...) ... end` as a class method.
 
     The function is registered under just the method name (not
@@ -206,11 +219,13 @@ def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(method_name), value_reg=func_reg))
 
 
-def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
+def lower_ruby_module(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `module Name; ...; end` like a class."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -226,7 +241,7 @@ def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(module_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(module_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(module_name), value_reg=cls_reg))
 
 
@@ -235,7 +250,7 @@ def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_ruby_initialize_fields(body) -> "dict[str, FieldInfo]":
+def _extract_ruby_initialize_fields(body) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
     """Walk initialize body and collect @x = ... instance variable assignments."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -248,13 +263,13 @@ def _extract_ruby_initialize_fields(body) -> "dict[str, FieldInfo]":
         if lhs is None or lhs.type != RubyNodeType.INSTANCE_VARIABLE:
             continue
         field_name = lhs.text.decode().lstrip("@")
-        fields[FieldName(field_name)] = FieldInfo(
+        fields[FieldName(field_name)] = FieldInfo(  # type: ignore[misc]  # see red-dragon-hzmm
             name=FieldName(field_name), type_hint="", has_initializer=True
         )
     return fields
 
 
-def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
+def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract a ClassInfo from a Ruby class node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -273,7 +288,7 @@ def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
             None,
         )
         if parent_name_node is not None:
-            parents = (ClassName(parent_name_node.text.decode()),)
+            parents = (ClassName(parent_name_node.text.decode()),)  # type: ignore[misc]  # see red-dragon-hzmm
 
     body = node.child_by_field_name("body")
     if body is None:
@@ -282,7 +297,7 @@ def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
             fields={},
             methods={},
             constants={},
-            parents=parents,
+            parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
         )
 
     fields: dict[FieldName, FieldInfo] = {}
@@ -310,18 +325,18 @@ def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
             if mname == "initialize":
                 mbody = child.child_by_field_name("body")
                 if mbody is not None:
-                    fields.update(_extract_ruby_initialize_fields(mbody))
+                    fields.update(_extract_ruby_initialize_fields(mbody))  # type: ignore[name-defined]  # see red-dragon-545a
 
     return class_name, ClassInfo(
         name=ClassName(class_name),
         fields=fields,
         methods=methods,
         constants={},
-        parents=parents,
+        parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
     )
 
 
-def _collect_ruby_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_ruby_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:  # type: ignore[name-defined]  # see red-dragon-545a
     """Recursively walk the AST and collect all class nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -334,7 +349,7 @@ def _collect_ruby_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> No
         _collect_ruby_classes(child, accumulator)
 
 
-def extract_ruby_symbols(root) -> "SymbolTable":
+def extract_ruby_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
     """Walk the Ruby AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

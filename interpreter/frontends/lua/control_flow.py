@@ -1,6 +1,9 @@
+# pyright: standard
 """Lua-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -27,7 +30,9 @@ from interpreter.instructions import (
 logger = logging.getLogger(__name__)
 
 
-def lower_lua_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower if_statement with elseif_statement and else_statement children."""
     condition_node = node.child_by_field_name(ctx.constants.if_condition_field)
     consequence_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -54,7 +59,7 @@ def lower_lua_if(ctx: TreeSitterEmitContext, node) -> None:
 
     if has_alternative:
         ctx.emit_inst(Label_(label=false_label))
-        _lower_lua_elseif_chain(ctx, elseif_nodes, else_node, end_label)
+        _lower_lua_elseif_chain(ctx, elseif_nodes, else_node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -82,21 +87,23 @@ def _lower_lua_elseif_chain(
     false_label = ctx.fresh_label("elseif_false") if has_more else end_label
 
     ctx.emit_inst(
-        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=current,
     )
 
     ctx.emit_inst(Label_(label=true_label))
     if body_node:
         ctx.lower_block(body_node)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
 
     if has_more:
-        ctx.emit_inst(Label_(label=false_label))
+        ctx.emit_inst(Label_(label=false_label))  # type: ignore[misc]  # see red-dragon-hzmm
         _lower_lua_elseif_chain(ctx, remaining, else_node, end_label)
 
 
-def lower_lua_while(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_while(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower while_statement."""
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
@@ -112,7 +119,7 @@ def lower_lua_while(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -121,7 +128,9 @@ def lower_lua_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_lua_for(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_for(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower for_statement -- dispatches on for_numeric_clause vs for_generic_clause."""
     numeric_clause = next(
         (c for c in node.children if c.type == LuaNodeType.FOR_NUMERIC_CLAUSE), None
@@ -186,7 +195,7 @@ def _lower_lua_for_numeric(
 
     ctx.emit_inst(Label_(label=body_label))
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -212,7 +221,9 @@ def _lower_lua_for_numeric(
 _ITERATOR_WRAPPERS = frozenset({"ipairs", "pairs"})
 
 
-def _strip_iterator_wrapper(ctx: TreeSitterEmitContext, expr_list_node):
+def _strip_iterator_wrapper(
+    ctx: TreeSitterEmitContext, expr_list_node: Any
+) -> Any:  # Any: tree-sitter node — untyped at Python boundary
     """If the expression list is a single ipairs(t)/pairs(t) call, return t.
 
     Otherwise return the original expression list node unchanged.
@@ -292,7 +303,7 @@ def _lower_lua_for_generic(
         ctx.emit_inst(DeclVar(name=VarName(var_names[1]), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("generic_for_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -312,7 +323,9 @@ def _lower_lua_for_generic(
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_repeat(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower repeat ... until cond (execute body first, then check)."""
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
@@ -321,7 +334,7 @@ def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("repeat_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(body_label, end_label)
+    ctx.push_loop(body_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -341,7 +354,9 @@ def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_lua_do(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_do(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower do ... end as a plain block."""
     body_node = node.child_by_field_name("body")
     if body_node:
@@ -352,7 +367,9 @@ def lower_lua_do(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.lower_stmt(child)
 
 
-def lower_lua_goto(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_goto(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower goto_statement -- BRANCH to the named label."""
     named_children = [c for c in node.children if c.is_named]
     label_name = ctx.node_text(named_children[0]) if named_children else "unknown"
@@ -360,7 +377,9 @@ def lower_lua_goto(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Branch(label=CodeLabel(label_name)), node=node)
 
 
-def lower_lua_label(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_label(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower label_statement (::name::) -- emit LABEL with the name."""
     named_children = [c for c in node.children if c.is_named]
     label_name = ctx.node_text(named_children[0]) if named_children else "unknown"

@@ -1,6 +1,9 @@
+# pyright: standard
 """Parse tree-sitter Python pattern AST nodes into Pattern ADT."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.common.patterns import (
     AsPattern,
@@ -42,7 +45,9 @@ def _parse_key_literal(
             return text.strip("'\"")
 
 
-def parse_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def parse_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Convert a tree-sitter case_pattern (or inner pattern) node into a Pattern ADT."""
     # case_pattern is a wrapper — unwrap to inner
     if node.type == PythonNodeType.CASE_PATTERN:

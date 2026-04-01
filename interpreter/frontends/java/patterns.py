@@ -1,6 +1,9 @@
+# pyright: standard
 """Parse tree-sitter Java pattern nodes into Pattern ADT."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.common.patterns import (
     AsPattern,
@@ -13,7 +16,9 @@ from interpreter.frontends.common.patterns import (
 from interpreter.frontends.context import TreeSitterEmitContext
 
 
-def parse_java_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def parse_java_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Convert a Java tree-sitter pattern node into a Pattern ADT.
 
     Java 16+ pattern nodes in switch expressions:
@@ -44,7 +49,9 @@ def parse_java_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     return LiteralPattern(value=text)
 
 
-def _parse_type_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def _parse_type_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse: String s, String _, int x."""
     named = [c for c in node.children if c.is_named]
     type_node = named[0] if named else node
@@ -62,7 +69,9 @@ def _parse_type_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     return class_pat
 
 
-def _parse_record_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def _parse_record_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse: Point(int x, int y)."""
     type_node = next(
         (c for c in node.children if c.type in ("type_identifier", "identifier")),
@@ -82,7 +91,9 @@ def _parse_record_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     return ClassPattern(class_name=class_name, positional=tuple(positional), keyword=())
 
 
-def _parse_record_component(ctx: TreeSitterEmitContext, node) -> Pattern:
+def _parse_record_component(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse a record_pattern_component: int x, String s, _."""
     named = [c for c in node.children if c.is_named]
     if len(named) >= 2:

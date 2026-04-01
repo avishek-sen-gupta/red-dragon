@@ -1,3 +1,4 @@
+# pyright: standard
 """Pascal frontend package."""
 
 from interpreter.frontends.pascal.frontend import PascalFrontend

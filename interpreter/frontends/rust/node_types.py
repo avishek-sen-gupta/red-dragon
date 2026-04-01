@@ -1,3 +1,4 @@
+# pyright: standard
 """Tree-sitter node type constants for the Rust frontend."""
 
 

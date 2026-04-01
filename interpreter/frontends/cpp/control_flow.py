@@ -1,6 +1,9 @@
+# pyright: standard
 """C++-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -29,7 +32,9 @@ from interpreter.frontends.common.exceptions import (
 from interpreter.frontends.cpp.node_types import CppNodeType
 
 
-def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_cpp_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Override if lowering to handle C++ condition_clause wrapper.
 
     C++17 allows ``if (init; cond) { }`` where the init variable is
@@ -92,7 +97,9 @@ def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.exit_block_scope()
 
 
-def lower_cpp_while(ctx: TreeSitterEmitContext, node) -> None:
+def lower_cpp_while(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Override while lowering to handle C++ condition_clause wrapper."""
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
@@ -108,7 +115,7 @@ def lower_cpp_while(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -117,14 +124,18 @@ def lower_cpp_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_namespace_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_namespace_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower namespace_definition as a block — descend into body."""
     body_node = node.child_by_field_name("body")
     if body_node:
         ctx.lower_block(body_node)
 
 
-def lower_template_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_template_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower template_declaration — try to lower the inner declaration."""
     inner_decls = [
         c
@@ -158,13 +169,15 @@ def _lower_structured_binding(
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),
+            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=id_node,
         )
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=part_reg), node=id_node)
 
 
-def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
+def lower_range_for(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower for (auto x : container) { body }.
 
     Handles structured bindings: ``for (auto [a, b] : pairs)`` by
@@ -219,13 +232,13 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
 
     if is_structured_binding:
-        _lower_structured_binding(ctx, declarator_node, elem_reg)
+        _lower_structured_binding(ctx, declarator_node, elem_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
     else:
         var_name = ctx.declare_block_var(raw_name)
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("range_for_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -246,7 +259,9 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_throw(ctx: TreeSitterEmitContext, node) -> None:
+def lower_throw(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower C++ throw statement."""
     lower_raise_or_throw(ctx, node, keyword="throw")
 
@@ -288,7 +303,9 @@ def _extract_catch_param(
     return exc_var, exc_type
 
 
-def lower_try(ctx: TreeSitterEmitContext, node) -> None:
+def lower_try(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower C++ try/catch."""
     body_node = node.child_by_field_name("body")
     catch_clauses = []
