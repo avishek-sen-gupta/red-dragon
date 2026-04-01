@@ -1,3 +1,4 @@
+# pyright: standard
 """Common expression lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend. Every function returns the register holding
@@ -5,6 +6,8 @@ the expression's value.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
@@ -36,7 +39,9 @@ from interpreter.instructions import (
 )
 
 
-def lower_const_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_const_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         Const(
@@ -48,7 +53,9 @@ def lower_const_literal(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_canonical_none(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_canonical_none(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -61,7 +68,9 @@ def lower_canonical_none(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_canonical_true(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_canonical_true(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         Const(
@@ -73,7 +82,9 @@ def lower_canonical_true(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_canonical_false(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_canonical_false(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         Const(
@@ -85,7 +96,9 @@ def lower_canonical_false(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_canonical_bool(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_canonical_bool(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Emit canonical True/False based on node text."""
     text = ctx.node_text(node).strip().lower()
     if text == "true":
@@ -93,7 +106,9 @@ def lower_canonical_bool(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_canonical_false(ctx, node)
 
 
-def lower_identifier(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_identifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     name = ctx.node_text(node)
     resolved_name = ctx.resolve_var(name)
     # Implicit this: bare identifier that's a class field and not a local/param
@@ -127,7 +142,9 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_paren(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_paren(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     inner = next(
         (
             c
@@ -141,7 +158,9 @@ def lower_paren(ctx: TreeSitterEmitContext, node) -> Register:
     return ctx.lower_expr(inner)
 
 
-def lower_spread_arg(ctx: TreeSitterEmitContext, node) -> SpreadArguments:
+def lower_spread_arg(
+    ctx: TreeSitterEmitContext, node: Any
+) -> SpreadArguments:  # Any: tree-sitter node — untyped at Python boundary
     """Lower *expr / ...expr / **expr as SpreadArguments(register).
 
     Returns a SpreadArguments wrapper (not a plain register string).
@@ -157,7 +176,9 @@ def lower_spread_arg(ctx: TreeSitterEmitContext, node) -> SpreadArguments:
     return SpreadArguments(register=inner_reg)
 
 
-def lower_binop(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_binop(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     children = [
         c
         for c in node.children
@@ -179,7 +200,9 @@ def lower_binop(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_comparison(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_comparison(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     children = [
         c
         for c in node.children
@@ -201,7 +224,9 @@ def lower_comparison(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_unop(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_unop(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     children = [
         c
         for c in node.children
@@ -221,13 +246,17 @@ def lower_unop(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     return lower_call_impl(ctx, func_node, args_node, node)
 
 
-def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> Register:
+def lower_call_impl(
+    ctx: TreeSitterEmitContext, func_node: Any, args_node: Any, node: Any
+) -> Register:  # Any: tree-sitter nodes — untyped at Python boundary
     arg_regs = extract_call_args(ctx, args_node)
 
     # Method call: obj.method(...)
@@ -254,7 +283,7 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> R
                     result_reg=reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(
+                    args=tuple(  # type: ignore[arg-type]  # see red-dragon-2us7
                         str(a) if not isinstance(a, SpreadArguments) else a
                         for a in arg_regs
                     ),
@@ -271,7 +300,7 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> R
             CallFunction(
                 result_reg=reg,
                 func_name=FuncName(func_name),
-                args=tuple(
+                args=tuple(  # type: ignore[arg-type]  # see red-dragon-2us7
                     str(a) if not isinstance(a, SpreadArguments) else a
                     for a in arg_regs
                 ),
@@ -296,7 +325,7 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> R
         CallUnknown(
             result_reg=reg,
             target_reg=target_reg,
-            args=tuple(
+            args=tuple(  # type: ignore[arg-type]  # see red-dragon-2us7
                 str(a) if not isinstance(a, SpreadArguments) else a for a in arg_regs
             ),
         ),
@@ -305,11 +334,13 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> R
     return reg
 
 
-def extract_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
+def extract_call_args(
+    ctx: TreeSitterEmitContext, args_node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract argument registers from a call arguments node."""
     if args_node is None:
         return []
-    return [
+    return [  # type: ignore[return-value]  # see red-dragon-2us7
         ctx.lower_expr(c)
         for c in args_node.children
         if c.type
@@ -324,7 +355,9 @@ def extract_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     ]
 
 
-def extract_call_args_unwrap(ctx: TreeSitterEmitContext, args_node) -> list[str]:
+def extract_call_args_unwrap(
+    ctx: TreeSitterEmitContext, args_node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract args, unwrapping wrapper nodes like 'argument'."""
     if args_node is None:
         return []
@@ -342,13 +375,15 @@ def extract_call_args_unwrap(ctx: TreeSitterEmitContext, args_node) -> list[str]
                 None,
             )
             if inner:
-                regs.append(ctx.lower_expr(inner))
+                regs.append(ctx.lower_expr(inner))  # type: ignore[arg-type]  # see red-dragon-2us7
         elif c.is_named:
-            regs.append(ctx.lower_expr(c))
+            regs.append(ctx.lower_expr(c))  # type: ignore[arg-type]  # see red-dragon-2us7
     return regs
 
 
-def lower_attribute(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_attribute(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     attr_node = node.child_by_field_name(ctx.constants.attr_attribute_field)
     if obj_node is None:
@@ -371,7 +406,9 @@ def lower_attribute(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_subscript(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_subscript(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     obj_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     idx_node = node.child_by_field_name(ctx.constants.subscript_index_field)
     if obj_node is None or idx_node is None:
@@ -391,7 +428,9 @@ def lower_subscript(ctx: TreeSitterEmitContext, node) -> Register:
 
 
 def lower_interpolated_string_parts(
-    ctx: TreeSitterEmitContext, parts: list[str], node
+    ctx: TreeSitterEmitContext,
+    parts: list[str],
+    node: Any,  # Any: tree-sitter node — untyped at Python boundary
 ) -> Register:
     """Chain a list of string-part registers with BINOP '+' concatenation."""
     if not parts:
@@ -403,16 +442,18 @@ def lower_interpolated_string_parts(
             Binop(
                 result_reg=new_reg,
                 operator=resolve_binop("+"),
-                left=str(result),
-                right=str(part),
+                left=str(result),  # type: ignore[arg-type]  # see red-dragon-2us7
+                right=str(part),  # type: ignore[arg-type]  # see red-dragon-2us7
             ),
             node=node,
         )
         result = new_reg
-    return result
+    return result  # type: ignore[return-value]  # see red-dragon-2us7
 
 
-def lower_update_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_update_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower i++ / i-- / ++i / --i update expressions."""
     children = [c for c in node.children if c.is_named]
     if not children:
@@ -433,11 +474,13 @@ def lower_update_expr(ctx: TreeSitterEmitContext, node) -> Register:
         ),
         node=node,
     )
-    lower_store_target(ctx, operand, result_reg, node)
+    lower_store_target(ctx, operand, result_reg, node)  # type: ignore[arg-type]  # see red-dragon-2us7
     return result_reg
 
 
-def lower_list_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_list_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     elems = [
         c
         for c in node.children
@@ -475,7 +518,9 @@ def lower_list_literal(ctx: TreeSitterEmitContext, node) -> Register:
     return arr_reg
 
 
-def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_dict_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
         NewObject(
@@ -508,13 +553,16 @@ def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> Register:
 
 
 def lower_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext,
+    target: Any,
+    val_reg: str,
+    parent_node: Any,  # Any: tree-sitter nodes — untyped at Python boundary
 ) -> None:
     if target.type == CommonNodeType.IDENTIFIER:
         ctx.emit_inst(
             StoreVar(
                 name=VarName(ctx.resolve_var(ctx.node_text(target))),
-                value_reg=val_reg,
+                value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
             ),
             node=parent_node,
         )
@@ -537,7 +585,7 @@ def lower_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(attr_node)),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                 ),
                 node=parent_node,
             )
@@ -551,7 +599,7 @@ def lower_store_target(
                 StoreIndex(
                     arr_reg=obj_reg,
                     index_reg=idx_reg,
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                 ),
                 node=parent_node,
             )
@@ -560,7 +608,7 @@ def lower_store_target(
         ctx.emit_inst(
             StoreVar(
                 name=VarName(ctx.node_text(target)),
-                value_reg=val_reg,
+                value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
             ),
             node=parent_node,
         )

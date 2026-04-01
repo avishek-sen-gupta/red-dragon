@@ -1,3 +1,4 @@
+# pyright: standard
 """Common control-flow lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend: if/elif/while/for/break/continue.
@@ -5,13 +6,17 @@ Extracted from BaseFrontend: if/elif/while/for/break/continue.
 
 from __future__ import annotations
 
+from typing import Any
+
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter.instructions import Branch, BranchIf, Label_, Symbolic
 
 
-def lower_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -44,13 +49,15 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
-        lower_alternative(ctx, alt_node, end_label)
+        lower_alternative(ctx, alt_node, end_label)  # type: ignore[arg-type]  # see red-dragon-2us7
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -> None:
+def lower_alternative(
+    ctx: TreeSitterEmitContext, alt_node: Any, end_label: str
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower an else/elif/else-if alternative block."""
     alt_type = alt_node.type
     if alt_type in (CommonNodeType.ELIF_CLAUSE,):
@@ -72,7 +79,9 @@ def lower_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -> N
         ctx.lower_block(alt_node)
 
 
-def lower_elif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
+def lower_elif(
+    ctx: TreeSitterEmitContext, node: Any, end_label: str
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -84,26 +93,28 @@ def lower_elif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     ctx.emit_inst(
         BranchIf(
             cond_reg=cond_reg,
-            branch_targets=(true_label, false_label),
+            branch_targets=(true_label, false_label),  # type: ignore[arg-type]  # see red-dragon-2us7
         ),
         node=node,
     )
 
     ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-2us7
 
     if alt_node:
-        ctx.emit_inst(Label_(label=false_label))
-        lower_alternative(ctx, alt_node, end_label)
-        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Label_(label=false_label))  # type: ignore[arg-type]  # see red-dragon-2us7
+        lower_alternative(ctx, alt_node, end_label)  # type: ignore[arg-type]  # see red-dragon-2us7
+        ctx.emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-2us7
 
 
-def lower_break(ctx: TreeSitterEmitContext, node) -> None:
+def lower_break(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower break statement as BRANCH to innermost break target."""
     if ctx.break_target_stack:
         ctx.emit_inst(
-            Branch(label=ctx.break_target_stack[-1]),
+            Branch(label=ctx.break_target_stack[-1]),  # type: ignore[arg-type]  # see red-dragon-2us7
             node=node,
         )
     else:
@@ -117,11 +128,13 @@ def lower_break(ctx: TreeSitterEmitContext, node) -> None:
         )
 
 
-def lower_continue(ctx: TreeSitterEmitContext, node) -> None:
+def lower_continue(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower continue statement as BRANCH to innermost loop continue label."""
     if ctx.loop_stack:
         ctx.emit_inst(
-            Branch(label=ctx.loop_stack[-1]["continue_label"]),
+            Branch(label=ctx.loop_stack[-1]["continue_label"]),  # type: ignore[arg-type]  # see red-dragon-2us7
             node=node,
         )
     else:
@@ -135,7 +148,9 @@ def lower_continue(ctx: TreeSitterEmitContext, node) -> None:
         )
 
 
-def lower_while(ctx: TreeSitterEmitContext, node) -> None:
+def lower_while(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
 
@@ -154,7 +169,7 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-2us7
     ctx.lower_block(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -162,7 +177,9 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
+def lower_c_style_for(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a C-style for(init; cond; update) loop.
 
     When ``ctx.block_scoped`` is True, the entire loop (init + condition +
@@ -200,7 +217,7 @@ def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=body_label))
     update_label = ctx.fresh_label("for_update") if update_node else loop_label
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-2us7
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
