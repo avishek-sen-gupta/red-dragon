@@ -1,3 +1,4 @@
+# pyright: standard
 """FieldName — typed field/property name with access-pattern tag."""
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ class FieldName:
     value: str
     kind: FieldKind = FieldKind.PROPERTY
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.value, str):
             raise TypeError(
                 f"FieldName.value must be str, got {type(self.value).__name__}: {self.value!r}"

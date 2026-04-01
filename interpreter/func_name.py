@@ -1,3 +1,4 @@
+# pyright: standard
 """FuncName — typed function/method name."""
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ class FuncName:
 
     value: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.value, str):
             raise TypeError(
                 f"FuncName.value must be str, got {type(self.value).__name__}: {self.value!r}"
