@@ -1,3 +1,4 @@
+# pyright: standard
 """Condition name index — maps level-88 condition names to parent fields.
 
 Builds a lookup from condition names to their parent field name and

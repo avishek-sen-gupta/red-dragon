@@ -1,3 +1,4 @@
+# pyright: standard
 """COMP-1 and COMP-2 IEEE 754 float encoding/decoding — reference implementation.
 
 COMP-1: Single-precision IEEE 754 float, 4 bytes, big-endian.

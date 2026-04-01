@@ -1,3 +1,4 @@
+# pyright: standard
 """Data alignment filters for COBOL numeric formatting.
 
 Ported from smojol's RightAdjuster, LeftAdjuster, DecimalPointAligner.

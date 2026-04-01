@@ -1,3 +1,4 @@
+# pyright: standard
 """Data layout builder — computes byte layouts from COBOL field trees.
 
 Pure function: takes a list of CobolField trees and produces a flat

@@ -1,10 +1,10 @@
+# pyright: standard
 """Condition lowering — free functions for COBOL condition and expression nodes."""
 
 from __future__ import annotations
 
 import logging
 from functools import reduce
-from typing import Any
 
 from interpreter.cobol.cobol_expression import (
     BinOpNode,
@@ -74,7 +74,7 @@ def _emit_single_value_test(
                 right=le_result,
             )
         )
-        return and_result
+        return and_result  # type: ignore[return-value]  # see red-dragon-pn3f
 
     value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
     eq_result = ctx.fresh_reg()
@@ -86,7 +86,7 @@ def _emit_single_value_test(
             right=Register(str(value_reg)),
         )
     )
-    return eq_result
+    return eq_result  # type: ignore[return-value]  # see red-dragon-pn3f
 
 
 def _emit_or_chain(ctx: EmitContext, regs: list[str]) -> str:
@@ -109,7 +109,7 @@ def _emit_or(ctx: EmitContext, left_reg: str, right_reg: str) -> str:
             right=Register(str(right_reg)),
         )
     )
-    return result
+    return result  # type: ignore[return-value]  # see red-dragon-pn3f
 
 
 def _expand_condition_name(
@@ -134,8 +134,8 @@ def _expand_condition_name(
 
     if not value_regs:
         result = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=result, value=True))
-        return result
+        ctx.emit_inst(Const(result_reg=result, value=True))  # type: ignore[arg-type]  # see red-dragon-0qgg
+        return result  # type: ignore[return-value]  # see red-dragon-pn3f
 
     return _emit_or_chain(ctx, value_regs)
 
@@ -197,11 +197,11 @@ def lower_condition(
                 right=Register(str(right_reg)),
             )
         )
-        return result
+        return result  # type: ignore[return-value]  # see red-dragon-pn3f
 
     result = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=result, value=True))
-    return result
+    ctx.emit_inst(Const(result_reg=result, value=True))  # type: ignore[arg-type]  # see red-dragon-0qgg
+    return result  # type: ignore[return-value]  # see red-dragon-pn3f
 
 
 def lower_expr_node(
@@ -230,6 +230,6 @@ def lower_expr_node(
                 right=Register(str(right_reg)),
             )
         )
-        return result_reg
+        return result_reg  # type: ignore[return-value]  # see red-dragon-pn3f
     logger.warning("Unknown expression node type: %s", type(node).__name__)
     return ctx.const_to_reg(0)
