@@ -1,6 +1,9 @@
+# pyright: standard
 """Go-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -35,7 +38,9 @@ logger = logging.getLogger(__name__)
 # -- Go: if statement ------------------------------------------------------
 
 
-def lower_go_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Go if statement, including optional init statement.
 
     Go allows ``if x := expr; cond { }``.  The init variable is scoped
@@ -91,7 +96,9 @@ def lower_go_if(ctx: TreeSitterEmitContext, node) -> None:
 # -- Go: for statement -----------------------------------------------------
 
 
-def lower_go_for(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_for(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     # Look for for_clause (C-style) or range_clause
@@ -144,7 +151,7 @@ def _lower_go_for_clause(ctx: TreeSitterEmitContext, clause, body_node, parent) 
 
     ctx.emit_inst(Label_(label=body_label))
     update_label = ctx.fresh_label("for_update") if update_node else loop_label
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -208,7 +215,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
         ctx.emit_inst(DeclVar(name=VarName(var_names[1]), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("range_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -229,7 +236,9 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     ctx.emit_inst(Label_(label=end_label))
 
 
-def _lower_go_bare_for(ctx: TreeSitterEmitContext, node, body_node) -> None:
+def _lower_go_bare_for(
+    ctx: TreeSitterEmitContext, node: Any, body_node
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Bare for loop: `for { ... }` or `for cond { ... }`."""
     # Check if there is a condition child (not for_clause/range_clause/block/for)
     cond_node = next(
@@ -262,7 +271,7 @@ def _lower_go_bare_for(ctx: TreeSitterEmitContext, node, body_node) -> None:
         ctx.emit_inst(Branch(label=body_label))
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -274,7 +283,9 @@ def _lower_go_bare_for(ctx: TreeSitterEmitContext, node, body_node) -> None:
 # -- Go: inc/dec statements ------------------------------------------------
 
 
-def lower_go_inc(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_inc(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     children = [c for c in node.children if c.is_named]
     if not children:
         return
@@ -292,10 +303,12 @@ def lower_go_inc(ctx: TreeSitterEmitContext, node) -> None:
         ),
         node=node,
     )
-    lower_go_store_target(ctx, operand, result_reg, node)
+    lower_go_store_target(ctx, operand, result_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
 
 
-def lower_go_dec(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_dec(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     children = [c for c in node.children if c.is_named]
     if not children:
         return
@@ -313,13 +326,15 @@ def lower_go_dec(ctx: TreeSitterEmitContext, node) -> None:
         ),
         node=node,
     )
-    lower_go_store_target(ctx, operand, result_reg, node)
+    lower_go_store_target(ctx, operand, result_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
 
 
 # -- Go: return statement --------------------------------------------------
 
 
-def lower_go_return(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_return(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     children = [c for c in node.children if c.type != GoNodeType.RETURN and c.is_named]
     if not children:
         val_reg = ctx.fresh_reg()
@@ -334,13 +349,15 @@ def lower_go_return(ctx: TreeSitterEmitContext, node) -> None:
     else:
         regs = [ctx.lower_expr(c) for c in children]
     for reg in regs:
-        ctx.emit_inst(Return_(value_reg=reg), node=node)
+        ctx.emit_inst(Return_(value_reg=reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
 
 
 # -- Go: defer statement ---------------------------------------------------
 
 
-def lower_defer_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_defer_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower defer statement: lower call child, then CALL_FUNCTION('defer', call_reg)."""
     call_node = next(
         (c for c in node.children if c.is_named and c.type != GoNodeType.DEFER),
@@ -360,7 +377,9 @@ def lower_defer_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- Go: go statement ------------------------------------------------------
 
 
-def lower_go_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower go statement: lower call child, then CALL_FUNCTION('go', call_reg)."""
     call_node = next(
         (c for c in node.children if c.is_named and c.type != GoNodeType.GO),
@@ -380,7 +399,9 @@ def lower_go_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- Go: expression switch statement ---------------------------------------
 
 
-def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
+def lower_expression_switch(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower expression_switch_statement as if/else chain.
 
     Go allows ``switch x := expr; x { }``.  The init variable is scoped
@@ -407,7 +428,7 @@ def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
         if c.type in (GoNodeType.EXPRESSION_CASE, GoNodeType.DEFAULT_CASE)
     ]
 
-    ctx.push_loop(end_label, end_label)
+    ctx.push_loop(end_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     for case in cases:
         if case.type == GoNodeType.DEFAULT_CASE:
             body_children = [c for c in case.children if c.is_named]
@@ -429,8 +450,8 @@ def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
                         Binop(
                             result_reg=cmp_reg,
                             operator=resolve_binop("=="),
-                            left=val_reg,
-                            right=case_exprs[0],
+                            left=val_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+                            right=case_exprs[0],  # type: ignore[misc]  # see red-dragon-hzmm
                         ),
                         node=case,
                     )
@@ -467,13 +488,15 @@ def _make_const_val(ctx: TreeSitterEmitContext, value: str) -> str:
     """Emit a CONST and return its register."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=reg, value=value))
-    return reg
+    return reg  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
 # -- Go: type switch statement ---------------------------------------------
 
 
-def lower_type_switch(ctx: TreeSitterEmitContext, node) -> None:
+def lower_type_switch(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower type_switch_statement with CALL_FUNCTION('type_check') per case."""
     header = next(
         (c for c in node.children if c.type == GoNodeType.TYPE_SWITCH_HEADER), None
@@ -491,7 +514,7 @@ def lower_type_switch(ctx: TreeSitterEmitContext, node) -> None:
         if c.type in (GoNodeType.TYPE_CASE, GoNodeType.DEFAULT_CASE)
     ]
 
-    ctx.push_loop(end_label, end_label)
+    ctx.push_loop(end_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     for case in cases:
         if case.type == GoNodeType.DEFAULT_CASE:
             body_children = [c for c in case.children if c.is_named]
@@ -514,7 +537,7 @@ def lower_type_switch(ctx: TreeSitterEmitContext, node) -> None:
                     CallFunction(
                         result_reg=check_reg,
                         func_name=FuncName("type_check"),
-                        args=(expr_reg, type_text),
+                        args=(expr_reg, type_text),  # type: ignore[arg-type]  # see red-dragon-hzmm
                     ),
                     node=case,
                 )
@@ -541,7 +564,9 @@ def lower_type_switch(ctx: TreeSitterEmitContext, node) -> None:
 # -- Go: select statement --------------------------------------------------
 
 
-def lower_select_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_select_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower select_statement: lower each communication_case."""
     end_label = ctx.fresh_label("select_end")
     cases = [
@@ -564,7 +589,9 @@ def lower_select_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- Go: send statement ----------------------------------------------------
 
 
-def lower_send_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_send_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower send_statement: ch <- val -> CALL_FUNCTION('chan_send', ch, val)."""
     channel_node = node.child_by_field_name("channel")
     value_node = node.child_by_field_name("value")
@@ -588,7 +615,9 @@ def lower_send_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- Go: labeled statement -------------------------------------------------
 
 
-def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_labeled_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower labeled_statement: LABEL(name) + lower body."""
     label_node = next(
         (c for c in node.children if c.type == GoNodeType.LABEL_NAME),
@@ -606,7 +635,9 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- Go: goto statement ----------------------------------------------------
 
 
-def lower_goto_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_goto_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower goto_statement as BRANCH(label_name)."""
     label_node = next(
         (c for c in node.children if c.type == GoNodeType.LABEL_NAME),
@@ -619,7 +650,9 @@ def lower_goto_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- Go: receive statement -------------------------------------------------
 
 
-def lower_receive_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_receive_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower receive_statement: v := <-ch -> CALL_FUNCTION('chan_recv', ch) + STORE_VAR."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)

@@ -1,6 +1,9 @@
+# pyright: standard
 """Parse tree-sitter C# pattern nodes into Pattern ADT."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.common.patterns import (
     AndPattern,
@@ -19,7 +22,9 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 
 
-def parse_csharp_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def parse_csharp_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Convert a C# tree-sitter pattern node into a Pattern ADT."""
     node_type = node.type
 
@@ -129,12 +134,16 @@ def parse_csharp_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     return _parse_constant(ctx, node)
 
 
-def _parse_constant(ctx: TreeSitterEmitContext, node) -> LiteralPattern:
+def _parse_constant(
+    ctx: TreeSitterEmitContext, node: Any
+) -> LiteralPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse a constant value node into a LiteralPattern."""
-    return LiteralPattern(value=_parse_const_value(ctx, node))
+    return LiteralPattern(value=_parse_const_value(ctx, node))  # type: ignore[misc]  # see red-dragon-hzmm
 
 
-def _parse_const_value(ctx: TreeSitterEmitContext, node) -> object:
+def _parse_const_value(
+    ctx: TreeSitterEmitContext, node: Any
+) -> object:  # Any: tree-sitter node — untyped at Python boundary
     """Parse a constant value node into a Python value."""
     text = ctx.node_text(node)
     match node.type:

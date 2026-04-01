@@ -1,3 +1,4 @@
+# pyright: standard
 """Parse tree-sitter Ruby case/in pattern nodes into the Pattern ADT.
 
 Diagnostic-confirmed node types (ruby_pattern_diag.py):
@@ -16,6 +17,8 @@ Diagnostic-confirmed node types (ruby_pattern_diag.py):
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 
@@ -38,7 +41,9 @@ from interpreter.frontends.ruby.node_types import RubyNodeType as RNT
 logger = logging.getLogger(__name__)
 
 
-def parse_ruby_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def parse_ruby_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Map a tree-sitter Ruby pattern node to the Pattern ADT."""
     node_type = node.type
 
@@ -92,7 +97,9 @@ def parse_ruby_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     )
 
 
-def _parse_unary_pattern(ctx: TreeSitterEmitContext, node) -> LiteralPattern:
+def _parse_unary_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> LiteralPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse a unary negation node like -1 into a LiteralPattern."""
     # Unary: operator child + operand child
     operator = next(
@@ -107,7 +114,9 @@ def _parse_unary_pattern(ctx: TreeSitterEmitContext, node) -> LiteralPattern:
     raise ValueError(f"Unsupported unary pattern: {ctx.node_text(node)!r}")
 
 
-def _extract_string_content(ctx: TreeSitterEmitContext, node) -> str:
+def _extract_string_content(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
     """Extract the text content from a string node."""
     content_node = next(
         (c for c in node.children if c.type == RNT.STRING_CONTENT),
@@ -119,7 +128,9 @@ def _extract_string_content(ctx: TreeSitterEmitContext, node) -> str:
     return ""
 
 
-def _parse_alternative_pattern(ctx: TreeSitterEmitContext, node) -> OrPattern:
+def _parse_alternative_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> OrPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse alternative_pattern (1 | 2 | 3) into a flat OrPattern."""
     alternatives = tuple(
         parse_ruby_pattern(ctx, c) for c in node.children if c.is_named
@@ -127,7 +138,9 @@ def _parse_alternative_pattern(ctx: TreeSitterEmitContext, node) -> OrPattern:
     return OrPattern(alternatives)
 
 
-def _parse_array_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def _parse_array_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse array_pattern ([a, b] or Point[x, y]) into SequencePattern or ClassPattern."""
     leading_constant = next(
         (c for c in node.children if c.is_named and c.type == RNT.CONSTANT),
@@ -143,7 +156,9 @@ def _parse_array_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     return SequencePattern(elements)
 
 
-def _parse_as_pattern(ctx: TreeSitterEmitContext, node) -> AsPattern:
+def _parse_as_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> AsPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse as_pattern (pattern => name) into AsPattern."""
     named_children = [c for c in node.children if c.is_named]
     # First named child is the inner pattern, last named child is the binding name
@@ -153,7 +168,9 @@ def _parse_as_pattern(ctx: TreeSitterEmitContext, node) -> AsPattern:
     return AsPattern(inner_pattern, ctx.node_text(name_node))
 
 
-def _parse_splat_parameter(ctx: TreeSitterEmitContext, node) -> StarPattern:
+def _parse_splat_parameter(
+    ctx: TreeSitterEmitContext, node: Any
+) -> StarPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse splat_parameter (*rest or *) into StarPattern."""
     name_node = next(
         (c for c in node.children if c.is_named and c.type == RNT.IDENTIFIER),
@@ -163,14 +180,18 @@ def _parse_splat_parameter(ctx: TreeSitterEmitContext, node) -> StarPattern:
     return StarPattern(name)
 
 
-def _parse_hash_pattern(ctx: TreeSitterEmitContext, node) -> MappingPattern:
+def _parse_hash_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> MappingPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse hash_pattern ({name: n, age: a}) into MappingPattern."""
     keyword_patterns = [c for c in node.children if c.type == RNT.KEYWORD_PATTERN]
     entries = tuple(_parse_keyword_pattern(ctx, kp) for kp in keyword_patterns)
     return MappingPattern(entries)
 
 
-def _parse_keyword_pattern(ctx: TreeSitterEmitContext, node) -> tuple[str, Pattern]:
+def _parse_keyword_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> tuple[str, Pattern]:  # Any: tree-sitter node — untyped at Python boundary
     """Parse a keyword_pattern (name: value) into a (key, Pattern) pair.
 
     If no value is present ({name:} shorthand), the key becomes a capture variable.

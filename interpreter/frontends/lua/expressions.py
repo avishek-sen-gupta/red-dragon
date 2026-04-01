@@ -1,6 +1,9 @@
+# pyright: standard
 """Lua-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -34,7 +37,9 @@ from interpreter.instructions import (
 logger = logging.getLogger(__name__)
 
 
-def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_lua_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function_call -- name field is identifier or method_index_expression."""
     name_node = node.child_by_field_name("name")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -45,7 +50,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
+            CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=node,
         )
         return reg
@@ -63,7 +68,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
                     result_reg=reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(arg_regs),
+                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=node,
             )
@@ -87,7 +92,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
             )
             reg = ctx.fresh_reg()
             ctx.emit_inst(
-                CallUnknown(result_reg=reg, target_reg=func_reg, args=tuple(arg_regs)),
+                CallUnknown(result_reg=reg, target_reg=func_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=node,
             )
             return reg
@@ -98,7 +103,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -108,13 +113,15 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
     target_reg = ctx.lower_expr(name_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
 
 
-def lower_dot_index(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_dot_index(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower dot_index_expression (obj.field)."""
     table_node = node.child_by_field_name("table")
     field_node = node.child_by_field_name("field")
@@ -130,7 +137,9 @@ def lower_dot_index(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_method_index(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_method_index(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower method_index_expression (obj:method) as attribute load.
 
     When used standalone (not as the callee inside function_call),
@@ -150,7 +159,9 @@ def lower_method_index(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_bracket_index(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_bracket_index(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower bracket_index_expression (obj[key])."""
     table_node = node.child_by_field_name("table")
     key_node = node.child_by_field_name("field")
@@ -165,7 +176,9 @@ def lower_bracket_index(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_table_constructor(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_table_constructor(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower table_constructor ({key=val, ...})."""
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("table")), node=node)
@@ -193,7 +206,9 @@ def lower_table_constructor(ctx: TreeSitterEmitContext, node) -> Register:
     return obj_reg
 
 
-def lower_expression_list(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_expression_list(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Unwrap expression_list to its first named child."""
     named = [c for c in node.children if c.is_named]
     if named:
@@ -203,7 +218,9 @@ def lower_expression_list(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_lua_function_definition(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_lua_function_definition(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function_definition (anonymous function expression).
 
     Produces BRANCH past body, LABEL, params, body, default RETURN,
@@ -233,11 +250,13 @@ def lower_lua_function_definition(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(str(anon_name), func_label, result_reg=func_reg)
+    ctx.emit_func_ref(str(anon_name), func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return func_reg
 
 
-def lower_lua_vararg(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_lua_vararg(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower vararg_expression (...) as SYMBOLIC('varargs')."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(Symbolic(result_reg=reg, hint="varargs"), node=node)

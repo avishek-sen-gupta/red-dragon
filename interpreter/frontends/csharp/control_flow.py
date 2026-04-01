@@ -1,6 +1,9 @@
+# pyright: standard
 """C#-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -28,7 +31,9 @@ from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.register import Register
 
 
-def lower_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """C# if with else-if handled as nested if_statement."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -72,7 +77,9 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
+def lower_foreach(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower foreach (Type var in collection) { body }."""
     left_node = node.child_by_field_name(ctx.constants.assign_left_field)
     right_node = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -112,7 +119,7 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("foreach_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -133,11 +140,15 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_throw(ctx: TreeSitterEmitContext, node) -> None:
+def lower_throw(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     lower_raise_or_throw(ctx, node, keyword="throw")
 
 
-def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_throw_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower C# throw expression (``throw new Exception()`` used as an expression).
 
     Emits THROW and returns a fresh register (unreachable but satisfies
@@ -149,7 +160,9 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return ctx.fresh_reg()
 
 
-def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
+def lower_goto(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower C# goto statement — emit BRANCH to the target label."""
     id_node = next(
         (c for c in node.children if c.type in (NT.IDENTIFIER, NT.LABEL_NAME)), None
@@ -158,7 +171,9 @@ def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Branch(label=CodeLabel(label_name)), node=node)
 
 
-def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_labeled_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower C# labeled statement — emit LABEL, then lower the body statement."""
     id_node = next(
         (c for c in node.children if c.type in (NT.IDENTIFIER, NT.LABEL_NAME)), None
@@ -174,7 +189,9 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_stmt(child)
 
 
-def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
+def lower_do_while(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
 
@@ -183,7 +200,7 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)
+    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -201,7 +218,9 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
+def lower_switch(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower switch statement with pattern matching."""
     from interpreter.frontends.common.patterns import (
         WildcardPattern,
@@ -217,7 +236,7 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
     subject_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)
+    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     sections = (
         [c for c in body_node.children if c.type == NT.SWITCH_SECTION]
@@ -280,23 +299,31 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def _csharp_switch_expr_pattern_of(ctx, arm):
+def _csharp_switch_expr_pattern_of(
+    ctx: TreeSitterEmitContext, arm: Any
+) -> Any:  # Any: tree-sitter node — untyped at Python boundary
     from interpreter.frontends.csharp.patterns import parse_csharp_pattern
 
     pattern_children = [c for c in arm.children if c.is_named]
     return parse_csharp_pattern(ctx, pattern_children[0])
 
 
-def _csharp_switch_expr_guard_of(ctx, arm):
+def _csharp_switch_expr_guard_of(
+    ctx: TreeSitterEmitContext, arm: Any
+) -> Any | None:  # Any: tree-sitter node — untyped at Python boundary
     return None
 
 
-def _csharp_switch_expr_body_of(ctx, arm):
+def _csharp_switch_expr_body_of(
+    ctx: TreeSitterEmitContext, arm: Any
+) -> Any:  # Any: tree-sitter node — untyped at Python boundary
     named = [c for c in arm.children if c.is_named]
     return ctx.lower_expr(named[-1])
 
 
-def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_switch_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower C# 8 switch expression: subject switch { pattern => expr, ... }."""
     from interpreter.frontends.common.match_expr import (
         MatchArmSpec,
@@ -305,7 +332,7 @@ def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     spec = MatchArmSpec(
         extract_arms=lambda n: [
-            c for c in n.children if c.type == NT.SWITCH_EXPRESSION_ARM
+            c for c in n.children if c.type == NT.SWITCH_EXPRESSION_ARM  # type: ignore[attr-defined]  # see red-dragon-545a
         ],
         pattern_of=_csharp_switch_expr_pattern_of,
         guard_of=_csharp_switch_expr_guard_of,
@@ -315,10 +342,12 @@ def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> Register:
     named_children = [c for c in node.children if c.is_named]
     subject_node = named_children[0] if named_children else node
     subject_reg = ctx.lower_expr(subject_node)
-    return lower_match_as_expr(ctx, subject_reg, node, spec)
+    return lower_match_as_expr(ctx, subject_reg, node, spec)  # type: ignore[arg-type]  # see red-dragon-hzmm
 
 
-def lower_try(ctx: TreeSitterEmitContext, node) -> None:
+def lower_try(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     body_node = node.child_by_field_name("body")
     catch_clauses: list[dict] = []
     finally_node = None
@@ -368,14 +397,18 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
 
 
-def lower_global_statement(ctx: TreeSitterEmitContext, node) -> None:
+def lower_global_statement(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Unwrap global_statement and lower the inner statement."""
     for child in node.children:
         if child.is_named:
             ctx.lower_stmt(child)
 
 
-def lower_lock_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lock_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower lock(expr) { body }: lower the lock expression, then the body."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:
@@ -385,7 +418,9 @@ def lower_lock_stmt(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
 
 
-def lower_using_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_using_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower using(resource) { body }: lower resource, then body.
 
     The resource variable is scoped to the using block.
@@ -412,21 +447,27 @@ def lower_using_stmt(ctx: TreeSitterEmitContext, node) -> None:
         ctx.exit_block_scope()
 
 
-def lower_checked_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_checked_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower checked { body }: just lower the body block."""
     body_node = next((c for c in node.children if c.type == NT.BLOCK), None)
     if body_node:
         ctx.lower_block(body_node)
 
 
-def lower_fixed_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_fixed_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower fixed(decl) { body }: just lower the body block."""
     body_node = next((c for c in node.children if c.type == NT.BLOCK), None)
     if body_node:
         ctx.lower_block(body_node)
 
 
-def lower_yield_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_yield_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower yield return expr or yield break."""
     children = [c for c in node.children if c.is_named]
     # Check if this is yield break (no expression child)

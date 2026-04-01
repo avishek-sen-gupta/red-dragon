@@ -1,6 +1,9 @@
+# pyright: standard
 """Java-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -42,7 +45,9 @@ from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
 
 
-def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_method_invocation(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     name_node = node.child_by_field_name("name")
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -57,7 +62,7 @@ def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> Register:
                 result_reg=reg,
                 obj_reg=obj_reg,
                 method_name=FuncName(method_name),
-                args=tuple(arg_regs),
+                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -67,14 +72,16 @@ def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> Register:
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+            result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
     return reg
 
 
-def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_object_creation(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     type_node = node.child_by_field_name("type")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
@@ -85,7 +92,7 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
             result_reg=reg,
             func_name=FuncName(type_name),
             type_hint=scalar(type_name),
-            args=tuple(arg_regs),
+            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
@@ -93,7 +100,9 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_field_access(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_field_access(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     field_node = node.child_by_field_name("field")
     if obj_node is None or field_node is None:
@@ -108,7 +117,9 @@ def lower_field_access(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_method_reference(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_method_reference(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower method_reference: Type::method or obj::method or Type::new."""
     obj_node = node.children[0]
     method_node = node.children[-1]
@@ -122,7 +133,9 @@ def lower_method_reference(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_scoped_identifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower scoped_identifier (e.g., java.lang.System) as LOAD_VAR."""
     qualified_name = ctx.node_text(node)
     reg = ctx.fresh_reg()
@@ -130,7 +143,9 @@ def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_class_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_class_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower class_literal: Type.class -> LOAD_FIELD(type_reg, 'class')."""
     type_node = node.children[0]
     type_reg = ctx.lower_expr(type_node)
@@ -142,7 +157,9 @@ def lower_class_literal(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_lambda(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower lambda_expression: (params) -> expr or (params) -> { body }."""
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}__lambda")
     end_label = ctx.fresh_label("lambda_end")
@@ -169,7 +186,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
-    ctx.emit_func_ref("__lambda", func_label, result_reg=ref_reg, node=node)
+    ctx.emit_func_ref("__lambda", func_label, result_reg=ref_reg, node=node)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return ref_reg
 
 
@@ -196,7 +213,9 @@ def _lower_lambda_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 )
 
 
-def lower_array_access(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_array_access(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     arr_node = node.child_by_field_name("array")
     idx_node = node.child_by_field_name("index")
     if arr_node is None or idx_node is None:
@@ -210,7 +229,9 @@ def lower_array_access(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_array_creation(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower array_creation_expression or standalone array_initializer."""
     # Handle standalone array_initializer: {1, 2, 3}
     if node.type == JavaNodeType.ARRAY_INITIALIZER:
@@ -273,11 +294,13 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
     return arr_reg
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_assignment_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_java_store_target(ctx, left, val_reg, node)
+    lower_java_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
     return val_reg
 
 
@@ -293,13 +316,13 @@ def lower_java_store_target(
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
+                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node
+                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
             )
     elif target.type == JavaNodeType.FIELD_ACCESS:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
@@ -310,7 +333,7 @@ def lower_java_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
@@ -321,17 +344,19 @@ def lower_java_store_target(
             arr_reg = ctx.lower_expr(arr_node)
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
 
 
-def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_cast_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     value_node = node.child_by_field_name("value")
     if value_node:
         return ctx.lower_expr(value_node)
@@ -341,7 +366,9 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def lower_instanceof(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_instanceof(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower instanceof_expression: operand instanceof Type [binding].
 
     Java 16+ type patterns: ``o instanceof String s`` binds ``s`` to
@@ -397,7 +424,9 @@ def lower_instanceof(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ternary(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -425,7 +454,9 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     return result_reg
 
 
-def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_expr_stmt_as_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower expression_statement in expr context (e.g., inside switch expression)."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:
@@ -433,7 +464,9 @@ def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def lower_throw_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_throw_as_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower throw_statement in expr context (e.g., switch expression arm)."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:

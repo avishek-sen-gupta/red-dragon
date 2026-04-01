@@ -1,6 +1,9 @@
+# pyright: standard
 """Lua-specific declaration and assignment lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -26,7 +29,9 @@ from interpreter.instructions import (
 logger = logging.getLogger(__name__)
 
 
-def lower_lua_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_variable_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `local x = expr` -- variable_declaration wraps assignment_statement."""
     for child in node.children:
         if child.type == LuaNodeType.ASSIGNMENT_STATEMENT:
@@ -43,7 +48,9 @@ def lower_lua_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
             )
 
 
-def lower_lua_assignment(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower assignment_statement with variable_list and expression_list."""
     var_list_node = next(
         (c for c in node.children if c.type == LuaNodeType.VARIABLE_LIST), None
@@ -73,7 +80,7 @@ def lower_lua_assignment(ctx: TreeSitterEmitContext, node) -> None:
         val_reg = val_regs[i] if i < len(val_regs) else ctx.fresh_reg()
         if i >= len(val_regs):
             ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-        lower_lua_store_target(ctx, target, val_reg, node)
+        lower_lua_store_target(ctx, target, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
 
 
 def lower_lua_store_target(
@@ -82,7 +89,7 @@ def lower_lua_store_target(
     """Lua-specific store target supporting dot_index and bracket_index."""
     if target.type == LuaNodeType.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
     elif target.type == LuaNodeType.DOT_INDEX_EXPRESSION:
@@ -94,7 +101,7 @@ def lower_lua_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
@@ -105,17 +112,19 @@ def lower_lua_store_target(
             obj_reg = ctx.lower_expr(obj_node)
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
 
 
-def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_function_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function_declaration with name, parameters, body fields.
 
     For dotted names (``function Counter.new()``), the function is stored
@@ -156,9 +165,9 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
 
-    if is_dotted and table_name:
+    if is_dotted and table_name:  # type: ignore[misc]  # see red-dragon-hzmm
         obj_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=obj_reg, name=VarName(table_name)))
         ctx.emit_inst(
@@ -171,7 +180,9 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:
+def lower_lua_return(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower return statement."""
     children = [c for c in node.children if c.type != LuaNodeType.RETURN and c.is_named]
     if children:
@@ -191,7 +202,7 @@ def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:
 # straightforward without heuristic analysis. Return an empty SymbolTable.
 
 
-def extract_lua_symbols(root) -> "SymbolTable":
+def extract_lua_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
     """Return an empty SymbolTable — Lua table-based OOP has no extractable class syntax."""
     from interpreter.frontends.symbol_table import SymbolTable
 

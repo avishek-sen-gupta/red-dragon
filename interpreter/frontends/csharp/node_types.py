@@ -1,3 +1,4 @@
+# pyright: standard
 """C# tree-sitter node type constants."""
 
 

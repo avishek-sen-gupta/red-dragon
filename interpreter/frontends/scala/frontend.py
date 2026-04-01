@@ -1,11 +1,14 @@
+# pyright: standard
 """ScalaFrontend — thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -52,7 +55,9 @@ class ScalaFrontend(BaseFrontend):
             "Any": "Any",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             NT.IDENTIFIER: common_expr.lower_identifier,
             NT.INTEGER_LITERAL: common_expr.lower_const_literal,
@@ -96,7 +101,9 @@ class ScalaFrontend(BaseFrontend):
             NT.STABLE_TYPE_IDENTIFIER: scala_expr.lower_stable_type_identifier,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             NT.VAL_DEFINITION: scala_decl.lower_val_def,
             NT.VAR_DEFINITION: scala_decl.lower_var_def,
@@ -127,8 +134,7 @@ class ScalaFrontend(BaseFrontend):
             NT.ENUM_DEFINITION: scala_decl.lower_enum_def,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.scala.declarations import extract_scala_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_scala_symbols(root)

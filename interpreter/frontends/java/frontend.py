@@ -1,11 +1,14 @@
+# pyright: standard
 """JavaFrontend — thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -59,7 +62,9 @@ class JavaFrontend(BaseFrontend):
             "void": "Any",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             JavaNodeType.IDENTIFIER: common_expr.lower_identifier,
             JavaNodeType.DECIMAL_INTEGER_LITERAL: common_expr.lower_const_literal,
@@ -99,7 +104,9 @@ class JavaFrontend(BaseFrontend):
             JavaNodeType.THROW_STATEMENT: java_expr.lower_throw_as_expr,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             JavaNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             JavaNodeType.LOCAL_VARIABLE_DECLARATION: java_decl.lower_local_var_decl,
@@ -130,8 +137,7 @@ class JavaFrontend(BaseFrontend):
             JavaNodeType.YIELD_STATEMENT: java_cf.lower_yield_statement,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.java.declarations import extract_java_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_java_symbols(root)

@@ -1,3 +1,4 @@
+# pyright: standard
 """Java frontend package."""
 
 from interpreter.frontends.java.frontend import JavaFrontend
