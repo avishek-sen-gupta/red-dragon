@@ -84,3 +84,9 @@ fileignoreconfig:
   checksum: b2f1e237ed7d21d8db22933bfb8a55c464120f2ad1cecf4981fd8aa15624363a
 - filename: docs/superpowers/specs/2026-04-01-wf-sentinel-design.md
   checksum: 2b61ef6c11ce5c836856e2ddfd428315342e5d5f71353d490d92db312c5d370b
+- filename: docs/superpowers/specs/2026-04-01-wf-toggle-plugin-design.md
+  checksum: 68ce4fa8952bc8a63379ab5161dbc688a5ed7ff34b7b18f956b0cace040a8ae4
+- filename: docs/superpowers/plans/2026-04-01-instructionbase-protocol.md
+  checksum: 3e22cf237c3db35e5eb7dd7740edbeb3497d6ebade7394685914dc9897271fc5
+- filename: docs/superpowers/plans/2026-04-01-list-opcodes.md
+  checksum: 9e07779637f419ac98b9679bd40ad8958514e04343484260f0a10fbed7452b84
