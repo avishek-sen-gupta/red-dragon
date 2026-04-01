@@ -1,3 +1,4 @@
+# pyright: standard
 """Structured class references — replaces stringly-typed CLASS_REF_PATTERN."""
 
 from __future__ import annotations

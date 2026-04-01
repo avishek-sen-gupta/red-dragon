@@ -1,3 +1,4 @@
+# pyright: standard
 """Structured function references — replaces stringly-typed FUNC_REF_PATTERN."""
 
 from __future__ import annotations
