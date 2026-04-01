@@ -1,8 +1,13 @@
 """Arithmetic opcode handlers: BINOP, UNOP."""
 
+# pyright: standard
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.vm.executor import HandlerContext
 
 from interpreter.instructions import InstructionBase, Binop, Unop
 from interpreter.vm.vm import (
@@ -22,13 +27,15 @@ from interpreter import constants
 from interpreter.handlers._common import _symbolic_name
 
 
-def _handle_binop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_binop(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, Binop)
     binop_coercion = ctx.binop_coercion
     oper = t.operator
-    lhs_typed = _resolve_reg(vm, inst.operands[1])
-    rhs_typed = _resolve_reg(vm, inst.operands[2])
+    lhs_typed = _resolve_reg(vm, inst.operands[1])  # type: ignore[reportAttributeAccessIssue]  # see issue filed below
+    rhs_typed = _resolve_reg(vm, inst.operands[2])  # type: ignore[reportAttributeAccessIssue]  # inst narrowed via t
 
     # Unwrap for special-case checks
     lhs = lhs_typed.value
@@ -63,11 +70,11 @@ def _handle_binop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResu
         offset_val = rhs if lhs_ptr else lhs
         if isinstance(offset_val, (int, float)):
             new_offset = (
-                ptr.offset + int(offset_val)
+                ptr.offset + int(offset_val)  # type: ignore[reportOptionalMemberAccess]  # guarded by (lhs_ptr or rhs_ptr)
                 if oper == "+" or not lhs_ptr
-                else ptr.offset - int(offset_val)
+                else ptr.offset - int(offset_val)  # type: ignore[reportOptionalMemberAccess]  # same guard
             )
-            result_ptr = Pointer(base=ptr.base, offset=new_offset)
+            result_ptr = Pointer(base=ptr.base, offset=new_offset)  # type: ignore[reportOptionalMemberAccess]  # same guard
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
@@ -118,12 +125,14 @@ def _handle_binop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResu
     )
 
 
-def _handle_unop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_unop(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, Unop)
     unop_coercion = ctx.unop_coercion
     oper = t.operator
-    operand_typed = _resolve_reg(vm, inst.operands[1])
+    operand_typed = _resolve_reg(vm, inst.operands[1])  # type: ignore[reportAttributeAccessIssue]  # inst narrowed via t
     operand = operand_typed.value
     # Address-of (&) on a value that is already a reference (function ref or
     # heap object) returns the reference unchanged — our model already uses
