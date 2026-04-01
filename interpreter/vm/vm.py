@@ -1,4 +1,3 @@
-# pyright: standard
 """Symbolic VM — state update application and helpers."""
 
 from __future__ import annotations
@@ -360,7 +359,7 @@ def _resolve_reg(vm: VMState, operand: str | Register) -> TypedValue:
         val = frame.registers.get(operand)
         if val is None:
             # Fallback: try string key (legacy dict may have str keys)
-            val = frame.registers.get(str(operand), str(operand))  # type: ignore[call-overload]  # see red-dragon-sxyc
+            val = frame.registers.get(str(operand), str(operand))
         if isinstance(val, TypedValue):
             return val
         return typed_from_runtime(val)

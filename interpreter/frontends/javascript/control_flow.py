@@ -1,4 +1,3 @@
-# pyright: standard
 """JavaScript-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -70,7 +69,7 @@ def lower_js_if(
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
-        lower_js_alternative(ctx, alt_node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+        lower_js_alternative(ctx, alt_node, end_label)
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -138,14 +137,14 @@ def lower_for_in(
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=keys_reg, index_reg=idx_reg))
 
     if is_destructure:
-        _lower_for_destructure(ctx, left, elem_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        _lower_for_destructure(ctx, left, elem_reg)
     else:
-        var_name = ctx.declare_block_var(raw_name)  # type: ignore[misc]  # see red-dragon-hzmm
+        var_name = ctx.declare_block_var(raw_name)
         if var_name:
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_in_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -219,14 +218,14 @@ def lower_for_of(
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
 
     if is_destructure:
-        _lower_for_destructure(ctx, left, elem_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        _lower_for_destructure(ctx, left, elem_reg)
     else:
-        var_name = ctx.declare_block_var(raw_name)  # type: ignore[misc]  # see red-dragon-hzmm
+        var_name = ctx.declare_block_var(raw_name)
         if var_name:
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_of_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -318,7 +317,7 @@ def lower_switch_statement(
     disc_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.break_target_stack.append(end_label)
 
     if body_node:
         cases = [
@@ -380,7 +379,7 @@ def lower_do_statement(
 
     ctx.emit_inst(Label_(label=body_label))
 
-    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()

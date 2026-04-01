@@ -1,4 +1,3 @@
-# pyright: standard
 """JavaScript-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -47,10 +46,10 @@ def lower_js_var_declaration(
 
         if name_node.type == JSN.OBJECT_PATTERN and value_node:
             val_reg = ctx.lower_expr(value_node)
-            _lower_object_destructure(ctx, name_node, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+            _lower_object_destructure(ctx, name_node, val_reg, node)
         elif name_node.type == JSN.ARRAY_PATTERN and value_node:
             val_reg = ctx.lower_expr(value_node)
-            _lower_array_destructure(ctx, name_node, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+            _lower_array_destructure(ctx, name_node, val_reg, node)
         elif value_node:
             var_name = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.lower_expr(value_node)
@@ -77,7 +76,7 @@ def _lower_object_destructure(
             ctx.emit_inst(
                 LoadField(
                     result_reg=field_reg,
-                    obj_reg=val_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+                    obj_reg=val_reg,
                     field_name=FieldName(prop_name),
                 ),
                 node=child,
@@ -96,7 +95,7 @@ def _lower_object_destructure(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=val_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+                        obj_reg=val_reg,
                         field_name=FieldName(key_name),
                     ),
                     node=child,
@@ -117,7 +116,7 @@ def _lower_object_destructure(
                 CallFunction(
                     result_reg=rest_reg,
                     func_name=FuncName("object_rest"),
-                    args=(val_reg, *key_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    args=(val_reg, *key_regs),
                 ),
                 node=rest_child,
             )
@@ -130,7 +129,7 @@ def _const_reg(ctx: TreeSitterEmitContext, value: str) -> str:
     """Emit a CONST and return the register holding the value."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=reg, value=value))
-    return reg  # type: ignore[return-value]  # see red-dragon-hzmm
+    return reg
 
 
 def _extract_rest_name(child) -> str | None:
@@ -157,7 +156,7 @@ def _lower_array_destructure(
                 CallFunction(
                     result_reg=rest_reg,
                     func_name=FuncName("slice"),
-                    args=(val_reg, start_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    args=(val_reg, start_reg),
                 ),
                 node=child,
             )
@@ -169,7 +168,7 @@ def _lower_array_destructure(
             ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
             elem_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
                 node=child,
             )
             ctx.emit_inst(
@@ -228,7 +227,7 @@ def lower_js_class_expression(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.seed_register_type(cls_reg, metatype(ScalarType(class_name)))
     return cls_reg
 
@@ -265,7 +264,7 @@ def lower_js_class_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
@@ -319,7 +318,7 @@ def _lower_method_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -355,7 +354,7 @@ def lower_js_function_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -387,7 +386,7 @@ def lower_class_static_block(
 # ---------------------------------------------------------------------------
 
 
-def _extract_js_method(node) -> tuple[str, "FunctionInfo"] | None:  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_js_method(node) -> tuple[str, "FunctionInfo"] | None:
     """Extract a FunctionInfo from a JS method_definition node."""
     from interpreter.frontends.symbol_table import FunctionInfo
 
@@ -412,7 +411,7 @@ def _extract_param_names(params_node) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _extract_js_self_fields(body) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_js_self_fields(body) -> "dict[str, FieldInfo]":
     """Walk a constructor body and collect this.x = ... assignments."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -436,13 +435,13 @@ def _extract_js_self_fields(body) -> "dict[str, FieldInfo]":  # type: ignore[nam
         if obj_node.text != b"this":
             continue
         field_name = prop_node.text.decode()
-        fields[FieldName(field_name)] = FieldInfo(  # type: ignore[misc]  # see red-dragon-hzmm
+        fields[FieldName(field_name)] = FieldInfo(
             name=FieldName(field_name), type_hint="", has_initializer=True
         )
     return fields
 
 
-def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":
     """Extract a ClassInfo from a JS class_declaration or class node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -464,7 +463,7 @@ def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[n
             for sub in c.children
             if sub.type == JSN.IDENTIFIER
         ]
-        parents = tuple(ClassName(c.text.decode()) for c in (direct_ids or nested_ids))  # type: ignore[misc]  # see red-dragon-hzmm
+        parents = tuple(ClassName(c.text.decode()) for c in (direct_ids or nested_ids))
 
     body = node.child_by_field_name("body")
     if body is None:
@@ -473,7 +472,7 @@ def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[n
             fields={},
             methods={},
             constants={},
-            parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
+            parents=parents,
         )
 
     fields: dict[FieldName, FieldInfo] = {}
@@ -489,7 +488,7 @@ def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[n
             if mname == "constructor":
                 ctor_body = child.child_by_field_name("body")
                 if ctor_body is not None:
-                    fields.update(_extract_js_self_fields(ctor_body))  # type: ignore[name-defined]  # see red-dragon-545a
+                    fields.update(_extract_js_self_fields(ctor_body))
         elif child.type == JSN.FIELD_DEFINITION:
             prop_node = child.child_by_field_name("property")
             if prop_node is not None:
@@ -504,11 +503,11 @@ def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[n
         fields=fields,
         methods=methods,
         constants={},
-        parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
+        parents=parents,
     )
 
 
-def _collect_js_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:  # type: ignore[name-defined]  # see red-dragon-545a
+def _collect_js_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all class nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -521,7 +520,7 @@ def _collect_js_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None
         _collect_js_classes(child, accumulator)
 
 
-def extract_javascript_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
+def extract_javascript_symbols(root) -> "SymbolTable":
     """Walk the JS AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

@@ -1,4 +1,3 @@
-# pyright: standard
 """Orchestrator — run() entry point."""
 
 from __future__ import annotations
@@ -256,7 +255,7 @@ def _handle_call_dispatch_setup(
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
 ):
     """Set up the new call frame's return info after call_push + dispatch."""
-    call_result_reg = instruction.result_reg  # type: ignore[attr-defined]  # see red-dragon-4ei7
+    call_result_reg = instruction.result_reg
     call_return_label = current_label
     call_return_ip = ip + 1
 
@@ -437,7 +436,7 @@ def execute_cfg(
 
         if is_return or (is_throw and not is_caught_throw):
             flow = _handle_return_flow(
-                vm, cfg, return_frame, update, config.verbose, step  # type: ignore[arg-type]  # see red-dragon-iarh
+                vm, cfg, return_frame, update, config.verbose, step
             )
             if isinstance(flow, _StopExecution):
                 break
@@ -592,7 +591,7 @@ def execute_cfg_traced(
         trace_steps.append(
             TraceStep(
                 step_index=len(trace_steps),
-                block_label=current_label,  # type: ignore[arg-type]  # see red-dragon-a4yo
+                block_label=current_label,
                 instruction_index=ip,
                 instruction=instruction,
                 update=update,
@@ -603,7 +602,7 @@ def execute_cfg_traced(
 
         if is_return or is_throw:
             flow = _handle_return_flow(
-                vm, cfg, return_frame, update, config.verbose, step  # type: ignore[arg-type]  # see red-dragon-iarh
+                vm, cfg, return_frame, update, config.verbose, step
             )
             if isinstance(flow, _StopExecution):
                 break

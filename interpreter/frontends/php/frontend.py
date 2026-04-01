@@ -1,4 +1,3 @@
-# pyright: standard
 """PhpFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
@@ -59,7 +58,7 @@ class PhpFrontend(BaseFrontend):
     def _build_expr_dispatch(
         self,
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
-        return {  # type: ignore[return-value]  # see red-dragon-rke4
+        return {
             PHPNodeType.VARIABLE_NAME: php_expr.lower_php_variable,
             PHPNodeType.NAME: common_expr.lower_identifier,
             PHPNodeType.INTEGER: common_expr.lower_const_literal,
@@ -99,7 +98,7 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.INCLUDE_EXPRESSION: php_expr.lower_php_include,
             PHPNodeType.NULLSAFE_MEMBER_CALL_EXPRESSION: php_expr.lower_php_nullsafe_method_call,
             PHPNodeType.REQUIRE_ONCE_EXPRESSION: php_expr.lower_php_include,
-            PHPNodeType.VARIADIC_UNPACKING: php_expr.lower_php_variadic_unpacking,  # type: ignore[dict-item]  # see red-dragon-rke4
+            PHPNodeType.VARIADIC_UNPACKING: php_expr.lower_php_variadic_unpacking,
             PHPNodeType.PRINT_INTRINSIC: php_expr.lower_php_print_intrinsic,
             PHPNodeType.CLONE_EXPRESSION: php_expr.lower_php_clone_expression,
             PHPNodeType.ERROR_SUPPRESSION_EXPRESSION: php_expr.lower_php_error_suppression,

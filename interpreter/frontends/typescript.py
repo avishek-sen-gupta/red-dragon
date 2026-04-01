@@ -1,4 +1,3 @@
-# pyright: standard
 """TypeScriptFrontend — tree-sitter TypeScript AST -> IR lowering.
 
 Extends JavaScriptFrontend, adding TS-specific node handlers and
@@ -87,8 +86,8 @@ class TypeScriptFrontend(JavaScriptFrontend):
         self,
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         dispatch = super()._build_expr_dispatch()
-        dispatch.update(  # type: ignore[arg-type]  # see red-dragon-q5jm
-            {  # type: ignore[arg-type]  # see red-dragon-q5jm
+        dispatch.update(
+            {
                 TypeScriptNodeType.TYPE_IDENTIFIER: common_expr.lower_identifier,
                 TypeScriptNodeType.PREDEFINED_TYPE: common_expr.lower_const_literal,
                 TypeScriptNodeType.AS_EXPRESSION: lower_as_expression,
@@ -234,7 +233,7 @@ def lower_interface_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
     ctx.seed_var_type(iface_name, metatype(ScalarType(iface_name)))
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
@@ -261,7 +260,7 @@ def _lower_ts_interface_method(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -421,7 +420,7 @@ def lower_ts_class_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
@@ -465,7 +464,7 @@ def _lower_ts_method_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -487,7 +486,7 @@ def lower_ts_abstract_method(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -634,7 +633,7 @@ def lower_ts_arrow_function(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
@@ -665,7 +664,7 @@ def lower_ts_function_expression(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
@@ -701,7 +700,7 @@ def lower_ts_function_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 

@@ -1,4 +1,3 @@
-# pyright: standard
 """Python-specific assignment lowerers -- pure functions taking (ctx, node).
 
 These override common assignment lowerers to use Python's store_target
@@ -22,7 +21,7 @@ def lower_assignment(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_store_target(ctx, left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    lower_store_target(ctx, left, val_reg, node)
 
 
 def lower_augmented_assignment(
@@ -44,4 +43,4 @@ def lower_augmented_assignment(
         ),
         node=node,
     )
-    lower_store_target(ctx, left, result, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    lower_store_target(ctx, left, result, node)

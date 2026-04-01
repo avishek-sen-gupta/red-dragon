@@ -1,4 +1,3 @@
-# pyright: standard
 """Lua-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -59,7 +58,7 @@ def lower_lua_if(
 
     if has_alternative:
         ctx.emit_inst(Label_(label=false_label))
-        _lower_lua_elseif_chain(ctx, elseif_nodes, else_node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+        _lower_lua_elseif_chain(ctx, elseif_nodes, else_node, end_label)
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -87,17 +86,17 @@ def _lower_lua_elseif_chain(
     false_label = ctx.fresh_label("elseif_false") if has_more else end_label
 
     ctx.emit_inst(
-        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
         node=current,
     )
 
     ctx.emit_inst(Label_(label=true_label))
     if body_node:
         ctx.lower_block(body_node)
-    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
+    ctx.emit_inst(Branch(label=end_label))
 
     if has_more:
-        ctx.emit_inst(Label_(label=false_label))  # type: ignore[misc]  # see red-dragon-hzmm
+        ctx.emit_inst(Label_(label=false_label))
         _lower_lua_elseif_chain(ctx, remaining, else_node, end_label)
 
 
@@ -119,7 +118,7 @@ def lower_lua_while(
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -195,7 +194,7 @@ def _lower_lua_for_numeric(
 
     ctx.emit_inst(Label_(label=body_label))
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -303,7 +302,7 @@ def _lower_lua_for_generic(
         ctx.emit_inst(DeclVar(name=VarName(var_names[1]), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("generic_for_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -334,7 +333,7 @@ def lower_lua_repeat(
     end_label = ctx.fresh_label("repeat_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(body_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(body_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()

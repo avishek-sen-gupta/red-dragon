@@ -1,4 +1,3 @@
-# pyright: standard
 """Java-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -62,7 +61,7 @@ def lower_method_invocation(
                 result_reg=reg,
                 obj_reg=obj_reg,
                 method_name=FuncName(method_name),
-                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                args=tuple(arg_regs),
             ),
             node=node,
         )
@@ -72,7 +71,7 @@ def lower_method_invocation(
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+            result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
         ),
         node=node,
     )
@@ -92,7 +91,7 @@ def lower_object_creation(
             result_reg=reg,
             func_name=FuncName(type_name),
             type_hint=scalar(type_name),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -186,7 +185,7 @@ def lower_lambda(
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
-    ctx.emit_func_ref("__lambda", func_label, result_reg=ref_reg, node=node)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref("__lambda", func_label, result_reg=ref_reg, node=node)
     return ref_reg
 
 
@@ -300,7 +299,7 @@ def lower_assignment_expr(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_java_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_java_store_target(ctx, left, val_reg, node)
     return val_reg
 
 
@@ -316,13 +315,13 @@ def lower_java_store_target(
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
                 ),
                 node=parent_node,
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node
             )
     elif target.type == JavaNodeType.FIELD_ACCESS:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
@@ -333,7 +332,7 @@ def lower_java_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -344,12 +343,12 @@ def lower_java_store_target(
             arr_reg = ctx.lower_expr(arr_node)
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 

@@ -1,4 +1,3 @@
-# pyright: standard
 """C++-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -115,7 +114,7 @@ def lower_cpp_while(
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -169,7 +168,7 @@ def _lower_structured_binding(
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),
             node=id_node,
         )
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=part_reg), node=id_node)
@@ -232,13 +231,13 @@ def lower_range_for(
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
 
     if is_structured_binding:
-        _lower_structured_binding(ctx, declarator_node, elem_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        _lower_structured_binding(ctx, declarator_node, elem_reg)
     else:
         var_name = ctx.declare_block_var(raw_name)
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("range_for_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
