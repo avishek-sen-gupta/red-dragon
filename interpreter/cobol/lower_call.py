@@ -1,4 +1,3 @@
-# pyright: standard
 """CALL, ALTER, ENTRY, CANCEL statement lowering."""
 
 from __future__ import annotations
@@ -52,7 +51,7 @@ def lower_call(
 
     if stmt.giving and ctx.has_field(stmt.giving, layout):
         giving_ref = ctx.resolve_field_ref(stmt.giving, layout, region_reg)
-        str_reg = ctx.emit_to_string(result_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
+        str_reg = ctx.emit_to_string(result_reg)
         ctx.emit_encode_and_write(
             region_reg, giving_ref.fl, str_reg, giving_ref.offset_reg
         )

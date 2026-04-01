@@ -1,4 +1,3 @@
-# pyright: standard
 """Scala-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -112,7 +111,7 @@ def _lower_scala_tuple_destructure(
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
             node=child,
         )
         ctx.emit_inst(
@@ -134,7 +133,7 @@ def _lower_val_or_var_def(
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
 
     if pattern_node is not None and pattern_node.type == NT.TUPLE_PATTERN:
-        _lower_scala_tuple_destructure(ctx, pattern_node, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+        _lower_scala_tuple_destructure(ctx, pattern_node, val_reg, node)
     else:
         raw_name = _extract_pattern_name(ctx, pattern_node)
         var_name = ctx.declare_block_var(raw_name)
@@ -218,7 +217,7 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
         and c.type not in ctx.constants.noise_types
     ]
     if not children:
-        return ""  # type: ignore[return-value]  # see red-dragon-hzmm
+        return ""
     *init, last = children
     for child in init:
         ctx.lower_stmt(child)
@@ -229,7 +228,7 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
     # Explicit return already emits its own RETURN opcode
     if is_stmt or last.type == NT.RETURN_EXPRESSION:
         ctx.lower_stmt(last)
-        return ""  # type: ignore[return-value]  # see red-dragon-hzmm
+        return ""
     return ctx.lower_expr(last)
 
 
@@ -288,7 +287,7 @@ def lower_function_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -344,7 +343,7 @@ def _lower_auxiliary_constructor(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -509,7 +508,7 @@ def _emit_primary_constructor_init(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -533,7 +532,7 @@ def lower_class_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     if body_node:
@@ -564,7 +563,7 @@ def lower_object_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(obj_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(obj_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(obj_name), value_reg=cls_reg))
 
     if body_node:
@@ -590,7 +589,7 @@ def lower_trait_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(trait_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(trait_name, class_label, parents, result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(trait_name), value_reg=cls_reg))
 
 
@@ -612,7 +611,7 @@ def lower_function_declaration(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -628,7 +627,7 @@ def lower_function_def_stmt(
 # ---------------------------------------------------------------------------
 
 
-def _extract_scala_primary_ctor_fields(class_params_node) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_scala_primary_ctor_fields(class_params_node) -> "dict[str, FieldInfo]":
     """Extract val/var class parameters as fields from a class_parameters node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -650,10 +649,10 @@ def _extract_scala_primary_ctor_fields(class_params_node) -> "dict[str, FieldInf
         fields[FieldName(fname)] = FieldInfo(
             name=FieldName(fname), type_hint=type_hint, has_initializer=False
         )
-    return fields  # type: ignore[name-defined]  # see red-dragon-545a
+    return fields
 
 
-def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
     """Extract a ClassInfo from a Scala class_definition or case_class_definition node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -679,7 +678,7 @@ def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignor
     # Primary constructor parameters with val/var
     class_params = node.child_by_field_name("class_parameters")
     if class_params is not None:
-        fields.update(_extract_scala_primary_ctor_fields(class_params))  # type: ignore[name-defined]  # see red-dragon-545a
+        fields.update(_extract_scala_primary_ctor_fields(class_params))
 
     body = next((c for c in node.children if c.type == NT.TEMPLATE_BODY), None)
     if body is None:
@@ -734,7 +733,7 @@ def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignor
     )
 
 
-def _collect_scala_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:  # type: ignore[name-defined]  # see red-dragon-545a
+def _collect_scala_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all class/case class definition nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -747,7 +746,7 @@ def _collect_scala_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> N
         _collect_scala_classes(child, accumulator)
 
 
-def extract_scala_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
+def extract_scala_symbols(root) -> "SymbolTable":
     """Walk the Scala AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

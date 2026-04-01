@@ -1,4 +1,3 @@
-# pyright: standard
 """Lua-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -50,7 +49,7 @@ def lower_lua_call(
         ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
         reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
             node=node,
         )
         return reg
@@ -68,7 +67,7 @@ def lower_lua_call(
                     result_reg=reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    args=tuple(arg_regs),
                 ),
                 node=node,
             )
@@ -92,7 +91,7 @@ def lower_lua_call(
             )
             reg = ctx.fresh_reg()
             ctx.emit_inst(
-                CallUnknown(result_reg=reg, target_reg=func_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                CallUnknown(result_reg=reg, target_reg=func_reg, args=tuple(arg_regs)),
                 node=node,
             )
             return reg
@@ -103,7 +102,7 @@ def lower_lua_call(
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
             ),
             node=node,
         )
@@ -113,7 +112,7 @@ def lower_lua_call(
     target_reg = ctx.lower_expr(name_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -250,7 +249,7 @@ def lower_lua_function_definition(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(str(anon_name), func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(str(anon_name), func_label, result_reg=func_reg)
     return func_reg
 
 

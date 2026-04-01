@@ -1,4 +1,3 @@
-# pyright: standard
 """C#-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -77,12 +76,12 @@ def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]
                 ctx.emit_inst(
                     AddressOf(result_reg=reg, var_name=VarName(ctx.node_text(inner)))
                 )
-                regs.append(reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+                regs.append(reg)
             else:
                 # declaration_expression (out int x) or regular arg
-                regs.append(ctx.lower_expr(inner))  # type: ignore[arg-type]  # see red-dragon-y5bm
+                regs.append(ctx.lower_expr(inner))
         elif c.is_named:
-            regs.append(ctx.lower_expr(c))  # type: ignore[arg-type]  # see red-dragon-y5bm
+            regs.append(ctx.lower_expr(c))
     return regs
 
 
@@ -106,7 +105,7 @@ def lower_invocation(
                     result_reg=reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    args=tuple(arg_regs),
                 ),
                 node=node,
             )
@@ -117,7 +116,7 @@ def lower_invocation(
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
             ),
             node=node,
         )
@@ -131,7 +130,7 @@ def lower_invocation(
         ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -150,7 +149,7 @@ def lower_object_creation(
             result_reg=reg,
             func_name=FuncName(type_name),
             type_hint=scalar(type_name),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -255,7 +254,7 @@ def lower_assignment_expr(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_csharp_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_csharp_store_target(ctx, left, val_reg, node)
     return val_reg
 
 
@@ -378,10 +377,10 @@ def emit_byref_store(
         ptr_reg = ctx.fresh_reg()
         resolved = ctx.resolve_var(name)
         ctx.emit_inst(LoadVar(result_reg=ptr_reg, name=VarName(resolved)), node=node)
-        ctx.emit_inst(StoreIndirect(ptr_reg=ptr_reg, value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        ctx.emit_inst(StoreIndirect(ptr_reg=ptr_reg, value_reg=val_reg), node=node)
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.resolve_var(name)), value_reg=val_reg), node=node  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.resolve_var(name)), value_reg=val_reg), node=node
         )
 
 
@@ -485,7 +484,7 @@ def lower_lambda(
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg, node=node)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg, node=node)
     return ref_reg
 
 
@@ -563,7 +562,7 @@ def lower_csharp_interpolated_string(
             ctx.emit_inst(
                 Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
-            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(frag_reg)
         elif child.type == NT.INTERPOLATION:
             named = [
                 c
@@ -571,7 +570,7 @@ def lower_csharp_interpolated_string(
                 if c.is_named and c.type not in _INTERPOLATION_NOISE
             ]
             if named:
-                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
+                parts.append(ctx.lower_expr(named[0]))
         # skip: interpolation_start, ", punctuation
     return lower_interpolated_string_parts(ctx, parts, node)
 
@@ -819,7 +818,7 @@ def lower_csharp_store_target(
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
                 ),
                 node=parent_node,
             )
@@ -834,7 +833,7 @@ def lower_csharp_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(name_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -854,12 +853,12 @@ def lower_csharp_store_target(
                 )
             idx_reg = _extract_bracket_index(ctx, bracket_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 

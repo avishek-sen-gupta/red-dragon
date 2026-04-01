@@ -1,4 +1,3 @@
-# pyright: standard
 """PHP-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -109,9 +108,9 @@ def lower_php_if(
     ctx.emit_inst(Branch(label=end_label))
 
     if else_clauses:
-        ctx.emit_inst(Label_(label=false_label))  # type: ignore[misc]  # see red-dragon-hzmm
+        ctx.emit_inst(Label_(label=false_label))
         for clause in else_clauses:
-            _lower_php_else_clause(ctx, clause, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+            _lower_php_else_clause(ctx, clause, end_label)
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -136,7 +135,7 @@ def _lower_php_else_clause(
         ctx.emit_inst(Label_(label=true_label))
         if body_node:
             lower_php_compound(ctx, body_node)
-        ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
+        ctx.emit_inst(Branch(label=end_label))
 
         ctx.emit_inst(Label_(label=false_label))
     elif node.type == PHPNodeType.ELSE_CLAUSE:
@@ -215,7 +214,7 @@ def lower_php_foreach(
         ctx.emit_inst(DeclVar(name=VarName(value_var), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("foreach_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -296,7 +295,7 @@ def lower_php_switch(
     subject_reg = ctx.lower_expr(cond_node) if cond_node else ctx.fresh_reg()
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.break_target_stack.append(end_label)
 
     cases = (
         [
@@ -356,7 +355,7 @@ def lower_php_do(
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()

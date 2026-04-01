@@ -1,4 +1,3 @@
-# pyright: standard
 """Kotlin-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -56,7 +55,7 @@ def lower_kotlin_assignment(
         else:
             return
     val_reg = ctx.lower_expr(right)
-    lower_kotlin_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_kotlin_store_target(ctx, left, val_reg, node)
 
 
 # -- if statement ------------------------------------------------------
@@ -105,7 +104,7 @@ def lower_while_stmt(
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -157,7 +156,7 @@ def _lower_for_multi_destructure(
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),
             node=var_decl,
         )
         ctx.emit_inst(
@@ -230,13 +229,13 @@ def lower_for_stmt(
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
 
     if is_destructure:
-        _lower_for_multi_destructure(ctx, multi_var_node, elem_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        _lower_for_multi_destructure(ctx, multi_var_node, elem_reg)
     else:
         var_name = ctx.declare_block_var(raw_name)
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -310,7 +309,7 @@ def lower_do_while_stmt(
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()

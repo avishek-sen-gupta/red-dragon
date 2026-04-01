@@ -1,4 +1,3 @@
-# pyright: standard
 """Ruby-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -103,11 +102,11 @@ def lower_ruby_string(
             ctx.emit_inst(
                 Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
-            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(frag_reg)
         elif child.type == RubyNodeType.INTERPOLATION:
             named = [c for c in child.children if c.is_named]
             if named:
-                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
+                parts.append(ctx.lower_expr(named[0]))
         # skip punctuation: ", #{, }
     return lower_interpolated_string_parts(ctx, parts, node)
 
@@ -127,11 +126,11 @@ def lower_ruby_heredoc_body(
             ctx.emit_inst(
                 Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
-            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(frag_reg)
         elif child.type == RubyNodeType.INTERPOLATION:
             named = [c for c in child.children if c.is_named]
             if named:
-                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
+                parts.append(ctx.lower_expr(named[0]))
         # skip heredoc_end and punctuation
     return lower_interpolated_string_parts(ctx, parts, node)
 
@@ -174,7 +173,7 @@ def lower_ruby_call(
                     result_reg=ctor_reg,
                     obj_reg=obj_reg,
                     method_name=FuncName("__init__"),
-                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    args=tuple(arg_regs),
                 ),
                 node=node,
             )
@@ -188,7 +187,7 @@ def lower_ruby_call(
                 result_reg=reg,
                 obj_reg=obj_reg,
                 method_name=FuncName(method_name),
-                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                args=tuple(arg_regs),
             ),
             node=node,
         )
@@ -200,12 +199,12 @@ def lower_ruby_call(
         # Ruby raise -> THROW
         if func_name == "raise":
             val_reg = arg_regs[0] if arg_regs else ctx.fresh_reg()
-            ctx.emit_inst(Throw_(value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
-            return val_reg  # type: ignore[return-value]  # see red-dragon-hzmm
+            ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
+            return val_reg
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
             ),
             node=node,
         )
@@ -216,7 +215,7 @@ def lower_ruby_call(
     ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -333,7 +332,7 @@ def lower_ruby_lambda(
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)
     return ref_reg
 
 
@@ -378,10 +377,10 @@ def lower_element_reference(
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(named_children[0])
     if len(named_children) > 1 and named_children[1].type == RubyNodeType.RANGE:
-        return _lower_range_slice(ctx, named_children[1], obj_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        return _lower_range_slice(ctx, named_children[1], obj_reg)
     # arr[start, length] — Ruby's two-arg slice: start at index, take N elements
     if len(named_children) == 3:
-        return _lower_positional_slice(ctx, named_children, obj_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        return _lower_positional_slice(ctx, named_children, obj_reg, node)
     idx_reg = (
         ctx.lower_expr(named_children[1])
         if len(named_children) > 1
@@ -431,7 +430,7 @@ def _lower_range_slice(
             result_reg=reg,
             func_name=FuncName("slice"),
             args=(
-                collection_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                collection_reg,
                 start_reg,
                 end_reg,
                 none_reg,
@@ -465,7 +464,7 @@ def _lower_positional_slice(
             result_reg=reg,
             func_name=FuncName("slice"),
             args=(
-                collection_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                collection_reg,
                 start_reg,
                 stop_reg,
                 none_reg,
@@ -537,7 +536,7 @@ def lower_ruby_super(
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=FuncName("super"), args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallFunction(result_reg=reg, func_name=FuncName("super"), args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -554,7 +553,7 @@ def lower_ruby_yield(
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=FuncName("yield"), args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallFunction(result_reg=reg, func_name=FuncName("yield"), args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -712,7 +711,7 @@ def lower_ruby_store_target(
         )
         ctx.emit_inst(
             StoreField(
-                obj_reg=self_reg, field_name=FieldName(field_name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
+                obj_reg=self_reg, field_name=FieldName(field_name), value_reg=val_reg
             ),
             node=parent_node,
         )
@@ -723,7 +722,7 @@ def lower_ruby_store_target(
         RubyNodeType.CLASS_VARIABLE,
     ):
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == RubyNodeType.ELEMENT_REFERENCE:
@@ -732,7 +731,7 @@ def lower_ruby_store_target(
             obj_reg = ctx.lower_expr(named_children[0])
             idx_reg = ctx.lower_expr(named_children[1])
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
         else:

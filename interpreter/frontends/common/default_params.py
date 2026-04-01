@@ -1,4 +1,3 @@
-# pyright: standard
 """Shared default-parameter IR emission helpers.
 
 Provides a lazily-emitted ``__resolve_default__`` IR function and a
@@ -138,8 +137,8 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)  # type: ignore[arg-type]  # see red-dragon-2us7
-    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=ref_reg))  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=ref_reg))
 
 
 def emit_default_param_guard(
@@ -170,7 +169,7 @@ def emit_default_param_guard(
     ctx.emit_inst(LoadVar(result_reg=args_reg, name=VarName("arguments")))
 
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=idx_reg, value=param_index))  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_inst(Const(result_reg=idx_reg, value=param_index))
 
     # Call __resolve_default__(arguments, param_index, default_value)
     result_reg = ctx.fresh_reg()

@@ -1,4 +1,3 @@
-# pyright: standard
 """LLM-based frontend — sends raw source to an LLM to produce IR instructions."""
 
 from __future__ import annotations
@@ -287,8 +286,8 @@ def _validate_ir(instructions: list[InstructionBase]) -> list[InstructionBase]:
 
     first = instructions[0]
     has_entry_label = (
-        isinstance(first, Label_) or first.opcode == Opcode.LABEL  # type: ignore[attr-defined]  # see red-dragon-4ei7
-    ) and first.label.is_entry()  # type: ignore[attr-defined]  # see red-dragon-4ei7
+        isinstance(first, Label_) or first.opcode == Opcode.LABEL
+    ) and first.label.is_entry()
 
     if not has_entry_label:
         logger.warning("LLM response missing entry label — auto-prepending")
@@ -308,7 +307,7 @@ def _convert_llm_func_refs(
     This is the ONLY place regex is used for function references — at the LLM boundary.
     """
     for i, inst in enumerate(instructions):
-        if inst.opcode == Opcode.CONST and inst.operands:  # type: ignore[attr-defined]  # see red-dragon-4ei7
+        if inst.opcode == Opcode.CONST and inst.operands:
             t = inst
             assert isinstance(t, Const)
             operand = str(t.value)
@@ -329,7 +328,7 @@ def _convert_llm_class_refs(
     This is the ONLY place regex is used for class references — at the LLM boundary.
     """
     for i, inst in enumerate(instructions):
-        if inst.opcode == Opcode.CONST and inst.operands:  # type: ignore[attr-defined]  # see red-dragon-4ei7
+        if inst.opcode == Opcode.CONST and inst.operands:
             t = inst
             assert isinstance(t, Const)
             operand = str(t.value)

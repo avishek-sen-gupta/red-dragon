@@ -1,4 +1,3 @@
-# pyright: standard
 """Scala-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -93,7 +92,7 @@ def _lower_this_call_as_delegation(
             result_reg=result_reg,
             obj_reg=this_reg,
             method_name=FuncName("__init__"),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -123,7 +122,7 @@ def lower_assignment_expr(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_scala_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_scala_store_target(ctx, left, val_reg, node)
     return val_reg
 
 
@@ -132,7 +131,7 @@ def lower_scala_store_target(
 ) -> None:
     if target.type == NT.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == NT.FIELD_EXPRESSION:
@@ -144,7 +143,7 @@ def lower_scala_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -157,13 +156,13 @@ def lower_scala_store_target(
             if len(arg_regs) == 1:
                 ctx.emit_inst(
                     StoreIndex(
-                        arr_reg=obj_reg, index_reg=arg_regs[0], value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
+                        arr_reg=obj_reg, index_reg=arg_regs[0], value_reg=val_reg
                     ),
                     node=parent_node,
                 )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 
@@ -243,10 +242,10 @@ def _scala_body_of(
 
 
 _SCALA_MATCH_SPEC = MatchArmSpec(
-    extract_arms=lambda body: [c for c in body.children if c.type == NT.CASE_CLAUSE],  # type: ignore[attr-defined]  # see red-dragon-545a
+    extract_arms=lambda body: [c for c in body.children if c.type == NT.CASE_CLAUSE],
     pattern_of=_scala_pattern_of,
     guard_of=_scala_guard_of,
-    body_of=_scala_body_of,  # type: ignore[misc]  # see red-dragon-hzmm
+    body_of=_scala_body_of,
 )
 
 
@@ -257,7 +256,7 @@ def lower_match_expr(
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
     subject_reg = ctx.lower_expr(value_node)
-    return lower_match_as_expr(ctx, subject_reg, body_node, _SCALA_MATCH_SPEC)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    return lower_match_as_expr(ctx, subject_reg, body_node, _SCALA_MATCH_SPEC)
 
 
 def lower_block_expr(
@@ -410,7 +409,7 @@ def lower_lambda_expr(
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
     return reg
 
 
@@ -435,7 +434,7 @@ def lower_new_expr(
             result_reg=reg,
             func_name=FuncName(type_name),
             type_hint=scalar(type_name),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -488,11 +487,11 @@ def lower_scala_interpolated_string_body(
             if gap_text:
                 frag_reg = ctx.fresh_reg()
                 ctx.emit_inst(Const(result_reg=frag_reg, value=gap_text), node=node)
-                parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+                parts.append(frag_reg)
             # Lower the interpolation expression
             named = [c for c in child.children if c.is_named]
             if named:
-                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
+                parts.append(ctx.lower_expr(named[0]))
             content_start = child.end_byte
 
     # Trailing literal after last interpolation
@@ -500,7 +499,7 @@ def lower_scala_interpolated_string_body(
     if trailing:
         frag_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=frag_reg, value=trailing), node=node)
-        parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+        parts.append(frag_reg)
 
     return lower_interpolated_string_parts(ctx, parts, node)
 

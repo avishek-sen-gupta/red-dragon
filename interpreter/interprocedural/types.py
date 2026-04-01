@@ -223,7 +223,7 @@ class InterproceduralResult:
 _SENTINEL_INSTRUCTION = IRInstruction(opcode=Opcode.CONST, operands=[])
 
 NO_DEFINITION = Definition(
-    variable="",  # type: ignore[arg-type]  # sentinel str; StorageIdentifier boundary — see red-dragon-r32l
+    variable="",  # type: ignore[arg-type]  # sentinel str; StorageIdentifier boundary
     block_label=NO_LABEL,
     instruction_index=-1,
     instruction=_SENTINEL_INSTRUCTION,

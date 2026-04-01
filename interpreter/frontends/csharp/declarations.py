@@ -1,4 +1,3 @@
-# pyright: standard
 """C#-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -61,7 +60,7 @@ def lower_variable_declaration(
     is_ref = any(child.type == NT.REF_TYPE for child in node.children)
     for child in node.children:
         if child.type == NT.VARIABLE_DECLARATOR:
-            _lower_csharp_declarator(ctx, child, type_hint=type_hint, is_ref=is_ref)  # type: ignore[arg-type]  # see red-dragon-hzmm
+            _lower_csharp_declarator(ctx, child, type_hint=type_hint, is_ref=is_ref)
 
 
 def _lower_csharp_declarator(
@@ -95,7 +94,7 @@ def _lower_csharp_declarator(
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
-    ctx.seed_var_type(var_name, type_hint)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    ctx.seed_var_type(var_name, type_hint)
     if is_ref:
         ctx.byref_params.add(var_name)
 
@@ -156,7 +155,7 @@ def lower_method_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -202,7 +201,7 @@ def lower_constructor_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -309,7 +308,7 @@ def lower_class_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -456,7 +455,7 @@ def lower_interface_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -562,7 +561,7 @@ def lower_local_function_stmt(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -606,7 +605,7 @@ def lower_delegate_declaration(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -676,7 +675,7 @@ def _extract_csharp_class_parents(node) -> tuple[str, ...]:
     base_list = next((c for c in node.children if c.type == NT.BASE_LIST), None)
     if base_list is None:
         return ()
-    return tuple(  # type: ignore[return-value]  # see red-dragon-hzmm
+    return tuple(
         ClassName(c.text.decode())
         for c in base_list.children
         if c.type == NT.IDENTIFIER
@@ -698,7 +697,7 @@ def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
             fields={},
             methods={},
             constants={},
-            parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
+            parents=parents,
         )
 
     fields: dict[FieldName, FieldInfo] = {}
@@ -727,7 +726,7 @@ def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
         fields=fields,
         methods=methods,
         constants=constants_map,
-        parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
+        parents=parents,
     )
 
 

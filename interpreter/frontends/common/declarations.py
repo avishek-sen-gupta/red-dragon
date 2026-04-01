@@ -1,4 +1,3 @@
-# pyright: standard
 """Common declaration lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend: function_def, params, class_def, var_declaration.
@@ -137,8 +136,8 @@ def lower_function_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)  # type: ignore[arg-type]  # see red-dragon-2us7
-    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)
 
 
 FieldInit = tuple[
@@ -211,8 +210,8 @@ def emit_synthetic_init(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-2us7
-    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_class_def(
@@ -232,8 +231,8 @@ def lower_class_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-2us7
-    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg), node=node)
 
 
 def lower_var_declaration(

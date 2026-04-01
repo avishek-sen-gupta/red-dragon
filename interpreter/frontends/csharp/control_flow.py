@@ -1,4 +1,3 @@
-# pyright: standard
 """C#-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -119,7 +118,7 @@ def lower_foreach(
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("foreach_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -200,7 +199,7 @@ def lower_do_while(
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -236,7 +235,7 @@ def lower_switch(
     subject_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.break_target_stack.append(end_label)
 
     sections = (
         [c for c in body_node.children if c.type == NT.SWITCH_SECTION]
@@ -332,7 +331,7 @@ def lower_switch_expr(
 
     spec = MatchArmSpec(
         extract_arms=lambda n: [
-            c for c in n.children if c.type == NT.SWITCH_EXPRESSION_ARM  # type: ignore[attr-defined]  # see red-dragon-545a
+            c for c in n.children if c.type == NT.SWITCH_EXPRESSION_ARM
         ],
         pattern_of=_csharp_switch_expr_pattern_of,
         guard_of=_csharp_switch_expr_guard_of,
@@ -342,7 +341,7 @@ def lower_switch_expr(
     named_children = [c for c in node.children if c.is_named]
     subject_node = named_children[0] if named_children else node
     subject_reg = ctx.lower_expr(subject_node)
-    return lower_match_as_expr(ctx, subject_reg, node, spec)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    return lower_match_as_expr(ctx, subject_reg, node, spec)
 
 
 def lower_try(

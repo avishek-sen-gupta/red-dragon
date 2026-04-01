@@ -1,4 +1,3 @@
-# pyright: standard
 """Go-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -50,7 +49,7 @@ def lower_short_var_decl(
 
     for name, val_reg in zip(left_names, right_regs):
         var_name = ctx.declare_block_var(name)
-        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
 
 
 # -- Go: assignment statement (=) ------------------------------------------
@@ -108,7 +107,7 @@ def lower_go_func_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -161,7 +160,7 @@ def lower_go_method_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -244,7 +243,7 @@ def _lower_go_struct_type(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=cls_reg))
 
 
@@ -265,7 +264,7 @@ def _lower_go_interface_type(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=cls_reg))
 
 
@@ -294,7 +293,7 @@ def _lower_go_interface_method(ctx: TreeSitterEmitContext, method_node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(method_name), value_reg=func_reg))
 
 
@@ -345,7 +344,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
         for name_node, val_reg in zip(names, val_regs):
             name_str = ctx.declare_block_var(ctx.node_text(name_node))
             ctx.emit_inst(
-                DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
+                DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node
             )
             ctx.seed_var_type(name_str, type_hint)
         # If more names than values (e.g. `var a, b int`), store None for remainder
@@ -384,13 +383,13 @@ def lower_go_const_decl(
     old_iota = getattr(ctx, "_go_iota_value", 0)
     for child in node.children:
         if child.type == GoNodeType.CONST_SPEC:
-            ctx._go_iota_value = iota_counter  # type: ignore[misc]  # see red-dragon-hzmm
+            ctx._go_iota_value = iota_counter
             _lower_const_spec(ctx, child, prev_value_node)
             raw_value = child.child_by_field_name("value")
             if raw_value is not None:
                 prev_value_node = _unwrap_expression_list(raw_value)
             iota_counter += 1
-    ctx._go_iota_value = old_iota  # type: ignore[misc]  # see red-dragon-hzmm
+    ctx._go_iota_value = old_iota
 
 
 def _unwrap_expression_list(
@@ -442,7 +441,7 @@ def _lower_const_spec(
 # ---------------------------------------------------------------------------
 
 
-def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
     """Extract fields from a Go struct field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -459,7 +458,7 @@ def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
                 fields[FieldName(fname)] = FieldInfo(
                     name=FieldName(fname), type_hint=type_hint, has_initializer=False
                 )
-    return fields  # type: ignore[name-defined]  # see red-dragon-545a
+    return fields
 
 
 def _extract_go_method_params(params_node) -> "tuple[str, ...]":
@@ -474,7 +473,7 @@ def _extract_go_method_params(params_node) -> "tuple[str, ...]":
 
 
 def _collect_go_structs(
-    node, classes: "dict[ClassName, ClassInfo]", methods: "dict[FuncName, FunctionInfo]"  # type: ignore[name-defined]  # see red-dragon-545a
+    node, classes: "dict[ClassName, ClassInfo]", methods: "dict[FuncName, FunctionInfo]"
 ) -> None:
     """Walk AST to collect structs (as ClassInfo) and top-level/method functions."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
@@ -505,7 +504,7 @@ def _collect_go_structs(
                     )
                     classes[ClassName(struct_name)] = ClassInfo(
                         name=ClassName(struct_name),
-                        fields=fields,  # type: ignore[name-defined]  # see red-dragon-545a
+                        fields=fields,
                         methods={},
                         constants={},
                         parents=(),
@@ -553,7 +552,7 @@ def _collect_go_structs(
         _collect_go_structs(child, classes, methods)
 
 
-def extract_go_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
+def extract_go_symbols(root) -> "SymbolTable":
     """Walk the Go AST and return a SymbolTable of all struct and function definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 

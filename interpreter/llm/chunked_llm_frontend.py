@@ -1,4 +1,3 @@
-# pyright: standard
 """Chunked LLM frontend — decomposes large files into top-level chunks for LLM lowering."""
 
 from __future__ import annotations
@@ -181,7 +180,7 @@ class IRRenumberer:
         """
 
         def _renumber_inst(inst: InstructionBase) -> InstructionBase:
-            i: Any = inst  # type: ignore[misc]  # see red-dragon-4ei7 — subclass attrs not visible on InstructionBase
+            i: Any = inst  # subclass attrs not visible on InstructionBase
             new_operands = [
                 self._renumber_operand(op, reg_offset, label_suffix)
                 for op in i.operands
@@ -200,7 +199,7 @@ class IRRenumberer:
         all_reg_numbers = [
             self._extract_reg_number(token)
             for inst in result
-            for token in [inst.result_reg, *inst.operands]  # type: ignore[attr-defined]  # see red-dragon-4ei7
+            for token in [inst.result_reg, *inst.operands]
         ]
         max_reg = max(all_reg_numbers, default=-1)
         next_offset = max_reg + 1 if max_reg >= 0 else reg_offset
@@ -333,8 +332,8 @@ class ChunkedLLMFrontend(Frontend):
                 inst
                 for inst in chunk_instructions
                 if not (
-                    (isinstance(inst, Label_) or inst.opcode == Opcode.LABEL)  # type: ignore[attr-defined]  # see red-dragon-4ei7
-                    and inst.label.is_entry()  # type: ignore[attr-defined]  # see red-dragon-4ei7
+                    (isinstance(inst, Label_) or inst.opcode == Opcode.LABEL)
+                    and inst.label.is_entry()
                 )
             ]
 

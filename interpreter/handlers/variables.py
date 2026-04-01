@@ -1,7 +1,5 @@
 """Variable-related opcode handlers: CONST, LOAD_VAR, DECL_VAR, STORE_VAR, SYMBOLIC."""
 
-# pyright: standard
-
 from __future__ import annotations
 
 import logging
@@ -48,13 +46,13 @@ def _handle_const(
     assert isinstance(t, Const)
     func_symbol_table = ctx.func_symbol_table
     class_symbol_table = ctx.class_symbol_table
-    raw = inst.operands[0] if inst.operands else "None"  # type: ignore[reportAttributeAccessIssue]  # see red-dragon-gq2o
+    raw = inst.operands[0] if inst.operands else "None"
     val = _parse_const(raw)
 
     # Symbol table lookup: produce BoundFuncRef for function labels
     func_ref_entry = None
-    if isinstance(val, str) and val in func_symbol_table:  # type: ignore[reportArgumentType]  # see red-dragon-mayj
-        func_ref_entry = func_symbol_table[val]  # type: ignore[reportArgumentType]  # see red-dragon-mayj
+    if isinstance(val, str) and val in func_symbol_table:
+        func_ref_entry = func_symbol_table[val]
 
     if func_ref_entry is not None:
         closure_id = NO_CLOSURE_ID
@@ -86,8 +84,8 @@ def _handle_const(
             )
         val = BoundFuncRef(func_ref=func_ref_entry, closure_id=closure_id)
     # Class symbol table lookup: store ClassRef directly in register
-    elif isinstance(val, str) and val in class_symbol_table:  # type: ignore[reportArgumentType]  # see red-dragon-mayj
-        val = class_symbol_table[val]  # type: ignore[reportArgumentType]  # see red-dragon-mayj
+    elif isinstance(val, str) and val in class_symbol_table:
+        val = class_symbol_table[val]
 
     return ExecutionResult.success(
         StateUpdate(
@@ -125,7 +123,7 @@ def _handle_load_var(
                 )
             )
     # Variable not found — try field fallback strategy
-    this_field = ctx.field_fallback.resolve_load(vm, name)  # type: ignore[reportArgumentType]  # see red-dragon-zzph
+    this_field = ctx.field_fallback.resolve_load(vm, name)
     if this_field is not None:
         return ExecutionResult.success(
             StateUpdate(
@@ -172,7 +170,7 @@ def _handle_store_var(
             )
     # Not found in any frame — try field fallback strategy
     fallback = ctx.field_fallback
-    this_addr = fallback.resolve_store(vm, name)  # type: ignore[reportArgumentType]  # see red-dragon-zzph
+    this_addr = fallback.resolve_store(vm, name)
     if this_addr is not None:
         return ExecutionResult.success(
             StateUpdate(

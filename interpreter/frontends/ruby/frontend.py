@@ -1,4 +1,3 @@
-# pyright: standard
 """RubyFrontend — thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
@@ -44,7 +43,7 @@ class RubyFrontend(BaseFrontend):
     def _build_expr_dispatch(
         self,
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
-        return {  # type: ignore[return-value]  # see red-dragon-rke4
+        return {
             RubyNodeType.SCOPE_RESOLUTION: ruby_expr.lower_scope_resolution,
             RubyNodeType.IDENTIFIER: common_expr.lower_identifier,
             RubyNodeType.INSTANCE_VARIABLE: ruby_expr.lower_instance_variable,
@@ -93,7 +92,7 @@ class RubyFrontend(BaseFrontend):
     def _build_stmt_dispatch(
         self,
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
-        return {  # type: ignore[return-value]  # see red-dragon-q5jm
+        return {
             RubyNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             RubyNodeType.ASSIGNMENT: ruby_assign.lower_ruby_assignment,
             RubyNodeType.OPERATOR_ASSIGNMENT: ruby_assign.lower_ruby_augmented_assignment,
