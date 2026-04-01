@@ -1,8 +1,13 @@
 """Region opcode handlers: ALLOC_REGION, WRITE_REGION, LOAD_REGION."""
 
+# pyright: standard
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.vm.executor import HandlerContext
 
 from interpreter.instructions import (
     InstructionBase,
@@ -25,7 +30,7 @@ from interpreter import constants
 
 
 def _handle_alloc_region(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """ALLOC_REGION: operands[0] = size literal. Allocate a zeroed byte region."""
     t = inst
@@ -51,7 +56,7 @@ def _handle_alloc_region(
 
 
 def _handle_write_region(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """WRITE_REGION: operands = [region_reg, offset_reg, length_literal, value_reg].
 
@@ -95,7 +100,7 @@ def _handle_write_region(
 
 
 def _handle_load_region(
-    inst: InstructionBase, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """LOAD_REGION: operands = [region_reg, offset_reg, length_literal].
 
