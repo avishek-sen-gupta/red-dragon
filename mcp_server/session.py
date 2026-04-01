@@ -1,3 +1,4 @@
+# pyright: standard
 """Session management for the RedDragon MCP server.
 
 Single-session model: one program loaded at a time. load_session()
@@ -14,6 +15,7 @@ from interpreter.cfg import build_cfg
 from interpreter.cfg_types import CFG
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
+from interpreter.instructions import InstructionBase
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.types import InterproceduralResult
 from interpreter.registry import FunctionRegistry, build_registry
