@@ -1,3 +1,4 @@
+# pyright: standard
 """Orchestrator — run() entry point."""
 
 from __future__ import annotations
@@ -18,8 +19,8 @@ from interpreter.types.coercion.default_conversion_rules import (
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import Opcode, CodeLabel, NO_LABEL
-from interpreter.instructions import Label_, Return_, Throw_
-from interpreter.frontend import get_frontend
+from interpreter.instructions import InstructionBase, Label_, Return_, Throw_
+from interpreter.frontend import Frontend, get_frontend
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import build_registry, FunctionRegistry
@@ -185,7 +186,7 @@ def _binop_coercion_for_language(lang: Language) -> BinopCoercionStrategy:
     return DefaultBinopCoercion()
 
 
-def _find_entry_point(cfg: CFG, entry_point: str) -> CodeLabel:
+def _find_entry_point(cfg: CFG, entry_point: str | CodeLabel) -> CodeLabel:
     """Resolve the entry point label in the CFG."""
     entry: str | CodeLabel = entry_point or cfg.entry
     if entry in cfg.blocks:
@@ -221,7 +222,7 @@ def _log_update(
     step: int,
     current_label: CodeLabel,
     ip: int,
-    instruction: Any,
+    instruction: InstructionBase,
     update: StateUpdate,
     used_llm: bool,
 ):
@@ -247,7 +248,7 @@ def _log_update(
 
 def _handle_call_dispatch_setup(
     vm: VMState,
-    instruction: Any,
+    instruction: InstructionBase,
     update: StateUpdate,
     current_label: CodeLabel,
     ip: int,
@@ -255,7 +256,7 @@ def _handle_call_dispatch_setup(
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
 ):
     """Set up the new call frame's return info after call_push + dispatch."""
-    call_result_reg = instruction.result_reg
+    call_result_reg = instruction.result_reg  # type: ignore[attr-defined]  # see red-dragon-4ei7
     call_return_label = current_label
     call_return_ip = ip + 1
 
@@ -436,7 +437,7 @@ def execute_cfg(
 
         if is_return or (is_throw and not is_caught_throw):
             flow = _handle_return_flow(
-                vm, cfg, return_frame, update, config.verbose, step
+                vm, cfg, return_frame, update, config.verbose, step  # type: ignore[arg-type]  # see red-dragon-iarh
             )
             if isinstance(flow, _StopExecution):
                 break
@@ -591,7 +592,7 @@ def execute_cfg_traced(
         trace_steps.append(
             TraceStep(
                 step_index=len(trace_steps),
-                block_label=current_label,
+                block_label=current_label,  # type: ignore[arg-type]  # see red-dragon-a4yo
                 instruction_index=ip,
                 instruction=instruction,
                 update=update,
@@ -602,7 +603,7 @@ def execute_cfg_traced(
 
         if is_return or is_throw:
             flow = _handle_return_flow(
-                vm, cfg, return_frame, update, config.verbose, step
+                vm, cfg, return_frame, update, config.verbose, step  # type: ignore[arg-type]  # see red-dragon-iarh
             )
             if isinstance(flow, _StopExecution):
                 break
@@ -635,8 +636,8 @@ def execute_cfg_traced(
 
 
 def build_execution_strategies(
-    frontend,
-    instructions: list,
+    frontend: Frontend,
+    instructions: list[InstructionBase],
     registry: FunctionRegistry,
     lang: Language,
 ) -> ExecutionStrategies:
@@ -783,7 +784,7 @@ def run(
     max_steps: int = 100,
     verbose: bool = False,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    llm_client: Any = None,
+    llm_client: Any = None,  # Any: Optional LLM client injection — see red-dragon-c7y2
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
 ) -> VMState:
     """End-to-end: parse → lower → build LinkedProgram → run_linked.
@@ -908,7 +909,9 @@ def run(
     return vm
 
 
-def _format_val(v: Any) -> str:
+def _format_val(
+    v: Any,
+) -> str:  # Any: display boundary — formats all runtime value types
     """Format a value for verbose display."""
     if isinstance(v, TypedValue):
         return _format_val(v.value)
