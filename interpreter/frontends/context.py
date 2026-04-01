@@ -1,3 +1,4 @@
+# pyright: standard
 """TreeSitterEmitContext — shared mutable state for tree-sitter IR lowering.
 
 Analogous to COBOL's EmitContext. Holds registers, labels, instructions,
@@ -128,8 +129,13 @@ class TreeSitterEmitContext:
     type_map: dict[str, str] = field(default_factory=dict)
 
     # Dispatch tables: node_type -> Callable[[TreeSitterEmitContext, node], ...]
-    stmt_dispatch: dict[str, Callable] = field(default_factory=dict)
-    expr_dispatch: dict[str, Callable] = field(default_factory=dict)
+    # Any: tree-sitter node objects are untyped at the Python boundary
+    stmt_dispatch: dict[str, Callable[[TreeSitterEmitContext, Any], None]] = field(
+        default_factory=dict
+    )
+    expr_dispatch: dict[str, Callable[[TreeSitterEmitContext, Any], Register]] = field(
+        default_factory=dict
+    )
 
     # Type environment builder — accumulates type seeds during lowering
     type_env_builder: TypeEnvironmentBuilder = field(
@@ -183,7 +189,7 @@ class TreeSitterEmitContext:
         self.label_counter += 1
         return lbl
 
-    def emit_inst(self, inst: Instruction, *, node=None) -> Instruction:
+    def emit_inst(self, inst: Instruction, *, node: Any = None) -> Instruction:
         """Emit a typed instruction directly.
 
         Resolves source_location from *node* if the instruction carries
@@ -201,19 +207,21 @@ class TreeSitterEmitContext:
         self.instructions.append(inst)
 
         if isinstance(inst, DeclVar):
-            self._method_declared_names.add(inst.name)
+            self._method_declared_names.add(inst.name)  # type: ignore[arg-type]  # see red-dragon-2us7
         return inst
 
-    def emit_decl_var(self, name: str, val_reg: str, *, node=None) -> Instruction:
+    def emit_decl_var(
+        self, name: str, val_reg: str, *, node: Any = None
+    ) -> Instruction:
         """Emit DECL_VAR: declare a new variable in the current scope."""
-        return self.emit_inst(DeclVar(name=VarName(name), value_reg=val_reg), node=node)
+        return self.emit_inst(DeclVar(name=VarName(name), value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-2us7
 
     def emit_func_ref(
         self,
         func_name: str,
         func_label: CodeLabel,
         result_reg: str,
-        node=None,
+        node: Any = None,
     ) -> Instruction:
         """Register a function reference in the symbol table and emit CONST.
 
@@ -224,7 +232,7 @@ class TreeSitterEmitContext:
             name=FuncName(func_name), label=func_label
         )
         return self.emit_inst(
-            Const(result_reg=result_reg, value=str(func_label)),
+            Const(result_reg=result_reg, value=str(func_label)),  # type: ignore[arg-type]  # see red-dragon-2us7
             node=node,
         )
 
@@ -234,7 +242,7 @@ class TreeSitterEmitContext:
         class_label: CodeLabel,
         parents: list[str],
         result_reg: str,
-        node=None,
+        node: Any = None,
     ) -> Instruction:
         """Register a class reference in the symbol table and emit CONST.
 
@@ -247,7 +255,7 @@ class TreeSitterEmitContext:
             parents=tuple(ClassName(p) for p in parents),
         )
         return self.emit_inst(
-            Const(result_reg=result_reg, value=str(class_label)),
+            Const(result_reg=result_reg, value=str(class_label)),  # type: ignore[arg-type]  # see red-dragon-2us7
             node=node,
         )
 
@@ -307,10 +315,14 @@ class TreeSitterEmitContext:
                 (param_name, type_hint)
             )
 
-    def node_text(self, node) -> str:
+    def node_text(
+        self, node: Any
+    ) -> str:  # Any: tree-sitter node — untyped at Python boundary
         return self.source[node.start_byte : node.end_byte].decode("utf-8")
 
-    def source_loc(self, node) -> SourceLocation:
+    def source_loc(
+        self, node: Any
+    ) -> SourceLocation:  # Any: tree-sitter node — untyped at Python boundary
         s, e = node.start_point, node.end_point
         return SourceLocation(
             start_line=s[0] + 1,
@@ -321,7 +333,9 @@ class TreeSitterEmitContext:
 
     # ── recursive descent entry points ───────────────────────────
 
-    def lower_block(self, node) -> None:
+    def lower_block(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower a block of statements (module / suite / body).
 
         If *node* is itself a known statement whose handler is NOT a
@@ -345,7 +359,9 @@ class TreeSitterEmitContext:
         if scope_entered:
             self.exit_block_scope()
 
-    def lower_stmt(self, node) -> None:
+    def lower_stmt(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         ntype = node.type
         if ntype in self.constants.comment_types or ntype in self.constants.noise_types:
             return
@@ -359,7 +375,9 @@ class TreeSitterEmitContext:
         # Fallback: try as expression
         self.lower_expr(node)
 
-    def lower_expr(self, node) -> Register:
+    def lower_expr(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         """Lower an expression, return the register holding its value."""
         handler = self.expr_dispatch.get(node.type)
         if handler:
