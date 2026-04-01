@@ -1,11 +1,14 @@
+# pyright: standard
 """PythonFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -48,8 +51,10 @@ class PythonFrontend(BaseFrontend):
             "None": "Any",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
-        return {
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
+        return {  # type: ignore[return-value]  # see red-dragon-rke4
             PythonNodeType.IDENTIFIER: common_expr.lower_identifier,
             PythonNodeType.INTEGER: common_expr.lower_const_literal,
             PythonNodeType.FLOAT: common_expr.lower_const_literal,
@@ -98,7 +103,9 @@ class PythonFrontend(BaseFrontend):
             PythonNodeType.SPLAT_PATTERN: py_expr.lower_splat_expr,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             PythonNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             PythonNodeType.ASSIGNMENT: py_assign.lower_assignment,
@@ -127,8 +134,7 @@ class PythonFrontend(BaseFrontend):
             PythonNodeType.TYPE_ALIAS_STATEMENT: lambda ctx, node: None,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.python.declarations import extract_python_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_python_symbols(root)

@@ -1,6 +1,9 @@
+# pyright: standard
 """Rust-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -25,12 +28,16 @@ from interpreter.frontends.rust.expressions import lower_if_expr
 logger = logging.getLogger(__name__)
 
 
-def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_if_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower if as a statement (discard result)."""
     lower_if_expr(ctx, node)
 
 
-def lower_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_while_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower while — detect while-let and delegate, else use common lower_while."""
     from interpreter.frontends.common.control_flow import lower_while
     from interpreter.frontends.rust.node_types import RustNodeType
@@ -42,7 +49,9 @@ def lower_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
     lower_while(ctx, node)
 
 
-def _lower_while_let(ctx: TreeSitterEmitContext, node, let_cond_node) -> None:
+def _lower_while_let(
+    ctx: TreeSitterEmitContext, node: Any, let_cond_node
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `while let Pattern = expr { body }` as a loop with pattern test."""
     from interpreter.frontends.common.patterns import (
         compile_pattern_bindings,
@@ -69,7 +78,7 @@ def _lower_while_let(ctx: TreeSitterEmitContext, node, let_cond_node) -> None:
 
     ctx.emit_inst(Label_(label=body_label))
     compile_pattern_bindings(ctx, subject_reg, pattern)
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     ctx.lower_block(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -77,14 +86,16 @@ def _lower_while_let(ctx: TreeSitterEmitContext, node, let_cond_node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_loop(ctx: TreeSitterEmitContext, node) -> None:
+def lower_loop(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `loop { ... }` -- infinite loop."""
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
     loop_label = ctx.fresh_label("loop_top")
     end_label = ctx.fresh_label("loop_end")
 
     ctx.emit_inst(Label_(label=loop_label))
-    ctx.push_loop(loop_label, end_label)
+    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -92,7 +103,9 @@ def lower_loop(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_for(ctx: TreeSitterEmitContext, node) -> None:
+def lower_for(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `for pattern in value { body }`."""
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
@@ -135,7 +148,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -156,14 +169,18 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_return_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_return_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower return as statement (discard result)."""
     from interpreter.frontends.rust.expressions import lower_return_expr
 
     lower_return_expr(ctx, node)
 
 
-def lower_macro_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_macro_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower macro_invocation as statement."""
     from interpreter.frontends.rust.expressions import lower_macro_invocation
 

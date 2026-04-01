@@ -1,11 +1,14 @@
+# pyright: standard
 """CppFrontend — thin orchestrator that extends CFrontend with C++-specific handlers."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends.c.frontend import CFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.cpp import expressions as cpp_expr
@@ -52,7 +55,9 @@ class CppFrontend(CFrontend):
         )
         return base
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         dispatch = super()._build_expr_dispatch()
         dispatch.update(
             {
@@ -82,7 +87,9 @@ class CppFrontend(CFrontend):
         )
         return dispatch
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         dispatch = super()._build_stmt_dispatch()
         dispatch.update(
             {
@@ -109,8 +116,7 @@ class CppFrontend(CFrontend):
         )
         return dispatch
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.cpp.declarations import extract_cpp_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_cpp_symbols(root)

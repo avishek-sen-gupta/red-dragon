@@ -1,3 +1,4 @@
+# pyright: standard
 """Pascal-specific constants shared across lowerer modules."""
 
 from __future__ import annotations

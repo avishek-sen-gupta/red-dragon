@@ -1,11 +1,14 @@
+# pyright: standard
 """KotlinFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.kotlin import expressions as kotlin_expr
 from interpreter.frontends.kotlin import control_flow as kotlin_cf
@@ -42,8 +45,10 @@ class KotlinFrontend(BaseFrontend):
             "Any": "Any",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
-        return {
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
+        return {  # type: ignore[return-value]  # see red-dragon-rke4
             KNT.SIMPLE_IDENTIFIER: kotlin_expr.lower_kotlin_identifier,
             KNT.INTEGER_LITERAL: common_expr.lower_const_literal,
             KNT.LONG_LITERAL: common_expr.lower_const_literal,
@@ -89,10 +94,12 @@ class KotlinFrontend(BaseFrontend):
             KNT.ANONYMOUS_FUNCTION: kotlin_expr.lower_anonymous_function,
             KNT.UNSIGNED_LITERAL: kotlin_expr.lower_unsigned_literal,
             KNT.CALLABLE_REFERENCE: kotlin_expr.lower_callable_reference,
-            KNT.SPREAD_EXPRESSION: kotlin_expr.lower_spread_expression,
+            KNT.SPREAD_EXPRESSION: kotlin_expr.lower_spread_expression,  # type: ignore[dict-item]  # see red-dragon-rke4
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             KNT.PROPERTY_DECLARATION: kotlin_decl.lower_property_decl,
             KNT.ASSIGNMENT: kotlin_cf.lower_kotlin_assignment,
@@ -117,8 +124,7 @@ class KotlinFrontend(BaseFrontend):
             KNT.GETTER: lambda ctx, node: None,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.kotlin.declarations import extract_kotlin_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_kotlin_symbols(root)

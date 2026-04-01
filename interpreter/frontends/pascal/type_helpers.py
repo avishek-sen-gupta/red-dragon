@@ -1,3 +1,4 @@
+# pyright: standard
 """Pascal type extraction helpers."""
 
 from __future__ import annotations

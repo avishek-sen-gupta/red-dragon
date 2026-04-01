@@ -1,7 +1,8 @@
+# pyright: standard
 """JavaScript-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from interpreter.ir import SpreadArguments, CodeLabel
@@ -58,7 +59,7 @@ def _emit_optional_guard(
         Binop(
             result_reg=cmp_reg,
             operator=resolve_binop("=="),
-            left=obj_reg,
+            left=obj_reg,  # type: ignore[misc]  # see red-dragon-hzmm
             right=null_reg,
         )
     )
@@ -87,7 +88,9 @@ def _emit_optional_guard(
     return result_reg
 
 
-def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_js_subscript(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     idx_node = node.child_by_field_name("index")
     if obj_node is None or idx_node is None:
@@ -103,11 +106,13 @@ def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> Register:
         return reg
 
     if _has_optional_chain(node):
-        return _emit_optional_guard(ctx, obj_reg, emit_access)
+        return _emit_optional_guard(ctx, obj_reg, emit_access)  # type: ignore[misc]  # see red-dragon-hzmm
     return emit_access()
 
 
-def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_js_attribute(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     prop_node = node.child_by_field_name("property")
     if obj_node is None or prop_node is None:
@@ -126,11 +131,13 @@ def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> Register:
         return reg
 
     if _has_optional_chain(node):
-        return _emit_optional_guard(ctx, obj_reg, emit_access)
+        return _emit_optional_guard(ctx, obj_reg, emit_access)  # type: ignore[misc]  # see red-dragon-hzmm
     return emit_access()
 
 
-def lower_js_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_js_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = _extract_js_call_args(ctx, args_node) if args_node else []
@@ -149,14 +156,14 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> Register:
                         result_reg=reg,
                         obj_reg=obj_reg,
                         method_name=FuncName(method_name),
-                        args=tuple(arg_regs),
+                        args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
                     ),
                     node=node,
                 )
                 return reg
 
             if _has_optional_chain(func_node):
-                return _emit_optional_guard(ctx, obj_reg, emit_method_call)
+                return _emit_optional_guard(ctx, obj_reg, emit_method_call)  # type: ignore[misc]  # see red-dragon-hzmm
             return emit_method_call()
 
     if func_node and func_node.type == JSN.IDENTIFIER:
@@ -164,7 +171,7 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> Register:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -173,7 +180,7 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> Register:
     target_reg = ctx.lower_expr(func_node) if func_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
@@ -182,7 +189,7 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> Register:
 def _extract_js_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     if args_node is None:
         return []
-    return [
+    return [  # type: ignore[return-value]  # see red-dragon-hzmm
         ctx.lower_expr(c)
         for c in args_node.children
         if c.type not in (JSN.OPEN_PAREN, JSN.CLOSE_PAREN, JSN.COMMA) and c.is_named
@@ -194,7 +201,7 @@ def lower_js_store_target(
 ) -> None:
     if target.type == JSN.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
     elif target.type == JSN.MEMBER_EXPRESSION:
@@ -206,7 +213,7 @@ def lower_js_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(prop_node)),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
@@ -217,25 +224,29 @@ def lower_js_store_target(
             obj_reg = ctx.lower_expr(obj_node)
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_assignment_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_js_store_target(ctx, left, val_reg, node)
+    lower_js_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
     return val_reg
 
 
-def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_js_object_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("object")), node=node)
     for child in node.children:
@@ -269,7 +280,9 @@ def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
     return obj_reg
 
 
-def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_arrow_function(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
@@ -300,11 +313,13 @@ def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return func_reg
 
 
-def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ternary(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -333,7 +348,9 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     return result_reg
 
 
-def lower_new_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_new_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `new Foo(args)` -> NEW_OBJECT(class) + CALL_METHOD('constructor', args)."""
     constructor_node = node.child_by_field_name("constructor")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -350,14 +367,16 @@ def lower_new_expression(ctx: TreeSitterEmitContext, node) -> Register:
             result_reg=ctor_reg,
             obj_reg=obj_reg,
             method_name=FuncName("constructor"),
-            args=tuple(arg_regs),
+            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
     return obj_reg
 
 
-def lower_await_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_await_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `await expr` -> CALL_FUNCTION('await', expr)."""
     children = [c for c in node.children if c.is_named]
     expr_reg = ctx.lower_expr(children[0]) if children else ctx.fresh_reg()
@@ -369,7 +388,9 @@ def lower_await_expression(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_yield_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_yield_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `yield expr` or bare `yield` -> CALL_FUNCTION('yield', expr)."""
     children = [c for c in node.children if c.is_named]
     if children:
@@ -391,7 +412,9 @@ def lower_yield_expression(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_sequence_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_sequence_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `(a, b, c)` -> evaluate all, return last register."""
     children = [c for c in node.children if c.is_named]
     if not children:
@@ -402,14 +425,18 @@ def lower_sequence_expression(ctx: TreeSitterEmitContext, node) -> Register:
     return last_reg
 
 
-def lower_spread_element(ctx: TreeSitterEmitContext, node) -> str | SpreadArguments:
+def lower_spread_element(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str | SpreadArguments:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `...expr` -> CALL_FUNCTION('spread', expr)."""
     from interpreter.frontends.common.expressions import lower_spread_arg
 
     return lower_spread_arg(ctx, node)
 
 
-def lower_function_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_function_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower anonymous function expression: same as function_declaration but anonymous."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
@@ -434,11 +461,13 @@ def lower_function_expression(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return func_reg
 
 
-def lower_template_string(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_template_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower template string, descending into template_substitution children."""
     has_substitution = any(c.type == JSN.TEMPLATE_SUBSTITUTION for c in node.children)
     if not has_substitution:
@@ -448,14 +477,14 @@ def lower_template_string(ctx: TreeSitterEmitContext, node) -> Register:
     parts: list[str] = []
     for child in node.children:
         if child.type == JSN.TEMPLATE_SUBSTITUTION:
-            parts.append(lower_template_substitution(ctx, child))
+            parts.append(lower_template_substitution(ctx, child))  # type: ignore[arg-type]  # see red-dragon-y5bm
         elif child.is_named:
-            parts.append(ctx.lower_expr(child))
+            parts.append(ctx.lower_expr(child))  # type: ignore[arg-type]  # see red-dragon-y5bm
         elif child.type not in (JSN.BACKTICK,):
             # String fragment
             frag_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=frag_reg, value=ctx.node_text(child)))
-            parts.append(frag_reg)
+            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     if not parts:
         return lower_const_literal(ctx, node)
@@ -464,15 +493,17 @@ def lower_template_string(ctx: TreeSitterEmitContext, node) -> Register:
         new_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
-                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part
+                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part  # type: ignore[misc]  # see red-dragon-hzmm
             ),
             node=node,
         )
         result = new_reg
-    return result
+    return result  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
-def lower_template_substitution(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_template_substitution(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ${expr} inside a template string."""
     children = [c for c in node.children if c.is_named]
     if children:
@@ -480,7 +511,9 @@ def lower_template_substitution(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def lower_export_clause(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_export_clause(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `{ a, b }` export clause — lower inner export_specifiers."""
     last_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=last_reg, value=ctx.constants.none_literal))
@@ -490,7 +523,9 @@ def lower_export_clause(ctx: TreeSitterEmitContext, node) -> Register:
     return last_reg
 
 
-def lower_js_field_definition(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_js_field_definition(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower class field: `#privateField = 0` or `name = expr`."""
     property_node = node.child_by_field_name("property")
     value_node = node.child_by_field_name("value")

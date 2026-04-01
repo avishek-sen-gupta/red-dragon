@@ -1,6 +1,9 @@
+# pyright: standard
 """Scala-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -41,7 +44,9 @@ from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
 
 
-def lower_scala_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_scala_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower call_expression, unwrapping generic_function to its inner function.
 
     In Scala, foo[Int](x) parses as call_expression(generic_function(foo, [Int]), (x)).
@@ -88,14 +93,16 @@ def _lower_this_call_as_delegation(
             result_reg=result_reg,
             obj_reg=this_reg,
             method_name=FuncName("__init__"),
-            args=tuple(arg_regs),
+            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
     return result_reg
 
 
-def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_field_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     value_node = node.child_by_field_name(ctx.constants.attr_object_field)
     field_node = node.child_by_field_name("field")
     if value_node is None or field_node is None:
@@ -110,11 +117,13 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_assignment_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_scala_store_target(ctx, left, val_reg, node)
+    lower_scala_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
     return val_reg
 
 
@@ -123,7 +132,7 @@ def lower_scala_store_target(
 ) -> None:
     if target.type == NT.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
     elif target.type == NT.FIELD_EXPRESSION:
@@ -135,7 +144,7 @@ def lower_scala_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
@@ -148,18 +157,20 @@ def lower_scala_store_target(
             if len(arg_regs) == 1:
                 ctx.emit_inst(
                     StoreIndex(
-                        arr_reg=obj_reg, index_reg=arg_regs[0], value_reg=val_reg
+                        arr_reg=obj_reg, index_reg=arg_regs[0], value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
                     ),
                     node=parent_node,
                 )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
 
 
-def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_if_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower if as a value-producing expression."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -210,38 +221,48 @@ def _lower_body_as_expr(ctx: TreeSitterEmitContext, body_node) -> Register:
     return ctx.lower_expr(body_node)
 
 
-def _scala_pattern_of(ctx: TreeSitterEmitContext, clause):
+def _scala_pattern_of(
+    ctx: TreeSitterEmitContext, clause: Any
+) -> Any:  # Any: tree-sitter node — untyped at Python boundary
     return parse_scala_pattern(ctx, clause.child_by_field_name("pattern"))
 
 
-def _scala_guard_of(ctx: TreeSitterEmitContext, clause):
+def _scala_guard_of(
+    ctx: TreeSitterEmitContext, clause: Any
+) -> Any | None:  # Any: tree-sitter node — untyped at Python boundary
     guard = next((c for c in clause.children if c.type == NT.GUARD), None)
     if guard is None:
         return None
     return next(c for c in guard.children if c.is_named)
 
 
-def _scala_body_of(ctx: TreeSitterEmitContext, clause):
+def _scala_body_of(
+    ctx: TreeSitterEmitContext, clause: Any
+) -> Any:  # Any: tree-sitter node — untyped at Python boundary
     return _lower_body_as_expr(ctx, clause.child_by_field_name("body"))
 
 
 _SCALA_MATCH_SPEC = MatchArmSpec(
-    extract_arms=lambda body: [c for c in body.children if c.type == NT.CASE_CLAUSE],
+    extract_arms=lambda body: [c for c in body.children if c.type == NT.CASE_CLAUSE],  # type: ignore[attr-defined]  # see red-dragon-545a
     pattern_of=_scala_pattern_of,
     guard_of=_scala_guard_of,
-    body_of=_scala_body_of,
+    body_of=_scala_body_of,  # type: ignore[misc]  # see red-dragon-hzmm
 )
 
 
-def lower_match_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_match_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Scala match expression using Pattern ADT."""
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
     subject_reg = ctx.lower_expr(value_node)
-    return lower_match_as_expr(ctx, subject_reg, body_node, _SCALA_MATCH_SPEC)
+    return lower_match_as_expr(ctx, subject_reg, body_node, _SCALA_MATCH_SPEC)  # type: ignore[arg-type]  # see red-dragon-hzmm
 
 
-def lower_block_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_block_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a block `{ ... }` as an expression (last expr is value)."""
     children = [
         c
@@ -260,7 +281,9 @@ def lower_block_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return ctx.lower_expr(children[-1])
 
 
-def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_loop_as_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower while/for/do-while in expression position (returns unit)."""
     ctx.lower_stmt(node)
     reg = ctx.fresh_reg()
@@ -268,7 +291,9 @@ def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_break_as_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower break in expression position."""
     from interpreter.frontends.common.control_flow import lower_break
 
@@ -278,7 +303,9 @@ def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_continue_as_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower continue in expression position."""
     from interpreter.frontends.common.control_flow import lower_continue
 
@@ -288,7 +315,9 @@ def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_return_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_return_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     children = [c for c in node.children if c.type != NT.RETURN]
     if children:
         val_reg = ctx.lower_expr(children[0])
@@ -301,7 +330,9 @@ def lower_return_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return val_reg
 
 
-def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_tuple_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     elems = [c for c in node.children if c.type not in (NT.LPAREN, NT.RPAREN, NT.COMMA)]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
@@ -318,7 +349,9 @@ def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return arr_reg
 
 
-def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_lambda_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     func_name = f"__lambda_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
@@ -377,11 +410,13 @@ def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return reg
 
 
-def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_new_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     named_children = [c for c in node.children if c.is_named]
     if named_children:
         type_name = ctx.node_text(named_children[0])
@@ -400,7 +435,7 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
             result_reg=reg,
             func_name=FuncName(type_name),
             type_hint=scalar(type_name),
-            args=tuple(arg_regs),
+            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
@@ -408,7 +443,9 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_symbolic_node(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_symbolic_node(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         Symbolic(result_reg=reg, hint=f"{node.type}:{ctx.node_text(node)[:60]}"),
@@ -417,7 +454,9 @@ def lower_symbolic_node(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_scala_interpolated_string(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_scala_interpolated_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower interpolated_string_expression: s"..." / f"..." / raw"..."."""
     interp_string = next(
         (c for c in node.children if c.type == NT.INTERPOLATED_STRING),
@@ -428,7 +467,9 @@ def lower_scala_interpolated_string(ctx: TreeSitterEmitContext, node) -> Registe
     return lower_scala_interpolated_string_body(ctx, interp_string)
 
 
-def lower_scala_interpolated_string_body(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_scala_interpolated_string_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower interpolated_string, extracting literal gaps and interpolation children."""
     interpolations = [c for c in node.children if c.type == NT.INTERPOLATION]
     if not interpolations:
@@ -447,11 +488,11 @@ def lower_scala_interpolated_string_body(ctx: TreeSitterEmitContext, node) -> Re
             if gap_text:
                 frag_reg = ctx.fresh_reg()
                 ctx.emit_inst(Const(result_reg=frag_reg, value=gap_text), node=node)
-                parts.append(frag_reg)
+                parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
             # Lower the interpolation expression
             named = [c for c in child.children if c.is_named]
             if named:
-                parts.append(ctx.lower_expr(named[0]))
+                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
             content_start = child.end_byte
 
     # Trailing literal after last interpolation
@@ -459,12 +500,14 @@ def lower_scala_interpolated_string_body(ctx: TreeSitterEmitContext, node) -> Re
     if trailing:
         frag_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=frag_reg, value=trailing), node=node)
-        parts.append(frag_reg)
+        parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     return lower_interpolated_string_parts(ctx, parts, node)
 
 
-def lower_try_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_try_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower try_expression in expression context (returns a register)."""
     from interpreter.frontends.scala.control_flow import lower_try_stmt
 
@@ -474,7 +517,9 @@ def lower_try_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_throw_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower throw_expression: throw expr -> lower expr, emit THROW, return reg."""
     children = [c for c in node.children if c.type != NT.THROW and c.is_named]
     if children:
@@ -488,7 +533,9 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return val_reg
 
 
-def lower_generic_function(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_generic_function(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower generic_function: foo[Int] -> delegate to the inner function expression.
 
     The generic_function node has field 'function' (the base expression) and
@@ -500,7 +547,9 @@ def lower_generic_function(ctx: TreeSitterEmitContext, node) -> Register:
     return ctx.lower_expr(func_node)
 
 
-def lower_postfix_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_postfix_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower postfix_expression: 'list sorted' -> CALL_METHOD(sorted) on list with 0 args.
 
     The node has two named children: child[0] is the receiver, child[1] is the method name.
@@ -520,7 +569,9 @@ def lower_postfix_expression(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_stable_type_identifier(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_stable_type_identifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower stable_type_identifier: pkg.MyClass -> LOAD_VAR(pkg), LOAD_FIELD(MyClass).
 
     The node has named children: identifier(s) separated by '.', ending with type_identifier.

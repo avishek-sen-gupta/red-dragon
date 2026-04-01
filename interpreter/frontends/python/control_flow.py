@@ -1,6 +1,9 @@
+# pyright: standard
 """Python-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.var_name import VarName
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -35,7 +38,9 @@ _WILDCARD_PATTERN = "_"
 # ── if/elif/else ──────────────────────────────────────────────
 
 
-def lower_python_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_python_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Python if/elif/else chains by iterating all sibling clauses.
 
     Python's tree-sitter grammar places elif_clause and else_clause as
@@ -68,7 +73,7 @@ def lower_python_if(ctx: TreeSitterEmitContext, node) -> None:
 
     if has_alternative:
         ctx.emit_inst(Label_(label=false_label))
-        _lower_python_elif_chain(ctx, elif_clauses, else_clause, end_label)
+        _lower_python_elif_chain(ctx, elif_clauses, else_clause, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -89,7 +94,7 @@ def _lower_python_elif_chain(
             body = else_clause.child_by_field_name("body")
             if body:
                 ctx.lower_block(body)
-        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
         return
 
     current = elif_clauses[0]
@@ -101,23 +106,25 @@ def _lower_python_elif_chain(
     false_label = ctx.fresh_label("elif_false") if has_more else end_label
 
     ctx.emit_inst(
-        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=current,
     )
 
     ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
 
     if has_more:
-        ctx.emit_inst(Label_(label=false_label))
+        ctx.emit_inst(Label_(label=false_label))  # type: ignore[misc]  # see red-dragon-hzmm
         _lower_python_elif_chain(ctx, remaining_elifs, else_clause, end_label)
 
 
 # ── for loop ──────────────────────────────────────────────────
 
 
-def lower_for(ctx: TreeSitterEmitContext, node) -> None:
+def lower_for(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
@@ -152,15 +159,15 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=body_label))
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
-    lower_store_target(ctx, left, elem_reg, node)
+    lower_store_target(ctx, left, elem_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     ctx.lower_block(body_node)
     ctx.pop_loop()
 
     ctx.emit_inst(Label_(label=update_label))
-    _emit_for_increment(ctx, idx_reg, loop_label)
+    _emit_for_increment(ctx, idx_reg, loop_label)  # type: ignore[arg-type]  # see red-dragon-hzmm
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -168,14 +175,18 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
 # ── raise ─────────────────────────────────────────────────────
 
 
-def lower_raise(ctx: TreeSitterEmitContext, node) -> None:
+def lower_raise(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     lower_raise_or_throw(ctx, node, keyword="raise")
 
 
 # ── try/except/else/finally ──────────────────────────────────
 
 
-def lower_try(ctx: TreeSitterEmitContext, node) -> None:
+def lower_try(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     body_node = node.child_by_field_name("body")
     catch_clauses: list[dict] = []
     finally_node = None
@@ -215,7 +226,9 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
 # ── with statement ────────────────────────────────────────────
 
 
-def lower_with(ctx: TreeSitterEmitContext, node) -> None:
+def lower_with(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `with ctx as var: body` into __enter__/__exit__ calls."""
     with_clause = next(
         (c for c in node.children if c.type == PythonNodeType.WITH_CLAUSE), None
@@ -272,7 +285,7 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
         )
         if var_name:
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=enter_reg))
-        enter_info.append((ctx_reg, var_name))
+        enter_info.append((ctx_reg, var_name))  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     ctx.lower_block(body_node)
 
@@ -282,7 +295,7 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(
             CallMethod(
                 result_reg=exit_reg,
-                obj_reg=ctx_reg,
+                obj_reg=ctx_reg,  # type: ignore[misc]  # see red-dragon-hzmm
                 method_name=FuncName("__exit__"),
                 args=(),
             ),
@@ -293,7 +306,9 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
 # ── decorated definition ─────────────────────────────────────
 
 
-def lower_decorated_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_decorated_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower @dec def/class into define, then wrap with decorator calls."""
     decorators = [c for c in node.children if c.type == PythonNodeType.DECORATOR]
     definition = next(
@@ -310,7 +325,7 @@ def lower_decorated_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.lower_stmt(definition)
 
     # Extract the defined name
-    name_node = definition.child_by_field_name(ctx.constants.func_name_field)
+    name_node = definition.child_by_field_name(ctx.constants.func_name_field)  # type: ignore[attr-defined]  # see red-dragon-zznx
     func_name = ctx.node_text(name_node)
 
     # Apply decorators bottom-up (last decorator applied first)
@@ -338,7 +353,9 @@ def lower_decorated_def(ctx: TreeSitterEmitContext, node) -> None:
 # ── assert statement ──────────────────────────────────────────
 
 
-def lower_assert(ctx: TreeSitterEmitContext, node) -> None:
+def lower_assert(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower assert cond [, msg] as CALL_FUNCTION('assert', cond [, msg])."""
     named_children = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named_children]
@@ -355,7 +372,9 @@ def lower_assert(ctx: TreeSitterEmitContext, node) -> None:
 # ── delete statement ──────────────────────────────────────────
 
 
-def lower_delete(ctx: TreeSitterEmitContext, node) -> None:
+def lower_delete(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower del x, y as CALL_FUNCTION('del', target) for each target."""
     for child in node.children:
         if not child.is_named:
@@ -388,14 +407,16 @@ def lower_delete(ctx: TreeSitterEmitContext, node) -> None:
 # ── import statement ──────────────────────────────────────────
 
 
-def lower_import(ctx: TreeSitterEmitContext, node) -> None:
+def lower_import(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower import module as CALL_FUNCTION('import', module) + DECL_VAR."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     module_name = ctx.node_text(name_node) if name_node else "unknown"
     import_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=import_reg, func_name=FuncName("import"), args=(module_name,)
+            result_reg=import_reg, func_name=FuncName("import"), args=(module_name,)  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
@@ -407,7 +428,9 @@ def lower_import(ctx: TreeSitterEmitContext, node) -> None:
 # ── import from statement ─────────────────────────────────────
 
 
-def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
+def lower_import_from(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower from X import Y, Z as CALL_FUNCTION('import', ...) + DECL_VAR per name."""
     module_node = node.child_by_field_name("module_name")
     module_name = ctx.node_text(module_node) if module_node else "unknown"
@@ -426,7 +449,7 @@ def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
             CallFunction(
                 result_reg=import_reg,
                 func_name=FuncName("import"),
-                args=(f"from {module_name} import {imported_name}",),
+                args=(f"from {module_name} import {imported_name}",),  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -438,7 +461,9 @@ def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
 # ── match statement ───────────────────────────────────────────
 
 
-def lower_match(ctx: TreeSitterEmitContext, node) -> None:
+def lower_match(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower match/case as pattern-driven linear chain."""
     from interpreter.frontends.common.patterns import (
         MatchCase,

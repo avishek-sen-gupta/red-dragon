@@ -1,6 +1,9 @@
+# pyright: standard
 """Pascal-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -33,14 +36,18 @@ from interpreter.instructions import (
 logger = logging.getLogger(__name__)
 
 
-def lower_pascal_root(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_root(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower the root node -- contains a program node."""
     for child in node.children:
         if child.is_named:
             ctx.lower_stmt(child)
 
 
-def lower_pascal_program(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_program(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower the program node -- contains moduleName, declVars, block, etc."""
     for child in node.children:
         if child.type in KEYWORD_NOISE:
@@ -51,7 +58,9 @@ def lower_pascal_program(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_pascal_block(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_block(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a block -- children between kBegin and kEnd."""
     for child in node.children:
         if child.type in KEYWORD_NOISE:
@@ -60,7 +69,9 @@ def lower_pascal_block(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_pascal_statement(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_statement(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Unwrap a statement node and lower its inner content."""
     for child in node.children:
         if child.type in KEYWORD_NOISE:
@@ -74,7 +85,9 @@ def lower_pascal_statement(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_expr(child)
 
 
-def lower_pascal_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower if/ifElse -- contains kIf, condition, kThen, consequence, optional kElse, alternative."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -118,7 +131,9 @@ def lower_pascal_if(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_pascal_while(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_while(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower while -- contains kWhile, condition, kDo, body."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -151,7 +166,9 @@ def lower_pascal_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_for(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower for -- contains kFor, assignment(var := start), kTo/kDownto, end, kDo, body."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -235,7 +252,9 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_pascal_case(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_case(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower case statement as if/else chain on caseCase children."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -255,7 +274,7 @@ def lower_pascal_case(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("case_end")
 
     for case_node in case_cases:
-        _lower_pascal_case_branch(ctx, case_node, selector_reg, end_label)
+        _lower_pascal_case_branch(ctx, case_node, selector_reg, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
 
     # Handle else branch: lower remaining statements after kElse
     if else_case:
@@ -303,7 +322,7 @@ def _lower_pascal_case_branch(
                 Binop(
                     result_reg=cmp_reg,
                     operator=resolve_binop("=="),
-                    left=selector_reg,
+                    left=selector_reg,  # type: ignore[misc]  # see red-dragon-hzmm
                     right=first_val_reg,
                 ),
                 node=case_node,
@@ -315,7 +334,7 @@ def _lower_pascal_case_branch(
                     Binop(
                         result_reg=extra_cmp,
                         operator=resolve_binop("=="),
-                        left=selector_reg,
+                        left=selector_reg,  # type: ignore[misc]  # see red-dragon-hzmm
                         right=extra_reg,
                     )
                 )
@@ -338,11 +357,13 @@ def _lower_pascal_case_branch(
     ctx.emit_inst(Label_(label=true_label))
     for child in body_children:
         ctx.lower_stmt(child)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
     ctx.emit_inst(Label_(label=next_label))
 
 
-def lower_pascal_repeat(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_repeat(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower repeat ... until condition (execute body first, then check)."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -374,13 +395,19 @@ def lower_pascal_repeat(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_pascal_try(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_try(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower try/except/finally using common lower_try_catch."""
     body_node, catch_clauses, finally_node = _extract_pascal_try_parts(ctx, node)
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
 
 
-def _extract_pascal_try_parts(ctx: TreeSitterEmitContext, node):
+def _extract_pascal_try_parts(
+    ctx: TreeSitterEmitContext, node: Any
+) -> tuple[
+    Any | None, list[Any], Any | None
+]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract body, catch clauses, and finally from a Pascal try node."""
     body_node = None
     catch_clauses: list[dict] = []
@@ -449,7 +476,9 @@ def _extract_pascal_try_parts(ctx: TreeSitterEmitContext, node):
     return body_node, catch_clauses, finally_node
 
 
-def lower_pascal_exception_handler(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_exception_handler(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `on E: Exception do statement` -- extract variable, lower body."""
     from interpreter import constants
 
@@ -477,7 +506,9 @@ def lower_pascal_exception_handler(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_pascal_raise(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_raise(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `raise Exception.Create('oops');` as THROW."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -492,7 +523,9 @@ def lower_pascal_raise(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
 
 
-def lower_pascal_with(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_with(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `with P do statement` -- lower object then body."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -504,14 +537,18 @@ def lower_pascal_with(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_stmt(named_children[0])
 
 
-def lower_pascal_inherited_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_inherited_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `inherited Create` as statement."""
     from interpreter.frontends.pascal.expressions import lower_pascal_inherited_expr
 
     lower_pascal_inherited_expr(ctx, node)
 
 
-def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_foreach(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower for-in loop: for var in collection do body."""
     foreach_noise = KEYWORD_NOISE | frozenset({"kIn"})
     named_children = [
@@ -583,7 +620,9 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_pascal_goto(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_goto(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower goto label -- emit BRANCH to the label."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -592,7 +631,9 @@ def lower_pascal_goto(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Branch(label=CodeLabel(label_name)), node=node)
 
 
-def lower_pascal_label(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_label(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower label: statement -- emit LABEL."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -601,6 +642,8 @@ def lower_pascal_label(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=CodeLabel(label_name)))
 
 
-def lower_pascal_noop(ctx: TreeSitterEmitContext, node) -> None:
+def lower_pascal_noop(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """No-op handler -- skips nodes that produce no IR."""
     logger.debug("Skipping %s at %s (no-op)", node.type, ctx.source_loc(node))

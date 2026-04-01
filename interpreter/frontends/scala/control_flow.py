@@ -1,6 +1,9 @@
+# pyright: standard
 """Scala-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -19,12 +22,16 @@ from interpreter.frontends.scala.expressions import lower_if_expr, lower_match_e
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 
 
-def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_if_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower if as a statement (discard result)."""
     lower_if_expr(ctx, node)
 
 
-def lower_while(ctx: TreeSitterEmitContext, node) -> None:
+def lower_while(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
 
@@ -46,12 +53,16 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_match_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_match_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower match as a statement (discard result)."""
     lower_match_expr(ctx, node)
 
 
-def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
+def lower_for_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower for-comprehension: for (generators) body / for (generators) yield body."""
     enumerators_node = next(
         (c for c in node.children if c.type == NT.ENUMERATORS), None
@@ -129,7 +140,9 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
+def lower_do_while(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower do { body } while (condition)."""
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
@@ -153,7 +166,11 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def _extract_try_parts(ctx: TreeSitterEmitContext, node):
+def _extract_try_parts(
+    ctx: TreeSitterEmitContext, node: Any
+) -> tuple[
+    Any | None, list[Any], Any | None
+]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract body, catch clauses, and finally from a try_expression."""
     body_node = node.child_by_field_name("body")
     catch_clauses: list[dict] = []
@@ -218,6 +235,8 @@ def _extract_try_parts(ctx: TreeSitterEmitContext, node):
     return body_node, catch_clauses, finally_node
 
 
-def lower_try_stmt(ctx: TreeSitterEmitContext, node) -> None:
+def lower_try_stmt(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     body_node, catch_clauses, finally_node = _extract_try_parts(ctx, node)
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)

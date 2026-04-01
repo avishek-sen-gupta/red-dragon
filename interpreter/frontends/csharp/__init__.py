@@ -1,3 +1,4 @@
+# pyright: standard
 """C# frontend package."""
 
 from interpreter.frontends.csharp.frontend import CSharpFrontend

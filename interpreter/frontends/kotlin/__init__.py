@@ -1,3 +1,4 @@
+# pyright: standard
 """Kotlin frontend package."""
 
 from interpreter.frontends.kotlin.frontend import KotlinFrontend

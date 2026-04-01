@@ -1,6 +1,9 @@
+# pyright: standard
 """C++-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -40,7 +43,9 @@ from interpreter.frontends.common.declarations import (
 )
 
 
-def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_cpp_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a C++ declaration using C++ struct type detection."""
     struct_type = _extract_cpp_struct_type(ctx, node)
     raw_type = extract_type_from_field(ctx, node, "type")
@@ -71,7 +76,9 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
             ctx.seed_var_type(var_name, type_hint)
 
 
-def _extract_cpp_struct_type(ctx: TreeSitterEmitContext, node) -> str:
+def _extract_cpp_struct_type(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
     """Return struct/class type name from a declaration, or ''.
 
     Extends the C version to also detect bare ``type_identifier``
@@ -99,7 +106,9 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.seed_var_type("this", class_type)
 
 
-def _extract_cpp_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+def _extract_cpp_parents(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parent class names from a C++ class/struct specifier."""
     base_clause = next(
         (c for c in node.children if c.type == CppNodeType.BASE_CLASS_CLAUSE), None
@@ -113,7 +122,9 @@ def _extract_cpp_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
-def _collect_cpp_field_init(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
+def _collect_cpp_field_init(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[FieldInit]:  # Any: tree-sitter node — untyped at Python boundary
     """Collect (field_name, value_node) from a C++ field_declaration.
 
     Returns a list with at most one element.  The value_node is the
@@ -139,7 +150,7 @@ def _is_cpp_constructor(ctx: TreeSitterEmitContext, child, class_name: str) -> b
         return name_node is not None and ctx.node_text(name_node) == class_name
     func_decl = _find_function_declarator(decl)
     if func_decl:
-        name_node = func_decl.child_by_field_name("declarator")
+        name_node = func_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
         return name_node is not None and ctx.node_text(name_node) == class_name
     return False
 
@@ -167,7 +178,7 @@ def _lower_cpp_constructor_with_field_inits(
         else:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
-                params_node = func_decl.child_by_field_name(
+                params_node = func_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
                     ctx.constants.func_params_field
                 )
 
@@ -200,11 +211,13 @@ def _lower_cpp_constructor_with_field_inits(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
+def lower_class_specifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower class_specifier (C++ class with field_declaration_list body)."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -240,7 +253,7 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
@@ -287,7 +300,9 @@ def _lower_cpp_class_body_b2(
     ctx._current_class_name = saved_class
 
 
-def lower_cpp_class_body(ctx: TreeSitterEmitContext, node) -> None:
+def lower_cpp_class_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower field_declaration_list (C++ class/struct body)."""
     from interpreter.frontends.cpp.control_flow import lower_template_decl
 
@@ -310,7 +325,9 @@ def lower_cpp_class_body(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
+def lower_cpp_method(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a function_definition inside a class/struct body, injecting param:this."""
     declarator_node = node.child_by_field_name("declarator")
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -334,8 +351,8 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
         else:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
-                name_node = func_decl.child_by_field_name("declarator")
-                params_node = func_decl.child_by_field_name(
+                name_node = func_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
+                params_node = func_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
                     ctx.constants.func_params_field
                 )
                 func_name = (
@@ -373,11 +390,13 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
+def lower_field_initializer_list(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower field_initializer_list: : field(val), field2(val2).
 
     Emits: LOAD_VAR this -> [lower_expr(arg) -> STORE_FIELD this, field, val] x N
@@ -417,7 +436,9 @@ def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
             )
 
 
-def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_cpp_function_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Override C function_def to detect and lower field_initializer_list in constructors."""
     declarator_node = node.child_by_field_name("declarator")
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -441,8 +462,8 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
         else:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
-                name_node = func_decl.child_by_field_name("declarator")
-                params_node = func_decl.child_by_field_name(
+                name_node = func_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
+                params_node = func_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
                     ctx.constants.func_params_field
                 )
                 func_name = (
@@ -477,16 +498,20 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_cpp_struct_body(ctx: TreeSitterEmitContext, node) -> None:
+def lower_cpp_struct_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Override C _lower_struct_body to handle function_definition children."""
     lower_cpp_class_body(ctx, node)
 
 
-def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_cpp_struct_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower struct_specifier using C++ class body handling."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -526,7 +551,7 @@ def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(struct_name, class_label, parents, result_reg=cls_reg)
+    ctx.emit_class_ref(struct_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(struct_name), value_reg=cls_reg))
 
 
@@ -626,7 +651,7 @@ def _extract_cpp_method(node) -> tuple[str, FunctionInfo] | None:
     )
     return_type = type_node.text.decode() if type_node else ""
     return name, FunctionInfo(
-        name=FuncName(name), params=params, return_type=return_type
+        name=FuncName(name), params=params, return_type=return_type  # type: ignore[misc]  # see red-dragon-hzmm
     )
 
 
@@ -651,7 +676,7 @@ def _extract_cpp_class_parents(node) -> tuple[str, ...]:
     )
     if base_clause is None:
         return ()
-    return tuple(
+    return tuple(  # type: ignore[return-value]  # see red-dragon-hzmm
         ClassName(c.text.decode())
         for c in base_clause.children
         if c.type == CppNodeType.TYPE_IDENTIFIER
@@ -679,7 +704,7 @@ def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
             fields={},
             methods={},
             constants={},
-            parents=parents,
+            parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
         )
 
     fields: dict[FieldName, FieldInfo] = {}
@@ -708,7 +733,7 @@ def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
         fields=fields,
         methods=methods,
         constants=constants_map,
-        parents=parents,
+        parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
     )
 
 

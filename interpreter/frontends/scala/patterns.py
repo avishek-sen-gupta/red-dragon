@@ -1,6 +1,9 @@
+# pyright: standard
 """Parse tree-sitter Scala pattern AST nodes into Pattern ADT."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.common.patterns import (
     AsPattern,
@@ -21,7 +24,9 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 
 
-def parse_scala_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def parse_scala_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Map a tree-sitter Scala pattern node to the Pattern ADT."""
     node_type = node.type
     text = ctx.node_text(node)
@@ -71,13 +76,17 @@ def parse_scala_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     raise ValueError(f"Unsupported Scala pattern node type: {node_type!r} ({text!r})")
 
 
-def _flatten_alternative_pattern(ctx: TreeSitterEmitContext, node) -> OrPattern:
+def _flatten_alternative_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> OrPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Flatten a left-associatively nested alternative_pattern into a flat OrPattern."""
     alternatives = tuple(_collect_alternatives(ctx, node))
     return OrPattern(alternatives)
 
 
-def _collect_alternatives(ctx: TreeSitterEmitContext, node) -> list[Pattern]:
+def _collect_alternatives(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[Pattern]:  # Any: tree-sitter node — untyped at Python boundary
     """Recursively collect all leaf patterns from a nested alternative_pattern."""
     if node.type != NT.ALTERNATIVE_PATTERN:
         return [parse_scala_pattern(ctx, node)]
@@ -89,7 +98,9 @@ def _collect_alternatives(ctx: TreeSitterEmitContext, node) -> list[Pattern]:
     ]
 
 
-def _parse_case_class_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
+def _parse_case_class_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> ClassPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse case_class_pattern: Circle(r), Point(x, y)."""
     type_node = next(
         c
@@ -105,7 +116,9 @@ def _parse_case_class_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
     return resolve_positional_via_match_args(ctx, class_name, positional)
 
 
-def _parse_typed_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def _parse_typed_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse typed_pattern: i: Int → AsPattern(ClassPattern('Int', (), ()), 'i').
 
     For wildcard typed patterns (_: Int), return just ClassPattern (no binding).

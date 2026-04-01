@@ -1,6 +1,9 @@
+# pyright: standard
 """Parse tree-sitter Rust pattern AST nodes into Pattern ADT."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.common.patterns import (
     CapturePattern,
@@ -31,7 +34,9 @@ _VARIANT_TO_CLASS: dict[str, str] = {
 _WILDCARD_TEXT = "_"
 
 
-def parse_rust_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
+def parse_rust_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Pattern:  # Any: tree-sitter node — untyped at Python boundary
     """Map a tree-sitter Rust pattern node to the Pattern ADT.
 
     Handles: integer literals, float literals, string literals, boolean
@@ -106,7 +111,9 @@ def parse_rust_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     raise ValueError(f"Unsupported Rust pattern node type: {node_type!r} ({text!r})")
 
 
-def _parse_slice_pattern(ctx: TreeSitterEmitContext, node) -> SequencePattern:
+def _parse_slice_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> SequencePattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse slice_pattern [a, b, ..] into SequencePattern with optional StarPattern."""
     elements = tuple(
         parse_rust_pattern(ctx, c)
@@ -116,7 +123,9 @@ def _parse_slice_pattern(ctx: TreeSitterEmitContext, node) -> SequencePattern:
     return SequencePattern(elements)
 
 
-def _parse_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
+def _parse_tuple_struct_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> ClassPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse a tuple_struct_pattern node: Some(x), Message::Write(text)."""
     name_node = next(
         c
@@ -133,7 +142,9 @@ def _parse_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> ClassPatter
     return resolve_positional_via_match_args(ctx, class_name, positional)
 
 
-def _parse_struct_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
+def _parse_struct_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> ClassPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse a struct_pattern node: Point { x, y }."""
     type_node = next(
         c
@@ -164,7 +175,9 @@ def _parse_field_pattern(ctx: TreeSitterEmitContext, fp) -> tuple[str, Pattern]:
     return (ctx.node_text(field_name_node), parse_rust_pattern(ctx, pattern_child))
 
 
-def _flatten_or_pattern(ctx: TreeSitterEmitContext, node) -> list[Pattern]:
+def _flatten_or_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[Pattern]:  # Any: tree-sitter node — untyped at Python boundary
     """Flatten a left-associative or_pattern tree into a flat list of alternatives.
 
     Tree-sitter parses `1 | 2 | 3` as `or_pattern(or_pattern(1, 2), 3)`.
