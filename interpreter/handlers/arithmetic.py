@@ -34,8 +34,8 @@ def _handle_binop(
     assert isinstance(t, Binop)
     binop_coercion = ctx.binop_coercion
     oper = t.operator
-    lhs_typed = _resolve_reg(vm, inst.operands[1])  # type: ignore[reportAttributeAccessIssue]  # see issue filed below
-    rhs_typed = _resolve_reg(vm, inst.operands[2])  # type: ignore[reportAttributeAccessIssue]  # inst narrowed via t
+    lhs_typed = _resolve_reg(vm, inst.operands[1])  # type: ignore[reportAttributeAccessIssue]  # see red-dragon-gq2o
+    rhs_typed = _resolve_reg(vm, inst.operands[2])  # type: ignore[reportAttributeAccessIssue]  # see red-dragon-gq2o
 
     # Unwrap for special-case checks
     lhs = lhs_typed.value
@@ -70,11 +70,11 @@ def _handle_binop(
         offset_val = rhs if lhs_ptr else lhs
         if isinstance(offset_val, (int, float)):
             new_offset = (
-                ptr.offset + int(offset_val)  # type: ignore[reportOptionalMemberAccess]  # guarded by (lhs_ptr or rhs_ptr)
+                ptr.offset + int(offset_val)  # type: ignore[reportOptionalMemberAccess]  # see red-dragon-ji60
                 if oper == "+" or not lhs_ptr
-                else ptr.offset - int(offset_val)  # type: ignore[reportOptionalMemberAccess]  # same guard
+                else ptr.offset - int(offset_val)  # type: ignore[reportOptionalMemberAccess]  # see red-dragon-ji60
             )
-            result_ptr = Pointer(base=ptr.base, offset=new_offset)  # type: ignore[reportOptionalMemberAccess]  # same guard
+            result_ptr = Pointer(base=ptr.base, offset=new_offset)  # type: ignore[reportOptionalMemberAccess]  # see red-dragon-ji60
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
@@ -132,7 +132,7 @@ def _handle_unop(
     assert isinstance(t, Unop)
     unop_coercion = ctx.unop_coercion
     oper = t.operator
-    operand_typed = _resolve_reg(vm, inst.operands[1])  # type: ignore[reportAttributeAccessIssue]  # inst narrowed via t
+    operand_typed = _resolve_reg(vm, inst.operands[1])  # type: ignore[reportAttributeAccessIssue]  # see red-dragon-gq2o
     operand = operand_typed.value
     # Address-of (&) on a value that is already a reference (function ref or
     # heap object) returns the reference unchanged — our model already uses

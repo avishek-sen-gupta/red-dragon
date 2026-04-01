@@ -197,7 +197,7 @@ def _handle_address_of(
     vm.heap_set(
         Address(mem_addr),
         HeapObject(
-            type_hint=None,  # type: ignore[reportArgumentType]  # HeapObject.type_hint should accept None
+            type_hint=None,  # type: ignore[reportArgumentType]  # see red-dragon-zur9
             fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(current_val)},
         ),
     )
@@ -353,7 +353,7 @@ def _handle_store_indirect(
     logger.debug("store_indirect on non-pointer %s", obj_desc)
     return ExecutionResult.success(
         StateUpdate(
-            reasoning=f"store_indirect on {obj_desc} = {val!r} (non-pointer, no-op)",  # type: ignore[reportUndefinedVariable]  # val undefined, should be tv.value
+            reasoning=f"store_indirect on {obj_desc} = {val!r} (non-pointer, no-op)",  # type: ignore[reportUndefinedVariable]  # see red-dragon-xmot
         )
     )
 
@@ -487,7 +487,7 @@ def _handle_store_index(
     assert isinstance(t, StoreIndex)
     arr_val = _resolve_reg(vm, t.arr_reg).value
     idx_val = _resolve_reg(vm, t.index_reg).value
-    tv = _resolve_reg(vm, t.value_reg)  # type: ignore[reportArgumentType]  # value_reg: Register | SpreadArguments vs str | Register
+    tv = _resolve_reg(vm, t.value_reg)  # type: ignore[reportArgumentType]  # see red-dragon-d0pv
     addr = _heap_addr(arr_val)
     if addr and not vm.heap_contains(addr):
         # Materialise a synthetic heap entry for symbolic arrays so that
