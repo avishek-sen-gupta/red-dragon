@@ -1,3 +1,4 @@
+# pyright: standard
 """LLM Interpreter Backend."""
 
 from __future__ import annotations
@@ -88,10 +89,11 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
     def _build_prompt(self, instruction: InstructionBase, state: VMState) -> str:
         """Build a user prompt with resolved operand values."""
         frame = state.current_frame
+        inst: Any = instruction  # type: ignore[misc]  # see red-dragon-4ei7 — subclass attrs not visible on InstructionBase
 
         # Resolve operand values for the LLM
         resolved = {}
-        for i, op in enumerate(instruction.operands):
+        for i, op in enumerate(inst.operands):
             raw = op
             tv = _resolve_reg(state, op)
             if tv.value is not raw:  # was a register reference
@@ -110,9 +112,9 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
 
         msg: dict[str, Any] = {
             "instruction": str(instruction),
-            "result_reg": instruction.result_reg,
-            "opcode": instruction.opcode.value,
-            "operands": instruction.operands,
+            "result_reg": inst.result_reg,
+            "opcode": inst.opcode.value,
+            "operands": inst.operands,
         }
         if resolved:
             msg["resolved_operand_values"] = resolved
