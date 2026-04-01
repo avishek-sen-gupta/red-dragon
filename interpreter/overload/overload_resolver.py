@@ -1,3 +1,4 @@
+# pyright: standard
 """OverloadResolver -- composes ResolutionStrategy and AmbiguityHandler."""
 
 from __future__ import annotations

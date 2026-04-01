@@ -1,3 +1,4 @@
+# pyright: standard
 """ResolutionStrategy — ranks overload candidates by arity then type compatibility."""
 
 from __future__ import annotations

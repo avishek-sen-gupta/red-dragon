@@ -1,3 +1,4 @@
+# pyright: standard
 """Builds LLM prompts for syntax repair and parses responses."""
 
 from __future__ import annotations
