@@ -1,3 +1,4 @@
+# pyright: standard
 """Function summary extraction for interprocedural dataflow analysis.
 
 Builds FunctionSummary objects that capture which inputs (params, field reads)
@@ -8,9 +9,11 @@ from __future__ import annotations
 
 import logging
 from functools import reduce
+from typing import Any
 
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import DataflowResult, Definition, analyze
+from interpreter.field_name import FieldName
 from interpreter.ir import CodeLabel
 from interpreter.instructions import (
     DeclVar,
@@ -42,7 +45,7 @@ from interpreter.interprocedural.types import (
 logger = logging.getLogger(__name__)
 
 
-def _collect_boundary_labels(cfg: CFG) -> frozenset[str]:
+def _collect_boundary_labels(cfg: CFG) -> frozenset[CodeLabel]:
     """Collect labels that mark function boundaries (other function entries and end blocks).
 
     A function entry block starts with 'func_' and contains a SYMBOLIC param: instruction.
@@ -71,8 +74,8 @@ def extract_sub_cfg(cfg: CFG, function_entry: FunctionEntry) -> CFG:
     entry_label = function_entry.label
     boundary_labels = _collect_boundary_labels(cfg) - {entry_label}
 
-    visited: set[str] = set()
-    worklist = [entry_label]
+    visited: set[CodeLabel] = set()
+    worklist: list[CodeLabel] = [entry_label]
     while worklist:
         label = worklist.pop()
         if label in visited or label in boundary_labels:
@@ -128,20 +131,26 @@ def _is_param_store(cfg: CFG, block: BasicBlock, store_inst) -> bool:
     )
 
 
-def _find_return_operands(cfg: CFG) -> list[tuple[str, str, int]]:
+def _find_return_operands(cfg: CFG) -> list[tuple[CodeLabel, str, int]]:
     """Find all RETURN instructions and their operand registers.
 
     Returns list of (block_label, operand_register, instruction_index).
     """
-    return [
-        (label, str(t.value_reg), idx)
-        for label, block in cfg.blocks.items()
-        for idx, inst in enumerate(block.instructions)
-        if isinstance((t := inst), Return_) and t.value_reg.is_present()
-    ]
+    result_list = []
+    for label, block in cfg.blocks.items():
+        for idx, inst in enumerate(block.instructions):
+            if (
+                isinstance(inst, Return_)
+                and inst.value_reg is not None
+                and inst.value_reg.is_present()
+            ):
+                result_list.append((label, str(inst.value_reg), idx))
+    return result_list
 
 
-def _find_store_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
+def _find_store_fields(
+    cfg: CFG,
+) -> list[tuple[CodeLabel, int, str, FieldName, str]]:
     """Find all STORE_FIELD instructions.
 
     Returns list of (block_label, instruction_index, obj_reg, field_name, val_reg).
@@ -174,7 +183,9 @@ def _find_store_indirects(cfg: CFG) -> list[tuple[CodeLabel, int, str, str]]:
     ]
 
 
-def _find_load_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
+def _find_load_fields(
+    cfg: CFG,
+) -> list[tuple[CodeLabel, int, str, FieldName, Register]]:
     """Find all LOAD_FIELD instructions.
 
     Returns list of (block_label, instruction_index, obj_reg, field_name, result_reg).
@@ -261,15 +272,17 @@ def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[VarName
 
         for block in cfg.blocks.values():
             for inst in block.instructions:
-                t = inst
-                if str(t.result_reg) != reg:
+                raw: Any = (
+                    inst  # InstructionBase subclasses have result_reg/operands  # see red-dragon-4ei7
+                )
+                if str(raw.result_reg) != reg:
                     continue
-                if isinstance(t, LoadVar):
-                    source_vars.add(t.name)
+                if isinstance(inst, LoadVar):
+                    source_vars.add(inst.name)
                 else:
                     worklist.extend(
                         str(op)
-                        for op in t.operands
+                        for op in raw.operands
                         if isinstance(op, str) and str(op).startswith("%")
                     )
 
@@ -298,7 +311,10 @@ def _find_instruction_location(
     """Find the location of an instruction that produces a given register."""
     for label, block in cfg.blocks.items():
         for idx, inst in enumerate(block.instructions):
-            if isinstance(inst, inst_type) and str(inst.result_reg) == result_register:
+            raw: Any = (
+                inst  # InstructionBase subclasses have result_reg  # see red-dragon-4ei7
+            )
+            if isinstance(inst, inst_type) and str(raw.result_reg) == result_register:
                 return InstructionLocation(block_label=label, instruction_index=idx)
     return None
 
@@ -306,7 +322,7 @@ def _find_instruction_location(
 def _build_return_flows(
     cfg: CFG,
     dataflow: DataflowResult,
-    param_names: frozenset[str],
+    param_names: frozenset[VarName],
     function_entry: FunctionEntry,
 ) -> list[tuple[FlowEndpoint, FlowEndpoint]]:
     """Build flows from params/fields to RETURN instructions."""
@@ -369,12 +385,12 @@ def _build_return_flows(
 
 
 def _add_field_to_return_flows(
-    var_name: str,
+    var_name: VarName,
     cfg: CFG,
     dataflow: DataflowResult,
-    param_names: frozenset[str],
+    param_names: frozenset[VarName],
     ret_endpoint: ReturnEndpoint,
-    load_fields: list[tuple[str, int, str, str, str]],
+    load_fields: list[tuple[CodeLabel, int, str, FieldName, Register]],
     flows: list[tuple[FlowEndpoint, FlowEndpoint]],
 ) -> None:
     """Check if a variable was defined by a LOAD_FIELD and add field→return flows."""
@@ -407,7 +423,7 @@ def _add_field_to_return_flows(
 def _build_field_write_flows(
     cfg: CFG,
     dataflow: DataflowResult,
-    param_names: frozenset[str],
+    param_names: frozenset[VarName],
 ) -> list[tuple[FlowEndpoint, FlowEndpoint]]:
     """Build flows from params to STORE_FIELD instructions."""
     store_fields = _find_store_fields(cfg)

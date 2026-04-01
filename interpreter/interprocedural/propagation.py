@@ -1,3 +1,4 @@
+# pyright: standard
 """Interprocedural whole-program propagation with SCC fixpoint.
 
 Computes strongly connected components of the call graph, iterates summaries
@@ -8,9 +9,11 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from typing import Any
 
 from interpreter import constants
 from interpreter.cfg_types import CFG
+from interpreter.ir import CodeLabel, NO_LABEL
 from interpreter.instructions import LoadVar, DeclVar, StoreVar, AddressOf
 from interpreter.interprocedural.summaries import build_summary
 from interpreter.interprocedural.types import (
@@ -149,14 +152,14 @@ def _dfs_collect_sccs(
 # ---------------------------------------------------------------------------
 
 
-def _trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
+def _trace_reg_to_var(reg: str, cfg: CFG, block_label: CodeLabel | str) -> str:
     """Trace a register back to its named variable by scanning the block for LOAD_VAR/STORE_VAR.
 
     If the register was produced by LOAD_VAR x → %reg, return "x".
     If the register is the result_reg of a CALL_*, scan for STORE_VAR/DECL_VAR that consumes it.
     Falls back to the register name itself if no named variable found.
     """
-    block = cfg.blocks.get(block_label)
+    block = cfg.blocks.get(block_label)  # type: ignore[arg-type]  # CodeLabel | str used interchangeably as dict key
     if block is None:
         return reg
     # Scan for LOAD_VAR that produces this register
@@ -220,7 +223,7 @@ def _substitute_endpoint(
 
 
 def _call_site_result_reg(
-    call_site: CallSite, cfg: CFG = CFG(blocks={}, entry="")
+    call_site: CallSite, cfg: CFG = CFG(blocks={}, entry=NO_LABEL)
 ) -> str:
     """Get the result register for a call site from the actual instruction."""
     block = cfg.blocks.get(call_site.location.block_label)
@@ -228,8 +231,11 @@ def _call_site_result_reg(
         block.instructions
     ):
         inst = block.instructions[call_site.location.instruction_index]
-        if inst.result_reg.is_present():
-            return str(inst.result_reg)
+        raw: Any = (
+            inst  # InstructionBase subclasses have result_reg  # see red-dragon-4ei7
+        )
+        if raw.result_reg.is_present():
+            return str(raw.result_reg)
     loc = call_site.location
     return f"%call_{loc.block_label}_{loc.instruction_index}"
 
@@ -238,7 +244,7 @@ def apply_summary_at_call_site(
     call_site: CallSite,
     summary: FunctionSummary,
     callee: FunctionEntry,
-    cfg: CFG = CFG(blocks={}, entry=""),
+    cfg: CFG = CFG(blocks={}, entry=NO_LABEL),
 ) -> frozenset[tuple[FlowEndpoint, FlowEndpoint]]:
     """Substitute formal params with actual args in a summary's flows.
 
@@ -351,7 +357,7 @@ def _root_context() -> CallContext:
 def build_whole_program_graph(
     summaries: dict[SummaryKey, FunctionSummary],
     call_graph: CallGraph,
-    cfg: CFG = CFG(blocks={}, entry=""),
+    cfg: CFG = CFG(blocks={}, entry=NO_LABEL),
 ) -> tuple[
     dict[FlowEndpoint, frozenset[FlowEndpoint]],
     dict[FlowEndpoint, frozenset[FlowEndpoint]],

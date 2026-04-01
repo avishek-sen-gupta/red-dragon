@@ -1,3 +1,4 @@
+# pyright: standard
 """Call graph construction with Class Hierarchy Analysis (CHA) for method dispatch."""
 
 from __future__ import annotations
@@ -67,7 +68,7 @@ def _resolve_call_function_callees(
     Try direct label lookup first, then consult registry.func_refs for name→label.
     """
     # Direct label match (e.g., target is already "func_add_0")
-    entry = function_entries.get(target)
+    entry = function_entries.get(target)  # type: ignore[arg-type]  # target str used as CodeLabel key by design
     if entry is not None:
         return frozenset({entry})
     # Name-based lookup via FuncRef (e.g., target is "add", label is "func_add_0")

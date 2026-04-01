@@ -1,3 +1,4 @@
+# pyright: standard
 """Decorator that wraps any Frontend, repairing tree-sitter parse errors via LLM."""
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from interpreter.ast_repair.repair_prompter import build_prompt, parse_response
 from interpreter.ast_repair.source_patcher import patch
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
+from interpreter.instructions import InstructionBase
 from interpreter.llm.llm_client import LLMClient
 from interpreter.parser import ParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
@@ -53,8 +55,8 @@ class RepairingFrontendDecorator(Frontend):
         return self._last_lowered_source
 
     def lower(self, source: bytes) -> list[InstructionBase]:
-        parser = self._parser_factory.get_parser(self._language)
-        tree = parser.parse(source)
+        parser = self._parser_factory.get_parser(self._language)  # type: ignore[func-returns-value]  # ParserFactory.get_parser unannotated; fixed in Task 16
+        tree = parser.parse(source)  # type: ignore[union-attr]  # parser is Any from unannotated factory
 
         if not tree.root_node.has_error:
             logger.debug("No parse errors — delegating directly to inner frontend")
@@ -83,7 +85,7 @@ class RepairingFrontendDecorator(Frontend):
             fragments = parse_response(response, len(error_spans))
             current_source = patch(current_source, error_spans, fragments)
 
-            tree = parser.parse(current_source)
+            tree = parser.parse(current_source)  # type: ignore[union-attr]  # parser is Any from unannotated factory
             if not tree.root_node.has_error:
                 logger.info("Repair succeeded on attempt %d", attempt)
                 self._last_lowered_source = current_source
