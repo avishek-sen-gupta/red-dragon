@@ -1,3 +1,4 @@
+# pyright: standard
 """I/O statement lowering — ACCEPT, OPEN, CLOSE, READ, WRITE, REWRITE, START, DELETE."""
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ def lower_accept(
     )
     if stmt.target and ctx.has_field(stmt.target, layout):
         target_ref = ctx.resolve_field_ref(stmt.target, layout, region_reg)
-        str_reg = ctx.emit_to_string(result_reg)
+        str_reg = ctx.emit_to_string(result_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
         ctx.emit_encode_and_write(
             region_reg, target_ref.fl, str_reg, target_ref.offset_reg
         )
@@ -107,7 +108,7 @@ def lower_read(
     )
     if stmt.into and ctx.has_field(stmt.into, layout):
         target_ref = ctx.resolve_field_ref(stmt.into, layout, region_reg)
-        str_reg = ctx.emit_to_string(result_reg)
+        str_reg = ctx.emit_to_string(result_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
         ctx.emit_encode_and_write(
             region_reg, target_ref.fl, str_reg, target_ref.offset_reg
         )

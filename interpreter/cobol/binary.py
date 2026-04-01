@@ -1,3 +1,4 @@
+# pyright: standard
 """COMP/BINARY big-endian two's complement encoding/decoding — reference implementation.
 
 COMP (also COMP-4, BINARY) stores numeric values as big-endian

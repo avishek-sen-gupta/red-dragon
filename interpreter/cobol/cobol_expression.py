@@ -1,3 +1,4 @@
+# pyright: standard
 """COBOL arithmetic expression tokenizer and recursive-descent parser.
 
 Parses expressions emitted by the ProLeap bridge for COMPUTE statements.

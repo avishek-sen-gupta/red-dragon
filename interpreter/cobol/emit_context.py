@@ -1,3 +1,4 @@
+# pyright: standard
 """EmitContext — shared mutable state and emit primitives for COBOL lowering.
 
 All lowering functions receive an EmitContext and operate on it.  The context
@@ -15,10 +16,11 @@ import logging
 from typing import Any, Callable
 
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
-from interpreter.cobol.cobol_types import CobolDataCategory
+from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.frontend_observer import FrontendObserver
 from interpreter.cobol.field_resolution import (
     ResolvedFieldRef,
     parse_subscript_notation,
@@ -56,8 +58,11 @@ from interpreter.register import Register, NO_REGISTER
 
 logger = logging.getLogger(__name__)
 
-# Type alias for the dispatch callback signature
-DispatchFn = Callable[["EmitContext", Any, DataLayout, str], None]
+# Type alias for the dispatch callback signature.
+# Any is CobolStatementType — avoided here to prevent a circular import via statement_dispatch.
+DispatchFn = Callable[
+    ["EmitContext", Any, DataLayout, str], None
+]  # Any: CobolStatementType, circular-import boundary
 
 
 class EmitContext:
@@ -66,7 +71,7 @@ class EmitContext:
     def __init__(
         self,
         dispatch_fn: DispatchFn,
-        observer: Any = None,
+        observer: FrontendObserver | None = None,
         condition_index: ConditionNameIndex = ConditionNameIndex({}),
     ) -> None:
         self._dispatch_fn = dispatch_fn
@@ -117,8 +122,8 @@ class EmitContext:
     def const_to_reg(self, value: Any) -> str:
         """Emit a CONST and return its register."""
         reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=reg, value=value))
-        return reg
+        self.emit_inst(Const(result_reg=reg, value=value))  # type: ignore[arg-type]  # see red-dragon-0qgg
+        return reg  # type: ignore[return-value]  # see red-dragon-pn3f
 
     def inline_ir(
         self, ir_instructions: list[Instruction], param_regs: dict[str, str]
@@ -138,7 +143,7 @@ class EmitContext:
             if isinstance(inst, Label_):
                 continue
             if isinstance(inst, Return_):
-                resolved = remap(inst.value_reg)
+                resolved = remap(inst.value_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
                 resolved_str = str(resolved)
                 return_reg = (
                     resolved_str
@@ -163,7 +168,9 @@ class EmitContext:
 
     # ── Statement Dispatch ────────────────────────────────────────
 
-    def lower_statement(self, stmt: Any, layout: DataLayout, region_reg: str) -> None:
+    def lower_statement(
+        self, stmt: Any, layout: DataLayout, region_reg: str
+    ) -> None:  # Any: CobolStatementType, circular-import boundary
         """Dispatch a statement through the injected callback."""
         self._dispatch_fn(self, stmt, layout, region_reg)
 
@@ -178,8 +185,8 @@ class EmitContext:
 
         if not subscript:
             offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
-            return ResolvedFieldRef(fl=fl, offset_reg=offset_reg)
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))  # type: ignore[arg-type]  # see red-dragon-0qgg
+            return ResolvedFieldRef(fl=fl, offset_reg=offset_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
 
         # Resolve subscript value: literal or field
         try:
@@ -205,8 +212,8 @@ class EmitContext:
             Binop(
                 result_reg=idx_minus_one,
                 operator=resolve_binop("-"),
-                left=idx_reg,
-                right=one_reg,
+                left=idx_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
+                right=one_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
             ),
         )
 
@@ -217,8 +224,8 @@ class EmitContext:
             Binop(
                 result_reg=displacement,
                 operator=resolve_binop("*"),
-                left=idx_minus_one,
-                right=elem_size_reg,
+                left=idx_minus_one,  # type: ignore[arg-type]  # see red-dragon-pn3f
+                right=elem_size_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
             ),
         )
 
@@ -228,8 +235,8 @@ class EmitContext:
             Binop(
                 result_reg=final_offset_reg,
                 operator=resolve_binop("+"),
-                left=base_offset_reg,
-                right=displacement,
+                left=base_offset_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
+                right=displacement,  # type: ignore[arg-type]  # see red-dragon-pn3f
             ),
         )
 
@@ -242,7 +249,7 @@ class EmitContext:
             redefines=fl.redefines,
             value=fl.value,
         )
-        return ResolvedFieldRef(fl=element_fl, offset_reg=final_offset_reg)
+        return ResolvedFieldRef(fl=element_fl, offset_reg=final_offset_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
 
     def has_field(self, name: str, layout: DataLayout) -> bool:
         """Check if a name (possibly subscripted) refers to a known field."""
@@ -257,14 +264,14 @@ class EmitContext:
         """Emit IR to encode a value and write it to the region."""
         encoded_reg = self.emit_encode_value(fl, value)
         if not offset_reg:
-            offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            offset_reg = self.fresh_reg()  # type: ignore[assignment]  # see red-dragon-pn3f
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))  # type: ignore[arg-type]  # see red-dragon-0qgg, red-dragon-pn3f
         self.emit_inst(
             WriteRegion(
-                region_reg=region_reg,
-                offset_reg=offset_reg,
+                region_reg=region_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
+                offset_reg=offset_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
                 length=fl.byte_length,
-                value_reg=encoded_reg,
+                value_reg=encoded_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
             ),
         )
 
@@ -300,7 +307,7 @@ class EmitContext:
                 args=(Register(str(length_reg)), Register(str(space_reg))),
             ),
         )
-        return result
+        return result  # type: ignore[return-value]  # see red-dragon-pn3f
 
     def emit_encode_alphanumeric(
         self,
@@ -319,18 +326,22 @@ class EmitContext:
             )
         else:
             ir = build_encode_alphanumeric_ir(f"enc_alpha_{field_name}", length)
-        return self.inline_ir(ir, {"%p_value": value_reg})
+        return self.inline_ir(ir, {"%p_value": value_reg})  # type: ignore[arg-type]  # see red-dragon-0juj, red-dragon-pn3f
 
-    def emit_encode_float(self, field_name: str, value: str, td: Any) -> str:
+    def emit_encode_float(
+        self, field_name: str, value: str, td: CobolTypeDescriptor
+    ) -> str:
         """Emit inline float encoding IR for COMP-1/COMP-2. Returns result register."""
         float_val = float(value)
         value_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=value_reg, value=float_val))
+        self.emit_inst(Const(result_reg=value_reg, value=float_val))  # type: ignore[arg-type]  # see red-dragon-0qgg
 
         ir = build_encode_float_ir(f"enc_float_{field_name}", td.byte_length)
-        return self.inline_ir(ir, {"%p_float_value": value_reg})
+        return self.inline_ir(ir, {"%p_float_value": value_reg})  # type: ignore[arg-type]  # see red-dragon-0juj, red-dragon-pn3f
 
-    def emit_encode_numeric(self, field_name: str, value: str, td: Any) -> str:
+    def emit_encode_numeric(
+        self, field_name: str, value: str, td: CobolTypeDescriptor
+    ) -> str:
         """Emit inline numeric encoding IR. Returns result register."""
         negative = value.startswith("-")
         clean = value.lstrip("+-")
@@ -351,10 +362,10 @@ class EmitContext:
             sign_nibble = ByteConstants.SIGN_NIBBLE_POSITIVE
 
         digits_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=digits_reg, value=digits))
+        self.emit_inst(Const(result_reg=digits_reg, value=digits))  # type: ignore[arg-type]  # see red-dragon-0qgg
 
         sign_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=sign_reg, value=sign_nibble))
+        self.emit_inst(Const(result_reg=sign_reg, value=sign_nibble))  # type: ignore[arg-type]  # see red-dragon-0qgg
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
             if td.sign_separate:
@@ -379,22 +390,22 @@ class EmitContext:
         else:
             ir = build_encode_comp3_ir(f"enc_comp3_{field_name}", td.total_digits)
 
-        return self.inline_ir(ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg})
+        return self.inline_ir(ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg})  # type: ignore[arg-type]  # see red-dragon-0juj, red-dragon-pn3f
 
     def emit_decode_field(
         self, region_reg: str, fl: FieldLayout, offset_reg: str = ""
     ) -> str:
         """Emit IR to load and decode a field from the region. Returns decoded value register."""
         if not offset_reg:
-            offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            offset_reg = self.fresh_reg()  # type: ignore[assignment]  # see red-dragon-pn3f
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))  # type: ignore[arg-type]  # see red-dragon-0qgg, red-dragon-pn3f
 
         data_reg = self.fresh_reg()
         self.emit_inst(
             LoadRegion(
                 result_reg=data_reg,
-                region_reg=region_reg,
-                offset_reg=offset_reg,
+                region_reg=region_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
+                offset_reg=offset_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
                 length=fl.byte_length,
             ),
         )
@@ -431,7 +442,7 @@ class EmitContext:
                 f"dec_comp3_{fl.name}", td.total_digits, td.decimal_digits
             )
 
-        return self.inline_ir(ir, {"%p_data": data_reg})
+        return self.inline_ir(ir, {"%p_data": data_reg})  # type: ignore[arg-type]  # see red-dragon-0juj, red-dragon-pn3f
 
     # ── String Conversion Helpers ─────────────────────────────────
 
@@ -445,7 +456,7 @@ class EmitContext:
                 args=(Register(str(value_reg)),),
             ),
         )
-        return result
+        return result  # type: ignore[return-value]  # see red-dragon-pn3f
 
     def _emit_blank_when_zero_wrap(
         self, encoded_reg: str, value_str_reg: str, byte_length: int
@@ -464,7 +475,7 @@ class EmitContext:
                 ),
             ),
         )
-        return result
+        return result  # type: ignore[return-value]  # see red-dragon-pn3f
 
     def emit_encode_from_string(self, fl: FieldLayout, value_str_reg: str) -> str:
         """Emit encoding IR from a string value register."""
@@ -478,7 +489,7 @@ class EmitContext:
                 ir = build_encode_alphanumeric_ir(
                     f"enc_alpha_{fl.name}", td.total_digits
                 )
-            return self.inline_ir(ir, {"%p_value": value_str_reg})
+            return self.inline_ir(ir, {"%p_value": value_str_reg})  # type: ignore[arg-type]  # see red-dragon-0juj
 
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
             # Convert string to float, then encode
@@ -491,7 +502,7 @@ class EmitContext:
                 ),
             )
             ir = build_encode_float_ir(f"enc_float_{fl.name}", td.byte_length)
-            encoded = self.inline_ir(ir, {"%p_float_value": float_reg})
+            encoded = self.inline_ir(ir, {"%p_float_value": float_reg})  # type: ignore[arg-type]  # see red-dragon-0juj, red-dragon-pn3f
             if td.blank_when_zero:
                 return self._emit_blank_when_zero_wrap(
                     encoded, value_str_reg, fl.byte_length
@@ -560,7 +571,7 @@ class EmitContext:
         else:
             ir = build_encode_comp3_ir(f"enc_comp3_{fl.name}", td.total_digits)
 
-        return self.inline_ir(ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg})
+        return self.inline_ir(ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg})  # type: ignore[arg-type]  # see red-dragon-0juj, red-dragon-pn3f
 
     def emit_encode_and_write(
         self,
@@ -572,14 +583,14 @@ class EmitContext:
         """Encode a string value and write it to the field's region slot."""
         encoded_reg = self.emit_encode_from_string(fl, value_str_reg)
         if not offset_reg:
-            offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            offset_reg = self.fresh_reg()  # type: ignore[assignment]  # see red-dragon-pn3f
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))  # type: ignore[arg-type]  # see red-dragon-0qgg, red-dragon-pn3f
         self.emit_inst(
             WriteRegion(
-                region_reg=region_reg,
-                offset_reg=offset_reg,
+                region_reg=region_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
+                offset_reg=offset_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
                 length=fl.byte_length,
-                value_reg=encoded_reg,
+                value_reg=encoded_reg,  # type: ignore[arg-type]  # see red-dragon-pn3f
             ),
         )
 

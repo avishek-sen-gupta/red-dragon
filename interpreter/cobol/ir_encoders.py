@@ -1,3 +1,4 @@
+# pyright: standard
 """IR function builders for COBOL encoding/decoding.
 
 Each builder generates a list of IRInstructions forming a straight-line

@@ -1,3 +1,4 @@
+# pyright: standard
 """Primitive byte-manipulation builtins for the symbolic interpreter.
 
 These are the atoms from which all COBOL encoding/decoding is built in IR.
@@ -7,8 +8,6 @@ Language-agnostic — no COBOL-specific logic here.
 from __future__ import annotations
 
 import struct
-from typing import Any
-
 from interpreter.func_name import FuncName
 from interpreter.cobol.cobol_constants import (
     BuiltinName,
@@ -20,13 +19,13 @@ from interpreter.cobol.cobol_constants import (
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm.vm import Operators, _is_symbolic
+from interpreter.vm.vm import Operators, VMState, _is_symbolic
 from interpreter.vm.vm_types import BuiltinResult
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
 
-def _builtin_nibble_get(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_nibble_get(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Extract high or low nibble from a byte value.
 
     Args: [byte_val: int, position: str ("high" or "low")]
@@ -44,7 +43,7 @@ def _builtin_nibble_get(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_nibble_set(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_nibble_set(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Set high or low nibble of a byte value.
 
     Args: [byte_val: int, position: str ("high" or "low"), nibble: int]
@@ -71,7 +70,7 @@ def _builtin_nibble_set(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_byte_from_int(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_byte_from_int(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Clamp/mask integer to 0-255.
 
     Args: [value: int]
@@ -84,7 +83,7 @@ def _builtin_byte_from_int(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=args[0].value & ByteConstants.BYTE_MASK)
 
 
-def _builtin_int_from_byte(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_int_from_byte(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Identity — for semantic clarity in IR.
 
     Args: [byte_val: int]
@@ -97,7 +96,7 @@ def _builtin_int_from_byte(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=args[0].value)
 
 
-def _builtin_bytes_to_string(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_bytes_to_string(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Decode byte list to string.
 
     Args: [byte_list: list[int], encoding: str ("ascii" or "ebcdic")]
@@ -117,7 +116,7 @@ def _builtin_bytes_to_string(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_string_to_bytes(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_string_to_bytes(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Encode string to byte list.
 
     Args: [string: str, encoding: str ("ascii" or "ebcdic")]
@@ -137,7 +136,7 @@ def _builtin_string_to_bytes(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_list_get(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_list_get(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Get element at index from a list.
 
     Args: [lst: list, index: int]
@@ -153,7 +152,7 @@ def _builtin_list_get(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_list_set(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_list_set(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Return new list with element replaced at index.
 
     Args: [lst: list, index: int, value: Any]
@@ -171,7 +170,7 @@ def _builtin_list_set(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_list_len(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_list_len(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Return list length.
 
     Args: [lst: list]
@@ -184,7 +183,7 @@ def _builtin_list_len(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=len(args[0].value))
 
 
-def _builtin_list_slice(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_list_slice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Return sublist [start:end].
 
     Args: [lst: list, start: int, end: int]
@@ -202,7 +201,7 @@ def _builtin_list_slice(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=lst[start:end])
 
 
-def _builtin_list_concat(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_list_concat(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Concatenate two lists.
 
     Args: [lst1: list, lst2: list]
@@ -216,7 +215,7 @@ def _builtin_list_concat(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=lst1 + lst2)
 
 
-def _builtin_make_list(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_make_list(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Create list of `size` elements, all set to `fill`.
 
     Args: [size: int, fill: int]
@@ -230,7 +229,7 @@ def _builtin_make_list(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=[fill] * size)
 
 
-def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Prepare digit list from a string value for COBOL numeric encoding.
 
     Args: [value_str: str, total_digits: int, decimal_digits: int, signed: bool]
@@ -264,7 +263,7 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: Any) -> BuiltinRes
     return BuiltinResult(value=[int(ch) if ch.isdigit() else 0 for ch in digit_str])
 
 
-def _builtin_cobol_prepare_sign(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_cobol_prepare_sign(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Compute sign nibble from a string value for COBOL numeric encoding.
 
     Args: [value_str: str, signed: bool]
@@ -287,7 +286,7 @@ def _builtin_cobol_prepare_sign(args: list[TypedValue], vm: Any) -> BuiltinResul
     return BuiltinResult(value=ByteConstants.SIGN_NIBBLE_POSITIVE)
 
 
-def _builtin_string_find(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_string_find(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Find first occurrence of needle in source string.
 
     Args: [source: str, needle: str]
@@ -301,7 +300,7 @@ def _builtin_string_find(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=source.find(needle))
 
 
-def _builtin_string_split(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_string_split(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Split source string by delimiter.
 
     Args: [source: str, delimiter: str]
@@ -317,7 +316,7 @@ def _builtin_string_split(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=source.split(delimiter))
 
 
-def _builtin_string_count(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_string_count(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Count occurrences of pattern in source string.
 
     Args: [source: str, pattern: str, mode: str ("all"/"leading"/"characters")]
@@ -349,7 +348,7 @@ def _builtin_string_count(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_string_replace(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_string_replace(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Replace occurrences of pattern in source string.
 
     Args: [source: str, from_pat: str, to_pat: str, mode: str ("all"/"leading"/"first")]
@@ -384,7 +383,7 @@ def _builtin_string_replace(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_string_concat(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_string_concat(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Concatenate a list of strings.
 
     Args: [parts: list[str]]
@@ -400,7 +399,7 @@ def _builtin_string_concat(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value="".join(str(p) for p in parts))
 
 
-def _builtin_string_concat_pair(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_string_concat_pair(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Concatenate two strings.
 
     Args: [left: str, right: str]
@@ -412,7 +411,7 @@ def _builtin_string_concat_pair(args: list[TypedValue], vm: Any) -> BuiltinResul
     return BuiltinResult(value=str(left) + str(right))
 
 
-def _builtin_int_to_binary_bytes(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_int_to_binary_bytes(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Pack signed/unsigned integer as big-endian binary bytes.
 
     Args: [value: int, byte_count: int, signed: bool]
@@ -428,7 +427,7 @@ def _builtin_int_to_binary_bytes(args: list[TypedValue], vm: Any) -> BuiltinResu
     )
 
 
-def _builtin_binary_bytes_to_int(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_binary_bytes_to_int(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Unpack big-endian binary bytes as signed/unsigned integer.
 
     Args: [byte_list: list[int], signed: bool]
@@ -444,7 +443,7 @@ def _builtin_binary_bytes_to_int(args: list[TypedValue], vm: Any) -> BuiltinResu
     )
 
 
-def _builtin_float_to_bytes(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_float_to_bytes(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Pack IEEE 754 float to big-endian bytes.
 
     Args: [value: float|int, byte_count: int (4 or 8)]
@@ -459,7 +458,7 @@ def _builtin_float_to_bytes(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=list(struct.pack(fmt, float(value))))
 
 
-def _builtin_bytes_to_float(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_bytes_to_float(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Unpack big-endian IEEE 754 bytes to float.
 
     Args: [byte_list: list[int], byte_count: int (4 or 8)]
@@ -475,7 +474,9 @@ def _builtin_bytes_to_float(args: list[TypedValue], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=float(result))
 
 
-def _builtin_cobol_blank_when_zero(args: list[TypedValue], vm: Any) -> BuiltinResult:
+def _builtin_cobol_blank_when_zero(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
     """Apply BLANK WHEN ZERO: if numeric value is zero, return EBCDIC spaces.
 
     Args: [encoded_bytes: list[int], value_str: str, byte_length: int]
@@ -495,30 +496,34 @@ def _builtin_cobol_blank_when_zero(args: list[TypedValue], vm: Any) -> BuiltinRe
     )
 
 
-BYTE_BUILTINS: dict[FuncName, Any] = {
-    FuncName(BuiltinName.NIBBLE_GET): _builtin_nibble_get,
-    FuncName(BuiltinName.NIBBLE_SET): _builtin_nibble_set,
-    FuncName(BuiltinName.BYTE_FROM_INT): _builtin_byte_from_int,
-    FuncName(BuiltinName.INT_FROM_BYTE): _builtin_int_from_byte,
-    FuncName(BuiltinName.BYTES_TO_STRING): _builtin_bytes_to_string,
-    FuncName(BuiltinName.STRING_TO_BYTES): _builtin_string_to_bytes,
-    FuncName(BuiltinName.LIST_GET): _builtin_list_get,
-    FuncName(BuiltinName.LIST_SET): _builtin_list_set,
-    FuncName(BuiltinName.LIST_LEN): _builtin_list_len,
-    FuncName(BuiltinName.LIST_SLICE): _builtin_list_slice,
-    FuncName(BuiltinName.LIST_CONCAT): _builtin_list_concat,
-    FuncName(BuiltinName.MAKE_LIST): _builtin_make_list,
-    FuncName(BuiltinName.COBOL_PREPARE_DIGITS): _builtin_cobol_prepare_digits,
-    FuncName(BuiltinName.COBOL_PREPARE_SIGN): _builtin_cobol_prepare_sign,
-    FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
-    FuncName(BuiltinName.STRING_SPLIT): _builtin_string_split,
-    FuncName(BuiltinName.STRING_COUNT): _builtin_string_count,
-    FuncName(BuiltinName.STRING_REPLACE): _builtin_string_replace,
-    FuncName(BuiltinName.STRING_CONCAT): _builtin_string_concat,
-    FuncName(BuiltinName.STRING_CONCAT_PAIR): _builtin_string_concat_pair,
-    FuncName(BuiltinName.INT_TO_BINARY_BYTES): _builtin_int_to_binary_bytes,
-    FuncName(BuiltinName.BINARY_BYTES_TO_INT): _builtin_binary_bytes_to_int,
-    FuncName(BuiltinName.FLOAT_TO_BYTES): _builtin_float_to_bytes,
-    FuncName(BuiltinName.BYTES_TO_FLOAT): _builtin_bytes_to_float,
-    FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,
-}
+from typing import Any
+
+BYTE_BUILTINS: dict[FuncName, Any] = (
+    {  # Any: Callable[(list[TypedValue], VMState) -> BuiltinResult] — builtin boundary
+        FuncName(BuiltinName.NIBBLE_GET): _builtin_nibble_get,
+        FuncName(BuiltinName.NIBBLE_SET): _builtin_nibble_set,
+        FuncName(BuiltinName.BYTE_FROM_INT): _builtin_byte_from_int,
+        FuncName(BuiltinName.INT_FROM_BYTE): _builtin_int_from_byte,
+        FuncName(BuiltinName.BYTES_TO_STRING): _builtin_bytes_to_string,
+        FuncName(BuiltinName.STRING_TO_BYTES): _builtin_string_to_bytes,
+        FuncName(BuiltinName.LIST_GET): _builtin_list_get,
+        FuncName(BuiltinName.LIST_SET): _builtin_list_set,
+        FuncName(BuiltinName.LIST_LEN): _builtin_list_len,
+        FuncName(BuiltinName.LIST_SLICE): _builtin_list_slice,
+        FuncName(BuiltinName.LIST_CONCAT): _builtin_list_concat,
+        FuncName(BuiltinName.MAKE_LIST): _builtin_make_list,
+        FuncName(BuiltinName.COBOL_PREPARE_DIGITS): _builtin_cobol_prepare_digits,
+        FuncName(BuiltinName.COBOL_PREPARE_SIGN): _builtin_cobol_prepare_sign,
+        FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
+        FuncName(BuiltinName.STRING_SPLIT): _builtin_string_split,
+        FuncName(BuiltinName.STRING_COUNT): _builtin_string_count,
+        FuncName(BuiltinName.STRING_REPLACE): _builtin_string_replace,
+        FuncName(BuiltinName.STRING_CONCAT): _builtin_string_concat,
+        FuncName(BuiltinName.STRING_CONCAT_PAIR): _builtin_string_concat_pair,
+        FuncName(BuiltinName.INT_TO_BINARY_BYTES): _builtin_int_to_binary_bytes,
+        FuncName(BuiltinName.BINARY_BYTES_TO_INT): _builtin_binary_bytes_to_int,
+        FuncName(BuiltinName.FLOAT_TO_BYTES): _builtin_float_to_bytes,
+        FuncName(BuiltinName.BYTES_TO_FLOAT): _builtin_bytes_to_float,
+        FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,
+    }
+)
