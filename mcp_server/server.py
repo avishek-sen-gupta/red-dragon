@@ -19,6 +19,7 @@ from mcp_server.tools import (
     handle_get_function_summary,
     handle_get_ir,
     handle_get_state,
+    handle_list_opcodes,
     handle_load_program,
     handle_load_project,
     handle_run_to_end,
@@ -67,6 +68,21 @@ def get_call_chain(
     Returns a nested tree structure.
     """
     return handle_get_call_chain(source, language, function_name)
+
+
+@mcp.tool()
+def list_opcodes() -> dict[str, Any]:
+    """List all IR opcodes with descriptions, categories, typed fields, and semantic notes.
+
+    Returns a sorted list of all 33 opcodes. Each entry includes:
+    - name: the opcode string (e.g. "BINOP")
+    - category: one of variables, arithmetic, calls, fields_and_indices,
+      control_flow, heap, memory, continuations
+    - description: what the instruction does
+    - fields: list of {name, type} for every typed operand
+    - notes: detailed semantic notes including field meanings and VM behaviour
+    """
+    return handle_list_opcodes()
 
 
 # ---------------------------------------------------------------------------
