@@ -1,3 +1,4 @@
+# pyright: standard
 """Lua frontend package."""
 
 from interpreter.frontends.lua.frontend import LuaFrontend

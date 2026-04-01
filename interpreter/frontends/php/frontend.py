@@ -1,11 +1,14 @@
+# pyright: standard
 """PhpFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -53,8 +56,10 @@ class PhpFrontend(BaseFrontend):
             "null": "Any",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
-        return {
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
+        return {  # type: ignore[return-value]  # see red-dragon-rke4
             PHPNodeType.VARIABLE_NAME: php_expr.lower_php_variable,
             PHPNodeType.NAME: common_expr.lower_identifier,
             PHPNodeType.INTEGER: common_expr.lower_const_literal,
@@ -94,7 +99,7 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.INCLUDE_EXPRESSION: php_expr.lower_php_include,
             PHPNodeType.NULLSAFE_MEMBER_CALL_EXPRESSION: php_expr.lower_php_nullsafe_method_call,
             PHPNodeType.REQUIRE_ONCE_EXPRESSION: php_expr.lower_php_include,
-            PHPNodeType.VARIADIC_UNPACKING: php_expr.lower_php_variadic_unpacking,
+            PHPNodeType.VARIADIC_UNPACKING: php_expr.lower_php_variadic_unpacking,  # type: ignore[dict-item]  # see red-dragon-rke4
             PHPNodeType.PRINT_INTRINSIC: php_expr.lower_php_print_intrinsic,
             PHPNodeType.CLONE_EXPRESSION: php_expr.lower_php_clone_expression,
             PHPNodeType.ERROR_SUPPRESSION_EXPRESSION: php_expr.lower_php_error_suppression,
@@ -103,7 +108,9 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.REQUIRE_EXPRESSION: php_expr.lower_php_include,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             PHPNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             PHPNodeType.RETURN_STATEMENT: php_cf.lower_php_return,
@@ -141,8 +148,7 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.UNSET_STATEMENT: lambda ctx, node: None,
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.php.declarations import extract_php_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_php_symbols(root)

@@ -1,6 +1,9 @@
+# pyright: standard
 """Rust-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -135,7 +138,7 @@ def _lower_rust_body_with_implicit_return(
         and c.type not in ctx.constants.noise_types
     ]
     if not children:
-        return ""
+        return ""  # type: ignore[return-value]  # see red-dragon-hzmm
     *init, last = children
     for child in init:
         ctx.lower_stmt(child)
@@ -147,11 +150,13 @@ def _lower_rust_body_with_implicit_return(
     )
     if is_stmt:
         ctx.lower_stmt(last)
-        return ""
+        return ""  # type: ignore[return-value]  # see red-dragon-hzmm
     return ctx.lower_expr(last)
 
 
-def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_function_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Rust function_item with Rust-specific param handling.
 
     Uses ``_lower_rust_body_with_implicit_return`` so that:
@@ -197,14 +202,16 @@ def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 # ── let declaration ──────────────────────────────────────────────────
 
 
-def lower_let_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_let_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `let pattern = value;`."""
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
@@ -217,9 +224,9 @@ def lower_let_decl(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
 
     if pattern_node is not None and pattern_node.type == RustNodeType.TUPLE_PATTERN:
-        _lower_tuple_destructure(ctx, pattern_node, val_reg, node)
+        _lower_tuple_destructure(ctx, pattern_node, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
     elif pattern_node is not None and pattern_node.type == RustNodeType.STRUCT_PATTERN:
-        _lower_struct_destructure(ctx, pattern_node, val_reg, node)
+        _lower_struct_destructure(ctx, pattern_node, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
     else:
         raw_name = _extract_let_pattern_name(ctx, pattern_node)
         var_name = ctx.declare_block_var(raw_name)
@@ -243,7 +250,7 @@ def _lower_tuple_destructure(
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
+            LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=child,
         )
         var_name = _extract_let_pattern_name(ctx, child)
@@ -278,7 +285,7 @@ def _lower_struct_destructure(
             ctx.emit_inst(
                 LoadField(
                     result_reg=field_reg,
-                    obj_reg=val_reg,
+                    obj_reg=val_reg,  # type: ignore[misc]  # see red-dragon-hzmm
                     field_name=FieldName(field_name),
                 ),
                 node=child,
@@ -291,7 +298,9 @@ def _lower_struct_destructure(
 # ── struct definition ────────────────────────────────────────────────
 
 
-def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_struct_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `struct Name { ... }`."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_struct"
@@ -303,14 +312,16 @@ def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 # ── impl block ───────────────────────────────────────────────────────
 
 
-def lower_impl_item(ctx: TreeSitterEmitContext, node) -> None:
+def lower_impl_item(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `impl Type { ... }`."""
     type_node = node.child_by_field_name("type")
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -326,14 +337,16 @@ def lower_impl_item(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(impl_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(impl_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(impl_name), value_reg=cls_reg))
 
 
 # ── trait item ───────────────────────────────────────────────────────
 
 
-def lower_trait_item(ctx: TreeSitterEmitContext, node) -> None:
+def lower_trait_item(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `trait Name { ... }` like a class/impl block."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -349,14 +362,16 @@ def lower_trait_item(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(trait_name), value_reg=cls_reg))
 
 
 # ── enum item ────────────────────────────────────────────────────────
 
 
-def lower_enum_item(ctx: TreeSitterEmitContext, node) -> None:
+def lower_enum_item(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `enum Name { A, B(i32), ... }` as NEW_OBJECT + STORE_FIELD per variant."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -394,7 +409,9 @@ def lower_enum_item(ctx: TreeSitterEmitContext, node) -> None:
 # ── const item ───────────────────────────────────────────────────────
 
 
-def lower_const_item(ctx: TreeSitterEmitContext, node) -> None:
+def lower_const_item(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `const NAME: type = value;`."""
     name_node = node.child_by_field_name("name")
     value_node = node.child_by_field_name("value")
@@ -414,7 +431,9 @@ def lower_const_item(ctx: TreeSitterEmitContext, node) -> None:
 # ── static item ──────────────────────────────────────────────────────
 
 
-def lower_static_item(ctx: TreeSitterEmitContext, node) -> None:
+def lower_static_item(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `static NAME: type = value;`."""
     name_node = node.child_by_field_name("name")
     value_node = node.child_by_field_name("value")
@@ -434,7 +453,9 @@ def lower_static_item(ctx: TreeSitterEmitContext, node) -> None:
 # ── type alias ───────────────────────────────────────────────────────
 
 
-def lower_type_item(ctx: TreeSitterEmitContext, node) -> None:
+def lower_type_item(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `type Alias = OriginalType;`."""
     name_node = node.child_by_field_name("name")
     type_node = node.child_by_field_name("type")
@@ -449,7 +470,9 @@ def lower_type_item(ctx: TreeSitterEmitContext, node) -> None:
 # ── mod item ─────────────────────────────────────────────────────────
 
 
-def lower_mod_item(ctx: TreeSitterEmitContext, node) -> None:
+def lower_mod_item(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `mod name { ... }` by lowering the body block."""
     name_node = node.child_by_field_name("name")
     body_node = node.child_by_field_name("body")
@@ -464,7 +487,9 @@ def lower_mod_item(ctx: TreeSitterEmitContext, node) -> None:
 # ── foreign mod item (extern block) ──────────────────────────────────
 
 
-def lower_foreign_mod_item(ctx: TreeSitterEmitContext, node) -> None:
+def lower_foreign_mod_item(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `extern "C" { fn foo(); ... }` by lowering body declarations."""
     body_node = node.child_by_field_name("body")
     if body_node:
@@ -476,7 +501,9 @@ def lower_foreign_mod_item(ctx: TreeSitterEmitContext, node) -> None:
 # ── function signature item (trait method stub) ──────────────────────
 
 
-def lower_function_signature(ctx: TreeSitterEmitContext, node) -> None:
+def lower_function_signature(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `fn area(&self) -> f64;` as function stub (no body)."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node) if name_node else "__trait_fn"
@@ -496,7 +523,7 @@ def lower_function_signature(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -555,7 +582,7 @@ def _emit_prelude_func_ref(
 ) -> None:
     """Emit CONST <function:name@label> + STORE_VAR."""
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -604,7 +631,7 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
     mm_inner = ctx.fresh_reg()
     ctx.emit_inst(
         LoadField(
-            result_reg=mm_inner, obj_reg=mm_self, field_name=constants.BOXED_FIELD
+            result_reg=mm_inner, obj_reg=mm_self, field_name=constants.BOXED_FIELD  # type: ignore[misc]  # see red-dragon-hzmm
         )
     )
     mm_name = ctx.fresh_reg()
@@ -617,14 +644,14 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Label_(label=mm_end))
 
     # Register methods — CONST func_ref INSIDE class body
-    _emit_prelude_func_ref(ctx, "__init__", init_label)
-    _emit_prelude_func_ref(ctx, constants.METHOD_MISSING, mm_label)
+    _emit_prelude_func_ref(ctx, "__init__", init_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    _emit_prelude_func_ref(ctx, constants.METHOD_MISSING, mm_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     ctx.emit_inst(Label_(label=end_label))
 
     # Store class ref (OUTSIDE class body, after end_label)
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
@@ -682,14 +709,14 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Label_(label=as_ref_end))
 
     # Register all 3 methods — CONST func_ref INSIDE class body
-    _emit_prelude_func_ref(ctx, "__init__", init_label)
-    _emit_prelude_func_ref(ctx, "unwrap", unwrap_label)
-    _emit_prelude_func_ref(ctx, "as_ref", as_ref_label)
+    _emit_prelude_func_ref(ctx, "__init__", init_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    _emit_prelude_func_ref(ctx, "unwrap", unwrap_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    _emit_prelude_func_ref(ctx, "as_ref", as_ref_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
@@ -698,7 +725,7 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_rust_struct_fields(field_declaration_list) -> "dict[FieldName, FieldInfo]":
+def _extract_rust_struct_fields(field_declaration_list) -> "dict[FieldName, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract fields from a Rust field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -717,7 +744,7 @@ def _extract_rust_struct_fields(field_declaration_list) -> "dict[FieldName, Fiel
     return fields
 
 
-def _extract_rust_struct(node) -> "tuple[ClassName, ClassInfo] | None":
+def _extract_rust_struct(node) -> "tuple[ClassName, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract a ClassInfo from a Rust struct_item node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo
 
@@ -740,8 +767,8 @@ def _extract_rust_struct(node) -> "tuple[ClassName, ClassInfo] | None":
 
 def _collect_rust_structs_and_impls(
     node,
-    classes: "dict[ClassName, ClassInfo]",
-    functions: "dict[FuncName, FunctionInfo]",
+    classes: "dict[ClassName, ClassInfo]",  # type: ignore[name-defined]  # see red-dragon-545a
+    functions: "dict[FuncName, FunctionInfo]",  # type: ignore[name-defined]  # see red-dragon-545a
 ) -> None:
     """Walk AST to collect struct definitions and impl blocks (methods)."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo
@@ -803,7 +830,7 @@ def _collect_rust_structs_and_impls(
         _collect_rust_structs_and_impls(child, classes, functions)
 
 
-def extract_rust_symbols(root) -> "SymbolTable":
+def extract_rust_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
     """Walk the Rust AST and return a SymbolTable of all struct definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 

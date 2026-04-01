@@ -1,3 +1,4 @@
+# pyright: standard
 """Tree-sitter node type strings used in JavaScript frontend lowerers.
 
 Centralises raw string literals so that typos are caught at import time

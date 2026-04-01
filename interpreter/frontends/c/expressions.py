@@ -1,6 +1,9 @@
+# pyright: standard
 """C-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -41,7 +44,9 @@ from interpreter.instructions import (
 logger = logging.getLogger(__name__)
 
 
-def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_field_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower field_expression (e.g., obj.field or ptr->field)."""
     obj_node = node.child_by_field_name("argument")
     field_node = node.child_by_field_name("field")
@@ -57,7 +62,9 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_subscript_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_subscript_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower subscript_expression (arr[idx])."""
     arr_node = node.child_by_field_name("argument")
     idx_node = node.child_by_field_name("index")
@@ -72,12 +79,14 @@ def lower_subscript_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_assignment_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower assignment_expression (x = val)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_c_store_target(ctx, left, val_reg, node)
+    lower_c_store_target(ctx, left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
     return val_reg
 
 
@@ -94,13 +103,13 @@ def lower_c_store_target(
             ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
+                    obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node
+                StoreVar(name=VarName(name), value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
             )
     elif target.type == CNodeType.FIELD_EXPRESSION:
         obj_node = target.child_by_field_name("argument")
@@ -111,7 +120,7 @@ def lower_c_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
@@ -122,7 +131,7 @@ def lower_c_store_target(
             arr_reg = ctx.lower_expr(arr_node)
             idx_reg = ctx.lower_expr(idx_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
     elif target.type == CNodeType.POINTER_EXPRESSION:
@@ -132,16 +141,18 @@ def lower_c_store_target(
             operand_node = next((c for c in target.children if c.is_named), None)
         ptr_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
         ctx.emit_inst(
-            StoreIndirect(ptr_reg=ptr_reg, value_reg=val_reg), node=parent_node
+            StoreIndirect(ptr_reg=ptr_reg, value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
         )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
 
 
-def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_cast_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower cast_expression — pass through the value."""
     value_node = node.child_by_field_name("value")
     if value_node:
@@ -152,7 +163,9 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_pointer_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower pointer dereference (*p) as LOAD_INDIRECT or address-of (&x) as ADDRESS_OF."""
     operand_node = node.child_by_field_name("argument")
     # Detect operator: first non-named child is '*' or '&'
@@ -196,7 +209,9 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_sizeof(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_sizeof(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower sizeof(type) or sizeof(expr) as CALL_FUNCTION sizeof(arg)."""
     type_node = next(
         (c for c in node.children if c.type == CNodeType.TYPE_DESCRIPTOR),
@@ -220,7 +235,9 @@ def lower_sizeof(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ternary(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower conditional_expression (ternary operator)."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -249,7 +266,9 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     return result_reg
 
 
-def lower_comma_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_comma_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower comma expression (a, b) — evaluate both, return last."""
     children = [c for c in node.children if c.is_named]
     reg = ctx.fresh_reg()
@@ -259,7 +278,9 @@ def lower_comma_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_compound_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_compound_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower (type){elem1, elem2, ...} as NEW_OBJECT + STORE_INDEX per element."""
     type_node = next(
         (c for c in node.children if c.type == CNodeType.TYPE_DESCRIPTOR),
@@ -284,7 +305,9 @@ def lower_compound_literal(ctx: TreeSitterEmitContext, node) -> Register:
     return obj_reg
 
 
-def lower_initializer_list(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_initializer_list(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower initializer_list {a, b, c} as NEW_ARRAY + STORE_INDEX per element."""
     elements = [c for c in node.children if c.is_named]
     size_reg = ctx.fresh_reg()
@@ -302,7 +325,9 @@ def lower_initializer_list(ctx: TreeSitterEmitContext, node) -> Register:
     return arr_reg
 
 
-def lower_initializer_pair(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_initializer_pair(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `.field = value` — lower the value (field binding handled by parent)."""
     value_node = next(
         (

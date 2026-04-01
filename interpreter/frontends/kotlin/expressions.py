@@ -1,7 +1,8 @@
+# pyright: standard
 """Kotlin-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from interpreter.ir import SpreadArguments, CodeLabel
@@ -58,7 +59,9 @@ from interpreter.types.type_expr import scalar
 logger = logging.getLogger(__name__)
 
 
-def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_kotlin_identifier(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower identifier, intercepting 'field' inside property accessor bodies."""
     text = ctx.node_text(node)
     if text == "field" and ctx._accessor_backing_field:
@@ -80,7 +83,9 @@ def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> Register:
 # -- string interpolation ----------------------------------------------
 
 
-def lower_kotlin_string_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_kotlin_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Kotlin string literal, decomposing $var / ${expr} interpolation."""
     has_interpolation = any(
         c.type in (KNT.INTERPOLATED_IDENTIFIER, KNT.INTERPOLATED_EXPRESSION)
@@ -96,13 +101,13 @@ def lower_kotlin_string_literal(ctx: TreeSitterEmitContext, node) -> Register:
             ctx.emit_inst(
                 Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
-            parts.append(frag_reg)
+            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
         elif child.type == KNT.INTERPOLATED_IDENTIFIER:
-            parts.append(lower_identifier(ctx, child))
+            parts.append(lower_identifier(ctx, child))  # type: ignore[arg-type]  # see red-dragon-y5bm
         elif child.type == KNT.INTERPOLATED_EXPRESSION:
             named = [c for c in child.children if c.is_named]
             if named:
-                parts.append(ctx.lower_expr(named[0]))
+                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
         # skip punctuation: ", $, ${, }
     return lower_interpolated_string_parts(ctx, parts, node)
 
@@ -125,7 +130,9 @@ def _extract_kotlin_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     return regs
 
 
-def _extract_nav_field_name(ctx: TreeSitterEmitContext, node) -> Register:
+def _extract_nav_field_name(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Extract the identifier name from a navigation_suffix or plain node.
 
     ``navigation_suffix`` nodes include the leading dot in their text,
@@ -136,11 +143,13 @@ def _extract_nav_field_name(ctx: TreeSitterEmitContext, node) -> Register:
             (c for c in node.children if c.type == KNT.SIMPLE_IDENTIFIER), None
         )
         if id_node:
-            return ctx.node_text(id_node)
-    return ctx.node_text(node)
+            return ctx.node_text(id_node)  # type: ignore[return-value]  # see red-dragon-hzmm
+    return ctx.node_text(node)  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
-def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_kotlin_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower call_expression: first child is callee, call_suffix has args."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -172,8 +181,8 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
                 CallMethod(
                     result_reg=reg,
                     obj_reg=obj_reg,
-                    method_name=FuncName(method_name),
-                    args=tuple(arg_regs),
+                    method_name=FuncName(method_name),  # type: ignore[misc]  # see red-dragon-hzmm
+                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=node,
             )
@@ -185,7 +194,7 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -195,7 +204,7 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
     target_reg = ctx.lower_expr(callee_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
@@ -204,7 +213,9 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
 # -- navigation expression (member access) -----------------------------
 
 
-def lower_navigation_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_navigation_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     from interpreter.frontends.common.property_accessors import (
         emit_field_load_or_getter,
     )
@@ -219,12 +230,12 @@ def lower_navigation_expr(ctx: TreeSitterEmitContext, node) -> Register:
     # Intercept this.x when a custom getter is registered
     if obj_node.type == KNT.THIS_EXPRESSION and ctx._current_class_name:
         return emit_field_load_or_getter(
-            ctx, obj_reg, ctx._current_class_name, field_name, node
+            ctx, obj_reg, ctx._current_class_name, field_name, node  # type: ignore[misc]  # see red-dragon-hzmm
         )
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),  # type: ignore[misc]  # see red-dragon-hzmm
         node=node,
     )
     return reg
@@ -282,7 +293,9 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     return ctx.lower_expr(children[-1])
 
 
-def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_if_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Kotlin if as an expression (returns a value)."""
     children = [c for c in node.children if c.is_named]
     # Children layout: condition, consequence, [alternative]
@@ -327,7 +340,9 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- when expression ---------------------------------------------------
 
 
-def _kotlin_pattern_of(ctx: TreeSitterEmitContext, entry):
+def _kotlin_pattern_of(
+    ctx: TreeSitterEmitContext, entry: Any
+) -> Any:  # Any: tree-sitter node — untyped at Python boundary
     """Extract the Pattern ADT for a when entry (subject-based when)."""
     cond_node = next((c for c in entry.children if c.type == KNT.WHEN_CONDITION), None)
     if cond_node is None:
@@ -336,7 +351,9 @@ def _kotlin_pattern_of(ctx: TreeSitterEmitContext, entry):
     return parse_kotlin_pattern(ctx, cond_inner)
 
 
-def _kotlin_guard_of(ctx: TreeSitterEmitContext, entry):
+def _kotlin_guard_of(
+    ctx: TreeSitterEmitContext, entry: Any
+) -> Any | None:  # Any: tree-sitter node — untyped at Python boundary
     """Kotlin when has no guard syntax — always returns None."""
     return None
 
@@ -347,14 +364,16 @@ def _kotlin_body_of(ctx: TreeSitterEmitContext, entry) -> Register:
 
 
 _KOTLIN_WHEN_SPEC = MatchArmSpec(
-    extract_arms=lambda node: [c for c in node.children if c.type == KNT.WHEN_ENTRY],
+    extract_arms=lambda node: [c for c in node.children if c.type == KNT.WHEN_ENTRY],  # type: ignore[attr-defined]  # see red-dragon-545a
     pattern_of=_kotlin_pattern_of,
     guard_of=_kotlin_guard_of,
-    body_of=_kotlin_body_of,
+    body_of=_kotlin_body_of,  # type: ignore[misc]  # see red-dragon-hzmm
 )
 
 
-def lower_when_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_when_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower when(subject) { entries } as an if/else chain.
 
     Kotlin allows ``when(val x = expr) { }`` where the subject variable
@@ -407,7 +426,7 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> Register:
     has_subject = subject_node is not None
 
     if has_subject:
-        reg = lower_match_as_expr(ctx, val_reg, node, _KOTLIN_WHEN_SPEC)
+        reg = lower_match_as_expr(ctx, val_reg, node, _KOTLIN_WHEN_SPEC)  # type: ignore[arg-type]  # see red-dragon-hzmm
         if scope_entered:
             ctx.exit_block_scope()
         return reg
@@ -418,7 +437,7 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     entries = [c for c in node.children if c.type == KNT.WHEN_ENTRY]
     for entry in entries:
-        _lower_subjectless_when_entry(ctx, entry, result_var, end_label)
+        _lower_subjectless_when_entry(ctx, entry, result_var, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
@@ -453,7 +472,7 @@ def _lower_subjectless_when_entry(
 
     arm_result = _lower_when_body(ctx, entry)
     ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=arm_result))
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
     ctx.emit_inst(Label_(label=next_label))
 
 
@@ -481,7 +500,9 @@ def _lower_when_body(ctx: TreeSitterEmitContext, entry) -> Register:
 # -- statements as expression ------------------------------------------
 
 
-def lower_statements_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_statements_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a ``statements`` node in expression context (last child is value)."""
     children = [c for c in node.children if c.is_named]
     if not children:
@@ -493,7 +514,9 @@ def lower_statements_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return ctx.lower_expr(children[-1])
 
 
-def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_loop_as_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower while/for/do-while in expression position (returns unit)."""
     ctx.lower_stmt(node)
     reg = ctx.fresh_reg()
@@ -504,7 +527,9 @@ def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- assignment as expression ------------------------------------------
 
 
-def lower_kotlin_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_kotlin_assignment_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower assignment in expression context (e.g. last expr in block)."""
     from interpreter.frontends.kotlin.control_flow import lower_kotlin_assignment
 
@@ -517,7 +542,9 @@ def lower_kotlin_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- jump as expression ------------------------------------------------
 
 
-def lower_jump_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_jump_as_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower jump_expression in expression context (emit + return reg)."""
     from interpreter.frontends.kotlin.control_flow import lower_jump_expr
 
@@ -530,7 +557,9 @@ def lower_jump_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- postfix expression ------------------------------------------------
 
 
-def lower_postfix_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_postfix_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     text = ctx.node_text(node)
     if "++" in text or "--" in text:
         return lower_update_expr(ctx, node)
@@ -539,7 +568,9 @@ def lower_postfix_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def _lower_not_null_assertion(ctx: TreeSitterEmitContext, node) -> Register:
+def _lower_not_null_assertion(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower not-null assertion (expr!!) as UNOP('!!', expr)."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -555,7 +586,9 @@ def _lower_not_null_assertion(ctx: TreeSitterEmitContext, node) -> Register:
 # -- lambda literal ----------------------------------------------------
 
 
-def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_lambda_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     func_name = f"__lambda_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
@@ -629,14 +662,16 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return reg
 
 
 # -- anonymous function expression ------------------------------------
 
 
-def lower_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_anonymous_function(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `fun(x: Int): Int { return x * 2 }` as a function definition.
 
     Structurally similar to lambda_literal but uses function_value_parameters
@@ -675,7 +710,7 @@ def lower_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return reg
 
 
@@ -720,13 +755,15 @@ def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> Register:
                 last_reg = ""
             else:
                 last_reg = ctx.lower_expr(child)
-    return last_reg
+    return last_reg  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
 # -- object literal (anonymous object expression) ------------------------
 
 
-def lower_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_object_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `object : Type { ... }` as NEW_OBJECT + body lowering."""
     delegation = next(
         (c for c in node.children if c.type == KNT.DELEGATION_SPECIFIER),
@@ -757,7 +794,9 @@ def lower_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
 # -- range expression --------------------------------------------------
 
 
-def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_range_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `1..10` as CALL_FUNCTION("range", start, end)."""
     named = [c for c in node.children if c.is_named]
     start_reg = ctx.lower_expr(named[0]) if len(named) > 0 else ctx.fresh_reg()
@@ -780,7 +819,9 @@ def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- check expression (is / !is) --------------------------------------
 
 
-def lower_check_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_check_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower check_expression (is/!is) as CALL_FUNCTION('is', expr, type_text)."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
@@ -794,7 +835,7 @@ def lower_check_expr(ctx: TreeSitterEmitContext, node) -> Register:
             func_name=FuncName("is"),
             args=(
                 expr_reg,
-                type_text,
+                type_text,  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
         ),
         node=node,
@@ -805,7 +846,9 @@ def lower_check_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- try expression (in expression context) ----------------------------
 
 
-def lower_try_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_try_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower try_expression in expression context (returns a register)."""
     from interpreter.frontends.kotlin.control_flow import lower_try_stmt
 
@@ -825,7 +868,9 @@ def _rhs_has_throw(node) -> bool:
     )
 
 
-def lower_elvis_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_elvis_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `x ?: default` as BINOP or conditional branch (when RHS is throw).
 
     When the RHS is a throw expression, short-circuit evaluation is required:
@@ -908,7 +953,9 @@ _KOTLIN_BITWISE_INFIX: dict[str, str] = {
 }
 
 
-def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_infix_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `a to b`, `x until y` as CALL_FUNCTION(infix_name, left, right).
 
     Kotlin bitwise infix functions (and, or, xor, shl, shr) are lowered as
@@ -950,7 +997,9 @@ def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- indexing expression -----------------------------------------------
 
 
-def lower_indexing_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_indexing_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `collection[index]` as LOAD_INDEX."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -977,7 +1026,9 @@ def lower_indexing_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- as expression (type cast) -----------------------------------------
 
 
-def lower_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_as_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `expr as Type` as CALL_FUNCTION('as', expr, type_name)."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
@@ -991,7 +1042,7 @@ def lower_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
             func_name=FuncName("as"),
             args=(
                 expr_reg,
-                type_name,
+                type_name,  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
         ),
         node=node,
@@ -1002,7 +1053,9 @@ def lower_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- type_test (is Type in when) ----------------------------------
 
 
-def lower_type_test(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_type_test(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `is Type` as CONST(type_name) for pattern matching in when."""
     named_children = [c for c in node.children if c.is_named]
     type_node = named_children[0] if named_children else None
@@ -1027,12 +1080,12 @@ def lower_kotlin_store_target(
                 StoreField(
                     obj_reg=this_reg,
                     field_name=FieldName(ctx._accessor_backing_field),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
             return
-        ctx.emit_inst(StoreVar(name=VarName(text), value_reg=val_reg), node=parent_node)
+        ctx.emit_inst(StoreVar(name=VarName(text), value_reg=val_reg), node=parent_node)  # type: ignore[arg-type]  # see red-dragon-hzmm
     elif target.type == KNT.NAVIGATION_EXPRESSION:
         from interpreter.frontends.common.property_accessors import (
             emit_field_store_or_setter,
@@ -1047,9 +1100,9 @@ def lower_kotlin_store_target(
             if obj_node.type == KNT.THIS_EXPRESSION and ctx._current_class_name:
                 emit_field_store_or_setter(
                     ctx,
-                    obj_reg,
+                    obj_reg,  # type: ignore[misc]  # see red-dragon-hzmm
                     ctx._current_class_name,
-                    field_name,
+                    field_name,  # type: ignore[misc]  # see red-dragon-hzmm
                     val_reg,
                     parent_node,
                 )
@@ -1057,13 +1110,13 @@ def lower_kotlin_store_target(
 
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg
+                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
     elif target.type == KNT.INDEXING_EXPRESSION:
@@ -1082,12 +1135,12 @@ def lower_kotlin_store_target(
             else:
                 idx_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
     elif target.type == KNT.DIRECTLY_ASSIGNABLE_EXPRESSION:
@@ -1111,7 +1164,7 @@ def lower_kotlin_store_target(
                 ctx.lower_expr(idx_children[0]) if idx_children else ctx.fresh_reg()
             )
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
         elif nav_suffix:
@@ -1135,9 +1188,9 @@ def lower_kotlin_store_target(
             ):
                 emit_field_store_or_setter(
                     ctx,
-                    obj_reg,
+                    obj_reg,  # type: ignore[misc]  # see red-dragon-hzmm
                     ctx._current_class_name,
-                    field_name,
+                    field_name,  # type: ignore[misc]  # see red-dragon-hzmm
                     val_reg,
                     parent_node,
                 )
@@ -1145,7 +1198,7 @@ def lower_kotlin_store_target(
 
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg
+                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
@@ -1156,12 +1209,12 @@ def lower_kotlin_store_target(
                 lower_kotlin_store_target(ctx, inner, val_reg, parent_node)
             else:
                 ctx.emit_inst(
-                    StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+                    StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                     node=parent_node,
                 )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
 
@@ -1169,7 +1222,9 @@ def lower_kotlin_store_target(
 # -- P1 gap handlers ------------------------------------------------------
 
 
-def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_callable_reference(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ::functionName — emit LOAD_VAR for the referenced function."""
     named_children = [c for c in node.children if c.is_named]
     func_name = (
@@ -1180,7 +1235,9 @@ def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_unsigned_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_unsigned_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Kotlin unsigned literal (42u, 10UL) by stripping the suffix."""
     text = _UNSIGNED_SUFFIX.sub("", ctx.node_text(node))
     reg = ctx.fresh_reg()
@@ -1188,7 +1245,9 @@ def lower_unsigned_literal(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_spread_expression(ctx: TreeSitterEmitContext, node) -> str | SpreadArguments:
+def lower_spread_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str | SpreadArguments:  # Any: tree-sitter node — untyped at Python boundary
     """Lower *array as CALL_FUNCTION('spread', inner) for call-site flattening."""
     from interpreter.frontends.common.expressions import lower_spread_arg
 

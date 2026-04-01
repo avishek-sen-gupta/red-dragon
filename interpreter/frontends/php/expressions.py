@@ -1,7 +1,8 @@
+# pyright: standard
 """PHP-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from interpreter.ir import SpreadArguments, CodeLabel
@@ -49,7 +50,9 @@ _NON_INTERPOLATION_TYPES = frozenset(
 )
 
 
-def lower_php_variable(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_variable(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower PHP variable ($x) as LOAD_VAR."""
     var_name = ctx.node_text(node)
     reg = ctx.fresh_reg()
@@ -67,7 +70,7 @@ def _lower_php_interpolated_children(
     ``_EXPR_DISPATCH`` and falls back to SYMBOLIC -- variable-variable
     indirection cannot be statically lowered.
     """
-    parts: list[str] = [
+    parts: list[str] = [  # type: ignore[misc]  # see red-dragon-hzmm
         _lower_interpolated_child(ctx, child)
         for child in children
         if _is_interpolation_relevant(child)
@@ -110,15 +113,17 @@ def _lower_interpolated_string_parts(
         new_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
-                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part
+                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part  # type: ignore[misc]  # see red-dragon-hzmm
             ),
             node=node,
         )
         result = new_reg
-    return result
+    return result  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
-def lower_php_encapsed_string(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_encapsed_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower PHP double-quoted string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
     has_interpolation = any(
         c.is_named and c.type not in _NON_INTERPOLATION_TYPES for c in node.children
@@ -128,7 +133,9 @@ def lower_php_encapsed_string(ctx: TreeSitterEmitContext, node) -> Register:
     return _lower_php_interpolated_children(ctx, node.children, node)
 
 
-def lower_php_heredoc(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_heredoc(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower PHP heredoc (<<<EOT ... EOT), decomposing interpolation inside heredoc_body."""
     body = next((c for c in node.children if c.type == PHPNodeType.HEREDOC_BODY), None)
     if body is None:
@@ -142,7 +149,9 @@ def lower_php_heredoc(ctx: TreeSitterEmitContext, node) -> Register:
     return _lower_php_interpolated_children(ctx, body.children, node)
 
 
-def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_func_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function_call_expression: name(args) or dynamic call."""
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -153,7 +162,7 @@ def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> Register:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -163,13 +172,15 @@ def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> Register:
     target_reg = ctx.lower_expr(func_node) if func_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
 
 
-def lower_php_method_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_method_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower $obj->method(args) as CALL_METHOD."""
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
@@ -184,14 +195,16 @@ def lower_php_method_call(ctx: TreeSitterEmitContext, node) -> Register:
             result_reg=reg,
             obj_reg=obj_reg,
             method_name=FuncName(method_name),
-            args=tuple(arg_regs),
+            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
     return reg
 
 
-def lower_php_member_access(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_member_access(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower $obj->field as LOAD_FIELD."""
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
@@ -207,7 +220,9 @@ def lower_php_member_access(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_php_subscript(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_subscript(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower $arr[idx] as LOAD_INDEX."""
     children = [c for c in node.children if c.is_named]
     if len(children) < 2:
@@ -221,16 +236,20 @@ def lower_php_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_php_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_assignment_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower assignment expression ($x = expr)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_php_store_target(ctx, left, val_reg, node)
+    lower_php_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
     return val_reg
 
 
-def lower_php_augmented_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_augmented_assignment_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower augmented assignment ($x += expr)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -248,7 +267,7 @@ def lower_php_augmented_assignment_expr(ctx: TreeSitterEmitContext, node) -> Reg
         ),
         node=node,
     )
-    lower_php_store_target(ctx, left, result, node)
+    lower_php_store_target(ctx, left, result, node)  # type: ignore[misc]  # see red-dragon-hzmm
     return result
 
 
@@ -258,7 +277,7 @@ def lower_php_store_target(
     """Store to a PHP target: variable_name, member_access, subscript, or fallback."""
     if target.type in (PHPNodeType.VARIABLE_NAME, PHPNodeType.NAME):
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
     elif target.type == PHPNodeType.MEMBER_ACCESS_EXPRESSION:
@@ -270,7 +289,7 @@ def lower_php_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(name_node)),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
@@ -280,28 +299,30 @@ def lower_php_store_target(
             obj_reg = ctx.lower_expr(children[0])
             idx_reg = ctx.lower_expr(children[1])
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
     elif target.type == PHPNodeType.LIST_LITERAL:
         vars_ = [c for c in target.children if c.is_named]
         for i, var_node in enumerate(vars_):
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=i))
+            ctx.emit_inst(Const(result_reg=idx_reg, value=i))  # type: ignore[misc]  # see red-dragon-hzmm
             elem_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
+                LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=var_node,
             )
-            lower_php_store_target(ctx, var_node, elem_reg, parent_node)
+            lower_php_store_target(ctx, var_node, elem_reg, parent_node)  # type: ignore[misc]  # see red-dragon-hzmm
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
 
 
-def lower_php_cast(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_cast(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower (type) expr -- just lower the inner expression."""
     children = [c for c in node.children if c.is_named]
     if children:
@@ -309,7 +330,9 @@ def lower_php_cast(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_ternary(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ternary / conditional expression ($cond ? $a : $b)."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name("body")
@@ -342,7 +365,9 @@ def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     return result_reg
 
 
-def lower_php_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_throw_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower throw_expression when it appears in expression context."""
     from interpreter.frontends.common.exceptions import lower_raise_or_throw
 
@@ -352,7 +377,9 @@ def lower_php_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_object_creation(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``new Foo(args)`` or ``new class { ... }``."""
     from interpreter.frontends.php.declarations import lower_php_class
 
@@ -380,7 +407,7 @@ def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
                 result_reg=ctor_reg,
                 obj_reg=obj_reg,
                 method_name=FuncName("__construct"),
-                args=tuple(arg_regs),
+                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -404,7 +431,7 @@ def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
             result_reg=ctor_reg,
             obj_reg=obj_reg,
             method_name=FuncName("__construct"),
-            args=tuple(arg_regs),
+            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
@@ -468,11 +495,13 @@ def _lower_php_anonymous_class(
 
     ctx.emit_inst(Label_(label=end_label))
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
-def lower_php_array(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_array(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower array_creation_expression: array(1, 2) or [1, 2] or ['k' => 'v'].
 
     Value-only elements: NEW_ARRAY + STORE_INDEX per element.
@@ -538,7 +567,9 @@ def _lower_php_indexed_array(
     return arr_reg
 
 
-def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_match_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower match(subject) { pattern => expr, default => expr } as if/else chain."""
     cond_node = node.child_by_field_name("condition")
     body_node = node.child_by_field_name("body")
@@ -618,7 +649,9 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> Register:
     return result_reg
 
 
-def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_arrow_function(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower fn($x) => expr as a function definition with implicit return."""
     from interpreter.frontends.php.declarations import lower_php_params
 
@@ -645,11 +678,13 @@ def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return func_reg
 
 
-def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_scoped_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ClassName::method(args) as CALL_METHOD on a ClassRef.
 
     Emits LOAD_VAR for the class name (which resolves to a ClassRef),
@@ -673,14 +708,16 @@ def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> Register:
             result_reg=reg,
             obj_reg=class_reg,
             method_name=FuncName(method_name),
-            args=tuple(arg_regs),
+            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
     return reg
 
 
-def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_anonymous_function(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function($x) use ($y) { body } as anonymous function."""
     from interpreter.frontends.php.declarations import lower_php_params
     from interpreter.frontends.php.control_flow import lower_php_compound
@@ -707,11 +744,13 @@ def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return func_reg
 
 
-def lower_php_nullsafe_member_access(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_nullsafe_member_access(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower $obj?->field as LOAD_FIELD (null-safety is semantic)."""
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
@@ -727,7 +766,9 @@ def lower_php_nullsafe_member_access(ctx: TreeSitterEmitContext, node) -> Regist
     return reg
 
 
-def lower_php_class_constant_access(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_class_constant_access(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ClassName::CONST as LOAD_FIELD on the class."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -742,7 +783,9 @@ def lower_php_class_constant_access(ctx: TreeSitterEmitContext, node) -> Registe
     return reg
 
 
-def lower_php_scoped_property_access(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_scoped_property_access(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ClassName::$prop as LOAD_FIELD on the class."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -757,7 +800,9 @@ def lower_php_scoped_property_access(ctx: TreeSitterEmitContext, node) -> Regist
     return reg
 
 
-def lower_php_yield(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_yield(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower yield $value as CALL_FUNCTION('yield', expr)."""
     named = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named]
@@ -769,17 +814,21 @@ def lower_php_yield(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_php_reference_assignment(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_reference_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower $x = &$y as STORE_VAR (ignore reference semantics)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right) if right else ctx.fresh_reg()
     if left:
-        lower_php_store_target(ctx, left, val_reg, node)
+        lower_php_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
     return val_reg
 
 
-def lower_php_dynamic_variable(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_dynamic_variable(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``${x}`` -- unwrap to inner variable_name or expression."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:
@@ -787,7 +836,9 @@ def lower_php_dynamic_variable(ctx: TreeSitterEmitContext, node) -> Register:
     return lower_const_literal(ctx, node)
 
 
-def lower_php_include(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_include(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``include 'file.php'`` / ``require_once 'file.php'`` as CALL_FUNCTION."""
     keyword = node.type.replace("_expression", "")
     named_children = [c for c in node.children if c.is_named]
@@ -800,7 +851,9 @@ def lower_php_include(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_nullsafe_method_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``$obj?->method(args)`` like regular method call."""
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
@@ -832,7 +885,9 @@ def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> Register
     return reg
 
 
-def lower_php_print_intrinsic(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_print_intrinsic(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``print $x`` as CALL_FUNCTION('print', arg)."""
     named_children = [c for c in node.children if c.is_named]
     arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
@@ -844,7 +899,9 @@ def lower_php_print_intrinsic(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_php_clone_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_clone_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``clone $obj`` as CALL_FUNCTION('clone', arg)."""
     named_children = [c for c in node.children if c.is_named]
     arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
@@ -865,7 +922,9 @@ def lower_php_variadic_unpacking(
     return lower_spread_arg(ctx, node)
 
 
-def lower_php_error_suppression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_error_suppression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower @expr — just lower the inner expression (error suppression is a no-op for us)."""
     named_children = [c for c in node.children if c.is_named]
     return (
@@ -875,7 +934,9 @@ def lower_php_error_suppression(ctx: TreeSitterEmitContext, node) -> Register:
     )
 
 
-def lower_php_sequence_expression(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_php_sequence_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower comma expression ($a = 1, $b = 2) -> evaluate all, return last."""
     children = [c for c in node.children if c.is_named]
     if not children:

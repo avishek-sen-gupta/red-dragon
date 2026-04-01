@@ -1,3 +1,4 @@
+# pyright: standard
 """Python frontend package."""
 
 from interpreter.frontends.python.frontend import PythonFrontend

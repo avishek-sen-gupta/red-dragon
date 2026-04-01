@@ -1,6 +1,9 @@
+# pyright: standard
 """Go-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -37,7 +40,9 @@ logger = logging.getLogger(__name__)
 # -- Go: short variable declaration (:=) -----------------------------------
 
 
-def lower_short_var_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_short_var_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     left_names = extract_expression_list(ctx, left)
@@ -45,13 +50,15 @@ def lower_short_var_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     for name, val_reg in zip(left_names, right_regs):
         var_name = ctx.declare_block_var(name)
-        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
 
 
 # -- Go: assignment statement (=) ------------------------------------------
 
 
-def lower_go_assignment(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     left_nodes = get_expression_list_children(left)
@@ -66,7 +73,9 @@ def lower_go_assignment(ctx: TreeSitterEmitContext, node) -> None:
 _GO_MAIN_FUNC_NAME = "main"
 
 
-def lower_go_func_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_func_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -99,7 +108,7 @@ def lower_go_func_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -117,7 +126,9 @@ def _lower_go_main_hoisted(ctx: TreeSitterEmitContext, body_node) -> None:
 # -- Go: method declaration ------------------------------------------------
 
 
-def lower_go_method_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_method_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -150,7 +161,7 @@ def lower_go_method_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -198,7 +209,9 @@ def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
 # -- Go: type declaration (struct) -----------------------------------------
 
 
-def lower_go_type_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_type_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     for child in node.children:
         if child.type == GoNodeType.TYPE_SPEC:
             name_node = child.child_by_field_name("name")
@@ -231,7 +244,7 @@ def _lower_go_struct_type(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=cls_reg))
 
 
@@ -252,7 +265,7 @@ def _lower_go_interface_type(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=cls_reg))
 
 
@@ -281,7 +294,7 @@ def _lower_go_interface_method(ctx: TreeSitterEmitContext, method_node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(method_name), value_reg=func_reg))
 
 
@@ -305,7 +318,9 @@ def _extract_go_method_elem_return_type(ctx: TreeSitterEmitContext, method_node)
 # -- Go: var declaration ---------------------------------------------------
 
 
-def lower_go_var_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_var_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     specs = [c for c in node.children if c.type == GoNodeType.VAR_SPEC]
     # Handle var (...) block form: var_spec_list contains var_spec children
     spec_list = next(
@@ -330,7 +345,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
         for name_node, val_reg in zip(names, val_regs):
             name_str = ctx.declare_block_var(ctx.node_text(name_node))
             ctx.emit_inst(
-                DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node
+                DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
             )
             ctx.seed_var_type(name_str, type_hint)
         # If more names than values (e.g. `var a, b int`), store None for remainder
@@ -356,7 +371,9 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
 # -- Go: const declaration -------------------------------------------------
 
 
-def lower_go_const_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_go_const_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower const_declaration: iterate const_spec children with iota tracking.
 
     In Go, `iota` starts at 0 and increments per const_spec in a block.
@@ -367,16 +384,18 @@ def lower_go_const_decl(ctx: TreeSitterEmitContext, node) -> None:
     old_iota = getattr(ctx, "_go_iota_value", 0)
     for child in node.children:
         if child.type == GoNodeType.CONST_SPEC:
-            ctx._go_iota_value = iota_counter
+            ctx._go_iota_value = iota_counter  # type: ignore[misc]  # see red-dragon-hzmm
             _lower_const_spec(ctx, child, prev_value_node)
             raw_value = child.child_by_field_name("value")
             if raw_value is not None:
                 prev_value_node = _unwrap_expression_list(raw_value)
             iota_counter += 1
-    ctx._go_iota_value = old_iota
+    ctx._go_iota_value = old_iota  # type: ignore[misc]  # see red-dragon-hzmm
 
 
-def _unwrap_expression_list(node):
+def _unwrap_expression_list(
+    node: Any,
+) -> Any:  # Any: tree-sitter node — untyped at Python boundary
     """Unwrap a single-element expression_list to its inner expression."""
     if node.type == GoNodeType.EXPRESSION_LIST:
         named = [c for c in node.children if c.is_named]
@@ -385,7 +404,9 @@ def _unwrap_expression_list(node):
     return node
 
 
-def _lower_const_spec(ctx: TreeSitterEmitContext, node, prev_value_node=None) -> None:
+def _lower_const_spec(
+    ctx: TreeSitterEmitContext, node: Any, prev_value_node=None
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a single const_spec: lower value, DECL_VAR.
 
     If the spec has no value but a previous expression exists (iota pattern),
@@ -421,7 +442,7 @@ def _lower_const_spec(ctx: TreeSitterEmitContext, node, prev_value_node=None) ->
 # ---------------------------------------------------------------------------
 
 
-def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
+def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract fields from a Go struct field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -438,7 +459,7 @@ def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
                 fields[FieldName(fname)] = FieldInfo(
                     name=FieldName(fname), type_hint=type_hint, has_initializer=False
                 )
-    return fields
+    return fields  # type: ignore[name-defined]  # see red-dragon-545a
 
 
 def _extract_go_method_params(params_node) -> "tuple[str, ...]":
@@ -453,7 +474,7 @@ def _extract_go_method_params(params_node) -> "tuple[str, ...]":
 
 
 def _collect_go_structs(
-    node, classes: "dict[ClassName, ClassInfo]", methods: "dict[FuncName, FunctionInfo]"
+    node, classes: "dict[ClassName, ClassInfo]", methods: "dict[FuncName, FunctionInfo]"  # type: ignore[name-defined]  # see red-dragon-545a
 ) -> None:
     """Walk AST to collect structs (as ClassInfo) and top-level/method functions."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
@@ -484,7 +505,7 @@ def _collect_go_structs(
                     )
                     classes[ClassName(struct_name)] = ClassInfo(
                         name=ClassName(struct_name),
-                        fields=fields,
+                        fields=fields,  # type: ignore[name-defined]  # see red-dragon-545a
                         methods={},
                         constants={},
                         parents=(),
@@ -532,7 +553,7 @@ def _collect_go_structs(
         _collect_go_structs(child, classes, methods)
 
 
-def extract_go_symbols(root) -> "SymbolTable":
+def extract_go_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
     """Walk the Go AST and return a SymbolTable of all struct and function definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 
