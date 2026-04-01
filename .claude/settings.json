@@ -46,7 +46,7 @@
       {
         "hooks": [
           {
-            "command": ".claude/classify-prompt.sh",
+            "command": "~/.claude/plugins/context-injector/hooks/user-prompt-submit.sh",
             "type": "command"
           }
         ]
