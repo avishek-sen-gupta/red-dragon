@@ -1,3 +1,4 @@
+# pyright: standard
 """CFG data types (pure data, no business logic)."""
 
 from __future__ import annotations

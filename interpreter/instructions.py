@@ -1,3 +1,4 @@
+# pyright: standard
 """Per-opcode typed instruction classes.
 
 Each IR opcode has a frozen dataclass with named, typed fields replacing
@@ -12,10 +13,12 @@ from __future__ import annotations
 
 import dataclasses
 import types
+from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import (
     Any,
+    Protocol,
     Self,
     Union,  # noqa: F401 — Union used in Instruction type alias
     get_args,
@@ -78,6 +81,21 @@ def _is_label_tuple(hint: object) -> bool:
     return False
 
 
+class _FlatInstruction(Protocol):
+    """Duck-typed protocol for flat instruction objects passed to ``_to_typed`` converters.
+
+    Covers the ``_Flat`` shim in ``ir.IRInstruction`` and any other
+    duck-typed flat instruction producers (e.g. test helpers).
+    """
+
+    opcode: Opcode
+    result_reg: Register
+    operands: list[Any]
+    label: CodeLabel
+    branch_targets: list[CodeLabel]
+    source_location: SourceLocation
+
+
 def _as_register(val: Any) -> Register | Any:
     """Wrap a value as Register if it looks like a register reference (%…).
 
@@ -100,6 +118,21 @@ class InstructionBase:
     """Shared metadata carried by every instruction."""
 
     source_location: SourceLocation = field(default_factory=lambda: NO_SOURCE_LOCATION)
+
+    # ── Common fields declared with defaults; each concrete subclass overrides them ──
+    # These declarations let pyright see the attributes in base-typed references
+    # (e.g. list[InstructionBase]).  Concrete dataclass fields take precedence.
+    result_reg: Register = field(default=NO_REGISTER)
+    label: CodeLabel = field(default=NO_LABEL)
+    branch_targets: tuple[CodeLabel, ...] = field(default=())
+
+    @property
+    @abstractmethod
+    def opcode(self) -> Opcode: ...
+
+    @property
+    @abstractmethod
+    def operands(self) -> list[Any]: ...
 
     def map_registers(self, fn: Callable[[Register], Register]) -> Self:
         """Apply fn to every Register-typed field, return a new instruction.
@@ -414,8 +447,12 @@ class CallMethod(InstructionBase):
     branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
-        args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
-        return ([self.obj_reg] if self.obj_reg.is_present() else []) + args_regs
+        regs: list[StorageIdentifier] = [
+            r for r in self.args if isinstance(r, Register) and r.is_present()
+        ]
+        if self.obj_reg.is_present():
+            regs.insert(0, self.obj_reg)
+        return regs
 
     @property
     def opcode(self) -> Opcode:
@@ -443,8 +480,12 @@ class CallUnknown(InstructionBase):
     branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
-        args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
-        return ([self.target_reg] if self.target_reg.is_present() else []) + args_regs
+        regs: list[StorageIdentifier] = [
+            r for r in self.args if isinstance(r, Register) and r.is_present()
+        ]
+        if self.target_reg.is_present():
+            regs.insert(0, self.target_reg)
+        return regs
 
     @property
     def opcode(self) -> Opcode:
@@ -1116,7 +1157,7 @@ Instruction = Union[
 # Each converter takes (IRInstruction) → Instruction.
 
 
-def _const(inst: IRInstruction) -> Const:
+def _const(inst: _FlatInstruction) -> Const:
     return Const(
         result_reg=inst.result_reg,
         value=str(inst.operands[0]) if inst.operands else "",
@@ -1124,7 +1165,7 @@ def _const(inst: IRInstruction) -> Const:
     )
 
 
-def _load_var(inst: IRInstruction) -> LoadVar:
+def _load_var(inst: _FlatInstruction) -> LoadVar:
     return LoadVar(
         result_reg=inst.result_reg,
         name=VarName(str(inst.operands[0])) if inst.operands else NO_VAR_NAME,
@@ -1132,7 +1173,7 @@ def _load_var(inst: IRInstruction) -> LoadVar:
     )
 
 
-def _decl_var(inst: IRInstruction) -> DeclVar:
+def _decl_var(inst: _FlatInstruction) -> DeclVar:
     ops = inst.operands
     return DeclVar(
         name=VarName(str(ops[0])) if len(ops) >= 1 else NO_VAR_NAME,
@@ -1141,7 +1182,7 @@ def _decl_var(inst: IRInstruction) -> DeclVar:
     )
 
 
-def _store_var(inst: IRInstruction) -> StoreVar:
+def _store_var(inst: _FlatInstruction) -> StoreVar:
     ops = inst.operands
     return StoreVar(
         name=VarName(str(ops[0])) if len(ops) >= 1 else NO_VAR_NAME,
@@ -1150,7 +1191,7 @@ def _store_var(inst: IRInstruction) -> StoreVar:
     )
 
 
-def _symbolic(inst: IRInstruction) -> Symbolic:
+def _symbolic(inst: _FlatInstruction) -> Symbolic:
     return Symbolic(
         result_reg=inst.result_reg,
         hint=str(inst.operands[0]) if inst.operands else "",
@@ -1158,7 +1199,7 @@ def _symbolic(inst: IRInstruction) -> Symbolic:
     )
 
 
-def _binop(inst: IRInstruction) -> Binop:
+def _binop(inst: _FlatInstruction) -> Binop:
     ops = inst.operands
     raw_op = getattr(ops[0], "value", str(ops[0])) if ops else ""
     return Binop(
@@ -1170,7 +1211,7 @@ def _binop(inst: IRInstruction) -> Binop:
     )
 
 
-def _unop(inst: IRInstruction) -> Unop:
+def _unop(inst: _FlatInstruction) -> Unop:
     ops = inst.operands
     raw_op = getattr(ops[0], "value", str(ops[0])) if ops else ""
     return Unop(
@@ -1181,7 +1222,7 @@ def _unop(inst: IRInstruction) -> Unop:
     )
 
 
-def _call_function(inst: IRInstruction) -> CallFunction:
+def _call_function(inst: _FlatInstruction) -> CallFunction:
     ops = inst.operands
     raw_args = ops[1:]
     args = tuple(
@@ -1195,7 +1236,7 @@ def _call_function(inst: IRInstruction) -> CallFunction:
     )
 
 
-def _call_method(inst: IRInstruction) -> CallMethod:
+def _call_method(inst: _FlatInstruction) -> CallMethod:
     ops = inst.operands
     raw_args = ops[2:]
     args = tuple(
@@ -1210,7 +1251,7 @@ def _call_method(inst: IRInstruction) -> CallMethod:
     )
 
 
-def _call_unknown(inst: IRInstruction) -> CallUnknown:
+def _call_unknown(inst: _FlatInstruction) -> CallUnknown:
     ops = inst.operands
     raw_args = ops[1:]
     args = tuple(
@@ -1224,7 +1265,7 @@ def _call_unknown(inst: IRInstruction) -> CallUnknown:
     )
 
 
-def _call_ctor(inst: IRInstruction) -> CallCtorFunction:
+def _call_ctor(inst: _FlatInstruction) -> CallCtorFunction:
     ops = inst.operands
     raw_args = ops[1:]
     args = tuple(
@@ -1240,7 +1281,7 @@ def _call_ctor(inst: IRInstruction) -> CallCtorFunction:
     )
 
 
-def _load_field(inst: IRInstruction) -> LoadField:
+def _load_field(inst: _FlatInstruction) -> LoadField:
     ops = inst.operands
     return LoadField(
         result_reg=inst.result_reg,
@@ -1250,7 +1291,7 @@ def _load_field(inst: IRInstruction) -> LoadField:
     )
 
 
-def _store_field(inst: IRInstruction) -> StoreField:
+def _store_field(inst: _FlatInstruction) -> StoreField:
     ops = inst.operands
     return StoreField(
         obj_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
@@ -1260,7 +1301,7 @@ def _store_field(inst: IRInstruction) -> StoreField:
     )
 
 
-def _load_field_indirect(inst: IRInstruction) -> LoadFieldIndirect:
+def _load_field_indirect(inst: _FlatInstruction) -> LoadFieldIndirect:
     ops = inst.operands
     return LoadFieldIndirect(
         result_reg=inst.result_reg,
@@ -1270,7 +1311,7 @@ def _load_field_indirect(inst: IRInstruction) -> LoadFieldIndirect:
     )
 
 
-def _load_index(inst: IRInstruction) -> LoadIndex:
+def _load_index(inst: _FlatInstruction) -> LoadIndex:
     ops = inst.operands
     return LoadIndex(
         result_reg=inst.result_reg,
@@ -1280,7 +1321,7 @@ def _load_index(inst: IRInstruction) -> LoadIndex:
     )
 
 
-def _store_index(inst: IRInstruction) -> StoreIndex:
+def _store_index(inst: _FlatInstruction) -> StoreIndex:
     ops = inst.operands
     vr = (
         ops[2]
@@ -1295,7 +1336,7 @@ def _store_index(inst: IRInstruction) -> StoreIndex:
     )
 
 
-def _load_indirect(inst: IRInstruction) -> LoadIndirect:
+def _load_indirect(inst: _FlatInstruction) -> LoadIndirect:
     return LoadIndirect(
         result_reg=inst.result_reg,
         ptr_reg=Register(str(inst.operands[0])) if inst.operands else NO_REGISTER,
@@ -1303,7 +1344,7 @@ def _load_indirect(inst: IRInstruction) -> LoadIndirect:
     )
 
 
-def _store_indirect(inst: IRInstruction) -> StoreIndirect:
+def _store_indirect(inst: _FlatInstruction) -> StoreIndirect:
     ops = inst.operands
     return StoreIndirect(
         ptr_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
@@ -1312,7 +1353,7 @@ def _store_indirect(inst: IRInstruction) -> StoreIndirect:
     )
 
 
-def _address_of(inst: IRInstruction) -> AddressOf:
+def _address_of(inst: _FlatInstruction) -> AddressOf:
     return AddressOf(
         result_reg=inst.result_reg,
         var_name=VarName(str(inst.operands[0])) if inst.operands else NO_VAR_NAME,
@@ -1320,7 +1361,7 @@ def _address_of(inst: IRInstruction) -> AddressOf:
     )
 
 
-def _new_object(inst: IRInstruction) -> NewObject:
+def _new_object(inst: _FlatInstruction) -> NewObject:
     raw = str(inst.operands[0]) if inst.operands else ""
     return NewObject(
         result_reg=inst.result_reg,
@@ -1329,7 +1370,7 @@ def _new_object(inst: IRInstruction) -> NewObject:
     )
 
 
-def _new_array(inst: IRInstruction) -> NewArray:
+def _new_array(inst: _FlatInstruction) -> NewArray:
     ops = inst.operands
     raw = str(ops[0]) if len(ops) >= 1 else ""
     return NewArray(
@@ -1340,15 +1381,15 @@ def _new_array(inst: IRInstruction) -> NewArray:
     )
 
 
-def _label(inst: IRInstruction) -> Label_:
+def _label(inst: _FlatInstruction) -> Label_:
     return Label_(label=inst.label, source_location=inst.source_location)
 
 
-def _branch(inst: IRInstruction) -> Branch:
+def _branch(inst: _FlatInstruction) -> Branch:
     return Branch(label=inst.label, source_location=inst.source_location)
 
 
-def _branch_if(inst: IRInstruction) -> BranchIf:
+def _branch_if(inst: _FlatInstruction) -> BranchIf:
     return BranchIf(
         cond_reg=Register(str(inst.operands[0])) if inst.operands else NO_REGISTER,
         branch_targets=tuple(inst.branch_targets),
@@ -1356,21 +1397,21 @@ def _branch_if(inst: IRInstruction) -> BranchIf:
     )
 
 
-def _return(inst: IRInstruction) -> Return_:
+def _return(inst: _FlatInstruction) -> Return_:
     return Return_(
         value_reg=Register(str(inst.operands[0])) if inst.operands else None,
         source_location=inst.source_location,
     )
 
 
-def _throw(inst: IRInstruction) -> Throw_:
+def _throw(inst: _FlatInstruction) -> Throw_:
     return Throw_(
         value_reg=Register(str(inst.operands[0])) if inst.operands else None,
         source_location=inst.source_location,
     )
 
 
-def _try_push(inst: IRInstruction) -> TryPush:
+def _try_push(inst: _FlatInstruction) -> TryPush:
     ops = inst.operands
     catch = tuple(ops[0]) if len(ops) >= 1 and isinstance(ops[0], list) else ()
     finally_lbl = ops[1] if len(ops) >= 2 else NO_LABEL
@@ -1383,11 +1424,11 @@ def _try_push(inst: IRInstruction) -> TryPush:
     )
 
 
-def _try_pop(inst: IRInstruction) -> TryPop:
+def _try_pop(inst: _FlatInstruction) -> TryPop:
     return TryPop(source_location=inst.source_location)
 
 
-def _alloc_region(inst: IRInstruction) -> AllocRegion:
+def _alloc_region(inst: _FlatInstruction) -> AllocRegion:
     return AllocRegion(
         result_reg=inst.result_reg,
         size_reg=Register(str(inst.operands[0])) if inst.operands else NO_REGISTER,
@@ -1395,7 +1436,7 @@ def _alloc_region(inst: IRInstruction) -> AllocRegion:
     )
 
 
-def _load_region(inst: IRInstruction) -> LoadRegion:
+def _load_region(inst: _FlatInstruction) -> LoadRegion:
     ops = inst.operands
     return LoadRegion(
         result_reg=inst.result_reg,
@@ -1406,7 +1447,7 @@ def _load_region(inst: IRInstruction) -> LoadRegion:
     )
 
 
-def _write_region(inst: IRInstruction) -> WriteRegion:
+def _write_region(inst: _FlatInstruction) -> WriteRegion:
     ops = inst.operands
     return WriteRegion(
         region_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
@@ -1417,7 +1458,7 @@ def _write_region(inst: IRInstruction) -> WriteRegion:
     )
 
 
-def _set_continuation(inst: IRInstruction) -> SetContinuation:
+def _set_continuation(inst: _FlatInstruction) -> SetContinuation:
     ops = inst.operands
     return SetContinuation(
         name=ContinuationName(str(ops[0])) if len(ops) >= 1 else NO_CONTINUATION_NAME,
@@ -1426,7 +1467,7 @@ def _set_continuation(inst: IRInstruction) -> SetContinuation:
     )
 
 
-def _resume_continuation(inst: IRInstruction) -> ResumeContinuation:
+def _resume_continuation(inst: _FlatInstruction) -> ResumeContinuation:
     return ResumeContinuation(
         name=(
             ContinuationName(str(inst.operands[0]))
@@ -1437,7 +1478,7 @@ def _resume_continuation(inst: IRInstruction) -> ResumeContinuation:
     )
 
 
-_TO_TYPED: dict[Opcode, object] = {
+_TO_TYPED: dict[Opcode, Callable[[_FlatInstruction], Instruction]] = {
     Opcode.CONST: _const,
     Opcode.LOAD_VAR: _load_var,
     Opcode.DECL_VAR: _decl_var,
@@ -1474,7 +1515,7 @@ _TO_TYPED: dict[Opcode, object] = {
 }
 
 
-def _to_typed(inst: Any) -> Instruction:
+def _to_typed(inst: _FlatInstruction | InstructionBase) -> Instruction:
     """Convert a flat instruction-like object to a per-opcode typed instruction.
 
     If *inst* is already a typed instruction (InstructionBase subclass),
@@ -1482,8 +1523,10 @@ def _to_typed(inst: Any) -> Instruction:
     ``.opcode``, ``.result_reg``, ``.operands``, ``.label``,
     ``.branch_targets``, and ``.source_location`` attributes.
     """
+    from typing import cast
+
     if isinstance(inst, InstructionBase):
-        return inst
+        return cast(Instruction, inst)
     converter = _TO_TYPED.get(inst.opcode)
     if converter is None:
         raise ValueError(f"Unknown opcode: {inst.opcode}")
