@@ -45,3 +45,5 @@ proleap-bridge/.settings/
 # Git worktrees
 .worktrees/
 .superpowers/
+
+.claude/ctx.lock
