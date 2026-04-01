@@ -1,3 +1,4 @@
+# pyright: standard
 """COBOL parser — subprocess bridge to ProLeap.
 
 The ProLeap bridge is a separate Java repo that parses COBOL source

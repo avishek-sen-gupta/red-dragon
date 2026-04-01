@@ -1,3 +1,4 @@
+# pyright: standard
 """SEARCH statement lowering."""
 
 from __future__ import annotations
@@ -101,7 +102,7 @@ def lower_search(
                 right=Register(str(one_reg)),
             )
         )
-        str_reg = ctx.emit_to_string(inc_reg)
+        str_reg = ctx.emit_to_string(inc_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
         ctx.emit_encode_and_write(
             region_reg, varying_ref.fl, str_reg, varying_ref.offset_reg
         )

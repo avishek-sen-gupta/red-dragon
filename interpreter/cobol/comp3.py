@@ -1,3 +1,4 @@
+# pyright: standard
 """COMP-3 (packed BCD) encoding/decoding — reference implementation.
 
 Ported from smojol's Comp3DataTypeSpec.java.

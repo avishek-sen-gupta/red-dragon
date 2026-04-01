@@ -1,3 +1,4 @@
+# pyright: standard
 """Field reference resolution — subscript parsing and offset computation."""
 
 from __future__ import annotations

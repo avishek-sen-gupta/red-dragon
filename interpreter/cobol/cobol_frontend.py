@@ -1,3 +1,4 @@
+# pyright: standard
 """COBOL frontend — lowers ProLeap JSON ASG to RedDragon IR.
 
 Direct Frontend subclass (not BaseFrontend) since COBOL does not
@@ -12,7 +13,6 @@ for backward compatibility.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
@@ -22,6 +22,7 @@ from interpreter.cobol.field_resolution import (
     ResolvedFieldRef,
     parse_subscript_notation,
 )
+from interpreter.cobol.cobol_parser import CobolParser
 from interpreter.cobol.lower_data_division import lower_data_division
 from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
@@ -46,7 +47,7 @@ class CobolFrontend(Frontend):
 
     def __init__(
         self,
-        cobol_parser: Any,
+        cobol_parser: CobolParser,
         observer: FrontendObserver = NullFrontendObserver(),
     ):
         self._parser = cobol_parser

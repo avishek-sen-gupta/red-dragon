@@ -1,3 +1,4 @@
+# pyright: standard
 """PERFORM statement lowering — simple, TIMES, UNTIL, VARYING variants."""
 
 from __future__ import annotations
@@ -292,7 +293,7 @@ def emit_varying_increment(
         )
     )
 
-    new_str_reg = ctx.emit_to_string(new_val_reg)
+    new_str_reg = ctx.emit_to_string(new_val_reg)  # type: ignore[arg-type]  # see red-dragon-pn3f
     ctx.emit_encode_and_write(
         region_reg, varying_ref.fl, new_str_reg, varying_ref.offset_reg
     )
