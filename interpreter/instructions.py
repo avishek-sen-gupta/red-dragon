@@ -13,12 +13,10 @@ from __future__ import annotations
 
 import dataclasses
 import types
-from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import (
     Any,
-    Protocol,
     Self,
     Union,  # noqa: F401 — Union used in Instruction type alias
     get_args,
@@ -81,21 +79,6 @@ def _is_label_tuple(hint: object) -> bool:
     return False
 
 
-class _FlatInstruction(Protocol):
-    """Duck-typed protocol for flat instruction objects passed to ``_to_typed`` converters.
-
-    Covers the ``_Flat`` shim in ``ir.IRInstruction`` and any other
-    duck-typed flat instruction producers (e.g. test helpers).
-    """
-
-    opcode: Opcode
-    result_reg: Register
-    operands: list[Any]
-    label: CodeLabel
-    branch_targets: list[CodeLabel]
-    source_location: SourceLocation
-
-
 def _as_register(val: Any) -> Register | Any:
     """Wrap a value as Register if it looks like a register reference (%…).
 
@@ -118,21 +101,6 @@ class InstructionBase:
     """Shared metadata carried by every instruction."""
 
     source_location: SourceLocation = field(default_factory=lambda: NO_SOURCE_LOCATION)
-
-    # ── Common fields declared with defaults; each concrete subclass overrides them ──
-    # These declarations let pyright see the attributes in base-typed references
-    # (e.g. list[InstructionBase]).  Concrete dataclass fields take precedence.
-    result_reg: Register = field(default=NO_REGISTER)
-    label: CodeLabel = field(default=NO_LABEL)
-    branch_targets: tuple[CodeLabel, ...] = field(default=())
-
-    @property
-    @abstractmethod
-    def opcode(self) -> Opcode: ...
-
-    @property
-    @abstractmethod
-    def operands(self) -> list[Any]: ...
 
     def map_registers(self, fn: Callable[[Register], Register]) -> Self:
         """Apply fn to every Register-typed field, return a new instruction.
@@ -188,7 +156,7 @@ class InstructionBase:
 
     def writes(self) -> StorageIdentifier | None:
         """Return the storage location written by this instruction, or None."""
-        return self.result_reg if self.result_reg.is_present() else None
+        return self.result_reg if self.result_reg.is_present() else None  # type: ignore[attr-defined]  # see red-dragon-4ei7
 
     def reads(self) -> list[StorageIdentifier]:
         """Return the storage locations read as inputs by this instruction."""
@@ -196,27 +164,28 @@ class InstructionBase:
 
     def __str__(self) -> str:
         """Render in the same format as IRInstruction.__str__."""
+        inst: Any = self  # type: ignore[misc]  # see red-dragon-4ei7 — subclass attrs not visible on InstructionBase
         parts: list[str] = []
         if (
-            hasattr(self, "label")
-            and self.label.is_present()
-            and self.opcode == Opcode.LABEL
+            hasattr(inst, "label")
+            and inst.label.is_present()
+            and inst.opcode == Opcode.LABEL
         ):
-            base = f"{self.label}:"
+            base = f"{inst.label}:"
         else:
-            if self.result_reg.is_present():
-                parts.append(f"{self.result_reg} =")
-            parts.append(self.opcode.value.lower())
-            for op in self.operands:
+            if inst.result_reg.is_present():
+                parts.append(f"{inst.result_reg} =")
+            parts.append(inst.opcode.value.lower())
+            for op in inst.operands:
                 parts.append(str(op))
-            if hasattr(self, "branch_targets") and self.branch_targets:
-                parts.append(",".join(str(t) for t in self.branch_targets))
+            if hasattr(inst, "branch_targets") and inst.branch_targets:
+                parts.append(",".join(str(t) for t in inst.branch_targets))
             elif (
-                hasattr(self, "label")
-                and self.label.is_present()
-                and self.opcode != Opcode.LABEL
+                hasattr(inst, "label")
+                and inst.label.is_present()
+                and inst.opcode != Opcode.LABEL
             ):
-                parts.append(str(self.label))
+                parts.append(str(inst.label))
             base = " ".join(parts)
         if not self.source_location.is_unknown():
             return f"{base}  # {self.source_location}"
@@ -447,12 +416,8 @@ class CallMethod(InstructionBase):
     branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
-        regs: list[StorageIdentifier] = [
-            r for r in self.args if isinstance(r, Register) and r.is_present()
-        ]
-        if self.obj_reg.is_present():
-            regs.insert(0, self.obj_reg)
-        return regs
+        args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
+        return ([self.obj_reg] if self.obj_reg.is_present() else []) + args_regs  # type: ignore[return-value]  # see red-dragon-8jzr
 
     @property
     def opcode(self) -> Opcode:
@@ -480,12 +445,8 @@ class CallUnknown(InstructionBase):
     branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
-        regs: list[StorageIdentifier] = [
-            r for r in self.args if isinstance(r, Register) and r.is_present()
-        ]
-        if self.target_reg.is_present():
-            regs.insert(0, self.target_reg)
-        return regs
+        args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
+        return ([self.target_reg] if self.target_reg.is_present() else []) + args_regs  # type: ignore[return-value]  # see red-dragon-8jzr
 
     @property
     def opcode(self) -> Opcode:
@@ -1157,7 +1118,7 @@ Instruction = Union[
 # Each converter takes (IRInstruction) → Instruction.
 
 
-def _const(inst: _FlatInstruction) -> Const:
+def _const(inst: Any) -> Const:
     return Const(
         result_reg=inst.result_reg,
         value=str(inst.operands[0]) if inst.operands else "",
@@ -1165,7 +1126,7 @@ def _const(inst: _FlatInstruction) -> Const:
     )
 
 
-def _load_var(inst: _FlatInstruction) -> LoadVar:
+def _load_var(inst: Any) -> LoadVar:
     return LoadVar(
         result_reg=inst.result_reg,
         name=VarName(str(inst.operands[0])) if inst.operands else NO_VAR_NAME,
@@ -1173,7 +1134,7 @@ def _load_var(inst: _FlatInstruction) -> LoadVar:
     )
 
 
-def _decl_var(inst: _FlatInstruction) -> DeclVar:
+def _decl_var(inst: Any) -> DeclVar:
     ops = inst.operands
     return DeclVar(
         name=VarName(str(ops[0])) if len(ops) >= 1 else NO_VAR_NAME,
@@ -1182,7 +1143,7 @@ def _decl_var(inst: _FlatInstruction) -> DeclVar:
     )
 
 
-def _store_var(inst: _FlatInstruction) -> StoreVar:
+def _store_var(inst: Any) -> StoreVar:
     ops = inst.operands
     return StoreVar(
         name=VarName(str(ops[0])) if len(ops) >= 1 else NO_VAR_NAME,
@@ -1191,7 +1152,7 @@ def _store_var(inst: _FlatInstruction) -> StoreVar:
     )
 
 
-def _symbolic(inst: _FlatInstruction) -> Symbolic:
+def _symbolic(inst: Any) -> Symbolic:
     return Symbolic(
         result_reg=inst.result_reg,
         hint=str(inst.operands[0]) if inst.operands else "",
@@ -1199,7 +1160,7 @@ def _symbolic(inst: _FlatInstruction) -> Symbolic:
     )
 
 
-def _binop(inst: _FlatInstruction) -> Binop:
+def _binop(inst: Any) -> Binop:
     ops = inst.operands
     raw_op = getattr(ops[0], "value", str(ops[0])) if ops else ""
     return Binop(
@@ -1211,7 +1172,7 @@ def _binop(inst: _FlatInstruction) -> Binop:
     )
 
 
-def _unop(inst: _FlatInstruction) -> Unop:
+def _unop(inst: Any) -> Unop:
     ops = inst.operands
     raw_op = getattr(ops[0], "value", str(ops[0])) if ops else ""
     return Unop(
@@ -1222,7 +1183,7 @@ def _unop(inst: _FlatInstruction) -> Unop:
     )
 
 
-def _call_function(inst: _FlatInstruction) -> CallFunction:
+def _call_function(inst: Any) -> CallFunction:
     ops = inst.operands
     raw_args = ops[1:]
     args = tuple(
@@ -1236,7 +1197,7 @@ def _call_function(inst: _FlatInstruction) -> CallFunction:
     )
 
 
-def _call_method(inst: _FlatInstruction) -> CallMethod:
+def _call_method(inst: Any) -> CallMethod:
     ops = inst.operands
     raw_args = ops[2:]
     args = tuple(
@@ -1251,7 +1212,7 @@ def _call_method(inst: _FlatInstruction) -> CallMethod:
     )
 
 
-def _call_unknown(inst: _FlatInstruction) -> CallUnknown:
+def _call_unknown(inst: Any) -> CallUnknown:
     ops = inst.operands
     raw_args = ops[1:]
     args = tuple(
@@ -1265,7 +1226,7 @@ def _call_unknown(inst: _FlatInstruction) -> CallUnknown:
     )
 
 
-def _call_ctor(inst: _FlatInstruction) -> CallCtorFunction:
+def _call_ctor(inst: Any) -> CallCtorFunction:
     ops = inst.operands
     raw_args = ops[1:]
     args = tuple(
@@ -1281,7 +1242,7 @@ def _call_ctor(inst: _FlatInstruction) -> CallCtorFunction:
     )
 
 
-def _load_field(inst: _FlatInstruction) -> LoadField:
+def _load_field(inst: Any) -> LoadField:
     ops = inst.operands
     return LoadField(
         result_reg=inst.result_reg,
@@ -1291,7 +1252,7 @@ def _load_field(inst: _FlatInstruction) -> LoadField:
     )
 
 
-def _store_field(inst: _FlatInstruction) -> StoreField:
+def _store_field(inst: Any) -> StoreField:
     ops = inst.operands
     return StoreField(
         obj_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
@@ -1301,7 +1262,7 @@ def _store_field(inst: _FlatInstruction) -> StoreField:
     )
 
 
-def _load_field_indirect(inst: _FlatInstruction) -> LoadFieldIndirect:
+def _load_field_indirect(inst: Any) -> LoadFieldIndirect:
     ops = inst.operands
     return LoadFieldIndirect(
         result_reg=inst.result_reg,
@@ -1311,7 +1272,7 @@ def _load_field_indirect(inst: _FlatInstruction) -> LoadFieldIndirect:
     )
 
 
-def _load_index(inst: _FlatInstruction) -> LoadIndex:
+def _load_index(inst: Any) -> LoadIndex:
     ops = inst.operands
     return LoadIndex(
         result_reg=inst.result_reg,
@@ -1321,7 +1282,7 @@ def _load_index(inst: _FlatInstruction) -> LoadIndex:
     )
 
 
-def _store_index(inst: _FlatInstruction) -> StoreIndex:
+def _store_index(inst: Any) -> StoreIndex:
     ops = inst.operands
     vr = (
         ops[2]
@@ -1336,7 +1297,7 @@ def _store_index(inst: _FlatInstruction) -> StoreIndex:
     )
 
 
-def _load_indirect(inst: _FlatInstruction) -> LoadIndirect:
+def _load_indirect(inst: Any) -> LoadIndirect:
     return LoadIndirect(
         result_reg=inst.result_reg,
         ptr_reg=Register(str(inst.operands[0])) if inst.operands else NO_REGISTER,
@@ -1344,7 +1305,7 @@ def _load_indirect(inst: _FlatInstruction) -> LoadIndirect:
     )
 
 
-def _store_indirect(inst: _FlatInstruction) -> StoreIndirect:
+def _store_indirect(inst: Any) -> StoreIndirect:
     ops = inst.operands
     return StoreIndirect(
         ptr_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
@@ -1353,7 +1314,7 @@ def _store_indirect(inst: _FlatInstruction) -> StoreIndirect:
     )
 
 
-def _address_of(inst: _FlatInstruction) -> AddressOf:
+def _address_of(inst: Any) -> AddressOf:
     return AddressOf(
         result_reg=inst.result_reg,
         var_name=VarName(str(inst.operands[0])) if inst.operands else NO_VAR_NAME,
@@ -1361,7 +1322,7 @@ def _address_of(inst: _FlatInstruction) -> AddressOf:
     )
 
 
-def _new_object(inst: _FlatInstruction) -> NewObject:
+def _new_object(inst: Any) -> NewObject:
     raw = str(inst.operands[0]) if inst.operands else ""
     return NewObject(
         result_reg=inst.result_reg,
@@ -1370,7 +1331,7 @@ def _new_object(inst: _FlatInstruction) -> NewObject:
     )
 
 
-def _new_array(inst: _FlatInstruction) -> NewArray:
+def _new_array(inst: Any) -> NewArray:
     ops = inst.operands
     raw = str(ops[0]) if len(ops) >= 1 else ""
     return NewArray(
@@ -1381,15 +1342,15 @@ def _new_array(inst: _FlatInstruction) -> NewArray:
     )
 
 
-def _label(inst: _FlatInstruction) -> Label_:
+def _label(inst: Any) -> Label_:
     return Label_(label=inst.label, source_location=inst.source_location)
 
 
-def _branch(inst: _FlatInstruction) -> Branch:
+def _branch(inst: Any) -> Branch:
     return Branch(label=inst.label, source_location=inst.source_location)
 
 
-def _branch_if(inst: _FlatInstruction) -> BranchIf:
+def _branch_if(inst: Any) -> BranchIf:
     return BranchIf(
         cond_reg=Register(str(inst.operands[0])) if inst.operands else NO_REGISTER,
         branch_targets=tuple(inst.branch_targets),
@@ -1397,21 +1358,21 @@ def _branch_if(inst: _FlatInstruction) -> BranchIf:
     )
 
 
-def _return(inst: _FlatInstruction) -> Return_:
+def _return(inst: Any) -> Return_:
     return Return_(
         value_reg=Register(str(inst.operands[0])) if inst.operands else None,
         source_location=inst.source_location,
     )
 
 
-def _throw(inst: _FlatInstruction) -> Throw_:
+def _throw(inst: Any) -> Throw_:
     return Throw_(
         value_reg=Register(str(inst.operands[0])) if inst.operands else None,
         source_location=inst.source_location,
     )
 
 
-def _try_push(inst: _FlatInstruction) -> TryPush:
+def _try_push(inst: Any) -> TryPush:
     ops = inst.operands
     catch = tuple(ops[0]) if len(ops) >= 1 and isinstance(ops[0], list) else ()
     finally_lbl = ops[1] if len(ops) >= 2 else NO_LABEL
@@ -1424,11 +1385,11 @@ def _try_push(inst: _FlatInstruction) -> TryPush:
     )
 
 
-def _try_pop(inst: _FlatInstruction) -> TryPop:
+def _try_pop(inst: Any) -> TryPop:
     return TryPop(source_location=inst.source_location)
 
 
-def _alloc_region(inst: _FlatInstruction) -> AllocRegion:
+def _alloc_region(inst: Any) -> AllocRegion:
     return AllocRegion(
         result_reg=inst.result_reg,
         size_reg=Register(str(inst.operands[0])) if inst.operands else NO_REGISTER,
@@ -1436,7 +1397,7 @@ def _alloc_region(inst: _FlatInstruction) -> AllocRegion:
     )
 
 
-def _load_region(inst: _FlatInstruction) -> LoadRegion:
+def _load_region(inst: Any) -> LoadRegion:
     ops = inst.operands
     return LoadRegion(
         result_reg=inst.result_reg,
@@ -1447,7 +1408,7 @@ def _load_region(inst: _FlatInstruction) -> LoadRegion:
     )
 
 
-def _write_region(inst: _FlatInstruction) -> WriteRegion:
+def _write_region(inst: Any) -> WriteRegion:
     ops = inst.operands
     return WriteRegion(
         region_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
@@ -1458,7 +1419,7 @@ def _write_region(inst: _FlatInstruction) -> WriteRegion:
     )
 
 
-def _set_continuation(inst: _FlatInstruction) -> SetContinuation:
+def _set_continuation(inst: Any) -> SetContinuation:
     ops = inst.operands
     return SetContinuation(
         name=ContinuationName(str(ops[0])) if len(ops) >= 1 else NO_CONTINUATION_NAME,
@@ -1467,7 +1428,7 @@ def _set_continuation(inst: _FlatInstruction) -> SetContinuation:
     )
 
 
-def _resume_continuation(inst: _FlatInstruction) -> ResumeContinuation:
+def _resume_continuation(inst: Any) -> ResumeContinuation:
     return ResumeContinuation(
         name=(
             ContinuationName(str(inst.operands[0]))
@@ -1478,7 +1439,7 @@ def _resume_continuation(inst: _FlatInstruction) -> ResumeContinuation:
     )
 
 
-_TO_TYPED: dict[Opcode, Callable[[_FlatInstruction], Instruction]] = {
+_TO_TYPED: dict[Opcode, object] = {
     Opcode.CONST: _const,
     Opcode.LOAD_VAR: _load_var,
     Opcode.DECL_VAR: _decl_var,
@@ -1515,7 +1476,7 @@ _TO_TYPED: dict[Opcode, Callable[[_FlatInstruction], Instruction]] = {
 }
 
 
-def _to_typed(inst: _FlatInstruction | InstructionBase) -> Instruction:
+def _to_typed(inst: Any) -> Instruction:
     """Convert a flat instruction-like object to a per-opcode typed instruction.
 
     If *inst* is already a typed instruction (InstructionBase subclass),
@@ -1530,4 +1491,4 @@ def _to_typed(inst: _FlatInstruction | InstructionBase) -> Instruction:
     converter = _TO_TYPED.get(inst.opcode)
     if converter is None:
         raise ValueError(f"Unknown opcode: {inst.opcode}")
-    return converter(inst)
+    return converter(inst)  # type: ignore[call-arg,misc]  # see red-dragon-ivkr
