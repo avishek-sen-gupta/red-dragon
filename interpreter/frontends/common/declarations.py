@@ -1,3 +1,4 @@
+# pyright: standard
 """Common declaration lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend: function_def, params, class_def, var_declaration.
@@ -5,7 +6,7 @@ Extracted from BaseFrontend: function_def, params, class_def, var_declaration.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
@@ -30,7 +31,9 @@ from interpreter.frontends.type_extraction import (
 )
 
 
-def extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
+def extract_param_name(
+    ctx: TreeSitterEmitContext, child: Any
+) -> str | None:  # Any: tree-sitter node — untyped at Python boundary
     """Extract parameter name from a parameter node."""
     if child.type == CommonNodeType.IDENTIFIER:
         return ctx.node_text(child)
@@ -49,7 +52,9 @@ def extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
     return None
 
 
-def lower_param(ctx: TreeSitterEmitContext, child) -> None:
+def lower_param(
+    ctx: TreeSitterEmitContext, child: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a single function parameter to SYMBOLIC + STORE_VAR."""
     if child.type in (
         CommonNodeType.OPEN_PAREN,
@@ -84,7 +89,9 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     ctx.seed_var_type(pname, type_hint)
 
 
-def lower_params(ctx: TreeSitterEmitContext, params_node) -> None:
+def lower_params(
+    ctx: TreeSitterEmitContext, params_node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function parameters. Override for language-specific param shapes."""
     for child in params_node.children:
         lower_param(ctx, child)
@@ -92,8 +99,8 @@ def lower_params(ctx: TreeSitterEmitContext, params_node) -> None:
 
 def lower_function_def(
     ctx: TreeSitterEmitContext,
-    node,
-    params_lowerer: Callable = lower_params,
+    node: Any,  # Any: tree-sitter node — untyped at Python boundary
+    params_lowerer: Callable[[TreeSitterEmitContext, Any], None] = lower_params,
 ) -> None:
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
@@ -130,11 +137,13 @@ def lower_function_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
-    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-2us7
 
 
-FieldInit = tuple  # (field_name: str, value_node)
+FieldInit = tuple[
+    str, Any
+]  # (field_name: str, value_node) — value_node is a tree-sitter node, untyped at Python boundary
 
 
 def emit_field_initializers(
@@ -202,11 +211,13 @@ def emit_synthetic_init(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))  # type: ignore[arg-type]  # see red-dragon-2us7
 
 
-def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -> None:
+def lower_class_def(
+    ctx: TreeSitterEmitContext, node: Any, parents: list[str] = []
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node)
@@ -221,11 +232,13 @@ def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg), node=node)
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-2us7
 
 
-def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_var_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a variable declaration with name/value fields or declarators."""
     for child in node.children:
         if child.type == CommonNodeType.VARIABLE_DECLARATOR:

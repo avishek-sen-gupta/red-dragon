@@ -1,9 +1,12 @@
+# pyright: standard
 """Common exception lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend: try_catch, raise_or_throw.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -25,11 +28,11 @@ from interpreter.instructions import (
 
 def lower_try_catch(
     ctx: TreeSitterEmitContext,
-    node,
-    body_node,
-    catch_clauses: list[dict],
-    finally_node=None,
-    else_node=None,
+    node: Any,  # Any: tree-sitter node — untyped at Python boundary
+    body_node: Any,  # Any: tree-sitter node — untyped at Python boundary
+    catch_clauses: list[dict],  # type: ignore[type-arg]  # dict values are tree-sitter nodes
+    finally_node: Any = None,  # Any: tree-sitter node — untyped at Python boundary
+    else_node: Any = None,  # Any: tree-sitter node — untyped at Python boundary
 ) -> None:
     """Lower try/catch/finally into labeled blocks connected by BRANCH.
 
@@ -112,7 +115,9 @@ def lower_try_catch(
 
 
 def lower_raise_or_throw(
-    ctx: TreeSitterEmitContext, node, keyword: str = "raise"
+    ctx: TreeSitterEmitContext,
+    node: Any,
+    keyword: str = "raise",  # Any: tree-sitter node — untyped at Python boundary
 ) -> None:
     children = [c for c in node.children if c.type != keyword]
     if children:

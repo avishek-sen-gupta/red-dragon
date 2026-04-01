@@ -1,3 +1,4 @@
+# pyright: standard
 """Tree-sitter node type string constants used by BaseFrontend.
 
 Centralises raw string literals so that typos are caught at import time
