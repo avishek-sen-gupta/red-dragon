@@ -74,3 +74,7 @@ fileignoreconfig:
   checksum: 56fd368b7d8105239a22eca2018891ab949f86fc8fec9b0258b2b6f1de15efbf
 - filename: interpreter/types/type_inference.py
   checksum: f831570ddb956ef32e5dc6305681dfdff74c5a68434803215f538d52ba11fbc3
+- filename: interpreter/frontends/common/exceptions.py
+  checksum: 553efc4a65dd05221edec9b897a8bda685e1a24b14adf20010733fd5b2ddf9b6
+- filename: interpreter/frontends/_base.py
+  checksum: a33aef9105ae8593ee023ae4bbb4924ba184ab268e9e8c58795bd15ac99762ba

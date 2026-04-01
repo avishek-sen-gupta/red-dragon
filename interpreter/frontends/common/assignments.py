@@ -1,9 +1,12 @@
+# pyright: standard
 """Common assignment lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend: assignment, augmented_assignment, expression_statement, return.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
@@ -14,14 +17,18 @@ from interpreter.instructions import Binop, Const, Return_
 from interpreter.frontends.common.expressions import lower_store_target
 
 
-def lower_assignment(ctx: TreeSitterEmitContext, node) -> None:
+def lower_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_store_target(ctx, left, val_reg, node)
+    lower_store_target(ctx, left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-2us7
 
 
-def lower_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
+def lower_augmented_assignment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     op_node = [c for c in node.children if c.type not in (left.type, right.type)][0]
@@ -38,10 +45,12 @@ def lower_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
         ),
         node=node,
     )
-    lower_store_target(ctx, left, result, node)
+    lower_store_target(ctx, left, result, node)  # type: ignore[arg-type]  # see red-dragon-2us7
 
 
-def lower_return(ctx: TreeSitterEmitContext, node) -> None:
+def lower_return(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a return statement."""
     children = [c for c in node.children if c.type != CommonNodeType.RETURN]
     if children:
@@ -60,7 +69,9 @@ def lower_return(ctx: TreeSitterEmitContext, node) -> None:
     )
 
 
-def lower_expression_statement(ctx: TreeSitterEmitContext, node) -> None:
+def lower_expression_statement(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower an expression statement (unwrap and lower the inner expr).
 
     If the inner node is a known statement (e.g. ``while_expression`` in

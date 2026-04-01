@@ -1,3 +1,4 @@
+# pyright: standard
 """Unified match expression lowering framework.
 
 Provides lower_match_as_expr() which emits IR for expression-style match
@@ -59,7 +60,7 @@ def lower_match_as_expr(
     end_label = ctx.fresh_label("match_end")
 
     for arm in spec.extract_arms(body_node):
-        _lower_arm(ctx, arm, subject_reg, result_var, end_label, spec)
+        _lower_arm(ctx, arm, subject_reg, result_var, end_label, spec)  # type: ignore[arg-type]  # see red-dragon-2us7
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
@@ -86,8 +87,8 @@ def _lower_arm(
     if is_irrefutable:
         compile_pattern_bindings(ctx, subject_reg, pattern)
         body_reg = spec.body_of(ctx, arm)
-        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=body_reg))
-        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=body_reg))  # type: ignore[arg-type]  # see red-dragon-2us7
+        ctx.emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-2us7
         return
 
     test_reg = compile_pattern_test(ctx, subject_reg, pattern)
@@ -121,6 +122,6 @@ def _lower_arm(
         compile_pattern_bindings(ctx, subject_reg, pattern)
 
     body_reg = spec.body_of(ctx, arm)
-    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=body_reg))
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=body_reg))  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-2us7
     ctx.emit_inst(Label_(label=next_label))

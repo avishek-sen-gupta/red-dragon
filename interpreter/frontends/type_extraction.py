@@ -1,3 +1,4 @@
+# pyright: standard
 """Type annotation extraction utilities for tree-sitter frontends.
 
 Pure functions that extract type text from tree-sitter AST nodes and
@@ -13,6 +14,7 @@ Java becomes ``ParameterizedType("List", (ScalarType("String"),))``,
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.types.type_expr import UNKNOWN, ParameterizedType, ScalarType, TypeExpr
@@ -46,7 +48,9 @@ def normalize_type_hint(raw: str, type_map: dict[str, str]) -> TypeExpr:
 
 
 def extract_type_from_field(
-    ctx: TreeSitterEmitContext, node, field_name: str = "type"
+    ctx: TreeSitterEmitContext,
+    node: Any,
+    field_name: str = "type",  # Any: tree-sitter node — untyped at Python boundary
 ) -> str:
     """Extract type text from a tree-sitter node's named field.
 
@@ -57,7 +61,9 @@ def extract_type_from_field(
 
 
 def extract_type_from_child(
-    ctx: TreeSitterEmitContext, node, child_types: tuple[str, ...]
+    ctx: TreeSitterEmitContext,
+    node: Any,
+    child_types: tuple[str, ...],  # Any: tree-sitter node — untyped at Python boundary
 ) -> str:
     """Extract type text from the first child matching one of *child_types*.
 
@@ -79,7 +85,7 @@ def extract_type_from_child(
 
 def extract_normalized_type(
     ctx: TreeSitterEmitContext,
-    node,
+    node: Any,  # Any: tree-sitter node — untyped at Python boundary
     field_name: str,
     type_map: dict[str, str],
 ) -> TypeExpr:
@@ -100,7 +106,7 @@ def extract_normalized_type(
 
 def extract_normalized_type_from_child(
     ctx: TreeSitterEmitContext,
-    node,
+    node: Any,  # Any: tree-sitter node — untyped at Python boundary
     child_types: tuple[str, ...],
     type_map: dict[str, str],
 ) -> TypeExpr:
@@ -121,7 +127,7 @@ def extract_normalized_type_from_child(
 
 def _type_node_to_expr(
     ctx: TreeSitterEmitContext,
-    type_node,
+    type_node: Any,  # Any: tree-sitter node — untyped at Python boundary
     type_map: dict[str, str],
 ) -> TypeExpr:
     """Convert a type AST node to a normalised TypeExpr."""
@@ -132,7 +138,9 @@ def _type_node_to_expr(
     return normalize_type_hint(raw, type_map)
 
 
-def _unwrap_projection(node):
+def _unwrap_projection(
+    node: Any,
+) -> Any:  # Any: tree-sitter node — untyped at Python boundary
     """Unwrap Kotlin ``type_projection`` to get the actual type node."""
     if node.type in _TYPE_PROJECTION_TYPES:
         return next((c for c in node.children if c.is_named), node)
@@ -141,7 +149,7 @@ def _unwrap_projection(node):
 
 def _decompose_generic(
     ctx: TreeSitterEmitContext,
-    node,
+    node: Any,  # Any: tree-sitter node — untyped at Python boundary
     args_child_type: str,
     type_map: dict[str, str],
 ) -> TypeExpr:
