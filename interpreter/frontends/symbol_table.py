@@ -1,3 +1,4 @@
+# pyright: standard
 """Unified symbol table for all frontends.
 
 Generalizes COBOL's DataLayout pattern: extract symbols from the AST
