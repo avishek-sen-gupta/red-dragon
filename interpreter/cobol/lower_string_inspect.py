@@ -1,4 +1,3 @@
-# pyright: standard
 """STRING, UNSTRING, INSPECT statement lowering."""
 
 from __future__ import annotations
@@ -72,10 +71,10 @@ def lower_string(
                 CallFunction(
                     result_reg=first_part,
                     func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(Register(str(parts)), 0),  # type: ignore[arg-type]  # see red-dragon-5kgb
+                    args=(Register(str(parts)), 0),
                 ),
             )
-            part_regs.append(first_part)  # type: ignore[arg-type]  # see red-dragon-5kgb
+            part_regs.append(first_part)
 
     if not part_regs:
         concat_reg = ctx.const_to_reg("")
@@ -97,7 +96,7 @@ def lower_string(
     if stmt.into and ctx.has_field(stmt.into, layout):
         target_ref = ctx.resolve_field_ref(stmt.into, layout, region_reg)
         ctx.emit_encode_and_write(
-            region_reg, target_ref.fl, concat_reg, target_ref.offset_reg  # type: ignore[arg-type]  # see red-dragon-5kgb
+            region_reg, target_ref.fl, concat_reg, target_ref.offset_reg
         )
     else:
         logger.warning("STRING INTO target %s not found in layout", stmt.into)
@@ -122,7 +121,7 @@ def lower_unstring(
     delimiter = translate_cobol_figurative(str(stmt.delimited_by))
     delim_reg = ctx.const_to_reg(delimiter)
     ir = build_string_split_ir(f"unstring_split_{stmt.source}")
-    parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})  # type: ignore[arg-type]  # see red-dragon-5kgb
+    parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})
 
     for i, target_name in enumerate(stmt.into):
         if not ctx.has_field(target_name, layout):
@@ -139,7 +138,7 @@ def lower_unstring(
             ),
         )
         ctx.emit_encode_and_write(
-            region_reg, target_ref.fl, part_reg, target_ref.offset_reg  # type: ignore[arg-type]  # see red-dragon-5kgb
+            region_reg, target_ref.fl, part_reg, target_ref.offset_reg
         )
 
 
@@ -179,7 +178,7 @@ def lower_inspect_tallying(
         mode_reg = ctx.const_to_reg(tally_for.mode.lower())
         ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
         count_reg = ctx.inline_ir(
-            ir,  # type: ignore[arg-type]  # see red-dragon-5kgb
+            ir,
             {
                 "%p_source": src_str_reg,
                 "%p_pattern": pattern_reg,
@@ -199,7 +198,7 @@ def lower_inspect_tallying(
 
     if stmt.tallying_target and ctx.has_field(stmt.tallying_target, layout):
         tally_ref = ctx.resolve_field_ref(stmt.tallying_target, layout, region_reg)
-        count_str_reg = ctx.emit_to_string(total_count_reg)  # type: ignore[arg-type]  # see red-dragon-5kgb
+        count_str_reg = ctx.emit_to_string(total_count_reg)
         ctx.emit_encode_and_write(
             region_reg, tally_ref.fl, count_str_reg, tally_ref.offset_reg
         )
@@ -222,7 +221,7 @@ def lower_inspect_replacing(
         mode_reg = ctx.const_to_reg(replacing.mode.lower())
         ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")
         new_str_reg = ctx.inline_ir(
-            ir,  # type: ignore[arg-type]  # see red-dragon-5kgb
+            ir,
             {
                 "%p_source": current_str_reg,
                 "%p_from": from_reg,

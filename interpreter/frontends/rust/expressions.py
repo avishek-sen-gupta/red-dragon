@@ -1,4 +1,3 @@
-# pyright: standard
 """Rust-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -87,7 +86,7 @@ def _lower_box_new(ctx: TreeSitterEmitContext, args_node, call_node) -> Register
     arg_regs = extract_call_args(ctx, args_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=FuncName("Box"), args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallFunction(result_reg=reg, func_name=FuncName("Box"), args=tuple(arg_regs)),
         node=call_node,
     )
     return reg
@@ -98,7 +97,7 @@ def _lower_string_from(ctx: TreeSitterEmitContext, args_node) -> Register:
     from interpreter.frontends.common.expressions import extract_call_args
 
     arg_regs = extract_call_args(ctx, args_node)
-    return arg_regs[0] if arg_regs else ctx.fresh_reg()  # type: ignore[return-value]  # see red-dragon-hzmm
+    return arg_regs[0] if arg_regs else ctx.fresh_reg()
 
 
 def _lower_some(ctx: TreeSitterEmitContext, args_node, call_node) -> Register:
@@ -109,7 +108,7 @@ def _lower_some(ctx: TreeSitterEmitContext, args_node, call_node) -> Register:
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=reg, func_name=FuncName("Option"), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+            result_reg=reg, func_name=FuncName("Option"), args=tuple(arg_regs)
         ),
         node=call_node,
     )
@@ -427,11 +426,11 @@ def _rust_body_of(ctx: TreeSitterEmitContext, arm) -> Register:
 
 _RUST_MATCH_SPEC = MatchArmSpec(
     extract_arms=lambda body: [
-        c for c in body.children if c.type == RustNodeType.MATCH_ARM  # type: ignore[attr-defined]  # see red-dragon-545a
+        c for c in body.children if c.type == RustNodeType.MATCH_ARM
     ],
     pattern_of=_rust_pattern_of,
     guard_of=_rust_guard_of,
-    body_of=_rust_body_of,  # type: ignore[misc]  # see red-dragon-hzmm
+    body_of=_rust_body_of,
 )
 
 
@@ -442,7 +441,7 @@ def lower_match_expr(
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
     subject_reg = ctx.lower_expr(value_node)
-    return lower_match_as_expr(ctx, subject_reg, body_node, _RUST_MATCH_SPEC)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    return lower_match_as_expr(ctx, subject_reg, body_node, _RUST_MATCH_SPEC)
 
 
 def _extract_arm_body(
@@ -518,7 +517,7 @@ def lower_closure_expr(
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
     return reg
 
 
@@ -638,7 +637,7 @@ def lower_index_expr(
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(children[0])
     if children[1].type == RustNodeType.RANGE_EXPRESSION:
-        return _lower_range_slice(ctx, children[1], obj_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        return _lower_range_slice(ctx, children[1], obj_reg)
     idx_reg = ctx.lower_expr(children[1])
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -685,7 +684,7 @@ def _lower_range_slice(
             result_reg=reg,
             func_name=FuncName("slice"),
             args=(
-                collection_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                collection_reg,
                 start_reg,
                 end_reg,
                 none_reg,
@@ -789,7 +788,7 @@ def lower_type_cast_expr(
             func_name=FuncName("as"),
             args=(
                 expr_reg,
-                type_name,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                type_name,
             ),
         ),
         node=node,
@@ -872,7 +871,7 @@ def lower_assignment_expr(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_rust_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_rust_store_target(ctx, left, val_reg, node)
     return val_reg
 
 
@@ -896,7 +895,7 @@ def lower_compound_assignment_expr(
         ),
         node=node,
     )
-    lower_rust_store_target(ctx, left, result, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_rust_store_target(ctx, left, result, node)
     return result
 
 
@@ -1018,7 +1017,7 @@ def lower_rust_store_target(
     """Rust-specific store target handling field_expression and index_expression."""
     if target.type == RustNodeType.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == RustNodeType.FIELD_EXPRESSION:
@@ -1030,7 +1029,7 @@ def lower_rust_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -1040,7 +1039,7 @@ def lower_rust_store_target(
             obj_reg = ctx.lower_expr(children[0])
             idx_reg = ctx.lower_expr(children[1])
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type in (
@@ -1053,10 +1052,10 @@ def lower_rust_store_target(
         if inner_children:
             inner_reg = ctx.lower_expr(inner_children[0])
             ctx.emit_inst(
-                StoreIndirect(ptr_reg=inner_reg, value_reg=val_reg), node=parent_node  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndirect(ptr_reg=inner_reg, value_reg=val_reg), node=parent_node
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )

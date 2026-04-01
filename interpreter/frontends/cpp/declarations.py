@@ -1,4 +1,3 @@
-# pyright: standard
 """C++-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -150,7 +149,7 @@ def _is_cpp_constructor(ctx: TreeSitterEmitContext, child, class_name: str) -> b
         return name_node is not None and ctx.node_text(name_node) == class_name
     func_decl = _find_function_declarator(decl)
     if func_decl:
-        name_node = func_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
+        name_node = func_decl.child_by_field_name("declarator")
         return name_node is not None and ctx.node_text(name_node) == class_name
     return False
 
@@ -178,7 +177,7 @@ def _lower_cpp_constructor_with_field_inits(
         else:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
-                params_node = func_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
+                params_node = func_decl.child_by_field_name(
                     ctx.constants.func_params_field
                 )
 
@@ -211,7 +210,7 @@ def _lower_cpp_constructor_with_field_inits(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -253,7 +252,7 @@ def lower_class_specifier(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
@@ -351,8 +350,8 @@ def lower_cpp_method(
         else:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
-                name_node = func_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
-                params_node = func_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
+                name_node = func_decl.child_by_field_name("declarator")
+                params_node = func_decl.child_by_field_name(
                     ctx.constants.func_params_field
                 )
                 func_name = (
@@ -390,7 +389,7 @@ def lower_cpp_method(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -462,8 +461,8 @@ def lower_cpp_function_def(
         else:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
-                name_node = func_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
-                params_node = func_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
+                name_node = func_decl.child_by_field_name("declarator")
+                params_node = func_decl.child_by_field_name(
                     ctx.constants.func_params_field
                 )
                 func_name = (
@@ -498,7 +497,7 @@ def lower_cpp_function_def(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -551,7 +550,7 @@ def lower_cpp_struct_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(struct_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(struct_name, class_label, parents, result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(struct_name), value_reg=cls_reg))
 
 
@@ -651,7 +650,7 @@ def _extract_cpp_method(node) -> tuple[str, FunctionInfo] | None:
     )
     return_type = type_node.text.decode() if type_node else ""
     return name, FunctionInfo(
-        name=FuncName(name), params=params, return_type=return_type  # type: ignore[misc]  # see red-dragon-hzmm
+        name=FuncName(name), params=params, return_type=return_type
     )
 
 
@@ -676,7 +675,7 @@ def _extract_cpp_class_parents(node) -> tuple[str, ...]:
     )
     if base_clause is None:
         return ()
-    return tuple(  # type: ignore[return-value]  # see red-dragon-hzmm
+    return tuple(
         ClassName(c.text.decode())
         for c in base_clause.children
         if c.type == CppNodeType.TYPE_IDENTIFIER
@@ -704,7 +703,7 @@ def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
             fields={},
             methods={},
             constants={},
-            parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
+            parents=parents,
         )
 
     fields: dict[FieldName, FieldInfo] = {}
@@ -733,7 +732,7 @@ def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
         fields=fields,
         methods=methods,
         constants=constants_map,
-        parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
+        parents=parents,
     )
 
 

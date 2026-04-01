@@ -1,4 +1,3 @@
-# pyright: standard
 """Per-opcode typed instruction classes.
 
 Each IR opcode has a frozen dataclass with named, typed fields replacing
@@ -156,7 +155,7 @@ class InstructionBase:
 
     def writes(self) -> StorageIdentifier | None:
         """Return the storage location written by this instruction, or None."""
-        return self.result_reg if self.result_reg.is_present() else None  # type: ignore[attr-defined]  # see red-dragon-4ei7
+        return self.result_reg if self.result_reg.is_present() else None
 
     def reads(self) -> list[StorageIdentifier]:
         """Return the storage locations read as inputs by this instruction."""
@@ -164,7 +163,7 @@ class InstructionBase:
 
     def __str__(self) -> str:
         """Render in the same format as IRInstruction.__str__."""
-        inst: Any = self  # type: ignore[misc]  # see red-dragon-4ei7 — subclass attrs not visible on InstructionBase
+        inst: Any = self  # subclass attrs not visible on InstructionBase
         parts: list[str] = []
         if (
             hasattr(inst, "label")
@@ -417,7 +416,7 @@ class CallMethod(InstructionBase):
 
     def reads(self) -> list[StorageIdentifier]:
         args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
-        return ([self.obj_reg] if self.obj_reg.is_present() else []) + args_regs  # type: ignore[return-value]  # see red-dragon-8jzr
+        return ([self.obj_reg] if self.obj_reg.is_present() else []) + args_regs
 
     @property
     def opcode(self) -> Opcode:
@@ -446,7 +445,7 @@ class CallUnknown(InstructionBase):
 
     def reads(self) -> list[StorageIdentifier]:
         args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
-        return ([self.target_reg] if self.target_reg.is_present() else []) + args_regs  # type: ignore[return-value]  # see red-dragon-8jzr
+        return ([self.target_reg] if self.target_reg.is_present() else []) + args_regs
 
     @property
     def opcode(self) -> Opcode:
@@ -1491,4 +1490,4 @@ def _to_typed(inst: Any) -> Instruction:
     converter = _TO_TYPED.get(inst.opcode)
     if converter is None:
         raise ValueError(f"Unknown opcode: {inst.opcode}")
-    return converter(inst)  # type: ignore[call-arg,misc]  # see red-dragon-ivkr
+    return converter(inst)

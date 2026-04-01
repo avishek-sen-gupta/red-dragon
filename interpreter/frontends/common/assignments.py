@@ -1,4 +1,3 @@
-# pyright: standard
 """Common assignment lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend: assignment, augmented_assignment, expression_statement, return.
@@ -23,7 +22,7 @@ def lower_assignment(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_store_target(ctx, left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-2us7
+    lower_store_target(ctx, left, val_reg, node)
 
 
 def lower_augmented_assignment(
@@ -45,7 +44,7 @@ def lower_augmented_assignment(
         ),
         node=node,
     )
-    lower_store_target(ctx, left, result, node)  # type: ignore[arg-type]  # see red-dragon-2us7
+    lower_store_target(ctx, left, result, node)
 
 
 def lower_return(

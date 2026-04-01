@@ -1,4 +1,3 @@
-# pyright: standard
 """BaseFrontend — language-agnostic tree-sitter AST → IR lowering infrastructure.
 
 Supports two modes:
@@ -256,14 +255,14 @@ class BaseFrontend(Frontend):
         Emits the plain class_label as the CONST operand.  The symbol table
         maps class_label -> ClassRef(name, label, parents) for downstream consumers.
         """
-        self._class_symbol_table[class_label] = ClassRef(  # type: ignore[index]  # see red-dragon-xgkl
+        self._class_symbol_table[class_label] = ClassRef(
             name=ClassName(class_name),
-            label=class_label,  # type: ignore[arg-type]  # see red-dragon-xgkl
+            label=class_label,
             parents=tuple(ClassName(p) for p in parents),
         )
         return self._emit(
             Opcode.CONST,
-            result_reg=result_reg,  # type: ignore[arg-type]  # see red-dragon-xgkl
+            result_reg=result_reg,
             operands=[str(class_label)],
             node=node,
         )
@@ -281,7 +280,7 @@ class BaseFrontend(Frontend):
         )
         return self._emit(
             Opcode.CONST,
-            result_reg=result_reg,  # type: ignore[arg-type]  # see red-dragon-xgkl
+            result_reg=result_reg,
             operands=[str(func_label)],
             node=node,
         )
@@ -313,7 +312,7 @@ class BaseFrontend(Frontend):
     def lower(self, source: bytes) -> list[InstructionBase]:
         t0 = time.perf_counter()
         parser = self._parser_factory.get_parser(self._language)
-        tree = parser.parse(source)  # type: ignore[union-attr]  # see red-dragon-xgkl
+        tree = parser.parse(source)
         self._observer.on_parse(time.perf_counter() - t0)
 
         t1 = time.perf_counter()
@@ -346,7 +345,7 @@ class BaseFrontend(Frontend):
             source=source,
             language=self._language,
             observer=self._observer,
-            constants=grammar_constants,  # type: ignore[arg-type]  # see red-dragon-xgkl
+            constants=grammar_constants,
             type_map=self._build_type_map(),
             stmt_dispatch=self._build_stmt_dispatch(),
             expr_dispatch=self._build_expr_dispatch(),
@@ -439,13 +438,13 @@ class BaseFrontend(Frontend):
                 Binop(
                     result_reg=new_reg,
                     operator=resolve_binop("+"),
-                    left=result,  # type: ignore[arg-type]  # see red-dragon-xgkl
-                    right=part,  # type: ignore[arg-type]  # see red-dragon-xgkl
+                    left=result,
+                    right=part,
                 ),
                 node=node,
             )
             result = new_reg
-        return result  # type: ignore[return-value]  # see red-dragon-xgkl
+        return result
 
     def _lower_const_literal(
         self, node: Any
@@ -610,7 +609,7 @@ class BaseFrontend(Frontend):
                         result_reg=reg,
                         obj_reg=obj_reg,
                         method_name=FuncName(method_name),
-                        args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                        args=tuple(arg_regs),
                     ),
                     node=node,
                 )
@@ -624,7 +623,7 @@ class BaseFrontend(Frontend):
                 CallFunction(
                     result_reg=reg,
                     func_name=FuncName(func_name),
-                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                    args=tuple(arg_regs),
                 ),
                 node=node,
             )
@@ -643,7 +642,7 @@ class BaseFrontend(Frontend):
             CallUnknown(
                 result_reg=reg,
                 target_reg=target_reg,
-                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                args=tuple(arg_regs),
             ),
             node=node,
         )
@@ -655,7 +654,7 @@ class BaseFrontend(Frontend):
         """Extract argument registers from a call arguments node."""
         if args_node is None:
             return []
-        return [  # type: ignore[return-value]  # see red-dragon-xgkl
+        return [
             self._lower_expr(c)
             for c in args_node.children
             if c.type
@@ -739,7 +738,7 @@ class BaseFrontend(Frontend):
     ) -> None:  # Any: tree-sitter nodes — untyped at Python boundary
         if target.type == BaseNodeType.IDENTIFIER:
             self._emit_inst(
-                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),
                 node=parent_node,
             )
         elif target.type in (
@@ -761,7 +760,7 @@ class BaseFrontend(Frontend):
                     StoreField(
                         obj_reg=obj_reg,
                         field_name=FieldName(self._node_text(attr_node)),
-                        value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-xgkl
+                        value_reg=val_reg,
                     ),
                     node=parent_node,
                 )
@@ -772,13 +771,13 @@ class BaseFrontend(Frontend):
                 obj_reg = self._lower_expr(obj_node)
                 idx_reg = self._lower_expr(idx_node)
                 self._emit_inst(
-                    StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                    StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                     node=parent_node,
                 )
         else:
             # Fallback: just store to the text of the target
             self._emit_inst(
-                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),
                 node=parent_node,
             )
 
@@ -790,7 +789,7 @@ class BaseFrontend(Frontend):
         left = node.child_by_field_name(self.ASSIGN_LEFT_FIELD)
         right = node.child_by_field_name(self.ASSIGN_RIGHT_FIELD)
         val_reg = self._lower_expr(right)
-        self._lower_store_target(left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._lower_store_target(left, val_reg, node)
 
     def _lower_augmented_assignment(
         self, node: Any
@@ -811,7 +810,7 @@ class BaseFrontend(Frontend):
             ),
             node=node,
         )
-        self._lower_store_target(left, result, node)  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._lower_store_target(left, result, node)
 
     def _lower_return(
         self, node: Any
@@ -865,7 +864,7 @@ class BaseFrontend(Frontend):
 
         if alt_node:
             self._emit_inst(Label_(label=false_label))
-            self._lower_alternative(alt_node, end_label)  # type: ignore[arg-type]  # see red-dragon-xgkl
+            self._lower_alternative(alt_node, end_label)
             self._emit_inst(Branch(label=end_label))
 
         self._emit_inst(Label_(label=end_label))
@@ -907,19 +906,19 @@ class BaseFrontend(Frontend):
         self._emit_inst(
             BranchIf(
                 cond_reg=cond_reg,
-                branch_targets=(true_label, false_label),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                branch_targets=(true_label, false_label),
             ),
             node=node,
         )
 
         self._emit_inst(Label_(label=true_label))
         self._lower_block(body_node)
-        self._emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._emit_inst(Branch(label=end_label))
 
         if alt_node:
-            self._emit_inst(Label_(label=false_label))  # type: ignore[arg-type]  # see red-dragon-xgkl
+            self._emit_inst(Label_(label=false_label))
             self._lower_alternative(alt_node, end_label)
-            self._emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-xgkl
+            self._emit_inst(Branch(label=end_label))
 
     def _lower_break(
         self, node: Any
@@ -927,7 +926,7 @@ class BaseFrontend(Frontend):
         """Lower break statement as BRANCH to innermost break target."""
         if self._break_target_stack:
             self._emit_inst(
-                Branch(label=self._break_target_stack[-1]),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                Branch(label=self._break_target_stack[-1]),
                 node=node,
             )
         else:
@@ -943,7 +942,7 @@ class BaseFrontend(Frontend):
         """Lower continue statement as BRANCH to innermost loop continue label."""
         if self._loop_stack:
             self._emit_inst(
-                Branch(label=self._loop_stack[-1]["continue_label"]),  # type: ignore[arg-type]  # see red-dragon-xgkl
+                Branch(label=self._loop_stack[-1]["continue_label"]),
                 node=node,
             )
         else:
@@ -986,7 +985,7 @@ class BaseFrontend(Frontend):
         )
 
         self._emit_inst(Label_(label=body_label))
-        self._push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._push_loop(loop_label, end_label)
         self._lower_block(body_node)
         self._pop_loop()
         self._emit_inst(Branch(label=loop_label))
@@ -1024,7 +1023,7 @@ class BaseFrontend(Frontend):
 
         self._emit_inst(Label_(label=body_label))
         update_label = self._fresh_label("for_update") if update_node else loop_label
-        self._push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
         self._pop_loop()
@@ -1066,8 +1065,8 @@ class BaseFrontend(Frontend):
         self._emit_inst(Label_(label=end_label))
 
         func_reg = self._fresh_reg()
-        self._emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)  # type: ignore[arg-type]  # see red-dragon-xgkl
-        self._emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
+        self._emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)
 
     def _lower_params(
         self, params_node: Any
@@ -1138,8 +1137,8 @@ class BaseFrontend(Frontend):
         self._emit_inst(Label_(label=end_label))
 
         cls_reg = self._fresh_reg()
-        self._emit_class_ref(class_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-xgkl
-        self._emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
+        self._emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     def _lower_raise_or_throw(
         self, node: Any, keyword: str = "raise"
@@ -1228,7 +1227,7 @@ class BaseFrontend(Frontend):
             ),
             node=node,
         )
-        self._lower_store_target(operand, result_reg, node)  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._lower_store_target(operand, result_reg, node)
         return result_reg
 
     def _lower_try_catch(

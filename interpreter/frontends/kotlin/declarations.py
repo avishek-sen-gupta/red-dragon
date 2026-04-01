@@ -1,4 +1,3 @@
-# pyright: standard
 """Kotlin-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -127,7 +126,7 @@ def lower_property_decl(
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
-    ctx.seed_var_type(var_name, type_hint)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    ctx.seed_var_type(var_name, type_hint)
 
 
 # -- function declaration ----------------------------------------------
@@ -215,7 +214,7 @@ def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> Register:
                 last_reg = ""
             else:
                 last_reg = ctx.lower_expr(child)
-    return last_reg  # type: ignore[return-value]  # see red-dragon-hzmm
+    return last_reg
 
 
 def lower_function_decl(
@@ -267,7 +266,7 @@ def lower_function_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -329,7 +328,7 @@ def _emit_synthetic_getter(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -380,7 +379,7 @@ def _emit_synthetic_setter(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -571,7 +570,7 @@ def _emit_primary_constructor_init(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -625,7 +624,7 @@ def lower_secondary_constructor(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -703,7 +702,7 @@ def lower_class_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
@@ -743,7 +742,7 @@ def lower_object_decl(
 # ---------------------------------------------------------------------------
 
 
-def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
     """Extract val/var params from a Kotlin primary_constructor as fields."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -770,10 +769,10 @@ def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
         fields[FieldName(fname)] = FieldInfo(
             name=FieldName(fname), type_hint=type_hint, has_initializer=has_default
         )
-    return fields  # type: ignore[name-defined]  # see red-dragon-545a
+    return fields
 
 
-def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":  # type: ignore[name-defined]  # see red-dragon-545a
+def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
     """Extract a ClassInfo from a Kotlin class_declaration node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -825,7 +824,7 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":  # type: igno
         (c for c in node.children if c.type == KNT.PRIMARY_CONSTRUCTOR), None
     )
     if primary_ctor is not None:
-        fields.update(_extract_kotlin_primary_ctor_fields(primary_ctor))  # type: ignore[name-defined]  # see red-dragon-545a
+        fields.update(_extract_kotlin_primary_ctor_fields(primary_ctor))
 
     body = next((c for c in node.children if c.type == KNT.CLASS_BODY), None)
     if body is None:
@@ -923,7 +922,7 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":  # type: igno
     )
 
 
-def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:  # type: ignore[name-defined]  # see red-dragon-545a
+def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
     """Recursively walk the AST and collect all class_declaration nodes."""
     from interpreter.frontends.symbol_table import ClassInfo
 
@@ -936,7 +935,7 @@ def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> 
         _collect_kotlin_classes(child, accumulator)
 
 
-def extract_kotlin_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
+def extract_kotlin_symbols(root) -> "SymbolTable":
     """Walk the Kotlin AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

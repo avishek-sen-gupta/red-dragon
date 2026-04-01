@@ -1,4 +1,3 @@
-# pyright: standard
 """PHP-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -70,7 +69,7 @@ def _lower_php_interpolated_children(
     ``_EXPR_DISPATCH`` and falls back to SYMBOLIC -- variable-variable
     indirection cannot be statically lowered.
     """
-    parts: list[str] = [  # type: ignore[misc]  # see red-dragon-hzmm
+    parts: list[str] = [
         _lower_interpolated_child(ctx, child)
         for child in children
         if _is_interpolation_relevant(child)
@@ -113,12 +112,12 @@ def _lower_interpolated_string_parts(
         new_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
-                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part  # type: ignore[misc]  # see red-dragon-hzmm
+                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part
             ),
             node=node,
         )
         result = new_reg
-    return result  # type: ignore[return-value]  # see red-dragon-hzmm
+    return result
 
 
 def lower_php_encapsed_string(
@@ -162,7 +161,7 @@ def lower_php_func_call(
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
             ),
             node=node,
         )
@@ -172,7 +171,7 @@ def lower_php_func_call(
     target_reg = ctx.lower_expr(func_node) if func_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -195,7 +194,7 @@ def lower_php_method_call(
             result_reg=reg,
             obj_reg=obj_reg,
             method_name=FuncName(method_name),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -243,7 +242,7 @@ def lower_php_assignment_expr(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_php_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_php_store_target(ctx, left, val_reg, node)
     return val_reg
 
 
@@ -267,7 +266,7 @@ def lower_php_augmented_assignment_expr(
         ),
         node=node,
     )
-    lower_php_store_target(ctx, left, result, node)  # type: ignore[misc]  # see red-dragon-hzmm
+    lower_php_store_target(ctx, left, result, node)
     return result
 
 
@@ -277,7 +276,7 @@ def lower_php_store_target(
     """Store to a PHP target: variable_name, member_access, subscript, or fallback."""
     if target.type in (PHPNodeType.VARIABLE_NAME, PHPNodeType.NAME):
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == PHPNodeType.MEMBER_ACCESS_EXPRESSION:
@@ -289,7 +288,7 @@ def lower_php_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(name_node)),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
@@ -299,23 +298,23 @@ def lower_php_store_target(
             obj_reg = ctx.lower_expr(children[0])
             idx_reg = ctx.lower_expr(children[1])
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == PHPNodeType.LIST_LITERAL:
         vars_ = [c for c in target.children if c.is_named]
         for i, var_node in enumerate(vars_):
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=i))  # type: ignore[misc]  # see red-dragon-hzmm
+            ctx.emit_inst(Const(result_reg=idx_reg, value=i))
             elem_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
                 node=var_node,
             )
-            lower_php_store_target(ctx, var_node, elem_reg, parent_node)  # type: ignore[misc]  # see red-dragon-hzmm
+            lower_php_store_target(ctx, var_node, elem_reg, parent_node)
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 
@@ -407,7 +406,7 @@ def lower_php_object_creation(
                 result_reg=ctor_reg,
                 obj_reg=obj_reg,
                 method_name=FuncName("__construct"),
-                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                args=tuple(arg_regs),
             ),
             node=node,
         )
@@ -431,7 +430,7 @@ def lower_php_object_creation(
             result_reg=ctor_reg,
             obj_reg=obj_reg,
             method_name=FuncName("__construct"),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -495,7 +494,7 @@ def _lower_php_anonymous_class(
 
     ctx.emit_inst(Label_(label=end_label))
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
@@ -678,7 +677,7 @@ def lower_php_arrow_function(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
@@ -708,7 +707,7 @@ def lower_php_scoped_call(
             result_reg=reg,
             obj_reg=class_reg,
             method_name=FuncName(method_name),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -744,7 +743,7 @@ def lower_php_anonymous_function(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
@@ -822,7 +821,7 @@ def lower_php_reference_assignment(
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right) if right else ctx.fresh_reg()
     if left:
-        lower_php_store_target(ctx, left, val_reg, node)  # type: ignore[misc]  # see red-dragon-hzmm
+        lower_php_store_target(ctx, left, val_reg, node)
     return val_reg
 
 

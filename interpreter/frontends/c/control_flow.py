@@ -1,4 +1,3 @@
-# pyright: standard
 """C-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ def lower_do_while(
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -60,7 +59,7 @@ def lower_switch(
     subject_reg = ctx.lower_expr(cond_node)
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.break_target_stack.append(end_label)
 
     cases = (
         [c for c in body_node.children if c.type == CNodeType.CASE_STATEMENT]

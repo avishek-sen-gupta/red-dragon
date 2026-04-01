@@ -1,4 +1,3 @@
-# pyright: standard
 """Parse tree-sitter C# pattern nodes into Pattern ADT."""
 
 from __future__ import annotations
@@ -138,7 +137,7 @@ def _parse_constant(
     ctx: TreeSitterEmitContext, node: Any
 ) -> LiteralPattern:  # Any: tree-sitter node — untyped at Python boundary
     """Parse a constant value node into a LiteralPattern."""
-    return LiteralPattern(value=_parse_const_value(ctx, node))  # type: ignore[misc]  # see red-dragon-hzmm
+    return LiteralPattern(value=_parse_const_value(ctx, node))
 
 
 def _parse_const_value(

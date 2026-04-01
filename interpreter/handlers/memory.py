@@ -1,8 +1,6 @@
 """Memory-related opcode handlers: LOAD_FIELD, STORE_FIELD, LOAD_INDEX, STORE_INDEX,
 LOAD_INDIRECT, STORE_INDIRECT, ADDRESS_OF, LOAD_FIELD_INDIRECT."""
 
-# pyright: standard
-
 from __future__ import annotations
 
 import logging
@@ -197,7 +195,7 @@ def _handle_address_of(
     vm.heap_set(
         Address(mem_addr),
         HeapObject(
-            type_hint=None,  # type: ignore[reportArgumentType]  # see red-dragon-zur9
+            type_hint=None,
             fields={FieldName("0", FieldKind.INDEX): typed_from_runtime(current_val)},
         ),
     )
@@ -353,7 +351,7 @@ def _handle_store_indirect(
     logger.debug("store_indirect on non-pointer %s", obj_desc)
     return ExecutionResult.success(
         StateUpdate(
-            reasoning=f"store_indirect on {obj_desc} = {val!r} (non-pointer, no-op)",  # type: ignore[reportUndefinedVariable]  # see red-dragon-xmot
+            reasoning=f"store_indirect on {obj_desc} = {val!r} (non-pointer, no-op)",
         )
     )
 
@@ -487,7 +485,7 @@ def _handle_store_index(
     assert isinstance(t, StoreIndex)
     arr_val = _resolve_reg(vm, t.arr_reg).value
     idx_val = _resolve_reg(vm, t.index_reg).value
-    tv = _resolve_reg(vm, t.value_reg)  # type: ignore[reportArgumentType]  # see red-dragon-d0pv
+    tv = _resolve_reg(vm, t.value_reg)
     addr = _heap_addr(arr_val)
     if addr and not vm.heap_contains(addr):
         # Materialise a synthetic heap entry for symbolic arrays so that

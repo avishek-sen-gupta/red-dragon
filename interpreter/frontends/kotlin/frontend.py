@@ -1,4 +1,3 @@
-# pyright: standard
 """KotlinFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
@@ -48,7 +47,7 @@ class KotlinFrontend(BaseFrontend):
     def _build_expr_dispatch(
         self,
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
-        return {  # type: ignore[return-value]  # see red-dragon-rke4
+        return {
             KNT.SIMPLE_IDENTIFIER: kotlin_expr.lower_kotlin_identifier,
             KNT.INTEGER_LITERAL: common_expr.lower_const_literal,
             KNT.LONG_LITERAL: common_expr.lower_const_literal,
@@ -94,7 +93,7 @@ class KotlinFrontend(BaseFrontend):
             KNT.ANONYMOUS_FUNCTION: kotlin_expr.lower_anonymous_function,
             KNT.UNSIGNED_LITERAL: kotlin_expr.lower_unsigned_literal,
             KNT.CALLABLE_REFERENCE: kotlin_expr.lower_callable_reference,
-            KNT.SPREAD_EXPRESSION: kotlin_expr.lower_spread_expression,  # type: ignore[dict-item]  # see red-dragon-rke4
+            KNT.SPREAD_EXPRESSION: kotlin_expr.lower_spread_expression,
         }
 
     def _build_stmt_dispatch(

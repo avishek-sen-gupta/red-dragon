@@ -1,4 +1,3 @@
-# pyright: standard
 """Tool handler implementations for the RedDragon MCP server.
 
 Each handle_* function is a pure function that returns a JSON-serializable dict.
@@ -102,7 +101,7 @@ def handle_analyze_program(source: str, language: str) -> dict[str, Any]:
             for f in sorted(call_graph.functions, key=lambda f: str(f.label))
         ],
         "call_graph": [
-            {"caller": s.caller.label, "callees": sorted(c.label for c in s.callees)}  # type: ignore[type-var]  # see red-dragon-1la4
+            {"caller": s.caller.label, "callees": sorted(c.label for c in s.callees)}
             for s in call_graph.call_sites
         ],
         "summary_counts": {
@@ -187,7 +186,7 @@ def handle_get_call_chain(
     chains = []
     func_by_label = {f.label: f for f in interprocedural.call_graph.functions}
     for call in top_calls:
-        callee = func_by_label.get(call.callee_label)  # type: ignore[arg-type]  # see red-dragon-m889
+        callee = func_by_label.get(call.callee_label)
         if not callee:
             callee = next(
                 (
