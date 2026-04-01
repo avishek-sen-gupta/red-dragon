@@ -1,3 +1,4 @@
+# pyright: standard
 """Configuration for LLM-assisted AST repair."""
 
 from __future__ import annotations

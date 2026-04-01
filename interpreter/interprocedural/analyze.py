@@ -1,3 +1,4 @@
+# pyright: standard
 """Interprocedural analysis entry point — thin orchestrator."""
 
 from __future__ import annotations
