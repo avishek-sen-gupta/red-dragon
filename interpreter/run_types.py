@@ -1,3 +1,4 @@
+# pyright: standard
 """Run pipeline data types (pure data, no business logic)."""
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ class VMConfig:
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC
     source_language: str = ""
     io_provider: Any = (
-        None  # Optional CobolIOProvider — Any to avoid COBOL import in core VM
+        None  # Any: COBOL isolation boundary — CobolIOProvider avoided in core VM
     )
 
 
