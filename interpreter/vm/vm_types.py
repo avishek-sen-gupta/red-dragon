@@ -1,9 +1,11 @@
+# pyright: standard
 """Symbolic VM — data types (pure data, no business logic)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from collections.abc import ItemsView, KeysView, ValuesView
 
 from pydantic import BaseModel, ConfigDict
 
@@ -152,7 +154,7 @@ class VMState:
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     data_layout: dict[str, dict] = field(default_factory=dict)
     io_provider: Any = (
-        None  # Optional CobolIOProvider — Any to avoid COBOL import in core VM
+        None  # Any: Optional CobolIOProvider — avoids COBOL import in core VM — see red-dragon-r32l
     )
 
     def heap_get(self, addr: Address) -> HeapObject:
@@ -173,11 +175,11 @@ class VMState:
             self._heap[addr] = HeapObject()
         return self._heap[addr]
 
-    def heap_items(self):
+    def heap_items(self) -> ItemsView[Address, HeapObject]:
         """Iterate over all (address, HeapObject) pairs."""
         return self._heap.items()
 
-    def heap_keys(self):
+    def heap_keys(self) -> KeysView[Address]:
         """Iterate over all heap addresses."""
         return self._heap.keys()
 
@@ -189,11 +191,11 @@ class VMState:
         """Set region data at address."""
         self._regions[addr] = data
 
-    def region_items(self):
+    def region_items(self) -> ItemsView[Address, bytearray]:
         """Iterate over all (address, bytearray) pairs."""
         return self._regions.items()
 
-    def region_keys(self):
+    def region_keys(self) -> KeysView[Address]:
         """Iterate over all region addresses."""
         return self._regions.keys()
 
@@ -205,7 +207,7 @@ class VMState:
         """Number of heap objects."""
         return len(self._heap)
 
-    def heap_values(self):
+    def heap_values(self) -> ValuesView[HeapObject]:
         """Iterate over all HeapObjects."""
         return self._heap.values()
 
@@ -249,7 +251,7 @@ class HeapWrite(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     obj_addr: Address
     field: FieldName
-    value: Any
+    value: Any  # Any: heterogeneous heap field value (TypedValue | raw runtime) — see red-dragon-r32l
 
 
 class NewObject(BaseModel):
@@ -272,7 +274,7 @@ class BuiltinResult:
     Heap-mutating builtins express mutations as new_objects + heap_writes.
     """
 
-    value: Any
+    value: Any  # Any: heterogeneous VM return value (int | str | bool | TypedValue | Pointer | SymbolicValue | None | Uncomputable) — see red-dragon-r32l
     new_objects: list[NewObject] = field(default_factory=list)
     heap_writes: list[HeapWrite] = field(default_factory=list)
 
@@ -289,8 +291,12 @@ VOID_RETURN: TypedValue = typed(None, scalar(TypeName.VOID))
 
 
 class StateUpdate(BaseModel):
-    register_writes: dict[Register, Any] = {}
-    var_writes: dict[VarName, Any] = {}
+    register_writes: dict[Register, Any] = (
+        {}
+    )  # Any: TypedValue | raw runtime value (pre-materialization) — see red-dragon-r32l
+    var_writes: dict[VarName, Any] = (
+        {}
+    )  # Any: TypedValue | raw runtime value (pre-materialization) — see red-dragon-r32l
     heap_writes: list[HeapWrite] = []
     new_objects: list[NewObject] = []
     region_writes: list[RegionWrite] = []
@@ -300,7 +306,9 @@ class StateUpdate(BaseModel):
     next_label: CodeLabel | None = None
     call_push: StackFramePush | None = None
     call_pop: bool = False
-    return_value: Any = VOID_RETURN
+    return_value: Any = (
+        VOID_RETURN  # Any: TypedValue | raw runtime value (pre-materialization) — see red-dragon-r32l
+    )
     path_condition: str | None = None
     reasoning: str = ""
 
