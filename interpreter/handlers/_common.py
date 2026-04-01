@@ -42,7 +42,9 @@ def _resolve_call_args(vm: VMState, arg_operands: list) -> list[TypedValue]:
     return args
 
 
-def _symbolic_name(val: Any) -> str:
+def _symbolic_name(
+    val: Any,
+) -> str:  # Any: display boundary — raw VM value (SymbolicValue, dict, or primitive)
     """Get a human-readable name for a value, suitable for symbolic hints."""
     if isinstance(val, SymbolicValue):
         return val.name
@@ -51,7 +53,9 @@ def _symbolic_name(val: Any) -> str:
     return repr(val)
 
 
-def _symbolic_type_hint(val: Any) -> TypeExpr:
+def _symbolic_type_hint(
+    val: Any,
+) -> TypeExpr:  # Any: display boundary — raw VM value (SymbolicValue or dict)
     """Extract a type hint from a symbolic value (SymbolicValue or dict)."""
     if isinstance(val, SymbolicValue):
         return scalar(val.type_hint) if val.type_hint else UNKNOWN
