@@ -1,16 +1,18 @@
+# pyright: standard
 """Pure functions to extract ErrorSpan regions from a tree-sitter AST."""
 
 from __future__ import annotations
 
 import logging
 from functools import reduce
+from typing import Any
 
 from interpreter.ast_repair.error_span import ErrorSpan
 
 logger = logging.getLogger(__name__)
 
 
-def extract(root_node, source: bytes, context_lines: int = 3) -> list[ErrorSpan]:
+def extract(root_node: Any, source: bytes, context_lines: int = 3) -> list[ErrorSpan]:
     """Walk a tree-sitter AST and collect error/missing spans.
 
     Fast-path: returns empty list immediately when ``root_node.has_error`` is False.
@@ -28,12 +30,12 @@ def extract(root_node, source: bytes, context_lines: int = 3) -> list[ErrorSpan]
     return [_attach_context(span, lines, context_lines) for span in merged]
 
 
-def _is_error_node(node) -> bool:
+def _is_error_node(node: Any) -> bool:
     """Check whether a tree-sitter node represents a parse error or missing token."""
     return node.is_error or node.is_missing
 
 
-def _collect_error_nodes(node) -> list[ErrorSpan]:
+def _collect_error_nodes(node: Any) -> list[ErrorSpan]:
     """Recursively collect ERROR/MISSING nodes from the AST."""
     if _is_error_node(node):
         return [
