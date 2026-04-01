@@ -1,3 +1,4 @@
+# pyright: standard
 """Address — typed heap/region address."""
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ class Address:
 
     value: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.value, str):
             raise TypeError(
                 f"Address.value must be str, got {type(self.value).__name__}: {self.value!r}"
