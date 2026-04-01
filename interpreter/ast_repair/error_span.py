@@ -1,3 +1,4 @@
+# pyright: standard
 """ErrorSpan — frozen dataclass representing a contiguous error region in source."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# pyright: standard
 """AmbiguityHandler -- decides what to do when overload resolution is inconclusive."""
 
 from __future__ import annotations

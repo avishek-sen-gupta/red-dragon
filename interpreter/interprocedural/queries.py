@@ -1,3 +1,4 @@
+# pyright: standard
 """Query interface for interprocedural dataflow analysis results."""
 
 from __future__ import annotations
