@@ -1,4 +1,3 @@
-# pyright: standard
 """Python-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -73,7 +72,7 @@ def lower_python_if(
 
     if has_alternative:
         ctx.emit_inst(Label_(label=false_label))
-        _lower_python_elif_chain(ctx, elif_clauses, else_clause, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+        _lower_python_elif_chain(ctx, elif_clauses, else_clause, end_label)
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -94,7 +93,7 @@ def _lower_python_elif_chain(
             body = else_clause.child_by_field_name("body")
             if body:
                 ctx.lower_block(body)
-        ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
+        ctx.emit_inst(Branch(label=end_label))
         return
 
     current = elif_clauses[0]
@@ -106,16 +105,16 @@ def _lower_python_elif_chain(
     false_label = ctx.fresh_label("elif_false") if has_more else end_label
 
     ctx.emit_inst(
-        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
         node=current,
     )
 
     ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
+    ctx.emit_inst(Branch(label=end_label))
 
     if has_more:
-        ctx.emit_inst(Label_(label=false_label))  # type: ignore[misc]  # see red-dragon-hzmm
+        ctx.emit_inst(Label_(label=false_label))
         _lower_python_elif_chain(ctx, remaining_elifs, else_clause, end_label)
 
 
@@ -159,15 +158,15 @@ def lower_for(
     ctx.emit_inst(Label_(label=body_label))
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
-    lower_store_target(ctx, left, elem_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    lower_store_target(ctx, left, elem_reg, node)
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     ctx.lower_block(body_node)
     ctx.pop_loop()
 
     ctx.emit_inst(Label_(label=update_label))
-    _emit_for_increment(ctx, idx_reg, loop_label)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    _emit_for_increment(ctx, idx_reg, loop_label)
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -285,7 +284,7 @@ def lower_with(
         )
         if var_name:
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=enter_reg))
-        enter_info.append((ctx_reg, var_name))  # type: ignore[arg-type]  # see red-dragon-y5bm
+        enter_info.append((ctx_reg, var_name))
 
     ctx.lower_block(body_node)
 
@@ -295,7 +294,7 @@ def lower_with(
         ctx.emit_inst(
             CallMethod(
                 result_reg=exit_reg,
-                obj_reg=ctx_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+                obj_reg=ctx_reg,
                 method_name=FuncName("__exit__"),
                 args=(),
             ),
@@ -325,7 +324,7 @@ def lower_decorated_def(
     ctx.lower_stmt(definition)
 
     # Extract the defined name
-    name_node = definition.child_by_field_name(ctx.constants.func_name_field)  # type: ignore[attr-defined]  # see red-dragon-zznx
+    name_node = definition.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node)
 
     # Apply decorators bottom-up (last decorator applied first)
@@ -416,7 +415,7 @@ def lower_import(
     import_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=import_reg, func_name=FuncName("import"), args=(module_name,)  # type: ignore[arg-type]  # see red-dragon-hzmm
+            result_reg=import_reg, func_name=FuncName("import"), args=(module_name,)
         ),
         node=node,
     )
@@ -449,7 +448,7 @@ def lower_import_from(
             CallFunction(
                 result_reg=import_reg,
                 func_name=FuncName("import"),
-                args=(f"from {module_name} import {imported_name}",),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                args=(f"from {module_name} import {imported_name}",),
             ),
             node=node,
         )

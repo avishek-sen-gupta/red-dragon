@@ -1,4 +1,3 @@
-# pyright: standard
 """Ruby-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -73,7 +72,7 @@ def lower_unless(
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
-        _lower_ruby_alternative(ctx, alt_node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+        _lower_ruby_alternative(ctx, alt_node, end_label)
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -106,7 +105,7 @@ def lower_until(
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     ctx.lower_block(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -169,7 +168,7 @@ def lower_ruby_for(
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -310,7 +309,7 @@ def lower_ruby_if(
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
-        _lower_ruby_alternative(ctx, alt_node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+        _lower_ruby_alternative(ctx, alt_node, end_label)
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -347,17 +346,17 @@ def _lower_ruby_elsif(
     false_label = ctx.fresh_label("elsif_false") if alt_node else end_label
 
     ctx.emit_inst(
-        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)), node=node  # type: ignore[arg-type]  # see red-dragon-hzmm
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)), node=node
     )
 
     ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit_inst(Label_(label=false_label))  # type: ignore[misc]  # see red-dragon-hzmm
+        ctx.emit_inst(Label_(label=false_label))
         _lower_ruby_alternative(ctx, alt_node, end_label)
-        ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
+        ctx.emit_inst(Branch(label=end_label))
 
 
 def lower_ruby_elsif_stmt(
@@ -365,7 +364,7 @@ def lower_ruby_elsif_stmt(
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Handle elsif appearing as a top-level statement (fallback)."""
     end_label = ctx.fresh_label("elsif_end")
-    _lower_ruby_elsif(ctx, node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+    _lower_ruby_elsif(ctx, node, end_label)
     ctx.emit_inst(Label_(label=end_label))
 
 
@@ -462,7 +461,7 @@ def lower_ruby_while_modifier(
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     ctx.lower_stmt(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -504,7 +503,7 @@ def lower_ruby_until_modifier(
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(loop_label, end_label)
     ctx.lower_stmt(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -670,14 +669,14 @@ def _extract_case_match_arms(node) -> list:
     return arms
 
 
-def _case_match_pattern_of(ctx: TreeSitterEmitContext, arm) -> "Pattern":  # type: ignore[misc]  # see red-dragon-hzmm
+def _case_match_pattern_of(ctx: TreeSitterEmitContext, arm) -> "Pattern":
     """Extract and parse the pattern from an in_clause or synthetic else arm."""
     from interpreter.frontends.common.patterns import WildcardPattern
     from interpreter.frontends.ruby.patterns import parse_ruby_pattern
 
     if isinstance(arm, tuple) and arm[0] == "__else__":
         return WildcardPattern()
-    pattern_node = arm.child_by_field_name("pattern")  # type: ignore[misc]  # see red-dragon-hzmm
+    pattern_node = arm.child_by_field_name("pattern")
     return parse_ruby_pattern(ctx, pattern_node)
 
 
@@ -694,15 +693,15 @@ def _case_match_body_of(ctx: TreeSitterEmitContext, arm) -> str:
         else_node = arm[1]
         body_children = [c for c in else_node.children if c.is_named]
         # Lower the last named child as the expression result
-        return ctx.lower_expr(body_children[-1]) if body_children else ctx.fresh_reg()  # type: ignore[return-value]  # see red-dragon-hzmm
+        return ctx.lower_expr(body_children[-1]) if body_children else ctx.fresh_reg()
 
-    body_node = arm.child_by_field_name("body")  # type: ignore[misc]  # see red-dragon-hzmm
+    body_node = arm.child_by_field_name("body")
     # body is a `then` node; its named children (excluding `then` keyword) are body exprs
     body_exprs = [c for c in body_node.children if c.is_named]
     # Lower all but the last as statements, return the last as expression
     for expr in body_exprs[:-1]:
         ctx.lower_stmt(expr)
-    return ctx.lower_expr(body_exprs[-1]) if body_exprs else ctx.fresh_reg()  # type: ignore[return-value]  # see red-dragon-hzmm
+    return ctx.lower_expr(body_exprs[-1]) if body_exprs else ctx.fresh_reg()
 
 
 _RUBY_CASE_MATCH_SPEC = None  # lazy init to avoid circular imports
@@ -730,7 +729,7 @@ def lower_case_match(
 
     subject_node = node.child_by_field_name("value")
     subject_reg = ctx.lower_expr(subject_node)
-    return lower_match_as_expr(ctx, subject_reg, node, _get_case_match_spec())  # type: ignore[arg-type]  # see red-dragon-hzmm
+    return lower_match_as_expr(ctx, subject_reg, node, _get_case_match_spec())
 
 
 def lower_case_match_stmt(

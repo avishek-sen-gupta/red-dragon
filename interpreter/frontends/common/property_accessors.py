@@ -1,4 +1,3 @@
-# pyright: standard
 """Common property accessor registration and emit helpers.
 
 Reusable by any frontend that supports property getters/setters
@@ -48,7 +47,7 @@ def emit_field_load_or_getter(
         ctx.emit_inst(
             CallMethod(
                 result_reg=reg,
-                obj_reg=obj_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                obj_reg=obj_reg,
                 method_name=FuncName(f"__get_{field_name}__"),
                 args=(),
             ),
@@ -59,7 +58,7 @@ def emit_field_load_or_getter(
     ctx.emit_inst(
         LoadField(
             result_reg=reg,
-            obj_reg=obj_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+            obj_reg=obj_reg,
             field_name=FieldName(field_name),
         ),
         node=node,
@@ -80,18 +79,18 @@ def emit_field_store_or_setter(
         ctx.emit_inst(
             CallMethod(
                 result_reg=ctx.fresh_reg(),
-                obj_reg=obj_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                obj_reg=obj_reg,
                 method_name=FuncName(f"__set_{field_name}__"),
-                args=(val_reg,),  # type: ignore[arg-type]  # see red-dragon-2us7
+                args=(val_reg,),
             ),
             node=node,
         )
         return
     ctx.emit_inst(
         StoreField(
-            obj_reg=obj_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+            obj_reg=obj_reg,
             field_name=FieldName(field_name),
-            value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+            value_reg=val_reg,
         ),
         node=node,
     )

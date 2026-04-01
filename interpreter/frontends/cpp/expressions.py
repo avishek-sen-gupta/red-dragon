@@ -1,4 +1,3 @@
-# pyright: standard
 """C++-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -52,7 +51,7 @@ def lower_new_expr(
             result_reg=reg,
             func_name=FuncName(type_name),
             type_hint=scalar(type_name),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -111,7 +110,7 @@ def lower_lambda(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
@@ -185,7 +184,7 @@ def lower_cpp_call(
                     result_reg=result_reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    args=tuple(arg_regs),
                 ),
                 node=node,
             )
@@ -281,7 +280,7 @@ def lower_cpp_assignment_expr(
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
-    lower_cpp_store_target(ctx, left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+    lower_cpp_store_target(ctx, left, val_reg, node)
     return val_reg
 
 
@@ -316,7 +315,7 @@ def lower_cpp_store_target(
         else:
             idx_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
             node=parent_node,
         )
     else:

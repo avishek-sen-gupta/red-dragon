@@ -1,4 +1,3 @@
-# pyright: standard
 """PIC clause parser — ANTLR visitor that walks the parse tree.
 
 Parses COBOL PIC strings (e.g. "S9(5)V99", "X(8)") into
@@ -102,15 +101,15 @@ class _PicVisitor(CobolDataTypesVisitor):
         if ctx.charTypeIndicator():
             self.alphanumeric_length += 1
         elif ctx.nchars():
-            numberof_ctx = ctx.nchars().numberOf()  # type: ignore[union-attr]  # see red-dragon-ax5h
-            self.alphanumeric_length += _extract_repeat_count(numberof_ctx.getText())  # type: ignore[union-attr]  # see red-dragon-ax5h
+            numberof_ctx = ctx.nchars().numberOf()
+            self.alphanumeric_length += _extract_repeat_count(numberof_ctx.getText())
         return None
 
     def visitLeftSideAlphanumericIndicator(
         self, ctx: CobolDataTypes.LeftSideAlphanumericIndicatorContext
     ):
         if ctx.alphaNumericIndicator():
-            return self.visitAlphaNumericIndicator(ctx.alphaNumericIndicator())  # type: ignore[arg-type]  # see red-dragon-ax5h
+            return self.visitAlphaNumericIndicator(ctx.alphaNumericIndicator())
         if ctx.digitIndicator():
             self.alphanumeric_length += self._count_single_digit_indicator(
                 ctx.digitIndicator()
@@ -121,7 +120,7 @@ class _PicVisitor(CobolDataTypesVisitor):
         self, ctx: CobolDataTypes.RightSideAlphanumericIndicatorContext
     ):
         if ctx.alphaNumericIndicator():
-            return self.visitAlphaNumericIndicator(ctx.alphaNumericIndicator())  # type: ignore[arg-type]  # see red-dragon-ax5h
+            return self.visitAlphaNumericIndicator(ctx.alphaNumericIndicator())
         if ctx.digitIndicator():
             self.alphanumeric_length += self._count_single_digit_indicator(
                 ctx.digitIndicator()
