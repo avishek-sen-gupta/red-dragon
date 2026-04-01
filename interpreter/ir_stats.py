@@ -1,11 +1,14 @@
+# pyright: standard
 """Pure functions for computing statistics over IR instruction lists."""
 
 from __future__ import annotations
 
 from collections import Counter
 
+from interpreter.instructions import Instruction
 
-def count_opcodes(instructions: list[InstructionBase]) -> dict[str, int]:
+
+def count_opcodes(instructions: list[Instruction]) -> dict[str, int]:
     """Return a frequency map of opcode names in the given instruction list.
 
     Args:
