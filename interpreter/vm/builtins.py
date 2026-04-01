@@ -1,3 +1,4 @@
+# pyright: standard
 """Built-in function implementations for the symbolic interpreter."""
 
 from __future__ import annotations
@@ -148,7 +149,9 @@ def _builtin_keys(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return _builtin_array_of(field_names, vm)
 
 
-def _builtin_array_of(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+def _builtin_array_of(
+    args: list[Any], vm: VMState
+) -> BuiltinResult:  # Any: mixed TypedValue | raw runtime items
     """Create a heap-allocated array from arguments (arrayOf, intArrayOf, Array, etc.)."""
     addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
@@ -457,36 +460,38 @@ def _builtin_isinstance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 class Builtins:
     """Table of built-in function implementations."""
 
-    TABLE: dict[FuncName, Any] = {
-        FuncName("len"): _builtin_len,
-        FuncName("strlen"): _builtin_len,
-        FuncName("range"): _builtin_range,
-        FuncName("print"): _builtin_print,
-        FuncName("println"): _builtin_println,
-        FuncName("int"): _builtin_int,
-        FuncName("float"): _builtin_float,
-        FuncName("str"): _builtin_str,
-        FuncName("bool"): _builtin_bool,
-        FuncName("abs"): _builtin_abs,
-        FuncName("max"): _builtin_max,
-        FuncName("min"): _builtin_min,
-        FuncName("keys"): _builtin_keys,
-        FuncName("arrayOf"): _builtin_array_of,
-        FuncName("intArrayOf"): _builtin_array_of,
-        FuncName("listOf"): _builtin_array_of,
-        FuncName("mutableListOf"): _builtin_array_of,
-        FuncName("Array"): _builtin_array_of,
-        FuncName("slice"): _builtin_slice,
-        FuncName("clone"): _builtin_clone,
-        FuncName("isinstance"): _builtin_isinstance,
-        FuncName("object_rest"): _builtin_object_rest,
-        FuncName("str_upper"): _builtin_str_upper,
-        FuncName("str_lower"): _builtin_str_lower,
-        FuncName("str_strip"): _builtin_str_strip,
-        FuncName("list_append"): _builtin_list_append,
-        FuncName("dict_contains_key"): _builtin_dict_contains_key,
-        **BYTE_BUILTINS,
-    }
+    TABLE: dict[FuncName, Any] = (
+        {  # Any: Callable[(list[TypedValue], VMState) -> BuiltinResult] — display boundary
+            FuncName("len"): _builtin_len,
+            FuncName("strlen"): _builtin_len,
+            FuncName("range"): _builtin_range,
+            FuncName("print"): _builtin_print,
+            FuncName("println"): _builtin_println,
+            FuncName("int"): _builtin_int,
+            FuncName("float"): _builtin_float,
+            FuncName("str"): _builtin_str,
+            FuncName("bool"): _builtin_bool,
+            FuncName("abs"): _builtin_abs,
+            FuncName("max"): _builtin_max,
+            FuncName("min"): _builtin_min,
+            FuncName("keys"): _builtin_keys,
+            FuncName("arrayOf"): _builtin_array_of,
+            FuncName("intArrayOf"): _builtin_array_of,
+            FuncName("listOf"): _builtin_array_of,
+            FuncName("mutableListOf"): _builtin_array_of,
+            FuncName("Array"): _builtin_array_of,
+            FuncName("slice"): _builtin_slice,
+            FuncName("clone"): _builtin_clone,
+            FuncName("isinstance"): _builtin_isinstance,
+            FuncName("object_rest"): _builtin_object_rest,
+            FuncName("str_upper"): _builtin_str_upper,
+            FuncName("str_lower"): _builtin_str_lower,
+            FuncName("str_strip"): _builtin_str_strip,
+            FuncName("list_append"): _builtin_list_append,
+            FuncName("dict_contains_key"): _builtin_dict_contains_key,
+            **BYTE_BUILTINS,
+        }
+    )
 
     @classmethod
     def lookup_builtin(cls, name: FuncName) -> Any | None:
@@ -498,13 +503,15 @@ class Builtins:
 
     # Method builtins: obj.method(args) → builtin(obj, *args)
     # Signature: (obj, args: list, vm) -> Any
-    METHOD_TABLE: dict[FuncName, Any] = {
-        FuncName("subList"): _method_slice,
-        FuncName("substring"): _method_slice,
-        FuncName("slice"): _method_slice,
-        FuncName("to_string"): _method_to_string,
-        FuncName("toString"): _method_to_string,
-        FuncName("length"): _method_length,
-        FuncName("size"): _method_length,
-        FuncName("Length"): _method_length,
-    }
+    METHOD_TABLE: dict[FuncName, Any] = (
+        {  # Any: Callable[(TypedValue, list[TypedValue], VMState) -> BuiltinResult] — display boundary
+            FuncName("subList"): _method_slice,
+            FuncName("substring"): _method_slice,
+            FuncName("slice"): _method_slice,
+            FuncName("to_string"): _method_to_string,
+            FuncName("toString"): _method_to_string,
+            FuncName("length"): _method_length,
+            FuncName("size"): _method_length,
+            FuncName("Length"): _method_length,
+        }
+    )
