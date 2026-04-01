@@ -1,4 +1,3 @@
-# pyright: standard
 """CFG Builder."""
 
 from __future__ import annotations
@@ -355,9 +354,9 @@ def extract_function_instructions(
         (
             i
             for i, inst in enumerate(instructions)
-            if inst.opcode == Opcode.LABEL  # type: ignore[attr-defined]  # see red-dragon-4ei7
-            and inst.label.is_function()  # type: ignore[attr-defined]  # see red-dragon-4ei7
-            and inst.label.extract_name(func_prefix) == func_name  # type: ignore[attr-defined]  # see red-dragon-4ei7
+            if inst.opcode == Opcode.LABEL
+            and inst.label.is_function()
+            and inst.label.extract_name(func_prefix) == func_name
         ),
         -1,
     )
@@ -368,8 +367,8 @@ def extract_function_instructions(
         (
             i
             for i in range(start_idx + 1, len(instructions))
-            if instructions[i].opcode == Opcode.LABEL  # type: ignore[attr-defined]  # see red-dragon-4ei7
-            and instructions[i].label.starts_with(end_prefix)  # type: ignore[attr-defined]  # see red-dragon-4ei7
+            if instructions[i].opcode == Opcode.LABEL
+            and instructions[i].label.starts_with(end_prefix)
         ),
         -1,
     )

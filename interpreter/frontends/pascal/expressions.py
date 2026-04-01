@@ -1,4 +1,3 @@
-# pyright: standard
 """Pascal-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -93,7 +92,7 @@ def lower_pascal_call(
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
             ),
             node=node,
         )
@@ -103,7 +102,7 @@ def lower_pascal_call(
     ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -113,7 +112,7 @@ def _extract_pascal_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     """Extract argument registers from exprArgs node."""
     if args_node is None:
         return []
-    return [  # type: ignore[return-value]  # see red-dragon-hzmm
+    return [
         ctx.lower_expr(c)
         for c in args_node.children
         if c.is_named and c.type not in KEYWORD_NOISE
@@ -154,7 +153,7 @@ def lower_pascal_dot(
     # Check if obj is a class-typed variable for property interception
     obj_class = _resolve_object_class(ctx, obj_node)
     if obj_class:
-        return emit_field_load_or_getter(ctx, obj_reg, obj_class, field_name, node)  # type: ignore[misc]  # see red-dragon-hzmm
+        return emit_field_load_or_getter(ctx, obj_reg, obj_class, field_name, node)
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -265,7 +264,7 @@ def lower_pascal_inherited_expr(
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=reg, func_name=FuncName("inherited"), args=(method_name,)  # type: ignore[arg-type]  # see red-dragon-hzmm
+            result_reg=reg, func_name=FuncName("inherited"), args=(method_name,)
         ),
         node=node,
     )

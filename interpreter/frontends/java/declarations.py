@@ -1,4 +1,3 @@
-# pyright: standard
 """Java-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -115,7 +114,7 @@ def lower_method_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -248,7 +247,7 @@ def lower_class_def(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -308,7 +307,7 @@ def lower_record_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(record_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(record_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(record_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -416,7 +415,7 @@ def _emit_record_init(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -451,7 +450,7 @@ def _lower_constructor_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -519,7 +518,7 @@ def lower_interface_decl(
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
@@ -691,7 +690,7 @@ def _extract_java_class_parents(node) -> tuple[str, ...]:
     )
     if type_id is None:
         return ()
-    return (ClassName(type_id.text.decode()),)  # type: ignore[return-value]  # see red-dragon-hzmm
+    return (ClassName(type_id.text.decode()),)
 
 
 def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
@@ -712,7 +711,7 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
             fields={},
             methods={},
             constants={},
-            parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
+            parents=parents,
         )
 
     fields: dict[FieldName, FieldInfo] = {}
@@ -741,7 +740,7 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
         fields=fields,
         methods=methods,
         constants=constants_map,
-        parents=parents,  # type: ignore[arg-type]  # see red-dragon-hzmm
+        parents=parents,
     )
 
 

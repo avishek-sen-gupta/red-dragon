@@ -1,4 +1,3 @@
-# pyright: standard
 """Common control-flow lowerers — pure functions taking (ctx, node).
 
 Extracted from BaseFrontend: if/elif/while/for/break/continue.
@@ -49,7 +48,7 @@ def lower_if(
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
-        lower_alternative(ctx, alt_node, end_label)  # type: ignore[arg-type]  # see red-dragon-2us7
+        lower_alternative(ctx, alt_node, end_label)
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -93,19 +92,19 @@ def lower_elif(
     ctx.emit_inst(
         BranchIf(
             cond_reg=cond_reg,
-            branch_targets=(true_label, false_label),  # type: ignore[arg-type]  # see red-dragon-2us7
+            branch_targets=(true_label, false_label),
         ),
         node=node,
     )
 
     ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit_inst(Label_(label=false_label))  # type: ignore[arg-type]  # see red-dragon-2us7
-        lower_alternative(ctx, alt_node, end_label)  # type: ignore[arg-type]  # see red-dragon-2us7
-        ctx.emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-2us7
+        ctx.emit_inst(Label_(label=false_label))
+        lower_alternative(ctx, alt_node, end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
 
 def lower_break(
@@ -114,7 +113,7 @@ def lower_break(
     """Lower break statement as BRANCH to innermost break target."""
     if ctx.break_target_stack:
         ctx.emit_inst(
-            Branch(label=ctx.break_target_stack[-1]),  # type: ignore[arg-type]  # see red-dragon-2us7
+            Branch(label=ctx.break_target_stack[-1]),
             node=node,
         )
     else:
@@ -134,7 +133,7 @@ def lower_continue(
     """Lower continue statement as BRANCH to innermost loop continue label."""
     if ctx.loop_stack:
         ctx.emit_inst(
-            Branch(label=ctx.loop_stack[-1]["continue_label"]),  # type: ignore[arg-type]  # see red-dragon-2us7
+            Branch(label=ctx.loop_stack[-1]["continue_label"]),
             node=node,
         )
     else:
@@ -169,7 +168,7 @@ def lower_while(
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.push_loop(loop_label, end_label)
     ctx.lower_block(body_node)
     ctx.pop_loop()
     ctx.emit_inst(Branch(label=loop_label))
@@ -217,7 +216,7 @@ def lower_c_style_for(
 
     ctx.emit_inst(Label_(label=body_label))
     update_label = ctx.fresh_label("for_update") if update_node else loop_label
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-2us7
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()

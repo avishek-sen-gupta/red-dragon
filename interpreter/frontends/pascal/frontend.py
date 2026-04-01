@@ -1,4 +1,3 @@
-# pyright: standard
 """PascalFrontend -- thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
@@ -54,15 +53,15 @@ class PascalFrontend(BaseFrontend):
 
     def _emit_prelude(self, ctx) -> None:
         """Initialize Pascal-specific mutable state on the context."""
-        ctx._pascal_current_function_name = ""  # type: ignore[attr-defined]  # see red-dragon-zznx
-        ctx._pascal_record_types = set()  # type: ignore[attr-defined]  # see red-dragon-zznx
-        ctx._pascal_var_types = {}  # type: ignore[attr-defined]  # see red-dragon-zznx
+        ctx._pascal_current_function_name = ""
+        ctx._pascal_record_types = set()
+        ctx._pascal_var_types = {}
 
     def _build_context(self, source: bytes) -> TreeSitterEmitContext:
-        ctx = super()._build_context(source)  # type: ignore[attr-defined]  # see red-dragon-zznx
+        ctx = super()._build_context(source)
         # Pascal-specific mutable state stored on the context
-        ctx._pascal_current_function_name = ""  # type: ignore[attr-defined]  # see red-dragon-zznx
-        ctx._pascal_record_types = set()  # type: ignore[attr-defined]  # see red-dragon-zznx
+        ctx._pascal_current_function_name = ""
+        ctx._pascal_record_types = set()
         return ctx
 
     def _build_expr_dispatch(

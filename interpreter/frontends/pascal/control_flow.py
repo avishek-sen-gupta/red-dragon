@@ -1,4 +1,3 @@
-# pyright: standard
 """Pascal-specific control flow lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -274,7 +273,7 @@ def lower_pascal_case(
     end_label = ctx.fresh_label("case_end")
 
     for case_node in case_cases:
-        _lower_pascal_case_branch(ctx, case_node, selector_reg, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+        _lower_pascal_case_branch(ctx, case_node, selector_reg, end_label)
 
     # Handle else branch: lower remaining statements after kElse
     if else_case:
@@ -322,7 +321,7 @@ def _lower_pascal_case_branch(
                 Binop(
                     result_reg=cmp_reg,
                     operator=resolve_binop("=="),
-                    left=selector_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+                    left=selector_reg,
                     right=first_val_reg,
                 ),
                 node=case_node,
@@ -334,7 +333,7 @@ def _lower_pascal_case_branch(
                     Binop(
                         result_reg=extra_cmp,
                         operator=resolve_binop("=="),
-                        left=selector_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+                        left=selector_reg,
                         right=extra_reg,
                     )
                 )
@@ -357,7 +356,7 @@ def _lower_pascal_case_branch(
     ctx.emit_inst(Label_(label=true_label))
     for child in body_children:
         ctx.lower_stmt(child)
-    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
+    ctx.emit_inst(Branch(label=end_label))
     ctx.emit_inst(Label_(label=next_label))
 
 

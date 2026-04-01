@@ -1,4 +1,3 @@
-# pyright: standard
 """Java-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -122,7 +121,7 @@ def lower_enhanced_for(
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
-    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -154,7 +153,7 @@ def lower_java_switch(
     subject_reg = ctx.lower_expr(cond_node)
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.break_target_stack.append(end_label)
 
     groups = (
         [
@@ -227,7 +226,7 @@ def lower_java_switch_expr(
     end_label = ctx.fresh_label("switch_end")
 
     ctx.switch_result_stack.append(result_var)
-    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.break_target_stack.append(end_label)
 
     groups = (
         [
@@ -363,7 +362,7 @@ def lower_yield_statement(
     result_var = ctx.switch_result_stack[-1]
     end_label = ctx.break_target_stack[-1]
     ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=val_reg), node=node)
-    ctx.emit_inst(Branch(label=end_label), node=node)  # type: ignore[misc]  # see red-dragon-hzmm
+    ctx.emit_inst(Branch(label=end_label), node=node)
 
 
 def lower_do_statement(
@@ -378,7 +377,7 @@ def lower_do_statement(
     end_label = ctx.fresh_label("do_end")
 
     ctx.emit_inst(Label_(label=body_label))
-    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
+    ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -406,15 +405,15 @@ def lower_assert_statement(
 
     arg_regs: list[str] = []
     if cond_node:
-        arg_regs.append(ctx.lower_expr(cond_node))  # type: ignore[arg-type]  # see red-dragon-y5bm
+        arg_regs.append(ctx.lower_expr(cond_node))
     if message_node:
-        arg_regs.append(ctx.lower_expr(message_node))  # type: ignore[arg-type]  # see red-dragon-y5bm
+        arg_regs.append(ctx.lower_expr(message_node))
 
     ctx.emit_inst(
         CallFunction(
             result_reg=ctx.fresh_reg(),
             func_name=FuncName("assert"),
-            args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            args=tuple(arg_regs),
         ),
         node=node,
     )
@@ -537,7 +536,7 @@ def lower_explicit_constructor_invocation(
                 result_reg=ctx.fresh_reg(),
                 obj_reg=this_reg,
                 method_name=FuncName("__init__"),
-                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                args=tuple(arg_regs),
             ),
             node=node,
         )
@@ -546,7 +545,7 @@ def lower_explicit_constructor_invocation(
             CallFunction(
                 result_reg=ctx.fresh_reg(),
                 func_name=FuncName(target_name),
-                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                args=tuple(arg_regs),
             ),
             node=node,
         )

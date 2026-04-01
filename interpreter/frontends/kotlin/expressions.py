@@ -1,4 +1,3 @@
-# pyright: standard
 """Kotlin-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -101,13 +100,13 @@ def lower_kotlin_string_literal(
             ctx.emit_inst(
                 Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
-            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(frag_reg)
         elif child.type == KNT.INTERPOLATED_IDENTIFIER:
-            parts.append(lower_identifier(ctx, child))  # type: ignore[arg-type]  # see red-dragon-y5bm
+            parts.append(lower_identifier(ctx, child))
         elif child.type == KNT.INTERPOLATED_EXPRESSION:
             named = [c for c in child.children if c.is_named]
             if named:
-                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
+                parts.append(ctx.lower_expr(named[0]))
         # skip punctuation: ", $, ${, }
     return lower_interpolated_string_parts(ctx, parts, node)
 
@@ -143,8 +142,8 @@ def _extract_nav_field_name(
             (c for c in node.children if c.type == KNT.SIMPLE_IDENTIFIER), None
         )
         if id_node:
-            return ctx.node_text(id_node)  # type: ignore[return-value]  # see red-dragon-hzmm
-    return ctx.node_text(node)  # type: ignore[return-value]  # see red-dragon-hzmm
+            return ctx.node_text(id_node)
+    return ctx.node_text(node)
 
 
 def lower_kotlin_call(
@@ -181,8 +180,8 @@ def lower_kotlin_call(
                 CallMethod(
                     result_reg=reg,
                     obj_reg=obj_reg,
-                    method_name=FuncName(method_name),  # type: ignore[misc]  # see red-dragon-hzmm
-                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    method_name=FuncName(method_name),
+                    args=tuple(arg_regs),
                 ),
                 node=node,
             )
@@ -194,7 +193,7 @@ def lower_kotlin_call(
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
             ),
             node=node,
         )
@@ -204,7 +203,7 @@ def lower_kotlin_call(
     target_reg = ctx.lower_expr(callee_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -230,12 +229,12 @@ def lower_navigation_expr(
     # Intercept this.x when a custom getter is registered
     if obj_node.type == KNT.THIS_EXPRESSION and ctx._current_class_name:
         return emit_field_load_or_getter(
-            ctx, obj_reg, ctx._current_class_name, field_name, node  # type: ignore[misc]  # see red-dragon-hzmm
+            ctx, obj_reg, ctx._current_class_name, field_name, node
         )
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),  # type: ignore[misc]  # see red-dragon-hzmm
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=FieldName(field_name)),
         node=node,
     )
     return reg
@@ -364,10 +363,10 @@ def _kotlin_body_of(ctx: TreeSitterEmitContext, entry) -> Register:
 
 
 _KOTLIN_WHEN_SPEC = MatchArmSpec(
-    extract_arms=lambda node: [c for c in node.children if c.type == KNT.WHEN_ENTRY],  # type: ignore[attr-defined]  # see red-dragon-545a
+    extract_arms=lambda node: [c for c in node.children if c.type == KNT.WHEN_ENTRY],
     pattern_of=_kotlin_pattern_of,
     guard_of=_kotlin_guard_of,
-    body_of=_kotlin_body_of,  # type: ignore[misc]  # see red-dragon-hzmm
+    body_of=_kotlin_body_of,
 )
 
 
@@ -426,7 +425,7 @@ def lower_when_expr(
     has_subject = subject_node is not None
 
     if has_subject:
-        reg = lower_match_as_expr(ctx, val_reg, node, _KOTLIN_WHEN_SPEC)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        reg = lower_match_as_expr(ctx, val_reg, node, _KOTLIN_WHEN_SPEC)
         if scope_entered:
             ctx.exit_block_scope()
         return reg
@@ -437,7 +436,7 @@ def lower_when_expr(
 
     entries = [c for c in node.children if c.type == KNT.WHEN_ENTRY]
     for entry in entries:
-        _lower_subjectless_when_entry(ctx, entry, result_var, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
+        _lower_subjectless_when_entry(ctx, entry, result_var, end_label)
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
@@ -472,7 +471,7 @@ def _lower_subjectless_when_entry(
 
     arm_result = _lower_when_body(ctx, entry)
     ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=arm_result))
-    ctx.emit_inst(Branch(label=end_label))  # type: ignore[misc]  # see red-dragon-hzmm
+    ctx.emit_inst(Branch(label=end_label))
     ctx.emit_inst(Label_(label=next_label))
 
 
@@ -662,7 +661,7 @@ def lower_lambda_literal(
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
     return reg
 
 
@@ -710,7 +709,7 @@ def lower_anonymous_function(
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
     return reg
 
 
@@ -755,7 +754,7 @@ def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> Register:
                 last_reg = ""
             else:
                 last_reg = ctx.lower_expr(child)
-    return last_reg  # type: ignore[return-value]  # see red-dragon-hzmm
+    return last_reg
 
 
 # -- object literal (anonymous object expression) ------------------------
@@ -835,7 +834,7 @@ def lower_check_expr(
             func_name=FuncName("is"),
             args=(
                 expr_reg,
-                type_text,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                type_text,
             ),
         ),
         node=node,
@@ -1042,7 +1041,7 @@ def lower_as_expr(
             func_name=FuncName("as"),
             args=(
                 expr_reg,
-                type_name,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                type_name,
             ),
         ),
         node=node,
@@ -1080,12 +1079,12 @@ def lower_kotlin_store_target(
                 StoreField(
                     obj_reg=this_reg,
                     field_name=FieldName(ctx._accessor_backing_field),
-                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    value_reg=val_reg,
                 ),
                 node=parent_node,
             )
             return
-        ctx.emit_inst(StoreVar(name=VarName(text), value_reg=val_reg), node=parent_node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+        ctx.emit_inst(StoreVar(name=VarName(text), value_reg=val_reg), node=parent_node)
     elif target.type == KNT.NAVIGATION_EXPRESSION:
         from interpreter.frontends.common.property_accessors import (
             emit_field_store_or_setter,
@@ -1100,9 +1099,9 @@ def lower_kotlin_store_target(
             if obj_node.type == KNT.THIS_EXPRESSION and ctx._current_class_name:
                 emit_field_store_or_setter(
                     ctx,
-                    obj_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+                    obj_reg,
                     ctx._current_class_name,
-                    field_name,  # type: ignore[misc]  # see red-dragon-hzmm
+                    field_name,
                     val_reg,
                     parent_node,
                 )
@@ -1110,13 +1109,13 @@ def lower_kotlin_store_target(
 
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg
                 ),
                 node=parent_node,
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == KNT.INDEXING_EXPRESSION:
@@ -1135,12 +1134,12 @@ def lower_kotlin_store_target(
             else:
                 idx_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
         else:
             ctx.emit_inst(
-                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == KNT.DIRECTLY_ASSIGNABLE_EXPRESSION:
@@ -1164,7 +1163,7 @@ def lower_kotlin_store_target(
                 ctx.lower_expr(idx_children[0]) if idx_children else ctx.fresh_reg()
             )
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
         elif nav_suffix:
@@ -1188,9 +1187,9 @@ def lower_kotlin_store_target(
             ):
                 emit_field_store_or_setter(
                     ctx,
-                    obj_reg,  # type: ignore[misc]  # see red-dragon-hzmm
+                    obj_reg,
                     ctx._current_class_name,
-                    field_name,  # type: ignore[misc]  # see red-dragon-hzmm
+                    field_name,
                     val_reg,
                     parent_node,
                 )
@@ -1198,7 +1197,7 @@ def lower_kotlin_store_target(
 
             ctx.emit_inst(
                 StoreField(
-                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    obj_reg=obj_reg, field_name=FieldName(field_name), value_reg=val_reg
                 ),
                 node=parent_node,
             )
@@ -1209,12 +1208,12 @@ def lower_kotlin_store_target(
                 lower_kotlin_store_target(ctx, inner, val_reg, parent_node)
             else:
                 ctx.emit_inst(
-                    StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+                    StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
                     node=parent_node,
                 )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 

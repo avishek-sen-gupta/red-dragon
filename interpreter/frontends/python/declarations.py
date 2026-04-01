@@ -1,4 +1,3 @@
-# pyright: standard
 """Python-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
@@ -111,7 +110,7 @@ def _extract_python_self_fields(init_body) -> dict[str, FieldInfo]:
         if obj_node.text != b"self":
             continue
         field_name = attr_node.text.decode()
-        fields[FieldName(field_name)] = FieldInfo(  # type: ignore[misc]  # see red-dragon-hzmm
+        fields[FieldName(field_name)] = FieldInfo(
             name=FieldName(field_name), type_hint="", has_initializer=True
         )
     return fields
@@ -176,7 +175,7 @@ def _extract_python_class(node) -> tuple[str, ClassInfo] | None:
             if mname == "__init__":
                 init_body = child.child_by_field_name("body")
                 if init_body is not None:
-                    fields.update(_extract_python_self_fields(init_body))  # type: ignore[name-defined]  # see red-dragon-545a
+                    fields.update(_extract_python_self_fields(init_body))
 
     return class_name, ClassInfo(
         name=ClassName(class_name),
