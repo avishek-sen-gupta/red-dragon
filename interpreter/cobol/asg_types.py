@@ -1,3 +1,4 @@
+# pyright: standard
 """COBOL ASG types — frozen dataclasses defining the JSON contract.
 
 These dataclasses represent the Abstract Semantic Graph produced by
