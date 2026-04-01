@@ -82,3 +82,5 @@ fileignoreconfig:
   checksum: 4be6b2a19a260bb6f89ec260cdfc49af6fb2d6f6510135e88fe9c7ca7a978bc0
 - filename: docs/superpowers/list-opcodes-workflow-walkthrough.md
   checksum: b2f1e237ed7d21d8db22933bfb8a55c464120f2ad1cecf4981fd8aa15624363a
+- filename: docs/superpowers/specs/2026-04-01-wf-sentinel-design.md
+  checksum: 2b61ef6c11ce5c836856e2ddfd428315342e5d5f71353d490d92db312c5d370b
