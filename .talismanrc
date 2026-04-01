@@ -60,10 +60,6 @@ fileignoreconfig:
   checksum: f8825cf5be5ca386e1788ddd86fdde6206b3fa22443ff14dcecbdd65c3e06daf
 - filename: scripts/paper-results-code/05_execution_equivalence.py
   checksum: 9afc1f1c5d20daf4d8d088b6093472339584ca4ca3c4a444f1400d107185513d
-- filename: .beads/backup/backup_state.json
-  checksum: 177c90ab63e1a087f4733bb97b257c198713995051cf3d3dbcae3779a84ca25f
-- filename: .beads/backup/issues.jsonl
-  checksum: c5afbe60a07b25acae13b2aa38fcc333ada8bab78f89db612fe9243bab7064c7
 - filename: docs/superpowers/specs/2026-03-31-type-hints-design.md
   checksum: c3822da3cf994a9b2415bda5440a5557c42e1a400eaf515432953a9de77e7057
 - filename: docs/superpowers/plans/2026-03-31-type-hints.md
@@ -78,3 +74,9 @@ fileignoreconfig:
   checksum: 553efc4a65dd05221edec9b897a8bda685e1a24b14adf20010733fd5b2ddf9b6
 - filename: interpreter/frontends/_base.py
   checksum: a33aef9105ae8593ee023ae4bbb4924ba184ab268e9e8c58795bd15ac99762ba
+- filename: .beads/backup/backup_state.json
+  checksum: bef60d6780fb075b1359ae0823a423c1b37b7351756f800ece0050f58501d11c
+- filename: .beads/backup/issues.jsonl
+  checksum: 6267c06b7b897944e0a7ed226b635b93778e3d09c564732d34284f60b86b4a84
+- filename: docs/superpowers/plans/2026-03-31-leaky-function-scoping.md
+  checksum: 4be6b2a19a260bb6f89ec260cdfc49af6fb2d6f6510135e88fe9c7ca7a978bc0
