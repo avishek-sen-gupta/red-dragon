@@ -100,6 +100,17 @@ class InstructionBase:
     """Shared metadata carried by every instruction."""
 
     source_location: SourceLocation = field(default_factory=lambda: NO_SOURCE_LOCATION)
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
+    @property
+    def opcode(self) -> Opcode:
+        raise NotImplementedError
+
+    @property
+    def operands(self) -> list[Any]:
+        raise NotImplementedError
 
     def map_registers(self, fn: Callable[[Register], Register]) -> Self:
         """Apply fn to every Register-typed field, return a new instruction.
@@ -163,28 +174,19 @@ class InstructionBase:
 
     def __str__(self) -> str:
         """Render in the same format as IRInstruction.__str__."""
-        inst: Any = self  # subclass attrs not visible on InstructionBase
         parts: list[str] = []
-        if (
-            hasattr(inst, "label")
-            and inst.label.is_present()
-            and inst.opcode == Opcode.LABEL
-        ):
-            base = f"{inst.label}:"
+        if self.label.is_present() and self.opcode == Opcode.LABEL:
+            base = f"{self.label}:"
         else:
-            if inst.result_reg.is_present():
-                parts.append(f"{inst.result_reg} =")
-            parts.append(inst.opcode.value.lower())
-            for op in inst.operands:
+            if self.result_reg.is_present():
+                parts.append(f"{self.result_reg} =")
+            parts.append(self.opcode.value.lower())
+            for op in self.operands:
                 parts.append(str(op))
-            if hasattr(inst, "branch_targets") and inst.branch_targets:
-                parts.append(",".join(str(t) for t in inst.branch_targets))
-            elif (
-                hasattr(inst, "label")
-                and inst.label.is_present()
-                and inst.opcode != Opcode.LABEL
-            ):
-                parts.append(str(inst.label))
+            if self.branch_targets:
+                parts.append(",".join(str(t) for t in self.branch_targets))
+            elif self.label.is_present() and self.opcode != Opcode.LABEL:
+                parts.append(str(self.label))
             base = " ".join(parts)
         if not self.source_location.is_unknown():
             return f"{base}  # {self.source_location}"
@@ -201,10 +203,6 @@ class Const(InstructionBase):
     result_reg: Register = NO_REGISTER
     value: str = ""
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     @property
     def opcode(self) -> Opcode:
         return Opcode.CONST
@@ -220,10 +218,6 @@ class LoadVar(InstructionBase):
 
     result_reg: Register = NO_REGISTER
     name: VarName = NO_VAR_NAME
-
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
         return [self.name] if self.name.is_present() else []
@@ -243,11 +237,6 @@ class DeclVar(InstructionBase):
 
     name: VarName = NO_VAR_NAME
     value_reg: Register = NO_REGISTER
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return self.name
@@ -271,11 +260,6 @@ class StoreVar(InstructionBase):
     name: VarName = NO_VAR_NAME
     value_reg: Register = NO_REGISTER
 
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def writes(self) -> StorageIdentifier | None:
         return self.name
 
@@ -298,10 +282,6 @@ class Symbolic(InstructionBase):
     result_reg: Register = NO_REGISTER
     hint: str = ""
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     @property
     def opcode(self) -> Opcode:
         return Opcode.SYMBOLIC
@@ -322,10 +302,6 @@ class Binop(InstructionBase):
     operator: BinopKind = BinopKind.ADD
     left: Register = NO_REGISTER
     right: Register = NO_REGISTER
-
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
         return [
@@ -355,10 +331,6 @@ class Unop(InstructionBase):
     operator: UnopKind = UnopKind.NEG
     operand: Register = NO_REGISTER
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         return [self.operand] if self.operand.is_present() else []
 
@@ -381,10 +353,6 @@ class CallFunction(InstructionBase):
     result_reg: Register = NO_REGISTER
     func_name: FuncName = NO_FUNC_NAME
     args: tuple[Register | SpreadArguments, ...] = ()
-
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
         return [r for r in self.args if isinstance(r, Register) and r.is_present()]
@@ -409,10 +377,6 @@ class CallMethod(InstructionBase):
     obj_reg: Register = NO_REGISTER
     method_name: FuncName = NO_FUNC_NAME
     args: tuple[Register | SpreadArguments, ...] = ()
-
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
         args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
@@ -439,10 +403,6 @@ class CallUnknown(InstructionBase):
     target_reg: Register = NO_REGISTER
     args: tuple[Register | SpreadArguments, ...] = ()
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
         return ([self.target_reg] if self.target_reg.is_present() else []) + args_regs
@@ -467,10 +427,6 @@ class CallCtorFunction(InstructionBase):
     func_name: FuncName = NO_FUNC_NAME
     type_hint: TypeExpr = UNKNOWN
     args: tuple[Register | SpreadArguments, ...] = ()
-
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
         return [r for r in self.args if isinstance(r, Register) and r.is_present()]
@@ -498,10 +454,6 @@ class LoadField(InstructionBase):
     obj_reg: Register = NO_REGISTER
     field_name: FieldName = NO_FIELD_NAME
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         return [self.obj_reg] if self.obj_reg.is_present() else []
 
@@ -521,11 +473,6 @@ class StoreField(InstructionBase):
     obj_reg: Register = NO_REGISTER
     field_name: FieldName = NO_FIELD_NAME
     value_reg: Register = NO_REGISTER
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -550,10 +497,6 @@ class LoadFieldIndirect(InstructionBase):
     obj_reg: Register = NO_REGISTER
     name_reg: Register = NO_REGISTER
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         return [r for r in (self.obj_reg, self.name_reg) if r.is_present()]
 
@@ -577,10 +520,6 @@ class LoadIndex(InstructionBase):
     arr_reg: Register = NO_REGISTER
     index_reg: Register = NO_REGISTER
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         return [r for r in (self.arr_reg, self.index_reg) if r.is_present()]
 
@@ -600,11 +539,6 @@ class StoreIndex(InstructionBase):
     arr_reg: Register = NO_REGISTER
     index_reg: Register = NO_REGISTER
     value_reg: Register | SpreadArguments = NO_REGISTER
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -641,10 +575,6 @@ class LoadIndirect(InstructionBase):
     result_reg: Register = NO_REGISTER
     ptr_reg: Register = NO_REGISTER
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         return [self.ptr_reg] if self.ptr_reg.is_present() else []
 
@@ -663,11 +593,6 @@ class StoreIndirect(InstructionBase):
 
     ptr_reg: Register = NO_REGISTER
     value_reg: Register = NO_REGISTER
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -691,10 +616,6 @@ class AddressOf(InstructionBase):
     result_reg: Register = NO_REGISTER
     var_name: VarName = NO_VAR_NAME
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         return [self.var_name] if self.var_name.is_present() else []
 
@@ -717,10 +638,6 @@ class NewObject(InstructionBase):
     result_reg: Register = NO_REGISTER
     type_hint: TypeExpr = UNKNOWN
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     @property
     def opcode(self) -> Opcode:
         return Opcode.NEW_OBJECT
@@ -737,10 +654,6 @@ class NewArray(InstructionBase):
     result_reg: Register = NO_REGISTER
     type_hint: TypeExpr = UNKNOWN
     size_reg: Register = NO_REGISTER
-
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     @property
     def opcode(self) -> Opcode:
@@ -760,10 +673,6 @@ class Label_(InstructionBase):
 
     label: CodeLabel = NO_LABEL
 
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def writes(self) -> StorageIdentifier | None:
         return None
 
@@ -781,10 +690,6 @@ class Branch(InstructionBase):
     """BRANCH: unconditional jump to a label."""
 
     label: CodeLabel = NO_LABEL
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -804,10 +709,6 @@ class BranchIf(InstructionBase):
 
     cond_reg: Register = NO_REGISTER
     branch_targets: tuple[CodeLabel, ...] = ()
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -829,11 +730,6 @@ class Return_(InstructionBase):
     """RETURN: return from the current function."""
 
     value_reg: Register | None = None
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -859,11 +755,6 @@ class Throw_(InstructionBase):
     """THROW: raise an exception."""
 
     value_reg: Register | None = None
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -895,11 +786,6 @@ class TryPush(InstructionBase):
     finally_label: CodeLabel = NO_LABEL
     end_label: CodeLabel = NO_LABEL
 
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def writes(self) -> StorageIdentifier | None:
         return None
 
@@ -915,11 +801,6 @@ class TryPush(InstructionBase):
 @dataclass(frozen=True)
 class TryPop(InstructionBase):
     """TRY_POP: pop the top exception handler."""
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -943,10 +824,6 @@ class AllocRegion(InstructionBase):
     result_reg: Register = NO_REGISTER
     size_reg: Register = NO_REGISTER
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         return [self.size_reg] if self.size_reg.is_present() else []
 
@@ -968,10 +845,6 @@ class LoadRegion(InstructionBase):
     offset_reg: Register = NO_REGISTER
     length: int = 0
 
-    # ── IRInstruction-compat fields ──
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def reads(self) -> list[StorageIdentifier]:
         return [r for r in (self.region_reg, self.offset_reg) if r.is_present()]
 
@@ -992,11 +865,6 @@ class WriteRegion(InstructionBase):
     offset_reg: Register = NO_REGISTER
     length: int = 0
     value_reg: Register = NO_REGISTER
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
@@ -1032,11 +900,6 @@ class SetContinuation(InstructionBase):
     name: ContinuationName = NO_CONTINUATION_NAME
     target_label: CodeLabel = NO_LABEL
 
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
-
     def writes(self) -> StorageIdentifier | None:
         return None
 
@@ -1054,11 +917,6 @@ class ResumeContinuation(InstructionBase):
     """RESUME_CONTINUATION: branch to the label associated with a name."""
 
     name: ContinuationName = NO_CONTINUATION_NAME
-
-    # ── IRInstruction-compat fields ──
-    result_reg: Register = NO_REGISTER
-    label: CodeLabel = NO_LABEL
-    branch_targets: tuple[CodeLabel, ...] = ()
 
     def writes(self) -> StorageIdentifier | None:
         return None
