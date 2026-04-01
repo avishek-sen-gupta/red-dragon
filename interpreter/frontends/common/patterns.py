@@ -1,3 +1,4 @@
+# pyright: standard
 """Pattern ADT for structural pattern matching.
 
 Language frontends parse tree-sitter ASTs into these types.
@@ -10,6 +11,7 @@ from dataclasses import dataclass
 from functools import reduce
 
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.ir import CodeLabel
 from interpreter.register import Register
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
@@ -167,29 +169,34 @@ def _const_true(ctx: TreeSitterEmitContext) -> Register:
 
 
 def _compile_indexed_element(
-    ctx: TreeSitterEmitContext, subject_reg: str, index: int, elem_pat: Pattern
+    ctx: TreeSitterEmitContext,
+    subject_reg: Register | str,
+    index: int,
+    elem_pat: Pattern,
 ) -> Register:
     """Load element at index from subject and compile its pattern test."""
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadIndex(
             result_reg=elem_reg,
-            arr_reg=subject_reg,
-            index_reg=str(index),
+            arr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+            index_reg=str(index),  # type: ignore[arg-type]  # see red-dragon-2us7
         ),
     )
     return compile_pattern_test(ctx, elem_reg, elem_pat)
 
 
-def _emit_binop(ctx: TreeSitterEmitContext, op: str, left: str, right: str) -> Register:
+def _emit_binop(
+    ctx: TreeSitterEmitContext, op: str, left: Register | str, right: Register | str
+) -> Register:
     """Emit a single BINOP and return the result register."""
     combined = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=combined,
             operator=resolve_binop(op),
-            left=str(left),
-            right=str(right),
+            left=str(left),  # type: ignore[arg-type]  # see red-dragon-2us7
+            right=str(right),  # type: ignore[arg-type]  # see red-dragon-2us7
         ),
     )
     return combined
@@ -207,8 +214,8 @@ def _star_index(elems: tuple[Pattern, ...]) -> int:
 
 def _compile_after_star_element_test(
     ctx: TreeSitterEmitContext,
-    subject_reg: str,
-    len_reg: str,
+    subject_reg: Register | str,
+    len_reg: Register | str,
     after_count: int,
     after_offset: int,
     elem_pat: Pattern,
@@ -223,25 +230,25 @@ def _compile_after_star_element_test(
     ctx.emit_inst(
         LoadIndex(
             result_reg=elem_reg,
-            arr_reg=subject_reg,
+            arr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
             index_reg=idx_reg,
         ),
     )
     return compile_pattern_test(ctx, elem_reg, elem_pat)
 
 
-def _and_all(ctx: TreeSitterEmitContext, regs: list[str]) -> Register:
+def _and_all(ctx: TreeSitterEmitContext, regs: list[Register | str]) -> Register:
     """AND a list of boolean registers together with BINOP &&."""
-    return reduce(lambda acc, reg: _emit_binop(ctx, "&&", acc, reg), regs[1:], regs[0])
+    return reduce(lambda acc, reg: _emit_binop(ctx, "&&", acc, reg), regs[1:], regs[0])  # type: ignore[return-value]  # see red-dragon-2us7
 
 
-def _or_any(ctx: TreeSitterEmitContext, regs: list[str]) -> Register:
+def _or_any(ctx: TreeSitterEmitContext, regs: list[Register | str]) -> Register:
     """OR a list of boolean registers together with BINOP ||."""
-    return reduce(lambda acc, reg: _emit_binop(ctx, "||", acc, reg), regs[1:], regs[0])
+    return reduce(lambda acc, reg: _emit_binop(ctx, "||", acc, reg), regs[1:], regs[0])  # type: ignore[return-value]  # see red-dragon-2us7
 
 
 def compile_pattern_test(
-    ctx: TreeSitterEmitContext, subject_reg: str, pattern: Pattern
+    ctx: TreeSitterEmitContext, subject_reg: Register | str, pattern: Pattern
 ) -> Register:
     """Emit IR that tests whether subject matches pattern. Returns a boolean register."""
     match pattern:
@@ -253,7 +260,7 @@ def compile_pattern_test(
                 Binop(
                     result_reg=cmp_reg,
                     operator=resolve_binop("=="),
-                    left=subject_reg,
+                    left=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                     right=const_reg,
                 ),
             )
@@ -269,7 +276,7 @@ def compile_pattern_test(
                 CallFunction(
                     result_reg=len_reg,
                     func_name=FuncName("len"),
-                    args=(subject_reg,),
+                    args=(subject_reg,),  # type: ignore[arg-type]  # see red-dragon-2us7
                 ),
             )
 
@@ -311,7 +318,7 @@ def compile_pattern_test(
                     for k, elem_pat in enumerate(elems[star_idx + 1 :])
                 )
                 # StarPattern itself: no test (skipped)
-            return _and_all(ctx, sub_results)
+            return _and_all(ctx, sub_results)  # type: ignore[arg-type]  # see red-dragon-2us7
         case MappingPattern(entries=entries):
             sub_results = []
             for key, val_pat in entries:
@@ -319,13 +326,13 @@ def compile_pattern_test(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=subject_reg,
+                        obj_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                         field_name=FieldName(str(key)),
                     ),
                 )
                 val_test = compile_pattern_test(ctx, field_reg, val_pat)
                 sub_results.append(val_test)
-            return _and_all(ctx, sub_results) if sub_results else _const_true(ctx)
+            return _and_all(ctx, sub_results) if sub_results else _const_true(ctx)  # type: ignore[arg-type]  # see red-dragon-2us7
         case ClassPattern(class_name=cls, positional=pos, keyword=kw):
             cls_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=cls_reg, value=cls))
@@ -334,7 +341,7 @@ def compile_pattern_test(
                 CallFunction(
                     result_reg=isinstance_reg,
                     func_name=FuncName("isinstance"),
-                    args=(subject_reg, cls_reg),
+                    args=(subject_reg, cls_reg),  # type: ignore[arg-type]  # see red-dragon-2us7
                 ),
             )
             sub_results = [isinstance_reg]
@@ -343,8 +350,8 @@ def compile_pattern_test(
                 ctx.emit_inst(
                     LoadIndex(
                         result_reg=elem_reg,
-                        arr_reg=subject_reg,
-                        index_reg=str(i),
+                        arr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                        index_reg=str(i),  # type: ignore[arg-type]  # see red-dragon-2us7
                     ),
                 )
                 sub_results.append(compile_pattern_test(ctx, elem_reg, p))
@@ -353,15 +360,15 @@ def compile_pattern_test(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=subject_reg,
+                        obj_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                         field_name=FieldName(name),
                     ),
                 )
                 sub_results.append(compile_pattern_test(ctx, field_reg, p))
-            return _and_all(ctx, sub_results)
+            return _and_all(ctx, sub_results)  # type: ignore[arg-type]  # see red-dragon-2us7
         case OrPattern(alternatives=alts):
             sub_results = [compile_pattern_test(ctx, subject_reg, alt) for alt in alts]
-            return _or_any(ctx, sub_results)
+            return _or_any(ctx, sub_results)  # type: ignore[arg-type]  # see red-dragon-2us7
         case AsPattern(pattern=inner, name=_):
             return compile_pattern_test(ctx, subject_reg, inner)
         case StarPattern():
@@ -372,7 +379,7 @@ def compile_pattern_test(
             ctx.emit_inst(
                 LoadIndirect(
                     result_reg=deref_reg,
-                    ptr_reg=subject_reg,
+                    ptr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                 ),
             )
             return compile_pattern_test(ctx, deref_reg, inner)
@@ -385,7 +392,7 @@ def compile_pattern_test(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=next_reg,
-                        obj_reg=str(reg),
+                        obj_reg=str(reg),  # type: ignore[arg-type]  # see red-dragon-2us7
                         field_name=FieldName(part),
                     ),
                 )
@@ -395,8 +402,8 @@ def compile_pattern_test(
                 Binop(
                     result_reg=cmp_reg,
                     operator=resolve_binop("=="),
-                    left=subject_reg,
-                    right=str(reg),
+                    left=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                    right=str(reg),  # type: ignore[arg-type]  # see red-dragon-2us7
                 ),
             )
             return cmp_reg
@@ -408,7 +415,7 @@ def compile_pattern_test(
                 Binop(
                     result_reg=cmp_reg,
                     operator=resolve_binop(op),
-                    left=subject_reg,
+                    left=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                     right=const_reg,
                 ),
             )
@@ -443,8 +450,8 @@ def compile_pattern_test(
 
 def _compile_after_star_element_binding(
     ctx: TreeSitterEmitContext,
-    subject_reg: str,
-    len_reg: str,
+    subject_reg: Register | str,
+    len_reg: Register | str,
     after_count: int,
     after_offset: int,
     elem_pat: Pattern,
@@ -459,7 +466,7 @@ def _compile_after_star_element_binding(
     ctx.emit_inst(
         LoadIndex(
             result_reg=elem_reg,
-            arr_reg=subject_reg,
+            arr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
             index_reg=idx_reg,
         ),
     )
@@ -467,12 +474,12 @@ def _compile_after_star_element_binding(
 
 
 def compile_pattern_bindings(
-    ctx: TreeSitterEmitContext, subject_reg: str, pattern: Pattern
+    ctx: TreeSitterEmitContext, subject_reg: Register | str, pattern: Pattern
 ) -> None:
     """Emit IR that binds variables from a matched pattern."""
     match pattern:
         case CapturePattern(name=name):
-            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))
+            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))  # type: ignore[arg-type]  # see red-dragon-2us7
         case LiteralPattern() | WildcardPattern():
             pass  # no bindings
         case RelationalPattern():
@@ -489,8 +496,8 @@ def compile_pattern_bindings(
                     ctx.emit_inst(
                         LoadIndex(
                             result_reg=elem_reg,
-                            arr_reg=subject_reg,
-                            index_reg=str(i),
+                            arr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                            index_reg=str(i),  # type: ignore[arg-type]  # see red-dragon-2us7
                         ),
                     )
                     compile_pattern_bindings(ctx, elem_reg, elem_pat)
@@ -502,7 +509,7 @@ def compile_pattern_bindings(
                     CallFunction(
                         result_reg=len_reg,
                         func_name=FuncName("len"),
-                        args=(subject_reg,),
+                        args=(subject_reg,),  # type: ignore[arg-type]  # see red-dragon-2us7
                     ),
                 )
                 after_count = len(elems) - star_idx - 1
@@ -512,8 +519,8 @@ def compile_pattern_bindings(
                     ctx.emit_inst(
                         LoadIndex(
                             result_reg=elem_reg,
-                            arr_reg=subject_reg,
-                            index_reg=str(i),
+                            arr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                            index_reg=str(i),  # type: ignore[arg-type]  # see red-dragon-2us7
                         ),
                     )
                     compile_pattern_bindings(ctx, elem_reg, elem_pat)
@@ -535,7 +542,7 @@ def compile_pattern_bindings(
                             result_reg=slice_reg,
                             func_name=FuncName("slice"),
                             args=(
-                                subject_reg,
+                                subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                                 start_reg,
                                 stop_reg,
                             ),
@@ -555,7 +562,7 @@ def compile_pattern_bindings(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=subject_reg,
+                        obj_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                         field_name=FieldName(str(key)),
                     ),
                 )
@@ -566,8 +573,8 @@ def compile_pattern_bindings(
                 ctx.emit_inst(
                     LoadIndex(
                         result_reg=elem_reg,
-                        arr_reg=subject_reg,
-                        index_reg=str(i),
+                        arr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
+                        index_reg=str(i),  # type: ignore[arg-type]  # see red-dragon-2us7
                     ),
                 )
                 compile_pattern_bindings(ctx, elem_reg, p)
@@ -576,7 +583,7 @@ def compile_pattern_bindings(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=field_reg,
-                        obj_reg=subject_reg,
+                        obj_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                         field_name=FieldName(name),
                     ),
                 )
@@ -601,17 +608,17 @@ def compile_pattern_bindings(
             ctx.emit_inst(Label_(label=or_done))
         case AsPattern(pattern=inner, name=name):
             compile_pattern_bindings(ctx, subject_reg, inner)
-            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))
+            ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))  # type: ignore[arg-type]  # see red-dragon-2us7
         case StarPattern(name=name):
             if name != "_":
-                ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))
+                ctx.emit_inst(StoreVar(name=VarName(name), value_reg=subject_reg))  # type: ignore[arg-type]  # see red-dragon-2us7
         case DerefPattern(inner=inner):
             # Dereference subject via LOAD_INDIRECT, then bind inner pattern
             deref_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 LoadIndirect(
                     result_reg=deref_reg,
-                    ptr_reg=subject_reg,
+                    ptr_reg=subject_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                 ),
             )
             compile_pattern_bindings(ctx, deref_reg, inner)
@@ -650,9 +657,9 @@ def _needs_pre_guard_bindings(pattern: Pattern) -> bool:
 
 def _compile_refutable_case(
     ctx: TreeSitterEmitContext,
-    subject_reg: str,
+    subject_reg: Register | str,
     case: MatchCase,
-    end_label: str,
+    end_label: CodeLabel | Register | str,
 ) -> None:
     """Emit IR for a refutable case (pattern has a test)."""
     test_reg = compile_pattern_test(ctx, subject_reg, case.pattern)
@@ -690,25 +697,25 @@ def _compile_refutable_case(
         compile_pattern_bindings(ctx, subject_reg, case.pattern)
     if not isinstance(case.body_node, NoBody):
         ctx.lower_block(case.body_node)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-2us7
     ctx.emit_inst(Label_(label=case_next))
 
 
 def _compile_irrefutable_case(
     ctx: TreeSitterEmitContext,
-    subject_reg: str,
+    subject_reg: Register | str,
     case: MatchCase,
-    end_label: str,
+    end_label: CodeLabel | Register | str,
 ) -> None:
     """Emit IR for an irrefutable case (wildcard or bare capture — always matches)."""
     compile_pattern_bindings(ctx, subject_reg, case.pattern)
     if not isinstance(case.body_node, NoBody):
         ctx.lower_block(case.body_node)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-2us7
 
 
 def compile_match(
-    ctx: TreeSitterEmitContext, subject_reg: str, cases: list[MatchCase]
+    ctx: TreeSitterEmitContext, subject_reg: Register | str, cases: list[MatchCase]
 ) -> None:
     """Emit IR for a match statement using CPython-style linear chain.
 

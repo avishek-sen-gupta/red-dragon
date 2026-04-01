@@ -1,3 +1,4 @@
+# pyright: standard
 """Shared utilities for language-specific pattern parsers.
 
 Extracted from duplicated logic across Rust, Scala, Kotlin, and Ruby

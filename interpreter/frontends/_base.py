@@ -1,3 +1,4 @@
+# pyright: standard
 """BaseFrontend — language-agnostic tree-sitter AST → IR lowering infrastructure.
 
 Supports two modes:
@@ -153,8 +154,9 @@ class BaseFrontend(Frontend):
         self._source: bytes = b""
         self._loop_stack: list[dict[str, str]] = []
         self._break_target_stack: list[str] = []
-        self._STMT_DISPATCH: dict[str, Callable] = {}
-        self._EXPR_DISPATCH: dict[str, Callable] = {}
+        # Legacy dispatch: bound methods, called as handler(node)
+        self._STMT_DISPATCH: dict[str, Callable[[Any], None]] = {}
+        self._EXPR_DISPATCH: dict[str, Callable[[Any], Register]] = {}
 
     # ── helpers ──────────────────────────────────────────────────
 
@@ -197,7 +199,7 @@ class BaseFrontend(Frontend):
         self._instructions.append(inst)
         return inst
 
-    def _emit_inst(self, inst: Instruction, *, node=None) -> Instruction:
+    def _emit_inst(self, inst: Instruction, *, node: Any = None) -> Instruction:
         """Emit a typed instruction directly (legacy-mode counterpart of ctx.emit_inst)."""
         import dataclasses
 
@@ -209,10 +211,14 @@ class BaseFrontend(Frontend):
         self._instructions.append(inst)
         return inst
 
-    def _node_text(self, node) -> str:
+    def _node_text(
+        self, node: Any
+    ) -> str:  # Any: tree-sitter node — untyped at Python boundary
         return self._source[node.start_byte : node.end_byte].decode("utf-8")
 
-    def _source_loc(self, node) -> SourceLocation:
+    def _source_loc(
+        self, node: Any
+    ) -> SourceLocation:  # Any: tree-sitter node — untyped at Python boundary
         s, e = node.start_point, node.end_point
         return SourceLocation(
             start_line=s[0] + 1,
@@ -243,27 +249,27 @@ class BaseFrontend(Frontend):
         class_label: str,
         parents: list[str],
         result_reg: str,
-        node=None,
+        node: Any = None,
     ) -> InstructionBase:
         """Legacy-mode equivalent of ctx.emit_class_ref().
 
         Emits the plain class_label as the CONST operand.  The symbol table
         maps class_label -> ClassRef(name, label, parents) for downstream consumers.
         """
-        self._class_symbol_table[class_label] = ClassRef(
+        self._class_symbol_table[class_label] = ClassRef(  # type: ignore[index]  # see red-dragon-xgkl
             name=ClassName(class_name),
-            label=class_label,
+            label=class_label,  # type: ignore[arg-type]  # see red-dragon-xgkl
             parents=tuple(ClassName(p) for p in parents),
         )
         return self._emit(
             Opcode.CONST,
-            result_reg=result_reg,
+            result_reg=result_reg,  # type: ignore[arg-type]  # see red-dragon-xgkl
             operands=[str(class_label)],
             node=node,
         )
 
     def _emit_func_ref(
-        self, func_name: str, func_label: CodeLabel, result_reg: str, node=None
+        self, func_name: str, func_label: CodeLabel, result_reg: str, node: Any = None
     ) -> InstructionBase:
         """Legacy-mode equivalent of ctx.emit_func_ref().
 
@@ -275,22 +281,26 @@ class BaseFrontend(Frontend):
         )
         return self._emit(
             Opcode.CONST,
-            result_reg=result_reg,
+            result_reg=result_reg,  # type: ignore[arg-type]  # see red-dragon-xgkl
             operands=[str(func_label)],
             node=node,
         )
 
     # ── context-mode hooks (override in subclasses for pure-function dispatch) ──
 
-    def _build_constants(self):
+    def _build_constants(self) -> GrammarConstants | None:
         """Override to return a GrammarConstants for context-mode dispatch."""
         return None
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         """Override to return stmt dispatch table for context-mode dispatch."""
         return {}
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         """Override to return expr dispatch table for context-mode dispatch."""
         return {}
 
@@ -303,7 +313,7 @@ class BaseFrontend(Frontend):
     def lower(self, source: bytes) -> list[InstructionBase]:
         t0 = time.perf_counter()
         parser = self._parser_factory.get_parser(self._language)
-        tree = parser.parse(source)
+        tree = parser.parse(source)  # type: ignore[union-attr]  # see red-dragon-xgkl
         self._observer.on_parse(time.perf_counter() - t0)
 
         t1 = time.perf_counter()
@@ -326,7 +336,9 @@ class BaseFrontend(Frontend):
         self._observer.on_lower(time.perf_counter() - t1)
         return result
 
-    def _lower_with_context(self, source: bytes, root) -> list[InstructionBase]:
+    def _lower_with_context(
+        self, source: bytes, root: Any
+    ) -> list[InstructionBase]:  # Any: tree-sitter node — untyped at Python boundary
         """Context-mode lowering using TreeSitterEmitContext and pure functions."""
         grammar_constants = self._build_constants()
         symbol_table = self._extract_symbols(root)
@@ -334,7 +346,7 @@ class BaseFrontend(Frontend):
             source=source,
             language=self._language,
             observer=self._observer,
-            constants=grammar_constants,
+            constants=grammar_constants,  # type: ignore[arg-type]  # see red-dragon-xgkl
             type_map=self._build_type_map(),
             stmt_dispatch=self._build_stmt_dispatch(),
             expr_dispatch=self._build_expr_dispatch(),
@@ -351,7 +363,9 @@ class BaseFrontend(Frontend):
         self._symbol_table = ctx.symbol_table
         return ctx.instructions
 
-    def _extract_symbols(self, root) -> SymbolTable:
+    def _extract_symbols(
+        self, root: Any
+    ) -> SymbolTable:  # Any: tree-sitter node — untyped at Python boundary
         """Override in subclasses to extract symbols before lowering."""
         return SymbolTable.empty()
 
@@ -360,7 +374,9 @@ class BaseFrontend(Frontend):
 
     # ── dispatchers ──────────────────────────────────────────────
 
-    def _lower_block(self, node):
+    def _lower_block(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower a block of statements (module / suite / body).
 
         If *node* is itself a known statement whose handler is **not**
@@ -380,7 +396,9 @@ class BaseFrontend(Frontend):
                 continue
             self._lower_stmt(child)
 
-    def _lower_stmt(self, node):
+    def _lower_stmt(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         ntype = node.type
         if ntype in self.COMMENT_TYPES or ntype in self.NOISE_TYPES:
             return
@@ -391,7 +409,9 @@ class BaseFrontend(Frontend):
         # Fallback: try as expression
         self._lower_expr(node)
 
-    def _lower_expr(self, node) -> Register:
+    def _lower_expr(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         """Lower an expression, return the register holding its value."""
         handler = self._EXPR_DISPATCH.get(node.type)
         if handler:
@@ -406,7 +426,9 @@ class BaseFrontend(Frontend):
 
     # ── common expression lowerers ───────────────────────────────
 
-    def _lower_interpolated_string_parts(self, parts: list[str], node) -> Register:
+    def _lower_interpolated_string_parts(
+        self, parts: list[str], node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         """Chain a list of string-part registers with BINOP '+' concatenation."""
         if not parts:
             return self._lower_const_literal(node)
@@ -417,15 +439,17 @@ class BaseFrontend(Frontend):
                 Binop(
                     result_reg=new_reg,
                     operator=resolve_binop("+"),
-                    left=result,
-                    right=part,
+                    left=result,  # type: ignore[arg-type]  # see red-dragon-xgkl
+                    right=part,  # type: ignore[arg-type]  # see red-dragon-xgkl
                 ),
                 node=node,
             )
             result = new_reg
-        return result
+        return result  # type: ignore[return-value]  # see red-dragon-xgkl
 
-    def _lower_const_literal(self, node) -> Register:
+    def _lower_const_literal(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         reg = self._fresh_reg()
         self._emit_inst(
             Const(result_reg=reg, value=self._node_text(node)),
@@ -433,32 +457,42 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_canonical_none(self, node) -> Register:
+    def _lower_canonical_none(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
         reg = self._fresh_reg()
         self._emit_inst(Const(result_reg=reg, value=self.NONE_LITERAL), node=node)
         return reg
 
-    def _lower_canonical_true(self, node) -> Register:
+    def _lower_canonical_true(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         """Emit canonical ``CONST "True"``."""
         reg = self._fresh_reg()
         self._emit_inst(Const(result_reg=reg, value=self.TRUE_LITERAL), node=node)
         return reg
 
-    def _lower_canonical_false(self, node) -> Register:
+    def _lower_canonical_false(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         """Emit canonical ``CONST "False"``."""
         reg = self._fresh_reg()
         self._emit_inst(Const(result_reg=reg, value=self.FALSE_LITERAL), node=node)
         return reg
 
-    def _lower_canonical_bool(self, node) -> Register:
+    def _lower_canonical_bool(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         """Emit canonical ``CONST "True"`` or ``CONST "False"`` based on node text."""
         text = self._node_text(node).strip().lower()
         if text == "true":
             return self._lower_canonical_true(node)
         return self._lower_canonical_false(node)
 
-    def _lower_identifier(self, node) -> Register:
+    def _lower_identifier(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         reg = self._fresh_reg()
         self._emit_inst(
             LoadVar(result_reg=reg, name=VarName(self._node_text(node))),
@@ -466,7 +500,9 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_paren(self, node) -> Register:
+    def _lower_paren(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         inner = next(
             (
                 c
@@ -479,7 +515,9 @@ class BaseFrontend(Frontend):
             return self._lower_const_literal(node)
         return self._lower_expr(inner)
 
-    def _lower_binop(self, node) -> Register:
+    def _lower_binop(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         children = [
             c
             for c in node.children
@@ -497,7 +535,9 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_comparison(self, node) -> Register:
+    def _lower_comparison(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         children = [
             c
             for c in node.children
@@ -515,7 +555,9 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_unop(self, node) -> Register:
+    def _lower_unop(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         children = [
             c
             for c in node.children
@@ -530,12 +572,16 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_call(self, node) -> Register:
+    def _lower_call(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         func_node = node.child_by_field_name(self.CALL_FUNCTION_FIELD)
         args_node = node.child_by_field_name(self.CALL_ARGUMENTS_FIELD)
         return self._lower_call_impl(func_node, args_node, node)
 
-    def _lower_call_impl(self, func_node, args_node, node) -> Register:
+    def _lower_call_impl(
+        self, func_node: Any, args_node: Any, node: Any
+    ) -> Register:  # Any: tree-sitter nodes — untyped at Python boundary
         arg_regs = self._extract_call_args(args_node)
 
         # Method call: obj.method(...)
@@ -564,7 +610,7 @@ class BaseFrontend(Frontend):
                         result_reg=reg,
                         obj_reg=obj_reg,
                         method_name=FuncName(method_name),
-                        args=tuple(arg_regs),
+                        args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-xgkl
                     ),
                     node=node,
                 )
@@ -578,7 +624,7 @@ class BaseFrontend(Frontend):
                 CallFunction(
                     result_reg=reg,
                     func_name=FuncName(func_name),
-                    args=tuple(arg_regs),
+                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-xgkl
                 ),
                 node=node,
             )
@@ -597,17 +643,19 @@ class BaseFrontend(Frontend):
             CallUnknown(
                 result_reg=reg,
                 target_reg=target_reg,
-                args=tuple(arg_regs),
+                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-xgkl
             ),
             node=node,
         )
         return reg
 
-    def _extract_call_args(self, args_node) -> list[str]:
+    def _extract_call_args(
+        self, args_node: Any
+    ) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
         """Extract argument registers from a call arguments node."""
         if args_node is None:
             return []
-        return [
+        return [  # type: ignore[return-value]  # see red-dragon-xgkl
             self._lower_expr(c)
             for c in args_node.children
             if c.type
@@ -621,7 +669,9 @@ class BaseFrontend(Frontend):
             and c.is_named
         ]
 
-    def _extract_call_args_unwrap(self, args_node) -> list[str]:
+    def _extract_call_args_unwrap(
+        self, args_node: Any
+    ) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
         """Extract args, unwrapping wrapper nodes like 'argument'."""
         if args_node is None:
             return []
@@ -644,7 +694,9 @@ class BaseFrontend(Frontend):
                 regs.append(self._lower_expr(c))
         return regs
 
-    def _lower_attribute(self, node) -> Register:
+    def _lower_attribute(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         obj_node = node.child_by_field_name(self.ATTR_OBJECT_FIELD)
         attr_node = node.child_by_field_name(self.ATTR_ATTRIBUTE_FIELD)
         if obj_node is None:
@@ -664,7 +716,9 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_subscript(self, node) -> Register:
+    def _lower_subscript(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         obj_node = node.child_by_field_name(self.SUBSCRIPT_VALUE_FIELD)
         idx_node = node.child_by_field_name(self.SUBSCRIPT_INDEX_FIELD)
         if obj_node is None or idx_node is None:
@@ -680,10 +734,12 @@ class BaseFrontend(Frontend):
 
     # ── common store target ──────────────────────────────────────
 
-    def _lower_store_target(self, target, val_reg: str, parent_node):
+    def _lower_store_target(
+        self, target: Any, val_reg: str, parent_node: Any
+    ) -> None:  # Any: tree-sitter nodes — untyped at Python boundary
         if target.type == BaseNodeType.IDENTIFIER:
             self._emit_inst(
-                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),
+                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-xgkl
                 node=parent_node,
             )
         elif target.type in (
@@ -705,7 +761,7 @@ class BaseFrontend(Frontend):
                     StoreField(
                         obj_reg=obj_reg,
                         field_name=FieldName(self._node_text(attr_node)),
-                        value_reg=val_reg,
+                        value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-xgkl
                     ),
                     node=parent_node,
                 )
@@ -716,25 +772,29 @@ class BaseFrontend(Frontend):
                 obj_reg = self._lower_expr(obj_node)
                 idx_reg = self._lower_expr(idx_node)
                 self._emit_inst(
-                    StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+                    StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-xgkl
                     node=parent_node,
                 )
         else:
             # Fallback: just store to the text of the target
             self._emit_inst(
-                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),
+                StoreVar(name=VarName(self._node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-xgkl
                 node=parent_node,
             )
 
     # ── common statement lowerers ────────────────────────────────
 
-    def _lower_assignment(self, node):
+    def _lower_assignment(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         left = node.child_by_field_name(self.ASSIGN_LEFT_FIELD)
         right = node.child_by_field_name(self.ASSIGN_RIGHT_FIELD)
         val_reg = self._lower_expr(right)
-        self._lower_store_target(left, val_reg, node)
+        self._lower_store_target(left, val_reg, node)  # type: ignore[arg-type]  # see red-dragon-xgkl
 
-    def _lower_augmented_assignment(self, node):
+    def _lower_augmented_assignment(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         left = node.child_by_field_name(self.ASSIGN_LEFT_FIELD)
         right = node.child_by_field_name(self.ASSIGN_RIGHT_FIELD)
         op_node = [c for c in node.children if c.type not in (left.type, right.type)][0]
@@ -751,9 +811,11 @@ class BaseFrontend(Frontend):
             ),
             node=node,
         )
-        self._lower_store_target(left, result, node)
+        self._lower_store_target(left, result, node)  # type: ignore[arg-type]  # see red-dragon-xgkl
 
-    def _lower_return(self, node):
+    def _lower_return(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower a return statement. Override for language-specific keyword."""
         children = [c for c in node.children if c.type != BaseNodeType.RETURN]
         if children:
@@ -768,7 +830,9 @@ class BaseFrontend(Frontend):
             node=node,
         )
 
-    def _lower_if(self, node):
+    def _lower_if(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         cond_node = node.child_by_field_name(self.IF_CONDITION_FIELD)
         body_node = node.child_by_field_name(self.IF_CONSEQUENCE_FIELD)
         alt_node = node.child_by_field_name(self.IF_ALTERNATIVE_FIELD)
@@ -801,12 +865,14 @@ class BaseFrontend(Frontend):
 
         if alt_node:
             self._emit_inst(Label_(label=false_label))
-            self._lower_alternative(alt_node, end_label)
+            self._lower_alternative(alt_node, end_label)  # type: ignore[arg-type]  # see red-dragon-xgkl
             self._emit_inst(Branch(label=end_label))
 
         self._emit_inst(Label_(label=end_label))
 
-    def _lower_alternative(self, alt_node, end_label: str):
+    def _lower_alternative(
+        self, alt_node: Any, end_label: str
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower an else/elif/else-if alternative block."""
         alt_type = alt_node.type
         if alt_type in (BaseNodeType.ELIF_CLAUSE,):
@@ -827,7 +893,9 @@ class BaseFrontend(Frontend):
         else:
             self._lower_block(alt_node)
 
-    def _lower_elif(self, node, end_label: str):
+    def _lower_elif(
+        self, node: Any, end_label: str
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         cond_node = node.child_by_field_name(self.IF_CONDITION_FIELD)
         body_node = node.child_by_field_name(self.IF_CONSEQUENCE_FIELD)
         alt_node = node.child_by_field_name(self.IF_ALTERNATIVE_FIELD)
@@ -839,25 +907,27 @@ class BaseFrontend(Frontend):
         self._emit_inst(
             BranchIf(
                 cond_reg=cond_reg,
-                branch_targets=(true_label, false_label),
+                branch_targets=(true_label, false_label),  # type: ignore[arg-type]  # see red-dragon-xgkl
             ),
             node=node,
         )
 
         self._emit_inst(Label_(label=true_label))
         self._lower_block(body_node)
-        self._emit_inst(Branch(label=end_label))
+        self._emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-xgkl
 
         if alt_node:
-            self._emit_inst(Label_(label=false_label))
+            self._emit_inst(Label_(label=false_label))  # type: ignore[arg-type]  # see red-dragon-xgkl
             self._lower_alternative(alt_node, end_label)
-            self._emit_inst(Branch(label=end_label))
+            self._emit_inst(Branch(label=end_label))  # type: ignore[arg-type]  # see red-dragon-xgkl
 
-    def _lower_break(self, node):
+    def _lower_break(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower break statement as BRANCH to innermost break target."""
         if self._break_target_stack:
             self._emit_inst(
-                Branch(label=self._break_target_stack[-1]),
+                Branch(label=self._break_target_stack[-1]),  # type: ignore[arg-type]  # see red-dragon-xgkl
                 node=node,
             )
         else:
@@ -867,11 +937,13 @@ class BaseFrontend(Frontend):
                 node=node,
             )
 
-    def _lower_continue(self, node):
+    def _lower_continue(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower continue statement as BRANCH to innermost loop continue label."""
         if self._loop_stack:
             self._emit_inst(
-                Branch(label=self._loop_stack[-1]["continue_label"]),
+                Branch(label=self._loop_stack[-1]["continue_label"]),  # type: ignore[arg-type]  # see red-dragon-xgkl
                 node=node,
             )
         else:
@@ -893,7 +965,9 @@ class BaseFrontend(Frontend):
         self._loop_stack.pop()
         self._break_target_stack.pop()
 
-    def _lower_while(self, node):
+    def _lower_while(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         cond_node = node.child_by_field_name(self.WHILE_CONDITION_FIELD)
         body_node = node.child_by_field_name(self.WHILE_BODY_FIELD)
 
@@ -912,14 +986,16 @@ class BaseFrontend(Frontend):
         )
 
         self._emit_inst(Label_(label=body_label))
-        self._push_loop(loop_label, end_label)
+        self._push_loop(loop_label, end_label)  # type: ignore[arg-type]  # see red-dragon-xgkl
         self._lower_block(body_node)
         self._pop_loop()
         self._emit_inst(Branch(label=loop_label))
 
         self._emit_inst(Label_(label=end_label))
 
-    def _lower_c_style_for(self, node):
+    def _lower_c_style_for(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower a C-style for(init; cond; update) loop."""
         init_node = node.child_by_field_name("initializer")
         cond_node = node.child_by_field_name(self.FOR_CONDITION_FIELD)
@@ -948,7 +1024,7 @@ class BaseFrontend(Frontend):
 
         self._emit_inst(Label_(label=body_label))
         update_label = self._fresh_label("for_update") if update_node else loop_label
-        self._push_loop(update_label, end_label)
+        self._push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-xgkl
         if body_node:
             self._lower_block(body_node)
         self._pop_loop()
@@ -959,7 +1035,9 @@ class BaseFrontend(Frontend):
 
         self._emit_inst(Label_(label=end_label))
 
-    def _lower_function_def(self, node):
+    def _lower_function_def(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         name_node = node.child_by_field_name(self.FUNC_NAME_FIELD)
         params_node = node.child_by_field_name(self.FUNC_PARAMS_FIELD)
         body_node = node.child_by_field_name(self.FUNC_BODY_FIELD)
@@ -988,15 +1066,19 @@ class BaseFrontend(Frontend):
         self._emit_inst(Label_(label=end_label))
 
         func_reg = self._fresh_reg()
-        self._emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
-        self._emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)
+        self._emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-xgkl
 
-    def _lower_params(self, params_node):
+    def _lower_params(
+        self, params_node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower function parameters. Override for language-specific param shapes."""
         for child in params_node.children:
             self._lower_param(child)
 
-    def _lower_param(self, child):
+    def _lower_param(
+        self, child: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower a single function parameter to SYMBOLIC + DECL_VAR."""
         if child.type in (
             BaseNodeType.OPEN_PAREN,
@@ -1019,7 +1101,9 @@ class BaseFrontend(Frontend):
             node=child,
         )
 
-    def _extract_param_name(self, child) -> str | None:
+    def _extract_param_name(
+        self, child: Any
+    ) -> str | None:  # Any: tree-sitter node — untyped at Python boundary
         """Extract parameter name from a parameter node. Override per language."""
         if child.type == BaseNodeType.IDENTIFIER:
             return self._node_text(child)
@@ -1037,7 +1121,9 @@ class BaseFrontend(Frontend):
             return self._node_text(id_node)
         return None
 
-    def _lower_class_def(self, node):
+    def _lower_class_def(
+        self, node: Any
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         name_node = node.child_by_field_name(self.CLASS_NAME_FIELD)
         body_node = node.child_by_field_name(self.CLASS_BODY_FIELD)
         class_name = self._node_text(name_node)
@@ -1052,10 +1138,12 @@ class BaseFrontend(Frontend):
         self._emit_inst(Label_(label=end_label))
 
         cls_reg = self._fresh_reg()
-        self._emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
-        self._emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
+        self._emit_class_ref(class_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-xgkl
+        self._emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))  # type: ignore[arg-type]  # see red-dragon-xgkl
 
-    def _lower_raise_or_throw(self, node, keyword: str = "raise"):
+    def _lower_raise_or_throw(
+        self, node: Any, keyword: str = "raise"
+    ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         children = [c for c in node.children if c.type != keyword]
         if children:
             val_reg = self._lower_expr(children[0])
@@ -1069,7 +1157,9 @@ class BaseFrontend(Frontend):
             node=node,
         )
 
-    def _lower_list_literal(self, node) -> Register:
+    def _lower_list_literal(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         elems = [
             c
             for c in node.children
@@ -1096,7 +1186,9 @@ class BaseFrontend(Frontend):
             )
         return arr_reg
 
-    def _lower_dict_literal(self, node) -> Register:
+    def _lower_dict_literal(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         obj_reg = self._fresh_reg()
         self._emit_inst(
             NewObject(result_reg=obj_reg, type_hint=scalar("dict")),
@@ -1113,7 +1205,9 @@ class BaseFrontend(Frontend):
                 )
         return obj_reg
 
-    def _lower_update_expr(self, node) -> Register:
+    def _lower_update_expr(
+        self, node: Any
+    ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         """Lower i++ / i-- / ++i / --i update expressions."""
         children = [c for c in node.children if c.is_named]
         if not children:
@@ -1134,17 +1228,17 @@ class BaseFrontend(Frontend):
             ),
             node=node,
         )
-        self._lower_store_target(operand, result_reg, node)
+        self._lower_store_target(operand, result_reg, node)  # type: ignore[arg-type]  # see red-dragon-xgkl
         return result_reg
 
     def _lower_try_catch(
         self,
-        node,
-        body_node,
-        catch_clauses: list[dict],
-        finally_node=None,
-        else_node=None,
-    ):
+        node: Any,  # Any: tree-sitter node — untyped at Python boundary
+        body_node: Any,  # Any: tree-sitter node — untyped at Python boundary
+        catch_clauses: list[dict],  # type: ignore[type-arg]  # dict values are tree-sitter nodes
+        finally_node: Any = None,  # Any: tree-sitter node — untyped at Python boundary
+        else_node: Any = None,  # Any: tree-sitter node — untyped at Python boundary
+    ) -> None:
         """Lower try/catch/finally into labeled blocks connected by BRANCH.
 
         Each catch dict: {"body": node, "variable": str|None, "type": str|None}

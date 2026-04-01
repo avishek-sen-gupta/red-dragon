@@ -1,3 +1,4 @@
+# pyright: standard
 """Common property accessor registration and emit helpers.
 
 Reusable by any frontend that supports property getters/setters
@@ -5,6 +6,8 @@ Reusable by any frontend that supports property getters/setters
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.field_name import FieldName
@@ -37,7 +40,7 @@ def emit_field_load_or_getter(
     obj_reg: str,
     class_name: str,
     field_name: str,
-    node,
+    node: Any,  # Any: tree-sitter node — untyped at Python boundary
 ) -> Register:
     """Emit CALL_METHOD for getter if registered, otherwise plain LOAD_FIELD."""
     if has_property_accessor(ctx, class_name, field_name, "get"):
@@ -45,7 +48,7 @@ def emit_field_load_or_getter(
         ctx.emit_inst(
             CallMethod(
                 result_reg=reg,
-                obj_reg=obj_reg,
+                obj_reg=obj_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                 method_name=FuncName(f"__get_{field_name}__"),
                 args=(),
             ),
@@ -56,7 +59,7 @@ def emit_field_load_or_getter(
     ctx.emit_inst(
         LoadField(
             result_reg=reg,
-            obj_reg=obj_reg,
+            obj_reg=obj_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
             field_name=FieldName(field_name),
         ),
         node=node,
@@ -70,25 +73,25 @@ def emit_field_store_or_setter(
     class_name: str,
     field_name: str,
     val_reg: str,
-    node,
+    node: Any,  # Any: tree-sitter node — untyped at Python boundary
 ) -> None:
     """Emit CALL_METHOD for setter if registered, otherwise plain STORE_FIELD."""
     if has_property_accessor(ctx, class_name, field_name, "set"):
         ctx.emit_inst(
             CallMethod(
                 result_reg=ctx.fresh_reg(),
-                obj_reg=obj_reg,
+                obj_reg=obj_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
                 method_name=FuncName(f"__set_{field_name}__"),
-                args=(val_reg,),
+                args=(val_reg,),  # type: ignore[arg-type]  # see red-dragon-2us7
             ),
             node=node,
         )
         return
     ctx.emit_inst(
         StoreField(
-            obj_reg=obj_reg,
+            obj_reg=obj_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
             field_name=FieldName(field_name),
-            value_reg=val_reg,
+            value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-2us7
         ),
         node=node,
     )
