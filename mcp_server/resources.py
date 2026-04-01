@@ -1,3 +1,4 @@
+# pyright: standard
 """Resource handler implementations for the RedDragon MCP server."""
 
 from __future__ import annotations
