@@ -1,3 +1,4 @@
+# pyright: standard
 """Per-module compiler and directory compilation orchestrator.
 
 compile_module(): file → ModuleUnit
@@ -32,7 +33,7 @@ from interpreter import constants
 
 
 def build_export_table(
-    ir: list[InstructionBase] | tuple[...],
+    ir: list[InstructionBase] | tuple[InstructionBase, ...],
     func_symbol_table: dict[CodeLabel, FuncRef],
     class_symbol_table: dict[CodeLabel, ClassRef],
 ) -> ExportTable:
