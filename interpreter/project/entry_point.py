@@ -1,3 +1,4 @@
+# pyright: standard
 """EntryPoint type -- explicit specification of how to enter a program for execution."""
 
 from __future__ import annotations
