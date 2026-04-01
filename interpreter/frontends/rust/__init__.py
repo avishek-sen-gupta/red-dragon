@@ -1,3 +1,4 @@
+# pyright: standard
 """Rust frontend package."""
 
 from interpreter.frontends.rust.frontend import RustFrontend

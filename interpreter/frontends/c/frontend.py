@@ -1,11 +1,14 @@
+# pyright: standard
 """CFrontend — thin orchestrator that builds dispatch tables from pure functions."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter.register import Register
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
@@ -73,7 +76,9 @@ class CFrontend(BaseFrontend):
             "void": "Any",
         }
 
-    def _build_expr_dispatch(self) -> dict[str, Callable]:
+    def _build_expr_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             CNodeType.IDENTIFIER: common_expr.lower_identifier,
             CNodeType.NUMBER_LITERAL: common_expr.lower_const_literal,
@@ -103,7 +108,9 @@ class CFrontend(BaseFrontend):
             CNodeType.INITIALIZER_PAIR: c_expr.lower_initializer_pair,
         }
 
-    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+    def _build_stmt_dispatch(
+        self,
+    ) -> dict[str, Callable[[TreeSitterEmitContext, Any], None]]:
         return {
             CNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             CNodeType.DECLARATION: c_decl.lower_declaration,
@@ -130,8 +137,7 @@ class CFrontend(BaseFrontend):
             CNodeType.DECLARATION_LIST: lambda ctx, node: ctx.lower_block(node),
         }
 
-    def _extract_symbols(self, root) -> "SymbolTable":
+    def _extract_symbols(self, root) -> SymbolTable:
         from interpreter.frontends.c.declarations import extract_c_symbols
-        from interpreter.frontends.symbol_table import SymbolTable
 
         return extract_c_symbols(root)

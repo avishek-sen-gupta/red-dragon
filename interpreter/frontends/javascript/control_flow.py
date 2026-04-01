@@ -1,6 +1,9 @@
+# pyright: standard
 """JavaScript-specific control flow lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -38,7 +41,9 @@ def lower_js_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -
         ctx.lower_block(alt_node)
 
 
-def lower_js_if(ctx: TreeSitterEmitContext, node) -> None:
+def lower_js_if(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -65,13 +70,15 @@ def lower_js_if(ctx: TreeSitterEmitContext, node) -> None:
 
     if alt_node:
         ctx.emit_inst(Label_(label=false_label))
-        lower_js_alternative(ctx, alt_node, end_label)
+        lower_js_alternative(ctx, alt_node, end_label)  # type: ignore[misc]  # see red-dragon-hzmm
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
+def lower_for_in(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     # for (let x in/of obj) { body }
     operator_node = node.child_by_field_name("operator")
     is_for_of = operator_node is not None and ctx.node_text(operator_node) == "of"
@@ -131,14 +138,14 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=keys_reg, index_reg=idx_reg))
 
     if is_destructure:
-        _lower_for_destructure(ctx, left, elem_reg)
+        _lower_for_destructure(ctx, left, elem_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
     else:
-        var_name = ctx.declare_block_var(raw_name)
+        var_name = ctx.declare_block_var(raw_name)  # type: ignore[misc]  # see red-dragon-hzmm
         if var_name:
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_in_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -159,7 +166,9 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
+def lower_for_of(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower for (const x of iterable) as index-based iteration.
 
     Handles destructuring patterns: ``for (const [k, v] of arr)`` and
@@ -210,14 +219,14 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
 
     if is_destructure:
-        _lower_for_destructure(ctx, left, elem_reg)
+        _lower_for_destructure(ctx, left, elem_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
     else:
-        var_name = ctx.declare_block_var(raw_name)
+        var_name = ctx.declare_block_var(raw_name)  # type: ignore[misc]  # see red-dragon-hzmm
         if var_name:
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_of_update")
-    ctx.push_loop(update_label, end_label)
+    ctx.push_loop(update_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -238,7 +247,9 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def _extract_var_name(ctx: TreeSitterEmitContext, node) -> str | None:
+def _extract_var_name(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str | None:  # Any: tree-sitter node — untyped at Python boundary
     """Extract variable name from a declaration or identifier."""
     if node.type == JSN.IDENTIFIER:
         return ctx.node_text(node)
@@ -275,7 +286,9 @@ def _lower_for_destructure(
         _lower_object_destructure(ctx, pattern_node, elem_reg, pattern_node)
 
 
-def lower_js_try(ctx: TreeSitterEmitContext, node) -> None:
+def lower_js_try(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     body_node = node.child_by_field_name("body")
     handler = node.child_by_field_name("handler")
     finalizer = node.child_by_field_name("finalizer")
@@ -289,11 +302,15 @@ def lower_js_try(ctx: TreeSitterEmitContext, node) -> None:
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
 
 
-def lower_js_throw(ctx: TreeSitterEmitContext, node) -> None:
+def lower_js_throw(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     lower_raise_or_throw(ctx, node, keyword="throw")
 
 
-def lower_switch_statement(ctx: TreeSitterEmitContext, node) -> None:
+def lower_switch_statement(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower switch(x) { case a: ... default: ... } as if/else chain."""
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
@@ -301,7 +318,7 @@ def lower_switch_statement(ctx: TreeSitterEmitContext, node) -> None:
     disc_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
     end_label = ctx.fresh_label("switch_end")
 
-    ctx.break_target_stack.append(end_label)
+    ctx.break_target_stack.append(end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
 
     if body_node:
         cases = [
@@ -350,7 +367,9 @@ def _lower_switch_case_body(ctx: TreeSitterEmitContext, case_node) -> None:
             ctx.lower_stmt(child)
 
 
-def lower_do_statement(ctx: TreeSitterEmitContext, node) -> None:
+def lower_do_statement(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower do { body } while (cond)."""
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
@@ -361,7 +380,7 @@ def lower_do_statement(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=body_label))
 
-    ctx.push_loop(cond_label, end_label)
+    ctx.push_loop(cond_label, end_label)  # type: ignore[arg-type]  # see red-dragon-y5bm
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
@@ -375,7 +394,9 @@ def lower_do_statement(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
 
-def lower_labeled_statement(ctx: TreeSitterEmitContext, node) -> None:
+def lower_labeled_statement(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `label: stmt` -> LABEL(name) + lower body."""
     label_node = node.child_by_field_name("label")
     body_node = node.child_by_field_name("body")
@@ -388,7 +409,9 @@ def lower_labeled_statement(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_stmt(body_node)
 
 
-def lower_with_statement(ctx: TreeSitterEmitContext, node) -> None:
+def lower_with_statement(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `with (obj) { body }` — lower object then body."""
     object_node = node.child_by_field_name(ctx.constants.attr_object_field)
     body_node = node.child_by_field_name("body")

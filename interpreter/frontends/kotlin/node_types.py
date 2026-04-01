@@ -1,3 +1,4 @@
+# pyright: standard
 """Kotlin tree-sitter node type constants."""
 
 

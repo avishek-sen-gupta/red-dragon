@@ -1,6 +1,9 @@
+# pyright: standard
 """Ruby-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
@@ -41,7 +44,9 @@ from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 
 
-def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_scope_resolution(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``Foo::Bar`` as LOAD_VAR(Foo) + LOAD_FIELD(scope_reg, 'Bar').
 
     For root scope ``::TopLevel`` (no scope child), emits LOAD_VAR('TopLevel').
@@ -65,7 +70,9 @@ def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_instance_variable(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``@var`` as ``LOAD_VAR self`` + ``LOAD_FIELD self_reg 'var'``."""
     raw = ctx.node_text(node)
     field_name = raw.lstrip("@")
@@ -81,7 +88,9 @@ def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
     has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
@@ -94,16 +103,18 @@ def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> Register:
             ctx.emit_inst(
                 Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
-            parts.append(frag_reg)
+            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
         elif child.type == RubyNodeType.INTERPOLATION:
             named = [c for c in child.children if c.is_named]
             if named:
-                parts.append(ctx.lower_expr(named[0]))
+                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
         # skip punctuation: ", #{, }
     return lower_interpolated_string_parts(ctx, parts, node)
 
 
-def lower_ruby_heredoc_body(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_heredoc_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby heredoc body, decomposing interpolation like lower_ruby_string."""
     has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
@@ -116,16 +127,18 @@ def lower_ruby_heredoc_body(ctx: TreeSitterEmitContext, node) -> Register:
             ctx.emit_inst(
                 Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
-            parts.append(frag_reg)
+            parts.append(frag_reg)  # type: ignore[arg-type]  # see red-dragon-y5bm
         elif child.type == RubyNodeType.INTERPOLATION:
             named = [c for c in child.children if c.is_named]
             if named:
-                parts.append(ctx.lower_expr(named[0]))
+                parts.append(ctx.lower_expr(named[0]))  # type: ignore[arg-type]  # see red-dragon-y5bm
         # skip heredoc_end and punctuation
     return lower_interpolated_string_parts(ctx, parts, node)
 
 
-def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby method call with receiver, block, and raise handling."""
     receiver_node = node.child_by_field_name("receiver")
     method_node = node.child_by_field_name("method")
@@ -161,7 +174,7 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
                     result_reg=ctor_reg,
                     obj_reg=obj_reg,
                     method_name=FuncName("__init__"),
-                    args=tuple(arg_regs),
+                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=node,
             )
@@ -175,7 +188,7 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
                 result_reg=reg,
                 obj_reg=obj_reg,
                 method_name=FuncName(method_name),
-                args=tuple(arg_regs),
+                args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -187,12 +200,12 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
         # Ruby raise -> THROW
         if func_name == "raise":
             val_reg = arg_regs[0] if arg_regs else ctx.fresh_reg()
-            ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
-            return val_reg
+            ctx.emit_inst(Throw_(value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
+            return val_reg  # type: ignore[return-value]  # see red-dragon-hzmm
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -203,13 +216,15 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
 
 
-def lower_ruby_argument_list(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_argument_list(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Unwrap argument_list to its first named child (e.g. return value)."""
     named = [c for c in node.children if c.is_named]
     if named:
@@ -219,7 +234,9 @@ def lower_ruby_argument_list(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_hash(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby hash literal as NEW_OBJECT + STORE_INDEX per pair."""
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("hash")), node=node)
@@ -236,7 +253,9 @@ def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> Register:
     return obj_reg
 
 
-def lower_ruby_range(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_range(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `a..b` or `a...b` as CALL_FUNCTION("range", start, end)."""
     named = [c for c in node.children if c.is_named]
     start_reg = ctx.lower_expr(named[0]) if len(named) > 0 else ctx.fresh_reg()
@@ -256,7 +275,9 @@ def lower_ruby_range(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_lambda(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `-> (params) { body }` as anonymous function."""
     func_name = f"__lambda_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -312,11 +333,13 @@ def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return ref_reg
 
 
-def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_word_array(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `%w[a b c]` or `%i[a b c]` as NEW_ARRAY + STORE_INDEX per element."""
     elems = [
         c
@@ -346,17 +369,19 @@ def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> Register:
     return arr_reg
 
 
-def lower_element_reference(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_element_reference(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `arr[idx]` as LOAD_INDEX, `arr[1..3]` as CALL_FUNCTION('slice')."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(named_children[0])
     if len(named_children) > 1 and named_children[1].type == RubyNodeType.RANGE:
-        return _lower_range_slice(ctx, named_children[1], obj_reg)
+        return _lower_range_slice(ctx, named_children[1], obj_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
     # arr[start, length] — Ruby's two-arg slice: start at index, take N elements
     if len(named_children) == 3:
-        return _lower_positional_slice(ctx, named_children, obj_reg, node)
+        return _lower_positional_slice(ctx, named_children, obj_reg, node)  # type: ignore[arg-type]  # see red-dragon-hzmm
     idx_reg = (
         ctx.lower_expr(named_children[1])
         if len(named_children) > 1
@@ -406,7 +431,7 @@ def _lower_range_slice(
             result_reg=reg,
             func_name=FuncName("slice"),
             args=(
-                collection_reg,
+                collection_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 start_reg,
                 end_reg,
                 none_reg,
@@ -440,7 +465,7 @@ def _lower_positional_slice(
             result_reg=reg,
             func_name=FuncName("slice"),
             args=(
-                collection_reg,
+                collection_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 start_reg,
                 stop_reg,
                 none_reg,
@@ -458,7 +483,9 @@ def _make_const(ctx: TreeSitterEmitContext, value: str) -> Register:
     return reg
 
 
-def lower_ruby_conditional(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_conditional(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `condition ? true_expr : false_expr` as ternary."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -488,7 +515,9 @@ def lower_ruby_conditional(ctx: TreeSitterEmitContext, node) -> Register:
     return result_reg
 
 
-def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_self(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `self` as LOAD_VAR('self')."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -497,7 +526,9 @@ def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> Register:
     return reg
 
 
-def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_super(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `super` or `super(args)` as CALL_FUNCTION("super", ...args)."""
     args_node = next(
         (c for c in node.children if c.type == RubyNodeType.ARGUMENT_LIST),
@@ -506,13 +537,15 @@ def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=FuncName("super"), args=tuple(arg_regs)),
+        CallFunction(result_reg=reg, func_name=FuncName("super"), args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
 
 
-def lower_ruby_yield(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_yield(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `yield` or `yield expr` as CALL_FUNCTION("yield", ...args)."""
     args_node = next(
         (c for c in node.children if c.type == RubyNodeType.ARGUMENT_LIST),
@@ -521,13 +554,15 @@ def lower_ruby_yield(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=FuncName("yield"), args=tuple(arg_regs)),
+        CallFunction(result_reg=reg, func_name=FuncName("yield"), args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
 
 
-def lower_ruby_pattern(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_pattern(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a `pattern` wrapper node by lowering its inner child."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:
@@ -538,7 +573,9 @@ def lower_ruby_pattern(ctx: TreeSitterEmitContext, node) -> Register:
 # ── Ruby block as inline closure ─────────────────────────────────────
 
 
-def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_ruby_block(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a Ruby block (curly brace) or do_block (do/end) as inline closure.
 
     BRANCH end -> LABEL block_ -> params -> body -> CONST nil -> RETURN -> LABEL end -> CONST func:label
@@ -675,7 +712,7 @@ def lower_ruby_store_target(
         )
         ctx.emit_inst(
             StoreField(
-                obj_reg=self_reg, field_name=FieldName(field_name), value_reg=val_reg
+                obj_reg=self_reg, field_name=FieldName(field_name), value_reg=val_reg  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=parent_node,
         )
@@ -686,7 +723,7 @@ def lower_ruby_store_target(
         RubyNodeType.CLASS_VARIABLE,
     ):
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
     elif target.type == RubyNodeType.ELEMENT_REFERENCE:
@@ -695,7 +732,7 @@ def lower_ruby_store_target(
             obj_reg = ctx.lower_expr(named_children[0])
             idx_reg = ctx.lower_expr(named_children[1])
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
         else:

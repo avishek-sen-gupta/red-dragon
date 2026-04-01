@@ -1,6 +1,9 @@
+# pyright: standard
 """Go-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -35,7 +38,9 @@ from interpreter.instructions import (
 )
 
 
-def lower_go_iota(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_go_iota(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `iota` to CONST with current iota counter value."""
     iota_val = getattr(ctx, "_go_iota_value", 0)
     reg = ctx.fresh_reg()
@@ -46,7 +51,7 @@ def lower_go_iota(ctx: TreeSitterEmitContext, node) -> Register:
 logger = logging.getLogger(__name__)
 
 
-def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> "TypeExpr":
+def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> "TypeExpr":  # type: ignore[arg-type]  # see red-dragon-hzmm
     """Convert a Go tree-sitter type node into a TypeExpr.
 
     Handles slice_type ([]T → Array[T]), map_type (map[K]V → Map[K, V]),
@@ -73,7 +78,9 @@ def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> "TypeExpr":
 # -- Go: call expression ---------------------------------------------------
 
 
-def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_go_call(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
 
@@ -121,7 +128,7 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
                     result_reg=reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(arg_regs),
+                    args=tuple(arg_regs),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=node,
             )
@@ -134,7 +141,7 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)
+                result_reg=reg, func_name=FuncName(func_name), args=tuple(arg_regs)  # type: ignore[arg-type]  # see red-dragon-hzmm
             ),
             node=node,
         )
@@ -144,7 +151,7 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
     target_reg = ctx.lower_expr(func_node) if func_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),  # type: ignore[arg-type]  # see red-dragon-hzmm
         node=node,
     )
     return reg
@@ -153,7 +160,9 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
 # -- Go: selector expression (obj.field) -----------------------------------
 
 
-def lower_selector(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_selector(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     operand_node = node.child_by_field_name("operand")
     field_node = node.child_by_field_name("field")
     if operand_node is None or field_node is None:
@@ -171,7 +180,9 @@ def lower_selector(ctx: TreeSitterEmitContext, node) -> Register:
 # -- Go: index expression (arr[i]) -----------------------------------------
 
 
-def lower_go_index(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_go_index(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     operand_node = node.child_by_field_name("operand")
     index_node = node.child_by_field_name("index")
     if operand_node is None or index_node is None:
@@ -188,7 +199,9 @@ def lower_go_index(ctx: TreeSitterEmitContext, node) -> Register:
 # -- Go: composite literal -------------------------------------------------
 
 
-def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_composite_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Go composite literal: Point{X: 1} or []int{1, 2, 3}."""
     type_node = node.child_by_field_name("type")
     body_node = node.child_by_field_name("body") or next(
@@ -255,7 +268,9 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> Register:
 # -- Go: type conversion expression ----------------------------------------
 
 
-def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_type_conversion(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower type_conversion_expression: []byte(s), Foo[int](y) -> CALL_FUNCTION.
 
     The node has a ``type`` field (the target type, e.g. ``[]byte``,
@@ -282,7 +297,9 @@ def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> Register:
 # -- Go: generic type (Foo[int]) as expression reference ------------------
 
 
-def lower_generic_type(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_generic_type(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower generic_type: Foo[int] -> lower as identifier using the full text.
 
     When generic_type appears in expression context (e.g. inside
@@ -294,7 +311,9 @@ def lower_generic_type(ctx: TreeSitterEmitContext, node) -> Register:
 # -- Go: type assertion expression -----------------------------------------
 
 
-def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_type_assertion(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower type_assertion_expression: x.(Type) -> CALL_FUNCTION('type_assert', x, Type)."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -308,7 +327,7 @@ def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
         CallFunction(
             result_reg=reg,
             func_name=FuncName("type_assert"),
-            args=(expr_reg, type_text),
+            args=(expr_reg, type_text),  # type: ignore[arg-type]  # see red-dragon-hzmm
         ),
         node=node,
     )
@@ -325,7 +344,9 @@ def _make_const(ctx: TreeSitterEmitContext, value: str) -> Register:
     return reg
 
 
-def lower_slice_expr(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_slice_expr(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower slice_expression: a[low:high] -> CALL_FUNCTION('slice', a, low, high)."""
     operand_node = node.child_by_field_name("operand")
     obj_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
@@ -355,7 +376,9 @@ def lower_slice_expr(ctx: TreeSitterEmitContext, node) -> Register:
 # -- Go: func literal (anonymous function) ---------------------------------
 
 
-def lower_func_literal(ctx: TreeSitterEmitContext, node) -> Register:
+def lower_func_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower func_literal as an anonymous function."""
     from interpreter.frontends.go.declarations import lower_go_params
 
@@ -381,14 +404,16 @@ def lower_func_literal(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     return reg
 
 
 # -- Go: expression list helpers -------------------------------------------
 
 
-def extract_expression_list(ctx: TreeSitterEmitContext, node) -> list[str]:
+def extract_expression_list(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract identifiers from an expression_list node."""
     if node is None:
         return []
@@ -412,17 +437,19 @@ def get_expression_list_children(node) -> list:
     return [node]
 
 
-def lower_expression_list(ctx: TreeSitterEmitContext, node) -> list[str]:
+def lower_expression_list(
+    ctx: TreeSitterEmitContext, node: Any
+) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
     """Lower each expression in an expression_list, return registers."""
     if node is None:
         return []
     if node.type == GoNodeType.EXPRESSION_LIST:
-        return [
+        return [  # type: ignore[return-value]  # see red-dragon-hzmm
             ctx.lower_expr(c)
             for c in node.children
             if c.type not in (GoNodeType.COMMA,) and c.is_named
         ]
-    return [ctx.lower_expr(node)]
+    return [ctx.lower_expr(node)]  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
 # -- Go: store target with selector_expression -----------------------------
@@ -433,7 +460,7 @@ def lower_go_store_target(
 ) -> None:
     if target.type == GoNodeType.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )
     elif target.type == GoNodeType.SELECTOR_EXPRESSION:
@@ -445,7 +472,7 @@ def lower_go_store_target(
                 StoreField(
                     obj_reg=obj_reg,
                     field_name=FieldName(ctx.node_text(field_node)),
-                    value_reg=val_reg,
+                    value_reg=val_reg,  # type: ignore[arg-type]  # see red-dragon-hzmm
                 ),
                 node=parent_node,
             )
@@ -456,11 +483,11 @@ def lower_go_store_target(
             obj_reg = ctx.lower_expr(operand_node)
             idx_reg = ctx.lower_expr(index_node)
             ctx.emit_inst(
-                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
                 node=parent_node,
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),  # type: ignore[arg-type]  # see red-dragon-hzmm
             node=parent_node,
         )

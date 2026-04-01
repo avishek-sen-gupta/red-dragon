@@ -1,6 +1,9 @@
+# pyright: standard
 """C-specific declaration lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -78,7 +81,9 @@ def _wrap_pointer_type(base_type: TypeExpr, depth: int) -> TypeExpr:
     return reduce(lambda inner, _: pointer(inner), range(depth), base_type)
 
 
-def _extract_struct_type(ctx: TreeSitterEmitContext, node) -> str:
+def _extract_struct_type(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
     """Return the struct type name if *node* has a struct_specifier, else ''."""
     for child in node.children:
         if child.type == CNodeType.STRUCT_SPECIFIER:
@@ -93,7 +98,9 @@ def _extract_struct_type(ctx: TreeSitterEmitContext, node) -> str:
     return ""
 
 
-def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
+def lower_declaration(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a C declaration: type declarator(s) with optional initializers."""
     struct_type = _extract_struct_type(ctx, node)
     raw_type = extract_type_from_field(ctx, node, "type")
@@ -145,7 +152,7 @@ def _lower_init_declarator(
         from interpreter.frontends.cpp.control_flow import _lower_structured_binding
 
         rhs_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
-        _lower_structured_binding(ctx, decl_node, rhs_reg)
+        _lower_structured_binding(ctx, decl_node, rhs_reg)  # type: ignore[arg-type]  # see red-dragon-hzmm
         return
 
     raw_name = extract_declarator_name(ctx, decl_node) if decl_node else "__anon"
@@ -182,7 +189,7 @@ def _lower_init_declarator(
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)  # type: ignore[arg-type]  # see red-dragon-hzmm
     ctx.seed_var_type(var_name, effective_type)
 
 
@@ -200,22 +207,22 @@ def _extract_struct_field_names(
     field_names: list[str] = []
     for inst in ctx.instructions:
         if (
-            inst.opcode == Opcode.LABEL
-            and inst.label.is_present()
-            and inst.label.starts_with(class_prefix)
+            inst.opcode == Opcode.LABEL  # type: ignore[union-attr]  # see red-dragon-hzmm
+            and inst.label.is_present()  # type: ignore[union-attr]  # see red-dragon-hzmm
+            and inst.label.starts_with(class_prefix)  # type: ignore[union-attr]  # see red-dragon-hzmm
         ):
             in_body = True
             continue
         if (
-            inst.opcode == Opcode.LABEL
-            and inst.label.is_present()
-            and inst.label.starts_with(end_prefix)
+            inst.opcode == Opcode.LABEL  # type: ignore[union-attr]  # see red-dragon-hzmm
+            and inst.label.is_present()  # type: ignore[union-attr]  # see red-dragon-hzmm
+            and inst.label.starts_with(end_prefix)  # type: ignore[union-attr]  # see red-dragon-hzmm
         ):
             break
-        if in_body and inst.opcode == Opcode.STORE_FIELD:
+        if in_body and inst.opcode == Opcode.STORE_FIELD:  # type: ignore[union-attr]  # see red-dragon-hzmm
             t = inst
             assert isinstance(t, StoreField)
-            field_names.append(t.field_name)
+            field_names.append(t.field_name)  # type: ignore[arg-type]  # see red-dragon-y5bm
     return field_names
 
 
@@ -282,7 +289,7 @@ def _lower_struct_initializer_list(
                 node=elem,
             )
 
-    return obj_reg
+    return obj_reg  # type: ignore[return-value]  # see red-dragon-hzmm
 
 
 def _find_function_declarator(node) -> object | None:
@@ -362,7 +369,9 @@ def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
             param_index += 1
 
 
-def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
+def lower_function_def_c(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function_definition with nested function_declarator."""
     declarator_node = node.child_by_field_name("declarator")
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -375,8 +384,8 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
             # Check for nested function_declarator (e.g. function-pointer return types)
             inner_decl = _find_innermost_function_declarator(declarator_node)
             target_decl = inner_decl if inner_decl else declarator_node
-            name_node = target_decl.child_by_field_name("declarator")
-            params_node = target_decl.child_by_field_name(
+            name_node = target_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
+            params_node = target_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
                 ctx.constants.func_params_field
             )
             func_name = (
@@ -385,8 +394,8 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
         else:
             func_decl = _find_innermost_function_declarator(declarator_node)
             if func_decl:
-                name_node = func_decl.child_by_field_name("declarator")
-                params_node = func_decl.child_by_field_name(
+                name_node = func_decl.child_by_field_name("declarator")  # type: ignore[attr-defined]  # see red-dragon-545a
+                params_node = func_decl.child_by_field_name(  # type: ignore[attr-defined]  # see red-dragon-545a
                     ctx.constants.func_params_field
                 )
                 func_name = (
@@ -417,11 +426,13 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
-def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_struct_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower struct_specifier as class."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -441,11 +452,13 @@ def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(struct_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(struct_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(struct_name), value_reg=cls_reg))
 
 
-def lower_struct_body(ctx: TreeSitterEmitContext, node) -> None:
+def lower_struct_body(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower struct field_declaration_list."""
     for child in node.children:
         if child.type == CNodeType.FIELD_DECLARATION:
@@ -469,7 +482,9 @@ def _collect_field_identifiers(node) -> list:
     return results
 
 
-def lower_struct_field(ctx: TreeSitterEmitContext, node) -> None:
+def lower_struct_field(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a struct field declaration as STORE_FIELD on this."""
     declarators = _collect_field_identifiers(node)
     for decl in declarators:
@@ -486,7 +501,9 @@ def lower_struct_field(ctx: TreeSitterEmitContext, node) -> None:
         )
 
 
-def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_enum_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower enum_specifier as NEW_OBJECT + STORE_FIELD per enumerator."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -524,7 +541,9 @@ def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=obj_reg), node=node)
 
 
-def lower_union_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_union_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower union_specifier like struct_specifier."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -544,11 +563,13 @@ def lower_union_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit_class_ref(union_name, class_label, [], result_reg=cls_reg)
+    ctx.emit_class_ref(union_name, class_label, [], result_reg=cls_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(union_name), value_reg=cls_reg))
 
 
-def lower_typedef(ctx: TreeSitterEmitContext, node) -> None:
+def lower_typedef(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower typedef as a type alias seed.
 
     Examples: ``typedef int UserId;`` → alias UserId = Int
@@ -581,7 +602,9 @@ def lower_typedef(ctx: TreeSitterEmitContext, node) -> None:
     logger.debug("Typedef alias: %s → %s", alias_name, effective_type)
 
 
-def lower_preproc_function_def(ctx: TreeSitterEmitContext, node) -> None:
+def lower_preproc_function_def(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `#define FUNC(args) body` as function stub."""
     name_node = node.child_by_field_name("name")
     value_node = node.child_by_field_name("value")
@@ -609,7 +632,7 @@ def lower_preproc_function_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)  # type: ignore[arg-type]  # see red-dragon-1vgf
     ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
@@ -636,7 +659,7 @@ def _extract_c_declarator_name_no_ctx(decl_node) -> "str | None":
     return id_node.text.decode() if id_node is not None else None
 
 
-def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":
+def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":  # type: ignore[name-defined]  # see red-dragon-545a
     """Extract fields from a C struct field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -652,13 +675,13 @@ def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":
                 fields[FieldName(fname)] = FieldInfo(
                     name=FieldName(fname), type_hint=type_hint, has_initializer=False
                 )
-    return fields
+    return fields  # type: ignore[name-defined]  # see red-dragon-545a
 
 
 def _collect_c_structs_and_functions(
     node,
-    classes: "dict[ClassName, ClassInfo]",
-    functions: "dict[FuncName, FunctionInfo]",
+    classes: "dict[ClassName, ClassInfo]",  # type: ignore[name-defined]  # see red-dragon-545a
+    functions: "dict[FuncName, FunctionInfo]",  # type: ignore[name-defined]  # see red-dragon-545a
 ) -> None:
     """Walk AST to collect struct_specifier nodes as ClassInfo and top-level function_definition nodes."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
@@ -673,7 +696,7 @@ def _collect_c_structs_and_functions(
             )
             classes[ClassName(struct_name)] = ClassInfo(
                 name=ClassName(struct_name),
-                fields=fields,
+                fields=fields,  # type: ignore[name-defined]  # see red-dragon-545a
                 methods={},
                 constants={},
                 parents=(),
@@ -702,7 +725,7 @@ def _collect_c_structs_and_functions(
         _collect_c_structs_and_functions(child, classes, functions)
 
 
-def extract_c_symbols(root) -> "SymbolTable":
+def extract_c_symbols(root) -> "SymbolTable":  # type: ignore[name-defined]  # see red-dragon-545a
     """Walk the C AST and return a SymbolTable of all struct and function definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 
