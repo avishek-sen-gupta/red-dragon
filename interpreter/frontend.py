@@ -1,3 +1,4 @@
+# pyright: standard
 """Frontend / AST-to-IR Lowering."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# pyright: standard
 """Iterative Dataflow Analysis on IR — reaching definitions, def-use chains, dependency graphs."""
 
 from __future__ import annotations
@@ -6,6 +7,7 @@ import logging
 from collections import deque
 from dataclasses import dataclass, field
 from functools import reduce
+from typing import Any
 
 from interpreter import constants
 from interpreter.cfg import BasicBlock, CFG
@@ -180,12 +182,12 @@ def solve_reaching_definitions(cfg: CFG) -> dict[CodeLabel, BlockDataflowFacts]:
     all_defs = collect_all_definitions(cfg)
     defs_by_var = _build_defs_by_variable(all_defs)
 
-    facts: dict[str, BlockDataflowFacts] = {}
+    facts: dict[CodeLabel, BlockDataflowFacts] = {}
     for label, block in cfg.blocks.items():
         gen, kill = compute_gen_kill(block, all_defs, defs_by_var)
         facts[label] = BlockDataflowFacts(gen=gen, kill=kill)
 
-    worklist: deque[str] = deque(cfg.blocks.keys())
+    worklist: deque[CodeLabel] = deque(cfg.blocks.keys())
     iteration = 0
 
     while worklist and iteration < constants.DATAFLOW_MAX_ITERATIONS:
@@ -287,13 +289,18 @@ def _build_raw_dependency_graph(
     )
 
     # Collect all variable definitions (DECL_VAR + STORE_VAR)
-    store_var_defs: set[tuple[VarName, Register]] = {
-        (t.name, t.value_reg)
-        for link in def_use_chains
-        if (use_inst := link.use.instruction).opcode in VAR_DEFINITION_OPCODES
-        and len(use_inst.operands) >= 2
-        and isinstance((t := use_inst), (DeclVar, StoreVar))
-    }
+    store_var_defs: set[tuple[VarName, Register]] = set()
+    for link in def_use_chains:
+        use_inst_raw: Any = (
+            link.use.instruction
+        )  # InstructionBase subclasses have opcode/operands  # see red-dragon-4ei7
+        if (
+            use_inst_raw.opcode in VAR_DEFINITION_OPCODES
+            and len(use_inst_raw.operands) >= 2
+            and isinstance(link.use.instruction, (DeclVar, StoreVar))
+        ):
+            t = link.use.instruction
+            store_var_defs.add((t.name, t.value_reg))
 
     # For each STORE_VAR, trace the RHS register backward to named variables
     def _trace_deps(
