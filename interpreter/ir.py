@@ -1,3 +1,4 @@
+# pyright: standard
 """IR Design — Flattened High-Level Three-Address Code."""
 
 from __future__ import annotations
