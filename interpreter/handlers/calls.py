@@ -1,9 +1,14 @@
 """Call opcode handlers: CALL_FUNCTION, CALL_METHOD, CALL_UNKNOWN + helpers."""
 
+# pyright: standard
+
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from interpreter.vm.executor import HandlerContext
 
 from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
@@ -89,14 +94,14 @@ def _try_builtin_call(
         sym.constraints = [f"{func_name}({args_desc})"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},  # type: ignore[reportAttributeAccessIssue]  # inst narrowed at call site
                 reasoning=f"builtin {func_name}({args_desc}) → symbolic {sym.name} (uncomputable)",
             )
         )
     return ExecutionResult.success(
         StateUpdate(
             register_writes={
-                inst.result_reg: _unwrap_builtin_result(result, func_name)
+                inst.result_reg: _unwrap_builtin_result(result, func_name)  # type: ignore[reportArgumentType,reportAttributeAccessIssue]  # FuncName vs str; inst.result_reg
             },
             new_objects=result.new_objects,
             heap_writes=result.heap_writes,
@@ -109,7 +114,7 @@ def _try_builtin_call(
 
 
 def _try_class_constructor_call(
-    func_val: Any,
+    func_val: Any,  # pre_triage: union of ClassRef | BoundFuncRef | str | callable-like
     args: list[TypedValue],
     inst: InstructionBase,
     vm: VMState,
@@ -117,7 +122,7 @@ def _try_class_constructor_call(
     registry: FunctionRegistry,
     current_label: CodeLabel,
     overload_resolver: OverloadResolver = NullOverloadResolver(),
-    type_env: TypeEnvironment = None,
+    type_env: TypeEnvironment = None,  # type: ignore[reportArgumentType]  # None default; checked at runtime
     type_hint: TypeExpr = UNKNOWN,
 ) -> ExecutionResult:
     """Attempt to handle a call as a class constructor."""
@@ -158,14 +163,14 @@ def _try_class_constructor_call(
     if not init_label or init_label not in cfg.blocks:
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: ptr_tv},
+                register_writes={inst.result_reg: ptr_tv},  # type: ignore[reportAttributeAccessIssue]  # inst narrowed at call site
                 new_objects=[NewObject(addr=Address(addr), type_hint=resolved_type)],
                 reasoning=f"new {class_name}() → {addr} (no __init__)",
             )
         )
 
     params = registry.func_params.get(init_label, [])
-    new_vars: dict[VarName, Any] = {}
+    new_vars: dict[VarName, TypedValue] = {}
     # Python emits self, Java/C#/Kotlin/Scala/C++ emit this as explicit first param
     has_explicit_self = bool(params) and params[0] in constants.SELF_PARAM_NAMES
     if has_explicit_self:
@@ -183,7 +188,7 @@ def _try_class_constructor_call(
 
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: ptr_tv},
+            register_writes={inst.result_reg: ptr_tv},  # type: ignore[reportAttributeAccessIssue]  # inst narrowed at call site
             call_push=StackFramePush(
                 function_name=FuncName(f"{class_name}.__init__"),
                 return_label=current_label,
@@ -201,7 +206,7 @@ def _try_class_constructor_call(
 
 
 def _try_user_function_call(
-    func_val: Any,
+    func_val: Any,  # pre_triage: union of BoundFuncRef | ClassRef | str | callable-like
     args: list[TypedValue],
     inst: InstructionBase,
     vm: VMState,
@@ -227,7 +232,7 @@ def _try_user_function_call(
 
     # Inject captured closure variables; parameter bindings take priority
     closure_env: ClosureEnvironment | None = None
-    captured: dict[VarName, Any] = {}
+    captured: dict[VarName, TypedValue] = {}
     if func_val.closure_id:
         closure_env = vm.closures.get(func_val.closure_id)
         if closure_env:
@@ -269,7 +274,7 @@ def _try_user_function_call(
 def _handle_call_function(
     inst: InstructionBase,
     vm: VMState,
-    ctx: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     t = inst
     assert isinstance(t, CallFunction)
@@ -301,7 +306,7 @@ def _handle_call_function(
         )
 
     # 1. Try builtins
-    builtin_result = _try_builtin_call(base_name, args, inst, vm)
+    builtin_result = _try_builtin_call(base_name, args, inst, vm)  # type: ignore[reportArgumentType]  # FuncName vs str
     if builtin_result.handled:
         return builtin_result
 
@@ -317,7 +322,7 @@ def _handle_call_function(
     if not func_val:
         # Unknown function — resolve via configured strategy
         return ctx.call_resolver.resolve_call(
-            base_name, [a.value for a in args], inst, vm
+            base_name, [a.value for a in args], inst, vm  # type: ignore[reportArgumentType]  # FuncName vs str
         )
 
     # 2b. Scala-style apply: arr(i) on heap-backed arrays → index into fields.
@@ -389,13 +394,13 @@ def _handle_call_function(
         return user_result
 
     # 5. Not a recognized function ref — resolve via configured strategy
-    return ctx.call_resolver.resolve_call(base_name, [a.value for a in args], inst, vm)
+    return ctx.call_resolver.resolve_call(base_name, [a.value for a in args], inst, vm)  # type: ignore[reportArgumentType]  # FuncName vs str
 
 
 def _handle_call_ctor(
     inst: InstructionBase,
     vm: VMState,
-    ctx: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     """Handle CALL_CTOR: typed constructor call with TypeExpr type_hint."""
     t = inst
@@ -415,7 +420,7 @@ def _handle_call_ctor(
             break
     if not func_val:
         return ctx.call_resolver.resolve_call(
-            func_name, [a.value for a in args], inst, vm
+            func_name, [a.value for a in args], inst, vm  # type: ignore[reportArgumentType]  # FuncName vs str
         )
 
     # Dispatch to constructor with the typed type_hint
@@ -441,13 +446,13 @@ def _handle_call_ctor(
     if user_result.handled:
         return user_result
 
-    return ctx.call_resolver.resolve_call(func_name, [a.value for a in args], inst, vm)
+    return ctx.call_resolver.resolve_call(func_name, [a.value for a in args], inst, vm)  # type: ignore[reportArgumentType]  # FuncName vs str
 
 
 def _handle_call_method(
     inst: InstructionBase,
     vm: VMState,
-    ctx: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     t = inst
     assert isinstance(t, CallMethod)
@@ -483,7 +488,7 @@ def _handle_call_method(
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
-                        t.result_reg: _unwrap_builtin_result(result, method_name)
+                        t.result_reg: _unwrap_builtin_result(result, method_name)  # type: ignore[reportArgumentType]  # FuncName vs str
                     },
                     new_objects=result.new_objects,
                     heap_writes=result.heap_writes,
@@ -516,7 +521,7 @@ def _handle_call_method(
         # Unknown object type — resolve via configured strategy
         obj_desc = _symbolic_name(obj_val.value)
         return ctx.call_resolver.resolve_method(
-            obj_desc, method_name, [a.value for a in args], inst, vm
+            obj_desc, method_name, [a.value for a in args], inst, vm  # type: ignore[reportArgumentType]  # FuncName vs str
         )
 
     func_labels = ctx.registry.lookup_methods(class_key, method_name)
@@ -585,11 +590,11 @@ def _handle_call_method(
         if not func_label or func_label not in ctx.cfg.blocks:
             # No delegation target found — resolve via configured strategy
             return ctx.call_resolver.resolve_method(
-                type_hint, method_name, [a.value for a in args], inst, vm
+                type_hint, method_name, [a.value for a in args], inst, vm  # type: ignore[reportArgumentType]  # TypeExpr|str, FuncName vs str
             )
 
     params = ctx.registry.func_params.get(func_label, [])
-    new_vars: dict[VarName, Any] = {}
+    new_vars: dict[VarName, TypedValue] = {}
     if params:
         new_vars[VarName(params[0])] = obj_val
     for i, arg in enumerate(args):
@@ -621,14 +626,14 @@ def _handle_call_method(
 def _handle_call_unknown(
     inst: InstructionBase,
     vm: VMState,
-    ctx: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     """Handle CALL_UNKNOWN — dynamic call target, resolve via configured strategy."""
     t = inst
     assert isinstance(t, CallUnknown)
     target_val = _resolve_reg(vm, t.target_reg)
     arg_regs = list(t.args)
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args = [_resolve_reg(vm, a) for a in arg_regs]  # type: ignore[reportArgumentType]  # a: Register|SpreadArguments vs str|Register
 
     # If the target resolves to a FUNC_REF, invoke it directly
     user_result = _try_user_function_call(

@@ -1,9 +1,14 @@
 """Variable-related opcode handlers: CONST, LOAD_VAR, DECL_VAR, STORE_VAR, SYMBOLIC."""
 
+# pyright: standard
+
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.vm.executor import HandlerContext
 
 from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
@@ -36,18 +41,20 @@ from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
 logger = logging.getLogger(__name__)
 
 
-def _handle_const(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_const(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, Const)
     func_symbol_table = ctx.func_symbol_table
     class_symbol_table = ctx.class_symbol_table
-    raw = inst.operands[0] if inst.operands else "None"
+    raw = inst.operands[0] if inst.operands else "None"  # type: ignore[reportAttributeAccessIssue]  # inst narrowed via t
     val = _parse_const(raw)
 
     # Symbol table lookup: produce BoundFuncRef for function labels
     func_ref_entry = None
-    if isinstance(val, str) and val in func_symbol_table:
-        func_ref_entry = func_symbol_table[val]
+    if isinstance(val, str) and val in func_symbol_table:  # type: ignore[reportArgumentType]  # str vs CodeLabel key
+        func_ref_entry = func_symbol_table[val]  # type: ignore[reportArgumentType]  # str vs CodeLabel key
 
     if func_ref_entry is not None:
         closure_id = NO_CLOSURE_ID
@@ -79,8 +86,8 @@ def _handle_const(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResu
             )
         val = BoundFuncRef(func_ref=func_ref_entry, closure_id=closure_id)
     # Class symbol table lookup: store ClassRef directly in register
-    elif isinstance(val, str) and val in class_symbol_table:
-        val = class_symbol_table[val]
+    elif isinstance(val, str) and val in class_symbol_table:  # type: ignore[reportArgumentType]  # str vs CodeLabel key
+        val = class_symbol_table[val]  # type: ignore[reportArgumentType]  # str vs CodeLabel key
 
     return ExecutionResult.success(
         StateUpdate(
@@ -90,7 +97,9 @@ def _handle_const(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResu
     )
 
 
-def _handle_load_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_load_var(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, LoadVar)
     name = t.name
@@ -116,7 +125,7 @@ def _handle_load_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
                 )
             )
     # Variable not found — try field fallback strategy
-    this_field = ctx.field_fallback.resolve_load(vm, name)
+    this_field = ctx.field_fallback.resolve_load(vm, name)  # type: ignore[reportArgumentType]  # VarName vs str param
     if this_field is not None:
         return ExecutionResult.success(
             StateUpdate(
@@ -134,7 +143,9 @@ def _handle_load_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
     )
 
 
-def _handle_decl_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_decl_var(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     """DECL_VAR: always create/overwrite in the current frame (declaration)."""
     t = inst
     assert isinstance(t, DeclVar)
@@ -144,7 +155,9 @@ def _handle_decl_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
     return ExecutionResult.success(StateUpdate(reasoning=f"decl {name} = {tv.value!r}"))
 
 
-def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_store_var(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     """STORE_VAR: assignment — walk scope chain to find existing variable."""
     t = inst
     assert isinstance(t, StoreVar)
@@ -159,7 +172,7 @@ def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
             )
     # Not found in any frame — try field fallback strategy
     fallback = ctx.field_fallback
-    this_addr = fallback.resolve_store(vm, name)
+    this_addr = fallback.resolve_store(vm, name)  # type: ignore[reportArgumentType]  # VarName vs str param
     if this_addr is not None:
         return ExecutionResult.success(
             StateUpdate(
@@ -180,7 +193,9 @@ def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
     )
 
 
-def _handle_symbolic(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_symbolic(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     t = inst
     assert isinstance(t, Symbolic)
     hint = t.hint

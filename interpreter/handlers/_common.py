@@ -1,8 +1,13 @@
 """Shared helpers used by multiple handler families."""
 
+# pyright: standard
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from interpreter.vm.executor import HandlerContext
 
 from interpreter.address import Address
 from interpreter.vm.vm import VMState, SymbolicValue, _heap_addr, _is_symbolic
@@ -57,7 +62,11 @@ def _symbolic_type_hint(val: Any) -> TypeExpr:
 
 
 def _write_var_to_frame(
-    vm: VMState, frame: StackFrame, name: VarName, tv: TypedValue, ctx: Any = None
+    vm: VMState,
+    frame: StackFrame,
+    name: VarName,
+    tv: TypedValue,
+    ctx: HandlerContext | None = None,
 ) -> None:
     """Write a variable to a specific frame, handling aliases and closure envs."""
     from interpreter.refs.func_ref import FuncRef, BoundFuncRef
