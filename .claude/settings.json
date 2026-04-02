@@ -11,16 +11,6 @@
         ]
       },
       {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "input=$(cat); skill=$(echo \"$input\" | jq -r '.tool_input.skill // \"\"'); if [[ \"$skill\" == \"superpowers:writing-plans\" ]]; then content=$(printf 'When writing out the implementation plan, include the following guidelines:\\n\\n'; cat .claude/conditional/testing-patterns.md); echo \"{}\" | jq --arg ctx \"$content\" '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": $ctx}}'; fi",
-            "statusMessage": "Injecting TDD guidelines for plan..."
-          }
-        ]
-      },
-      {
         "matcher": "Grep",
         "hooks": [
           {
@@ -35,11 +25,10 @@
       {
         "hooks": [
           {
-            "command": "cat .claude/core/*.md",
-            "type": "command"
+            "type": "command",
+            "command": "~/.claude/plugins/context-injector/hooks/session-start.sh"
           }
-        ],
-        "matcher": "startup|resume|clear|compact"
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -55,60 +44,60 @@
   },
   "permissions": {
     "allow": [
-      "Read(~/.claude/**)",
-      "WebFetch",
-      "WebSearch",
-      "LSP",
-      "Bash(curl:*)",
-      "Bash(wget:*)",
-      "Bash(jq:*)",
-      "Bash(yq:*)",
-      "Bash(sort:*)",
-      "Bash(uniq:*)",
-      "Bash(cut:*)",
-      "Bash(tr:*)",
-      "Bash(diff:*)",
-      "Bash(realpath:*)",
-      "Bash(dirname:*)",
+      "Bash(awk:*)",
       "Bash(basename:*)",
+      "Bash(bash:*)",
+      "Bash(cat:*)",
       "Bash(cd:*)",
+      "Bash(curl:*)",
+      "Bash(cut:*)",
+      "Bash(date:*)",
+      "Bash(diff:*)",
+      "Bash(dirname:*)",
       "Bash(echo:*)",
-      "Bash(which:*)",
-      "Bash(file:*)",
-      "Bash(tree:*)",
       "Bash(env:*)",
-      "Bash(printenv:*)",
+      "Bash(file:*)",
+      "Bash(find:*)",
       "Bash(gh:*)",
       "Bash(git:*)",
+      "Bash(go build:*)",
+      "Bash(go mod:*)",
+      "Bash(go test:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(jq:*)",
+      "Bash(ls:*)",
+      "Bash(make build)",
+      "Bash(make lint)",
+      "Bash(make test)",
+      "Bash(mkdir:/tmp/ctx-locks)",
       "Bash(npm:*)",
       "Bash(npx:*)",
       "Bash(pre-commit:*)",
-      "Bash(python:*)",
-      "Bash(python3:*)",
+      "Bash(printenv:*)",
       "Bash(pytest:*)",
-      "Bash(shellcheck:*)",
-      "Bash(bash:*)",
-      "Bash(ls:*)",
-      "Bash(awk:*)",
-      "Bash(cat:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(realpath:*)",
+      "Bash(rm:/tmp/ctx-locks/*)",
+      "Bash(rtk proxy:*)",
       "Bash(sed:*)",
-      "Bash(head:*)",
+      "Bash(shellcheck:*)",
+      "Bash(sort:*)",
       "Bash(tail:*)",
       "Bash(test:*)",
-      "Bash(wc:*)",
-      "Bash(date:*)",
-      "Bash(find:*)",
-      "Bash(grep:*)",
-      "Bash(go test:*)",
-      "Bash(go mod:*)",
-      "Bash(go build:*)",
-      "Bash(make build)",
-      "Bash(make test)",
-      "Bash(make lint)",
-      "Bash(rtk proxy:*)",
-      "Bash(mkdir:/tmp/ctx-locks)",
       "Bash(touch:/tmp/ctx-locks/*)",
-      "Bash(rm:/tmp/ctx-locks/*)"
+      "Bash(tr:*)",
+      "Bash(tree:*)",
+      "Bash(uniq:*)",
+      "Bash(wc:*)",
+      "Bash(wget:*)",
+      "Bash(which:*)",
+      "Bash(yq:*)",
+      "LSP",
+      "Read(~/.claude/**)",
+      "WebFetch",
+      "WebSearch"
     ],
     "defaultMode": "acceptEdits"
   }
