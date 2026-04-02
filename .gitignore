@@ -6,6 +6,7 @@ build/
 .venv/
 *.egg
 .mypy_cache/
+.coverage
 .pytest_cache/
 .idea/
 
