@@ -79,6 +79,7 @@
       "Bash(python3:*)",
       "Bash(python:*)",
       "Bash(realpath:*)",
+      "Bash(rm:/tmp/ctx-locks/)",
       "Bash(rm:/tmp/ctx-locks/*)",
       "Bash(rtk proxy:*)",
       "Bash(sed:*)",

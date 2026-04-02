@@ -1,3 +1,4 @@
+threshold: low
 fileignoreconfig:
 - filename: interpreter/vm/vm_types.py
   checksum: 3974d55425bdf94d6a89c2b8eb0e66b31775a072b8a4bf6209df76d28374a7e2
