@@ -81,6 +81,32 @@ class TestNamespaceTreeResolve:
         assert resolved is None
 
 
+class TestNamespaceResolverBase:
+    def test_base_resolver_returns_no_resolution(self):
+        from interpreter.namespace import NamespaceResolver, NO_RESOLUTION
+
+        resolver = NamespaceResolver()
+        result = resolver.try_resolve_field_access(None, None)
+        assert result is NO_RESOLUTION
+
+    def test_no_resolution_is_falsy(self):
+        from interpreter.namespace import NO_RESOLUTION
+
+        assert not NO_RESOLUTION
+
+    def test_no_chain_is_falsy(self):
+        from interpreter.namespace import NO_CHAIN
+
+        assert not NO_CHAIN
+
+    def test_register_is_not_no_resolution(self):
+        from interpreter.namespace import NO_RESOLUTION
+        from interpreter.register import Register
+
+        reg = Register("%0")
+        assert reg is not NO_RESOLUTION
+
+
 class TestNamespaceTreeRegister:
     def test_register_creates_intermediate_nodes(self):
         tree = NamespaceTree()
