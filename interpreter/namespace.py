@@ -11,12 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from interpreter.project.types import ModuleUnit
 from interpreter.refs.class_ref import ClassRef, NO_CLASS_REF
 from interpreter.register import Register
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
+    from interpreter.project.types import ModuleUnit
 
 
 @dataclass
