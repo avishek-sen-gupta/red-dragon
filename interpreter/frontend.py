@@ -12,6 +12,7 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import CodeLabel
 from interpreter.instructions import InstructionBase
+from interpreter.namespace import NamespaceResolver
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import LLMProvider
@@ -23,8 +24,14 @@ _NO_REPAIR_CLIENT = object()  # sentinel — distinct from None
 
 
 class Frontend(ABC):
+    _NULL_RESOLVER = NamespaceResolver()
+
     @abstractmethod
-    def lower(self, source: bytes) -> list[InstructionBase]: ...
+    def lower(
+        self,
+        source: bytes,
+        namespace_resolver: NamespaceResolver = _NULL_RESOLVER,
+    ) -> list[InstructionBase]: ...
 
     @property
     def data_layout(self) -> dict[str, dict]:

@@ -306,8 +306,12 @@ class TestFieldAccessWithResolver:
         # Should have LoadVar("Arrays"), NOT LoadVar("java")
         load_vars = [i for i in ir if i.opcode == Opcode.LOAD_VAR]
         load_var_names = [i.name.value for i in load_vars]
-        assert "Arrays" in load_var_names, f"Expected LoadVar('Arrays'), got: {load_var_names}"
-        assert "java" not in load_var_names, f"LoadVar('java') should not appear: {load_var_names}"
+        assert (
+            "Arrays" in load_var_names
+        ), f"Expected LoadVar('Arrays'), got: {load_var_names}"
+        assert (
+            "java" not in load_var_names
+        ), f"LoadVar('java') should not appear: {load_var_names}"
 
 
 class TestCompileDirectoryNamespaceResolution:
@@ -345,13 +349,11 @@ public class Main {
         assert isinstance(linked, LinkedProgram)
 
         # Verify: LoadVar("Helper") appears, LoadVar("com") does NOT
-        load_vars = [
-            i for i in linked.merged_ir if i.opcode == Opcode.LOAD_VAR
-        ]
+        load_vars = [i for i in linked.merged_ir if i.opcode == Opcode.LOAD_VAR]
         load_var_names = [i.name.value for i in load_vars]
-        assert "Helper" in load_var_names, (
-            f"Expected LoadVar('Helper') from namespace resolution, got: {load_var_names}"
-        )
-        assert "com" not in load_var_names, (
-            f"LoadVar('com') should not appear after namespace resolution: {load_var_names}"
-        )
+        assert (
+            "Helper" in load_var_names
+        ), f"Expected LoadVar('Helper') from namespace resolution, got: {load_var_names}"
+        assert (
+            "com" not in load_var_names
+        ), f"LoadVar('com') should not appear after namespace resolution: {load_var_names}"

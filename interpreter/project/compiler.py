@@ -77,7 +77,7 @@ def compile_module(
     file_path: Path,
     language: Language,
     source: bytes | None = None,
-    namespace_resolver: NamespaceResolver | None = None,
+    namespace_resolver: NamespaceResolver = NamespaceResolver(),
 ) -> ModuleUnit:
     """Compile a single file into a ModuleUnit.
 
@@ -167,7 +167,7 @@ def compile_directory(
     )
 
     # --- Java namespace resolution: pre-scan + build tree ---
-    namespace_resolver: NamespaceResolver | None = None
+    namespace_resolver: NamespaceResolver = NamespaceResolver()
     if language == Language.JAVA:
         from interpreter.frontends.java.namespace import (
             JavaNamespaceResolver,

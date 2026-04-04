@@ -310,10 +310,12 @@ class BaseFrontend(Frontend):
 
     # ── entry point ──────────────────────────────────────────────
 
+    _NULL_RESOLVER = NamespaceResolver()
+
     def lower(
         self,
         source: bytes,
-        namespace_resolver: NamespaceResolver | None = None,
+        namespace_resolver: NamespaceResolver = _NULL_RESOLVER,
     ) -> list[InstructionBase]:
         t0 = time.perf_counter()
         parser = self._parser_factory.get_parser(self._language)
@@ -344,7 +346,7 @@ class BaseFrontend(Frontend):
         self,
         source: bytes,
         root: Any,
-        namespace_resolver: NamespaceResolver | None = None,
+        namespace_resolver: NamespaceResolver = _NULL_RESOLVER,
     ) -> list[InstructionBase]:  # Any: tree-sitter node — untyped at Python boundary
         """Context-mode lowering using TreeSitterEmitContext and pure functions."""
         grammar_constants = self._build_constants()
@@ -359,7 +361,7 @@ class BaseFrontend(Frontend):
             expr_dispatch=self._build_expr_dispatch(),
             block_scoped=self.BLOCK_SCOPED,
             symbol_table=symbol_table,
-            **({"namespace_resolver": namespace_resolver} if namespace_resolver else {}),
+            namespace_resolver=namespace_resolver,
         )
         ctx.emit_inst(Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL)))
         self._emit_prelude(ctx)
