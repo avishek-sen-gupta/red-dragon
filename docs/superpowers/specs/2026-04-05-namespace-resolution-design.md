@@ -3,6 +3,7 @@
 **Date:** 2026-04-05
 **Status:** Draft
 **Issue:** red-dragon-06p8
+**Related:** red-dragon-y42x (TypeExpr/ClassRef unification)
 **Builds on:** `2026-03-31-java-stdlib-stubs-experiment-design.md` (Layer 3)
 
 ---
@@ -35,10 +36,10 @@ those stubs. The stubs exist but the frontend doesn't know how to find them.
 │ Methods without implementations → symbolic      │
 │ Built from imports + AST usage scanning          │
 ├─────────────────────────────────────────────────┤
-│ Layer 1: Namespace Tree                         │
-│ Package → Type mapping built from imports        │
-│ Frontend resolves field_access chains through it │
-│ No new opcodes — emits qualified VarName         │
+│ Layer 1: Namespace Tree (VM state)              │
+│ Package → Type mapping, lives in VMState        │
+│ Base resolution shared, seed is per-language     │
+│ Frontend + VM both consult it                    │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -46,11 +47,20 @@ those stubs. The stubs exist but the frontend doesn't know how to find them.
 
 ## Layer 1: Namespace Tree
 
-### Purpose
+### Ownership: VM State
 
-A compile-time data structure that maps dotted package paths to types.
-The frontend consults it when lowering `field_access` chains to decide
-where the namespace ends and member access begins (the "join point").
+The namespace tree is **part of VMState**, not a frontend-only structure.
+Both the frontend (during lowering) and the VM (during execution) can
+consult it. This allows runtime resolution for dynamic patterns while
+keeping the primary use case (compile-time field_access chain resolution)
+fast.
+
+```python
+@dataclass
+class VMState:
+    # ... existing fields ...
+    namespace_tree: NamespaceTree    # NEW — populated before execution
+```
 
 ### Data Structures
 
@@ -64,10 +74,122 @@ class NamespaceNode:
 @dataclass
 class QualifiedType:
     """A type reachable through namespace resolution."""
-    qualified_name: str                    # "java.util.Arrays"
-    class_ref: ClassRef                    # ClassRef for VM dispatch
-    module: ModuleUnit | None              # linked stub if available (Layer 2/3)
+    class_ref: ClassRef                    # for VM dispatch
+    module: ModuleUnit | None              # stub/runtime implementation
+    # No qualified_name field — derived from tree position during resolution
+
+
+class NamespaceTree:
+    """Base namespace tree with default resolution algorithm.
+    
+    The resolution algorithm is shared across languages. Language-specific
+    behavior comes from the seed (what's in the tree), not the walk
+    (how we traverse it). Override resolve() only if a language needs
+    fundamentally different resolution semantics (e.g. C++ partial
+    namespace paths).
+    """
+    
+    root: NamespaceNode
+    
+    def resolve(self, chain: list[str]) -> tuple[QualifiedType | None, list[str], str]:
+        """Walk the tree to find the type join point.
+        
+        Returns:
+            (resolved_type, remaining_chain, qualified_name)
+            or (None, original_chain, "") if no match.
+        """
+        node = self.root
+        for i, segment in enumerate(chain):
+            if segment in node.types:
+                qualified = ".".join(chain[:i + 1])
+                return node.types[segment], chain[i + 1:], qualified
+            if segment in node.children:
+                node = node.children[segment]
+                continue
+            break
+        return None, chain, ""
+    
+    def register_type(self, dotted_path: str, qtype: QualifiedType) -> None:
+        """Register a type at the given dotted path, creating namespace
+        nodes as needed. E.g. register_type("java.util.Arrays", ...) creates
+        java → util namespace nodes and registers Arrays as a type."""
+        ...
 ```
+
+### Language-Specific Seeds
+
+Each language provides a seed function that populates the tree before
+compilation/execution. The tree structure and resolution algorithm are
+shared; only the initial content differs.
+
+```python
+def build_java_namespace_seed(
+    imports: list[ImportDecl],
+    project_classes: dict[str, ClassRef],
+    stdlib_registry: dict[str, ModuleUnit] | None = None,
+) -> NamespaceTree:
+    """Build namespace tree for Java compilation.
+    
+    Sources (in priority order):
+    1. Import declarations from source files
+    2. Project classes from compile_directory()
+    3. Runtime library stubs (Layer 3)
+    """
+    tree = NamespaceTree()
+    
+    # Register project classes
+    for qualified_name, class_ref in project_classes.items():
+        tree.register_type(qualified_name, QualifiedType(
+            class_ref=class_ref, module=None,
+        ))
+    
+    # Register from imports
+    for imp in imports:
+        if imp.is_wildcard:
+            # import java.util.* → register java.util as namespace
+            # Types resolved lazily from usage
+            tree.ensure_namespace(imp.package_path)
+        else:
+            # import java.util.Arrays → register type
+            tree.register_type(imp.full_path, QualifiedType(
+                class_ref=ClassRef(name=ClassName(imp.type_name), ...),
+                module=stdlib_registry.get(imp.full_path) if stdlib_registry else None,
+            ))
+    
+    # Register runtime library types
+    if stdlib_registry:
+        for qualified_name, module in stdlib_registry.items():
+            tree.register_type(qualified_name, QualifiedType(
+                class_ref=ClassRef(name=ClassName(qualified_name.split(".")[-1]), ...),
+                module=module,
+            ))
+    
+    return tree
+
+# Future: build_csharp_namespace_seed(), build_python_namespace_seed(), ...
+```
+
+### Override Point
+
+The base `NamespaceTree.resolve()` handles the common case: walk from root,
+find join point at type node. Languages needing different resolution can
+subclass:
+
+```python
+class CppNamespaceTree(NamespaceTree):
+    """C++ allows partial namespace resolution via 'using namespace'."""
+    
+    def resolve(self, chain: list[str]) -> ...:
+        # Try from each imported namespace, not just root
+        for ns in self.using_namespaces:
+            result = self._resolve_from(ns, chain)
+            if result[0] is not None:
+                return result
+        return super().resolve(chain)
+```
+
+For now, only the base `NamespaceTree` is implemented. The override
+mechanism exists for future use.
 
 ### Population Sources (in priority order)
 
@@ -107,6 +229,13 @@ Given field_access chain: a.b.c.d(...)
    (single symbolic from unresolved method, not cascading from chain)
 ```
 
+### Java-Specific: No Partial Namespace Resolution Needed
+
+Java wildcard imports (`import java.util.*`) import types, not packages.
+`import java.*` does NOT make `util` available as a name. So resolution
+always starts from the root of the tree — there are no partial namespace
+paths in valid Java.
+
 ### Integration with Existing VM Dispatch
 
 The VM already has full support for static dispatch via `ClassRef`:
@@ -118,17 +247,10 @@ The VM already has full support for static dispatch via `ClassRef`:
 - `_handle_load_field` (memory.py:413) — when object is `ClassRef`,
   resolves static fields via symbol table constants
 
-**No new VM dispatch is needed.** The namespace tree just populates the
-class registry and symbol table with external types. After that,
+**No new VM dispatch is needed.** The namespace tree populates the class
+registry and symbol table with external types. After that,
 `java.util.Arrays.fill(arr, val)` follows the exact same code path as
 `Math.square(5)` — which already works.
-
-### Where It Lives
-
-- `interpreter/namespace.py` — `NamespaceNode`, `NamespaceTree` (build + resolve)
-- Built once per `compile_directory()` / `run_project()` call
-- Registers resolved types as `ClassRef` entries in the registry/symbol table
-- Passed into the Java frontend lowering context
 
 ---
 
@@ -205,15 +327,15 @@ def lower_field_access(ctx, node):
     if ctx.is_declared(root):
         return _lower_as_normal_field_access(ctx, node)  # existing behavior
     
-    # Step 2: resolve through namespace tree
-    qualified_type, remaining = ctx.namespace_tree.resolve(chain)
+    # Step 2: resolve through namespace tree (from VMState)
+    qualified_type, remaining, qualified_name = ctx.namespace_tree.resolve(chain)
     
     if qualified_type is not None:
         # Emit LOAD_VAR for the class name — the symbol table holds a ClassRef
         # for this name (registered when the namespace tree was built).
         # This follows the same path as project-internal static dispatch:
         #   LOAD_VAR "Arrays" → ClassRef → CALL_METHOD "fill"
-        type_reg = ctx.emit_load_var(VarName(qualified_type.qualified_name))
+        type_reg = ctx.emit_load_var(VarName(qualified_name))
         # Lower remaining segments as normal CALL_METHOD / LOAD_FIELD on ClassRef
         return _lower_remaining_chain(ctx, type_reg, remaining)
     
@@ -243,9 +365,10 @@ frontends can use the same mechanism:
 - **C#**: `System.IO.File.ReadAllText(...)` → `System → IO → File(type)`
 - **Python**: `os.path.join(...)` → `os → path(module)` → `.join`
 - **Go**: Package-qualified calls already work differently
+- **C++**: Would need `CppNamespaceTree` override for partial resolution
 
-Each frontend decides when to enter namespace resolution (undeclared root
-check), but the tree structure and resolution algorithm are shared.
+Each language provides its own seed function. The tree structure and base
+resolution algorithm are shared.
 
 ---
 
@@ -254,11 +377,12 @@ check), but the tree structure and resolution algorithm are shared.
 ### Phase 1: Namespace Tree + Resolution (eliminates cascading symbolics)
 
 1. Implement `NamespaceNode` / `NamespaceTree` in `interpreter/namespace.py`
-2. Build tree from import declarations in Java frontend
-3. Add `resolve()` method implementing the JLS §6.5 algorithm
-4. Register resolved types as `ClassRef` entries in the class registry
-5. Modify `lower_field_access` to consult the tree
-6. Test: `java.util.Arrays.fill(arr, val)` resolves via ClassRef static
+2. Add `namespace_tree` field to `VMState`
+3. Implement `build_java_namespace_seed()` — populates from imports + project classes
+4. Add `resolve()` method implementing the JLS §6.5 algorithm
+5. Register resolved types as `ClassRef` entries in the class registry
+6. Modify `lower_field_access` to consult the tree
+7. Test: `java.util.Arrays.fill(arr, val)` resolves via ClassRef static
    dispatch path (same as `Math.square(5)`), not LOAD_VAR chain
 
 ### Phase 2: Stub Types (proper call resolution)
@@ -281,20 +405,31 @@ check), but the tree structure and resolution algorithm are shared.
 
 ### Phase 4: Cross-Language (optional)
 
-1. Extract namespace tree building into shared infrastructure
-2. C# frontend integration (`System.IO`, `System.Collections`, etc.)
+1. Implement `build_csharp_namespace_seed()` etc.
+2. If needed, subclass `NamespaceTree` for language-specific resolution
 3. Python module resolution
 
 ---
 
-## Key Design Property
+## Key Design Properties
 
-**No new VM dispatch mechanism.** The entire feature reuses the existing
-`ClassRef` → `registry.class_methods` → static dispatch path that already
-works for project-internal classes. The namespace tree is purely a
-compile-time structure that populates the class registry with external
-types. At runtime, `java.util.Arrays.fill(arr, val)` is indistinguishable
-from a call to a project-defined static method.
+1. **Namespace tree lives in VMState** — available to both frontend and VM.
+   Not a compile-time-only structure.
+
+2. **Base resolution is shared, seed is per-language.** The tree walk
+   algorithm is the same for all languages. What differs is the initial
+   content (Java seeds `java.*`, C# seeds `System.*`, etc.).
+
+3. **Override point for resolution.** Languages needing different walk
+   semantics (e.g. C++ partial namespace paths) can subclass
+   `NamespaceTree` and override `resolve()`.
+
+4. **No new VM dispatch mechanism.** The entire feature reuses the existing
+   `ClassRef` → `registry.class_methods` → static dispatch path. The
+   namespace tree just populates the class registry with external types.
+
+5. **Qualified name is derived from tree position**, not stored as a
+   field. `resolve()` builds the dotted name during traversal.
 
 ---
 
