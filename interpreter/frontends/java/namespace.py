@@ -7,8 +7,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from interpreter.class_name import ClassName
+from interpreter.namespace import NamespaceTree, NamespaceType
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.project.types import ImportRef
+from interpreter.project.types import ImportRef, ModuleUnit
+from interpreter.refs.class_ref import NO_CLASS_REF, ClassRef
 
 if TYPE_CHECKING:
     pass
@@ -101,3 +104,52 @@ def _extract_import(node: object, source: bytes, result: JavaPreScanResult) -> N
     result.imports.append(
         ImportRef(source_file=_DUMMY_PATH, module_path=module_path, names=names, is_system=True)
     )
+
+
+def build_java_namespace_tree(
+    scan_results: dict[Path, JavaPreScanResult],
+    stdlib_registry: dict[Path, ModuleUnit],
+) -> NamespaceTree:
+    """Build namespace tree from stub registry + pre-scanned project classes.
+
+    Stubs are registered first. Project classes override stubs at the
+    same path (local wins).
+    """
+    tree = NamespaceTree()
+
+    # Source 1: Stub registry — types with real ModuleUnits
+    for stub_path, module in stdlib_registry.items():
+        dotted = _path_to_dotted(stub_path)
+        short_name = dotted.rsplit(".", 1)[-1]
+
+        # Extract ClassRef from stub's exports if available
+        class_ref = NO_CLASS_REF
+        for cls_name, cls_label in module.exports.classes.items():
+            if cls_name.value == short_name:
+                class_ref = ClassRef(
+                    name=cls_name, label=cls_label, parents=()
+                )
+                break
+
+        tree.register_type(
+            dotted,
+            NamespaceType(short_name=short_name, class_ref=class_ref, module=module),
+        )
+
+    # Source 2: Project classes — short_name only, ClassRef = NO_CLASS_REF
+    for file_path, scan in scan_results.items():
+        if scan.package is None:
+            continue  # no package → not addressable via qualified name
+        for class_name in scan.class_names:
+            dotted = f"{scan.package}.{class_name}"
+            tree.register_type(
+                dotted,
+                NamespaceType(short_name=class_name, class_ref=NO_CLASS_REF),
+            )
+
+    return tree
+
+
+def _path_to_dotted(path: Path) -> str:
+    """Convert stub path to dotted name: java/util/Arrays.java → java.util.Arrays."""
+    return ".".join(path.with_suffix("").parts)
