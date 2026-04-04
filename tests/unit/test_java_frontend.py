@@ -1104,3 +1104,33 @@ class TestJavaStringLengthExecution:
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] == 5
+
+
+class TestInlineCommentsInExpressions:
+    """Tree-sitter injects comment nodes as extras inside expressions.
+
+    Our lowerers must skip them — otherwise they get mistaken for operators.
+    """
+
+    def test_line_comment_inside_binary_expression(self):
+        ir = _parse_java("""class Foo {
+            void bar() {
+                int x = 1;
+                if (x == 1 // comment
+                    || x == 2) {
+                    x = 3;
+                }
+            }
+        }""")
+        assert len(ir) > 0
+
+    def test_block_comment_inside_binary_expression(self):
+        ir = _parse_java("""class Foo {
+            void bar() {
+                int x = 1;
+                if (x == 1 /* comment */ || x == 2) {
+                    x = 3;
+                }
+            }
+        }""")
+        assert len(ir) > 0

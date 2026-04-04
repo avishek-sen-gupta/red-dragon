@@ -45,6 +45,7 @@ textual = "^8.1.0"
 pyright = "^1.1.408"
 tdd-guard-pytest = "^0.1.2"
 pytest-cov = "^7.1.0"
+pytest-timeout = "^2.4.0"
 
 [tool.radon]
 exclude = "tests/*"
