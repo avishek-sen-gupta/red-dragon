@@ -102,9 +102,14 @@ int x = 42;""")
 
 class TestCSharpRangeExpressionExecution:
     def test_range_does_not_block(self):
-        """Code after range expression should execute."""
+        """Range expression creates a range object and code after it executes."""
         locals_ = _run_csharp("var r = 0..5;\nvar x = 42;")
-        assert locals_[VarName("x")] == 42
+        # Verify the range was created
+        assert VarName("r") in locals_, "Expected range variable 'r' to be created"
+        r_value = locals_[VarName("r")]
+        assert r_value is not None, "Expected range object, got None"
+        # Verify code after range expression executed
+        assert locals_[VarName("x")] == 42, "Expected x = 42 after range expression"
 
 
 class TestCSharpConstructorChainingExecution:
