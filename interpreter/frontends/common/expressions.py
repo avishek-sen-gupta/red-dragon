@@ -182,6 +182,7 @@ def lower_binop(
         c
         for c in node.children
         if c.type not in (CommonNodeType.OPEN_PAREN, CommonNodeType.CLOSE_PAREN)
+        and c.type not in ctx.constants.comment_types
     ]
     lhs_reg = ctx.lower_expr(children[0])
     op = ctx.node_text(children[1])
@@ -206,6 +207,7 @@ def lower_comparison(
         c
         for c in node.children
         if c.type not in (CommonNodeType.OPEN_PAREN, CommonNodeType.CLOSE_PAREN)
+        and c.type not in ctx.constants.comment_types
     ]
     lhs_reg = ctx.lower_expr(children[0])
     op = ctx.node_text(children[1])
@@ -230,6 +232,7 @@ def lower_unop(
         c
         for c in node.children
         if c.type not in (CommonNodeType.OPEN_PAREN, CommonNodeType.CLOSE_PAREN)
+        and c.type not in ctx.constants.comment_types
     ]
     op = ctx.node_text(children[0])
     operand_reg = ctx.lower_expr(children[1])
