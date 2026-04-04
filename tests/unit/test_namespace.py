@@ -150,3 +150,24 @@ class TestContextNamespaceResolver:
         )
         assert isinstance(ctx.namespace_resolver, NamespaceResolver)
         assert ctx.namespace_resolver.try_resolve_field_access(ctx, None) is NO_RESOLUTION
+
+
+class TestCompileModuleNamespaceResolver:
+    def test_compile_module_accepts_namespace_resolver(self):
+        """compile_module() should accept an optional namespace_resolver param."""
+        from interpreter.project.compiler import compile_module
+        from interpreter.constants import Language
+        from interpreter.namespace import NamespaceResolver
+        from pathlib import Path
+        import tempfile
+
+        java_src = "class Foo { }"
+        with tempfile.NamedTemporaryFile(suffix=".java", mode="w", delete=False) as f:
+            f.write(java_src)
+            f.flush()
+            path = Path(f.name)
+
+        resolver = NamespaceResolver()
+        module = compile_module(path, Language.JAVA, namespace_resolver=resolver)
+        assert module is not None
+        path.unlink()
