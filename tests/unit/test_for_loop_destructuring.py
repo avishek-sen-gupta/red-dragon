@@ -57,6 +57,7 @@ class TestJSForOfArrayDestructuring:
     """for (const [k, v] of arr) should decompose into LOAD_INDEX per element."""
 
     def test_array_destructure_emits_load_index(self):
+        """for (const [k, v] of arr) should decompose into LOAD_INDEX per element."""
         source = """
         function main() {
             let arr = [[1, 'a'], [2, 'b']];
@@ -66,8 +67,11 @@ class TestJSForOfArrayDestructuring:
         }
         """
         ir = _lower(JavaScriptFrontend, "javascript", source)
-        # Should have at least 2 LOAD_INDEX inside the loop body
-        # (one for k, one for v, plus the iteration index)
+        # Should have at least 2 LOAD_INDEX for destructuring k and v
+        load_idx = _load_index_count(ir)
+        assert load_idx >= 2, f"Expected >= 2 LOAD_INDEX for 2 elements, got {load_idx}"
+
+        # Verify the variables are stored
         stores = _store_var_names(ir)
         assert "k" in stores, f"Expected 'k' in stores, got {stores}"
         assert "v" in stores, f"Expected 'v' in stores, got {stores}"
