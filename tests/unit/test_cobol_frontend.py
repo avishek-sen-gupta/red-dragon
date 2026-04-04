@@ -235,6 +235,7 @@ class TestProcedureDivisionLowering:
         assert len(writes) >= 1
 
     def test_add_produces_binop(self):
+        """ADD statement produces BINOP + and stores result to target field."""
         fields = [
             CobolField(
                 name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
@@ -245,9 +246,14 @@ class TestProcedureDivisionLowering:
 
         binops = _find_opcodes(instructions, Opcode.BINOP)
         add_ops = [b for b in binops if b.operands[0] == "+"]
-        assert len(add_ops) >= 1
+        assert len(add_ops) >= 1, "Expected at least one ADD BINOP"
+
+        # Verify result is stored via WRITE_REGION (COBOL's field storage)
+        stores = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(stores) >= 1, "Expected WRITE_REGION to store ADD result"
 
     def test_subtract_produces_binop(self):
+        """SUBTRACT statement produces BINOP - and stores result to target field."""
         fields = [
             CobolField(
                 name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
@@ -258,7 +264,11 @@ class TestProcedureDivisionLowering:
 
         binops = _find_opcodes(instructions, Opcode.BINOP)
         sub_ops = [b for b in binops if b.operands[0] == "-"]
-        assert len(sub_ops) >= 1
+        assert len(sub_ops) >= 1, "Expected at least one SUBTRACT BINOP"
+
+        # Verify result is stored via WRITE_REGION (COBOL's field storage)
+        stores = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(stores) >= 1, "Expected WRITE_REGION to store SUBTRACT result"
 
     def test_if_produces_branch_if(self):
         fields = [
