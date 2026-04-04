@@ -76,9 +76,9 @@ fileignoreconfig:
 - filename: interpreter/frontends/_base.py
   checksum: a33aef9105ae8593ee023ae4bbb4924ba184ab268e9e8c58795bd15ac99762ba
 - filename: .beads/backup/backup_state.json
-  checksum: bef60d6780fb075b1359ae0823a423c1b37b7351756f800ece0050f58501d11c
+  checksum: 0d60d4be36fe97f8551e621e27f4a411a10afa996b1d45184ab6e468eadbcb7d
 - filename: .beads/backup/issues.jsonl
-  checksum: 6267c06b7b897944e0a7ed226b635b93778e3d09c564732d34284f60b86b4a84
+  checksum: 902f39f02ace3368028eb01e8ed88d9179cc53e7b57496ca7b137578937f8a78
 - filename: docs/superpowers/plans/2026-03-31-leaky-function-scoping.md
   checksum: 4be6b2a19a260bb6f89ec260cdfc49af6fb2d6f6510135e88fe9c7ca7a978bc0
 - filename: docs/superpowers/list-opcodes-workflow-walkthrough.md
