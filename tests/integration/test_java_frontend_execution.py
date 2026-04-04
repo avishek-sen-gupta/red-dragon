@@ -214,3 +214,28 @@ class M {
 """
         vm, locals_ = _run_java(source, max_steps=500)
         assert locals_[VarName("count")] == 10
+
+
+class TestJavaArrayLengthExecution:
+    """Array .length should return a concrete integer, not a symbolic value."""
+
+    def test_array_length_is_concrete(self):
+        source = """\
+class M {
+    static int[] arr = new int[5];
+    static int len = arr.length;
+}
+"""
+        _, locals_ = _run_java(source, max_steps=200)
+        assert locals_[VarName("len")] == 5
+
+    def test_array_length_in_loop(self):
+        source = """\
+class M {
+    static int[] arr = new int[3];
+    static int count = 0;
+    static { for (int i = 0; i < arr.length; i++) { count = count + 1; } }
+}
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("count")] == 3

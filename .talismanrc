@@ -91,3 +91,5 @@ fileignoreconfig:
   checksum: 3e22cf237c3db35e5eb7dd7740edbeb3497d6ebade7394685914dc9897271fc5
 - filename: docs/superpowers/plans/2026-04-01-list-opcodes.md
   checksum: 9e07779637f419ac98b9679bd40ad8958514e04343484260f0a10fbed7452b84
+- filename: interpreter/handlers/memory.py
+  checksum: f04d6f8adbeceaa6e87846bfcec2aa9767940547849344b07bbc74505a1cd42e
