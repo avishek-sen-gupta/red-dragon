@@ -166,7 +166,25 @@ def compile_directory(
         if f.is_file()
     )
 
-    modules = {path: compile_module(path, language) for path in source_files}
+    # --- Java namespace resolution: pre-scan + build tree ---
+    namespace_resolver: NamespaceResolver | None = None
+    if language == Language.JAVA:
+        from interpreter.frontends.java.namespace import (
+            JavaNamespaceResolver,
+            build_java_namespace_tree,
+            java_pre_scan,
+        )
+        from experiments.java_stdlib.registry import STDLIB_REGISTRY
+
+        scan_results = {path: java_pre_scan(path.read_bytes()) for path in source_files}
+        tree = build_java_namespace_tree(scan_results, STDLIB_REGISTRY)
+        namespace_resolver = JavaNamespaceResolver(tree)
+
+    # --- Compile each module (with namespace resolver if available) ---
+    modules = {
+        path: compile_module(path, language, namespace_resolver=namespace_resolver)
+        for path in source_files
+    }
 
     # Build import graph from modules' resolved imports
     if language == Language.JAVA:
