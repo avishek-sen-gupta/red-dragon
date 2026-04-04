@@ -188,3 +188,29 @@ int answer = p.sum();
 """
         _, locals_ = _run_java(source, max_steps=1000)
         assert locals_[VarName("answer")] == 8
+
+
+class TestJavaIntegerLiteralExecution:
+    """Hex/octal/binary literals should produce concrete values in the VM."""
+
+    def test_hex_literal_comparison(self):
+        source = """\
+class M {
+    static int x = 0x7f;
+    static boolean result = x > 100;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("x")] == 127
+        assert locals_[VarName("result")] is True
+
+    def test_hex_in_loop_bound(self):
+        """Loop with hex bound should execute concretely, not produce symbolic."""
+        source = """\
+class M {
+    static int count = 0;
+    static { for (int i = 0; i < 0x0a; i++) { count = count + 1; } }
+}
+"""
+        vm, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("count")] == 10
