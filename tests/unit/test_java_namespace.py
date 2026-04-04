@@ -288,3 +288,23 @@ class TestJavaNamespaceResolver:
 
         result = resolver.try_resolve_field_access(ctx, node)
         assert result is NO_RESOLUTION
+
+
+class TestFieldAccessWithResolver:
+    def test_qualified_reference_emits_load_var(self):
+        """Full pipeline: java.util.Arrays resolves to LoadVar('Arrays')."""
+        from interpreter.frontends.java.frontend import JavaFrontend
+
+        tree = NamespaceTree()
+        tree.register_type("java.util.Arrays", NamespaceType(short_name="Arrays"))
+        resolver = JavaNamespaceResolver(tree)
+
+        source = b"class X { void m() { java.util.Arrays.fill(arr, 0); } }"
+        frontend = JavaFrontend(_PARSER, "java")
+        ir = frontend.lower(source, namespace_resolver=resolver)
+
+        # Should have LoadVar("Arrays"), NOT LoadVar("java")
+        load_vars = [i for i in ir if i.opcode == Opcode.LOAD_VAR]
+        load_var_names = [i.name.value for i in load_vars]
+        assert "Arrays" in load_var_names, f"Expected LoadVar('Arrays'), got: {load_var_names}"
+        assert "java" not in load_var_names, f"LoadVar('java') should not appear: {load_var_names}"
