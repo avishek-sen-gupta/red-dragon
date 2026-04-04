@@ -99,3 +99,5 @@ fileignoreconfig:
   checksum: cee71ade6ab08b1826ad91e4b557a0328e18851359be9c751a7d304c1ab6e394
 - filename: docs/superpowers/specs/2026-04-05-namespace-resolution-design.md
   checksum: ee9d30cf23bc94a2b4f95d524f26f8a874f56801803432fd525e8c6b73060642
+- filename: .claude/core/workflow.md
+  checksum: b4d8e3938058251d7b684444e70e9f16ab23d23740e6015725f8e132098402f7
