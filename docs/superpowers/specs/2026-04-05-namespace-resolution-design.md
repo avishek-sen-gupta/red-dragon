@@ -222,14 +222,60 @@ Given field_access chain: a.b.c.d(...)
    a.b → found as namespace node? continue
    a.b.c → found as TYPE node? → JOIN POINT
 
-3. Resolved type → ClassRef("a.b.c")
-   Register ClassRef in symbol table so LOAD_VAR finds it
+3. Resolved type → namespace tree returns ClassRef directly
    Remaining ".d(...)" → CALL_METHOD on ClassRef (existing static dispatch)
 
 4. If chain doesn't match tree at all:
-   Register ClassRef for the full chain as fallback
+   Create ClassRef for the full chain as fallback
    (single symbolic from unresolved method, not cascading from chain)
 ```
+
+### Symbol Table vs Namespace Tree: Separation of Concerns
+
+The symbol table and namespace tree are **independent resolution paths**:
+
+- **Symbol table** — unqualified names only (`"Arrays"`, `"Math"`).
+  Project classes always win. Imports register only if no project class
+  with that name exists (matching Java's shadowing semantics).
+- **Namespace tree** — qualified paths only (`java.util.Arrays`).
+  Returns ClassRef directly, does not go through the symbol table.
+
+```
+Unqualified:  Arrays.fill(...)              → symbol table → ClassRef
+Qualified:    java.util.Arrays.fill(...)    → namespace tree → ClassRef
+```
+
+This means the symbol table stays namespace-free. The namespace tree is
+the sole authority for qualified paths. No namespace information leaks
+into the symbol table keys.
+
+### Disambiguation
+
+If a project defines `class Arrays` and code also `import java.util.Arrays`:
+- Unqualified `Arrays` → symbol table → project's ClassRef (local wins)
+- `java.util.Arrays` → namespace tree → stdlib ClassRef (qualified path)
+- This matches Java's actual shadowing semantics (JLS §6.3.1)
+
+### Swappable Resolution
+
+The resolution logic is self-contained in `NamespaceTree.resolve()`.
+Languages needing different resolution semantics subclass and override:
+
+```python
+class NamespaceTree:
+    def resolve(self, chain: list[str]) -> ...:
+        """Default: walk from root, find join point at type node."""
+        ...
+
+class CppNamespaceTree(NamespaceTree):
+    def resolve(self, chain: list[str]) -> ...:
+        """C++: try from each 'using namespace' scope, then root."""
+        ...
+```
+
+The seed function returns the appropriate tree subclass for the language.
+All consumers call `tree.resolve(chain)` — they don't know which
+implementation they're using.
 
 ### Java-Specific: No Partial Namespace Resolution Needed
 
@@ -249,10 +295,10 @@ The VM already has full support for static dispatch via `ClassRef`:
 - `_handle_load_field` (memory.py:413) — when object is `ClassRef`,
   resolves static fields via symbol table constants
 
-**No new VM dispatch is needed.** The namespace tree populates the class
-registry and symbol table with external types. After that,
-`java.util.Arrays.fill(arr, val)` follows the exact same code path as
-`Math.square(5)` — which already works.
+**No new VM dispatch is needed.** The namespace tree returns ClassRef
+instances directly to the frontend. For unqualified names, the symbol
+table provides ClassRef via the existing path. Both converge on the same
+`ClassRef` → static dispatch mechanism.
 
 ---
 
@@ -333,24 +379,26 @@ def lower_field_access(ctx, node):
     qualified_type, remaining, qualified_name = ctx.namespace_tree.resolve(chain)
     
     if qualified_type is not None:
-        # Emit LOAD_VAR for the class name — the symbol table holds a ClassRef
-        # for this name (registered when the namespace tree was built).
-        # This follows the same path as project-internal static dispatch:
-        #   LOAD_VAR "Arrays" → ClassRef → CALL_METHOD "fill"
-        type_reg = ctx.emit_load_var(VarName(qualified_name))
+        # Namespace tree returned a ClassRef directly — emit it as a constant
+        # or register it so LOAD_VAR can find it by the unqualified type name.
+        # This follows the same dispatch path as project-internal static calls:
+        #   ClassRef → CALL_METHOD "fill"
+        type_reg = ctx.emit_class_ref(qualified_type.class_ref)
         # Lower remaining segments as normal CALL_METHOD / LOAD_FIELD on ClassRef
         return _lower_remaining_chain(ctx, type_reg, remaining)
     
-    # Step 3: fallback — register a ClassRef for the full chain
+    # Step 3: fallback — create a ClassRef for the full chain
     full_name = ".".join(chain)
-    ctx.ensure_class_registered(full_name)  # creates ClassRef + stub in registry
-    return ctx.emit_load_var(VarName(full_name))
+    fallback_ref = ctx.create_external_class_ref(full_name)
+    return ctx.emit_class_ref(fallback_ref)
 ```
 
-The key insight: `LOAD_VAR` already resolves to `ClassRef` for known class
-names (variables.py:86). By registering external types in the class registry
-during namespace tree construction, the existing dispatch path handles
-everything — no new opcodes or VM logic needed.
+Two resolution paths converge on the same dispatch:
+- **Unqualified** (`Arrays.fill(...)`) → `LOAD_VAR "Arrays"` → symbol table → ClassRef
+- **Qualified** (`java.util.Arrays.fill(...)`) → namespace tree → ClassRef directly
+
+Both produce a ClassRef in a register. From there, the existing
+`_handle_call_method` ClassRef dispatch handles the rest.
 
 ### Scope Awareness
 
