@@ -36,10 +36,10 @@ those stubs. The stubs exist but the frontend doesn't know how to find them.
 │ Methods without implementations → symbolic      │
 │ Built from imports + AST usage scanning          │
 ├─────────────────────────────────────────────────┤
-│ Layer 1: Namespace Tree (VM state)              │
-│ Package → Type mapping, lives in VMState        │
+│ Layer 1: Namespace Tree (VMState)                │
+│ Package → Type mapping, lives in VMState         │
 │ Base resolution shared, seed is per-language     │
-│ Frontend + VM both consult it                    │
+│ Frontend consults during lowering; kept for VM   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -47,20 +47,22 @@ those stubs. The stubs exist but the frontend doesn't know how to find them.
 
 ## Layer 1: Namespace Tree
 
-### Ownership: VM State
+### Ownership: VMState
 
-The namespace tree is **part of VMState**, not a frontend-only structure.
-Both the frontend (during lowering) and the VM (during execution) can
-consult it. This allows runtime resolution for dynamic patterns while
-keeping the primary use case (compile-time field_access chain resolution)
-fast.
+The namespace tree is **part of VMState**. The frontend consults it
+during lowering to resolve `field_access` chains. It remains available
+at runtime for future use cases (runtime reflection, dynamic class
+loading, handler-level resolution).
 
 ```python
 @dataclass
 class VMState:
     # ... existing fields ...
-    namespace_tree: NamespaceTree    # NEW — populated before execution
+    namespace_tree: NamespaceTree    # populated before compilation/execution
 ```
+
+Primary resolution happens at compile time (during lowering). The tree
+persists in VMState so handlers can consult it if needed.
 
 ### Data Structures
 
@@ -413,8 +415,9 @@ resolution algorithm are shared.
 
 ## Key Design Properties
 
-1. **Namespace tree lives in VMState** — available to both frontend and VM.
-   Not a compile-time-only structure.
+1. **Namespace tree lives in VMState** — primarily consulted during
+   lowering, but persists at runtime for future use cases (reflection,
+   dynamic loading, handler-level resolution).
 
 2. **Base resolution is shared, seed is per-language.** The tree walk
    algorithm is the same for all languages. What differs is the initial
