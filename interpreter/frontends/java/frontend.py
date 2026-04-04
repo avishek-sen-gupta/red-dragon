@@ -67,10 +67,10 @@ class JavaFrontend(BaseFrontend):
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             JavaNodeType.IDENTIFIER: common_expr.lower_identifier,
-            JavaNodeType.DECIMAL_INTEGER_LITERAL: common_expr.lower_const_literal,
-            JavaNodeType.HEX_INTEGER_LITERAL: common_expr.lower_const_literal,
-            JavaNodeType.OCTAL_INTEGER_LITERAL: common_expr.lower_const_literal,
-            JavaNodeType.BINARY_INTEGER_LITERAL: common_expr.lower_const_literal,
+            JavaNodeType.DECIMAL_INTEGER_LITERAL: java_expr.lower_java_integer_literal,
+            JavaNodeType.HEX_INTEGER_LITERAL: java_expr.lower_java_integer_literal,
+            JavaNodeType.OCTAL_INTEGER_LITERAL: java_expr.lower_java_integer_literal,
+            JavaNodeType.BINARY_INTEGER_LITERAL: java_expr.lower_java_integer_literal,
             JavaNodeType.DECIMAL_FLOATING_POINT_LITERAL: common_expr.lower_const_literal,
             JavaNodeType.HEX_FLOATING_POINT_LITERAL: common_expr.lower_const_literal,
             JavaNodeType.STRING_LITERAL: common_expr.lower_const_literal,
