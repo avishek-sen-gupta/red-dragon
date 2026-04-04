@@ -14,7 +14,7 @@ fileignoreconfig:
 - filename: docs/notes-on-vm-design.md
   checksum: a100eb0b5f8f99850b8675cdccb090fd9dc24b821f30f41314ddac35bb15f889
 - filename: docs/architectural-design-decisions.md
-  checksum: 2c4f146864954d6079b76c7e106a14548e390accff36c8ae0d5457a37011493d
+  checksum: ac184221de7c48d0d807d80c79a8fa4eca78e2ed6b38ecc3b6ae43f1034ed8a1
 - filename: tests/unit/exercism/exercises/pangram/canonical_data.json
   checksum: fe0ff5850a9bcb260242e145ea21e3e4ddc1b9c5ac41045fdfa714f8d950de85
 - filename: tests/unit/exercism/exercises/pangram/solutions/rust.rs
@@ -99,5 +99,3 @@ fileignoreconfig:
   checksum: cee71ade6ab08b1826ad91e4b557a0328e18851359be9c751a7d304c1ab6e394
 - filename: docs/superpowers/specs/2026-04-05-namespace-resolution-design.md
   checksum: ee9d30cf23bc94a2b4f95d524f26f8a874f56801803432fd525e8c6b73060642
-- filename: docs/architectural-design-decisions.md
-  checksum: ac184221de7c48d0d807d80c79a8fa4eca78e2ed6b38ecc3b6ae43f1034ed8a1
