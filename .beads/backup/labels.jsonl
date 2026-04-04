@@ -31,12 +31,14 @@
 {"issue_id":"red-dragon-3077","label":"pattern-matching"}
 {"issue_id":"red-dragon-3077","label":"ruby"}
 {"issue_id":"red-dragon-3a3j","label":"audit-asserts"}
+{"issue_id":"red-dragon-3ebp","label":"audit-asserts"}
 {"issue_id":"red-dragon-3f4v","label":"symbol-table"}
 {"issue_id":"red-dragon-3ie","label":"frontend"}
 {"issue_id":"red-dragon-3ie","label":"php"}
 {"issue_id":"red-dragon-3k9f","label":"frontend-gap"}
 {"issue_id":"red-dragon-3l0","label":"frontend"}
 {"issue_id":"red-dragon-3l0","label":"kotlin"}
+{"issue_id":"red-dragon-3m6g","label":"audit-asserts"}
 {"issue_id":"red-dragon-3m92","label":"testing"}
 {"issue_id":"red-dragon-3n0w","label":"audit-asserts"}
 {"issue_id":"red-dragon-3o7","label":"frontend"}
@@ -51,10 +53,13 @@
 {"issue_id":"red-dragon-416","label":"frontend"}
 {"issue_id":"red-dragon-416","label":"scala"}
 {"issue_id":"red-dragon-41bw","label":"audit-asserts"}
+{"issue_id":"red-dragon-4242","label":"audit-asserts"}
 {"issue_id":"red-dragon-435i","label":"audit-asserts"}
+{"issue_id":"red-dragon-48xo","label":"audit-asserts"}
 {"issue_id":"red-dragon-4aaf","label":"audit-asserts"}
 {"issue_id":"red-dragon-4cn","label":"csharp"}
 {"issue_id":"red-dragon-4cn","label":"frontend"}
+{"issue_id":"red-dragon-4fal","label":"audit-asserts"}
 {"issue_id":"red-dragon-4hz","label":"edge-case"}
 {"issue_id":"red-dragon-4hz","label":"javascript"}
 {"issue_id":"red-dragon-4hz","label":"low-priority"}
@@ -114,6 +119,7 @@
 {"issue_id":"red-dragon-8rvy","label":"architecture"}
 {"issue_id":"red-dragon-8rvy","label":"symbol-table"}
 {"issue_id":"red-dragon-8s7z","label":"audit-asserts"}
+{"issue_id":"red-dragon-8x3l","label":"audit-asserts"}
 {"issue_id":"red-dragon-8ya1","label":"feature"}
 {"issue_id":"red-dragon-8ya1","label":"mcp"}
 {"issue_id":"red-dragon-8ya1","label":"p1"}
@@ -147,6 +153,7 @@
 {"issue_id":"red-dragon-b9cd","label":"epic:w667"}
 {"issue_id":"red-dragon-bfv","label":"code-quality"}
 {"issue_id":"red-dragon-bfv","label":"refactoring"}
+{"issue_id":"red-dragon-bgod","label":"audit-asserts"}
 {"issue_id":"red-dragon-bijo","label":"kotlin"}
 {"issue_id":"red-dragon-bijo","label":"p2"}
 {"issue_id":"red-dragon-bijo","label":"pattern-matching"}
@@ -183,8 +190,10 @@
 {"issue_id":"red-dragon-co5y","label":"p0"}
 {"issue_id":"red-dragon-cq8","label":"cpp"}
 {"issue_id":"red-dragon-cq8","label":"frontend"}
+{"issue_id":"red-dragon-d1af","label":"audit-asserts"}
 {"issue_id":"red-dragon-d3gp","label":"epic:w667"}
 {"issue_id":"red-dragon-d5c","label":"typed-value-migration"}
+{"issue_id":"red-dragon-dccy","label":"audit-asserts"}
 {"issue_id":"red-dragon-dcm","label":"frontend"}
 {"issue_id":"red-dragon-dcm","label":"java"}
 {"issue_id":"red-dragon-dp9","label":"frontend"}
@@ -213,6 +222,7 @@
 {"issue_id":"red-dragon-fre","label":"frontend"}
 {"issue_id":"red-dragon-fre","label":"scala"}
 {"issue_id":"red-dragon-fv2p","label":"pattern-matching"}
+{"issue_id":"red-dragon-fy46","label":"audit-asserts"}
 {"issue_id":"red-dragon-g5u","label":"builtin"}
 {"issue_id":"red-dragon-g5u","label":"vm"}
 {"issue_id":"red-dragon-g85o","label":"architecture"}
@@ -226,6 +236,7 @@
 {"issue_id":"red-dragon-gl1q","label":"multi-file"}
 {"issue_id":"red-dragon-gl1q","label":"p0"}
 {"issue_id":"red-dragon-gny","label":"typed-value-migration"}
+{"issue_id":"red-dragon-gqsj","label":"audit-asserts"}
 {"issue_id":"red-dragon-gsl","label":"cross-language"}
 {"issue_id":"red-dragon-gsl","label":"interfaces"}
 {"issue_id":"red-dragon-gsl","label":"type-inference"}
@@ -670,10 +681,12 @@
 {"issue_id":"red-dragon-i48d","label":"symbol-table"}
 {"issue_id":"red-dragon-i5ib","label":"cpp"}
 {"issue_id":"red-dragon-i8r0","label":"rust"}
+{"issue_id":"red-dragon-i8rj","label":"audit-asserts"}
 {"issue_id":"red-dragon-ia8","label":"csharp"}
 {"issue_id":"red-dragon-ia8","label":"vm"}
 {"issue_id":"red-dragon-icic","label":"audit-asserts"}
 {"issue_id":"red-dragon-ipdo","label":"symbol-table"}
+{"issue_id":"red-dragon-itc5","label":"audit-asserts"}
 {"issue_id":"red-dragon-iyb","label":"p2"}
 {"issue_id":"red-dragon-iyb","label":"pascal"}
 {"issue_id":"red-dragon-iz14","label":"architecture"}
@@ -723,6 +736,7 @@
 {"issue_id":"red-dragon-lgsk","label":"architecture"}
 {"issue_id":"red-dragon-lgsk","label":"pattern-matching"}
 {"issue_id":"red-dragon-lgsk","label":"refactor"}
+{"issue_id":"red-dragon-lkcy","label":"audit-asserts"}
 {"issue_id":"red-dragon-loht","label":"p2"}
 {"issue_id":"red-dragon-loht","label":"pattern-matching"}
 {"issue_id":"red-dragon-loht","label":"scala"}
@@ -773,6 +787,7 @@
 {"issue_id":"red-dragon-pa25","label":"bug"}
 {"issue_id":"red-dragon-pa25","label":"dataflow"}
 {"issue_id":"red-dragon-pa25","label":"p1"}
+{"issue_id":"red-dragon-pm3z","label":"audit-asserts"}
 {"issue_id":"red-dragon-px9t","label":"csharp"}
 {"issue_id":"red-dragon-px9t","label":"feature"}
 {"issue_id":"red-dragon-px9t","label":"multi-file"}
@@ -814,12 +829,14 @@
 {"issue_id":"red-dragon-swlt","label":"pattern-matching"}
 {"issue_id":"red-dragon-swlt","label":"ruby"}
 {"issue_id":"red-dragon-ta26","label":"c"}
+{"issue_id":"red-dragon-tb10","label":"audit-asserts"}
 {"issue_id":"red-dragon-tdh2","label":"bug"}
 {"issue_id":"red-dragon-tdh2","label":"dataflow"}
 {"issue_id":"red-dragon-tdh2","label":"p1"}
 {"issue_id":"red-dragon-tkv","label":"frontend"}
 {"issue_id":"red-dragon-tkv","label":"scala"}
 {"issue_id":"red-dragon-tmop","label":"symbol-table"}
+{"issue_id":"red-dragon-tney","label":"audit-asserts"}
 {"issue_id":"red-dragon-tpz","label":"typed-value"}
 {"issue_id":"red-dragon-tq0m","label":"kotlin"}
 {"issue_id":"red-dragon-tq0m","label":"p2"}
@@ -857,6 +874,7 @@
 {"issue_id":"red-dragon-vwqd","label":"enum"}
 {"issue_id":"red-dragon-vwqd","label":"p1"}
 {"issue_id":"red-dragon-vwqd","label":"rust"}
+{"issue_id":"red-dragon-vz73","label":"audit-asserts"}
 {"issue_id":"red-dragon-vzpw","label":"p1"}
 {"issue_id":"red-dragon-vzpw","label":"rust"}
 {"issue_id":"red-dragon-vzpw","label":"vm"}
