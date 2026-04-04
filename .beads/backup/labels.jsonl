@@ -836,6 +836,9 @@
 {"issue_id":"red-dragon-tkv","label":"frontend"}
 {"issue_id":"red-dragon-tkv","label":"scala"}
 {"issue_id":"red-dragon-tmop","label":"symbol-table"}
+{"issue_id":"red-dragon-tmtx","label":"frontend"}
+{"issue_id":"red-dragon-tmtx","label":"java"}
+{"issue_id":"red-dragon-tmtx","label":"lowering"}
 {"issue_id":"red-dragon-tney","label":"audit-asserts"}
 {"issue_id":"red-dragon-tpz","label":"typed-value"}
 {"issue_id":"red-dragon-tq0m","label":"kotlin"}
