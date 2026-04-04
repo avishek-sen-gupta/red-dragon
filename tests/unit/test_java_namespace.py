@@ -308,3 +308,50 @@ class TestFieldAccessWithResolver:
         load_var_names = [i.name.value for i in load_vars]
         assert "Arrays" in load_var_names, f"Expected LoadVar('Arrays'), got: {load_var_names}"
         assert "java" not in load_var_names, f"LoadVar('java') should not appear: {load_var_names}"
+
+
+class TestCompileDirectoryNamespaceResolution:
+    def test_compile_directory_uses_namespace_tree(self, tmp_path):
+        """compile_directory() should pre-scan, build tree, and resolve namespaces."""
+        from interpreter.project.compiler import compile_directory
+        from interpreter.project.types import LinkedProgram
+
+        # Two-file project: Helper in com.test package, Main uses it qualified
+        helper_src = """\
+package com.test;
+public class Helper {
+    public static int add(int a, int b) { return a + b; }
+}
+"""
+        main_src = """\
+package com.app;
+import com.test.Helper;
+public class Main {
+    public static void main() {
+        int result = com.test.Helper.add(1, 2);
+    }
+}
+"""
+        # Maven-style layout
+        helper_dir = tmp_path / "src" / "main" / "java" / "com" / "test"
+        helper_dir.mkdir(parents=True)
+        (helper_dir / "Helper.java").write_text(helper_src)
+
+        main_dir = tmp_path / "src" / "main" / "java" / "com" / "app"
+        main_dir.mkdir(parents=True)
+        (main_dir / "Main.java").write_text(main_src)
+
+        linked = compile_directory(tmp_path, Language.JAVA)
+        assert isinstance(linked, LinkedProgram)
+
+        # Verify: LoadVar("Helper") appears, LoadVar("com") does NOT
+        load_vars = [
+            i for i in linked.merged_ir if i.opcode == Opcode.LOAD_VAR
+        ]
+        load_var_names = [i.name.value for i in load_vars]
+        assert "Helper" in load_var_names, (
+            f"Expected LoadVar('Helper') from namespace resolution, got: {load_var_names}"
+        )
+        assert "com" not in load_var_names, (
+            f"LoadVar('com') should not appear after namespace resolution: {load_var_names}"
+        )
