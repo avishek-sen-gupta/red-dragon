@@ -128,6 +128,14 @@ def lower_object_creation(
 def lower_field_access(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    # Try namespace resolution first
+    from interpreter.namespace import NO_RESOLUTION
+
+    result = ctx.namespace_resolver.try_resolve_field_access(ctx, node)
+    if result is not NO_RESOLUTION:
+        return result
+
+    # Existing behavior: recursive lowering
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     field_node = node.child_by_field_name("field")
     if obj_node is None or field_node is None:
