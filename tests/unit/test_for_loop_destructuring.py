@@ -73,6 +73,7 @@ class TestJSForOfArrayDestructuring:
         assert "v" in stores, f"Expected 'v' in stores, got {stores}"
 
     def test_array_destructure_three_elements(self):
+        """for (const [a, b, c] of arr) should emit LOAD_INDEX per element."""
         source = """
         function main() {
             let arr = [[1, 2, 3]];
@@ -86,6 +87,10 @@ class TestJSForOfArrayDestructuring:
         assert "a" in stores
         assert "b" in stores
         assert "c" in stores
+
+        # Should have at least 3 LOAD_INDEX for destructuring a, b, c
+        load_idx = _load_index_count(ir)
+        assert load_idx >= 3, f"Expected >= 3 LOAD_INDEX for 3 elements, got {load_idx}"
 
 
 # ---------------------------------------------------------------------------
