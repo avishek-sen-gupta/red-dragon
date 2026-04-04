@@ -86,6 +86,17 @@ def _handle_binop(
 
     # Symbolic short-circuit — before coercion
     if _is_symbolic(lhs) or _is_symbolic(rhs):
+        # Symbolic values are never null: sym == null → False, sym != null → True
+        if oper in ("==", "!=") and (lhs is None or rhs is None):
+            result = oper == "!="
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={
+                        t.result_reg: typed(result, scalar(constants.TypeName.BOOL))
+                    },
+                    reasoning=f"binop symbolic {oper} null → {result}",
+                )
+            )
         lhs_desc = _symbolic_name(lhs)
         rhs_desc = _symbolic_name(rhs)
         sym = vm.fresh_symbolic(hint=f"{lhs_desc} {oper} {rhs_desc}")
