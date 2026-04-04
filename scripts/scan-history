@@ -1,0 +1,47 @@
+#!/bin/bash
+# Scan full git history for forbidden terminology.
+# Uses the same blocklist as the pre-commit guard.
+
+BLOCKLIST="$HOME/.config/git/blocklist.txt"
+
+if [ ! -f "$BLOCKLIST" ]; then
+  echo "No blocklist found at $BLOCKLIST"
+  exit 0
+fi
+
+PATTERN=$(grep -v '^\s*#' "$BLOCKLIST" | grep -v '^\s*$' | paste -sd '|' -)
+if [ -z "$PATTERN" ]; then
+  echo "Blocklist is empty."
+  exit 0
+fi
+
+echo "Scanning git history for forbidden terms..."
+echo ""
+
+# Check file contents across all commits
+CONTENT_MATCHES=$(git log --all -p 2>/dev/null | grep -En "$PATTERN" | head -30)
+
+# Check commit messages
+MSG_MATCHES=$(git log --all --format='%H %s%n%b' 2>/dev/null | grep -En "$PATTERN" | head -10)
+
+FOUND=0
+
+if [ -n "$CONTENT_MATCHES" ]; then
+  echo -e "\033[1;31m[FAIL] Forbidden terms in file contents:\033[0m"
+  echo "$CONTENT_MATCHES"
+  echo ""
+  FOUND=1
+fi
+
+if [ -n "$MSG_MATCHES" ]; then
+  echo -e "\033[1;31m[FAIL] Forbidden terms in commit messages:\033[0m"
+  echo "$MSG_MATCHES"
+  echo ""
+  FOUND=1
+fi
+
+if [ $FOUND -eq 0 ]; then
+  echo -e "\033[1;32mHistory clean. No forbidden terms found.\033[0m"
+fi
+
+exit $FOUND
