@@ -92,3 +92,35 @@ x = "count:" + 5
         )
         result = unwrap(vm.call_stack[0].local_vars.get(VarName("x")))
         assert isinstance(result, SymbolicValue)
+
+
+class TestSymbolicNullComparison:
+    """Symbolic values are never null: sym != null → True, sym == null → False."""
+
+    def test_java_symbolic_ne_null(self):
+        source = """\
+class Reader {
+    String line;
+    boolean check() {
+        return this.line != null;
+    }
+}
+Reader r = new Reader();
+boolean result = r.check();
+"""
+        local_vars = _run_java(source)
+        assert local_vars[VarName("result")] is True
+
+    def test_java_symbolic_eq_null(self):
+        source = """\
+class Reader {
+    String line;
+    boolean check() {
+        return this.line == null;
+    }
+}
+Reader r = new Reader();
+boolean result = r.check();
+"""
+        local_vars = _run_java(source)
+        assert local_vars[VarName("result")] is False
