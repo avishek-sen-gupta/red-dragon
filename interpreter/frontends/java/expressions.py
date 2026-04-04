@@ -44,6 +44,32 @@ from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
 
 
+def _parse_java_integer(text: str) -> str:
+    """Parse a Java integer literal (hex/octal/binary/decimal) to a decimal string."""
+    # Strip trailing type suffixes (L, l)
+    clean = text.rstrip("Ll")
+    if clean.startswith(("0x", "0X")):
+        return str(int(clean, 16))
+    if clean.startswith(("0b", "0B")):
+        return str(int(clean, 2))
+    # Octal: starts with 0 and has more digits (but not just "0")
+    if len(clean) > 1 and clean.startswith("0") and clean.isdigit():
+        return str(int(clean, 8))
+    return text
+
+
+def lower_java_integer_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Java integer literal, converting hex/octal/binary to decimal."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Const(result_reg=reg, value=_parse_java_integer(ctx.node_text(node))),
+        node=node,
+    )
+    return reg
+
+
 def lower_method_invocation(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
