@@ -1,0 +1,48 @@
+#!/bin/bash
+# Terminology guard — blocks commits containing forbidden project/client terms.
+# Blocklist lives at ~/.config/git/blocklist.txt (one regex pattern per line).
+# Excludelist lives at ~/.config/git/blocklist-exclude.txt (glob patterns to skip).
+# Exit 0 = clean, Exit 1 = blocked.
+
+BLOCKLIST="$HOME/.config/git/blocklist.txt"
+EXCLUDELIST="$HOME/.config/git/blocklist-exclude.txt"
+
+if [ ! -f "$BLOCKLIST" ]; then
+  exit 0
+fi
+
+# Build a single regex from all non-empty, non-comment lines
+PATTERN=$(grep -v '^\s*#' "$BLOCKLIST" | grep -v '^\s*$' | paste -sd '|' -)
+if [ -z "$PATTERN" ]; then
+  exit 0
+fi
+
+# Build exclude args for grep
+EXCLUDE_ARGS=""
+if [ -f "$EXCLUDELIST" ]; then
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// }" ]] && continue
+    EXCLUDE_ARGS="$EXCLUDE_ARGS -- ':!$line'"
+  done < "$EXCLUDELIST"
+fi
+
+# Check staged diff, excluding specified paths
+if [ -n "$EXCLUDE_ARGS" ]; then
+  MATCHES=$(eval "git diff --cached --diff-filter=ACMR -U0 $EXCLUDE_ARGS" | grep -En "$PATTERN" || true)
+else
+  MATCHES=$(git diff --cached --diff-filter=ACMR -U0 | grep -En "$PATTERN" || true)
+fi
+
+if [ -n "$MATCHES" ]; then
+  echo ""
+  echo -e "\033[1;31m[terminology-guard] Forbidden terms found in staged changes:\033[0m"
+  echo "$MATCHES" | head -20
+  echo ""
+  echo "Blocklist: $BLOCKLIST"
+  echo "Fix the content or update the blocklist to proceed."
+  exit 1
+fi
+
+echo -e "\033[32m[terminology-guard] No violations found.\033[0m"
+exit 0
