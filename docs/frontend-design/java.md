@@ -302,3 +302,64 @@ STORE_VAR factorial, %12
 - **Pure function architecture**: All lowering logic lives in pure functions taking `(ctx: TreeSitterEmitContext, node)` instead of instance methods. The `JavaFrontend` class is a thin orchestrator that builds dispatch tables and constants.
 - **Instance method `this` injection**: `lower_method_decl` accepts an `inject_this` parameter; class body methods get `this` injected unless they have a `static` modifier.
 - **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling). Shadowed variables in nested blocks, enhanced-for loop variables, catch clause variables, and C-style for-loop init declarations (via `for_initializer_field="init"`) are renamed (`x` → `x$1`) to disambiguate. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.
+
+## Namespace Resolution (Planned — see spec)
+
+> **Spec:** `docs/superpowers/specs/2026-04-05-namespace-resolution-design.md`
+
+### Problem
+
+Fully-qualified Java references like `java.util.Arrays.fill(arr, val)` are
+lowered as `LOAD_VAR "java"` → `LOAD_FIELD "util"` → `LOAD_FIELD "Arrays"`
+→ `CALL_METHOD "fill"`. Since `java` isn't a declared variable, each step
+produces a cascading `SymbolicValue`.
+
+### Solution: Namespace-Aware `lower_field_access`
+
+`lower_field_access` gains a namespace resolution pre-check via an
+injectable `NamespaceResolver` strategy on `TreeSitterEmitContext`:
+
+1. **`_collect_field_access_chain(ctx, node)`** walks nested `field_access`
+   nodes to collect `["java", "util", "Arrays"]`. Returns `NO_CHAIN` if
+   the root isn't a plain `identifier`.
+
+2. **Scope guard:** If the root identifier (`"java"`) is in
+   `ctx._method_declared_names` (locals + params), skip namespace
+   resolution — treat as normal field access.
+   - **Deliberate leniency:** Class fields are not checked. Real Java
+     rejects code where a field shadows a package root (`javac` error:
+     "cannot find symbol"), so compiled code won't have this collision.
+
+3. **Tree resolution:** Walk the namespace tree. If a type is found
+   (e.g. `Arrays` at `java.util.Arrays`), emit `LoadVar("Arrays")`.
+   The stub module's `DeclVar("Arrays", ...)` already ran via linker
+   topo ordering, so the variable holds a ClassRef.
+
+4. **Remaining chain:** Any segments after the type join point are
+   emitted as sequential `LoadField` instructions via
+   `_lower_remaining_chain()`.
+
+5. **Fallback:** If the chain doesn't match the tree, fall through to
+   existing recursive `lower_field_access` behaviour (cascading symbolics
+   — same as today).
+
+### Compilation Flow (multi-file only)
+
+Namespace resolution requires a pre-scan + compile flow in `compile_directory()`:
+
+1. **Pre-scan all files** — Java-frontend-specific. Extract
+   `(package, class_names, imports)` per file via fast tree-sitter walk
+   (top-level nodes only: `package_declaration`, `class_declaration`,
+   `interface_declaration`, `enum_declaration`). No expression lowering.
+2. **Build namespace tree** from stub registry (hand-written static
+   ModuleUnits with real ClassRefs) + pre-scanned project classes
+   (short_name only, ClassRef = NO_CLASS_REF initially).
+3. **Full compile** with namespace tree available in context via
+   `JavaNamespaceResolver`. Frontend uses `short_name` for `LoadVar`.
+4. **Patch tree** — fill in real ClassRefs for project classes from
+   compiled ModuleUnits' `class_symbol_table`.
+5. **Link** project modules + ALL stub modules unconditionally via
+   existing `link_modules()`. Stubs run first (no deps) so their
+   `DeclVar` makes type names available as variables.
+
+Single-file mode does not perform namespace resolution (existing behaviour).
