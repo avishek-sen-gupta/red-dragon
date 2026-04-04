@@ -53,9 +53,9 @@ public class Main {
         load_fields = [i for i in linked.merged_ir if i.opcode == Opcode.LOAD_FIELD]
         field_names = [i.field_name.value for i in load_fields]
 
-        assert "lang" not in field_names, (
-            f"Cascading LoadField('lang') should be gone: {field_names}"
-        )
+        assert (
+            "lang" not in field_names
+        ), f"Cascading LoadField('lang') should be gone: {field_names}"
 
     @pytest.fixture
     def cross_module_qualified_project(self, tmp_path: Path) -> Path:
@@ -87,7 +87,9 @@ public class Main {
         (app_dir / "Main.java").write_text(main_src)
         return tmp_path
 
-    def test_cross_module_qualified_resolves(self, cross_module_qualified_project: Path):
+    def test_cross_module_qualified_resolves(
+        self, cross_module_qualified_project: Path
+    ):
         """com.lib.Helper.doubleIt(21) should resolve Helper via namespace tree."""
         linked = compile_directory(cross_module_qualified_project, Language.JAVA)
 
