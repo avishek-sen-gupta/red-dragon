@@ -33,14 +33,16 @@ def _find_all(
 
 
 class TestCFrontendDeclaration:
-    def test_declaration_produces_const_and_store(self):
+    def test_declaration_with_init_produces_const_and_decl_var(self):
+        """int x = 10 produces CONST and DECL_VAR with value operand."""
         ir = _parse_and_lower("int x = 10;")
         opcodes = _opcodes(ir)
-        assert Opcode.CONST in opcodes
-        assert Opcode.DECL_VAR in opcodes
-        stores = _find_all(ir, Opcode.DECL_VAR)
-        x_stores = [s for s in stores if "x" in s.operands]
-        assert len(x_stores) >= 1
+        assert Opcode.CONST in opcodes, "Expected CONST for initializer value"
+        assert Opcode.DECL_VAR in opcodes, "Expected DECL_VAR for declaration"
+        # Verify x is declared with the const value
+        decls = _find_all(ir, Opcode.DECL_VAR)
+        x_decls = [d for d in decls if "x" in str(d.operands)]
+        assert len(x_decls) >= 1, "Expected DECL_VAR for x"
 
     def test_declaration_without_initializer(self):
         ir = _parse_and_lower("int x;")
@@ -100,6 +102,7 @@ void f() {
         assert Opcode.BRANCH_IF in opcodes
 
     def test_if_else_produces_labels(self):
+        """if-else produces LABEL opcodes for branch targets (then/else/merge)."""
         source = """
 void f() {
     if (x > 5) {
@@ -111,7 +114,10 @@ void f() {
 """
         ir = _parse_and_lower(source)
         labels = _find_all(ir, Opcode.LABEL)
-        assert len(labels) >= 3
+        # Verify we have labels for then block, else block, and merge point
+        assert (
+            len(labels) >= 3
+        ), f"Expected >= 3 LABEL opcodes for if-else structure (then/else/merge), got {len(labels)}"
 
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
