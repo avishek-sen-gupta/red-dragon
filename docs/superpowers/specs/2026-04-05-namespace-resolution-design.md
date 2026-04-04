@@ -65,6 +65,7 @@ class NamespaceNode:
 class QualifiedType:
     """A type reachable through namespace resolution."""
     qualified_name: str                    # "java.util.Arrays"
+    class_ref: ClassRef                    # ClassRef for VM dispatch
     module: ModuleUnit | None              # linked stub if available (Layer 2/3)
 ```
 
@@ -96,19 +97,37 @@ Given field_access chain: a.b.c.d(...)
    a → found as namespace node? continue
    a.b → found as namespace node? continue
    a.b.c → found as TYPE node? → JOIN POINT
-   
-3. Emit: LOAD_VAR VarName("a.b.c")  (qualified name, single instruction)
-   Remaining ".d(...)" → normal CALL_METHOD / LOAD_FIELD
-   
+
+3. Resolved type → ClassRef("a.b.c")
+   Register ClassRef in symbol table so LOAD_VAR finds it
+   Remaining ".d(...)" → CALL_METHOD on ClassRef (existing static dispatch)
+
 4. If chain doesn't match tree at all:
-   Emit LOAD_VAR VarName("a.b.c.d") for the full chain
-   (single symbolic instead of cascading)
+   Register ClassRef for the full chain as fallback
+   (single symbolic from unresolved method, not cascading from chain)
 ```
+
+### Integration with Existing VM Dispatch
+
+The VM already has full support for static dispatch via `ClassRef`:
+
+- `_handle_load_var` (variables.py:86) — stores `ClassRef` in register
+  for known class names
+- `_handle_call_method` (calls.py:468) — when object is `ClassRef`,
+  dispatches via `registry.class_methods[class_name]`
+- `_handle_load_field` (memory.py:413) — when object is `ClassRef`,
+  resolves static fields via symbol table constants
+
+**No new VM dispatch is needed.** The namespace tree just populates the
+class registry and symbol table with external types. After that,
+`java.util.Arrays.fill(arr, val)` follows the exact same code path as
+`Math.square(5)` — which already works.
 
 ### Where It Lives
 
 - `interpreter/namespace.py` — `NamespaceNode`, `NamespaceTree` (build + resolve)
 - Built once per `compile_directory()` / `run_project()` call
+- Registers resolved types as `ClassRef` entries in the registry/symbol table
 - Passed into the Java frontend lowering context
 
 ---
@@ -187,17 +206,27 @@ def lower_field_access(ctx, node):
         return _lower_as_normal_field_access(ctx, node)  # existing behavior
     
     # Step 2: resolve through namespace tree
-    type_ref, remaining = ctx.namespace_tree.resolve(chain)
+    qualified_type, remaining = ctx.namespace_tree.resolve(chain)
     
-    if type_ref is not None:
-        # Emit qualified LOAD_VAR for the resolved type
-        type_reg = ctx.emit_load_var(VarName(type_ref.qualified_name))
-        # Lower remaining segments as normal member access
+    if qualified_type is not None:
+        # Emit LOAD_VAR for the class name — the symbol table holds a ClassRef
+        # for this name (registered when the namespace tree was built).
+        # This follows the same path as project-internal static dispatch:
+        #   LOAD_VAR "Arrays" → ClassRef → CALL_METHOD "fill"
+        type_reg = ctx.emit_load_var(VarName(qualified_type.qualified_name))
+        # Lower remaining segments as normal CALL_METHOD / LOAD_FIELD on ClassRef
         return _lower_remaining_chain(ctx, type_reg, remaining)
     
-    # Step 3: fallback — collapse entire chain into single LOAD_VAR
-    return ctx.emit_load_var(VarName(".".join(chain)))
+    # Step 3: fallback — register a ClassRef for the full chain
+    full_name = ".".join(chain)
+    ctx.ensure_class_registered(full_name)  # creates ClassRef + stub in registry
+    return ctx.emit_load_var(VarName(full_name))
 ```
+
+The key insight: `LOAD_VAR` already resolves to `ClassRef` for known class
+names (variables.py:86). By registering external types in the class registry
+during namespace tree construction, the existing dispatch path handles
+everything — no new opcodes or VM logic needed.
 
 ### Scope Awareness
 
@@ -227,35 +256,55 @@ check), but the tree structure and resolution algorithm are shared.
 1. Implement `NamespaceNode` / `NamespaceTree` in `interpreter/namespace.py`
 2. Build tree from import declarations in Java frontend
 3. Add `resolve()` method implementing the JLS §6.5 algorithm
-4. Modify `lower_field_access` to consult the tree
-5. Test: `java.util.Arrays.fill(arr, val)` produces 1 symbolic instead of 4
+4. Register resolved types as `ClassRef` entries in the class registry
+5. Modify `lower_field_access` to consult the tree
+6. Test: `java.util.Arrays.fill(arr, val)` resolves via ClassRef static
+   dispatch path (same as `Math.square(5)`), not LOAD_VAR chain
 
 ### Phase 2: Stub Types (proper call resolution)
 
 1. AST usage scanner — discover methods/fields accessed per type
-2. Stub `ModuleUnit` generator
-3. Register stubs in namespace tree
-4. Test: calls to stub types resolve normally, return symbolic
+2. Stub `ModuleUnit` generator — creates class with method entries in
+   `registry.class_methods` so `_handle_call_method` dispatches them
+3. Stub method bodies return symbolic (external/unimplemented)
+4. Register stubs in namespace tree and class registry
+5. Test: `java.util.Arrays.fill(arr, val)` dispatches through ClassRef →
+   registry.class_methods → stub body → symbolic return (single symbolic)
 
 ### Phase 3: Runtime Library Integration (concrete execution)
 
 1. Wire existing `experiments/java-stdlib/` stubs into namespace tree
-2. Calls to implemented methods execute concretely
-3. Test: `Arrays.fill(arr, 0)` → array contains zeros, not symbolics
+2. Replace stub method bodies with concrete implementations
+3. Runtime library methods registered in `registry.class_methods` like
+   any other class method — no special dispatch path
+4. Test: `Arrays.fill(arr, 0)` → array contains zeros, not symbolics
 
 ### Phase 4: Cross-Language (optional)
 
 1. Extract namespace tree building into shared infrastructure
-2. C# frontend integration
+2. C# frontend integration (`System.IO`, `System.Collections`, etc.)
 3. Python module resolution
+
+---
+
+## Key Design Property
+
+**No new VM dispatch mechanism.** The entire feature reuses the existing
+`ClassRef` → `registry.class_methods` → static dispatch path that already
+works for project-internal classes. The namespace tree is purely a
+compile-time structure that populates the class registry with external
+types. At runtime, `java.util.Arrays.fill(arr, val)` is indistinguishable
+from a call to a project-defined static method.
 
 ---
 
 ## Success Criteria
 
-1. **Phase 1**: BatchDriverTest "java" symbolics drop from 67 to ≤19
-   (one per IR instruction instead of cascading)
-2. **Phase 2**: Static method calls on imported types resolve to function
-   table entries (not symbolic chains)
+1. **Phase 1**: `LOAD_VAR "java"` no longer appears in IR for resolved
+   types. Field access chains on namespace roots produce `ClassRef`
+   via qualified `LOAD_VAR`, not cascading symbolics.
+2. **Phase 2**: Static method calls on imported types dispatch through
+   `ClassRef` → `registry.class_methods` (verified by concrete
+   return from stub body, not symbolic chain).
 3. **Phase 3**: `java.util.Arrays.fill(arr, 0)` produces a concrete
-   array with zeros through VM execution
+   array with zeros through VM execution of runtime library IR.
