@@ -137,7 +137,10 @@ class TestNamespaceTreeRegister:
 
 class TestContextNamespaceResolver:
     def test_default_resolver_is_base(self):
-        from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
+        from interpreter.frontends.context import (
+            TreeSitterEmitContext,
+            GrammarConstants,
+        )
         from interpreter.constants import Language
         from interpreter.frontends._base import NullFrontendObserver
         from interpreter.namespace import NamespaceResolver, NO_RESOLUTION
@@ -149,7 +152,9 @@ class TestContextNamespaceResolver:
             constants=GrammarConstants(),
         )
         assert isinstance(ctx.namespace_resolver, NamespaceResolver)
-        assert ctx.namespace_resolver.try_resolve_field_access(ctx, None) is NO_RESOLUTION
+        assert (
+            ctx.namespace_resolver.try_resolve_field_access(ctx, None) is NO_RESOLUTION
+        )
 
 
 class TestCompileModuleNamespaceResolver:
