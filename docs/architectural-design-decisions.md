@@ -2630,9 +2630,20 @@ compilation. No chaining, no import tables, no special variable handling.
 
 **Context:** Fully-qualified Java references like `java.util.Arrays.fill(arr, val)` are lowered as a `LOAD_VAR "java"` → `LOAD_FIELD "util"` → `LOAD_FIELD "Arrays"` → `CALL_METHOD "fill"` chain, producing 4 cascading symbolic values per chain (67 total in BatchDriverTest). Tree-sitter parses these as nested `field_access` nodes in expression position — indistinguishable from real field access at the syntax level.
 
-**Decision:** Introduce a `NamespaceTree` data structure (in VMState) that maps package paths to types. Three-layer architecture: (1) Namespace tree built from imports + project classes, with per-language seed functions; (2) Usage-driven stub types for external classes; (3) Runtime library with concrete stdlib implementations. The tree uses the "undeclared root" heuristic (matching JLS §6.5 step 1) to identify namespace chains. Resolution is self-contained in `NamespaceTree.resolve()`, overrideable per language for different semantics (e.g., C++ partial namespace paths).
+**Decision:** Introduce a `NamespaceTree` data structure that maps package paths to types. Three-layer architecture: (1) Namespace tree populated from static stub registry + pre-scanned project classes; (2) Hand-written stub ModuleUnits for external classes (same shape as `experiments/java_stdlib/`); (3) Runtime library with concrete stdlib implementations.
 
-**Consequences:** Qualified references resolve to `ClassRef` via the namespace tree, bypassing the symbol table. Unqualified references continue through the symbol table (project classes win over imports, matching Java's shadowing semantics). Both paths converge on the existing `ClassRef` → `registry.class_methods` static dispatch mechanism — no new VM dispatch needed. See spec: `docs/superpowers/specs/2026-04-05-namespace-resolution-design.md`.
+Key design choices resolved through grill-me review (Q3–Q19):
+- **Interception point:** `lower_field_access` via injectable `JavaNamespaceResolver` strategy. `_collect_field_access_chain()` walks nested `field_access` nodes before recursive lowering.
+- **Frontend emission:** Resolver emits `LoadVar(short_name)` — the stub's `DeclVar` ran first via linker topo ordering. Same mechanism as project classes.
+- **Scope guard:** Checks `_method_declared_names` (locals + params) only. Deliberate leniency: class fields not checked. `javac` rejects field-shadows-package code, so compiled code won't have this collision.
+- **NamespaceType:** Holds `short_name: str` (used at compile time) + `class_ref: ClassRef` (starts `NO_CLASS_REF` for project classes, patched post-compile for runtime use).
+- **Stubs:** Static, hand-written, checked-in ModuleUnits. No auto-generation. Types without stubs fall through to existing cascading symbolic behaviour.
+- **Linking:** All stubs linked unconditionally — no import filtering.
+- **Pre-scan:** Java-frontend-specific fast tree-sitter pass extracts `(package, class_names, imports)` per file before compilation.
+- **Compilation flow:** Pre-scan → build tree → compile with tree → patch ClassRefs → link all stubs.
+- **Scope:** `compile_directory()` only. Single-file mode unchanged.
+
+**Consequences:** Qualified references resolve to `LoadVar(short_name)` via the namespace tree, which at runtime loads a ClassRef from the stub's `DeclVar`. The existing `ClassRef` → `registry.class_methods` static dispatch handles the rest — no new VM dispatch needed. Remaining chain segments after the type join point emit sequential `LoadField` instructions. See spec: `docs/superpowers/specs/2026-04-05-namespace-resolution-design.md`.
 
 ---
 
@@ -2640,6 +2651,12 @@ compilation. No chaining, no import tables, no special variable handling.
 
 **Context:** When introducing namespace resolution for qualified type names, the question arose whether the symbol table should hold qualified keys (e.g., `"java.util.Arrays"`) or whether the namespace tree should be the sole authority for qualified paths.
 
-**Decision:** Keep the symbol table namespace-free. Unqualified names only — project classes always win. The namespace tree returns `ClassRef` instances directly for qualified lookups, bypassing the symbol table entirely. Imports register in the symbol table only if no project class with that name exists. This matches Java's shadowing semantics (JLS §6.3.1: local declarations shadow single-type imports).
+**Decision:** Keep the symbol table namespace-free. Unqualified names only — project classes always win. The namespace tree provides `short_name` for `LoadVar` emission during lowering, bypassing the symbol table entirely. At runtime, `LoadVar` picks up the ClassRef from the stub's `DeclVar` (for external types) or the project's `lower_class_def` (for project types). Both paths converge on the same ClassRef → static dispatch mechanism.
+
+The tree is populated from two sources:
+1. **Stub registry** — hand-written static ModuleUnits with real ClassRefs.
+2. **Project classes** — from pre-scan, with ClassRef initially `NO_CLASS_REF` (patched post-compile).
+
+Imports are NOT a tree population source — they only appear in source code. Types without stubs are not registered in the tree and fall through to existing behaviour.
 
 **Consequences:** Clean separation of concerns — the symbol table handles unqualified dispatch, the namespace tree handles qualified paths. No namespace information leaks into symbol table keys. Name collisions between project classes and imports are handled by the same priority rules as javac. The resolution logic is swappable: `NamespaceTree.resolve()` can be overridden per language without affecting the symbol table.
