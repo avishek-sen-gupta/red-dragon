@@ -808,6 +808,9 @@
 {"issue_id":"red-dragon-r06p","label":"pattern-matching"}
 {"issue_id":"red-dragon-r06p","label":"rust"}
 {"issue_id":"red-dragon-r0f1","label":"frontend-gap"}
+{"issue_id":"red-dragon-r11q","label":"arrays"}
+{"issue_id":"red-dragon-r11q","label":"symbolic"}
+{"issue_id":"red-dragon-r11q","label":"vm"}
 {"issue_id":"red-dragon-ran2","label":"pattern-matching"}
 {"issue_id":"red-dragon-rd3","label":"csharp"}
 {"issue_id":"red-dragon-rd3","label":"frontend"}
@@ -911,6 +914,9 @@
 {"issue_id":"red-dragon-xycm","label":"p1"}
 {"issue_id":"red-dragon-y0df","label":"kotlin"}
 {"issue_id":"red-dragon-y0df","label":"pattern-matching"}
+{"issue_id":"red-dragon-y66p","label":"arrays"}
+{"issue_id":"red-dragon-y66p","label":"csharp"}
+{"issue_id":"red-dragon-y66p","label":"frontend"}
 {"issue_id":"red-dragon-y9s4","label":"enum"}
 {"issue_id":"red-dragon-y9s4","label":"p2"}
 {"issue_id":"red-dragon-y9s4","label":"scala"}
