@@ -20,6 +20,7 @@ from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.namespace import NamespaceResolver
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
@@ -309,7 +310,11 @@ class BaseFrontend(Frontend):
 
     # ── entry point ──────────────────────────────────────────────
 
-    def lower(self, source: bytes) -> list[InstructionBase]:
+    def lower(
+        self,
+        source: bytes,
+        namespace_resolver: NamespaceResolver | None = None,
+    ) -> list[InstructionBase]:
         t0 = time.perf_counter()
         parser = self._parser_factory.get_parser(self._language)
         tree = parser.parse(source)
@@ -320,7 +325,7 @@ class BaseFrontend(Frontend):
 
         grammar_constants = self._build_constants()
         if grammar_constants is not None:
-            result = self._lower_with_context(source, root)
+            result = self._lower_with_context(source, root, namespace_resolver)
         else:
             self._reg_counter = 0
             self._label_counter = 0
@@ -336,7 +341,10 @@ class BaseFrontend(Frontend):
         return result
 
     def _lower_with_context(
-        self, source: bytes, root: Any
+        self,
+        source: bytes,
+        root: Any,
+        namespace_resolver: NamespaceResolver | None = None,
     ) -> list[InstructionBase]:  # Any: tree-sitter node — untyped at Python boundary
         """Context-mode lowering using TreeSitterEmitContext and pure functions."""
         grammar_constants = self._build_constants()
@@ -351,6 +359,7 @@ class BaseFrontend(Frontend):
             expr_dispatch=self._build_expr_dispatch(),
             block_scoped=self.BLOCK_SCOPED,
             symbol_table=symbol_table,
+            **({"namespace_resolver": namespace_resolver} if namespace_resolver else {}),
         )
         ctx.emit_inst(Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL)))
         self._emit_prelude(ctx)
