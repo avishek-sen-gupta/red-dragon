@@ -93,3 +93,7 @@ fileignoreconfig:
   checksum: 9e07779637f419ac98b9679bd40ad8958514e04343484260f0a10fbed7452b84
 - filename: interpreter/handlers/memory.py
   checksum: f04d6f8adbeceaa6e87846bfcec2aa9767940547849344b07bbc74505a1cd42e
+- filename: .beads/backup/backup_state.json
+  checksum: 9a0c3a82ceec4074dadd8e4c54e21992ade3d63841fba7315115581d431a0d9e
+- filename: .beads/backup/issues.jsonl
+  checksum: cee71ade6ab08b1826ad91e4b557a0328e18851359be9c751a7d304c1ab6e394
