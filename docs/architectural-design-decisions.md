@@ -2603,3 +2603,43 @@ compilation. No chaining, no import tables, no special variable handling.
 **Decision:** In `_handle_load_indirect` (`interpreter/handlers/memory.py`), after failing to find `fields["0"]` (by both `INDEX` and `PROPERTY` kind), check whether the base address starts with `OBJ_ADDR_PREFIX` or `ARR_ADDR_PREFIX`. If so, return the pointer identity (the `Pointer` itself typed as `scalar("pointer")`) — the reference IS the object, so the dereference is a no-op.
 
 **Consequences:** C# byref parameters whose type is a class/struct correctly propagate the object identity through dereference. The existing behavior for pointer-to-primitive (field `"0"` present) and pointer-to-unknown (symbolic fallback) is unchanged. 13,245 tests passing.
+
+---
+
+### ADR-133: Java hex/octal/binary integer literal parsing in frontend (2026-04-05)
+
+**Context:** Java hex literals like `0x7f` were stored as raw strings in the IR. When the VM compared `i < "0x7f"`, it couldn't evaluate the comparison concretely, producing a symbolic value that cascaded through all downstream operations. In BatchDriverTest, a single `i < 0x7f` loop guard produced 3,430+ cascading symbolics.
+
+**Decision:** Add `_parse_java_integer()` in `interpreter/frontends/java/expressions.py` that converts hex (`0x`/`0X`), octal (leading `0`), and binary (`0b`/`0B`) text to decimal strings before emitting `CONST`. Registered as `lower_java_integer_literal` in the Java frontend dispatch table, overriding the common `lower_const_literal` for all four integer literal node types (`decimal_integer_literal`, `hex_integer_literal`, `octal_integer_literal`, `binary_integer_literal`).
+
+**Consequences:** Hex/octal/binary literals produce concrete integer values in the VM. The `i < 0x7f` cascade in BatchDriverTest is fully eliminated. 13,267 tests passing.
+
+---
+
+### ADR-134: Array .length as FieldKind.SPECIAL with LOAD_FIELD fallback (2026-04-05)
+
+**Context:** Java `arr.length` returned symbolic because array objects had no `length` field. Initially attempted storing length as `FieldKind.PROPERTY`, but this broke `_builtin_len` which counts PROPERTY fields to determine array size (off-by-one: 3 elements + 1 length field = `len()` returns 4).
+
+**Decision:** Two-part fix: (1) Java frontend emits `StoreField` with `FieldKind.SPECIAL` for `.length` after every `NEW_ARRAY` instruction. (2) `_handle_load_field` in `interpreter/handlers/memory.py` falls back to SPECIAL-kind fields when PROPERTY lookup misses. SPECIAL fields are excluded from `len(fields)` count by design.
+
+**Consequences:** `arr.length` returns a concrete integer. `_builtin_len` is unaffected (SPECIAL fields don't count). The LOAD_FIELD fallback is general — any future SPECIAL metadata fields benefit automatically. 13,267 tests passing.
+
+---
+
+### ADR-135: Namespace tree for qualified type name resolution (2026-04-05)
+
+**Context:** Fully-qualified Java references like `java.util.Arrays.fill(arr, val)` are lowered as a `LOAD_VAR "java"` → `LOAD_FIELD "util"` → `LOAD_FIELD "Arrays"` → `CALL_METHOD "fill"` chain, producing 4 cascading symbolic values per chain (67 total in BatchDriverTest). Tree-sitter parses these as nested `field_access` nodes in expression position — indistinguishable from real field access at the syntax level.
+
+**Decision:** Introduce a `NamespaceTree` data structure (in VMState) that maps package paths to types. Three-layer architecture: (1) Namespace tree built from imports + project classes, with per-language seed functions; (2) Usage-driven stub types for external classes; (3) Runtime library with concrete stdlib implementations. The tree uses the "undeclared root" heuristic (matching JLS §6.5 step 1) to identify namespace chains. Resolution is self-contained in `NamespaceTree.resolve()`, overrideable per language for different semantics (e.g., C++ partial namespace paths).
+
+**Consequences:** Qualified references resolve to `ClassRef` via the namespace tree, bypassing the symbol table. Unqualified references continue through the symbol table (project classes win over imports, matching Java's shadowing semantics). Both paths converge on the existing `ClassRef` → `registry.class_methods` static dispatch mechanism — no new VM dispatch needed. See spec: `docs/superpowers/specs/2026-04-05-namespace-resolution-design.md`.
+
+---
+
+### ADR-136: Symbol table and namespace tree as independent resolution paths (2026-04-05)
+
+**Context:** When introducing namespace resolution for qualified type names, the question arose whether the symbol table should hold qualified keys (e.g., `"java.util.Arrays"`) or whether the namespace tree should be the sole authority for qualified paths.
+
+**Decision:** Keep the symbol table namespace-free. Unqualified names only — project classes always win. The namespace tree returns `ClassRef` instances directly for qualified lookups, bypassing the symbol table entirely. Imports register in the symbol table only if no project class with that name exists. This matches Java's shadowing semantics (JLS §6.3.1: local declarations shadow single-type imports).
+
+**Consequences:** Clean separation of concerns — the symbol table handles unqualified dispatch, the namespace tree handles qualified paths. No namespace information leaks into symbol table keys. Name collisions between project classes and imports are handled by the same priority rules as javac. The resolution logic is swappable: `NamespaceTree.resolve()` can be overridden per language without affecting the symbol table.
