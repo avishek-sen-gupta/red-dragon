@@ -59,9 +59,22 @@ class TestFullRoundTrip:
         assert state["step_index"] == 5
 
     def test_call_chain_matches_execution(self):
-        """Call chain shows n -> double -> add, execution produces result == 20."""
+        """Call chain shows quadruple -> double -> add, execution produces result == 20."""
         chain = handle_get_call_chain(MULTI_FUNC_SOURCE, "python")
         assert len(chain["chains"]) >= 1
+
+        # Verify the first chain shows quadruple -> double -> add structure
+        first_chain = chain["chains"][0]
+        assert "quadruple" in first_chain["root"]
+
+        # Verify call chain depth: quadruple -> double -> add
+        assert len(first_chain["children"]) >= 1
+        double_node = first_chain["children"][0]
+        assert "double" in double_node["label"]
+
+        assert len(double_node["children"]) >= 1
+        add_node = double_node["children"][0]
+        assert "add" in add_node["label"]
 
         handle_load_program(MULTI_FUNC_SOURCE, "python")
         end = handle_run_to_end()
