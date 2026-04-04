@@ -69,7 +69,9 @@ def java_pre_scan(source: bytes) -> JavaPreScanResult:
             # package com.example;  →  scoped_identifier or identifier
             name_node = child.child_by_field_name("name") or _first_named_child(child)
             if name_node is not None:
-                result.package = source[name_node.start_byte : name_node.end_byte].decode()
+                result.package = source[
+                    name_node.start_byte : name_node.end_byte
+                ].decode()
 
         elif child.type in _TYPE_DECLARATION_TYPES:
             name_node = child.child_by_field_name("name")
@@ -114,7 +116,12 @@ def _extract_import(node: object, source: bytes, result: JavaPreScanResult) -> N
             names = ()
 
     result.imports.append(
-        ImportRef(source_file=_DUMMY_PATH, module_path=module_path, names=names, is_system=True)
+        ImportRef(
+            source_file=_DUMMY_PATH,
+            module_path=module_path,
+            names=names,
+            is_system=True,
+        )
     )
 
 
@@ -138,9 +145,7 @@ def build_java_namespace_tree(
         class_ref = NO_CLASS_REF
         for cls_name, cls_label in module.exports.classes.items():
             if cls_name.value == short_name:
-                class_ref = ClassRef(
-                    name=cls_name, label=cls_label, parents=()
-                )
+                class_ref = ClassRef(name=cls_name, label=cls_label, parents=())
                 break
 
         tree.register_type(
