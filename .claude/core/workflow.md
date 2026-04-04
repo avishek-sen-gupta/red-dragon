@@ -26,7 +26,7 @@ Classify before starting. This determines how much ceremony is needed.
 
 A deterministic pre-commit hook at `.claude/hooks/pre-commit` runs all gates automatically on every commit:
 
-- **Talisman** — secret detection
+- **Talisman** — secret detection. If Talisman flags a false positive, **always append new entries** to `.talismanrc` — never modify or remove existing entries, even for the same file. Duplicate entries for the same filename with different checksums are expected and correct.
 - **Black** — formatting (auto-fixes and re-stages)
 - **import-linter** — architectural contracts
 - **pytest** — full test suite (unit + integration)
