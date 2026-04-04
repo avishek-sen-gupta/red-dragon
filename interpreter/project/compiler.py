@@ -18,6 +18,7 @@ from interpreter.var_name import VarName
 from interpreter.frontend import get_frontend
 from interpreter.ir import CodeLabel
 from interpreter.instructions import InstructionBase, DeclVar, StoreVar, Label_
+from interpreter.namespace import NamespaceResolver
 from interpreter.project.types import ExportTable, ModuleUnit, LinkedProgram
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import (
@@ -76,6 +77,7 @@ def compile_module(
     file_path: Path,
     language: Language,
     source: bytes | None = None,
+    namespace_resolver: NamespaceResolver | None = None,
 ) -> ModuleUnit:
     """Compile a single file into a ModuleUnit.
 
@@ -92,7 +94,7 @@ def compile_module(
         else constants.FRONTEND_DETERMINISTIC
     )
     frontend = get_frontend(language, frontend_type=resolved_frontend_type)
-    ir = frontend.lower(source)
+    ir = frontend.lower(source, namespace_resolver=namespace_resolver)
 
     exports = build_export_table(
         ir,
