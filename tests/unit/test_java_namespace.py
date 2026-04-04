@@ -163,3 +163,128 @@ class TestBuildJavaNamespaceTree:
 
         resolved, _, _ = tree.resolve(["Main"])
         assert resolved is None
+
+
+from interpreter.frontends.java.namespace import (
+    JavaNamespaceResolver,
+    _collect_field_access_chain,
+)
+from interpreter.namespace import NO_CHAIN, NO_RESOLUTION, NamespaceTree
+from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
+from interpreter.frontends._base import NullFrontendObserver
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
+
+_PARSER = TreeSitterParserFactory()
+
+
+def _parse_expr_node(java_expr: str):
+    """Parse a Java expression and return the root expression node."""
+    source = f"class X {{ void m() {{ {java_expr}; }} }}".encode()
+    parser = _PARSER.get_parser("java")
+    tree = parser.parse(source)
+    # Navigate: program > class_declaration > class_body > method_declaration
+    #   > method body (block) > expression_statement > expression
+    cls = tree.root_node.children[0]
+    body = cls.child_by_field_name("body")
+    method = [c for c in body.children if c.type == "method_declaration"][0]
+    block = method.child_by_field_name("body")
+    expr_stmt = [c for c in block.children if c.type == "expression_statement"][0]
+    return expr_stmt.children[0], source
+
+
+def _make_java_ctx(source: bytes, resolver=None) -> TreeSitterEmitContext:
+    from interpreter.frontends.java.frontend import JavaFrontend
+
+    frontend = JavaFrontend(_PARSER, "java")
+    constants = frontend._build_constants()
+    ctx = TreeSitterEmitContext(
+        source=source,
+        language=Language.JAVA,
+        observer=NullFrontendObserver(),
+        constants=constants,
+        **({"namespace_resolver": resolver} if resolver else {}),
+    )
+    return ctx
+
+
+class TestCollectFieldAccessChain:
+    def test_simple_chain(self):
+        """java.util.Arrays → ['java', 'util', 'Arrays']."""
+        node, source = _parse_expr_node("java.util.Arrays")
+        ctx = _make_java_ctx(source)
+        chain = _collect_field_access_chain(ctx, node)
+        assert chain == ["java", "util", "Arrays"]
+
+    def test_deeper_chain(self):
+        """java.util.Arrays.fill → ['java', 'util', 'Arrays', 'fill']."""
+        node, source = _parse_expr_node("java.util.Arrays.fill")
+        ctx = _make_java_ctx(source)
+        chain = _collect_field_access_chain(ctx, node)
+        assert chain == ["java", "util", "Arrays", "fill"]
+
+    def test_non_identifier_root_returns_no_chain(self):
+        """this.field → NO_CHAIN (root is 'this', not identifier)."""
+        node, source = _parse_expr_node("this.field")
+        ctx = _make_java_ctx(source)
+        chain = _collect_field_access_chain(ctx, node)
+        assert chain is NO_CHAIN
+
+
+class TestJavaNamespaceResolver:
+    def test_resolve_qualified_type(self):
+        """java.util.Arrays → LoadVar('Arrays')."""
+        tree = NamespaceTree()
+        tree.register_type("java.util.Arrays", NamespaceType(short_name="Arrays"))
+        resolver = JavaNamespaceResolver(tree)
+
+        node, source = _parse_expr_node("java.util.Arrays")
+        ctx = _make_java_ctx(source, resolver)
+
+        result = resolver.try_resolve_field_access(ctx, node)
+        assert result is not NO_RESOLUTION
+        load_vars = [i for i in ctx.instructions if i.opcode == Opcode.LOAD_VAR]
+        assert len(load_vars) == 1
+        assert load_vars[0].name.value == "Arrays"
+
+    def test_resolve_with_remaining_field(self):
+        """java.sql.Types.VARCHAR → LoadVar('Types') + LoadField('VARCHAR')."""
+        tree = NamespaceTree()
+        tree.register_type("java.sql.Types", NamespaceType(short_name="Types"))
+        resolver = JavaNamespaceResolver(tree)
+
+        node, source = _parse_expr_node("java.sql.Types.VARCHAR")
+        ctx = _make_java_ctx(source, resolver)
+
+        result = resolver.try_resolve_field_access(ctx, node)
+        assert result is not NO_RESOLUTION
+        load_vars = [i for i in ctx.instructions if i.opcode == Opcode.LOAD_VAR]
+        load_fields = [i for i in ctx.instructions if i.opcode == Opcode.LOAD_FIELD]
+        assert len(load_vars) == 1
+        assert load_vars[0].name.value == "Types"
+        assert len(load_fields) == 1
+        assert load_fields[0].field_name.value == "VARCHAR"
+
+    def test_declared_local_skips_resolution(self):
+        """If 'java' is a local variable, skip namespace resolution."""
+        tree = NamespaceTree()
+        tree.register_type("java.util.Arrays", NamespaceType(short_name="Arrays"))
+        resolver = JavaNamespaceResolver(tree)
+
+        node, source = _parse_expr_node("java.util.Arrays")
+        ctx = _make_java_ctx(source, resolver)
+        ctx._method_declared_names.add("java")
+
+        result = resolver.try_resolve_field_access(ctx, node)
+        assert result is NO_RESOLUTION
+
+    def test_no_tree_match_falls_through(self):
+        """com.unknown.Foo → NO_RESOLUTION."""
+        tree = NamespaceTree()
+        resolver = JavaNamespaceResolver(tree)
+
+        node, source = _parse_expr_node("com.unknown.Foo")
+        ctx = _make_java_ctx(source, resolver)
+
+        result = resolver.try_resolve_field_access(ctx, node)
+        assert result is NO_RESOLUTION
