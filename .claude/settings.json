@@ -1,5 +1,14 @@
 {
   "enableAllProjectMcpServers": true,
+  "mcpServers": {
+    "neo4j": {
+      "command": "uvx",
+      "args": [
+        "mcp-neo4j-cypher",
+        "--transport", "stdio"
+      ]
+    }
+  },
   "hooks": {
     "PreToolUse": [
       {
