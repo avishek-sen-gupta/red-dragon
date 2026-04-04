@@ -6,7 +6,7 @@ from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.field_name import FieldName
+from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
 from interpreter.class_name import ClassName
@@ -254,6 +254,19 @@ def lower_array_access(
     return reg
 
 
+def _emit_array_length(
+    ctx: TreeSitterEmitContext, arr_reg: Register, size_reg: Register
+) -> None:
+    """Emit store_field arr.length = size so .length resolves concretely."""
+    ctx.emit_inst(
+        StoreField(
+            obj_reg=arr_reg,
+            field_name=FieldName("length", FieldKind.SPECIAL),
+            value_reg=size_reg,
+        )
+    )
+
+
 def lower_array_creation(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
@@ -268,6 +281,7 @@ def lower_array_creation(
             NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
             node=node,
         )
+        _emit_array_length(ctx, arr_reg, size_reg)
         for i, elem in enumerate(elements):
             idx_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
@@ -291,6 +305,7 @@ def lower_array_creation(
             NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
             node=node,
         )
+        _emit_array_length(ctx, arr_reg, size_reg)
         for i, elem in enumerate(elements):
             idx_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
@@ -316,6 +331,7 @@ def lower_array_creation(
         NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
         node=node,
     )
+    _emit_array_length(ctx, arr_reg, size_reg)
     return arr_reg
 
 

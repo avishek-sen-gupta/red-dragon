@@ -453,6 +453,16 @@ def _handle_load_field(
                 reasoning=f"load {addr}.{field_name} = {tv!r}",
             )
         )
+    # Fallback: check SPECIAL-kind field (e.g. array .length metadata)
+    special_key = FieldName(field_name.value, FieldKind.SPECIAL)
+    if special_key in heap_obj.fields:
+        tv = heap_obj.fields[special_key]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={t.result_reg: tv},
+                reasoning=f"load {addr}.{field_name} (special) = {tv!r}",
+            )
+        )
     # Field not found — check for __method_missing__ on the object
     mm_ref = _find_method_missing(heap_obj, ctx.registry, ctx.cfg)
     if mm_ref is not None:
