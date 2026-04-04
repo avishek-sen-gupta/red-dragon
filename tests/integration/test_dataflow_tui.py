@@ -57,16 +57,43 @@ result = g(10)
         assert isinstance(result.interprocedural, InterproceduralResult)
 
     def test_interprocedural_has_call_graph(self):
+        """Interprocedural result should have call graph with function entries."""
         result = run_pipeline(self.SOURCE, language="python", max_steps=50)
         assert len(result.interprocedural.call_graph.functions) > 0
+        # Verify specific functions f and g are in the call graph
+        func_names = {
+            f.label.extract_name("func_")
+            for f in result.interprocedural.call_graph.functions
+        }
+        assert "f" in func_names, f"Expected 'f' in call graph, got {func_names}"
+        assert "g" in func_names, f"Expected 'g' in call graph, got {func_names}"
 
     def test_interprocedural_has_summaries(self):
+        """Interprocedural result should have function summaries."""
         result = run_pipeline(self.SOURCE, language="python", max_steps=50)
         assert len(result.interprocedural.summaries) > 0
+        # Verify summaries contain expected functions (check by label)
+        summary_labels = {
+            str(k.function.label) for k in result.interprocedural.summaries.keys()
+        }
+        assert any(
+            "func_f" in lbl for lbl in summary_labels
+        ), f"Expected 'f' in summaries, got {summary_labels}"
+        assert any(
+            "func_g" in lbl for lbl in summary_labels
+        ), f"Expected 'g' in summaries, got {summary_labels}"
 
     def test_interprocedural_has_whole_program_graph(self):
+        """Interprocedural result should have whole-program dataflow graph."""
         result = run_pipeline(self.SOURCE, language="python", max_steps=50)
         assert len(result.interprocedural.whole_program_graph) > 0
+        # Verify graph contains flow endpoints (check for any VariableEndpoint)
+        has_endpoints = False
+        for src, dsts in result.interprocedural.whole_program_graph.items():
+            if src or dsts:
+                has_endpoints = True
+                break
+        assert has_endpoints, "Expected whole-program graph to contain flow endpoints"
 
     def test_pipeline_no_functions_still_works(self):
         result = run_pipeline("x = 1\ny = x + 1\n", language="python", max_steps=50)
