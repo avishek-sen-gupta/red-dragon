@@ -38,6 +38,7 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.var_scope_info import VarScopeInfo
 from interpreter.types.type_expr import TypeExpr
+from interpreter.namespace import NamespaceResolver
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,9 @@ class TreeSitterEmitContext:
 
     # Tracks names declared in current method scope (params + locals), for implicit-this suppression
     _method_declared_names: set[str] = field(default_factory=set)
+
+    # Namespace resolver — injectable strategy for qualified name resolution
+    namespace_resolver: NamespaceResolver = field(default_factory=NamespaceResolver)
 
     # Kotlin property accessors: class_name → {prop_name → {"get", "set"}}
     property_accessors: dict[str, dict[str, set[str]]] = field(default_factory=dict)
