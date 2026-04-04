@@ -99,3 +99,5 @@ fileignoreconfig:
   checksum: cee71ade6ab08b1826ad91e4b557a0328e18851359be9c751a7d304c1ab6e394
 - filename: docs/superpowers/specs/2026-04-05-namespace-resolution-design.md
   checksum: b08dd2631d3c0f8305e532e67c95a1c1bef83e3395812022df3da249ed2dba17
+- filename: docs/architectural-design-decisions.md
+  checksum: d45df5470535e1dd190bab7fa37118054690d70a079a9aea97e550d2119ffb89
