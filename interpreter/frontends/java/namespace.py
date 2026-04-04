@@ -8,13 +8,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from interpreter.class_name import ClassName
-from interpreter.namespace import NamespaceTree, NamespaceType
+from interpreter.field_name import FieldName
+from interpreter.instructions import LoadField, LoadVar
+from interpreter.namespace import (
+    NO_CHAIN,
+    NO_RESOLUTION,
+    NamespaceResolver,
+    NamespaceTree,
+    NamespaceType,
+    _NoChain,
+    _NoResolution,
+)
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.project.types import ImportRef, ModuleUnit
 from interpreter.refs.class_ref import NO_CLASS_REF, ClassRef
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 if TYPE_CHECKING:
-    pass
+    from interpreter.frontends.context import TreeSitterEmitContext
 
 # Node types that declare types at the top level
 _TYPE_DECLARATION_TYPES = frozenset(
@@ -153,3 +165,74 @@ def build_java_namespace_tree(
 def _path_to_dotted(path: Path) -> str:
     """Convert stub path to dotted name: java/util/Arrays.java → java.util.Arrays."""
     return ".".join(path.with_suffix("").parts)
+
+
+def _collect_field_access_chain(
+    ctx: TreeSitterEmitContext, node: object
+) -> list[str] | _NoChain:
+    """Walk nested field_access to collect ['java', 'util', 'Arrays'].
+
+    Returns NO_CHAIN if root isn't a plain identifier.
+    """
+    segments: list[str] = []
+    while node.type == "field_access":  # type: ignore[attr-defined]
+        field_node = node.child_by_field_name("field")  # type: ignore[attr-defined]
+        segments.append(ctx.node_text(field_node))
+        node = node.child_by_field_name(ctx.constants.attr_object_field)  # type: ignore[attr-defined]
+    if node.type == "identifier":  # type: ignore[attr-defined]
+        segments.append(ctx.node_text(node))
+        segments.reverse()
+        return segments
+    return NO_CHAIN  # type: ignore[return-value]
+
+
+def _lower_remaining_chain(
+    ctx: TreeSitterEmitContext,
+    base_reg: Register,
+    remaining: list[str],
+    node: object,
+) -> Register:
+    """Emit LoadField for each segment after the type join point."""
+    reg = base_reg
+    for segment in remaining:
+        next_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            LoadField(
+                result_reg=next_reg,
+                obj_reg=reg,
+                field_name=FieldName(segment),
+            ),
+            node=node,
+        )
+        reg = next_reg
+    return reg
+
+
+class JavaNamespaceResolver(NamespaceResolver):
+    """Java-specific: resolves field_access chains through namespace tree."""
+
+    def __init__(self, tree: NamespaceTree) -> None:
+        self.tree = tree
+
+    def try_resolve_field_access(
+        self, ctx: TreeSitterEmitContext, node: object
+    ) -> Register | _NoResolution:
+        chain = _collect_field_access_chain(ctx, node)
+        if chain is NO_CHAIN:
+            return NO_RESOLUTION  # type: ignore[return-value]
+
+        root = chain[0]  # type: ignore[index]
+        if root in ctx._method_declared_names:
+            return NO_RESOLUTION  # type: ignore[return-value]
+
+        ns_type, remaining, qualified_name = self.tree.resolve(chain)  # type: ignore[arg-type]
+        if ns_type is None:
+            return NO_RESOLUTION  # type: ignore[return-value]
+
+        # Emit LoadVar for the resolved type's short name
+        type_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            LoadVar(result_reg=type_reg, name=VarName(ns_type.short_name)),
+            node=node,
+        )
+        return _lower_remaining_chain(ctx, type_reg, remaining, node)
