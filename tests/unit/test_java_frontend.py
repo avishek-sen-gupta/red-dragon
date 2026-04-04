@@ -497,6 +497,48 @@ class TestJavaArrayCreation:
         assert len(stores) >= 3
 
 
+class TestJavaIntegerLiterals:
+    """Hex, octal, and binary integer literals must be lowered to decimal strings."""
+
+    def test_hex_literal(self):
+        instructions = _parse_java("class M { void m() { int x = 0x7f; } }")
+        consts = _find_all(instructions, Opcode.CONST)
+        hex_const = [c for c in consts if c.value == "127"]
+        assert (
+            hex_const
+        ), f"Expected CONST '127', got values: {[c.value for c in consts]}"
+
+    def test_hex_literal_with_long_suffix(self):
+        instructions = _parse_java("class M { void m() { long x = 0x7fffffffL; } }")
+        consts = _find_all(instructions, Opcode.CONST)
+        hex_const = [c for c in consts if c.value == "2147483647"]
+        assert (
+            hex_const
+        ), f"Expected CONST '2147483647', got values: {[c.value for c in consts]}"
+
+    def test_octal_literal(self):
+        instructions = _parse_java("class M { void m() { int x = 0777; } }")
+        consts = _find_all(instructions, Opcode.CONST)
+        oct_const = [c for c in consts if c.value == "511"]
+        assert (
+            oct_const
+        ), f"Expected CONST '511', got values: {[c.value for c in consts]}"
+
+    def test_binary_literal(self):
+        instructions = _parse_java("class M { void m() { int x = 0b1010; } }")
+        consts = _find_all(instructions, Opcode.CONST)
+        bin_const = [c for c in consts if c.value == "10"]
+        assert (
+            bin_const
+        ), f"Expected CONST '10', got values: {[c.value for c in consts]}"
+
+    def test_decimal_literal_unchanged(self):
+        instructions = _parse_java("class M { void m() { int x = 42; } }")
+        consts = _find_all(instructions, Opcode.CONST)
+        dec_const = [c for c in consts if c.value == "42"]
+        assert dec_const
+
+
 class TestJavaMethodReference:
     def test_type_method_reference(self):
         instructions = _parse_java(
