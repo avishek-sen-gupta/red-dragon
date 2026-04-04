@@ -34,7 +34,7 @@ int y = 2;
         assert local_vars[VarName("y")] == 2
 
     def test_goto_label_interaction(self):
-        """goto should jump to a defined label and execute code after it."""
+        """goto jumps to label, skipping intervening code; code after label executes."""
         source = """\
 int x = 1;
 goto done;
@@ -43,8 +43,12 @@ done:
 int y = x + 10;
 """
         local_vars = _run_csharp(source)
-        assert local_vars[VarName("x")] == 1, "goto should skip x = 99"
-        assert local_vars[VarName("y")] == 11, "code after label should use original x"
+        # Verify goto skipped the x = 99 line (x should still be 1)
+        assert local_vars[VarName("x")] == 1, "goto should skip x = 99, leaving x = 1"
+        # Verify code after label executed with correct value
+        assert (
+            local_vars[VarName("y")] == 11
+        ), "code after 'done:' label should set y = x + 10 = 11"
 
     def test_goto_backward_jump(self):
         """goto can jump backward to create a loop-like construct."""
