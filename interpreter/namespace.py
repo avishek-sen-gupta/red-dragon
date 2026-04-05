@@ -4,19 +4,24 @@
 The tree maps dotted package paths to type nodes. The resolution algorithm
 is shared across languages; language-specific behavior comes from the seed
 (what's in the tree), not the walk (how we traverse it).
+
+Re-exports NamespaceResolver, NO_RESOLUTION, NO_CHAIN from namespace_resolver
+so existing consumers can import from this single module.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
+from interpreter.project.types import ModuleUnit, NO_MODULE_UNIT
 from interpreter.refs.class_ref import ClassRef, NO_CLASS_REF
-from interpreter.register import Register
 
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
-    from interpreter.project.types import ModuleUnit
+# Re-export for convenience — consumers can import from interpreter.namespace
+from interpreter.namespace_resolver import (  # noqa: F401
+    NamespaceResolver,
+    NO_RESOLUTION,
+    NO_CHAIN,
+    _NoResolution,
+    _NoChain,
+)
 
 
 @dataclass
@@ -25,14 +30,14 @@ class NamespaceType:
 
     short_name: str  # "Arrays" — used by frontend for LoadVar
     class_ref: ClassRef = NO_CLASS_REF  # sentinel initially; patched post-compile
-    module: ModuleUnit | None = None  # stub ModuleUnit, if one exists
+    module: ModuleUnit = NO_MODULE_UNIT  # stub ModuleUnit, if one exists
 
 
 @dataclass
 class NamespaceNode:
     """A node in the package/namespace hierarchy."""
 
-    children: dict[str, NamespaceNode] = field(default_factory=dict)
+    children: dict[str, "NamespaceNode"] = field(default_factory=dict)
     types: dict[str, NamespaceType] = field(default_factory=dict)
 
 
@@ -47,7 +52,9 @@ class NamespaceTree:
     def __init__(self) -> None:
         self.root = NamespaceNode()
 
-    def resolve(self, chain: list[str]) -> tuple[NamespaceType | None, list[str], str]:
+    def resolve(
+        self, chain: list[str]
+    ) -> tuple["NamespaceType | None", list[str], str]:
         """Walk the tree to find the type join point.
 
         Returns:
@@ -80,36 +87,3 @@ class NamespaceTree:
                 node.children[part] = NamespaceNode()
             node = node.children[part]
         node.types[parts[-1]] = ns_type
-
-
-class _NoResolution:
-    """Sentinel: resolver did not handle this field_access."""
-
-    def __bool__(self) -> bool:
-        return False
-
-    def __repr__(self) -> str:
-        return "NO_RESOLUTION"
-
-
-class _NoChain:
-    """Sentinel: node isn't a pure identifier chain."""
-
-    def __bool__(self) -> bool:
-        return False
-
-    def __repr__(self) -> str:
-        return "NO_CHAIN"
-
-
-NO_RESOLUTION: _NoResolution | Register = _NoResolution()
-NO_CHAIN: _NoChain | list[str] = _NoChain()
-
-
-class NamespaceResolver:
-    """Base: no-op resolver for languages without namespace resolution."""
-
-    def try_resolve_field_access(
-        self, ctx: TreeSitterEmitContext | None, node: object
-    ) -> Register | _NoResolution:
-        return NO_RESOLUTION  # type: ignore[return-value]

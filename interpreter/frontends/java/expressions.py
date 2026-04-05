@@ -129,7 +129,7 @@ def lower_field_access(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     # Try namespace resolution first
-    from interpreter.namespace import NO_RESOLUTION
+    from interpreter.namespace_resolver import NO_RESOLUTION
 
     result = ctx.namespace_resolver.try_resolve_field_access(ctx, node)
     if result is not NO_RESOLUTION:

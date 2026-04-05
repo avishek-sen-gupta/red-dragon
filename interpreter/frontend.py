@@ -12,7 +12,7 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import CodeLabel
 from interpreter.instructions import InstructionBase
-from interpreter.namespace import NamespaceResolver
+from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import LLMProvider
