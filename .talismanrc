@@ -101,3 +101,5 @@ fileignoreconfig:
   checksum: ee9d30cf23bc94a2b4f95d524f26f8a874f56801803432fd525e8c6b73060642
 - filename: .claude/core/workflow.md
   checksum: b4d8e3938058251d7b684444e70e9f16ab23d23740e6015725f8e132098402f7
+- filename: docs/linker-design.md
+  checksum: f4b3cce12ad216e8c186ab7105555d836500457d38c4e51504432ade47f33749
