@@ -117,3 +117,5 @@ fileignoreconfig:
   checksum: 4479448a812174d943a526154562faa59db53a02eeceb223e278ba6bcc44c7da
 - filename: docs/superpowers/specs/2026-04-05-tui-mvvm-design.md
   checksum: b53c35744657dc6e1c89f0d2b69f3aca639bdeaed3ca44b8b7dc2d93d592fe6c
+- filename: docs/superpowers/plans/2026-04-05-tui-mvvm.md
+  checksum: df79fcf247a8cd9d6e717eac50ca56c6beaeda2b0f417a75df6ac9e970506ae4
