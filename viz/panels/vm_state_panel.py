@@ -63,7 +63,9 @@ class VMStatePanel(Static):
             # Local variables
             if frame.local_vars:
                 text.append("    locals:\n", style="dim")
-                for var, val in sorted(frame.local_vars.items()):
+                for var, val in sorted(
+                    frame.local_vars.items(), key=lambda kv: str(kv[0])
+                ):
                     val_str = _format_value(val)
                     if is_current and var in changed_vars:
                         text.append(f"      {var}: ", style="green bold")
@@ -75,7 +77,9 @@ class VMStatePanel(Static):
             # Registers (only show current frame, collapse if many)
             if is_current and frame.registers:
                 text.append("    registers:\n", style="dim")
-                for reg, val in sorted(frame.registers.items()):
+                for reg, val in sorted(
+                    frame.registers.items(), key=lambda kv: str(kv[0])
+                ):
                     val_str = _format_value(val)
                     if reg in changed_regs:
                         text.append(f"      {reg}: ", style="green bold")
@@ -89,13 +93,15 @@ class VMStatePanel(Static):
         # Heap
         if vm.heap_count():
             text.append("  Heap:\n", style="bold magenta")
-            for addr, obj in sorted(vm.heap_items()):
+            for addr, obj in sorted(vm.heap_items(), key=lambda kv: str(kv[0])):
                 type_hint = obj.type_hint or ""
                 text.append(f"    {addr}", style="magenta")
                 if type_hint:
                     text.append(f" ({type_hint})", style="dim magenta")
                 text.append(":\n")
-                for field_name, val in sorted(obj.fields.items()):
+                for field_name, val in sorted(
+                    obj.fields.items(), key=lambda kv: str(kv[0])
+                ):
                     val_str = _format_value(val)
                     if (addr, field_name) in changed_heap_fields:
                         text.append(
