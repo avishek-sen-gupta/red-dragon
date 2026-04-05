@@ -96,11 +96,15 @@ class DataflowSummaryPanel(Tree):
             )
 
             callers = build_function_callers(func, call_graph)
-            callers_str = ", ".join(sorted(callers)) if callers else "(none)"
+            callers_str = (
+                ", ".join(sorted(str(c) for c in callers)) if callers else "(none)"
+            )
             func_node.add_leaf(f"callers: {callers_str}")
 
             callees = build_function_callees(func, call_graph)
-            callees_str = ", ".join(sorted(callees)) if callees else "(none)"
+            callees_str = (
+                ", ".join(sorted(str(c) for c in callees)) if callees else "(none)"
+            )
             func_node.add_leaf(f"callees: {callees_str}")
 
             flows = merge_flows_for_function(func, result.summaries)
