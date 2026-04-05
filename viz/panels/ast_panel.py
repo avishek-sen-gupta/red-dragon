@@ -18,6 +18,17 @@ class ASTPanel(Tree):
         self._ast = ast
         self._node_map: dict[str, ASTNode] = {}
 
+    def set_ast(self, ast: ASTNode) -> None:
+        """Replace the AST tree with a new one and rebuild the widget tree."""
+        self._ast = ast
+        self._node_map.clear()
+        self.root.remove_children()
+        if self._ast:
+            self._populate_tree(self.root, self._ast)
+            self.root.expand()
+            for child in self.root.children:
+                child.expand()
+
     def on_mount(self) -> None:
         if self._ast:
             self._populate_tree(self.root, self._ast)
