@@ -27,7 +27,7 @@ from interpreter.cobol.lower_data_division import lower_data_division
 from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
-from interpreter.namespace import NamespaceResolver
+from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import Opcode, CodeLabel

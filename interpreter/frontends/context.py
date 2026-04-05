@@ -38,7 +38,7 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.var_scope_info import VarScopeInfo
 from interpreter.types.type_expr import TypeExpr
-from interpreter.namespace import NamespaceResolver
+from interpreter.namespace_resolver import NamespaceResolver
 
 logger = logging.getLogger(__name__)
 
