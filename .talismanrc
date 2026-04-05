@@ -103,3 +103,5 @@ fileignoreconfig:
   checksum: b4d8e3938058251d7b684444e70e9f16ab23d23740e6015725f8e132098402f7
 - filename: docs/linker-design.md
   checksum: f4b3cce12ad216e8c186ab7105555d836500457d38c4e51504432ade47f33749
+- filename: README.md
+  checksum: 8321514e8d846db9296ef8782e3f2bc3490384e58cf51af4008ed553255d1bdd
