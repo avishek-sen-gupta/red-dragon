@@ -28,9 +28,21 @@ Concretely, RedDragon does the following:
 
 ### Type system
 
-RedDragon has a three-phase type system: **frontend extraction**, **static inference**, and **runtime coercion**. All types are represented as `TypeExpr` algebraic data types (`ScalarType`, `ParameterizedType`, `UnionType`, `FunctionType`, `TypeVar`, `UnknownType`) with no string roundtrips. 13 statically-typed frontends extract type annotations during lowering; `infer_types()` propagates types to fixpoint across 15 opcodes (covering self/this typing, generics, union widening, overload resolution, interface hierarchies, and 60+ builtin return types); and an immutable `TypeEnvironment` drives write-time coercion at runtime via pluggable `TypeConversionRules`. All VM storage uses domain-typed keys — `registers` (keyed by `Register`), `local_vars` (keyed by `VarName`), `HeapObject.fields` (keyed by `FieldName` with `FieldKind` tags), `ClosureEnvironment.bindings` (keyed by `VarName`), and the heap/regions (keyed by `Address`) — and stores `TypedValue` exclusively. The heap and regions are private (`_heap`, `_regions`) with accessor methods (`heap_get`, `heap_set`, `heap_contains`, etc.) and a `NO_HEAP_OBJECT` null-object sentinel. `_resolve_reg()` returns `TypedValue` directly — preserving parameterized type information (e.g. `pointer(scalar("Dog"))`) through the register→handler→storage pipeline. All 33 IR instruction classes implement a `StorageIdentifier` protocol with `reads()`/`writes()` methods for dataflow analysis, replacing opcode-conditional logic.
+Three-phase pipeline — **extraction**, **inference**, **coercion** — with all types represented as `TypeExpr` algebraic data types (no string roundtrips). See the full [Type System Design Document](docs/type-system.md) for details.
 
-9 block-scoped frontends use LLVM-style name mangling to disambiguate shadowed variables in nested blocks, loops, and catch clauses. Function-scoped languages (Python, JavaScript `var`, Ruby, etc.) bypass this. See the full [Type System Design Document](docs/type-system.md) for architecture, algorithms, per-opcode inference rules, and runtime coercion details.
+| Phase | What it does |
+|-------|-------------|
+| **Frontend extraction** | 13 statically-typed frontends extract type annotations during lowering |
+| **Static inference** | `infer_types()` propagates types to fixpoint across 15 opcodes — self/this typing, generics, union widening, overload resolution, interface hierarchies, 60+ builtin return types |
+| **Runtime coercion** | Immutable `TypeEnvironment` drives write-time coercion via pluggable `TypeConversionRules` |
+
+**TypeExpr ADT:** `ScalarType`, `ParameterizedType`, `UnionType`, `FunctionType`, `TypeVar`, `UnknownType`
+
+**Storage model:** All VM storage uses domain-typed keys (`Register`, `VarName`, `FieldName`, `Address`) and stores `TypedValue` exclusively. The heap uses accessor methods with a `NO_HEAP_OBJECT` null-object sentinel. `_resolve_reg()` preserves parameterized type information (e.g. `pointer(scalar("Dog"))`) through the full pipeline.
+
+**Dataflow:** All 33 IR instruction classes implement a `StorageIdentifier` protocol with `reads()`/`writes()` methods.
+
+**Scoping:** 9 block-scoped frontends use LLVM-style name mangling for shadowed variables in nested blocks, loops, and catch clauses. Function-scoped languages (Python, JavaScript `var`, Ruby, etc.) bypass this.
 
 ### VM features
 
