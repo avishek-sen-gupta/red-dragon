@@ -55,8 +55,12 @@ def module_prefix(file_path: Path, project_root: Path) -> str:
 
     /project/src/utils.py  (root=/project/) → "src.utils"
     /project/main.py       (root=/project/) → "main"
+    java/util/ArrayList.java (stdlib stub)  → "java.util.ArrayList"
     """
-    relative = file_path.relative_to(project_root)
+    if file_path.is_absolute():
+        relative = file_path.relative_to(project_root)
+    else:
+        relative = file_path
     stem = str(relative.with_suffix(""))
     return stem.replace("/", ".").replace("\\", ".")
 

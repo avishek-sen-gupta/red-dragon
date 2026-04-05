@@ -186,6 +186,25 @@ def compile_directory(
         for path in source_files
     }
 
+    # --- Java stdlib: inject pre-built IR modules for system imports ---
+    stdlib_edges: dict[Path, list[Path]] = {}  # user_path → [stdlib_path, ...]
+    if language == Language.JAVA:
+        stdlib_needed: dict[Path, ModuleUnit] = {}
+        for user_path, module in list(modules.items()):
+            for ref in module.imports:
+                if not ref.is_system:
+                    continue
+                for name in ref.names:
+                    stub_key = Path(ref.module_path.replace(".", "/")) / f"{name}.java"
+                    if stub_key in STDLIB_REGISTRY:
+                        if stub_key not in stdlib_needed:
+                            stdlib_needed[stub_key] = STDLIB_REGISTRY[stub_key]
+                        stdlib_edges.setdefault(user_path, [])
+                        if stub_key not in stdlib_edges[user_path]:
+                            stdlib_edges[user_path].append(stub_key)
+        for stub_key, stub_module in stdlib_needed.items():
+            modules[stub_key] = stub_module
+
     # Build import graph from modules' resolved imports
     if language == Language.JAVA:
         discovered_roots = MavenSourceRootDiscovery().discover(directory)
@@ -197,7 +216,7 @@ def compile_directory(
     else:
         resolver = get_resolver(language)
 
-    import_graph: dict[Path, list[Path]] = {path: [] for path in source_files}
+    import_graph: dict[Path, list[Path]] = {path: [] for path in modules}
     for path, module in modules.items():
         for ref in module.imports:
             for resolved in resolver.resolve(ref, directory):
@@ -205,6 +224,12 @@ def compile_directory(
                     target = resolved.resolved_path.resolve()
                     if target in import_graph and target not in import_graph[path]:
                         import_graph[path].append(target)
+
+    # Add stdlib dependency edges so stdlib modules link before user code
+    for user_path, deps in stdlib_edges.items():
+        for dep in deps:
+            if dep not in import_graph[user_path]:
+                import_graph[user_path].append(dep)
 
     topo_order = topological_sort(import_graph)
 

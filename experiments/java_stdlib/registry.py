@@ -3,6 +3,10 @@ from pathlib import Path
 from interpreter.project.types import ModuleUnit
 
 from experiments.java_stdlib.stubs.java_io_print_stream import PRINT_STREAM_MODULE
+from experiments.java_stdlib.stubs.java_util_calendar import CALENDAR_MODULE
+from experiments.java_stdlib.stubs.java_util_gregorian_calendar import (
+    GREGORIAN_CALENDAR_MODULE,
+)
 from experiments.java_stdlib.stubs.java_lang_math import MATH_MODULE
 from experiments.java_stdlib.stubs.java_lang_string import STRING_MODULE
 from experiments.java_stdlib.stubs.java_lang_system import SYSTEM_MODULE
@@ -15,6 +19,8 @@ STDLIB_REGISTRY: dict[Path, ModuleUnit] = {
     Path("java/lang/String.java"): STRING_MODULE,
     Path("java/io/PrintStream.java"): PRINT_STREAM_MODULE,
     Path("java/lang/System.java"): SYSTEM_MODULE,
+    Path("java/util/Calendar.java"): CALENDAR_MODULE,
+    Path("java/util/GregorianCalendar.java"): GREGORIAN_CALENDAR_MODULE,
     Path("java/util/ArrayList.java"): ARRAY_LIST_MODULE,
     Path("java/util/HashMap.java"): HASH_MAP_MODULE,
     # Interface aliases — same ModuleUnit as concrete implementation
