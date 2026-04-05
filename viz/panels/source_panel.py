@@ -20,7 +20,8 @@ class SourcePanel(Static):
     def set_source(self, source: str) -> None:
         self._source = source
         self._lines = source.splitlines() if source else []
-        self._render_source()
+        if self.is_mounted:
+            self._render_source()
 
     def watch_current_instruction(self, inst: InstructionBase | None) -> None:
         self._render_source()
