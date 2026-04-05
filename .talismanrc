@@ -107,3 +107,11 @@ fileignoreconfig:
   checksum: 8321514e8d846db9296ef8782e3f2bc3490384e58cf51af4008ed553255d1bdd
 - filename: docs/superpowers/plans/2026-04-05-namespace-resolution.md
   checksum: 81b587d795b14a57513319f5abaf175ccb1f0bc65d167de7c517d58f535a5aac
+- filename: viz/panels/dataflow_summary_panel.py
+  checksum: b7bf334972b057a10e0ed2d21b815fc7d5b761ffd17548f8caf5c242d12038ca
+- filename: viz/panels/dataflow_graph_panel.py
+  checksum: c06ea51b0f066b3b49df2a2ea5cec4b00869780e41dd4bae28cc522ecd72d245
+- filename: viz/panels/vm_state_panel.py
+  checksum: 957a53fd69e05b7ceb86b79ae3700184fa98225c03e348d2ac07b29d2bb28bac
+- filename: tests/unit/viz/test_panel_rendering.py
+  checksum: 4479448a812174d943a526154562faa59db53a02eeceb223e278ba6bcc44c7da
