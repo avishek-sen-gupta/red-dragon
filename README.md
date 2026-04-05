@@ -127,9 +127,15 @@ poetry run python -m viz lower viz/examples/factorial.py -l python
 # Coverage matrix — cross-language frontend handler availability
 poetry run python -m viz coverage
 poetry run python -m viz coverage -l python,javascript,rust
+
+# Multi-file project — compile directory, browse import graph, debug across modules
+poetry run python -m viz project tests/fixtures/projects/python_basic -l python
+poetry run python -m viz project /path/to/java/project -l java -s 500
 ```
 
 Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `d` toggles **Dataflow mode** (replaces AST/VM/CFG with call-graph summaries and whole-program dependency graph, cross-highlights source and IR on function selection), `q` quits.
+
+The **project mode** (`viz project`) compiles an entire directory via `compile_directory()` and presents a two-phase experience. **Phase 1** (Project Overview) shows a box-drawing import DAG and an entry-point picker grouped by module. Select a function or top-level execution to proceed. **Phase 2** (Execution) reuses all standard panels with **module-aware source switching**: as execution crosses module boundaries, the Source and AST panels automatically swap to the active module's content, and the Source title updates to show the current file path. Press `p` to return to the project overview.
 
 The pipeline result also includes **interprocedural analysis** (call graph, function summaries, and whole-program dependency graph) when the source contains function definitions. The **Dataflow Summary** panel (`viz/panels/dataflow_summary_panel.py`) renders this as a collapsible tree: each function shows its callers, callees, and merged data-flow summaries across call contexts. The **Dataflow Graph** panel (`viz/panels/dataflow_graph_panel.py`) renders interprocedural data flow as a collapsible call-chain tree. Top-level call sites are discovered via `find_top_level_call_sites`, then `build_call_chain` recursively constructs a per-parameter flow tree for each callee: each parameter's data flows to return endpoints, field writes, or through inner call sites (with argument mapping) into recursive subtrees, with cycle detection via immutable visited sets. The tree widget replaces the previous flat edge list, making multi-level call chains navigable. The legacy `annotate_endpoint` and `render_graph_lines` functions remain available for programmatic use.
 
