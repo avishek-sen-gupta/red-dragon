@@ -8,7 +8,8 @@ interpreter/frontends/java/
   ├── node_types.py     # JavaNodeType constants for tree-sitter node type strings
   ├── expressions.py    # Java-specific expression lowerers (pure functions)
   ├── control_flow.py   # Java-specific control flow lowerers (pure functions)
-  └── declarations.py   # Java-specific declaration lowerers (pure functions)
+  ├── declarations.py   # Java-specific declaration lowerers (pure functions)
+  └── namespace.py      # Namespace resolution: java_pre_scan(), build_java_namespace_tree(), JavaNamespaceResolver
 ```
 
 ## Overview
@@ -61,7 +62,7 @@ All other constants (`none_literal`, `true_literal`, `false_literal`, `default_r
 | `parenthesized_expression` | `common_expr.lower_paren` | (unwraps inner expression) |
 | `method_invocation` | `java_expr.lower_method_invocation` | `CALL_METHOD` or `CALL_FUNCTION` |
 | `object_creation_expression` | `java_expr.lower_object_creation` | `CALL_FUNCTION(TypeName, args...)` |
-| `field_access` | `java_expr.lower_field_access` | `LOAD_FIELD` |
+| `field_access` | `java_expr.lower_field_access` | `LOAD_VAR` (if namespace-resolved) or `LOAD_FIELD` |
 | `array_access` | `java_expr.lower_array_access` | `LOAD_INDEX` |
 | `array_creation_expression` | `java_expr.lower_array_creation` | `NEW_ARRAY` + `STORE_INDEX` per element |
 | `array_initializer` | `java_expr.lower_array_creation` | `NEW_ARRAY` + `STORE_INDEX` per element |
@@ -303,21 +304,26 @@ STORE_VAR factorial, %12
 - **Instance method `this` injection**: `lower_method_decl` accepts an `inject_this` parameter; class body methods get `this` injected unless they have a `static` modifier.
 - **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling). Shadowed variables in nested blocks, enhanced-for loop variables, catch clause variables, and C-style for-loop init declarations (via `for_initializer_field="init"`) are renamed (`x` → `x$1`) to disambiguate. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.
 
-## Namespace Resolution (Planned — see spec)
+## Namespace Resolution (Implemented)
 
-> **Spec:** `docs/superpowers/specs/2026-04-05-namespace-resolution-design.md`
+> **Spec:** `docs/superpowers/specs/2026-04-05-namespace-resolution-design.md`  
+> **Code:** `interpreter/frontends/java/namespace.py`, `interpreter/namespace.py`, `interpreter/namespace_resolver.py`
 
 ### Problem
 
-Fully-qualified Java references like `java.util.Arrays.fill(arr, val)` are
+Fully-qualified Java references like `java.util.Arrays.fill(arr, val)` were
 lowered as `LOAD_VAR "java"` → `LOAD_FIELD "util"` → `LOAD_FIELD "Arrays"`
 → `CALL_METHOD "fill"`. Since `java` isn't a declared variable, each step
-produces a cascading `SymbolicValue`.
+produced a cascading `SymbolicValue`.
 
 ### Solution: Namespace-Aware `lower_field_access`
 
-`lower_field_access` gains a namespace resolution pre-check via an
-injectable `NamespaceResolver` strategy on `TreeSitterEmitContext`:
+`lower_field_access` has a namespace resolution pre-check via an
+injectable `NamespaceResolver` strategy on `TreeSitterEmitContext`.
+The `NamespaceResolver` base class (null object) is defined in
+`interpreter/namespace_resolver.py` and pushed to the `Frontend` ABC
+so all 16 frontends accept it. `JavaNamespaceResolver` is the only
+active subclass.
 
 1. **`_collect_field_access_chain(ctx, node)`** walks nested `field_access`
    nodes to collect `["java", "util", "Arrays"]`. Returns `NO_CHAIN` if
@@ -330,7 +336,7 @@ injectable `NamespaceResolver` strategy on `TreeSitterEmitContext`:
      rejects code where a field shadows a package root (`javac` error:
      "cannot find symbol"), so compiled code won't have this collision.
 
-3. **Tree resolution:** Walk the namespace tree. If a type is found
+3. **Tree resolution:** Walk the `NamespaceTree` (trie). If a type is found
    (e.g. `Arrays` at `java.util.Arrays`), emit `LoadVar("Arrays")`.
    The stub module's `DeclVar("Arrays", ...)` already ran via linker
    topo ordering, so the variable holds a ClassRef.
@@ -341,25 +347,28 @@ injectable `NamespaceResolver` strategy on `TreeSitterEmitContext`:
 
 5. **Fallback:** If the chain doesn't match the tree, fall through to
    existing recursive `lower_field_access` behaviour (cascading symbolics
-   — same as today).
+   — same as before).
+
+### Module Structure
+
+- **`interpreter/namespace_resolver.py`** — Lightweight base class and sentinels (`NO_RESOLUTION`, `NO_CHAIN`). No heavy dependencies — breaks the circular import between `frontend.py` and `namespace.py`.
+- **`interpreter/namespace.py`** — `NamespaceType`, `NamespaceNode`, `NamespaceTree`. Re-exports from `namespace_resolver.py`. Uses `NO_MODULE_UNIT` and `NO_CLASS_REF` sentinels (null object pattern, no `None`).
+- **`interpreter/frontends/java/namespace.py`** — `java_pre_scan()`, `build_java_namespace_tree()`, `JavaNamespaceResolver`, `_collect_field_access_chain()`, `_lower_remaining_chain()`.
 
 ### Compilation Flow (multi-file only)
 
-Namespace resolution requires a pre-scan + compile flow in `compile_directory()`:
+Namespace resolution uses a pre-scan + compile flow in `compile_directory()`:
 
-1. **Pre-scan all files** — Java-frontend-specific. Extract
+1. **Pre-scan all files** — Java-frontend-specific. `java_pre_scan()` extracts
    `(package, class_names, imports)` per file via fast tree-sitter walk
    (top-level nodes only: `package_declaration`, `class_declaration`,
-   `interface_declaration`, `enum_declaration`). No expression lowering.
+   `interface_declaration`, `enum_declaration`, `record_declaration`). No expression lowering.
 2. **Build namespace tree** from stub registry (hand-written static
    ModuleUnits with real ClassRefs) + pre-scanned project classes
-   (short_name only, ClassRef = NO_CLASS_REF initially).
+   (short_name only, ClassRef = `NO_CLASS_REF` initially). Project classes
+   override stubs at the same path.
 3. **Full compile** with namespace tree available in context via
-   `JavaNamespaceResolver`. Frontend uses `short_name` for `LoadVar`.
-4. **Patch tree** — fill in real ClassRefs for project classes from
-   compiled ModuleUnits' `class_symbol_table`.
-5. **Link** project modules + ALL stub modules unconditionally via
-   existing `link_modules()`. Stubs run first (no deps) so their
-   `DeclVar` makes type names available as variables.
+   `JavaNamespaceResolver` passed to `compile_module()` → `frontend.lower()`.
+4. **Link** project modules + stub modules via existing `link_modules()`.
 
 Single-file mode does not perform namespace resolution (existing behaviour).

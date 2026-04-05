@@ -403,6 +403,7 @@ Entry file (main.py)
     │ extract_imports()  — tree-sitter or regex (COBOL)
     ▼
 Dependency graph (BFS + topological sort)
+    │ [Java] pre-scan → NamespaceTree → JavaNamespaceResolver
     │ compile_module()  — existing lower() pipeline per file
     ▼
 list[ModuleUnit]
@@ -419,6 +420,7 @@ LinkedProgram
 - **Linking** strips per-module entry labels, namespaces all IR labels and registers, drops resolved import stubs, and concatenates everything — dependencies first, entry module last — producing a single IR stream indistinguishable from single-file compilation
 - **System imports** (stdlib, npm packages, maven artifacts) are automatically skipped — only local project files are compiled
 - **Cyclic imports** are detected and reported with the full cycle path
+- **Namespace resolution** (Java) — fully-qualified references like `java.util.Arrays.fill(arr, 0)` are resolved at compile time via a `NamespaceTree` that maps package paths to types. The pre-scan phase extracts package + class names from all source files, builds a tree from project classes + stdlib stubs, and an injectable `JavaNamespaceResolver` intercepts `lower_field_access` to emit `LoadVar(short_name)` instead of cascading `LOAD_VAR "java"` → `LOAD_FIELD "util"` → `LOAD_FIELD "Arrays"` chains. This resolves to the same `ClassRef` dispatch path used by unqualified references
 
 ## Supported languages
 
@@ -647,7 +649,7 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 - **Language frontends** — all 15 tree-sitter frontends, LLM frontend, chunked LLM frontend
 - **CFG and dataflow** — CFG building, reaching definitions, def-use chains, dependency graphs
 - **Cross-language semantics** — closures (mutation persistence, accumulator semantics, nested-function and lambda forms), classes with method dispatch and overload resolution (12 languages), field access, exception handling, destructuring, variable scoping
-- **Multi-file projects** — import extraction (all 15 languages + COBOL), import resolution, topological sort, cycle detection, module compilation, linking (label namespacing, register rebasing, import stub dropping), multi-file VM execution for every language, API and MCP integration (179 tests)
+- **Multi-file projects** — import extraction (all 15 languages + COBOL), import resolution, topological sort, cycle detection, module compilation, linking (label namespacing, register rebasing, import stub dropping), namespace resolution (Java qualified references via `NamespaceTree`), multi-file VM execution for every language, API and MCP integration
 - **Frontend type extraction** — 13 statically-typed frontends verified to populate `TypeEnvironmentBuilder` with register types, variable types, function return types, parameter types, and this/self class typing from source-level annotations
 - **Static type inference** — type propagation through 15 opcode chains, builtin return types, RETURN backfill, UNOP refinement, class method/field tracking, region tagging, CALL_UNKNOWN resolution, array element tracking, function signatures across 13 languages; comprehensive cross-language integration tests covering BINOP (int+int, int+float, comparison→Bool), UNOP (not/!→Bool, Lua #→Int), return backfill, typed param seeding, field tracking, CALL_METHOD return types, and NEW_OBJECT typing across all 15 languages
 - **VM execution** — deterministic execution, write-time type coercion, factory routing
