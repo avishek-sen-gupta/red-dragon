@@ -105,3 +105,5 @@ fileignoreconfig:
   checksum: f4b3cce12ad216e8c186ab7105555d836500457d38c4e51504432ade47f33749
 - filename: README.md
   checksum: 8321514e8d846db9296ef8782e3f2bc3490384e58cf51af4008ed553255d1bdd
+- filename: docs/superpowers/plans/2026-04-05-namespace-resolution.md
+  checksum: 81b587d795b14a57513319f5abaf175ccb1f0bc65d167de7c517d58f535a5aac
