@@ -47,13 +47,14 @@ class CFGPanel(Static):
             marker = "►" if is_current else " "
 
             # Top border
-            width = max(len(label) + 4, 20)
+            label_str = str(label)
+            width = max(len(label_str) + 4, 20)
             text.append(f"  {marker} ", style=box_style)
             text.append("┌" + "─" * width + "┐\n", style=box_style)
 
             # Block label
             text.append("    ", style=box_style)
-            padded = f" {label} ".ljust(width)
+            padded = f" {label_str} ".ljust(width)
             text.append("│", style=box_style)
             text.append(padded, style="bold white" if is_current else "cyan bold")
             text.append("│\n", style=box_style)
