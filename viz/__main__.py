@@ -12,6 +12,9 @@ Lowering trace:
 Coverage matrix:
   poetry run python -m viz coverage
   poetry run python -m viz coverage -l python,javascript,rust
+
+Multi-file project:
+  poetry run python -m viz project /path/to/dir -l java -s 500
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ def main() -> None:
         "compare": _main_compare,
         "lower": _main_lower,
         "coverage": _main_coverage,
+        "project": _main_project,
     }
     handler = dispatch.get(subcommand, _main_single)
     handler()
@@ -138,6 +142,36 @@ def _main_coverage() -> None:
     languages = [l.strip() for l in args.languages.split(",") if l.strip()] or None
     coverages = build_coverage(languages)
     app = CoverageApp(coverages)
+    app.run()
+
+
+def _main_project() -> None:
+    parser = argparse.ArgumentParser(
+        description="RedDragon Project Visualizer — multi-file TUI"
+    )
+    parser.add_argument("project", help="project subcommand")
+    parser.add_argument("directory", help="Path to project root directory")
+    parser.add_argument(
+        "-l", "--language", required=True, help="Source language (required)"
+    )
+    parser.add_argument(
+        "-s",
+        "--max-steps",
+        type=int,
+        default=300,
+        help="Maximum execution steps (default: 300)",
+    )
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.WARNING)
+
+    from pathlib import Path
+
+    from viz.project_app import ProjectApp
+    from viz.project_pipeline import run_project_pipeline
+
+    directory = Path(args.directory).resolve()
+    result = run_project_pipeline(directory, language=args.language)
+    app = ProjectApp(result, project_root=directory, max_steps=args.max_steps)
     app.run()
 
 
