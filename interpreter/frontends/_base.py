@@ -20,7 +20,7 @@ from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
-from interpreter.namespace import NamespaceResolver
+from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
