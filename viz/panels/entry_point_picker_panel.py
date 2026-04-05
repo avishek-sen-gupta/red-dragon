@@ -38,7 +38,12 @@ def group_entry_points(
 
 
 class EntryPointPickerPanel(OptionList):
-    """Scrollable list of entry points grouped by module."""
+    """Scrollable list of entry points grouped by module.
+
+    Uses OptionList's built-in OptionSelected message — the screen handles
+    the event via on_option_list_option_selected and maps option index to
+    FuncRef using option_refs.
+    """
 
     def __init__(
         self,
@@ -51,11 +56,11 @@ class EntryPointPickerPanel(OptionList):
         self._topo_order = topo_order
         self._func_symbol_table = func_symbol_table
         self._project_root = project_root
-        self._option_refs: dict[int, FuncRef | None] = {}
+        self.option_refs: dict[int, FuncRef | None] = {}
 
     def on_mount(self) -> None:
         self.add_option(Option("[t] Top-level execution"))
-        self._option_refs[0] = None
+        self.option_refs[0] = None
         # Track actual OptionList index (separators and disabled items count)
         actual_idx = 1
 
@@ -76,10 +81,5 @@ class EntryPointPickerPanel(OptionList):
             else:
                 for ref in funcs:
                     self.add_option(Option(f"    {ref.name}()"))
-                    self._option_refs[actual_idx] = ref
+                    self.option_refs[actual_idx] = ref
                     actual_idx += 1
-
-    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        idx = event.option_index
-        if idx in self._option_refs:
-            self.post_message(EntryPointSelected(func_ref=self._option_refs[idx]))

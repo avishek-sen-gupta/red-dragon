@@ -1,19 +1,17 @@
 """Project overview screen — import graph + entry point picker."""
 
 from __future__ import annotations
+
 from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Static
+from textual.widgets import Header, Footer, OptionList, Static
 
 from interpreter.project.entry_point import EntryPoint
 from viz.panels.import_graph_panel import ImportGraphPanel
-from viz.panels.entry_point_picker_panel import (
-    EntryPointPickerPanel,
-    EntryPointSelected,
-)
+from viz.panels.entry_point_picker_panel import EntryPointPickerPanel
 from viz.project_pipeline import ProjectPipelineResult
 
 
@@ -74,11 +72,16 @@ class ProjectOverviewScreen(Screen):
 
         yield Footer()
 
-    def on_entry_point_selected(self, message: EntryPointSelected) -> None:
-        """Handle entry point selection — notify the app to start execution."""
-        if message.func_ref is None:
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Handle entry point selection from the picker."""
+        picker = self.query_one("#entry-picker-panel", EntryPointPickerPanel)
+        idx = event.option_index
+        if idx not in picker.option_refs:
+            return
+        func_ref = picker.option_refs[idx]
+        if func_ref is None:
             entry_point = None
         else:
-            name = message.func_ref.name
+            name = func_ref.name
             entry_point = EntryPoint.function(lambda f, n=name: f.name == n)
         self.app.execute_entry_point(entry_point)
