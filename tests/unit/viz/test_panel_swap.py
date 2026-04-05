@@ -1,4 +1,5 @@
 """Tests for source/AST panel content swapping."""
+
 from viz.panels.ast_panel import ASTPanel
 from viz.panels.source_panel import SourcePanel
 from viz.pipeline import ASTNode
