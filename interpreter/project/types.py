@@ -144,6 +144,16 @@ class ModuleUnit:
     imports: tuple[ImportRef, ...]
 
 
+NO_MODULE_UNIT = ModuleUnit(
+    path=Path("<no-module>"),
+    language=Language.PYTHON,  # arbitrary — never inspected
+    ir=(),
+    exports=ExportTable(),
+    imports=(),
+)
+"""Null-object sentinel for absent ModuleUnit references."""
+
+
 # ── LinkedProgram ────────────────────────────────────────────────
 
 
