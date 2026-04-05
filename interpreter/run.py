@@ -775,6 +775,106 @@ def run_linked(
     return vm
 
 
+def run_linked_traced(
+    linked: LinkedProgram,
+    entry_point: EntryPoint,
+    max_steps: int = 100,
+    verbose: bool = False,
+    backend: str = LLMProvider.CLAUDE,
+    unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
+) -> tuple[VMState, ExecutionTrace]:
+    """Execute a LinkedProgram and return a trace of execution steps.
+
+    Mirrors run_linked() but uses execute_cfg_traced() instead of execute_cfg()
+    and returns both the final VMState and a complete ExecutionTrace.
+
+    For function entry points, performs two-phase execution (preamble + dispatch)
+    and concatenates the traces.
+
+    Args:
+        linked: Pre-compiled program (single-module or multi-module).
+        entry_point: How to enter — EntryPoint.top_level() or EntryPoint.function(pred).
+        max_steps: Maximum interpretation steps.
+        verbose: Print IR, CFG, and step-by-step info.
+        backend: LLM backend for interpreter fallback.
+        unresolved_call_strategy: Resolution strategy for unknown calls.
+
+    Returns:
+        Tuple of (final VMState, ExecutionTrace with per-step snapshots).
+    """
+    strategies = _build_strategies_from_linked(linked)
+
+    vm_config = VMConfig(
+        backend=backend,
+        max_steps=max_steps,
+        verbose=verbose,
+        source_language=linked.language,
+        unresolved_call_strategy=unresolved_call_strategy,
+    )
+
+    if entry_point.is_top_level:
+        vm, trace = execute_cfg_traced(
+            linked.merged_cfg,
+            linked.merged_cfg.entry,
+            linked.merged_registry,
+            vm_config,
+            strategies,
+        )
+    else:
+        # Phase 1: preamble
+        module_entry = linked.merged_cfg.entry
+        vm, preamble_trace = execute_cfg_traced(
+            linked.merged_cfg,
+            module_entry,
+            linked.merged_registry,
+            vm_config,
+            strategies,
+        )
+
+        # Resolve entry point function via predicate
+        func_ref = entry_point.resolve(list(linked.func_symbol_table.values()))
+        func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
+
+        # Phase 2: dispatch into target function
+        remaining = max_steps - preamble_trace.stats.steps
+        phase2_config = replace(vm_config, max_steps=max(remaining, 0))
+        vm, dispatch_trace = execute_cfg_traced(
+            linked.merged_cfg,
+            func_label,
+            linked.merged_registry,
+            phase2_config,
+            strategies,
+            vm=vm,
+        )
+
+        # Concatenate traces: renumber dispatch steps with offset, combine stats
+        preamble_step_count = len(preamble_trace.steps)
+        renumbered_dispatch_steps = [
+            replace(step, step_index=step.step_index + preamble_step_count)
+            for step in dispatch_trace.steps
+        ]
+
+        # Combine stats
+        combined_stats = ExecutionStats(
+            steps=preamble_trace.stats.steps + dispatch_trace.stats.steps,
+            llm_calls=preamble_trace.stats.llm_calls + dispatch_trace.stats.llm_calls,
+            final_heap_objects=dispatch_trace.stats.final_heap_objects,
+            final_symbolic_count=dispatch_trace.stats.final_symbolic_count,
+            closures_captured=preamble_trace.stats.closures_captured
+            + dispatch_trace.stats.closures_captured,
+        )
+
+        # Build concatenated trace with preamble's initial state
+        trace = ExecutionTrace(
+            steps=preamble_trace.steps + renumbered_dispatch_steps,
+            stats=combined_stats,
+            initial_state=preamble_trace.initial_state,
+        )
+
+    vm.data_layout = linked.data_layout
+    return vm, trace
+
+
 def run(
     source: str,
     language: str | Language = Language.PYTHON,
