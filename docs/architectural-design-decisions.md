@@ -2660,3 +2660,18 @@ The tree is populated from two sources:
 Imports are NOT a tree population source — they only appear in source code. Types without stubs are not registered in the tree and fall through to existing behaviour.
 
 **Consequences:** Clean separation of concerns — the symbol table handles unqualified dispatch, the namespace tree handles qualified paths. No namespace information leaks into symbol table keys. Name collisions between project classes and imports are handled by the same priority rules as javac. The resolution logic is swappable: `NamespaceTree.resolve()` can be overridden per language without affecting the symbol table.
+
+---
+
+## 2026-04-05 — Multi-file project TUI with two-screen architecture
+
+**Context:** The TUI visualizer (`viz/`) only supported single-file execution. Multi-file projects compiled via `compile_directory()` had no interactive debugging experience — users had to rely on programmatic `run_linked()` calls and print output.
+
+**Decision:** Extend the TUI with a `project` subcommand that presents a two-phase Textual `App`. Phase 1 (`ProjectOverviewScreen`) shows a box-drawing import DAG and a scrollable entry-point picker grouped by module. Phase 2 (`ExecutionScreen`) reuses all existing panels with module-aware source/AST switching: as execution crosses module boundaries (detected via binary search on `module_ir_ranges`), the Source and AST panels swap content automatically. Key architectural choices:
+
+- **`ProjectPipelineResult`** (`viz/project_pipeline.py`) — frozen dataclass that pre-loads all module sources and ASTs at pipeline time (no file I/O during TUI interaction). Trace is `None` until entry point selection, then populated via `execute_project()`.
+- **`run_linked_traced()`** (`interpreter/run.py`) — mirrors `run_linked()` but uses `execute_cfg_traced()` to capture every step. For function entry points, concatenates preamble + dispatch traces with renumbered step indices.
+- **Module-to-instruction mapping** — `module_ir_ranges` (list of `(start, end, Path)` tuples) built post-link by scanning `merged_ir` for LABEL opcode transitions matching `module_prefix()` values. `instruction_to_index` maps `id(instruction)` → merged_ir index for O(1) lookup from `TraceStep`.
+- **Screen management** — `ProjectApp` uses Textual's `push_screen()`/`pop_screen()` for phase transitions. `p` key returns from execution to overview.
+
+**Consequences:** Multi-file projects are now interactively debuggable with the same panel experience as single-file mode. No changes to existing single-file TUI, `LinkedProgram`, linker, or `execute_cfg_traced`. The `run_linked_traced` function is independently useful for any future traced multi-file execution needs. 13,324 tests passing.
