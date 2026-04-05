@@ -160,7 +160,7 @@
   <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
   <h2 style="color: #90a4ae;">Understand code across 16 languages &mdash; even when it's incomplete</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
-  <p class="small dim" style="margin-top: 40px;">~85K lines of code &middot; 16 languages &middot; 13,100+ tests</p>
+  <p class="small dim" style="margin-top: 40px;">~85K lines of code &middot; 16 languages &middot; 13,300+ tests</p>
 </section>
 
 <!-- Slide 2: The Problem -->
@@ -214,6 +214,8 @@
     <div class="arch-box fragment">Source Code<br><span class="small dim">any of 16 languages</span></div>
     <span class="arch-arrow fragment">&rarr;</span>
     <div class="arch-box green fragment">Parse &amp; Translate<br><span class="small dim">universal format</span></div>
+    <span class="arch-arrow fragment">&rarr;</span>
+    <div class="arch-box green fragment">Link<br><span class="small dim">multi-file</span></div>
     <span class="arch-arrow fragment">&rarr;</span>
     <div class="arch-box green fragment">Analyse<br><span class="small dim">data flow &amp; deps</span></div>
     <span class="arch-arrow fragment">&rarr;</span>
@@ -269,6 +271,10 @@
   <div class="scenario-card fragment">
     <strong>Incomplete Code Execution</strong><br>
     <span class="dim">Run code that has missing APIs or unknown imports &mdash; RedDragon fills gaps with symbolic placeholders and keeps going</span>
+  </div>
+  <div class="scenario-card fragment">
+    <strong>Multi-File Project Analysis</strong><br>
+    <span class="dim">Automatically discover imports, link modules in dependency order, and resolve namespaces &mdash; across all 16 languages</span>
   </div>
   <div class="scenario-card fragment">
     <strong>Legacy Code Reverse Engineering</strong><br>
@@ -359,7 +365,7 @@
       <div class="label">lines of code</div>
     </div>
     <div class="stat-card">
-      <div class="number">13,100+</div>
+      <div class="number">13,300+</div>
       <div class="label">automated tests</div>
     </div>
     <div class="stat-card">
@@ -384,6 +390,8 @@
     <div class="arch-box">Source</div>
     <span class="arch-arrow">&rarr;</span>
     <div class="arch-box green">Parse</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">Link</div>
     <span class="arch-arrow">&rarr;</span>
     <div class="arch-box green">Analyse</div>
     <span class="arch-arrow">&rarr;</span>

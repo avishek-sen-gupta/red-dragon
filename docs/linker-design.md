@@ -29,8 +29,13 @@ Phase 1: Import Discovery (BFS)
 Dependency graph + topological sort
     │
     ▼
+Phase 1.5: Namespace Pre-Scan (Java only)
+    │  java_pre_scan() per file → (package, class_names, imports)
+    │  build_java_namespace_tree(scan_results, stdlib_registry)
+    │  → JavaNamespaceResolver injected into Phase 2
+    ▼
 Phase 2: Per-Module Compilation
-    │  frontend.lower() → IR (unchanged single-file pipeline)
+    │  frontend.lower(source, namespace_resolver) → IR
     │  build_export_table() → ExportTable
     ▼
 list[ModuleUnit]
@@ -139,12 +144,22 @@ Each file is compiled independently using the existing single-file pipeline:
 
 ```python
 frontend = get_frontend(language)
-ir = frontend.lower(source)
+ir = frontend.lower(source, namespace_resolver=namespace_resolver)
 exports = build_export_table(ir, func_symbol_table, class_symbol_table)
 → ModuleUnit(path, language, ir, exports, imports)
 ```
 
 No CFG or registry is built per module. Only the raw IR (as an immutable tuple) and an export table.
+
+### Namespace Pre-Scan (Java)
+
+For Java, `compile_directory()` runs a pre-scan phase before per-module compilation:
+
+1. **`java_pre_scan(source)`** — fast tree-sitter walk extracting package name, top-level type names (class, interface, enum, record), and imports. No expression lowering.
+2. **`build_java_namespace_tree(scan_results, stdlib_registry)`** — builds a `NamespaceTree` (trie). Stdlib stubs are registered first, then project classes override at the same path. Types without a package are not registered.
+3. A `JavaNamespaceResolver` wrapping the tree is passed to each `compile_module()` call. During lowering, `lower_field_access` calls `resolver.try_resolve_field_access()` which collapses `java.util.Arrays` into `LoadVar("Arrays")` instead of cascading `LOAD_VAR "java"` → `LOAD_FIELD "util"` → `LOAD_FIELD "Arrays"`.
+
+Non-Java languages receive the null-object `NamespaceResolver` base class (no-op). Code: `interpreter/frontends/java/namespace.py`, `interpreter/namespace.py`.
 
 ### ExportTable
 
