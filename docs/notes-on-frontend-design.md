@@ -70,10 +70,14 @@ The abstract interface is a single method defined in `interpreter/frontend.py`:
 ```python
 class Frontend(ABC):
     @abstractmethod
-    def lower(self, source: bytes) -> list[InstructionBase]: ...
+    def lower(
+        self,
+        source: bytes,
+        namespace_resolver: NamespaceResolver = _NULL_RESOLVER,
+    ) -> list[InstructionBase]: ...
 ```
 
-Returns a flat list of IR instructions, always starting with `LABEL "entry"`. Any frontend strategy — AST-based, LLM-based, or hybrid — plugs in identically.
+Returns a flat list of IR instructions, always starting with `LABEL "entry"`. Any frontend strategy — AST-based, LLM-based, or hybrid — plugs in identically. The optional `namespace_resolver` parameter (default: no-op `NamespaceResolver()`) allows the multi-file compiler to inject a language-specific resolver that intercepts qualified name references during lowering (e.g., `JavaNamespaceResolver` resolves `java.util.Arrays` to `LoadVar("Arrays")` instead of cascading `LOAD_FIELD` chains).
 
 ---
 
