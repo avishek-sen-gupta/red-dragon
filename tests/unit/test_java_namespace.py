@@ -63,6 +63,7 @@ from pathlib import Path
 
 from interpreter.frontends.java.namespace import build_java_namespace_tree
 from interpreter.namespace import NamespaceType
+from interpreter.project.types import NO_MODULE_UNIT
 from interpreter.refs.class_ref import NO_CLASS_REF, ClassRef
 from interpreter.class_name import ClassName
 from interpreter.ir import CodeLabel
@@ -128,7 +129,7 @@ class TestBuildJavaNamespaceTree:
         assert resolved is not None
         assert resolved.short_name == "Helper"
         assert resolved.class_ref is NO_CLASS_REF
-        assert resolved.module is None
+        assert resolved.module is NO_MODULE_UNIT
 
     def test_project_class_overrides_stub(self):
         stub = _make_stub_module("Arrays", "class_Arrays_0")
@@ -146,7 +147,7 @@ class TestBuildJavaNamespaceTree:
 
         resolved, _, _ = tree.resolve(["java", "util", "Arrays"])
         assert resolved is not None
-        assert resolved.module is None  # project override, not stub
+        assert resolved.module is NO_MODULE_UNIT  # project override, not stub
 
     def test_no_package_class_not_registered(self):
         """Classes without a package are not registered in namespace tree."""
