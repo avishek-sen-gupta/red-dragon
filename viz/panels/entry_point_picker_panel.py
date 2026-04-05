@@ -1,7 +1,7 @@
 """Entry point picker panel — scrollable list of functions grouped by module."""
 
 from __future__ import annotations
-from dataclasses import dataclass
+
 from pathlib import Path
 
 from textual.message import Message
@@ -12,11 +12,12 @@ from interpreter.ir import CodeLabel
 from interpreter.refs.func_ref import FuncRef
 
 
-@dataclass(frozen=True)
 class EntryPointSelected(Message):
     """Posted when the user selects an entry point."""
 
-    func_ref: FuncRef | None  # None = top-level execution
+    def __init__(self, func_ref: FuncRef | None) -> None:
+        super().__init__()
+        self.func_ref = func_ref  # None = top-level execution
 
 
 def group_entry_points(
@@ -55,7 +56,8 @@ class EntryPointPickerPanel(OptionList):
     def on_mount(self) -> None:
         self.add_option(Option("[t] Top-level execution"))
         self._option_refs[0] = None
-        option_idx = 1
+        # Track actual OptionList index (separators and disabled items count)
+        actual_idx = 1
 
         grouped = group_entry_points(self._topo_order, self._func_symbol_table)
         for path, funcs in grouped:
@@ -65,14 +67,17 @@ class EntryPointPickerPanel(OptionList):
                 else path
             )
             self.add_option(None)  # separator
+            actual_idx += 1
             self.add_option(Option(f"  {rel}", disabled=True))
+            actual_idx += 1
             if not funcs:
                 self.add_option(Option("    (no functions)", disabled=True))
+                actual_idx += 1
             else:
                 for ref in funcs:
                     self.add_option(Option(f"    {ref.name}()"))
-                    self._option_refs[option_idx] = ref
-                    option_idx += 1
+                    self._option_refs[actual_idx] = ref
+                    actual_idx += 1
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         idx = event.option_index
