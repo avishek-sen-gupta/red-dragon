@@ -311,7 +311,7 @@
   <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
   <h2 style="color: #90a4ae;">Multi-language LLM-assisted symbolic execution and dataflow analysis</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
-  <p class="small dim" style="margin-top: 40px;">~85K LOC &middot; 33 opcodes &middot; 16 frontends &middot; 13,100+ tests &middot; 4 LLM providers</p>
+  <p class="small dim" style="margin-top: 40px;">~85K LOC &middot; 33 opcodes &middot; 16 frontends &middot; 13,300+ tests &middot; 4 LLM providers</p>
   <aside class="notes">
     This is an end-to-end technical deep dive into RedDragon's architecture.
     The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
@@ -378,13 +378,15 @@
     <span class="arch-arrow fragment" data-fragment-index="4">&rarr;</span>
     <div class="arch-box green fragment" data-fragment-index="4">IR<br><span class="small dim">33 opcodes</span></div>
     <span class="arch-arrow fragment" data-fragment-index="5">&rarr;</span>
-    <div class="arch-box fragment" data-fragment-index="5">CFG<br><span class="small dim">dataflow</span></div>
+    <div class="arch-box fragment" data-fragment-index="5">Link<br><span class="small dim">multi-file</span></div>
     <span class="arch-arrow fragment" data-fragment-index="6">&rarr;</span>
-    <div class="arch-box green fragment" data-fragment-index="6">VM<br><span class="small dim">LocalExecutor</span></div>
+    <div class="arch-box fragment" data-fragment-index="6">CFG<br><span class="small dim">dataflow</span></div>
     <span class="arch-arrow fragment" data-fragment-index="7">&rarr;</span>
-    <div class="arch-box orange fragment" data-fragment-index="7">(LLM)<br><span class="small dim">fallback</span></div>
+    <div class="arch-box green fragment" data-fragment-index="7">VM<br><span class="small dim">LocalExecutor</span></div>
+    <span class="arch-arrow fragment" data-fragment-index="8">&rarr;</span>
+    <div class="arch-box orange fragment" data-fragment-index="8">(LLM)<br><span class="small dim">fallback</span></div>
   </div>
-  <p class="fragment dim small" data-fragment-index="8" style="margin-top: 30px;">
+  <p class="fragment dim small" data-fragment-index="9" style="margin-top: 30px;">
     Every stage is deterministic except the final LLM fallback.
     The VM executes as far as it can before asking an LLM for help.
   </p>
@@ -1602,6 +1604,92 @@ p = Point(3, 4)
 </section>
 
 <!-- ============================================================ -->
+<!-- ACT 5b: MULTI-FILE LINKING & NAMESPACE RESOLUTION            -->
+<!-- ============================================================ -->
+
+<!-- Slide 23b: Multi-File Pipeline -->
+<section>
+  <h2>Multi-File Linking</h2>
+  <p>Real projects span many files. RedDragon compiles each independently, then <strong class="accent">links</strong> them:</p>
+  <div class="arch-flow" style="margin: 25px 0;">
+    <div class="arch-box fragment">Discover<br><span class="small dim">BFS imports</span></div>
+    <span class="arch-arrow fragment">&rarr;</span>
+    <div class="arch-box fragment">Pre-Scan<br><span class="small dim">namespaces</span></div>
+    <span class="arch-arrow fragment">&rarr;</span>
+    <div class="arch-box green fragment">Compile<br><span class="small dim">per-module IR</span></div>
+    <span class="arch-arrow fragment">&rarr;</span>
+    <div class="arch-box green fragment">Link<br><span class="small dim">merge &amp; rebase</span></div>
+  </div>
+  <div class="two-col fragment" style="margin-top: 15px; font-size: 0.85em;">
+    <div>
+      <h3>Import Discovery</h3>
+      <ul style="font-size: 0.8em;">
+        <li><code>extract_imports()</code> per file across all 16 languages</li>
+        <li>BFS &rarr; dependency graph &rarr; topological sort</li>
+      </ul>
+      <h3 style="margin-top: 12px;">Namespace Pre-Scan <span class="small dim">(Java)</span></h3>
+      <ul style="font-size: 0.8em;">
+        <li>Fast tree-sitter walk: package + class names</li>
+        <li>Builds <code>NamespaceTree</code> for qualified name resolution</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Per-Module Compilation</h3>
+      <ul style="font-size: 0.8em;">
+        <li><code>frontend.lower()</code> &rarr; IR + <code>ExportTable</code></li>
+        <li>Namespace resolver injected for Java</li>
+      </ul>
+      <h3 style="margin-top: 12px;">Linking</h3>
+      <ul style="font-size: 0.8em;">
+        <li>Namespace labels, rebase registers, drop import stubs</li>
+        <li>Concatenate in dependency order</li>
+      </ul>
+    </div>
+  </div>
+  <p class="fragment dim small" style="margin-top: 12px;">Output: single IR stream identical to single-file compilation. VM runs unmodified.</p>
+  <aside class="notes">
+    All 16 languages support multi-file. Each file is compiled independently,
+    then the linker produces a single merged IR stream. The VM and analysis
+    pipeline don't know or care that the IR came from multiple files.
+  </aside>
+</section>
+
+<!-- Slide 23c: Namespace Resolution -->
+<section>
+  <h2>Java Namespace Resolution</h2>
+  <p>Problem: <code class="accent4">java.util.Arrays.fill(arr, val)</code> becomes cascading symbolics</p>
+  <div class="two-col" style="margin-top: 20px;">
+    <div>
+      <h3 style="color: var(--accent4);">Before</h3>
+      <pre><code class="nohighlight">LOAD_VAR   "java"       &larr; unknown!
+LOAD_FIELD "util"       &larr; symbolic
+LOAD_FIELD "Arrays"     &larr; symbolic
+CALL_METHOD "fill"      &larr; symbolic</code></pre>
+    </div>
+    <div>
+      <h3 style="color: var(--accent2);">After</h3>
+      <pre><code class="nohighlight">LOAD_VAR   "Arrays"     &larr; resolved!
+CALL_METHOD "fill"      &larr; concrete</code></pre>
+    </div>
+  </div>
+  <div class="fragment" style="margin-top: 25px;">
+    <p><strong class="accent">How:</strong> Pre-scan builds a <code>NamespaceTree</code> (trie) mapping dotted paths to types.
+    During lowering, <code>lower_field_access</code> checks the tree <em>before</em> emitting IR.
+    If a qualified name resolves, emit <code>LoadVar(short_name)</code> directly.</p>
+  </div>
+  <p class="fragment dim small" style="margin-top: 15px;">
+    Injected via null-object <code>NamespaceResolver</code> on <code>Frontend.lower()</code> &mdash; non-Java languages get the no-op base class.
+  </p>
+  <aside class="notes">
+    This eliminates cascading SymbolicValues from Java qualified references.
+    The NamespaceTree is a trie built from pre-scanned project files plus
+    stdlib stubs. The resolver is injected into the frontend via the
+    NamespaceResolver strategy — all 16 frontends accept it, but only Java's
+    subclass does actual resolution.
+  </aside>
+</section>
+
+<!-- ============================================================ -->
 <!-- ACT 6: DESIGN & ENGINEERING                                  -->
 <!-- ============================================================ -->
 
@@ -1758,7 +1846,7 @@ vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
       <div class="label">language frontends</div>
     </div>
     <div class="stat-card">
-      <div class="number">13,100+</div>
+      <div class="number">13,300+</div>
       <div class="label">tests</div>
     </div>
     <div class="stat-card">
@@ -1793,6 +1881,8 @@ vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
     <div class="arch-box green">Lower</div>
     <span class="arch-arrow">&rarr;</span>
     <div class="arch-box green">IR</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box">Link</div>
     <span class="arch-arrow">&rarr;</span>
     <div class="arch-box">CFG</div>
     <span class="arch-arrow">&rarr;</span>
