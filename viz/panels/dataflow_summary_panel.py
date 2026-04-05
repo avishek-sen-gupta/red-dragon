@@ -86,7 +86,7 @@ class DataflowSummaryPanel(Tree):
     def _populate_tree(self) -> None:
         result = self._result
         call_graph = result.call_graph
-        sorted_functions = sorted(call_graph.functions, key=lambda f: f.label)
+        sorted_functions = sorted(call_graph.functions, key=lambda f: str(f.label))
 
         for func in sorted_functions:
             params_str = ", ".join(func.params) if func.params else "(none)"
