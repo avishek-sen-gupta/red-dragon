@@ -294,7 +294,7 @@ class DataflowGraphPanel(Tree):
 
         if not top_calls:
             # Fallback: show per-function chains for all functions
-            for func in sorted(result.call_graph.functions, key=lambda f: f.label):
+            for func in sorted(result.call_graph.functions, key=lambda f: str(f.label)):
                 func_node = self.root.add(f"{func.label}({', '.join(func.params)})")
                 chain_nodes = build_call_chain(
                     func, result.call_graph, result.summaries, cfg, set()
