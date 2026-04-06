@@ -122,8 +122,8 @@ fileignoreconfig:
 - filename: scripts/symbolic_trace_harness.py
   checksum: b76d6e47c2f7662ea765486b09bbb3776653a97f8cafa2c4061ffd3084b07a19
 - filename: .beads/backup/backup_state.json
-  checksum: c58e67a9ac3882585cefdb8fd0d49f9d699957dc6e33c1ed937e2915e7907173
+  checksum: a75654e804f5c6c3e1c5ebe93317b1285969a7627224b8621970cddc22a903cb
 - filename: .beads/backup/issues.jsonl
-  checksum: f2281a3ef360a40da0abd5929cec7de9891e4b5cf9970f2fc42bcc2e92e410e0
+  checksum: 4410d45083a787964380c7c1c61cf22ce8272a214ec12357ef6ca40469a9fdb4
 - filename: interpreter/project/compiler.py
   checksum: 138c6eac26eec05314c8b7e30c8c9f2b5c8e4057d27f5250622140f806d62384
