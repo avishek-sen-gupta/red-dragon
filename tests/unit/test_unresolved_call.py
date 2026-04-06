@@ -13,6 +13,7 @@ from interpreter.vm.unresolved_call import (
     LLMPlausibleResolver,
     SymbolicResolver,
     UnresolvedCallResolver,
+    _symbolic_name,
 )
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue
@@ -73,6 +74,24 @@ class FailingLLMClient(LLMClient):
         self, system_prompt: str, user_message: str, max_tokens: int = 4096
     ) -> str:
         raise ConnectionError("LLM service unavailable")
+
+
+class TestSymbolicName:
+    def test_plain_symbolic_uses_name(self):
+        sym = SymbolicValue(name="sym_0")
+        assert _symbolic_name(sym) == "sym_0"
+
+    def test_symbolic_with_type_hint_uses_hint(self):
+        sym = SymbolicValue(name="sym_0", type_hint="String")
+        assert _symbolic_name(sym) == "String"
+
+    def test_non_symbolic_uses_repr(self):
+        assert _symbolic_name(42) == "42"
+        assert _symbolic_name("hello") == "'hello'"
+
+    def test_dict_symbolic_uses_name(self):
+        d = {"__symbolic__": True, "name": "sym_5"}
+        assert _symbolic_name(d) == "sym_5"
 
 
 class TestSymbolicResolver:
