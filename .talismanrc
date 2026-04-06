@@ -127,3 +127,7 @@ fileignoreconfig:
   checksum: 4410d45083a787964380c7c1c61cf22ce8272a214ec12357ef6ca40469a9fdb4
 - filename: interpreter/project/compiler.py
   checksum: 138c6eac26eec05314c8b7e30c8c9f2b5c8e4057d27f5250622140f806d62384
+- filename: .beads/backup/backup_state.json
+  checksum: 879555e7ae06bb33b84ea70f8b8a754e6c5e817aec7bca454acaceab5690715d
+- filename: .beads/backup/issues.jsonl
+  checksum: aeb19f4017a89bc43ae6d6641a7ce01babe868af1affb52e70b7e79fcd908f7b
