@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 def _symbolic_name(val: Any) -> str:
     """Get a human-readable name for a value, suitable for symbolic hints."""
     if isinstance(val, SymbolicValue):
-        return val.name
+        return val.type_hint if val.type_hint else val.name
     if isinstance(val, dict) and val.get("__symbolic__"):
         return val.get("name", "?")
     return repr(val)
