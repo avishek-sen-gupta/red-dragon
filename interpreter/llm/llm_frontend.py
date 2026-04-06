@@ -66,18 +66,22 @@ Value producers (result_reg is set):
 - NEW_ARRAY: operands=[type_name, size_reg]
 - BINOP: operands=[op, lhs_reg, rhs_reg]
 - UNOP: operands=[op, operand_reg]
-- CALL_FUNCTION: operands=[func_name, arg1, arg2, ...]. Use for ALL calls: named functions AND constructors
+- CALL_FUNCTION: operands=[func_name, arg1, arg2, ...]. Use for named function calls
 - CALL_METHOD: operands=[obj_reg, method_name, arg1, ...]
 - CALL_UNKNOWN: operands=[target_reg, arg1, ...]
+- CALL_CTOR: operands=[class_name, arg1, arg2, ...]. Use for constructor calls (new ClassName(...))
 
 Consumers / control flow (result_reg is null):
-- STORE_VAR: operands=[var_name, value_reg]
+- DECL_VAR: operands=[var_name, value_reg]. First binding of a variable (declaration + init)
+- STORE_VAR: operands=[var_name, value_reg]. Re-assignment to an already-declared variable
 - STORE_FIELD: operands=[obj_reg, field_name, value_reg]
 - STORE_INDEX: operands=[obj_reg, index_reg, value_reg]
 - BRANCH_IF: operands=[cond_reg], branch_targets=["true_label", "false_label"]
 - BRANCH: label=target_label
 - RETURN: operands=[value_reg]
 - THROW: operands=[value_reg]
+- TRY_PUSH: operands=[["catch_label"], "finally_label", "end_label"]. Push exception handler
+- TRY_POP: operands=[]. Pop exception handler after try block completes normally
 
 Special:
 - SYMBOLIC: operands=["param:name"]. Declares a function parameter
@@ -91,13 +95,13 @@ For `def foo(a, b): ...body... return expr`:
 
 1. BRANCH to end_foo_N (skip over body in linear flow)
 2. LABEL func_foo_M (function entry point)
-3. For EACH parameter: SYMBOLIC "param:name" → STORE_VAR name %reg
+3. For EACH parameter: SYMBOLIC "param:name" → DECL_VAR name %reg
 4. ...body instructions...
 5. CONST "None" → RETURN %reg (implicit return at end of function)
 6. LABEL end_foo_N
-7. CONST "<function:foo@func_foo_M>" → STORE_VAR foo %reg
+7. CONST "<function:foo@func_foo_M>" → DECL_VAR foo %reg
 
-The STORE_VAR after the end label registers the function by name. The value MUST be \
+The DECL_VAR after the end label registers the function by name. The value MUST be \
 "<function:NAME@FUNC_LABEL>" where NAME is the function name and FUNC_LABEL is the \
 label from step 2.
 
@@ -109,17 +113,17 @@ For `class Cls: def __init__(self, x): ...`:
 2. LABEL class_Cls_M (class entry point)
 3. ...nested function definitions for methods (each using the function pattern above)...
 4. LABEL end_class_Cls_N
-5. CONST "<class:Cls@class_Cls_M>" → STORE_VAR Cls %reg
+5. CONST "<class:Cls@class_Cls_M>" → DECL_VAR Cls %reg
 
 Methods inside a class use the EXACT same function definition pattern. The __init__ \
 method must be named exactly __init__.
 
 ### Constructor calls
 
-To call a constructor like `obj = Cls(arg1, arg2)`, use CALL_FUNCTION:
-  CALL_FUNCTION Cls %arg1 %arg2 → STORE_VAR obj %result
+To call a constructor like `obj = Cls(arg1, arg2)`, use CALL_CTOR:
+  CALL_CTOR Cls %arg1 %arg2 → DECL_VAR obj %result
 
-Do NOT use NEW_OBJECT + CALL_METHOD for constructors. Use CALL_FUNCTION with the class name.
+Do NOT use NEW_OBJECT + CALL_METHOD for constructors. Use CALL_CTOR with the class name.
 
 ### Method calls
 
@@ -139,6 +143,28 @@ To call a method like `obj.method(arg)`:
   BRANCH if_end_N
   LABEL if_end_N
 
+### Try/catch/finally
+
+  TRY_PUSH [["catch_label"], "finally_label", "end_try_label"]
+  ...try body...
+  TRY_POP
+  BRANCH end_try_label  (or finally_label if present)
+  LABEL catch_label
+  ...catch body...
+  BRANCH end_try_label  (or finally_label if present)
+  LABEL finally_label   (optional — omit if no finally)
+  ...finally body...
+  LABEL end_try_label
+
+TRY_PUSH operands: first is a list of catch labels, second is the finally label \
+(use null if no finally), third is the end label. TRY_POP marks the end of the try body.
+
+### DECL_VAR vs STORE_VAR
+
+Use DECL_VAR for the FIRST binding of a variable name (includes function params, \
+variable declarations, function/class registrations). Use STORE_VAR only when \
+RE-ASSIGNING to an already-declared variable.
+
 ## Full example: function with if/else
 
 Source:
@@ -156,7 +182,7 @@ IR:
   {"opcode":"BRANCH","result_reg":null,"operands":[],"label":"end_fib_1","source_location":null},
   {"opcode":"LABEL","result_reg":null,"operands":[],"label":"func_fib_0","source_location":null},
   {"opcode":"SYMBOLIC","result_reg":"%0","operands":["param:n"],"label":null,"source_location":null},
-  {"opcode":"STORE_VAR","result_reg":null,"operands":["n","%0"],"label":null,"source_location":null},
+  {"opcode":"DECL_VAR","result_reg":null,"operands":["n","%0"],"label":null,"source_location":null},
   {"opcode":"LOAD_VAR","result_reg":"%1","operands":["n"],"label":null,"source_location":null},
   {"opcode":"CONST","result_reg":"%2","operands":["1"],"label":null,"source_location":null},
   {"opcode":"BINOP","result_reg":"%3","operands":["<=","%1","%2"],"label":null,"source_location":null},
@@ -180,10 +206,10 @@ IR:
   {"opcode":"RETURN","result_reg":null,"operands":["%14"],"label":null,"source_location":null},
   {"opcode":"LABEL","result_reg":null,"operands":[],"label":"end_fib_1","source_location":null},
   {"opcode":"CONST","result_reg":"%15","operands":["<function:fib@func_fib_0>"],"label":null,"source_location":null},
-  {"opcode":"STORE_VAR","result_reg":null,"operands":["fib","%15"],"label":null,"source_location":null},
+  {"opcode":"DECL_VAR","result_reg":null,"operands":["fib","%15"],"label":null,"source_location":null},
   {"opcode":"CONST","result_reg":"%16","operands":["6"],"label":null,"source_location":null},
   {"opcode":"CALL_FUNCTION","result_reg":"%17","operands":["fib","%16"],"label":null,"source_location":null},
-  {"opcode":"STORE_VAR","result_reg":null,"operands":["result","%17"],"label":null,"source_location":null}
+  {"opcode":"DECL_VAR","result_reg":null,"operands":["result","%17"],"label":null,"source_location":null}
 ]
 
 ## Array initialization example
@@ -203,7 +229,7 @@ IR:
   {"opcode":"CONST","result_reg":"%5","operands":["8"],"label":null,"source_location":null},
   {"opcode":"CONST","result_reg":"%6","operands":["2"],"label":null,"source_location":null},
   {"opcode":"STORE_INDEX","result_reg":null,"operands":["%0","%6","%5"],"label":null,"source_location":null},
-  {"opcode":"STORE_VAR","result_reg":null,"operands":["arr","%0"],"label":null,"source_location":null}
+  {"opcode":"DECL_VAR","result_reg":null,"operands":["arr","%0"],"label":null,"source_location":null}
 ]
 
 Note: each element value AND each index gets its own CONST + register. STORE_INDEX takes [array_reg, index_reg, value_reg].
@@ -212,7 +238,7 @@ Note: each element value AND each index gets its own CONST + register. STORE_IND
 
 - The first instruction is always LABEL "entry"
 - Every expression is flattened into registers. No nested expressions
-- Every function parameter needs SYMBOLIC + STORE_VAR (both instructions)
+- Every function parameter needs SYMBOLIC + DECL_VAR (both instructions)
 - Functions end with an implicit CONST "None" + RETURN
 - String literals include quotes in the operand: ["\\\"hello\\\""]
 - Numeric literals are strings: ["42"], ["3.14"]
