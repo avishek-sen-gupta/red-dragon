@@ -450,7 +450,7 @@ def execute_cfg(
 
     stats = ExecutionStats(
         steps=step + 1,
-        llm_calls=llm_calls,
+        llm_calls=llm_calls + call_resolver.llm_call_count,
         final_heap_objects=vm.heap_count(),
         final_symbolic_count=vm.symbolic_counter,
         closures_captured=len(vm.closures),
@@ -616,7 +616,7 @@ def execute_cfg_traced(
 
     stats = ExecutionStats(
         steps=step + 1,
-        llm_calls=llm_calls,
+        llm_calls=llm_calls + call_resolver.llm_call_count,
         final_heap_objects=vm.heap_count(),
         final_symbolic_count=vm.symbolic_counter,
         closures_captured=len(vm.closures),
