@@ -135,6 +135,15 @@ class TestSymbolicResolver:
         resolver.resolve_call("g", [], inst, vm)
         assert vm.symbolic_counter == 2
 
+    def test_llm_call_count_is_zero(self):
+        resolver = SymbolicResolver()
+        assert resolver.llm_call_count == 0
+
+        vm = _make_vm()
+        inst = _make_call_inst()
+        resolver.resolve_call("f", [], inst, vm)
+        assert resolver.llm_call_count == 0
+
     def test_is_instance_of_abc(self):
         assert isinstance(SymbolicResolver(), UnresolvedCallResolver)
 
@@ -288,6 +297,36 @@ class TestLLMPlausibleResolver:
         response = json.dumps({"value": 1, "reasoning": "test"})
         resolver = LLMPlausibleResolver(llm_client=FakeLLMClient(response))
         assert isinstance(resolver, UnresolvedCallResolver)
+
+    def test_llm_call_count_increments_on_resolve_call(self):
+        response = json.dumps({"value": 42, "reasoning": "test"})
+        resolver = LLMPlausibleResolver(llm_client=FakeLLMClient(response))
+        assert resolver.llm_call_count == 0
+
+        vm = _make_vm()
+        inst = _make_call_inst()
+        resolver.resolve_call("func", [], inst, vm)
+        assert resolver.llm_call_count == 1
+
+        resolver.resolve_call("func2", [], inst, vm)
+        assert resolver.llm_call_count == 2
+
+    def test_llm_call_count_increments_on_resolve_method(self):
+        response = json.dumps({"value": "ok", "reasoning": "test"})
+        resolver = LLMPlausibleResolver(llm_client=FakeLLMClient(response))
+        vm = _make_vm()
+        inst = _make_method_inst()
+
+        resolver.resolve_method("obj", "method", [], inst, vm)
+        assert resolver.llm_call_count == 1
+
+    def test_llm_call_count_not_incremented_on_fallback(self):
+        resolver = LLMPlausibleResolver(llm_client=FailingLLMClient())
+        vm = _make_vm()
+        inst = _make_call_inst()
+
+        resolver.resolve_call("broken", [], inst, vm)
+        assert resolver.llm_call_count == 0
 
     def test_heap_state_included_in_prompt(self):
         calls: list[str] = []

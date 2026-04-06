@@ -41,6 +41,11 @@ def _symbolic_name(val: Any) -> str:
 class UnresolvedCallResolver(ABC):
     """Strategy for resolving calls to unknown functions/methods."""
 
+    @property
+    def llm_call_count(self) -> int:
+        """Number of LLM API calls made by this resolver."""
+        return 0
+
     @abstractmethod
     def resolve_call(
         self,
@@ -141,6 +146,11 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         self._llm_client = llm_client
         self._source_language = source_language
         self._fallback = SymbolicResolver()
+        self._llm_call_count = 0
+
+    @property
+    def llm_call_count(self) -> int:
+        return self._llm_call_count
 
     def _build_prompt(
         self,
@@ -225,6 +235,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
                 user_message=prompt,
                 max_tokens=512,
             )
+            self._llm_call_count += 1
             return self._parse_llm_response(raw, inst)
         except (OpenAIError, OSError, json.JSONDecodeError, KeyError, ValueError):
             logger.warning(
@@ -252,6 +263,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
                 user_message=prompt,
                 max_tokens=512,
             )
+            self._llm_call_count += 1
             return self._parse_llm_response(raw, inst)
         except (OpenAIError, OSError, json.JSONDecodeError, KeyError, ValueError):
             logger.warning(
