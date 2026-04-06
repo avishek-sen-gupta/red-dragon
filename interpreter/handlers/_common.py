@@ -47,7 +47,7 @@ def _symbolic_name(
 ) -> str:  # Any: display boundary — raw VM value (SymbolicValue, dict, or primitive)
     """Get a human-readable name for a value, suitable for symbolic hints."""
     if isinstance(val, SymbolicValue):
-        return val.name
+        return val.type_hint if val.type_hint else val.name
     if isinstance(val, dict) and val.get("__symbolic__"):
         return val.get("name", "?")
     return repr(val)
