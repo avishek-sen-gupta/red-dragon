@@ -142,6 +142,50 @@ class TestParseSingleInstruction:
             inst = _parse_single_instruction(raw)
             assert inst.opcode == opcode
 
+    def test_decl_var_instruction(self):
+        raw = {
+            "opcode": "DECL_VAR",
+            "result_reg": None,
+            "operands": ["x", "%0"],
+            "label": None,
+        }
+        inst = _parse_single_instruction(raw)
+        assert inst.opcode == Opcode.DECL_VAR
+        assert inst.operands == ["x", "%0"]
+
+    def test_call_ctor_instruction(self):
+        raw = {
+            "opcode": "CALL_CTOR",
+            "result_reg": "%5",
+            "operands": ["ArrayList", "%3", "%4"],
+            "label": None,
+        }
+        inst = _parse_single_instruction(raw)
+        assert inst.opcode == Opcode.CALL_CTOR
+        assert inst.result_reg == Register("%5")
+        assert inst.operands == ["ArrayList", "%3", "%4"]
+
+    def test_try_push_instruction(self):
+        raw = {
+            "opcode": "TRY_PUSH",
+            "result_reg": None,
+            "operands": [["catch_0"], "finally_1", "end_try_2"],
+            "label": None,
+        }
+        inst = _parse_single_instruction(raw)
+        assert inst.opcode == Opcode.TRY_PUSH
+        assert inst.operands == [["catch_0"], "finally_1", "end_try_2"]
+
+    def test_try_pop_instruction(self):
+        raw = {
+            "opcode": "TRY_POP",
+            "result_reg": None,
+            "operands": [],
+            "label": None,
+        }
+        inst = _parse_single_instruction(raw)
+        assert inst.opcode == Opcode.TRY_POP
+
 
 class TestParseIRResponse:
     def test_valid_json_array(self):
@@ -292,3 +336,91 @@ class TestLLMFrontend:
 
         assert len(fake.calls) == 1
         assert len(result) == 3
+
+    def test_lower_decl_var_and_call_ctor(self):
+        """DECL_VAR and CALL_CTOR round-trip through the full frontend."""
+        ir_json = json.dumps(
+            [
+                {
+                    "opcode": "LABEL",
+                    "result_reg": None,
+                    "operands": [],
+                    "label": "entry",
+                },
+                {
+                    "opcode": "CALL_CTOR",
+                    "result_reg": "%0",
+                    "operands": ["Point", "%1", "%2"],
+                    "label": None,
+                },
+                {
+                    "opcode": "DECL_VAR",
+                    "result_reg": None,
+                    "operands": ["p", "%0"],
+                    "label": None,
+                },
+            ]
+        )
+        fake = FakeLLMClient(response=ir_json)
+        frontend = LLMFrontend(fake, language="java")
+        result = frontend.lower(b"Point p = new Point(1, 2);")
+
+        assert result[0].opcode == Opcode.LABEL
+        assert result[1].opcode == Opcode.CALL_CTOR
+        assert result[2].opcode == Opcode.DECL_VAR
+
+    def test_lower_try_catch(self):
+        """TRY_PUSH/TRY_POP round-trip through the full frontend."""
+        ir_json = json.dumps(
+            [
+                {
+                    "opcode": "LABEL",
+                    "result_reg": None,
+                    "operands": [],
+                    "label": "entry",
+                },
+                {
+                    "opcode": "TRY_PUSH",
+                    "result_reg": None,
+                    "operands": [["catch_0"], None, "end_try_1"],
+                    "label": None,
+                },
+                {
+                    "opcode": "CONST",
+                    "result_reg": "%0",
+                    "operands": ["1"],
+                    "label": None,
+                },
+                {
+                    "opcode": "TRY_POP",
+                    "result_reg": None,
+                    "operands": [],
+                    "label": None,
+                },
+                {
+                    "opcode": "BRANCH",
+                    "result_reg": None,
+                    "operands": [],
+                    "label": "end_try_1",
+                },
+                {
+                    "opcode": "LABEL",
+                    "result_reg": None,
+                    "operands": [],
+                    "label": "catch_0",
+                },
+                {
+                    "opcode": "LABEL",
+                    "result_reg": None,
+                    "operands": [],
+                    "label": "end_try_1",
+                },
+            ]
+        )
+        fake = FakeLLMClient(response=ir_json)
+        frontend = LLMFrontend(fake, language="python")
+        result = frontend.lower(b"try:\n  x = 1\nexcept:\n  pass")
+
+        opcodes = [inst.opcode for inst in result]
+        assert Opcode.TRY_PUSH in opcodes
+        assert Opcode.TRY_POP in opcodes
