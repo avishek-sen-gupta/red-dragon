@@ -77,20 +77,20 @@ All other `GrammarConstants` fields (`func_name_field`, `func_params_field`, `fu
 | AST Node Type | Handler | Emitted IR |
 |---|---|---|
 | `"expression_statement"` | `common_assign.lower_expression_statement` | (unwraps inner expression via `lower_stmt`) |
-| `"short_var_declaration"` | `go_decl.lower_short_var_decl` | `STORE_VAR` per variable |
+| `"short_var_declaration"` | `go_decl.lower_short_var_decl` | `DECL_VAR` per variable |
 | `"assignment_statement"` | `go_decl.lower_go_assignment` | `STORE_VAR` / `STORE_FIELD` / `STORE_INDEX` |
 | `"return_statement"` | `go_cf.lower_go_return` | `RETURN` (one per return value) |
 | `"if_statement"` | `go_cf.lower_go_if` | `BRANCH_IF` + `LABEL` + `BRANCH` |
 | `"for_statement"` | `go_cf.lower_go_for` | Dispatches to `_lower_go_for_clause`, `_lower_go_range`, or `_lower_go_bare_for` |
-| `"function_declaration"` | `go_decl.lower_go_func_decl` | `BRANCH` + `LABEL` + params + body + `RETURN` + `CONST func:ref` + `STORE_VAR` |
+| `"function_declaration"` | `go_decl.lower_go_func_decl` | `BRANCH` + `LABEL` + params + body + `RETURN` + `CONST func:ref` + `DECL_VAR` |
 | `"method_declaration"` | `go_decl.lower_go_method_decl` | Same as func_decl but includes receiver as first param |
-| `"type_declaration"` | `go_decl.lower_go_type_decl` | `SYMBOLIC("struct:Name")` or `SYMBOLIC("type:Name")` + `STORE_VAR` |
+| `"type_declaration"` | `go_decl.lower_go_type_decl` | `SYMBOLIC("struct:Name")` or `SYMBOLIC("type:Name")` + `DECL_VAR` |
 | `"inc_statement"` | `go_cf.lower_go_inc` | `BINOP("+", operand, 1)` + store |
 | `"dec_statement"` | `go_cf.lower_go_dec` | `BINOP("-", operand, 1)` + store |
 | `"block"` | `lambda ctx, node: ctx.lower_block(node)` | Iterates named children |
 | `"statement_list"` | `lambda ctx, node: ctx.lower_block(node)` | Base class block lowering |
 | `"source_file"` | `lambda ctx, node: ctx.lower_block(node)` | Base class block lowering (top-level) |
-| `"var_declaration"` | `go_decl.lower_go_var_decl` | `STORE_VAR` per `var_spec` |
+| `"var_declaration"` | `go_decl.lower_go_var_decl` | `DECL_VAR` per `var_spec` |
 | `"break_statement"` | `common_cf.lower_break` | `BRANCH` to break target |
 | `"continue_statement"` | `common_cf.lower_continue` | `BRANCH` to continue label |
 | `"defer_statement"` | `go_cf.lower_defer_stmt` | Lower call, then `CALL_FUNCTION("defer", call_reg)` |
@@ -100,9 +100,9 @@ All other `GrammarConstants` fields (`func_name_field`, `func_params_field`, `fu
 | `"select_statement"` | `go_cf.lower_select_stmt` | `LABEL` per case, `BRANCH` to end |
 | `"send_statement"` | `go_cf.lower_send_stmt` | `CALL_FUNCTION("chan_send", ch, val)` |
 | `"labeled_statement"` | `go_cf.lower_labeled_stmt` | `LABEL(name)` + lower body |
-| `"const_declaration"` | `go_decl.lower_go_const_decl` | `STORE_VAR` per `const_spec` |
+| `"const_declaration"` | `go_decl.lower_go_const_decl` | `DECL_VAR` per `const_spec` |
 | `"goto_statement"` | `go_cf.lower_goto_stmt` | `BRANCH(label_name)` |
-| `"receive_statement"` | `go_cf.lower_receive_stmt` | `CALL_FUNCTION("chan_recv", ch)` + `STORE_VAR` |
+| `"receive_statement"` | `go_cf.lower_receive_stmt` | `CALL_FUNCTION("chan_recv", ch)` + `DECL_VAR` |
 
 **27 entries total.**
 
@@ -148,7 +148,7 @@ Dispatches Go's `for` statement to one of three sub-handlers based on the presen
 - Neither -> `_lower_go_bare_for` (infinite or condition-only loop)
 
 ### `go_decl.lower_go_func_decl(ctx, node)`
-Lowers `function_declaration`. Special-cases `func main()` by hoisting its body to the top level via `_lower_go_main_hoisted`. All other functions get the standard function lowering: `BRANCH` past body, `LABEL`, params, body, implicit `RETURN`, `CONST func:ref`, `STORE_VAR`.
+Lowers `function_declaration`. Special-cases `func main()` by hoisting its body to the top level via `_lower_go_main_hoisted`. All other functions get the standard function lowering: `BRANCH` past body, `LABEL`, params, body, implicit `RETURN`, `CONST func:ref`, `DECL_VAR`.
 
 ### `go_decl.lower_go_method_decl(ctx, node)`
 Lowers `method_declaration`. Identical to `lower_go_func_decl` except it also lowers the receiver as the first parameter via `go_decl.lower_go_params(ctx, receiver_node)`.
@@ -157,7 +157,7 @@ Lowers `method_declaration`. Identical to `lower_go_func_decl` except it also lo
 Lowers Go-specific parameter declarations. Handles two cases:
 - `parameter_declaration` nodes: extracts the `name` field.
 - Direct `identifier` children (e.g., in receiver declarations).
-Each parameter emits `SYMBOLIC("param:name")` + `STORE_VAR`.
+Each parameter emits `SYMBOLIC("param:name")` + `DECL_VAR`.
 
 ### `go_cf.lower_go_inc(ctx, node)` / `go_cf.lower_go_dec(ctx, node)`
 Lower Go's `i++` and `i--` statements (which are statements, not expressions in Go). Loads the operand, emits `BINOP("+"/"-", operand, 1)`, stores back via `go_expr.lower_go_store_target`.
@@ -170,10 +170,10 @@ Handles Go-specific target types:
 - Fallback -> `STORE_VAR` with raw text
 
 ### `go_decl.lower_go_type_decl(ctx, node)`
-Lowers `type_declaration` by iterating `type_spec` children. For each spec, emits a `CLASS` block if the type is a `struct_type`, otherwise `SYMBOLIC("type:Name")`, followed by `STORE_VAR`.
+Lowers `type_declaration` by iterating `type_spec` children. For each spec, emits a `CLASS` block if the type is a `struct_type`, otherwise `SYMBOLIC("type:Name")`, followed by `DECL_VAR`.
 
 ### `go_decl.lower_go_var_decl(ctx, node)`
-Lowers `var_declaration` by iterating `var_spec` children. For each spec with a value, lowers the value and emits `STORE_VAR`. Specs without values get `CONST "None"` + `STORE_VAR`.
+Lowers `var_declaration` by iterating `var_spec` children. For each spec with a value, lowers the value and emits `DECL_VAR`. Specs without values get `CONST "None"` + `DECL_VAR`.
 
 ### `go_expr.lower_composite_literal(ctx, node) -> str`
 Lowers Go composite literals (e.g., `Point{X: 1, Y: 2}` or `[]int{1, 2, 3}`). Emits `NEW_OBJECT(type_name)`, then processes elements:
@@ -212,13 +212,13 @@ Lowers `ch <- val` as `CALL_FUNCTION("chan_send", ch_reg, val_reg)`.
 Lowers `label: stmt` by emitting `LABEL(label_name)` and then lowering the body statements.
 
 ### `go_decl.lower_go_const_decl(ctx, node)`
-Lowers `const` declarations. Iterates `const_spec` children; each spec with a value emits the lowered value + `STORE_VAR`. Specs without values emit `CONST "None"` + `STORE_VAR`.
+Lowers `const` declarations. Iterates `const_spec` children; each spec with a value emits the lowered value + `DECL_VAR`. Specs without values emit `CONST "None"` + `DECL_VAR`.
 
 ### `go_cf.lower_goto_stmt(ctx, node)`
 Lowers `goto label` as `BRANCH(label_name)`.
 
 ### `go_cf.lower_receive_stmt(ctx, node)`
-Lowers `v := <-ch` as `CALL_FUNCTION("chan_recv", ch_reg)` + `STORE_VAR`.
+Lowers `v := <-ch` as `CALL_FUNCTION("chan_recv", ch_reg)` + `DECL_VAR`.
 
 ## Canonical Literal Handling
 

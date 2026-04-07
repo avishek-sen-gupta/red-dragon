@@ -42,7 +42,7 @@ flowchart TD
 
     det["Deterministic\n(BaseFrontend subclass)\n15 language frontends/"]
     llm["LLMFrontend\nllm_frontend.py\nLLMClient"]
-    chunked["ChunkedLLMFrontend\nchunked_llm_frontend.py\nChunkExtractor, IRRenumberer\nwraps LLMFrontend"]
+    chunked["ChunkedLLMFrontend\nllm/chunked_llm_frontend.py\nChunkExtractor, IRRenumberer\nwraps LLMFrontend"]
 
     factory --> det & llm & chunked
 
@@ -97,7 +97,7 @@ Key conventions:
 | **Entry label** | First instruction is always `LABEL "entry"` |
 | **Function refs** | `<function:name@label>` or `<function:name@label#closure_id>` |
 | **Class refs** | `<class:name@label>` |
-| **Parameters** | `SYMBOLIC "param:x"` followed by `STORE_VAR x %reg` |
+| **Parameters** | `SYMBOLIC "param:x"` followed by `DECL_VAR x %reg` |
 | **Source locations** | Deterministic frontends attach AST spans; LLM uses `NO_SOURCE_LOCATION` |
 
 ---
@@ -199,7 +199,7 @@ For detailed documentation of each language frontend, see:
 
 ## 6. LLM Frontend
 
-`interpreter/llm_frontend.py` uses an LLM as a compiler frontend — the LLM is constrained by a formal IR schema, not used for reasoning.
+`interpreter/llm/llm_frontend.py` uses an LLM as a compiler frontend — the LLM is constrained by a formal IR schema, not used for reasoning.
 
 ### Architecture
 
@@ -211,17 +211,17 @@ class LLMFrontend(Frontend):
     def __init__(self, llm_client: LLMClient, language: str = "python",
                  max_tokens: int = ..., max_retries: int = ...): ...
 
-    def lower(self, tree: Any, source: bytes) -> list[InstructionBase]: ...
+    def lower(self, source: bytes, namespace_resolver: NamespaceResolver = ...) -> list[InstructionBase]: ...
 ```
 
-The `tree` parameter is **ignored** — the LLM works from raw source text only. This means it can handle any language, not just the 15 with tree-sitter grammars.
+`namespace_resolver` is accepted for interface compatibility with deterministic frontends but ignored by the LLM path — the LLM works from raw source text only. This means it can handle any language, not just the 15 with tree-sitter grammars.
 
 ### Prompt engineering
 
-`LLMFrontendPrompts.SYSTEM_PROMPT` (`interpreter/llm_frontend.py:23`) is a ~180-line prompt that includes:
+`LLMFrontendPrompts.SYSTEM_PROMPT` (`interpreter/llm/llm_frontend.py`) is a ~200-line prompt that includes:
 
 1. **Instruction format specification** — JSON schema for each instruction
-2. **Complete opcode reference** — all 33 opcodes with operand formats (see [IR Reference](ir-reference.md))
+2. **LLM opcode subset reference** — the practical lowering subset used by the LLM path (including `DECL_VAR`, `CALL_CTOR`, `TRY_PUSH`, `TRY_POP`)
 3. **Critical patterns** — exact templates for function definitions, class definitions, constructor calls, method calls, if/elif/else
 4. **Full worked example** — Fibonacci function lowered to 30+ IR instructions
 5. **Strict rules** — entry label mandatory, flattening required, literal formats
@@ -233,7 +233,7 @@ The prompt acts as a **formal specification** that constrains the LLM to produce
 `LLMFrontend.lower()` retries on parse failure:
 
 ```python
-def lower(self, tree, source):
+def lower(self, source: bytes, namespace_resolver=...):
     last_error = None
     for attempt in range(1, self._max_retries + 1):
         raw_response = self._llm_client.complete(
@@ -271,7 +271,7 @@ flowchart TD
 
 ## 7. Chunked LLM Frontend
 
-`interpreter/chunked_llm_frontend.py` handles large files by decomposing them into per-function/class chunks via tree-sitter, lowering each independently, then reassembling.
+`interpreter/llm/chunked_llm_frontend.py` handles large files by decomposing them into per-function/class chunks via tree-sitter, lowering each independently, then reassembling.
 
 ### Components
 

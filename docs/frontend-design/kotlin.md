@@ -88,8 +88,8 @@ All other constants retain `GrammarConstants` defaults. Notably, Kotlin does **n
 |---|---|---|
 | `property_declaration` | `kotlin_decl.lower_property_decl` | `STORE_VAR` |
 | `assignment` | `kotlin_cf.lower_kotlin_assignment` | `STORE_VAR` / `STORE_FIELD` / `STORE_INDEX` |
-| `function_declaration` | `kotlin_decl.lower_function_decl` | `BRANCH`/`LABEL` func + params + `RETURN` + `STORE_VAR` |
-| `class_declaration` | `kotlin_decl.lower_class_decl` | `BRANCH`/`LABEL` class + body + `STORE_VAR` |
+| `function_declaration` | `kotlin_decl.lower_function_decl` | `BRANCH`/`LABEL` func + params + `RETURN` + `DECL_VAR` |
+| `class_declaration` | `kotlin_decl.lower_class_decl` | `BRANCH`/`LABEL` class + body + `DECL_VAR` |
 | `if_expression` | `kotlin_cf.lower_if_stmt` | (delegates to `kotlin_expr.lower_if_expr`, discards result) |
 | `while_statement` | `kotlin_cf.lower_while_stmt` | `BRANCH_IF` loop |
 | `for_statement` | `kotlin_cf.lower_for_stmt` | index-based iteration loop |
@@ -128,7 +128,7 @@ Expression-context wrapper for assignment. Calls `kotlin_cf.lower_kotlin_assignm
 Locates `simple_identifier` (name), `function_value_parameters`, and `function_body` children by type (not field name). Creates function label, lowers params via `_lower_kotlin_params`, lowers body via `_lower_function_body`, emits implicit return, and registers function reference. Expression-bodied functions (`fun f() = 42`) return the expression directly. Optionally injects `this` parameter for instance methods.
 
 ### `kotlin_decl._lower_kotlin_params(ctx, params_node)`
-Walks `parameter` children. For each, finds `simple_identifier` child and emits `SYMBOLIC("param:name")` + `STORE_VAR`. Extracts and seeds type hints.
+Walks `parameter` children. For each, finds `simple_identifier` child and emits `SYMBOLIC("param:name")` + `DECL_VAR`. Extracts and seeds type hints.
 
 ### `kotlin_decl._lower_function_body(ctx, body_node) -> str`
 Unwraps the `function_body` node which wraps the actual block or expression. Skips `{`, `}`, `=` tokens, lowers remaining named children. Returns the last expression's register for expression-bodied functions, otherwise returns empty string.

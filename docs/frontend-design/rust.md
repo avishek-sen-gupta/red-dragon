@@ -118,14 +118,14 @@ Frontend (abstract)
 | `macro_invocation` | `rust_cf.lower_macro_stmt` | `CALL_FUNCTION("macro_name!")` |
 | `break_expression` | `common_cf.lower_break` | `BRANCH` to break target |
 | `continue_expression` | `common_cf.lower_continue` | `BRANCH` to continue label |
-| `trait_item` | `rust_decl.lower_trait_item` | `BRANCH`/`LABEL`/body/`STORE_VAR` (class ref) |
+| `trait_item` | `rust_decl.lower_trait_item` | `BRANCH`/`LABEL`/body/`DECL_VAR` (class ref) |
 | `enum_item` | `rust_decl.lower_enum_item` | `NEW_OBJECT` + `STORE_FIELD` per variant |
-| `const_item` | `rust_decl.lower_const_item` | `STORE_VAR` |
-| `static_item` | `rust_decl.lower_static_item` | `STORE_VAR` |
-| `type_item` | `rust_decl.lower_type_item` | `CONST type_text` + `STORE_VAR` |
+| `const_item` | `rust_decl.lower_const_item` | `DECL_VAR` |
+| `static_item` | `rust_decl.lower_static_item` | `DECL_VAR` |
+| `type_item` | `rust_decl.lower_type_item` | `CONST type_text` + `DECL_VAR` |
 | `mod_item` | `rust_decl.lower_mod_item` | (lowers body block) |
 | `extern_crate_declaration` | `lambda ctx, node: None` | No-op |
-| `function_signature_item` | `rust_decl.lower_function_signature` | `BRANCH`/`LABEL`/params/`RETURN`/`STORE_VAR` (stub) |
+| `function_signature_item` | `rust_decl.lower_function_signature` | `BRANCH`/`LABEL`/params/`RETURN`/`DECL_VAR` (stub) |
 
 **25 entries total.**
 
@@ -281,7 +281,7 @@ Lowers `function_item` with Rust-specific param handling via `rust_decl.lower_ru
 Lowers `fn area(&self) -> f64;` as a function stub with no body. Emits params, implicit return, and function reference.
 
 ### `rust_decl.lower_rust_params(ctx, params_node)` / `rust_decl.lower_rust_param(ctx, child)`
-Lowers Rust function parameters. Handles `self_parameter` -> `"self"`, `parameter` -> extracts from `pattern` field via `_extract_let_pattern_name`. Emits `SYMBOLIC("param:name")` + `STORE_VAR`.
+Lowers Rust function parameters. Handles `self_parameter` -> `"self"`, `parameter` -> extracts from `pattern` field via `_extract_let_pattern_name`. Emits `SYMBOLIC("param:name")` + `DECL_VAR`.
 
 ## Canonical Literal Handling
 

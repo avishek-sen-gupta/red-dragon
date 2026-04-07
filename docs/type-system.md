@@ -103,7 +103,7 @@ The type system operates in three phases:
 
 ## TypeExpr — Algebraic Data Type for Types
 
-All types in the system are represented as `TypeExpr` values (`interpreter/type_expr.py`), an algebraic data type (ADT) with six variants. Every `TypeExpr` is a frozen (immutable) dataclass.
+All types in the system are represented as `TypeExpr` values (`interpreter/types/type_expr.py`), an algebraic data type (ADT) with six variants. Every `TypeExpr` is a frozen (immutable) dataclass.
 
 ### Variants
 
@@ -303,7 +303,7 @@ POINTER = "Pointer" MAP = "Map"         TUPLE = "Tuple"    REGION = "Region"
 
 ### TypeNode
 
-`TypeNode` (`interpreter/type_node.py`) is a frozen dataclass representing a single node in the hierarchy:
+`TypeNode` (`interpreter/types/type_node.py`) is a frozen dataclass representing a single node in the hierarchy:
 
 ```python
 @dataclass(frozen=True)
@@ -315,7 +315,7 @@ class TypeNode:
 
 ### TypeGraph
 
-`TypeGraph` (`interpreter/type_graph.py`) is an **immutable** DAG built from a tuple of `TypeNode` values. Internally stores nodes in a `dict[str, TypeNode]` for O(1) lookup. All mutation operations (`extend`, `with_variance`, `extend_with_interfaces`) return new `TypeGraph` instances.
+`TypeGraph` (`interpreter/types/type_graph.py`) is an **immutable** DAG built from a tuple of `TypeNode` values. Internally stores nodes in a `dict[str, TypeNode]` for O(1) lookup. All mutation operations (`extend`, `with_variance`, `extend_with_interfaces`) return new `TypeGraph` instances.
 
 **Constructor:**
 ```python
@@ -610,7 +610,7 @@ Each frontend implements `_build_type_map()` mapping language-specific type name
 
 ### TypeEnvironmentBuilder
 
-`TypeEnvironmentBuilder` (`interpreter/type_environment_builder.py`) is a mutable dataclass that accumulates type seeds during lowering:
+`TypeEnvironmentBuilder` (`interpreter/types/type_environment_builder.py`) is a mutable dataclass that accumulates type seeds during lowering:
 
 ```python
 @dataclass
@@ -632,7 +632,7 @@ Its `.build()` method freezes the accumulated state into an immutable `TypeEnvir
 
 ## Phase 2: Static Type Inference
 
-`infer_types()` (`interpreter/type_inference.py`) walks the IR instruction list to fixpoint, propagating types through registers, variables, and function signatures. It accepts pre-seeded state from the `TypeEnvironmentBuilder` and returns an immutable `TypeEnvironment`.
+`infer_types()` (`interpreter/types/type_inference.py`) walks the IR instruction list to fixpoint, propagating types through registers, variables, and function signatures. It accepts pre-seeded state from the `TypeEnvironmentBuilder` and returns an immutable `TypeEnvironment`.
 
 ### _InferenceContext
 
@@ -949,7 +949,7 @@ Examples:
 
 ### TypeEnvironment (Output)
 
-The inference pass produces a frozen `TypeEnvironment` (`interpreter/type_environment.py`):
+The inference pass produces a frozen `TypeEnvironment` (`interpreter/types/type_environment.py`):
 
 ```python
 @dataclass(frozen=True)
@@ -1435,7 +1435,7 @@ The `operator_override = "//"` is key: when both operands are `Int`, the `/` ope
 
 ### TypeResolver
 
-`TypeResolver` (`interpreter/type_resolver.py`) composes `TypeConversionRules` with **graceful degradation** for missing type information:
+`TypeResolver` (`interpreter/types/type_resolver.py`) composes `TypeConversionRules` with **graceful degradation** for missing type information:
 
 ```python
 class TypeResolver:
@@ -1604,4 +1604,3 @@ The type system is designed for extension via dependency injection:
 | **Frontend type seeding** | `TreeSitterEmitContext.seed_*()` methods | Any frontend can seed register, var, alias, interface, and param types |
 | **Type aliases** | `seed_type_alias()` → transitive resolution | `typedef int UserId;` → `UserId = Int` |
 | **Block-scope tracking** | `enter_block_scope()` / `declare_block_var()` | Frontend-level name mangling for block-scoped languages |
-
