@@ -45,10 +45,6 @@ def constants_project(tmp_path: Path) -> Path:
 
 
 class TestJavaConstantDeclaration:
-    @pytest.mark.xfail(
-        reason="Java frontend does not lower constant_declaration nodes",
-        strict=True,
-    )
     def test_static_final_constants_are_concrete(self, constants_project: Path):
         """public static final fields should lower to concrete values."""
         linked = compile_directory(constants_project, Language.JAVA)
@@ -56,6 +52,7 @@ class TestJavaConstantDeclaration:
         strategies = ExecutionStrategies(
             func_symbol_table=linked.func_symbol_table,
             class_symbol_table=linked.class_symbol_table,
+            symbol_table=linked.symbol_table,
         )
         config = VMConfig(max_steps=500)
         vm, stats = execute_cfg(

@@ -84,6 +84,7 @@ class JavaNodeType:
     CONSTRUCTOR_DECLARATION = "constructor_declaration"
     COMPACT_CONSTRUCTOR_DECLARATION = "compact_constructor_declaration"
     FIELD_DECLARATION = "field_declaration"
+    CONSTANT_DECLARATION = "constant_declaration"
     STATIC_INITIALIZER = "static_initializer"
     VARIABLE_DECLARATOR = "variable_declarator"
     ENUM_CONSTANT = "enum_constant"

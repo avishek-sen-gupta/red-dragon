@@ -293,6 +293,8 @@ def link_modules(
 
     # Build merged symbol tables, CFG, and registry
     merged_func_symbols, merged_class_symbols = _merge_symbol_tables(modules, prefixes)
+    for module in modules.values():
+        symbol_table.classes.update(module.symbol_table.classes)
     merged_cfg = build_cfg(all_ir)
     merged_registry = build_registry(
         all_ir,
