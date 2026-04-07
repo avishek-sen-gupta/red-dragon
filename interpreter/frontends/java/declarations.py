@@ -61,6 +61,24 @@ def lower_local_var_decl(
                 ctx.seed_var_type(var_name, type_hint)
 
 
+def lower_constant_decl(
+    ctx: TreeSitterEmitContext, node: Any
+) -> None:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Java class ``constant_declaration`` nodes (``public static final``) as DeclVar."""
+    type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
+    for child in node.children:
+        if child.type == JavaNodeType.VARIABLE_DECLARATOR:
+            name_node = child.child_by_field_name("name")
+            value_node = child.child_by_field_name("value")
+            if name_node and value_node:
+                var_name = ctx.node_text(name_node)
+                val_reg = ctx.lower_expr(value_node)
+                ctx.emit_inst(
+                    DeclVar(name=VarName(var_name), value_reg=val_reg), node=node
+                )
+                ctx.seed_var_type(var_name, type_hint)
+
+
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
     param_reg = ctx.fresh_reg()
@@ -652,6 +670,21 @@ def _extract_java_field(node) -> tuple[str, FieldInfo] | None:
     )
 
 
+def _extract_java_constant(node) -> tuple[str, str] | None:
+    """Extract (name, raw_value_text) from a constant_declaration node."""
+    declarator = next(
+        (c for c in node.children if c.type == JavaNodeType.VARIABLE_DECLARATOR),
+        None,
+    )
+    if declarator is None:
+        return None
+    name_node = declarator.child_by_field_name("name")
+    value_node = declarator.child_by_field_name("value")
+    if name_node is None or value_node is None:
+        return None
+    return name_node.text.decode(), value_node.text.decode()
+
+
 def _extract_java_method(node) -> tuple[str, FunctionInfo] | None:
     """Extract a FunctionInfo from a Java method_declaration node."""
     name_node = node.child_by_field_name("name")
@@ -725,9 +758,16 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
                 continue
             fname, finfo = result
             if _is_java_static(child):
-                constants_map[fname] = finfo.type_hint
+                raw = _extract_java_constant(child)
+                if raw:
+                    constants_map[raw[0]] = raw[1]
             else:
                 fields[FieldName(fname)] = finfo
+        elif child.type == JavaNodeType.CONSTANT_DECLARATION:
+            result = _extract_java_constant(child)
+            if result:
+                name, raw_val = result
+                constants_map[name] = raw_val
         elif child.type == JavaNodeType.METHOD_DECLARATION:
             result = _extract_java_method(child)
             if result is None:

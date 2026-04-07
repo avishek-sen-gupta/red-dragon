@@ -110,6 +110,7 @@ class JavaFrontend(BaseFrontend):
         return {
             JavaNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             JavaNodeType.LOCAL_VARIABLE_DECLARATION: java_decl.lower_local_var_decl,
+            JavaNodeType.CONSTANT_DECLARATION: java_decl.lower_constant_decl,
             JavaNodeType.RETURN_STATEMENT: common_assign.lower_return,
             JavaNodeType.IF_STATEMENT: java_cf.lower_if,
             JavaNodeType.WHILE_STATEMENT: common_cf.lower_while,

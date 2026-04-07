@@ -110,6 +110,7 @@ def compile_module(
         ir=tuple(ir),
         exports=exports,
         imports=imports,
+        symbol_table=frontend.symbol_table,
     )
 
 
