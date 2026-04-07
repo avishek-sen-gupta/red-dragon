@@ -142,6 +142,7 @@ class ModuleUnit:
     ir: tuple[InstructionBase, ...]
     exports: ExportTable
     imports: tuple[ImportRef, ...]
+    symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
 
 
 NO_MODULE_UNIT = ModuleUnit(
