@@ -134,7 +134,7 @@ Note: `none_literal`, `true_literal`, `false_literal`, `default_return_value` re
 | `declTypes` | `pascal_decl.lower_pascal_decl_types` | (iterates `declType` children) |
 | `declUses` | `pascal_cf.lower_pascal_noop` | No-op |
 | `try` | `pascal_cf.lower_pascal_try` | `LABEL`/`SYMBOLIC`/`BRANCH` (try/except/finally) |
-| `exceptionHandler` | `pascal_cf.lower_pascal_exception_handler` | `SYMBOLIC`/`STORE_VAR` + body |
+| `exceptionHandler` | `pascal_cf.lower_pascal_exception_handler` | `SYMBOLIC`/`DECL_VAR` + body |
 | `raise` | `pascal_cf.lower_pascal_raise` | `THROW` |
 | `with` | `pascal_cf.lower_pascal_with` | Lowers object then body |
 | `inherited` | `pascal_cf.lower_pascal_inherited_stmt` | `CALL_FUNCTION("inherited", method)` |
@@ -226,7 +226,7 @@ Handles `repeat..until`. Body-first loop: last non-noise named child is the cond
 Handles `try`/`except`/`finally`. Extracts body, catch clauses (from `exceptionHandler` children and bare `statements` blocks in except region), and finally node. Delegates to the common `lower_try_catch` helper.
 
 ### `pascal_cf.lower_pascal_exception_handler(ctx, node)`
-Handles `on E: Exception do statement`. Extracts the variable identifier and emits `SYMBOLIC("param:{name}")` + `STORE_VAR`. Then lowers body statements.
+Handles `on E: Exception do statement`. Extracts the variable identifier and emits `SYMBOLIC("param:{name}")` + `DECL_VAR`. Then lowers body statements.
 
 ### `pascal_cf.lower_pascal_raise(ctx, node)`
 Handles `raise Exception.Create('oops')`. Lowers the expression child and emits `THROW`.

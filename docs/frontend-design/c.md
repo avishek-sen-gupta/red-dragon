@@ -121,7 +121,7 @@ The full statement dispatch returned by `_build_stmt_dispatch()`:
 | `while_statement` | `common_cf.lower_while` | `LABEL` + `BRANCH_IF` + body + `BRANCH` loop |
 | `for_statement` | `common_cf.lower_c_style_for` | init + `LABEL` cond + `BRANCH_IF` + body + update + `BRANCH`; init vars block-scoped |
 | `do_statement` | `c_cf.lower_do_while` | `LABEL` body + body + `LABEL` cond + `BRANCH_IF` |
-| `function_definition` | `c_decl.lower_function_def_c` | `BRANCH` end + `LABEL` func + params + body + `RETURN` + `STORE_VAR` |
+| `function_definition` | `c_decl.lower_function_def_c` | `BRANCH` end + `LABEL` func + params + body + `RETURN` + `DECL_VAR` |
 | `struct_specifier` | `c_decl.lower_struct_def` | `BRANCH` end + `LABEL` class + fields + `LABEL` end + `STORE_VAR` |
 | `compound_statement` | `lambda ctx, node: ctx.lower_block(node)` | Iterates children as statements |
 | `switch_statement` | `c_cf.lower_switch` | `BINOP "=="` per case + `BRANCH_IF` chain |
@@ -134,7 +134,7 @@ The full statement dispatch returned by `_build_stmt_dispatch()`:
 | `type_definition` | `c_decl.lower_typedef` | Seeds type alias (no IR emitted) |
 | `enum_specifier` | `c_decl.lower_enum_def` | `NEW_OBJECT "enum:<name>"` + `STORE_FIELD` per enumerator |
 | `union_specifier` | `c_decl.lower_union_def` | Same structure as struct: `BRANCH` + `LABEL` + fields + `STORE_VAR` |
-| `preproc_function_def` | `c_decl.lower_preproc_function_def` | `BRANCH` + `LABEL` + params + body + `RETURN` + `STORE_VAR` |
+| `preproc_function_def` | `c_decl.lower_preproc_function_def` | `BRANCH` + `LABEL` + params + body + `RETURN` + `DECL_VAR` |
 
 ## Language-Specific Lowering Methods
 
@@ -156,12 +156,12 @@ Handles C function definitions with the `function_declarator` grammar structure 
 1. Extracts `declarator` and `body` fields from the `function_definition` node
 2. Uses `_find_innermost_function_declarator` to handle complex declarators (e.g., function-pointer return types)
 3. Extracts name and parameters from the target function_declarator
-4. Emits: `BRANCH end` + `LABEL func_<name>` + params + body + implicit `RETURN "0"` + `LABEL end` + `STORE_VAR name = <function:name@label>`
+4. Emits: `BRANCH end` + `LABEL func_<name>` + params + body + implicit `RETURN "0"` + `LABEL end` + `DECL_VAR name = <function:name@label>`
 5. Seeds function return type via `ctx.seed_func_return_type`
 
 ### `c_decl.lower_c_params(ctx, params_node)`
 
-Lowers C function parameters (`parameter_declaration` nodes). For each parameter, extracts the declarator name, computes type hint (including pointer depth), and emits `SYMBOLIC "param:<name>"` + `STORE_VAR name`. Seeds register, parameter, and variable types.
+Lowers C function parameters (`parameter_declaration` nodes). For each parameter, extracts the declarator name, computes type hint (including pointer depth), and emits `SYMBOLIC "param:<name>"` + `DECL_VAR name`. Seeds register, parameter, and variable types.
 
 ### `c_decl.lower_struct_def(ctx, node)`
 

@@ -90,7 +90,7 @@ All entries from the JavaScript frontend's statement dispatch are inherited. See
 Handles TypeScript parameter types:
 
 - **Skipped types**: `(`, `)`, `,`, `:`, `type_annotation` -- returns immediately
-- **`required_parameter`**: Extracts name from `pattern` field (or first `identifier` child as fallback). Emits `SYMBOLIC("param:<name>")` + `STORE_VAR(<name>, reg)`. Extracts type hints from `type_annotation` field and seeds register/param/var types.
+- **`required_parameter`**: Extracts name from `pattern` field (or first `identifier` child as fallback). Emits `SYMBOLIC("param:<name>")` + `DECL_VAR(<name>, reg)`. Extracts type hints from `type_annotation` field and seeds register/param/var types.
 - **`optional_parameter`**: Same extraction logic as `required_parameter`. The optional nature (the `?` marker) is not represented in IR. Type hints are extracted and seeded.
 - **Other types**: Falls back to `lower_js_param` (JS handling)
 

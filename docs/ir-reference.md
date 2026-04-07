@@ -216,7 +216,7 @@ Read through a pointer (pointer dereference).
 | `result_reg` | `Register` | target register |
 | `ptr_reg` | `Register` | pointer to dereference |
 
-Resolves `ptr_reg` to a `Pointer`, then reads `heap[base].fields[str(offset)]`. If the resolved value is a `BoundFuncRef`, returns it unchanged (identity). If the resolved value is not a `Pointer` but is on the heap, returns a fresh symbolic value. This is how C and Rust lower `*ptr` in read context.
+Resolves `ptr_reg` to a `Pointer`, then reads `heap[base].fields[str(offset)]` (INDEX first, then PROPERTY). If the pointed slot is missing and `base` is an object/array heap address (`obj_*` or `arr_*`), dereference is treated as pointer identity (returns the same pointer) — this preserves byref object semantics. Function-pointer dereference (`BoundFuncRef`) is also identity. Otherwise, missing/invalid dereference yields a fresh symbolic value. This is how C and Rust lower `*ptr` in read context.
 
 ```
 %1 = load_indirect %ptr        // *ptr → reads through the pointer
@@ -463,7 +463,7 @@ Push an exception handler.
 | `finally_label` | `CodeLabel` | finally block label |
 | `end_label` | `CodeLabel` | end of try/catch |
 
-Pushes a handler onto the exception stack. `catch_labels_csv` is a comma-separated list of catch block labels. The handler remains active until a matching `TRY_POP`.
+Pushes a handler onto the exception stack. `catch_labels` is a typed `tuple[CodeLabel, ...]`; `finally_label` and `end_label` are `CodeLabel` values. The handler remains active until a matching `TRY_POP`.
 
 ```
 try_push catch_0,catch_1 finally_0 end_try_0

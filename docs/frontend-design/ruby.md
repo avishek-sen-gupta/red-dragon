@@ -106,9 +106,9 @@ All other `GrammarConstants` fields retain their defaults (`none_literal = "None
 | `"until"` | `ruby_cf.lower_until` | Inverted loop with `UNOP("!")` + `BRANCH_IF` |
 | `"until_modifier"` | `ruby_cf.lower_ruby_until_modifier` | Inverted modifier-form loop |
 | `"for"` | `ruby_cf.lower_ruby_for` | Index-based iteration loop |
-| `"method"` | `ruby_decl.lower_ruby_method_stmt` | `BRANCH` + `LABEL` + params + body + `RETURN` + `STORE_VAR` |
+| `"method"` | `ruby_decl.lower_ruby_method_stmt` | `BRANCH` + `LABEL` + params + body + `RETURN` + `DECL_VAR` |
 | `"singleton_method"` | `ruby_decl.lower_ruby_singleton_method` | Same as method but with `object.method` naming |
-| `"class"` | `ruby_decl.lower_ruby_class` | `BRANCH` + `LABEL` + body + `CONST class:ref` + `STORE_VAR` |
+| `"class"` | `ruby_decl.lower_ruby_class` | `BRANCH` + `LABEL` + body + `CONST class:ref` + `DECL_VAR` |
 | `"singleton_class"` | `ruby_decl.lower_ruby_singleton_class` | `BRANCH` + `LABEL` + body + `LABEL` |
 | `"program"` | `lambda ctx, node: ctx.lower_block(node)` | Top-level block lowering |
 | `"body_statement"` | `lambda ctx, node: ctx.lower_block(node)` | Ruby body block lowering |
@@ -165,16 +165,16 @@ Lowers `until cond ... end`. Loop that negates the condition each iteration with
 Lowers `for var in collection ... end`. Implements as index-based iteration: initializes idx to 0, computes `len(collection)`, branches on `idx < len`, loads element via `LOAD_INDEX`, stores to the loop variable, executes body, increments.
 
 ### `ruby_decl.lower_ruby_method(ctx, node, inject_self=False)`
-Lowers `def method_name(params) ... end`. Standard function lowering pattern: `BRANCH` past body, `LABEL`, optional `self` param injection, params via `ruby_expr.lower_ruby_params`, body with implicit return handling via `_lower_body_with_implicit_return`, end label, `CONST func:ref`, `STORE_VAR`. Ruby's `initialize` method is renamed to `__init__` when `inject_self=True`.
+Lowers `def method_name(params) ... end`. Standard function lowering pattern: `BRANCH` past body, `LABEL`, optional `self` param injection, params via `ruby_expr.lower_ruby_params`, body with implicit return handling via `_lower_body_with_implicit_return`, end label, `CONST func:ref`, `DECL_VAR`. Ruby's `initialize` method is renamed to `__init__` when `inject_self=True`.
 
 ### `ruby_decl.lower_ruby_method_stmt(ctx, node)`
 Statement wrapper: calls `ruby_decl.lower_ruby_method(ctx, node, inject_self=False)`.
 
 ### `ruby_expr.lower_ruby_params(ctx, params_node)`
-Ruby-specific parameter lowering. Skips `(`, `)`, `,`, and `|` tokens. For each parameter, attempts direct `identifier` extraction, falls back to `_extract_param_name`. Emits `SYMBOLIC("param:name")` + `STORE_VAR`.
+Ruby-specific parameter lowering. Skips `(`, `)`, `,`, and `|` tokens. For each parameter, attempts direct `identifier` extraction, falls back to `_extract_param_name`. Emits `SYMBOLIC("param:name")` + `DECL_VAR`.
 
 ### `ruby_decl.lower_ruby_class(ctx, node)`
-Lowers `class ClassName ... end`. Emits `BRANCH` past body, `LABEL`, body (with method bodies getting `inject_self=True`), end label, `CONST class:ref`, `STORE_VAR`. Extracts superclass from `superclass` child for class reference.
+Lowers `class ClassName ... end`. Emits `BRANCH` past body, `LABEL`, body (with method bodies getting `inject_self=True`), end label, `CONST class:ref`, `DECL_VAR`. Extracts superclass from `superclass` child for class reference.
 
 ### `ruby_cf.lower_ruby_if(ctx, node)`
 Lowers Ruby `if` statement with `elsif` support. Routes alternatives through `_lower_ruby_alternative` which handles `elsif`, `else`, and `else_clause` node types.
@@ -225,7 +225,7 @@ Lowers `case expr; when val; ...; else; ...; end` as an if/else chain. For each 
 4. After all `when` clauses, lowers the `else` clause if present.
 
 ### `ruby_decl.lower_ruby_module(ctx, node)`
-Lowers `module Name ... end` identically to a class: `BRANCH` past body, `LABEL`, body, end label, `CONST class:ref`, `STORE_VAR`. Uses `CLASS_LABEL_PREFIX` and `CLASS_REF_TEMPLATE` for naming.
+Lowers `module Name ... end` identically to a class: `BRANCH` past body, `LABEL`, body, end label, `CONST class:ref`, `DECL_VAR`. Uses `CLASS_LABEL_PREFIX` and `CLASS_REF_TEMPLATE` for naming.
 
 ### `ruby_cf.lower_ruby_if_modifier(ctx, node)`
 Lowers `body if condition` (modifier form). Extracts first two named children as `body_node` and `cond_node`, evaluates condition, emits `BRANCH_IF` to body or end, lowers body on true branch.

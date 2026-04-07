@@ -108,8 +108,8 @@ The Python frontend uses all the base defaults for `none_literal` (`"None"`), `t
 | `if_statement` | `py_cf.lower_python_if` | `BRANCH_IF` + labels (with elif/else chain support) |
 | `while_statement` | `common_cf.lower_while` | `LABEL` + `BRANCH_IF` loop |
 | `for_statement` | `py_cf.lower_for` | Index-based iteration loop |
-| `function_definition` | `common_decl.lower_function_def` | `BRANCH` past body, `LABEL`, params, body, implicit `RETURN`, `STORE_VAR` func ref |
-| `class_definition` | `py_decl.lower_python_class_def` | `BRANCH` past body, `LABEL`, body, `STORE_VAR` class ref (with parent extraction) |
+| `function_definition` | `common_decl.lower_function_def` | `BRANCH` past body, `LABEL`, params, body, implicit `RETURN`, `DECL_VAR` func ref |
+| `class_definition` | `py_decl.lower_python_class_def` | `BRANCH` past body, `LABEL`, body, `DECL_VAR` class ref (with parent extraction) |
 | `raise_statement` | `py_cf.lower_raise` | `THROW` |
 | `try_statement` | `py_cf.lower_try` | `LABEL` blocks for try/except/else/finally |
 | `pass_statement` | `lambda ctx, node: None` | No-op |
@@ -158,7 +158,7 @@ Handles four Python parameter types:
 - `typed_parameter` -- `x: int`, finds first `identifier` child
 - `typed_default_parameter` -- `x: int = value`, extracts name from `name` field
 
-Each emits: `SYMBOLIC("param:<name>")` + `STORE_VAR(<name>, reg)`.
+Each emits: `SYMBOLIC("param:<name>")` + `DECL_VAR(<name>, reg)`.
 
 ### `py_cf.lower_raise(ctx, node)`
 
