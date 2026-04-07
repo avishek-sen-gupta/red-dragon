@@ -2663,7 +2663,7 @@ Imports are NOT a tree population source — they only appear in source code. Ty
 
 ---
 
-## 2026-04-05 — Multi-file project TUI with two-screen architecture
+### ADR-137: Multi-file project TUI with two-screen architecture (2026-04-05)
 
 **Context:** The TUI visualizer (`viz/`) only supported single-file execution. Multi-file projects compiled via `compile_directory()` had no interactive debugging experience — users had to rely on programmatic `run_linked()` calls and print output.
 
@@ -2675,3 +2675,16 @@ Imports are NOT a tree population source — they only appear in source code. Ty
 - **Screen management** — `ProjectApp` uses Textual's `push_screen()`/`pop_screen()` for phase transitions. `p` key returns from execution to overview.
 
 **Consequences:** Multi-file projects are now interactively debuggable with the same panel experience as single-file mode. No changes to existing single-file TUI, `LinkedProgram`, linker, or `execute_cfg_traced`. The `run_linked_traced` function is independently useful for any future traced multi-file execution needs. 13,324 tests passing.
+
+---
+
+### ADR-138: Expand LLM frontend opcode contract and wire LLM call telemetry (2026-04-06)
+
+**Context:** The LLM frontend prompt/parser lagged behind the typed IR and deterministic frontends. Constructor calls, declaration-vs-assignment semantics, and try/catch lowering were under-specified in the LLM path. In parallel, `ExecutionStats.llm_calls` under-counted calls made by `LLMPlausibleResolver`, making runtime telemetry unreliable when unresolved-call strategy was set to `LLM`.
+
+**Decision:**
+1. Expand `LLMFrontendPrompts.SYSTEM_PROMPT` and parser support to include `DECL_VAR`, `CALL_CTOR`, `TRY_PUSH`, and `TRY_POP` in the supported LLM opcode contract.
+2. Keep the LLM frontend contract explicitly scoped to a pragmatic opcode subset used for language lowering (not all 33 opcodes), while preserving compatibility with the universal IR output type.
+3. Fix execution telemetry so `ExecutionStats.llm_calls` includes calls performed by `LLMPlausibleResolver`.
+
+**Consequences:** LLM-lowered IR is closer to deterministic frontend semantics for variable declaration, constructor dispatch, and exception scaffolding, reducing semantic skew between frontend strategies. Runtime observability now reports accurate LLM call counts for plausible-value resolution, improving debugging, cost tracking, and performance comparisons.

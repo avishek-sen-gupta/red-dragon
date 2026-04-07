@@ -258,7 +258,7 @@ Iterates a `field_declaration_list` (C++ class body) and dispatches children by 
 
 ### `cpp_decl.lower_cpp_method(ctx, node)`
 
-Lowers a `function_definition` inside a class/struct body, injecting `SYMBOLIC param:this` + `STORE_VAR this` before other parameters. Otherwise follows the same pattern as `lower_cpp_function_def`. Seeds register, parameter, and variable types for `this` using the current class name.
+Lowers a `function_definition` inside a class/struct body, injecting `SYMBOLIC param:this` + `DECL_VAR this` before other parameters. Otherwise follows the same pattern as `lower_cpp_function_def`. Seeds register, parameter, and variable types for `this` using the current class name.
 
 ### `cpp_decl.lower_field_initializer_list(ctx, node)`
 
@@ -273,7 +273,7 @@ If no argument list is present for an initializer, defaults to `CONST "0"` (the 
 Overrides the C version to detect and lower `field_initializer_list` nodes in constructor definitions. The initializer list is emitted after parameters but before the body. All other function definition logic is identical to the C version:
 1. Extract declarator and body
 2. Find function name and parameters (handling nested `function_declarator` and `pointer_declarator`)
-3. Emit: `BRANCH end` + `LABEL func_<name>` + params + **field_initializer_list** + body + implicit `RETURN "0"` + `LABEL end` + `STORE_VAR`
+3. Emit: `BRANCH end` + `LABEL func_<name>` + params + **field_initializer_list** + body + implicit `RETURN "0"` + `LABEL end` + `DECL_VAR`
 
 ### `cpp_decl.lower_cpp_struct_def(ctx, node)` (override)
 
@@ -493,7 +493,7 @@ STORE_VAR "main", %37
 
 10. **Range-for index variable naming**: The range-based `for` loop desugaring stores the updated index into `"__range_idx"` but reads from the original `idx_reg`. This means the loop's index does not actually advance across iterations in the generated IR. This is a known limitation that does not affect data-flow analysis of the loop variable itself (which is correctly re-loaded each iteration via `LOAD_INDEX`).
 
-11. **Method `this` injection**: `lower_cpp_method` injects `SYMBOLIC param:this` + `STORE_VAR this` before other parameters when lowering function definitions inside class/struct bodies. The `this` parameter is typed with the current class name.
+11. **Method `this` injection**: `lower_cpp_method` injects `SYMBOLIC param:this` + `DECL_VAR this` before other parameters when lowering function definitions inside class/struct bodies. The `this` parameter is typed with the current class name.
 
 12. **Pure function architecture**: Like the C frontend, all C++-specific lowering logic is implemented as pure functions taking `(ctx: TreeSitterEmitContext, node)`. The `CppFrontend` class only builds dispatch tables by extending the C tables with C++ entries. Node type strings are centralised in `CppNodeType` constants.
 

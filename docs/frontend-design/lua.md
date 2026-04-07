@@ -73,7 +73,7 @@ Note: All literal constants (`none_literal`, `true_literal`, `false_literal`, `d
 |---|---|---|
 | `"variable_declaration"` | `lua_decl.lower_lua_variable_declaration` | `CONST "None"` + `STORE_VAR` or delegates to assignment |
 | `"assignment_statement"` | `lua_decl.lower_lua_assignment` | `STORE_VAR` / `STORE_FIELD` / `STORE_INDEX` per target |
-| `"function_declaration"` | `lua_decl.lower_lua_function_declaration` | `BRANCH` + `LABEL` + params + body + `RETURN` + `STORE_VAR` |
+| `"function_declaration"` | `lua_decl.lower_lua_function_declaration` | `BRANCH` + `LABEL` + params + body + `RETURN` + `DECL_VAR` |
 | `"if_statement"` | `lua_cf.lower_lua_if` | `BRANCH_IF` + `LABEL` + `BRANCH` + elseif chain |
 | `"while_statement"` | `lua_cf.lower_lua_while` | Loop with `BRANCH_IF` |
 | `"for_statement"` | `lua_cf.lower_lua_for` | Dispatches to numeric or generic for |
@@ -103,7 +103,7 @@ Handles Lua-specific target types for store operations:
 - Fallback -> `STORE_VAR` with raw text
 
 ### `lua_decl.lower_lua_function_declaration(ctx, node)`
-Lowers `function name(params) ... end`. Standard function lowering: `BRANCH` past body, `LABEL`, params via `common_decl.lower_params`, body, implicit `RETURN "None"`, end label, `CONST func:ref`, `STORE_VAR`. Uses `"__anon"` if no name node exists.
+Lowers `function name(params) ... end`. Standard function lowering: `BRANCH` past body, `LABEL`, params via `common_decl.lower_params`, body, implicit `RETURN "None"`, end label, `CONST func:ref`, `DECL_VAR`. Uses `"__anon"` if no name node exists.
 
 ### `lua_expr.lower_lua_call(ctx, node) -> str`
 Lowers `function_call`. Uses Lua's `name` field (not `function`). Five paths:
@@ -160,7 +160,7 @@ Unwraps `expression_list` to its first named child. If empty, returns `CONST "No
 Lowers `do ... end` as a plain block (for scoping purposes). Tries the `body` field first; if absent, iterates named children excluding `do` and `end`.
 
 ### `lua_expr.lower_lua_function_definition(ctx, node) -> str`
-Lowers anonymous function expressions (`function(params) ... end`). Generates a unique name via `ctx.fresh_label("anon_fn")`, emits function body between labels, and **returns** a register holding the `func:ref` constant. Unlike `lua_decl.lower_lua_function_declaration`, this does not emit a `STORE_VAR` (the result is an expression, not a declaration).
+Lowers anonymous function expressions (`function(params) ... end`). Generates a unique name via `ctx.fresh_label("anon_fn")`, emits function body between labels, and **returns** a register holding the `func:ref` constant. Unlike `lua_decl.lower_lua_function_declaration`, this does not emit a `DECL_VAR` (the result is an expression, not a declaration).
 
 ### `lua_expr.lower_lua_vararg(ctx, node) -> str`
 Lowers the `...` vararg expression as `SYMBOLIC("varargs")`.
@@ -288,6 +288,6 @@ Note the table constructor: positional entries start at index 1 (Lua convention)
 
 8. **No class/module support** -- Lua has no built-in class or module syntax. Object-oriented patterns in Lua are implemented via metatables, which are not modeled by this frontend.
 
-9. **Anonymous functions vs. declarations** -- `function_definition` (expression) returns a register via `lua_expr.lower_lua_function_definition`, while `function_declaration` (statement) emits `STORE_VAR` via `lua_decl.lower_lua_function_declaration`. This distinction matches Lua's semantics where `local f = function() end` is an expression assignment and `function f() end` is a declaration.
+9. **Anonymous functions vs. declarations** -- `function_definition` (expression) returns a register via `lua_expr.lower_lua_function_definition`, while `function_declaration` (statement) emits `DECL_VAR` via `lua_decl.lower_lua_function_declaration`. This distinction matches Lua's semantics where `local f = function() end` is an expression assignment and `function f() end` is a declaration.
 
 10. **Scoping model** -- Uses default `BLOCK_SCOPED = False` (function-scoped). Lua's `local` variables are technically block-scoped in the real language, but the frontend treats them as function-scoped. No `$` mangling occurs.

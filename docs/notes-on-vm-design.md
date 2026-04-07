@@ -165,7 +165,7 @@ All frontends emit **canonical Python-form literals** in `CONST` operands. Langu
 
 This is implemented via `_lower_canonical_none()`, `_lower_canonical_true()`, `_lower_canonical_false()`, and `_lower_canonical_bool()` methods on `BaseFrontend` (`interpreter/frontends/_base.py:200`). Each frontend's expression dispatch table maps its language-specific null/boolean node types (e.g., `"nil"`, `"null_literal"`, `"boolean_literal"`, `"kTrue"`) to these canonical lowering methods instead of the raw `_lower_const_literal()`.
 
-The VM's `_parse_const()` (`interpreter/vm.py:119`) then only needs to recognize the three canonical forms:
+The VM's `_parse_const()` (`interpreter/vm/vm.py`) then only needs to recognize the three canonical forms:
 
 ```python
 def _parse_const(raw: str) -> Any:
@@ -574,7 +574,7 @@ Class references follow a similar pattern: `<class:Point@class_Point_0>`.
 
 ### Call dispatch (user function)
 
-When `_try_user_function_call()` (`interpreter/executor.py:596`) matches a function reference, it produces a `StateUpdate` with:
+When `_try_user_function_call()` (`interpreter/handlers/calls.py`) matches a function reference, it produces a `StateUpdate` with:
 
 ```python
 StateUpdate(
@@ -627,7 +627,7 @@ LABEL func_factorial_0
 %0 = SYMBOLIC param:n        ← parameter declaration
 ```
 
-When the executor handles `SYMBOLIC` (`interpreter/executor.py:191`), it checks whether the parameter was pre-bound by the caller:
+When the executor handles `SYMBOLIC` (`interpreter/vm/executor.py`), it checks whether the parameter was pre-bound by the caller:
 
 ```python
 def _handle_symbolic(inst, vm, **kwargs):
@@ -648,7 +648,7 @@ This is how the VM handles both concrete calls (where the caller pre-binds `n=5`
 
 ### Class constructor flow
 
-`_try_class_constructor_call()` (`interpreter/executor.py:538`) handles `<class:Point@class_Point_0>`:
+`_try_class_constructor_call()` (`interpreter/handlers/calls.py`) handles `<class:Point@class_Point_0>`:
 
 ```
 1. Allocate heap object: vm.heap["obj_0"] = HeapObject(type_hint="Point")
@@ -662,7 +662,7 @@ This is how the VM handles both concrete calls (where the caller pre-binds `n=5`
 
 ### Method dispatch
 
-`_handle_call_method()` (`interpreter/executor.py:704`) resolves the object's type from the heap, looks up the method in the registry, and dispatches:
+`_handle_call_method()` (`interpreter/handlers/calls.py`) resolves the object's type from the heap, looks up the method in the registry, and dispatches:
 
 ```python
 addr = _heap_addr(obj_val)
@@ -690,7 +690,7 @@ The VM's best-effort execution mechanism enables running programs with incomplet
 
 ### Symbolic propagation through BINOP
 
-`_handle_binop()` (`interpreter/executor.py:437`):
+`_handle_binop()` (`interpreter/handlers/arithmetic.py`):
 
 ```python
 def _handle_binop(inst, vm, **kwargs):
@@ -719,7 +719,7 @@ def _handle_binop(inst, vm, **kwargs):
 
 ### UNCOMPUTABLE sentinel
 
-`Operators.UNCOMPUTABLE` (`interpreter/vm.py:133`) is a sentinel that replaces exceptions for operations that fail at the value level (not at the system level). This avoids exception-heavy control flow:
+`Operators.UNCOMPUTABLE` (`interpreter/vm/vm.py`) is a sentinel that replaces exceptions for operations that fail at the value level (not at the system level). This avoids exception-heavy control flow:
 
 ```python
 class Operators:
@@ -738,7 +738,7 @@ class Operators:
 
 ### Symbolic branching
 
-`_handle_branch_if()` (`interpreter/executor.py:406`):
+`_handle_branch_if()` (`interpreter/handlers/control_flow.py`):
 
 When the branch condition is symbolic, the VM **deterministically takes the true branch** and records the assumption:
 
@@ -757,7 +757,7 @@ Path conditions accumulate in `vm.path_conditions` and are included in LLM promp
 
 ### Lazy heap materialisation
 
-When the VM accesses a field on a symbolic object (not yet on the heap), it **materialises** a synthetic heap entry on the fly (`interpreter/executor.py:286`):
+When the VM accesses a field on a symbolic object (not yet on the heap), it **materialises** a synthetic heap entry on the fly (`interpreter/handlers/memory.py`):
 
 ```python
 def _handle_load_field(inst, vm, **kwargs):
@@ -776,7 +776,7 @@ This ensures that `obj.x` and `obj.x` on the same symbolic object return the *sa
 
 ### Variable resolution via scope chain
 
-`_handle_load_var()` (`interpreter/executor.py:146`) walks the call stack backwards (innermost to outermost frame), implementing proper lexical scoping:
+`_handle_load_var()` (`interpreter/handlers/variables.py`) walks the call stack backwards (innermost to outermost frame), implementing proper lexical scoping:
 
 ```python
 def _handle_load_var(inst, vm, **kwargs):
@@ -814,7 +814,7 @@ class ClosureEnvironment:
 
 ### Capture mechanism
 
-When `_handle_const()` (`interpreter/executor.py:100`) encounters a function reference being created inside another function (i.e., `len(vm.call_stack) > 1`), it creates or reuses a `ClosureEnvironment`:
+When `_handle_const()` (`interpreter/handlers/variables.py`) encounters a function reference being created inside another function (i.e., `len(vm.call_stack) > 1`), it creates or reuses a `ClosureEnvironment`:
 
 ```python
 if len(vm.call_stack) > 1 and isinstance(val, str):
@@ -842,7 +842,7 @@ The `#closure_id` suffix on the function reference string links the closure to i
 
 ### Mutation persistence
 
-In `apply_update()` (`interpreter/vm.py:59`), variable writes to captured names are synced back to the shared environment:
+In `apply_update()` (`interpreter/vm/vm.py`), variable writes to captured names are synced back to the shared environment:
 
 ```python
 target_frame = vm.current_frame
@@ -926,7 +926,7 @@ After promotion, all reads (`LOAD_VAR`) and writes (`STORE_VAR`) for that variab
 
 ## 11. Built-in Functions
 
-Built-in functions are defined in `interpreter/builtins.py`. They are dispatched before user functions in the call chain.
+Built-in functions are defined in `interpreter/vm/builtins.py`. They are dispatched before user functions in the call chain.
 
 ### Built-in table
 
@@ -966,7 +966,7 @@ The primitive type map (`{"int": int, "str": str, "float": float, "bool": bool, 
 
 ### Handling symbolic arguments
 
-Built-ins gracefully degrade when given symbolic arguments. For example, `_builtin_len()` (`interpreter/builtins.py:12`):
+Built-ins gracefully degrade when given symbolic arguments. For example, `_builtin_len()` (`interpreter/vm/builtins.py`):
 
 ```python
 def _builtin_len(args, vm):
@@ -979,7 +979,7 @@ def _builtin_len(args, vm):
     return _UNCOMPUTABLE                      # symbolic → can't compute
 ```
 
-When a builtin returns `UNCOMPUTABLE`, the call handler in `_try_builtin_call()` (`interpreter/executor.py:506`) wraps it in a symbolic value:
+When a builtin returns `UNCOMPUTABLE`, the call handler in `_try_builtin_call()` (`interpreter/handlers/calls.py`) wraps it in a symbolic value:
 
 ```python
 result = Builtins.TABLE[func_name](args, vm)

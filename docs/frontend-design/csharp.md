@@ -100,14 +100,14 @@ The full statement dispatch returned by `_build_stmt_dispatch()`:
 | AST Node Type | Handler | Emitted IR |
 |---|---|---|
 | `expression_statement` | `common_assign.lower_expression_statement` | (unwraps inner expr) |
-| `local_declaration_statement` | `csharp_decl.lower_local_decl_stmt` | `STORE_VAR` per declarator |
+| `local_declaration_statement` | `csharp_decl.lower_local_decl_stmt` | `DECL_VAR` per declarator |
 | `return_statement` | `common_assign.lower_return` | `RETURN` |
 | `if_statement` | `csharp_cf.lower_if` | `BRANCH_IF` + labels |
 | `while_statement` | `common_cf.lower_while` | (inherited) `BRANCH_IF` loop |
 | `for_statement` | `common_cf.lower_c_style_for` | (inherited) C-style for loop; init vars block-scoped |
 | `foreach_statement` | `csharp_cf.lower_foreach` | Index-based loop with `LOAD_INDEX` |
-| `method_declaration` | `csharp_decl.lower_method_decl` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
-| `class_declaration` | `csharp_decl.lower_class_def` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
+| `method_declaration` | `csharp_decl.lower_method_decl` | `BRANCH`/`LABEL`/`RETURN`/`DECL_VAR` |
+| `class_declaration` | `csharp_decl.lower_class_def` | `BRANCH`/`LABEL`/`DECL_VAR` (class ref) |
 | `struct_declaration` | `csharp_decl.lower_class_def` | Same as class_declaration |
 | `record_declaration` | `csharp_decl.lower_class_def` | Same as class_declaration |
 | `record_struct_declaration` | `csharp_decl.lower_class_def` | Same as class_declaration |
@@ -130,8 +130,8 @@ The full statement dispatch returned by `_build_stmt_dispatch()`:
 | `using_statement` | `csharp_cf.lower_using_stmt` | (lowers resource decl + body block) |
 | `checked_statement` | `csharp_cf.lower_checked_stmt` | (lowers body block) |
 | `fixed_statement` | `csharp_cf.lower_fixed_stmt` | (lowers body block) |
-| `event_field_declaration` | `csharp_decl.lower_event_field_decl` | `STORE_VAR` via variable_declaration |
-| `event_declaration` | `csharp_decl.lower_event_decl` | `CONST("event:{name}")` + `STORE_VAR` |
+| `event_field_declaration` | `csharp_decl.lower_event_field_decl` | `DECL_VAR` via variable_declaration |
+| `event_declaration` | `csharp_decl.lower_event_decl` | `CONST("event:{name}")` + `DECL_VAR` |
 | `variable_declaration` | `csharp_decl.lower_variable_declaration` | `STORE_VAR` per declarator |
 | `delegate_declaration` | `csharp_decl.lower_delegate_declaration` | Function stub |
 | `local_function_statement` | `csharp_decl.lower_local_function_stmt` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
@@ -224,10 +224,10 @@ Handles individual LINQ clauses (from/select/where). Lowers named children seque
 Handles `foreach (Type var in collection)`. Extracts `left` (variable), `right` (collection), `body`. Desugars to index-based loop: `len()`, `LOAD_INDEX`, increment. Uses block scoping via `ctx.enter_block_scope`/`ctx.exit_block_scope`.
 
 ### `csharp_decl.lower_method_decl(ctx, node, inject_this)`
-Handles `method_declaration`. Extracts `name`, `parameters`, `body`. Emits function definition pattern with `csharp_expr.lower_csharp_params` for parameters. Optionally injects `SYMBOLIC param:this` + `STORE_VAR this` for instance methods (non-static). Seeds function return type.
+Handles `method_declaration`. Extracts `name`, `parameters`, `body`. Emits function definition pattern with `csharp_expr.lower_csharp_params` for parameters. Optionally injects `SYMBOLIC param:this` + `DECL_VAR this` for instance methods (non-static). Seeds function return type.
 
 ### `csharp_expr.lower_csharp_params(ctx, params_node)`
-Iterates `parameter` children, extracts `name` field, computes type hint, emits `SYMBOLIC("param:{name}")` + `STORE_VAR`. Seeds register, parameter, and variable types.
+Iterates `parameter` children, extracts `name` field, computes type hint, emits `SYMBOLIC("param:{name}")` + `DECL_VAR`. Seeds register, parameter, and variable types.
 
 ### `csharp_decl.lower_constructor_decl(ctx, node)`
 Handles `constructor_declaration`. Identical to `lower_method_decl` except the function name is hardcoded to `"__init__"`.
@@ -291,7 +291,7 @@ Handles `yield_statement`. If `yield break`: emits `CALL_FUNCTION("yield_break")
 Infrastructure statements. Each lowers the lock expression or resource declaration and then the body block. `checked` and `fixed` simply lower the body block.
 
 ### `csharp_decl.lower_event_field_decl(ctx, node)` / `csharp_decl.lower_event_decl(ctx, node)`
-Event declarations. `lower_event_field_decl` delegates to `lower_variable_declaration`. `lower_event_decl` emits `CONST("event:{name}")` + `STORE_VAR`.
+Event declarations. `lower_event_field_decl` delegates to `lower_variable_declaration`. `lower_event_decl` emits `CONST("event:{name}")` + `DECL_VAR`.
 
 ### `csharp_expr.lower_conditional_access(ctx, node) -> str`
 Handles `obj?.Field`. Lowers object, extracts field from `member_binding_expression` child. Emits `LOAD_FIELD`. Null-safety is semantic only.
@@ -376,7 +376,7 @@ Note: Methods are lowered *after* the class label/ref is emitted due to the defe
 
 7. **Structs and records treated as classes**: `struct_declaration`, `record_declaration`, and `record_struct_declaration` all map to the same `lower_class_def` handler as `class_declaration`. No value-type semantics are modeled.
 
-8. **Events as constants**: Event declarations emit `CONST("event:{name}")` + `STORE_VAR`. No delegate/subscription semantics are modeled.
+8. **Events as constants**: Event declarations emit `CONST("event:{name}")` + `DECL_VAR`. No delegate/subscription semantics are modeled.
 
 9. **`as` cast is passthrough**: `x as Type` returns the left operand's register directly; the type check is not modeled. For safety-aware analysis, `is` expressions emit proper `CALL_FUNCTION("is_check", ...)`.
 

@@ -45,10 +45,10 @@ All other constants (`none_literal`, `true_literal`, `false_literal`, `default_r
 | AST Node Type | Handler | Emitted IR |
 |---|---|---|
 | `identifier` | `common_expr.lower_identifier` | `LOAD_VAR` |
-| `decimal_integer_literal` | `common_expr.lower_const_literal` | `CONST` (raw text) |
-| `hex_integer_literal` | `common_expr.lower_const_literal` | `CONST` (raw text) |
-| `octal_integer_literal` | `common_expr.lower_const_literal` | `CONST` (raw text) |
-| `binary_integer_literal` | `common_expr.lower_const_literal` | `CONST` (raw text) |
+| `decimal_integer_literal` | `java_expr.lower_java_integer_literal` | `CONST` (normalized decimal text) |
+| `hex_integer_literal` | `java_expr.lower_java_integer_literal` | `CONST` (hex -> decimal text) |
+| `octal_integer_literal` | `java_expr.lower_java_integer_literal` | `CONST` (octal -> decimal text) |
+| `binary_integer_literal` | `java_expr.lower_java_integer_literal` | `CONST` (binary -> decimal text) |
 | `decimal_floating_point_literal` | `common_expr.lower_const_literal` | `CONST` (raw text) |
 | `string_literal` | `common_expr.lower_const_literal` | `CONST` (raw text) |
 | `character_literal` | `common_expr.lower_const_literal` | `CONST` (raw text) |
@@ -61,7 +61,7 @@ All other constants (`none_literal`, `true_literal`, `false_literal`, `default_r
 | `update_expression` | `common_expr.lower_update_expr` | `BINOP(+/-) + STORE_VAR/STORE_FIELD` |
 | `parenthesized_expression` | `common_expr.lower_paren` | (unwraps inner expression) |
 | `method_invocation` | `java_expr.lower_method_invocation` | `CALL_METHOD` or `CALL_FUNCTION` |
-| `object_creation_expression` | `java_expr.lower_object_creation` | `CALL_FUNCTION(TypeName, args...)` |
+| `object_creation_expression` | `java_expr.lower_object_creation` | `CALL_CTOR(TypeName, args...)` |
 | `field_access` | `java_expr.lower_field_access` | `LOAD_VAR` (if namespace-resolved) or `LOAD_FIELD` |
 | `array_access` | `java_expr.lower_array_access` | `LOAD_INDEX` |
 | `array_creation_expression` | `java_expr.lower_array_creation` | `NEW_ARRAY` + `STORE_INDEX` per element |
@@ -69,7 +69,7 @@ All other constants (`none_literal`, `true_literal`, `false_literal`, `default_r
 | `assignment_expression` | `java_expr.lower_assignment_expr` | `STORE_VAR` / `STORE_FIELD` / `STORE_INDEX` |
 | `cast_expression` | `java_expr.lower_cast_expr` | (transparent -- lowers the value child) |
 | `instanceof_expression` | `java_expr.lower_instanceof` | `CALL_FUNCTION("instanceof", obj, type)` |
-| `ternary_expression` | `java_expr.lower_ternary` | `BRANCH_IF` + `STORE_VAR` + `LOAD_VAR` |
+| `ternary_expression` | `java_expr.lower_ternary` | `BRANCH_IF` + `DECL_VAR` + `LOAD_VAR` |
 | `type_identifier` | `common_expr.lower_identifier` | `LOAD_VAR` |
 | `method_reference` | `java_expr.lower_method_reference` | `LOAD_FIELD(obj, method_name)` |
 | `lambda_expression` | `java_expr.lower_lambda` | `BRANCH`/`LABEL` func body + `CONST <function:...>` |
@@ -85,14 +85,14 @@ All other constants (`none_literal`, `true_literal`, `false_literal`, `default_r
 | AST Node Type | Handler | Emitted IR |
 |---|---|---|
 | `expression_statement` | `common_assign.lower_expression_statement` | (unwraps inner expression) |
-| `local_variable_declaration` | `java_decl.lower_local_var_decl` | `STORE_VAR` per declarator |
+| `local_variable_declaration` | `java_decl.lower_local_var_decl` | `DECL_VAR` per declarator |
 | `return_statement` | `common_assign.lower_return` | `RETURN` |
 | `if_statement` | `java_cf.lower_if` | `BRANCH_IF` / `LABEL` / `BRANCH` |
 | `while_statement` | `common_cf.lower_while` | `BRANCH_IF` loop |
 | `for_statement` | `common_cf.lower_c_style_for` | init + `BRANCH_IF` loop + update; init vars block-scoped (`for_initializer_field="init"`) |
 | `enhanced_for_statement` | `java_cf.lower_enhanced_for` | index-based iteration loop |
-| `method_declaration` | `java_decl.lower_method_decl_stmt` | `BRANCH`/`LABEL` func + params + `RETURN` + `STORE_VAR` |
-| `class_declaration` | `java_decl.lower_class_def` | `BRANCH`/`LABEL` class + deferred body + `STORE_VAR` |
+| `method_declaration` | `java_decl.lower_method_decl_stmt` | `BRANCH`/`LABEL` func + params + `RETURN` + `DECL_VAR` |
+| `class_declaration` | `java_decl.lower_class_def` | `BRANCH`/`LABEL` class + deferred body + `DECL_VAR` |
 | `interface_declaration` | `java_decl.lower_interface_decl` | `NEW_OBJECT("interface:Name")` + `STORE_INDEX` per member |
 | `enum_declaration` | `java_decl.lower_enum_decl` | `NEW_OBJECT("enum:Name")` + `STORE_INDEX` per constant |
 | `throw_statement` | `java_cf.lower_throw` | `THROW` |
@@ -107,7 +107,7 @@ All other constants (`none_literal`, `true_literal`, `false_literal`, `default_r
 | `assert_statement` | `java_cf.lower_assert_statement` | `CALL_FUNCTION("assert", cond, [msg])` |
 | `labeled_statement` | `java_cf.lower_labeled_statement` | (unwraps, lowers inner statement) |
 | `synchronized_statement` | `java_cf.lower_synchronized_statement` | lowers lock expr + body |
-| `explicit_constructor_invocation` | `java_cf.lower_explicit_constructor_invocation` | `CALL_FUNCTION("super"/"this", args...)` |
+| `explicit_constructor_invocation` | `java_cf.lower_explicit_constructor_invocation` | `CALL_FUNCTION("super", ...)` or `CALL_METHOD(this, "__init__", ...)` |
 | `annotation_type_declaration` | `java_decl.lower_annotation_type_decl` | `NEW_OBJECT("annotation:Name")` + `STORE_INDEX` per member |
 | `record_declaration` | `java_decl.lower_record_decl` | same structure as `class_declaration` |
 
@@ -117,7 +117,7 @@ All other constants (`none_literal`, `true_literal`, `false_literal`, `default_r
 Handles Java's `method_invocation` node which uses `name`, `object`, and `arguments` fields. If `object` is present, emits `CALL_METHOD(obj_reg, method_name, args...)`; otherwise emits `CALL_FUNCTION(func_name, args...)`. Uses `common_expr.extract_call_args_unwrap` to handle `argument` wrapper nodes.
 
 ### `java_expr.lower_object_creation(ctx, node) -> str`
-Lowers `new ClassName(args...)` by extracting the `type` field name and emitting `CALL_FUNCTION(TypeName, args...)`. Seeds the register type with the class name.
+Lowers `new ClassName(args...)` by extracting the `type` field name and emitting `CALL_CTOR(TypeName, args...)`. Seeds the register type with the class name.
 
 ### `java_expr.lower_field_access(ctx, node) -> str`
 Uses Java-specific field names (`object`/`field`) to emit `LOAD_FIELD(obj_reg, field_name)`.
@@ -165,7 +165,7 @@ Lowers `expression_statement` in expression context (e.g., inside switch express
 Lowers `throw_statement` in expression context (e.g., switch expression arm). Emits `THROW` and returns the value register.
 
 ### `java_expr.lower_java_params(ctx, params_node)`
-Walks `formal_parameter` and `spread_parameter` children. For each, extracts the `name` field and emits `SYMBOLIC("param:name")` + `STORE_VAR`. Extracts and seeds type hints.
+Walks `formal_parameter` and `spread_parameter` children. For each, extracts the `name` field and emits `SYMBOLIC("param:name")` + `DECL_VAR`. Extracts and seeds type hints.
 
 ### `java_cf.lower_if(ctx, node)`
 Java if with else-if handled as nested `if_statement`. Uses `condition`/`consequence`/`alternative` fields. Recursively calls itself for `else if` chains.
@@ -198,13 +198,13 @@ Delegates to `common.exceptions.lower_raise_or_throw(ctx, node, keyword="throw")
 Extracts body, catch clauses (from `catch_clause` -> `catch_formal_parameter` -> name/type), and finally block. Delegates to `common.exceptions.lower_try_catch`.
 
 ### `java_cf.lower_explicit_constructor_invocation(ctx, node)`
-Handles `super(...)` and `this(...)` calls. Determines target name from the first `super`/`this` child node, then emits `CALL_FUNCTION(target_name, args...)`.
+Handles `super(...)` and `this(...)` calls. `this(...)` is lowered as `CALL_METHOD(this, "__init__", args...)`; `super(...)` remains `CALL_FUNCTION("super", args...)`.
 
 ### `java_decl.lower_local_var_decl(ctx, node)`
-Walks `variable_declarator` children. With initializer: lowers value, emits `STORE_VAR`. Without initializer: emits `CONST "None"` + `STORE_VAR`. Extracts and seeds type hints.
+Walks `variable_declarator` children. With initializer: lowers value, emits `DECL_VAR`. Without initializer: emits `CONST "None"` + `DECL_VAR`. Extracts and seeds type hints.
 
 ### `java_decl.lower_method_decl(ctx, node, inject_this=False)`
-Lowers method declarations with `BRANCH` around the body, `LABEL` for the function, parameters via `lower_java_params`, block body, implicit return, and `STORE_VAR` binding the function reference. Optionally injects `this` parameter for instance methods.
+Lowers method declarations with `BRANCH` around the body, `LABEL` for the function, parameters via `lower_java_params`, block body, implicit return, and `DECL_VAR` binding the function reference. Optionally injects `this` parameter for instance methods.
 
 ### `java_decl.lower_method_decl_stmt(ctx, node)`
 Statement-dispatch wrapper: calls `lower_method_decl(ctx, node)`.
@@ -222,13 +222,13 @@ Dispatches by type: `method_declaration` -> `lower_method_decl` (with `inject_th
 Lowers constructor as a function named `__init__`. Uses `lower_java_params` for parameters.
 
 ### `java_decl._lower_field_decl(ctx, node)`
-Walks `variable_declarator` children. For those with both `name` and `value`, lowers value and emits `STORE_VAR`. Seeds type hints.
+Walks `variable_declarator` children. For those with both `name` and `value`, lowers value and emits `DECL_VAR`. Seeds type hints.
 
 ### `java_decl.lower_interface_decl(ctx, node)`
-Emits `NEW_OBJECT("interface:Name")`, then for each named member in the body emits `STORE_INDEX(obj, member_name, ordinal)`. Finally `STORE_VAR(iface_name, obj_reg)`.
+Emits `NEW_OBJECT("interface:Name")`, then for each named member in the body emits `STORE_INDEX(obj, member_name, ordinal)`. Finally `DECL_VAR(iface_name, obj_reg)`.
 
 ### `java_decl.lower_enum_decl(ctx, node)`
-Emits `NEW_OBJECT("enum:Name")`, then for each `enum_constant` child emits `STORE_INDEX(obj, member_name, ordinal)`. Finally `STORE_VAR(enum_name, obj_reg)`.
+Emits `NEW_OBJECT("enum:Name")`, then for each `enum_constant` child emits `STORE_INDEX(obj, member_name, ordinal)`. Finally `DECL_VAR(enum_name, obj_reg)`.
 
 ### `java_decl.lower_annotation_type_decl(ctx, node)`
 Lowers `@interface Name { ... }` as `NEW_OBJECT("annotation:Name")` + `STORE_INDEX` per member, identical structure to interface declarations.
@@ -265,7 +265,7 @@ LABEL entry
 BRANCH end_factorial_1
 LABEL func_factorial_0
 SYMBOLIC %0 "param:n"
-STORE_VAR n, %0
+DECL_VAR n, %0
 LOAD_VAR %1, n
 CONST %2, 1
 BINOP %3, "<=", %1, %2
@@ -286,7 +286,7 @@ CONST %11, "None"
 RETURN %11
 LABEL end_factorial_1
 CONST %12, "<function:factorial@func_factorial_0>"
-STORE_VAR factorial, %12
+DECL_VAR factorial, %12
 ```
 
 ## Design Notes
