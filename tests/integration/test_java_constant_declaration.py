@@ -1,15 +1,15 @@
-"""Integration test for Java ``public static final`` constant_declaration lowering.
+"""Integration test for Java constant_declaration lowering.
 
-Java's ``constant_declaration`` node (``public static final Type NAME = expr``)
-is not yet supported by the Java frontend. This test documents the gap: when
-a class declares ``public static final String`` constants, the frontend emits
-``Symbolic(hint='unsupported:constant_declaration')`` instead of lowering the
-initialiser expression.
+Covers two cases:
+1. **Class constants** — ``public static final`` fields inside a class body.
+   Tree-sitter parses these as ``field_declaration`` nodes with static/final
+   modifiers.
+2. **Interface constants** — fields inside an interface body.  Tree-sitter
+   parses these as ``constant_declaration`` nodes (implicitly
+   ``public static final``).
 
-This affects real-world code such as padding constants::
-
-    public static final String PAD1 = "                ";
-    public static final String PAD2 = PAD1 + PAD1 + PAD1 + PAD1;
+Both should produce concrete ``DeclVar`` IR and resolve to concrete values at
+runtime via ``LoadField`` on a ``ClassRef`` backed by ``SymbolTable.classes``.
 """
 
 from pathlib import Path
@@ -70,6 +70,65 @@ class TestJavaConstantDeclaration:
         }
 
         # All constant_declaration values should be concrete
+        symbolics = [
+            (str(k), v.name)
+            for k, v in local_vars.items()
+            if isinstance(v, SymbolicValue)
+        ]
+        assert symbolics == [], f"Expected no symbolics: {symbolics}"
+
+        assert local_vars.get(VarName("g")) == "hello"
+        assert local_vars.get(VarName("m")) == 100
+
+
+# ── Interface constants (red-dragon-ev6r) ────────────────────────
+
+_INTERFACE_CONSTANTS_JAVA = """\
+public interface MyConstants {
+    String GREETING = "hello";
+    int MAX_SIZE = 100;
+    String PADDED = "  " + "  ";
+}
+
+String g = MyConstants.GREETING;
+int m = MyConstants.MAX_SIZE;
+"""
+
+
+@pytest.fixture
+def interface_constants_project(tmp_path: Path) -> Path:
+    main_file = tmp_path / "src" / "main" / "java" / "MyConstants.java"
+    main_file.parent.mkdir(parents=True, exist_ok=True)
+    main_file.write_text(_INTERFACE_CONSTANTS_JAVA)
+    return tmp_path
+
+
+class TestJavaInterfaceConstantDeclaration:
+    def test_interface_constants_are_concrete(self, interface_constants_project: Path):
+        """Interface fields (constant_declaration) should lower to concrete values."""
+        linked = compile_directory(interface_constants_project, Language.JAVA)
+
+        strategies = ExecutionStrategies(
+            func_symbol_table=linked.func_symbol_table,
+            class_symbol_table=linked.class_symbol_table,
+            symbol_table=linked.symbol_table,
+        )
+        config = VMConfig(max_steps=500)
+        vm, stats = execute_cfg(
+            linked.merged_cfg,
+            linked.merged_cfg.entry,
+            linked.merged_registry,
+            config,
+            strategies,
+        )
+
+        frame = vm.call_stack[0]
+        local_vars = {
+            k: v.value if isinstance(v, TypedValue) else v
+            for k, v in frame.local_vars.items()
+        }
+
+        # No symbolic values should leak from interface constants
         symbolics = [
             (str(k), v.name)
             for k, v in local_vars.items()

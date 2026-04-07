@@ -727,7 +727,7 @@ def _extract_java_class_parents(node) -> tuple[str, ...]:
 
 
 def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
-    """Extract a ClassInfo from a Java class_declaration node."""
+    """Extract a ClassInfo from a Java class_declaration or interface_declaration node."""
     name_node = node.child_by_field_name("name")
     if name_node is None:
         return None
@@ -735,7 +735,7 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
     parents = _extract_java_class_parents(node)
 
     body = next(
-        (c for c in node.children if c.type == "class_body"),
+        (c for c in node.children if c.type in ("class_body", "interface_body")),
         None,
     )
     if body is None:
@@ -785,8 +785,11 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
 
 
 def _collect_java_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
-    """Recursively walk the AST and collect all class_declaration nodes."""
-    if node.type == JavaNodeType.CLASS_DECLARATION:
+    """Recursively walk the AST and collect all class/interface declaration nodes."""
+    if node.type in (
+        JavaNodeType.CLASS_DECLARATION,
+        JavaNodeType.INTERFACE_DECLARATION,
+    ):
         result = _extract_java_class(node)
         if result is not None:
             class_name, class_info = result
