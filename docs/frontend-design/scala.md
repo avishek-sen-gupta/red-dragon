@@ -59,8 +59,8 @@ The `default_return_value` of `"()"` reflects Scala's `Unit` type -- the implici
 | `parenthesized_expression` | `common_expr.lower_paren` | (unwraps inner expression) |
 | `call_expression` | `common_expr.lower_call` | `CALL_METHOD`, `CALL_FUNCTION`, or `CALL_UNKNOWN` |
 | `field_expression` | `scala_expr.lower_field_expr` | `LOAD_FIELD` |
-| `if_expression` | `scala_expr.lower_if_expr` | `BRANCH_IF` + `STORE_VAR` + `LOAD_VAR` (value-producing) |
-| `match_expression` | `scala_expr.lower_match_expr` | equality chain + `STORE_VAR` + `LOAD_VAR` |
+| `if_expression` | `scala_expr.lower_if_expr` | `BRANCH_IF` + `DECL_VAR` + `LOAD_VAR` (value-producing) |
+| `match_expression` | `scala_expr.lower_match_expr` | equality chain + `DECL_VAR` + `LOAD_VAR` |
 | `block` | `scala_expr.lower_block_expr` | lowers stmts, returns last expr's register |
 | `assignment_expression` | `scala_expr.lower_assignment_expr` | `STORE_VAR`/`STORE_FIELD` + returns val_reg |
 | `return_expression` | `scala_expr.lower_return_expr` | `RETURN` + returns val_reg |
@@ -72,7 +72,7 @@ The `default_return_value` of `"()"` reflects Scala's `Unit` type -- the implici
 | `interpolated_string_expression` | `scala_expr.lower_scala_interpolated_string` | String interpolation via parts |
 | `interpolated_string` | `scala_expr.lower_scala_interpolated_string_body` | String interpolation body |
 | `lambda_expression` | `scala_expr.lower_lambda_expr` | `BRANCH`/`LABEL` func body + `CONST <function:...>` |
-| `instance_expression` | `scala_expr.lower_new_expr` | `CALL_FUNCTION(TypeName)` |
+| `instance_expression` | `scala_expr.lower_new_expr` | `CALL_CTOR(TypeName, ...args)` |
 | `generic_type` | `scala_expr.lower_symbolic_node` | `SYMBOLIC` |
 | `type_identifier` | `common_expr.lower_identifier` | `LOAD_VAR` |
 | `try_expression` | `scala_expr.lower_try_expr` | try/catch/finally + `CONST "None"` |
@@ -98,9 +98,9 @@ The `default_return_value` of `"()"` reflects Scala's `Unit` type -- the implici
 |---|---|---|
 | `val_definition` | `scala_decl.lower_val_def` | `STORE_VAR` |
 | `var_definition` | `scala_decl.lower_var_def` | `STORE_VAR` |
-| `function_definition` | `scala_decl.lower_function_def_stmt` | `BRANCH`/`LABEL` func + params + `RETURN` + `STORE_VAR` |
-| `class_definition` | `scala_decl.lower_class_def` | `BRANCH`/`LABEL` class + hoisted body + `STORE_VAR` |
-| `object_definition` | `scala_decl.lower_object_def` | `BRANCH`/`LABEL` class + hoisted body + `STORE_VAR` |
+| `function_definition` | `scala_decl.lower_function_def_stmt` | `BRANCH`/`LABEL` func + params + `RETURN` + `DECL_VAR` |
+| `class_definition` | `scala_decl.lower_class_def` | `BRANCH`/`LABEL` class + hoisted body + `DECL_VAR` |
+| `object_definition` | `scala_decl.lower_object_def` | `BRANCH`/`LABEL` class + hoisted body + `DECL_VAR` |
 | `if_expression` | `scala_cf.lower_if_stmt` | (delegates to `scala_expr.lower_if_expr`, discards result) |
 | `while_expression` | `scala_cf.lower_while` | `BRANCH_IF` loop |
 | `match_expression` | `scala_cf.lower_match_stmt` | (delegates to `scala_expr.lower_match_expr`, discards result) |
@@ -114,7 +114,7 @@ The `default_return_value` of `"()"` reflects Scala's `Unit` type -- the implici
 | `continue_expression` | `common_cf.lower_continue` | `BRANCH` to continue label |
 | `try_expression` | `scala_cf.lower_try_stmt` | `LABEL`/`BRANCH` try/catch/finally blocks |
 | `for_expression` | `scala_cf.lower_for_expr` | generator loop with guards |
-| `trait_definition` | `scala_decl.lower_trait_def` | `BRANCH`/`LABEL` class-like + `STORE_VAR` |
+| `trait_definition` | `scala_decl.lower_trait_def` | `BRANCH`/`LABEL` class-like + `DECL_VAR` |
 | `case_class_definition` | `scala_decl.lower_class_def` | same as `class_definition` |
 | `lazy_val_definition` | `scala_decl.lower_val_def` | same as `val_definition` |
 | `do_while_expression` | `scala_cf.lower_do_while` | body-first loop with `BRANCH_IF` at end |
@@ -166,10 +166,10 @@ Statement-dispatch wrapper: calls `lower_function_def(ctx, node)`.
 Lowers abstract function declarations (no body) as function stubs with immediate return of `default_return_value`.
 
 ### `scala_decl.lower_scala_params(ctx, params_node)`
-Walks `parameter` children. For each, extracts `name` field and emits `SYMBOLIC("param:name")` + `STORE_VAR`. Extracts and seeds type hints.
+Walks `parameter` children. For each, extracts `name` field and emits `SYMBOLIC("param:name")` + `DECL_VAR`. Extracts and seeds type hints.
 
 ### `scala_decl.lower_class_def(ctx, node)`
-Uses `name`/`body` fields. Emits class label structure (notably **without** lowering body between labels -- the labels are placed consecutively). Then registers class reference via `STORE_VAR`. If body exists, hoists it via `_lower_class_body_hoisted` with `inject_this=True`. Extracts parent classes/traits from `extends_clause`.
+Uses `name`/`body` fields. Emits class label structure (notably **without** lowering body between labels -- the labels are placed consecutively). Then registers class reference via `DECL_VAR`. If body exists, hoists it via `_lower_class_body_hoisted` with `inject_this=True`. Extracts parent classes/traits from `extends_clause`.
 
 ### `scala_decl.lower_object_def(ctx, node)`
 Identical structure to `lower_class_def` for Scala singleton `object` definitions. Uses `CLASS_LABEL_PREFIX`/`CLASS_REF_TEMPLATE` same as classes. Hoists body without `inject_this`.
@@ -190,7 +190,7 @@ Lowers `(a, b, c)` as `NEW_ARRAY("tuple", size)` + `STORE_INDEX` per element. Fi
 Creates function body with label `func___lambda_N`. Extracts lambda parameters from `bindings` -> `binding` -> `identifier`. All named non-comment children (except bindings) are lowered; last expression is implicitly returned. Emits implicit return of `"()"`, returns function reference constant.
 
 ### `scala_expr.lower_new_expr(ctx, node) -> str`
-Lowers `new Type(...)` (via `instance_expression`). Extracts type name from first named child, emits `CALL_FUNCTION(TypeName)`. Defaults to `"Object"` if no children. Seeds register type.
+Lowers `new Type(...)` (via `instance_expression`). Extracts type name from first named child, emits `CALL_CTOR(TypeName, ...args)`. Defaults to `"Object"` if no children. Seeds register type.
 
 ### `scala_expr.lower_scala_interpolated_string(ctx, node) -> str`
 Lowers `interpolated_string_expression` (s"...", f"...", raw"..."). Delegates to `lower_scala_interpolated_string_body` for the inner `interpolated_string` child.
@@ -325,7 +325,7 @@ STORE_VAR factorial, %14
 - **No loop stack usage in `lower_while` and `lower_do_while`**: The Scala-specific while and do-while overrides do not call `push_loop`/`pop_loop`, meaning `break`/`continue` may not correctly target these loops. However, `break_expression` and `continue_expression` are still in the statement dispatch table via `common_cf.lower_break`/`common_cf.lower_continue`.
 - **`block` in `block_node_types`**: Setting `block_node_types = frozenset({"block", "template_body", "compilation_unit"})` enables block-level dispatch for these container node types.
 - **Scala's `field_expression`**: Uses `value`/`field` field names instead of `object`/`attribute`, requiring both constant overrides and a custom `lower_field_expr` method.
-- **`instance_expression` for `new`**: Scala's `new Type(...)` is tree-sitter node type `instance_expression`, lowered as a simple `CALL_FUNCTION(TypeName)` without arguments (arguments are not extracted in the current implementation). Register type is seeded.
+- **`instance_expression` for `new`**: Scala's `new Type(...)` is tree-sitter node type `instance_expression`, lowered as `CALL_CTOR(TypeName, ...args)` with constructor arguments extracted from `arguments`. Register type is seeded.
 - **`template_body` and `compilation_unit`**: Both are mapped to `ctx.lower_block`, serving as top-level and class-body containers respectively.
 - **String interpolation**: `s"Hello, $name"` is decomposed by extracting literal gaps between `interpolation` children from raw source bytes, then concatenating via `lower_interpolated_string_parts`.
 - **Tuple destructuring**: `val (a, b) = expr` is supported via `tuple_pattern` detection in `_lower_val_or_var_def`, emitting `LOAD_INDEX` per element.

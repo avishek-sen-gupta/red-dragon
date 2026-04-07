@@ -610,7 +610,7 @@ flowchart BT
 
 ## LLM frontend
 
-The LLM frontend (`--frontend llm`) sends source to an LLM constrained by a formal [IR schema](docs/ir-reference.md) — the LLM acts as a **compiler frontend**, not a reasoning engine. The prompt provides 20 opcode schemas, concrete patterns for functions/classes/control flow, a worked example for function definitions, and a worked example for array initialization (showing that each value and index needs a dedicated CONST register). An explicit rule warns against confusing register names with stored values. On malformed JSON, the call is retried up to 3 times.
+The LLM frontend (`--frontend llm`) sends source to an LLM constrained by a formal [IR schema](docs/ir-reference.md) — the LLM acts as a **compiler frontend**, not a reasoning engine. The prompt provides 24 opcode schemas used by the LLM path (including `DECL_VAR`, `CALL_CTOR`, `TRY_PUSH`, and `TRY_POP`), concrete patterns for functions/classes/control flow, a worked example for function definitions, and a worked example for array initialization (showing that each value and index needs a dedicated CONST register). An explicit rule warns against confusing register names with stored values. On malformed JSON, the call is retried up to 3 times.
 
 The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by decomposing them into per-function/class chunks via tree-sitter, lowering each independently, then renumbering registers/labels and reassembling. Failed chunks produce `SYMBOLIC` placeholders.
 
@@ -638,7 +638,7 @@ When tree-sitter parses malformed source, it produces ERROR/MISSING nodes that f
 
 ```python
 from interpreter.frontend import get_frontend
-from interpreter.llm_client import get_llm_client
+from interpreter.llm.llm_client import get_llm_client
 
 repair_llm = get_llm_client(provider="claude")
 frontend = get_frontend("python", repair_client=repair_llm)
@@ -661,6 +661,8 @@ poetry run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
 Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls).
+
+Current suite size: **13,436 collected tests** (`poetry run python -m pytest tests/ --co -q`).
 
 **Coverage areas:**
 
@@ -804,4 +806,3 @@ This is an experimental project. Key limitations to be aware of:
 - **LLM frontends are non-deterministic.** The LLM and chunked-LLM frontends produce valid IR in most cases, but outputs can vary between runs and may occasionally generate structurally incorrect IR despite schema constraints and retries.
 - **No concurrency or I/O modelling.** The VM is single-threaded and does not model file I/O, network calls, or concurrency primitives. Programs relying on these will hit symbolic boundaries.
 - **COBOL frontend requires external tooling.** The ProLeap bridge needs JDK 17+ and a separately-built JAR. It is not included in the default Poetry install.
-
