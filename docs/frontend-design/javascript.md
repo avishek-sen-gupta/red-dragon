@@ -93,8 +93,8 @@ The JavaScript frontend inherits base defaults for `none_literal` (`"None"`), `t
 | AST Node Type | Handler | Emitted IR |
 |---|---|---|
 | `expression_statement` | `common_assign.lower_expression_statement` | Unwraps inner expression |
-| `lexical_declaration` | `js_decl.lower_js_var_declaration` | `STORE_VAR` per declarator (with destructuring support) |
-| `variable_declaration` | `js_decl.lower_js_var_declaration` | `STORE_VAR` per declarator (with destructuring support) |
+| `lexical_declaration` | `js_decl.lower_js_var_declaration` | `DECL_VAR` per declarator (with destructuring support) |
+| `variable_declaration` | `js_decl.lower_js_var_declaration` | `DECL_VAR` per declarator (with destructuring support) |
 | `return_statement` | `common_assign.lower_return` | `RETURN` |
 | `if_statement` | `js_cf.lower_js_if` | `BRANCH_IF` + labels |
 | `while_statement` | `common_cf.lower_while` | `LABEL` + `BRANCH_IF` loop |

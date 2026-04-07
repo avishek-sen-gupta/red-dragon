@@ -96,9 +96,9 @@ Note: `none_literal`, `true_literal`, `false_literal`, `default_return_value` al
 | `while_statement` | `common_cf.lower_while` | (inherited) `BRANCH_IF` loop |
 | `for_statement` | `common_cf.lower_c_style_for` | (inherited) C-style for loop |
 | `foreach_statement` | `php_cf.lower_php_foreach` | Index-based loop with `LOAD_INDEX` |
-| `function_definition` | `php_decl.lower_php_func_def` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
-| `method_declaration` | `php_decl.lower_php_method_decl` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
-| `class_declaration` | `php_decl.lower_php_class` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
+| `function_definition` | `php_decl.lower_php_func_def` | `BRANCH`/`LABEL`/`RETURN`/`DECL_VAR` |
+| `method_declaration` | `php_decl.lower_php_method_decl` | `BRANCH`/`LABEL`/`RETURN`/`DECL_VAR` |
+| `class_declaration` | `php_decl.lower_php_class` | `BRANCH`/`LABEL`/`DECL_VAR` (class ref) |
 | `throw_expression` | `php_cf.lower_php_throw` | `THROW` |
 | `compound_statement` | `php_cf.lower_php_compound` | (iterates children, skips `{`/`}`) |
 | `program` | `lambda ctx, node: ctx.lower_block(node)` | (inherited block lowering) |
@@ -173,13 +173,13 @@ Handles `foreach_statement`. Supports both `foreach ($arr as $v)` and `foreach (
 4. Increments index with `BINOP +`
 
 ### `php_decl.lower_php_func_def(ctx, node)` / `php_decl.lower_php_method_decl(ctx, node)`
-Both handle function/method definitions with nearly identical logic. Extracts `name`, `parameters`, `body`. Emits: `BRANCH` to skip, `LABEL` for func entry, parameter lowering via `php_decl.lower_php_params`, body lowering via `php_cf.lower_php_compound`, implicit `RETURN`, end label, then `CONST`/`STORE_VAR` for the function reference. Method declarations additionally emit a `$this` parameter (via `_emit_this_param`) unless the method has a `static_modifier`.
+Both handle function/method definitions with nearly identical logic. Extracts `name`, `parameters`, `body`. Emits: `BRANCH` to skip, `LABEL` for func entry, parameter lowering via `php_decl.lower_php_params`, body lowering via `php_cf.lower_php_compound`, implicit `RETURN`, end label, then `CONST`/`DECL_VAR` for the function reference. Method declarations additionally emit a `$this` parameter (via `_emit_this_param`) unless the method has a `static_modifier`.
 
 ### `php_decl.lower_php_params(ctx, params_node)`
-Iterates parameter children. Handles `simple_parameter`, `variadic_parameter`, and bare `variable_name` nodes. For each, extracts the `name` field and emits `SYMBOLIC("param:{name}")` + `STORE_VAR`. Extracts type hints and seeds register/param/var types.
+Iterates parameter children. Handles `simple_parameter`, `variadic_parameter`, and bare `variable_name` nodes. For each, extracts the `name` field and emits `SYMBOLIC("param:{name}")` + `DECL_VAR`. Extracts type hints and seeds register/param/var types.
 
 ### `php_decl.lower_php_class(ctx, node)`
-Handles `class_declaration`. Extracts parent classes from `base_clause`. Emits `BRANCH` to skip, `LABEL` for class, lowers body via `_lower_php_class_body`, end label, then `CONST`/`STORE_VAR` for the class reference using `make_class_ref`.
+Handles `class_declaration`. Extracts parent classes from `base_clause`. Emits `BRANCH` to skip, `LABEL` for class, lowers body via `_lower_php_class_body`, end label, then `CONST`/`DECL_VAR` for the class reference using `make_class_ref`.
 
 ### `php_cf.lower_php_try(ctx, node)`
 Handles `try_statement`. Extracts `body` field, iterates children for `catch_clause` (with `named_type`/`name`/`qualified_name` for exception type and `variable_name` for variable) and `finally_clause`. Delegates to `lower_try_catch`.

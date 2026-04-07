@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-RedDragon's multi-file project support extends the single-file pipeline to real-world codebases. Given an entry file, it recursively discovers imports, compiles each file independently, then a **linker** merges them into a single IR stream that looks exactly like what the single-file pipeline would produce if all source files were concatenated in dependency order.
+RedDragon's multi-file project support extends the single-file pipeline to real-world codebases. Given a project directory, it compiles each source file for the selected language independently, resolves imports between modules, then a **linker** merges them into a single IR stream that looks exactly like what the single-file pipeline would produce if all source files were concatenated in dependency order.
 
 **Design principle:** The linker's output is indistinguishable from single-file compilation. The VM, CFG builder, registry, and interprocedural analysis run completely unmodified.
 
@@ -19,10 +19,11 @@ RedDragon's multi-file project support extends the single-file pipeline to real-
 ## 2. Pipeline
 
 ```
-Entry file
+Project directory
     │
     ▼
-Phase 1: Import Discovery (BFS)
+Phase 1: Source discovery + import extraction
+    │  scan by language extensions
     │  extract_imports() per file — tree-sitter AST or regex (COBOL)
     │  ImportResolver maps ImportRef → file path
     ▼
@@ -59,9 +60,9 @@ LinkedProgram
 
 | Function | Module | Purpose |
 |----------|--------|---------|
-| `compile_project(entry_file, language, project_root?)` | `compiler.py` | Full pipeline: discover → compile → link |
-| `analyze_project(entry_file, language, project_root?)` | `api.py` | compile_project + interprocedural analysis |
-| `run_project(entry_file, language, project_root?, ...)` | `api.py` | compile_project + VM execution |
+| `compile_directory(directory, language)` | `compiler.py` | Full pipeline: scan → compile → link |
+| `analyze_project(entry_file, language, project_root?)` | `api.py` | compile_directory + interprocedural analysis |
+| `run_project(entry_file, language, project_root?, ...)` | `api.py` | compile_directory + VM execution |
 | `handle_load_project(entry_file, language)` | `mcp_server/tools.py` | MCP tool wrapper |
 
 ---
@@ -132,7 +133,7 @@ System imports (stdlib, npm packages, etc.) are skipped — the resolver returns
 
 ### 3.4 Dependency graph
 
-BFS from the entry file discovers all reachable files. **Kahn's algorithm** produces a topological sort (dependencies before dependents). Cycles raise `CyclicImportError` with the full cycle path.
+All files matching the selected language extensions are compiled; imports then define dependency edges among that discovered set. **Kahn's algorithm** produces a topological sort (dependencies before dependents). Cycles raise `CyclicImportError` with the full cycle path.
 
 ---
 
@@ -399,7 +400,7 @@ interpreter/project/
     types.py       ImportRef, ExportTable, ModuleUnit, LinkedProgram, CyclicImportError
     imports.py     extract_imports() — tree-sitter walkers for 15 languages + regex for COBOL
     resolver.py    ImportResolver protocol + 13 language resolvers + topological_sort()
-    compiler.py    compile_module(), compile_project(), build_export_table()
+    compiler.py    compile_module(), compile_directory(), build_export_table()
     linker.py      link_modules() — strip, namespace, rebase, drop stubs, concatenate
 
 interpreter/registry.py
