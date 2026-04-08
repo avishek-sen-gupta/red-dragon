@@ -137,11 +137,5 @@ fileignoreconfig:
   checksum: 138c6eac26eec05314c8b7e30c8c9f2b5c8e4057d27f5250622140f806d62384
 - filename: .beads/backup/backup_state.json
   checksum: 879555e7ae06bb33b84ea70f8b8a754e6c5e817aec7bca454acaceab5690715d
-- filename: .beads/backup/issues.jsonl
-  ignore_detectors:
-    - filecontent
-- filename: .beads/backup/events.jsonl
-  ignore_detectors:
-    - filecontent
 - filename: docs/design/strongly-typed-ir.md
   checksum: 261347c52f71c415a499cadd73b2d74e4d89125d594ba2dbdae1952c53a80c69
