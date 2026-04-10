@@ -1,61 +1,44 @@
 #!/bin/bash
 # Scan full git history for forbidden terminology.
 # Uses the same blocklist as the pre-commit guard.
-# Output: commit SHA, file path, line number, and matching text.
 
-BLOCKLIST="$HOME/.config/git/blocklist.txt"
-
-# ── Helpers ─────────────────────────────────────────────────────
-
-load_pattern() {
-  if [ ! -f "$BLOCKLIST" ]; then
-    echo "No blocklist found at $BLOCKLIST"
-    exit 0
-  fi
-  PATTERN=$(grep -v '^\s*#' "$BLOCKLIST" | grep -v '^\s*$' | paste -sd '|' -)
-  if [ -z "$PATTERN" ]; then
-    echo "Blocklist is empty."
-    exit 0
-  fi
-}
-
-snippet_around() {
-  # Extract ~30 chars before and after the term in a line
-  local line="$1" term="$2"
-  echo "$line" | awk -v t="$term" '{
-    i = index($0, t)
-    if (i > 0) {
-      s = (i > 31) ? i - 30 : 1
-      print substr($0, s, 60 + length(t))
-    }
-  }'
-}
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib-terminology.sh"
 
 # ── Scanners ────────────────────────────────────────────────────
 
 scan_file_contents() {
-  # Use git log -G for fast diff-level search, then inspect matching files.
-  local commits
+  local commits count=0
   commits=$(git log --all -G "$PATTERN" --pretty=format:"%H" -- 2>/dev/null | sort -u)
   [ -z "$commits" ] && return 1
 
-  echo -e "\033[1;31m[FAIL] Forbidden terms in file contents:\033[0m"
+  print_table_header "Forbidden terms in file contents"
+
   echo "$commits" | while read -r sha; do
     local files short
     files=$(git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null)
-    short=$(git log -1 --format='%h %s' "$sha" 2>/dev/null)
+    short=$(git log -1 --format='%h' "$sha" 2>/dev/null)
 
     echo "$files" | while read -r file; do
       git show "$sha:$file" 2>/dev/null | grep -nE "$PATTERN" | while IFS=: read -r lineno rest; do
         echo "$rest" | grep -oE "$PATTERN" | sort -u | while read -r term; do
           local ctx
           ctx=$(snippet_around "$rest" "$term")
-          echo "  $short  $file:$lineno  term:\"$term\"  ...$ctx..."
+          print_table_row "$short" "$file:$lineno" "$term" "$ctx"
+          count=$((count + 1))
         done
       done
     done
   done | head -80
-  echo ""
+
+  # Count hits for footer (re-run is cheap since git caches)
+  local total
+  total=$(echo "$commits" | while read -r sha; do
+    git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null | while read -r file; do
+      git show "$sha:$file" 2>/dev/null | grep -cE "$PATTERN" 2>/dev/null
+    done
+  done | awk '{s+=$1} END {print s+0}')
+  print_table_footer "$total"
   return 0
 }
 
@@ -64,7 +47,9 @@ scan_commit_messages() {
   hits=$(git log --all --format='%h %s %b' 2>/dev/null | grep -E "$PATTERN" | head -10)
   [ -z "$hits" ] && return 1
 
-  echo -e "\033[1;31m[FAIL] Forbidden terms in commit messages:\033[0m"
+  print_table_header "Forbidden terms in commit messages"
+
+  local count=0
   echo "$hits" | while IFS= read -r line; do
     local sha msg
     sha=$(echo "$line" | cut -d' ' -f1)
@@ -74,26 +59,30 @@ scan_commit_messages() {
       local pos ctx
       pos=$(echo "$msg" | grep -boE "$term" | head -1 | cut -d: -f1)
       ctx=$(snippet_around "$msg" "$term")
-      echo "  $sha  col:$pos  term:\"$term\"  ...$ctx..."
+      print_table_row "$sha" "col:$pos" "$term" "$ctx"
+      count=$((count + 1))
     done
   done
-  echo ""
+
+  local total
+  total=$(echo "$hits" | wc -l | tr -d ' ')
+  print_table_footer "$total"
   return 0
 }
 
 # ── Main ────────────────────────────────────────────────────────
 
-load_pattern
+load_pattern || exit 0
 
-echo "Scanning git history for forbidden terms..."
 echo ""
+echo -e "${BOLD}Scanning git history for forbidden terms...${RESET}"
 
 FOUND=0
 scan_file_contents   && FOUND=1
 scan_commit_messages && FOUND=1
 
 if [ $FOUND -eq 0 ]; then
-  echo -e "\033[1;32mHistory clean. No forbidden terms found.\033[0m"
+  print_clean
 fi
 
 exit $FOUND
