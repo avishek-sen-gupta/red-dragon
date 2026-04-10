@@ -5,53 +5,92 @@
 
 BLOCKLIST="$HOME/.config/git/blocklist.txt"
 
-if [ ! -f "$BLOCKLIST" ]; then
-  echo "No blocklist found at $BLOCKLIST"
-  exit 0
-fi
+# ── Helpers ─────────────────────────────────────────────────────
 
-PATTERN=$(grep -v '^\s*#' "$BLOCKLIST" | grep -v '^\s*$' | paste -sd '|' -)
-if [ -z "$PATTERN" ]; then
-  echo "Blocklist is empty."
-  exit 0
-fi
+load_pattern() {
+  if [ ! -f "$BLOCKLIST" ]; then
+    echo "No blocklist found at $BLOCKLIST"
+    exit 0
+  fi
+  PATTERN=$(grep -v '^\s*#' "$BLOCKLIST" | grep -v '^\s*$' | paste -sd '|' -)
+  if [ -z "$PATTERN" ]; then
+    echo "Blocklist is empty."
+    exit 0
+  fi
+}
+
+snippet_around() {
+  # Extract ~30 chars before and after the term in a line
+  local line="$1" term="$2"
+  echo "$line" | awk -v t="$term" '{
+    i = index($0, t)
+    if (i > 0) {
+      s = (i > 31) ? i - 30 : 1
+      print substr($0, s, 60 + length(t))
+    }
+  }'
+}
+
+# ── Scanners ────────────────────────────────────────────────────
+
+scan_file_contents() {
+  # Use git log -G for fast diff-level search, then inspect matching files.
+  local commits
+  commits=$(git log --all -G "$PATTERN" --pretty=format:"%H" -- 2>/dev/null | sort -u)
+  [ -z "$commits" ] && return 1
+
+  echo -e "\033[1;31m[FAIL] Forbidden terms in file contents:\033[0m"
+  echo "$commits" | while read -r sha; do
+    local files short
+    files=$(git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null)
+    short=$(git log -1 --format='%h %s' "$sha" 2>/dev/null)
+
+    echo "$files" | while read -r file; do
+      git show "$sha:$file" 2>/dev/null | grep -nE "$PATTERN" | while IFS=: read -r lineno rest; do
+        echo "$rest" | grep -oE "$PATTERN" | sort -u | while read -r term; do
+          local ctx
+          ctx=$(snippet_around "$rest" "$term")
+          echo "  $short  $file:$lineno  term:\"$term\"  ...$ctx..."
+        done
+      done
+    done
+  done | head -80
+  echo ""
+  return 0
+}
+
+scan_commit_messages() {
+  local hits
+  hits=$(git log --all --format='%h %s %b' 2>/dev/null | grep -E "$PATTERN" | head -10)
+  [ -z "$hits" ] && return 1
+
+  echo -e "\033[1;31m[FAIL] Forbidden terms in commit messages:\033[0m"
+  echo "$hits" | while IFS= read -r line; do
+    local sha msg
+    sha=$(echo "$line" | cut -d' ' -f1)
+    msg=$(echo "$line" | cut -d' ' -f2-)
+
+    echo "$msg" | grep -oE "$PATTERN" | sort -u | while read -r term; do
+      local pos ctx
+      pos=$(echo "$msg" | grep -boE "$term" | head -1 | cut -d: -f1)
+      ctx=$(snippet_around "$msg" "$term")
+      echo "  $sha  col:$pos  term:\"$term\"  ...$ctx..."
+    done
+  done
+  echo ""
+  return 0
+}
+
+# ── Main ────────────────────────────────────────────────────────
+
+load_pattern
 
 echo "Scanning git history for forbidden terms..."
 echo ""
 
 FOUND=0
-
-# ── File contents: use git log -G for fast diff-level search ──────
-# -G finds commits where the diff (added or removed lines) matches.
-# Then we inspect only the matching files at those commits.
-COMMITS=$(git log --all -G "$PATTERN" --pretty=format:"%H" -- 2>/dev/null | sort -u)
-
-if [ -n "$COMMITS" ]; then
-  echo -e "\033[1;31m[FAIL] Forbidden terms in file contents:\033[0m"
-  echo "$COMMITS" | while read -r sha; do
-    # Get the files changed in this commit that match
-    FILES=$(git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null)
-    SHORT=$(git log -1 --format='%h %s' "$sha" 2>/dev/null)
-    echo "$FILES" | while read -r file; do
-      # Show the file at that commit, grep for matches with line numbers
-      git show "$sha:$file" 2>/dev/null | grep -nE "$PATTERN" | while IFS=: read -r lineno rest; do
-        echo "  $SHORT  $file:$lineno  $rest"
-      done
-    done
-  done | head -80
-  echo ""
-  FOUND=1
-fi
-
-# ── Commit messages ───────────────────────────────────────────────
-MSG_HITS=$(git log --all --format='%h %s%n%b' 2>/dev/null | grep -E "$PATTERN" | head -10)
-
-if [ -n "$MSG_HITS" ]; then
-  echo -e "\033[1;31m[FAIL] Forbidden terms in commit messages:\033[0m"
-  echo "$MSG_HITS"
-  echo ""
-  FOUND=1
-fi
+scan_file_contents   && FOUND=1
+scan_commit_messages && FOUND=1
 
 if [ $FOUND -eq 0 ]; then
   echo -e "\033[1;32mHistory clean. No forbidden terms found.\033[0m"
