@@ -139,3 +139,13 @@ fileignoreconfig:
   checksum: 879555e7ae06bb33b84ea70f8b8a754e6c5e817aec7bca454acaceab5690715d
 - filename: docs/design/strongly-typed-ir.md
   checksum: 261347c52f71c415a499cadd73b2d74e4d89125d594ba2dbdae1952c53a80c69
+- filename: .beads/backup/backup_state.json
+  checksum: 656784542f16abd4d0737a8a812eb6bcf81d9c498ffe964c67441d5595397b94
+- filename: .beads/backup/events.jsonl
+  checksum: 793f742ba3a8b8b40f1a97c2af3d349e7065093f129ee667b27b6e7ac0e7ba2c
+fileignoreconfig:
+- filename: .beads/backup/issues.jsonl
+  checksum: d95dfe7f782462b49e59dd67a6d08757e71edc3ba08860230e62122d096b73bc
+- filename: .beads/backup/backup_state.json
+  checksum: 6fb35fab4ace6ea526173006dedc3c0ee6ad6c143e98bf86bc4a051a92f3a5ef
+version: "1.0"
