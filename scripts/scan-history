@@ -1,6 +1,7 @@
 #!/bin/bash
 # Scan full git history for forbidden terminology.
 # Uses the same blocklist as the pre-commit guard.
+# Output: commit SHA, file path, line number, and matching text.
 
 BLOCKLIST="$HOME/.config/git/blocklist.txt"
 
@@ -18,24 +19,36 @@ fi
 echo "Scanning git history for forbidden terms..."
 echo ""
 
-# Check file contents across all commits
-CONTENT_MATCHES=$(git log --all -p 2>/dev/null | grep -En "$PATTERN" | head -30)
-
-# Check commit messages
-MSG_MATCHES=$(git log --all --format='%H %s%n%b' 2>/dev/null | grep -En "$PATTERN" | head -10)
-
 FOUND=0
 
-if [ -n "$CONTENT_MATCHES" ]; then
+# ── File contents: use git log -G for fast diff-level search ──────
+# -G finds commits where the diff (added or removed lines) matches.
+# Then we inspect only the matching files at those commits.
+COMMITS=$(git log --all -G "$PATTERN" --pretty=format:"%H" -- 2>/dev/null | sort -u)
+
+if [ -n "$COMMITS" ]; then
   echo -e "\033[1;31m[FAIL] Forbidden terms in file contents:\033[0m"
-  echo "$CONTENT_MATCHES"
+  echo "$COMMITS" | while read -r sha; do
+    # Get the files changed in this commit that match
+    FILES=$(git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null)
+    SHORT=$(git log -1 --format='%h %s' "$sha" 2>/dev/null)
+    echo "$FILES" | while read -r file; do
+      # Show the file at that commit, grep for matches with line numbers
+      git show "$sha:$file" 2>/dev/null | grep -nE "$PATTERN" | while IFS=: read -r lineno rest; do
+        echo "  $SHORT  $file:$lineno  $rest"
+      done
+    done
+  done | head -80
   echo ""
   FOUND=1
 fi
 
-if [ -n "$MSG_MATCHES" ]; then
+# ── Commit messages ───────────────────────────────────────────────
+MSG_HITS=$(git log --all --format='%h %s%n%b' 2>/dev/null | grep -E "$PATTERN" | head -10)
+
+if [ -n "$MSG_HITS" ]; then
   echo -e "\033[1;31m[FAIL] Forbidden terms in commit messages:\033[0m"
-  echo "$MSG_MATCHES"
+  echo "$MSG_HITS"
   echo ""
   FOUND=1
 fi
