@@ -4,45 +4,70 @@
 # Excludelist lives at ~/.config/git/blocklist-exclude.txt (glob patterns to skip).
 # Exit 0 = clean, Exit 1 = blocked.
 
-BLOCKLIST="$HOME/.config/git/blocklist.txt"
-EXCLUDELIST="$HOME/.config/git/blocklist-exclude.txt"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib-terminology.sh"
 
-if [ ! -f "$BLOCKLIST" ]; then
-  exit 0
-fi
+load_pattern || exit 0
+load_excludes
 
-# Build a single regex from all non-empty, non-comment lines
-PATTERN=$(grep -v '^\s*#' "$BLOCKLIST" | grep -v '^\s*$' | paste -sd '|' -)
-if [ -z "$PATTERN" ]; then
-  exit 0
-fi
+# ── Scan staged diff ────────────────────────────────────────────
 
-# Build exclude args for grep
-EXCLUDE_ARGS=""
-if [ -f "$EXCLUDELIST" ]; then
-  while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${line// }" ]] && continue
-    EXCLUDE_ARGS="$EXCLUDE_ARGS -- ':!$line'"
-  done < "$EXCLUDELIST"
-fi
+scan_staged_changes() {
+  local diff_output
+  if [ -n "$EXCLUDE_ARGS" ]; then
+    diff_output=$(eval "git diff --cached --diff-filter=ACMR -U0 $EXCLUDE_ARGS" 2>/dev/null)
+  else
+    diff_output=$(git diff --cached --diff-filter=ACMR -U0 2>/dev/null)
+  fi
 
-# Check staged diff, excluding specified paths
-if [ -n "$EXCLUDE_ARGS" ]; then
-  MATCHES=$(eval "git diff --cached --diff-filter=ACMR -U0 $EXCLUDE_ARGS" | grep -En "$PATTERN" || true)
-else
-  MATCHES=$(git diff --cached --diff-filter=ACMR -U0 | grep -En "$PATTERN" || true)
-fi
+  # Parse unified diff to extract file names and match locations
+  local current_file="" found=0 count=0
 
-if [ -n "$MATCHES" ]; then
-  echo ""
-  echo -e "\033[1;31m[terminology-guard] Forbidden terms found in staged changes:\033[0m"
-  echo "$MATCHES" | head -20
-  echo ""
-  echo "Blocklist: $BLOCKLIST"
-  echo "Fix the content or update the blocklist to proceed."
+  echo "$diff_output" | while IFS= read -r line; do
+    # Track current file from diff headers
+    if [[ "$line" =~ ^diff\ --git\ a/(.+)\ b/ ]]; then
+      current_file="${BASH_REMATCH[1]}"
+      continue
+    fi
+
+    # Only look at added lines (starting with +, but not +++ header)
+    if [[ "$line" =~ ^\+[^+] ]] || [[ "$line" =~ ^\+$ ]]; then
+      local content="${line:1}"  # strip leading +
+      if echo "$content" | grep -qE "$PATTERN"; then
+        # First hit: print header
+        if [ $found -eq 0 ]; then
+          print_table_header "Forbidden terms in staged changes"
+          found=1
+        fi
+
+        echo "$content" | grep -oE "$PATTERN" | sort -u | while read -r term; do
+          local ctx
+          ctx=$(snippet_around "$content" "$term")
+          print_table_row "staged" "$current_file" "$term" "$ctx"
+        done
+        count=$((count + 1))
+      fi
+    fi
+  done
+
+  # Subshell issue: re-check for matches to set exit code
+  if [ -n "$EXCLUDE_ARGS" ]; then
+    eval "git diff --cached --diff-filter=ACMR -U0 $EXCLUDE_ARGS" 2>/dev/null | grep -qE "^\+.*($PATTERN)"
+  else
+    git diff --cached --diff-filter=ACMR -U0 2>/dev/null | grep -qE "^\+.*($PATTERN)"
+  fi
+  return $?
+}
+
+# ── Main ────────────────────────────────────────────────────────
+
+if scan_staged_changes; then
+  # Matches found — print footer and block
+  local_count=$(git diff --cached --diff-filter=ACMR -U0 2>/dev/null | grep -cE "^\+.*($PATTERN)" || echo 0)
+  print_table_footer "$local_count"
+  print_blocked
   exit 1
 fi
 
-echo -e "\033[32m[terminology-guard] No violations found.\033[0m"
+echo -e "${GREEN}[terminology-guard] No violations found.${RESET}"
 exit 0
