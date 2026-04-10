@@ -38,7 +38,8 @@ dolt/
 dolt-server.*
 *.db
 
-# Beads: track JSONL backups, ignore Dolt database
+# Beads: ignore backup and Dolt database
+.beads/backup/
 .beads/dolt/
 .serena/
 
