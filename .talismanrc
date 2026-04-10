@@ -75,18 +75,8 @@ fileignoreconfig:
   checksum: 553efc4a65dd05221edec9b897a8bda685e1a24b14adf20010733fd5b2ddf9b6
 - filename: interpreter/frontends/_base.py
   checksum: a33aef9105ae8593ee023ae4bbb4924ba184ab268e9e8c58795bd15ac99762ba
-- filename: .beads/backup/backup_state.json
-  checksum: 54bb6e31aa45024d6ad1bfd8606cd9251fca7c5537cf73b1058e7024b04c262d
-- filename: .beads/backup/issues.jsonl
-  checksum: 9caf9753c8ebb212856006bb7103a3b2c011390777c011e1d91ed9bac1237c93
-- filename: .beads/backup/backup_state.json
-  checksum: 7819a02ddfd11f1f9b738fe524faedf3d84d2d02fa61abf753005ffc4c41913d
 - filename: .beads/interactions.jsonl
   checksum: ec8ec070d72e54bb9f833d4ff236a51b65307281a43913c2fad6f35f6efe1415
-- filename: .beads/backup/backup_state.json
-  ignore_detectors:
-    - filename
-  checksum: 7819a02ddfd11f1f9b738fe524faedf3d84d2d02fa61abf753005ffc4c41913d
 - filename: docs/superpowers/plans/2026-03-31-leaky-function-scoping.md
   checksum: 4be6b2a19a260bb6f89ec260cdfc49af6fb2d6f6510135e88fe9c7ca7a978bc0
 - filename: docs/superpowers/list-opcodes-workflow-walkthrough.md
@@ -101,10 +91,6 @@ fileignoreconfig:
   checksum: 9e07779637f419ac98b9679bd40ad8958514e04343484260f0a10fbed7452b84
 - filename: interpreter/handlers/memory.py
   checksum: f04d6f8adbeceaa6e87846bfcec2aa9767940547849344b07bbc74505a1cd42e
-- filename: .beads/backup/backup_state.json
-  checksum: 9a0c3a82ceec4074dadd8e4c54e21992ade3d63841fba7315115581d431a0d9e
-- filename: .beads/backup/issues.jsonl
-  checksum: cee71ade6ab08b1826ad91e4b557a0328e18851359be9c751a7d304c1ab6e394
 - filename: docs/superpowers/specs/2026-04-05-namespace-resolution-design.md
   checksum: ee9d30cf23bc94a2b4f95d524f26f8a874f56801803432fd525e8c6b73060642
 - filename: .claude/core/workflow.md
@@ -129,23 +115,8 @@ fileignoreconfig:
   checksum: df79fcf247a8cd9d6e717eac50ca56c6beaeda2b0f417a75df6ac9e970506ae4
 - filename: scripts/symbolic_trace_harness.py
   checksum: b76d6e47c2f7662ea765486b09bbb3776653a97f8cafa2c4061ffd3084b07a19
-- filename: .beads/backup/backup_state.json
-  checksum: a75654e804f5c6c3e1c5ebe93317b1285969a7627224b8621970cddc22a903cb
-- filename: .beads/backup/issues.jsonl
-  checksum: 4410d45083a787964380c7c1c61cf22ce8272a214ec12357ef6ca40469a9fdb4
 - filename: interpreter/project/compiler.py
   checksum: 138c6eac26eec05314c8b7e30c8c9f2b5c8e4057d27f5250622140f806d62384
-- filename: .beads/backup/backup_state.json
-  checksum: 879555e7ae06bb33b84ea70f8b8a754e6c5e817aec7bca454acaceab5690715d
 - filename: docs/design/strongly-typed-ir.md
   checksum: 261347c52f71c415a499cadd73b2d74e4d89125d594ba2dbdae1952c53a80c69
-- filename: .beads/backup/backup_state.json
-  checksum: 656784542f16abd4d0737a8a812eb6bcf81d9c498ffe964c67441d5595397b94
-- filename: .beads/backup/events.jsonl
-  checksum: 793f742ba3a8b8b40f1a97c2af3d349e7065093f129ee667b27b6e7ac0e7ba2c
-fileignoreconfig:
-- filename: .beads/backup/issues.jsonl
-  checksum: d95dfe7f782462b49e59dd67a6d08757e71edc3ba08860230e62122d096b73bc
-- filename: .beads/backup/backup_state.json
-  checksum: 6fb35fab4ace6ea526173006dedc3c0ee6ad6c143e98bf86bc4a051a92f3a5ef
 version: "1.0"
