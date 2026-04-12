@@ -197,7 +197,29 @@ def _extract_js_import(
 def _js_import_statement(
     node: Any, source: bytes, source_file: Path
 ) -> list[ImportRef]:
-    """Handle ESM: import { foo } from './utils'; import X from 'mod'"""
+    """Handle ESM: import { foo } from './utils'; import X from 'mod'
+
+    Also handles TS CJS interop: import x = require('./utils').
+    """
+    # Check for import_require_clause (TS CJS interop)
+    # Structure: import_require_clause -> identifier, string (no call_expression)
+    for child in node.children:
+        if child.type == "import_require_clause":
+            for sub in child.children:
+                if sub.type == "string":
+                    path = _extract_string_content(sub, source)
+                    is_relative = path.startswith(".") or path.startswith("/")
+                    return [
+                        ImportRef(
+                            source_file=source_file,
+                            module_path=path,
+                            kind=ImportKind.REQUIRE,
+                            is_relative=is_relative,
+                            is_system=not is_relative,
+                        )
+                    ]
+            return []
+
     # Find the source string (after 'from')
     source_str = ""
     for child in node.children:
