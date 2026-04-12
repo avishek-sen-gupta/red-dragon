@@ -119,4 +119,6 @@ fileignoreconfig:
   checksum: 138c6eac26eec05314c8b7e30c8c9f2b5c8e4057d27f5250622140f806d62384
 - filename: docs/design/strongly-typed-ir.md
   checksum: 261347c52f71c415a499cadd73b2d74e4d89125d594ba2dbdae1952c53a80c69
+- filename: docs/superpowers/specs/2026-04-13-import-module-opcode-design.md
+  checksum: de338959b1b73f606b59aa4b9865113e58d187efc26af8945a00f273aebb8c81
 version: "1.0"

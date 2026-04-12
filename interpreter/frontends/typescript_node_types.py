@@ -43,6 +43,7 @@ class TypeScriptNodeType:
     FUNCTION_SIGNATURE = "function_signature"
     AMBIENT_DECLARATION = "ambient_declaration"
     IMPORT_ALIAS = "import_alias"
+    IMPORT_REQUIRE_CLAUSE = "import_require_clause"
 
     # ── expression node types (TS-specific) ────────────────────────
 

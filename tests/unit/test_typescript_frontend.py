@@ -909,3 +909,35 @@ class TestTypeScriptImportAlias:
             and str(inst.operands[0]) == "Bar"
         ]
         assert len(loads) >= 1
+
+
+class TestTypeScriptImportRequireClause:
+    def test_import_require_emits_call_and_store(self):
+        """import x = require('y') → CALL_FUNCTION require + STORE_VAR x."""
+        ir = _parse_ts("import x = require('y');")
+        calls = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.CALL_FUNCTION
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "require"
+        ]
+        assert len(calls) == 1, f"Expected 1 CALL_FUNCTION require, got {calls}"
+        stores = [
+            inst
+            for inst in ir
+            if inst.opcode in (Opcode.STORE_VAR, Opcode.DECL_VAR)
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "x"
+        ]
+        assert len(stores) == 1, f"Expected 1 STORE_VAR x, got {stores}"
+
+    def test_import_require_no_symbolic(self):
+        """import x = require('y') should not produce unsupported SYMBOLIC."""
+        ir = _parse_ts("import x = require('y');")
+        symbolics = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.SYMBOLIC and "unsupported" in str(inst.operands)
+        ]
+        assert not symbolics, f"import_require_clause produced SYMBOLIC: {symbolics}"
