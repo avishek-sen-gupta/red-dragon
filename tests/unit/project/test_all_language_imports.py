@@ -48,6 +48,15 @@ class TestTypeScriptImportExtraction:
         assert refs[0].module_path == "./component"
         assert refs[0].is_relative is True
 
+    def test_import_require_clause(self):
+        """import x = require('y') should produce ImportRef with REQUIRE kind."""
+        source = b"import x = require('./utils');\n"
+        refs = extract_imports(source, Path("app.ts"), Language.TYPESCRIPT)
+        assert len(refs) == 1
+        assert refs[0].module_path == "./utils"
+        assert refs[0].kind == ImportKind.REQUIRE
+        assert refs[0].is_relative is True
+
 
 class TestJavaImportExtraction:
     def test_simple_import(self):

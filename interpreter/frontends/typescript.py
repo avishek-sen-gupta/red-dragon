@@ -14,6 +14,7 @@ from interpreter.frontends.common import expressions as common_expr
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
@@ -116,7 +117,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 TypeScriptNodeType.ENUM_DECLARATION: lower_enum_decl,
                 TypeScriptNodeType.TYPE_ALIAS_DECLARATION: lambda ctx, node: None,
                 TypeScriptNodeType.EXPORT_STATEMENT: lower_ts_export_statement,
-                TypeScriptNodeType.IMPORT_STATEMENT: lambda ctx, node: None,
+                TypeScriptNodeType.IMPORT_STATEMENT: lower_ts_import_statement,
                 TypeScriptNodeType.ABSTRACT_CLASS_DECLARATION: lower_ts_class_def,
                 TypeScriptNodeType.PUBLIC_FIELD_DEFINITION: lower_ts_field_definition,
                 TypeScriptNodeType.ABSTRACT_METHOD_SIGNATURE: lower_ts_abstract_method,
@@ -736,3 +737,52 @@ def _lower_nested_identifier(
         node=node,
     )
     return reg
+
+
+def lower_ts_import_statement(ctx: TreeSitterEmitContext, node: Any) -> None:
+    """Lower import_statement: handle import_require_clause children.
+
+    import x = require('y') → CALL_FUNCTION require + STORE_VAR x.
+    Other import forms (ESM) are type-only at runtime — no IR needed.
+    """
+    for child in node.children:
+        if child.type == TypeScriptNodeType.IMPORT_REQUIRE_CLAUSE:
+            _lower_import_require_clause(ctx, child, node)
+            return
+
+
+def _lower_import_require_clause(
+    ctx: TreeSitterEmitContext,
+    clause: Any,
+    parent: Any,
+) -> None:
+    """Lower import_require_clause: identifier = require(string)."""
+    name_node = None
+    string_node = None
+    for child in clause.children:
+        if child.type == "identifier":
+            name_node = child
+        if child.type == "string":
+            string_node = child
+    if name_node is None:
+        return
+    # Emit CONST for the module path argument
+    arg_reg = ctx.fresh_reg()
+    if string_node is not None:
+        # Extract string content (without quotes)
+        raw = ctx.node_text(string_node)
+        module_path = raw.strip("'\"")
+        ctx.emit_inst(Const(result_reg=arg_reg, value=module_path), node=parent)
+    # Emit CALL_FUNCTION require
+    result_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name=FuncName("require"),
+            args=(arg_reg,),
+        ),
+        node=parent,
+    )
+    # Emit STORE_VAR for the alias name
+    var_name = ctx.node_text(name_node)
+    ctx.emit_inst(StoreVar(name=VarName(var_name), value_reg=result_reg), node=parent)
