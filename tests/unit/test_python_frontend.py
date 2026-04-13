@@ -851,36 +851,39 @@ class TestPythonImportStatement:
     def test_import_simple(self):
         source = "import os"
         instructions = _parse_python(source)
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("import" in inst.operands for inst in calls)
+        imports = _find_all(instructions, Opcode.IMPORT_MODULE)
+        assert any("os" in inst.operands for inst in imports)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("os" in inst.operands for inst in stores)
 
     def test_import_dotted(self):
         source = "import os.path"
         instructions = _parse_python(source)
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("os.path" in inst.operands for inst in calls)
+        imports = _find_all(instructions, Opcode.IMPORT_MODULE)
+        assert any("os.path" in inst.operands for inst in imports)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("os" in inst.operands for inst in stores)
 
     def test_import_from_basic(self):
         source = "from os import path"
         instructions = _parse_python(source)
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("import" in inst.operands for inst in calls)
+        imports = _find_all(instructions, Opcode.IMPORT_MODULE)
+        assert any("os" in inst.operands for inst in imports)
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("path" in inst.operands for inst in loads)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("path" in inst.operands for inst in stores)
 
     def test_import_from_multiple(self):
         source = "from os import path, getcwd"
         instructions = _parse_python(source)
+        imports = _find_all(instructions, Opcode.IMPORT_MODULE)
+        assert any("os" in inst.operands for inst in imports)
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert len(loads) >= 2
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("path" in inst.operands for inst in stores)
         assert any("getcwd" in inst.operands for inst in stores)
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        import_calls = [c for c in calls if "import" in c.operands]
-        assert len(import_calls) >= 2
 
 
 class TestPythonMatchStatement:

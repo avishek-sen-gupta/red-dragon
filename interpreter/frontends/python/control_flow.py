@@ -30,7 +30,11 @@ from interpreter.instructions import (
     Label_,
     Branch,
     BranchIf,
+    ImportModule,
+    LoadField,
 )
+from interpreter.path_name import NO_PATH_NAME
+from interpreter.field_name import FieldName
 
 _WILDCARD_PATTERN = "_"
 
@@ -409,13 +413,16 @@ def lower_delete(
 def lower_import(
     ctx: TreeSitterEmitContext, node: Any
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
-    """Lower import module as CALL_FUNCTION('import', module) + DECL_VAR."""
+    """Lower import module as IMPORT_MODULE + DECL_VAR."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     module_name = ctx.node_text(name_node) if name_node else "unknown"
     import_reg = ctx.fresh_reg()
+    resolved = ctx.resolved_imports.get(module_name, NO_PATH_NAME)
     ctx.emit_inst(
-        CallFunction(
-            result_reg=import_reg, func_name=FuncName("import"), args=(module_name,)
+        ImportModule(
+            result_reg=import_reg,
+            module_path=module_name,
+            resolved_path=resolved,
         ),
         node=node,
     )
@@ -430,9 +437,21 @@ def lower_import(
 def lower_import_from(
     ctx: TreeSitterEmitContext, node: Any
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
-    """Lower from X import Y, Z as CALL_FUNCTION('import', ...) + DECL_VAR per name."""
+    """Lower from X import Y, Z as IMPORT_MODULE + LOAD_FIELD + DECL_VAR per name."""
     module_node = node.child_by_field_name("module_name")
     module_name = ctx.node_text(module_node) if module_node else "unknown"
+
+    # Emit a single IMPORT_MODULE for the module
+    mod_reg = ctx.fresh_reg()
+    resolved = ctx.resolved_imports.get(module_name, NO_PATH_NAME)
+    ctx.emit_inst(
+        ImportModule(
+            result_reg=mod_reg,
+            module_path=module_name,
+            resolved_path=resolved,
+        ),
+        node=node,
+    )
 
     # Collect all imported names (dotted_name children after 'import' keyword)
     imported_names = [
@@ -443,17 +462,17 @@ def lower_import_from(
 
     for name_node in imported_names:
         imported_name = ctx.node_text(name_node)
-        import_reg = ctx.fresh_reg()
+        field_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            CallFunction(
-                result_reg=import_reg,
-                func_name=FuncName("import"),
-                args=(f"from {module_name} import {imported_name}",),
+            LoadField(
+                result_reg=field_reg,
+                obj_reg=mod_reg,
+                field_name=FieldName(imported_name),
             ),
             node=node,
         )
         ctx.emit_inst(
-            DeclVar(name=VarName(imported_name), value_reg=import_reg), node=node
+            DeclVar(name=VarName(imported_name), value_reg=field_reg), node=node
         )
 
 
