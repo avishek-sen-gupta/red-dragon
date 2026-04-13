@@ -20,18 +20,20 @@ class TestCompileDirectory:
         linked = compile_directory(tmp_path, Language.PYTHON)
 
         assert isinstance(linked, LinkedProgram)
-        # All 3 files compiled, not just the 2 reachable via imports
-        assert len(linked.modules) == 3
+        # Demand-driven filtering: only main + utils are reachable; orphan is filtered
+        assert len(linked.modules) == 2
 
     def test_nested_directories(self, tmp_path):
-        (tmp_path / "main.py").write_text("x = 1\n")
+        (tmp_path / "main.py").write_text("from pkg.mod import y\nx = y\n")
         sub = tmp_path / "pkg"
         sub.mkdir()
+        (sub / "__init__.py").write_text("")
         (sub / "mod.py").write_text("y = 2\n")
 
         linked = compile_directory(tmp_path, Language.PYTHON)
 
-        assert len(linked.modules) == 2
+        # main.py imports pkg.mod, so both should be in the linked program
+        assert len(linked.modules) == 3  # main.py, pkg/__init__.py, pkg/mod.py
 
     def test_ignores_non_matching_extensions(self, tmp_path):
         (tmp_path / "main.py").write_text("x = 1\n")
@@ -48,7 +50,9 @@ class TestCompileDirectory:
 
         linked = compile_directory(tmp_path, Language.JAVASCRIPT)
 
-        assert len(linked.modules) == 2
+        # With demand-driven filtering, only reachable modules are included.
+        # Since main.js doesn't import utils.js, only main.js is in the linked program.
+        assert len(linked.modules) == 1
 
     def test_merged_cfg_has_entry(self, tmp_path):
         (tmp_path / "main.py").write_text("x = 42\n")
