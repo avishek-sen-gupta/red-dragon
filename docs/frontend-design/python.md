@@ -58,7 +58,7 @@ The Python frontend uses all the base defaults for `none_literal` (`"None"`), `t
 | `none` | `common_expr.lower_canonical_none` | `CONST "None"` |
 | `binary_operator` | `common_expr.lower_binop` | `BINOP` |
 | `boolean_operator` | `common_expr.lower_binop` | `BINOP` |
-| `comparison_operator` | `common_expr.lower_comparison` | `BINOP` |
+| `comparison_operator` | `py_expr.lower_python_comparison` | `BINOP` (most operators); `CALL_FUNCTION __py_contains__` [+ `UNOP NOT`] for `in` / `not in` |
 | `unary_operator` | `common_expr.lower_unop` | `UNOP` |
 | `not_operator` | `common_expr.lower_unop` | `UNOP` |
 | `call` | `py_expr.lower_call` | `CALL_METHOD` / `CALL_FUNCTION` / `CALL_UNKNOWN` |

@@ -943,8 +943,22 @@ class Builtins:
         "abs": _builtin_abs,
         "max": _builtin_max,
         "min": _builtin_min,
+        # … (str_upper, str_lower, str_strip, list_append, dict_contains_key, __py_contains__, …)
     }
 ```
+
+The table is keyed by `FuncName` (not plain `str`). Language-specific builtins use name-mangled keys (e.g. `__py_contains__`) to avoid collision with user-defined functions of the same name.
+
+### `__py_contains__` builtin
+
+The Python frontend lowers `x in lst` / `x not in lst` to `CALL_FUNCTION __py_contains__(collection, element)` rather than `BINOP IN` / `BINOP NOT_IN`. This is necessary because list literals lower to heap `Pointer` values at runtime, and `BINOP_TABLE` lambdas cannot walk the heap.
+
+`_builtin_py_contains(args, vm)` resolves the collection:
+1. If it is a heap `Pointer`, resolves the address and checks `element in HeapObject.fields.values()`.
+2. Otherwise, falls back to native `__contains__` for plain Python containers (strings, dicts, sets).
+3. Returns `UNCOMPUTABLE` for symbolic arguments.
+
+For `not in`, the frontend appends `UNOP NOT` after the call.
 
 ### isinstance builtin
 

@@ -2717,3 +2717,27 @@ DECL_VAR add %1
 - *Expand IMPORT_MODULE in linker to NEW_OBJECT + STORE_FIELD* — unnecessary; the dep module's top-level code already sets the binding in scope.
 
 **Consequences:** LLM-lowered IR is closer to deterministic frontend semantics for variable declaration, constructor dispatch, and exception scaffolding, reducing semantic skew between frontend strategies. Runtime observability now reports accurate LLM call counts for plausible-value resolution, improving debugging, cost tracking, and performance comparisons.
+
+---
+
+### ADR-140: Python `in`/`not in` lowered via `__py_contains__` builtin (2026-04-14)
+
+**Context:** Python list literals lower to `NEW_ARRAY` + `STORE_INDEX` per element. At runtime, the collection operand of `x in lst` is a heap `Pointer`, not a native Python container. `BINOP_TABLE` lambdas only have access to the two raw operand values — they cannot walk the heap — so `IN`/`NOT_IN` always fell through to `UNCOMPUTABLE`.
+
+Two VM-level fixes were considered but rejected:
+- *Heap-walking in `BINOP_TABLE`*: requires threading `vm: VMState` into every table lambda, breaking the table's flat/pure design.
+- *Disjunction expansion in the frontend* (`x == v1 or x == v2 or …`): O(n) instruction blowup, wrong semantics for symbolic collections, and duplicates element lowering.
+
+**Decision:** The Python frontend overrides `comparison_operator` lowering with `py_expr.lower_python_comparison`. For `in` and `not in` it emits:
+
+```
+%call = CALL_FUNCTION __py_contains__(collection_reg, element_reg)
+# for "not in" only:
+%result = UNOP NOT %call
+```
+
+A new builtin `_builtin_py_contains(args, vm)` is registered as `FuncName("__py_contains__")` in `Builtins.TABLE`. It resolves the collection: heap `Pointer` → walk `HeapObject.fields.values()`; native container → `__contains__`; symbolic → `UNCOMPUTABLE`.
+
+The `is` and `is not` operators continue to use the existing `BINOP IS` / `BINOP IS_NOT` path because they operate on concrete Python object identity, which works fine in `BINOP_TABLE`.
+
+**Consequences:** `x in [literal_list]` and `x not in [literal_list]` produce concrete booleans in VM execution. `BINOP_TABLE` remains pure (no `vm` threading). The pattern generalises: any language needing heap-aware containment can add a language-prefixed builtin following the same convention.
