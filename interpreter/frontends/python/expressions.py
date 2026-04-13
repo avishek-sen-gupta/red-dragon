@@ -11,6 +11,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
+    lower_comparison as common_lower_comparison,
     lower_const_literal,
     lower_interpolated_string_parts,
     lower_store_target as common_lower_store_target,
@@ -22,7 +23,7 @@ from interpreter.frontends.type_extraction import (
 from interpreter.frontends.python.node_types import PythonNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
-from interpreter.operator_kind import resolve_binop
+from interpreter.operator_kind import resolve_binop, UnopKind
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Const,
@@ -42,9 +43,45 @@ from interpreter.instructions import (
     BranchIf,
     Label_,
     Return_,
+    Unop,
 )
 
 # ── store target (with tuple unpack) ──────────────────────────
+
+
+def lower_python_comparison(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Python comparison lowering — routes 'in'/'not in' to __py_contains__ builtin.
+
+    For all other operators delegates to the generic lower_comparison.
+    """
+    children = [c for c in node.children if c.type not in ctx.constants.comment_types]
+    if len(children) >= 3:
+        op = ctx.node_text(children[1])
+        if op in ("in", "not in"):
+            collection_reg = ctx.lower_expr(children[2])
+            element_reg = ctx.lower_expr(children[0])
+            call_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=call_reg,
+                    func_name=FuncName("__py_contains__"),
+                    args=(collection_reg, element_reg),
+                ),
+                node=node,
+            )
+            if op == "not in":
+                result_reg = ctx.fresh_reg()
+                ctx.emit_inst(
+                    Unop(
+                        result_reg=result_reg,
+                        operator=UnopKind.NOT,
+                        operand=call_reg,
+                    ),
+                    node=node,
+                )
+                return result_reg
+            return call_reg
+    return common_lower_comparison(ctx, node)
 
 
 def lower_store_target(
