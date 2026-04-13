@@ -321,6 +321,29 @@ def compile_directory(
             if dep not in import_graph[user_path]:
                 import_graph[user_path].append(dep)
 
+    # --- Java: add implicit edges for qualified-name references ---
+    # A file may reference another project class via a fully-qualified name
+    # (e.g. com.lib.Helper.method()) without an explicit import statement.
+    # In that case the import graph has no edge, so we scan source text.
+    if language == Language.JAVA:
+        qualified_to_path: dict[str, Path] = {}
+        for file_path, scan in scan_results.items():
+            if scan.package:
+                for class_name in scan.class_names:
+                    dotted = f"{scan.package}.{class_name}"
+                    qualified_to_path[dotted] = file_path
+        for file_path in source_files:
+            source_bytes = file_path.read_bytes()
+            for dotted, dep_path in qualified_to_path.items():
+                if dep_path == file_path:
+                    continue
+                if dotted.encode() in source_bytes:
+                    if (
+                        dep_path in import_graph
+                        and dep_path not in import_graph[file_path]
+                    ):
+                        import_graph[file_path].append(dep_path)
+
     # --- PASS 2: Patch IMPORT_MODULE instructions with resolved paths ---
     resolved_imports_map = _build_resolved_imports_map(
         modules, import_graph, resolver, directory
