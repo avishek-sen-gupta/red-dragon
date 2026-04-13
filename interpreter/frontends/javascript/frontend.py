@@ -106,7 +106,7 @@ class JavaScriptFrontend(BaseFrontend):
             JSN.SWITCH_STATEMENT: js_cf.lower_switch_statement,
             JSN.DO_STATEMENT: js_cf.lower_do_statement,
             JSN.LABELED_STATEMENT: js_cf.lower_labeled_statement,
-            JSN.IMPORT_STATEMENT: lambda ctx, node: None,
+            JSN.IMPORT_STATEMENT: js_cf.lower_import_statement,
             JSN.EXPORT_STATEMENT: js_decl.lower_export_statement,
             JSN.WITH_STATEMENT: js_cf.lower_with_statement,
         }
