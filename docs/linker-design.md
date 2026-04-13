@@ -194,15 +194,19 @@ Labels get a module prefix derived from the file path: `func_helper_0` → `util
 
 ### 5.3 Drop resolved import stubs
 
-Python emits import statements as:
+Python, TypeScript, and JavaScript emit import statements using the `IMPORT_MODULE` opcode:
+
 ```
-%0 = CALL_FUNCTION "import" "from utils import helper"
-DECL_VAR helper %0
+%0 = IMPORT_MODULE "utils" resolved:"utils.py"
+%1 = LOAD_FIELD add %0
+DECL_VAR add %1
 ```
 
-For names that a dependency module already provides (functions, classes, variables), this pair is dropped. The dependency module's top-level code runs first and sets those names in scope — exactly like single-file.
+The linker buffers each `IMPORT_MODULE` together with any subsequent `LOAD_FIELD` instructions and `DECL_VAR` instructions whose value register traces back to the import — this is called an **import cluster**. A cluster is dropped when **all** declared names are already provided by a dependency module's exports (functions, classes, or variables); if any name is unresolved, the entire cluster is kept and passed to the VM, which handles it symbolically.
 
-Other languages (JS, Java, Go, etc.) emit no import IR at all — their import statements are no-ops during lowering. Ruby/PHP/Lua emit `CALL_FUNCTION require/require_once` which produce harmless symbolic values that don't overwrite the dependency's declarations.
+`CALL_FUNCTION "import"` / `CALL_FUNCTION "require"` (legacy pattern, still present in older frontend output) is handled by the same cluster logic for backward compatibility.
+
+Other languages (Java, Go, Rust, C, C#, Kotlin, Scala, etc.) emit no import IR — their import statements are no-ops during lowering. Ruby/PHP/Lua emit `CALL_FUNCTION require/require_once` which produce harmless symbolic values that don't overwrite the dependency's declarations.
 
 ### 5.4 Concatenate in dependency order
 
@@ -274,12 +278,13 @@ end_add_1:
 **main.py IR:**
 ```
 entry:
-  %0 = CALL_FUNCTION "import" "from utils import add"
-  DECL_VAR add %0
-  %1 = CONST 10
-  %2 = CONST 20
-  %3 = CALL_FUNCTION add %1 %2
-  STORE_VAR result %3
+  %0 = IMPORT_MODULE "utils" resolved:"utils.py"
+  %1 = LOAD_FIELD add %0
+  DECL_VAR add %1
+  %2 = CONST 10
+  %3 = CONST 20
+  %4 = CALL_FUNCTION add %2 %3
+  STORE_VAR result %4
 ```
 
 ### Phase 3: Linking
@@ -287,7 +292,7 @@ entry:
 1. **Strip** `entry:` labels from both modules
 2. **Namespace** utils labels: `func_add_0` → `utils.func_add_0`, etc.
 3. **Rebase** main registers by 6 (utils uses %0–%5)
-4. **Drop** main's import stub (`CALL_FUNCTION "import"` + `DECL_VAR add`) — `add` is in utils.py exports
+4. **Drop** main's import cluster (`IMPORT_MODULE` + `LOAD_FIELD add` + `DECL_VAR add`) — `add` is in utils.py exports
 5. **Prepend** single `entry:` label
 6. **Concatenate** utils first, then main
 
@@ -307,10 +312,10 @@ utils.func_add_0:
 utils.end_add_1:
   %5 = CONST utils.func_add_0
   DECL_VAR add %5
-  %6 = CONST 10
-  %7 = CONST 20
-  %8 = CALL_FUNCTION add %6 %7
-  STORE_VAR result %8
+  %8 = CONST 10
+  %9 = CONST 20
+  %10 = CALL_FUNCTION add %8 %9
+  STORE_VAR result %10
 ```
 
 This is one continuous stream. The VM:

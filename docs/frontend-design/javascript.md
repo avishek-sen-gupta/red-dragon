@@ -111,7 +111,7 @@ The JavaScript frontend inherits base defaults for `none_literal` (`"None"`), `t
 | `switch_statement` | `js_cf.lower_switch_statement` | `BINOP("===")` + `BRANCH_IF` chain |
 | `do_statement` | `js_cf.lower_do_statement` | `do...while` loop structure |
 | `labeled_statement` | `js_cf.lower_labeled_statement` | `LABEL` + inner statement |
-| `import_statement` | `lambda ctx, node: None` | No-op (imports ignored) |
+| `import_statement` | `js_cf.lower_import_statement` | `IMPORT_MODULE(path)` + `LOAD_FIELD` + `DECL_VAR` per named import |
 | `export_statement` | `js_decl.lower_export_statement` | Unwraps and lowers inner declaration |
 | `with_statement` | `js_cf.lower_with_statement` | Lower object then body |
 
