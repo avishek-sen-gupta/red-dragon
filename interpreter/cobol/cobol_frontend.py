@@ -28,6 +28,7 @@ from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.namespace_resolver import NamespaceResolver
+from interpreter.path_name import PathName
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import Opcode, CodeLabel
@@ -122,6 +123,7 @@ class CobolFrontend(Frontend):
         self,
         source: bytes,
         namespace_resolver: NamespaceResolver = Frontend._NULL_RESOLVER,
+        resolved_imports: dict[str, PathName] | None = None,
     ) -> list[InstructionBase]:
         """Lower COBOL source to IR via the ProLeap bridge."""
         asg = self._parser.parse(source)
