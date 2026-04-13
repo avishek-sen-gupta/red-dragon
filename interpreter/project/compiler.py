@@ -326,23 +326,26 @@ def compile_directory(
     # (e.g. com.lib.Helper.method()) without an explicit import statement.
     # In that case the import graph has no edge, so we scan source text.
     if language == Language.JAVA:
-        qualified_to_path: dict[str, Path] = {}
-        for file_path, scan in scan_results.items():
-            if scan.package:
-                for class_name in scan.class_names:
-                    dotted = f"{scan.package}.{class_name}"
-                    qualified_to_path[dotted] = file_path
-        for file_path in source_files:
-            source_bytes = file_path.read_bytes()
-            for dotted, dep_path in qualified_to_path.items():
-                if dep_path == file_path:
-                    continue
-                if dotted.encode() in source_bytes:
-                    if (
-                        dep_path in import_graph
-                        and dep_path not in import_graph[file_path]
-                    ):
-                        import_graph[file_path].append(dep_path)
+        qualified_to_path: dict[str, Path] = {
+            f"{scan.package}.{cls}": file_path
+            for file_path, scan in scan_results.items()
+            if scan.package
+            for cls in scan.class_names
+        }
+        source_bytes_map = {f: f.read_bytes() for f in source_files}
+        new_edges = {
+            (file_path, dep_path)
+            for file_path in source_files
+            for dotted, dep_path in qualified_to_path.items()
+            if dep_path != file_path
+            and dotted.encode() in source_bytes_map[file_path]
+            and dep_path in import_graph
+            and dep_path not in import_graph[file_path]
+        }
+        import_graph = {
+            path: deps + [dep for fp, dep in new_edges if fp == path]
+            for path, deps in import_graph.items()
+        }
 
     # --- PASS 2: Patch IMPORT_MODULE instructions with resolved paths ---
     resolved_imports_map = _build_resolved_imports_map(
