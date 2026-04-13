@@ -39,6 +39,7 @@ from interpreter.func_name import FuncName, NO_FUNC_NAME
 from interpreter.storage_identifier import StorageIdentifier
 from interpreter.var_name import NO_VAR_NAME, VarName
 from interpreter.continuation_name import ContinuationName, NO_CONTINUATION_NAME
+from interpreter.path_name import PathName, NoPathName, NO_PATH_NAME
 
 
 def _is_union(origin: object) -> bool:
@@ -609,6 +610,25 @@ class StoreIndirect(InstructionBase):
         return [str(self.ptr_reg), str(self.value_reg)]
 
 
+# ── Module imports ──────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ImportModule(InstructionBase):
+    """IMPORT_MODULE: import a module — expanded by the linker into existing opcodes."""
+
+    module_path: str = ""
+    resolved_path: PathName | NoPathName = NO_PATH_NAME
+
+    @property
+    def opcode(self) -> Opcode:
+        return Opcode.IMPORT_MODULE
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.module_path, str(self.resolved_path)]
+
+
 @dataclass(frozen=True)
 class AddressOf(InstructionBase):
     """ADDRESS_OF: take address of a named variable."""
@@ -951,6 +971,7 @@ Instruction = Union[
     StoreIndex,
     LoadIndirect,
     StoreIndirect,
+    ImportModule,
     AddressOf,
     NewObject,
     NewArray,
@@ -1276,6 +1297,22 @@ def _write_region(inst: Any) -> WriteRegion:
     )
 
 
+def _import_module(inst: Any) -> ImportModule:
+    ops = inst.operands
+    return ImportModule(
+        result_reg=_as_register(inst.result_reg),
+        module_path=str(ops[0]) if len(ops) > 0 else "",
+        resolved_path=(
+            PathName(str(ops[1]))
+            if len(ops) > 1 and str(ops[1]) != "<no-path>"
+            else NO_PATH_NAME
+        ),
+        label=inst.label,
+        branch_targets=inst.branch_targets,
+        source_location=inst.source_location,
+    )
+
+
 def _set_continuation(inst: Any) -> SetContinuation:
     ops = inst.operands
     return SetContinuation(
@@ -1315,6 +1352,7 @@ _TO_TYPED: dict[Opcode, object] = {
     Opcode.STORE_INDEX: _store_index,
     Opcode.LOAD_INDIRECT: _load_indirect,
     Opcode.STORE_INDIRECT: _store_indirect,
+    Opcode.IMPORT_MODULE: _import_module,
     Opcode.ADDRESS_OF: _address_of,
     Opcode.NEW_OBJECT: _new_object,
     Opcode.NEW_ARRAY: _new_array,
