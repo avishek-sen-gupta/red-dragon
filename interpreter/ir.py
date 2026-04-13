@@ -61,6 +61,8 @@ class Opcode(str, Enum):
     LOAD_INDIRECT = "LOAD_INDIRECT"
     LOAD_FIELD_INDIRECT = "LOAD_FIELD_INDIRECT"
     STORE_INDIRECT = "STORE_INDIRECT"
+    # Module imports (expanded by linker)
+    IMPORT_MODULE = "IMPORT_MODULE"
     # Labels (pseudo-instruction)
     LABEL = "LABEL"
 
