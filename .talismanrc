@@ -122,7 +122,9 @@ fileignoreconfig:
 - filename: docs/superpowers/specs/2026-04-13-import-module-opcode-design.md
   checksum: de338959b1b73f606b59aa4b9865113e58d187efc26af8945a00f273aebb8c81
 - filename: interpreter/project/linker.py
-  checksum: ffccb84564aef04d43552f4aaabe6fe3277ca57536ab81c00d14865e803f8a15
+  checksum: 3ba2bbdd16990b107e20f71f823696967b4f9e6449f998f57b3c3203d17bd48d
 - filename: docs/superpowers/plans/2026-04-13-import-module-opcode.md
   checksum: 39ea614ba3cc92415e831c1272a2626e8536cee61035a4cfda507be38037f0d1
+- filename: tests/unit/test_symbol_name.py
+  checksum: 47d84e6284172705d13008b2b7fde4aa9da8625450e9a916582a2e35bb2b03b6
 version: "1.0"

@@ -26,9 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from interpreter.cfg import build_cfg
-from interpreter.class_name import ClassName
-from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
+from interpreter.symbol_name import SymbolName
 from interpreter.instructions import (
     InstructionBase,
     CallFunction,
@@ -180,7 +179,7 @@ def _transform_module(
 
     # Build a map of imported names to their source modules (for IMPORT_MODULE replacement)
     # Value is either (src_module, label_string) for functions/classes, or (src_module, "VAR") for variables
-    import_name_sources: dict[str, tuple[Path, str]] = (
+    import_name_sources: dict[SymbolName, tuple[Path, str]] = (
         {}
     )  # name -> (src_module, src_label or "VAR")
     for dep_path in import_graph.get(module_path, []):
@@ -189,19 +188,19 @@ def _transform_module(
             dep_prefix = prefixes[dep_path]
             # Map function names to their namespaced labels
             for fname, label in dep.exports.functions.items():
-                import_name_sources[fname] = (
+                import_name_sources[SymbolName(str(fname))] = (
                     dep_path,
                     str(label.namespace(dep_prefix)),
                 )
             # Map class names to their namespaced labels
             for cname, label in dep.exports.classes.items():
-                import_name_sources[cname] = (
+                import_name_sources[SymbolName(str(cname))] = (
                     dep_path,
                     str(label.namespace(dep_prefix)),
                 )
             # Mark variables as importable (value is "VAR" since we skip the pattern)
             for vname in dep.exports.variables.keys():
-                import_name_sources[str(vname)] = (dep_path, "VAR")
+                import_name_sources[SymbolName(str(vname))] = (dep_path, "VAR")
 
     i = 0
     ir_list = list(module.ir)
@@ -250,13 +249,9 @@ def _transform_module(
             if loads_and_decls:
                 for load_field, decl in loads_and_decls:
                     field_name = load_field.field_name  # It's a FieldName object
-                    # Try both FuncName (for functions/classes) and string (for variables)
-                    func_name_key = FuncName(str(field_name))
-                    str_key = str(field_name)
-                    if func_name_key in import_name_sources:
-                        _, import_source = import_name_sources[func_name_key]
-                    elif str_key in import_name_sources:
-                        _, import_source = import_name_sources[str_key]
+                    symbol_key = SymbolName(str(field_name))
+                    if symbol_key in import_name_sources:
+                        _, import_source = import_name_sources[symbol_key]
                     else:
                         import_source = None
 
