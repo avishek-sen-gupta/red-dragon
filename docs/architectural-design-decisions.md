@@ -2687,4 +2687,33 @@ Imports are NOT a tree population source — they only appear in source code. Ty
 2. Keep the LLM frontend contract explicitly scoped to a pragmatic opcode subset used for language lowering (not all 33 opcodes), while preserving compatibility with the universal IR output type.
 3. Fix execution telemetry so `ExecutionStats.llm_calls` includes calls performed by `LLMPlausibleResolver`.
 
+## ADR-139: IMPORT_MODULE Opcode — Dedicated IR for Import Stubs (2026-04-13)
+
+**Status:** Accepted
+
+**Context:** The linker (ADR-125) detected import stubs using a fragile heuristic: `_is_import_call()` matched `CALL_FUNCTION` instructions whose function name was the magic string `"import"` or `"require"`. This was language-specific, brittle, and spread import semantics into what should be a language-agnostic linker.
+
+**Decision:** Add a dedicated `IMPORT_MODULE` opcode emitted by frontends wherever a module is imported. The linker detects import clusters by opcode type, not by magic name matching.
+
+IR shape emitted by frontends:
+```
+%0 = IMPORT_MODULE "utils" resolved:"utils.py"   ← always
+%1 = LOAD_FIELD add %0                            ← named imports only
+DECL_VAR add %1
+```
+
+`IMPORT_MODULE` carries two paths: `module_path` (source-level, as written) and `resolved_path` (a `PathName` wrapper, populated by the two-pass compiler; `NO_PATH_NAME` for single-file compilation).
+
+**Linker cluster logic:** The linker buffers each `IMPORT_MODULE` + any following `LOAD_FIELD` instructions + `DECL_VAR` instructions whose value register traces back to the import register. This cluster is dropped when **all** declared names are in the dependency module's `ExportTable`; if any name is unresolved the entire cluster is kept and passed to the VM.
+
+`CALL_FUNCTION "import"` / `"require"` (legacy) is handled by the same cluster logic for backward compatibility — no existing tests were broken.
+
+**Two-pass compilation:** `compile_directory()` was restructured into two passes: (1) discover files, extract imports, resolve paths, build the import graph; (2) compile each file with a `resolved_imports: dict[str, PathName]` map injected into `TreeSitterEmitContext`. Frontends use this map to populate `resolved_path` in `IMPORT_MODULE`.
+
+**Frontends updated:** Python, TypeScript, JavaScript, COBOL.
+
+**Rejected alternatives:**
+- *Keep magic-string heuristic* — too fragile; any function named "import" would trigger false matches.
+- *Expand IMPORT_MODULE in linker to NEW_OBJECT + STORE_FIELD* — unnecessary; the dep module's top-level code already sets the binding in scope.
+
 **Consequences:** LLM-lowered IR is closer to deterministic frontend semantics for variable declaration, constructor dispatch, and exception scaffolding, reducing semantic skew between frontend strategies. Runtime observability now reports accurate LLM call counts for plausible-value resolution, improving debugging, cost tracking, and performance comparisons.
