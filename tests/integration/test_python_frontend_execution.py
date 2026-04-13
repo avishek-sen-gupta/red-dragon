@@ -37,3 +37,65 @@ answer = y
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("answer")] == 15
+
+
+class TestPythonIdentityOperatorsExecution:
+    def test_is_none_true(self):
+        """'x is None' should evaluate to True when x is None."""
+        vm = run(
+            "x = None\nresult = x is None",
+            language=Language.PYTHON,
+            max_steps=200,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars[VarName("result")] is True
+
+    def test_is_none_false(self):
+        """'x is None' should evaluate to False when x is not None."""
+        vm = run(
+            "x = 42\nresult = x is None",
+            language=Language.PYTHON,
+            max_steps=200,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars[VarName("result")] is False
+
+    def test_is_not_none_true(self):
+        """'x is not None' should evaluate to True when x is not None."""
+        vm = run(
+            "x = 1\nresult = x is not None",
+            language=Language.PYTHON,
+            max_steps=200,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars[VarName("result")] is True
+
+    def test_is_not_none_false(self):
+        """'x is not None' should evaluate to False when x is None."""
+        vm = run(
+            "x = None\nresult = x is not None",
+            language=Language.PYTHON,
+            max_steps=200,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars[VarName("result")] is False
+
+    def test_not_in_lowers_without_crash(self):
+        """'x not in lst' should lower and execute without raising an error.
+
+        List literals lower to heap Pointers, so the VM produces a SymbolicValue
+        (UNCOMPUTABLE) rather than a concrete bool — same behaviour as 'in'.
+        The key assertion is that no ValueError is raised during lowering.
+        """
+        vm = run(
+            "lst = [1, 2, 3]\nresult = 5 not in lst",
+            language=Language.PYTHON,
+            max_steps=500,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert VarName("result") in local_vars
