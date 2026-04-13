@@ -116,9 +116,13 @@ fileignoreconfig:
 - filename: scripts/symbolic_trace_harness.py
   checksum: b76d6e47c2f7662ea765486b09bbb3776653a97f8cafa2c4061ffd3084b07a19
 - filename: interpreter/project/compiler.py
-  checksum: 138c6eac26eec05314c8b7e30c8c9f2b5c8e4057d27f5250622140f806d62384
+  checksum: d66dcb073b878cbc33ee33fd24b3d12ff6eef41412d26a27e592a975e9893894
 - filename: docs/design/strongly-typed-ir.md
   checksum: 261347c52f71c415a499cadd73b2d74e4d89125d594ba2dbdae1952c53a80c69
 - filename: docs/superpowers/specs/2026-04-13-import-module-opcode-design.md
   checksum: de338959b1b73f606b59aa4b9865113e58d187efc26af8945a00f273aebb8c81
+- filename: interpreter/project/linker.py
+  checksum: ffccb84564aef04d43552f4aaabe6fe3277ca57536ab81c00d14865e803f8a15
+- filename: docs/superpowers/plans/2026-04-13-import-module-opcode.md
+  checksum: 39ea614ba3cc92415e831c1272a2626e8536cee61035a4cfda507be38037f0d1
 version: "1.0"

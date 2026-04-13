@@ -35,9 +35,11 @@ from interpreter.instructions import (
     DeclVar,
     Const,
     Label_,
+    ImportModule,
 )
 from interpreter.constants import Language
 from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
+from interpreter.path_name import PathName, NO_PATH_NAME
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.registry import build_registry
@@ -143,12 +145,22 @@ def _transform_module(
     prefix: str,
     reg_offset: int,
     resolved_imports: set[str],
+    modules: dict[Path, ModuleUnit],
+    import_graph: dict[Path, list[Path]],
+    module_path: Path,
+    prefixes: dict[Path, str],
 ) -> list[InstructionBase]:
     """Transform a module's IR: namespace, rebase, drop resolved import stubs.
 
-    Import stubs (CALL_FUNCTION "import" + DECL_VAR) are dropped for names
-    that are already resolved (present in resolved_imports). These names
-    will be set by the dependency module's top-level code which runs first.
+    Handles two types of import stubs:
+
+    1. Old-style (Python): CALL_FUNCTION "import" + DECL_VAR. These are dropped
+       for names already resolved (present in resolved_imports).
+
+    2. New-style (IMPORT_MODULE): IMPORT_MODULE instructions with resolved_path
+       pointing to a local file. These are replaced with CONST instructions that
+       reference the actual function/class labels from dependency modules, since
+       the linker concatenates modules in dependency order.
 
     NOTE: The stub dropper assumes CALL_FUNCTION "import" is immediately
     followed by DECL_VAR (no intervening instructions). This holds for all
@@ -157,16 +169,138 @@ def _transform_module(
     future frontend breaks this adjacency, the skip_next_decl_for_reg flag
     could match a later unrelated DECL_VAR. See red-dragon-lzae.
     """
+    from interpreter.register import Register
+    from interpreter.instructions import LoadField
+    from interpreter.field_name import FieldName
+    from interpreter.var_name import VarName
+
     result: list[InstructionBase] = []
     skip_next_decl_for_reg: str | None = None
+    skip_import_module_pattern: tuple[str, list[tuple[str, str]]] | None = None
 
-    for inst in module.ir:
-        # Skip the per-module "entry:" label — we'll add a single one
+    # Build a map of imported names to their source modules (for IMPORT_MODULE replacement)
+    # Value is either (src_module, label_string) for functions/classes, or (src_module, "VAR") for variables
+    import_name_sources: dict[str, tuple[Path, str]] = (
+        {}
+    )  # name -> (src_module, src_label or "VAR")
+    for dep_path in import_graph.get(module_path, []):
+        if dep_path in modules:
+            dep = modules[dep_path]
+            dep_prefix = prefixes[dep_path]
+            # Map function names to their namespaced labels
+            for fname, label in dep.exports.functions.items():
+                import_name_sources[fname] = (
+                    dep_path,
+                    str(label.namespace(dep_prefix)),
+                )
+            # Map class names to their namespaced labels
+            for cname, label in dep.exports.classes.items():
+                import_name_sources[cname] = (
+                    dep_path,
+                    str(label.namespace(dep_prefix)),
+                )
+            # Mark variables as importable (value is "VAR" since we skip the pattern)
+            for vname in dep.exports.variables.keys():
+                import_name_sources[str(vname)] = (dep_path, "VAR")
+
+    i = 0
+    ir_list = list(module.ir)
+    while i < len(ir_list):
+        inst = ir_list[i]
         typed = inst
+
+        # Skip the per-module "entry:" label — we'll add a single one
         if isinstance(typed, Label_) and typed.label.is_entry():
+            i += 1
             continue
 
-        # Drop import stubs for resolved names
+        # Handle IMPORT_MODULE patterns: IMPORT_MODULE + LOAD_FIELD + DECL_VAR
+        if isinstance(typed, ImportModule) and typed.resolved_path != NO_PATH_NAME:
+            # This is a resolved local import. Look ahead to see if we have
+            # LOAD_FIELD + DECL_VAR pattern that we can replace.
+            import_reg = (
+                str(typed.result_reg) if typed.result_reg.is_present() else None
+            )
+            # DEBUG: Check import_name_sources
+            # print(f"DEBUG: IMPORT_MODULE {typed.module_path} with resolved_path {typed.resolved_path}")
+            # print(f"DEBUG: import_name_sources = {import_name_sources}")
+            # print(f"DEBUG: dependencies from import_graph[{module_path}] = {import_graph.get(module_path, [])}")
+
+            # Scan forward for LOAD_FIELD instructions that depend on this register
+            loads_and_decls = []
+            j = i + 1
+            while j < len(ir_list):
+                next_inst = ir_list[j]
+                if isinstance(next_inst, LoadField):
+                    # Check if this LOAD_FIELD uses the import register
+                    if str(next_inst.obj_reg) == import_reg:
+                        # Look for the following DECL_VAR
+                        if j + 1 < len(ir_list) and isinstance(ir_list[j + 1], DeclVar):
+                            decl = ir_list[j + 1]
+                            loads_and_decls.append((next_inst, decl))
+                            j += 2
+                        else:
+                            break
+                    else:
+                        break
+                else:
+                    break
+
+            # If we found LOAD_FIELD + DECL_VAR pairs, handle them
+            if loads_and_decls:
+                for load_field, decl in loads_and_decls:
+                    field_name = load_field.field_name  # It's a FieldName object
+                    # Try both FuncName (for functions/classes) and string (for variables)
+                    func_name_key = FuncName(str(field_name))
+                    str_key = str(field_name)
+                    if func_name_key in import_name_sources:
+                        _, import_source = import_name_sources[func_name_key]
+                    elif str_key in import_name_sources:
+                        _, import_source = import_name_sources[str_key]
+                    else:
+                        import_source = None
+
+                    if import_source is not None:
+                        if import_source == "VAR":
+                            # For variables: skip the entire LOAD_FIELD + DECL_VAR pattern.
+                            # The dependency module's top-level STORE_VAR already set the
+                            # variable in scope, so we don't need to redeclare it.
+                            pass  # Skip both LOAD_FIELD and DECL_VAR
+                        else:
+                            # For functions/classes: emit CONST with the actual label, then DECL_VAR
+                            actual_label = import_source
+                            const_inst = Const(
+                                result_reg=load_field.result_reg, value=actual_label
+                            )
+                            result.append(
+                                _transform_instruction(const_inst, prefix, reg_offset)
+                            )
+                            # Keep the DECL_VAR (but transform it)
+                            result.append(
+                                _transform_instruction(decl, prefix, reg_offset)
+                            )
+                    else:
+                        # Name not found in imports — keep original LOAD_FIELD + DECL_VAR
+                        result.append(
+                            _transform_instruction(load_field, prefix, reg_offset)
+                        )
+                        result.append(_transform_instruction(decl, prefix, reg_offset))
+
+                # Skip all the instructions we just processed
+                i = j
+                continue
+
+            # If no LOAD_FIELD pattern found, just drop the IMPORT_MODULE
+            i += 1
+            continue
+
+        # External/unresolved IMPORT_MODULE — keep it
+        if isinstance(typed, ImportModule):
+            result.append(_transform_instruction(inst, prefix, reg_offset))
+            i += 1
+            continue
+
+        # Drop old-style import stubs for resolved names
         raw_inst: Any = (
             inst  # InstructionBase subclasses have result_reg; not in base  # see red-dragon-4ei7
         )
@@ -176,6 +310,7 @@ def _transform_module(
             skip_next_decl_for_reg = rebase_register(raw_inst.result_reg, reg_offset)
             # Tentatively add the instruction — remove it if DECL_VAR matches
             result.append(_transform_instruction(inst, prefix, reg_offset))
+            i += 1
             continue
 
         if skip_next_decl_for_reg and isinstance(typed, DeclVar):
@@ -185,10 +320,12 @@ def _transform_module(
                 # Drop both the import CALL and this DECL_VAR
                 result.pop()  # remove the tentatively-added CALL_FUNCTION
                 skip_next_decl_for_reg = None
+                i += 1
                 continue
             skip_next_decl_for_reg = None
 
         result.append(_transform_instruction(inst, prefix, reg_offset))
+        i += 1
 
     return result
 
@@ -241,6 +378,56 @@ def _collect_resolved_imports(
     return resolved
 
 
+# ── Demand-driven filtering ──────────────────────────────────────
+
+
+def _filter_reachable_modules(
+    modules: dict[Path, ModuleUnit],
+    import_graph: dict[Path, list[Path]],
+    entry_path: Path,
+) -> tuple[dict[Path, ModuleUnit], dict[Path, list[Path]]]:
+    """Filter modules to only those reachable from the entry point.
+
+    Performs a reachability walk starting from entry_path through the import_graph,
+    including only modules that are transitively reachable. Returns filtered
+    modules dict and import_graph (both with unreachable nodes removed).
+
+    Args:
+        modules: All compiled modules.
+        import_graph: Import graph for all modules.
+        entry_path: The entry point module (typically the last in topo_order).
+
+    Returns:
+        A tuple of (filtered_modules, filtered_import_graph) containing only
+        reachable modules and their dependencies.
+    """
+    if entry_path not in modules:
+        # Entry not in modules — return everything (shouldn't happen)
+        return modules, import_graph
+
+    reachable: set[Path] = set()
+    queue = [entry_path]
+
+    while queue:
+        path = queue.pop(0)
+        if path in reachable:
+            continue
+        reachable.add(path)
+        for dep in import_graph.get(path, []):
+            if dep not in reachable:
+                queue.append(dep)
+
+    # Filter both dicts
+    filtered_modules = {p: m for p, m in modules.items() if p in reachable}
+    filtered_graph = {
+        p: [d for d in deps if d in reachable]
+        for p, deps in import_graph.items()
+        if p in reachable
+    }
+
+    return filtered_modules, filtered_graph
+
+
 # ── Main linker ──────────────────────────────────────────────────
 
 
@@ -278,6 +465,17 @@ def link_modules(
     # Processing order: topo_order already has deps first, entry last
     processing_order = [p for p in topo_order if p in modules]
 
+    # Demand-driven filtering: keep only modules reachable from entry point
+    if processing_order:
+        entry_path = processing_order[-1]
+        modules, import_graph = _filter_reachable_modules(
+            modules, import_graph, entry_path
+        )
+        # Recompute prefixes and resolved for the filtered modules
+        prefixes = {path: module_prefix(path, project_root) for path in modules}
+        resolved = _collect_resolved_imports(modules, import_graph)
+        processing_order = [p for p in processing_order if p in modules]
+
     # Build merged IR with a single entry label
     all_ir: list[InstructionBase] = [Label_(label=CodeLabel("entry"))]
     reg_offset = 0
@@ -287,7 +485,16 @@ def link_modules(
         prefix = prefixes[file_path]
         module_resolved = resolved.get(file_path, set())
 
-        transformed = _transform_module(module, prefix, reg_offset, module_resolved)
+        transformed = _transform_module(
+            module,
+            prefix,
+            reg_offset,
+            module_resolved,
+            modules,
+            import_graph,
+            file_path,
+            prefixes,
+        )
         all_ir.extend(transformed)
         reg_offset += max_register_number(module.ir) + 1
 
