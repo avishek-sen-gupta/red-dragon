@@ -1,0 +1,6 @@
+id: no-print
+language: python
+rule:
+  pattern: print($$$ARGS)
+message: "print() — use logging instead"
+severity: warning

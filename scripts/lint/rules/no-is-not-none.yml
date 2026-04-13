@@ -1,0 +1,6 @@
+id: no-is-not-none
+language: python
+rule:
+  pattern: "$X is not None"
+message: "is not None check — use structural pattern matching or Option type"
+severity: warning
