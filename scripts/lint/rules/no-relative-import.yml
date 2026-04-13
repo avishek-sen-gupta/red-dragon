@@ -1,0 +1,10 @@
+id: no-relative-import
+language: python
+rule:
+  any:
+    - pattern: "from . import $X"
+    - pattern: "from .. import $X"
+    - pattern: "from .$MOD import $X"
+    - pattern: "from ..$MOD import $X"
+message: "Relative import — use absolute imports"
+severity: warning

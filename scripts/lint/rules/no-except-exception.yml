@@ -1,0 +1,10 @@
+id: no-except-exception
+language: python
+rule:
+  pattern: |
+    try:
+      $$$BODY
+    except Exception:
+      $$$HANDLER
+message: "except Exception: — catch specific exceptions"
+severity: warning
