@@ -39,6 +39,7 @@ from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.var_scope_info import VarScopeInfo
 from interpreter.types.type_expr import TypeExpr
 from interpreter.namespace_resolver import NamespaceResolver
+from interpreter.path_name import PathName
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,10 @@ class TreeSitterEmitContext:
 
     # Namespace resolver — injectable strategy for qualified name resolution
     namespace_resolver: NamespaceResolver = field(default_factory=NamespaceResolver)
+
+    # Resolved import mappings: source module path → resolved PathName
+    # Populated by two-pass compilation; empty for single-file compilation.
+    resolved_imports: dict[str, PathName] = field(default_factory=dict)
 
     # Kotlin property accessors: class_name → {prop_name → {"get", "set"}}
     property_accessors: dict[str, dict[str, set[str]]] = field(default_factory=dict)
