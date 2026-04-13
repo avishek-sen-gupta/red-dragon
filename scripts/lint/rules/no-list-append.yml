@@ -1,0 +1,6 @@
+id: no-list-append
+language: python
+rule:
+  pattern: $LIST.append($ITEM)
+message: "list.append() — use list concatenation or comprehension"
+severity: warning

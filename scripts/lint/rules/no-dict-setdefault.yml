@@ -1,0 +1,6 @@
+id: no-dict-setdefault
+language: python
+rule:
+  pattern: $DICT.setdefault($KEY, $VAL)
+message: "dict.setdefault() — use explicit conditional or defaultdict at construction"
+severity: warning

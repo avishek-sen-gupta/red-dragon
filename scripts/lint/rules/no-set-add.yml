@@ -1,0 +1,6 @@
+id: no-set-add
+language: python
+rule:
+  pattern: $SET.add($ITEM)
+message: "set.add() — use set union"
+severity: warning
