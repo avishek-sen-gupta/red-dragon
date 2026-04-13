@@ -4,3 +4,4 @@
 #import .claude/core/workflow.md
 #import .claude/core/implementation.md
 #import .claude/core/tools-search.md
+#import .claude/conditional/design-principles.md
