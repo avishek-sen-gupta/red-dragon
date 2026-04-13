@@ -121,8 +121,8 @@ The Python frontend uses all the base defaults for `none_literal` (`"None"`), `t
 | `global_statement` | `lambda ctx, node: None` | No-op |
 | `nonlocal_statement` | `lambda ctx, node: None` | No-op |
 | `delete_statement` | `py_cf.lower_delete` | `CALL_FUNCTION("del", target)` per target |
-| `import_statement` | `py_cf.lower_import` | `CALL_FUNCTION("import", module)` + `STORE_VAR` |
-| `import_from_statement` | `py_cf.lower_import_from` | `CALL_FUNCTION("import", "from X import Y")` + `STORE_VAR` per name |
+| `import_statement` | `py_cf.lower_import` | `IMPORT_MODULE(module)` + `DECL_VAR` under top-level name |
+| `import_from_statement` | `py_cf.lower_import_from` | `IMPORT_MODULE(module)` + `LOAD_FIELD(name)` + `DECL_VAR` per name |
 | `match_statement` | `py_cf.lower_match` | `BINOP("==")` + `BRANCH_IF` chain (if/elif/else) |
 | `type_alias_statement` | `lambda ctx, node: None` | No-op |
 
@@ -268,13 +268,16 @@ Lowers `del x, y` by iterating targets (unwrapping `expression_list` if present)
 ### `py_cf.lower_import(ctx, node)`
 
 Lowers `import os.path`:
-1. `CALL_FUNCTION("import", "os.path")`
-2. `STORE_VAR("os", import_reg)` -- stores under the top-level module name (splits on `.`)
+1. `IMPORT_MODULE("os.path", resolved_path)` → `import_reg`
+2. `DECL_VAR("os", import_reg)` — stores under the top-level module name (splits on `.`)
+
+The `resolved_path` comes from `ctx.resolved_imports` (populated by the two-pass compiler). For single-file compilation the path is `NO_PATH_NAME`.
 
 ### `py_cf.lower_import_from(ctx, node)`
 
 Lowers `from X import Y, Z`:
-- For each imported `dotted_name` child: `CALL_FUNCTION("import", "from X import Y")` + `STORE_VAR("Y", reg)`
+1. `IMPORT_MODULE("X", resolved_path)` → `module_reg`
+2. For each name `Y`: `LOAD_FIELD("Y", module_reg)` → `field_reg`, then `DECL_VAR("Y", field_reg)`
 
 ### `py_cf.lower_match(ctx, node)`
 

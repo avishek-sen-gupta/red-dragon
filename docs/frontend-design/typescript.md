@@ -77,7 +77,7 @@ All entries from the JavaScript frontend's statement dispatch are inherited. See
 | `enum_declaration` | `lower_enum_decl` | `NEW_OBJECT("enum:<name>")` + `STORE_INDEX` per member + `STORE_VAR` |
 | `type_alias_declaration` | `lambda ctx, node: None` | No-op (type aliases are skipped) |
 | `export_statement` | `lower_ts_export_statement` | Unwraps inner declaration (filters `export` keyword) |
-| `import_statement` | `lambda ctx, node: None` | No-op (same as JS) |
+| `import_statement` | `lower_import_statement` | `IMPORT_MODULE(path)` + `DECL_VAR` per named import |
 | `abstract_class_declaration` | `lower_ts_class_def` | Treated as a regular class declaration |
 | `public_field_definition` | `lower_ts_field_definition` | `STORE_VAR(field_name, val)` |
 | `abstract_method_signature` | `lower_ts_abstract_method` | Function stub with empty body |
