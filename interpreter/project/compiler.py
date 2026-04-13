@@ -305,6 +305,15 @@ def compile_directory(
                     target = resolved.resolved_path.resolve()
                     if target in import_graph and target not in import_graph[path]:
                         import_graph[path].append(target)
+                    # For Python: if importing from a package (e.g., pkg.mod),
+                    # add implicit dependency on pkg/__init__.py
+                    if language == Language.PYTHON and target.name != "__init__.py":
+                        init_file = target.parent / "__init__.py"
+                        if (
+                            init_file in import_graph
+                            and init_file not in import_graph[path]
+                        ):
+                            import_graph[path].append(init_file)
 
     # Add stdlib dependency edges so stdlib modules link before user code
     for user_path, deps in stdlib_edges.items():
