@@ -377,6 +377,29 @@ def _builtin_dict_contains_key(args: list[TypedValue], vm: VMState) -> BuiltinRe
     return BuiltinResult(value=field in heap_obj.fields)
 
 
+def _builtin_py_contains(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """__py_contains__(collection, element) — Python-specific membership test.
+
+    Handles both heap-backed arrays/dicts (Pointer) and native Python containers.
+    Emitted by the Python frontend for 'in' / 'not in' expressions; the frontend
+    wraps the result in UNOP NOT for 'not in'.
+    """
+    if len(args) < 2:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    collection_val = args[0].value
+    element_val = args[1].value
+    if _is_symbolic(collection_val) or _is_symbolic(element_val):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    addr = _heap_addr(collection_val)
+    if addr and vm.heap_contains(addr):
+        heap_obj = vm.heap_get(addr)
+        raw_values = [tv.value for tv in heap_obj.fields.values()]
+        return BuiltinResult(value=element_val in raw_values)
+    if hasattr(collection_val, "__contains__"):
+        return BuiltinResult(value=element_val in collection_val)
+    return BuiltinResult(value=_UNCOMPUTABLE)
+
+
 def _builtin_str_upper(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     # Precondition: args[0].value must be a raw Python str.
     # The caller (String stub IR) extracts the raw value via LoadField before calling.
@@ -489,6 +512,7 @@ class Builtins:
             FuncName("str_strip"): _builtin_str_strip,
             FuncName("list_append"): _builtin_list_append,
             FuncName("dict_contains_key"): _builtin_dict_contains_key,
+            FuncName("__py_contains__"): _builtin_py_contains,
             **BYTE_BUILTINS,
         }
     )
