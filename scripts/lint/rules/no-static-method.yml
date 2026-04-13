@@ -1,0 +1,6 @@
+id: no-static-method
+language: python
+rule:
+  pattern: "@staticmethod"
+message: "@staticmethod — use module-level functions instead"
+severity: warning
