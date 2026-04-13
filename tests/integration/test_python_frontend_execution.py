@@ -116,3 +116,36 @@ class TestPythonIdentityOperatorsExecution:
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is False
+
+    def test_not_in_list_branch_taken(self):
+        """'if x not in [1,2,3]: result = 99' should execute the branch when x=5."""
+        source = """\
+x = 5
+if x not in [1, 2, 3]:
+    result = 99
+"""
+        vm = run(
+            source,
+            language=Language.PYTHON,
+            max_steps=500,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars[VarName("result")] == 99
+
+    def test_not_in_list_branch_skipped(self):
+        """'if x not in [1,2,3]: result = 99' should skip the branch when x=2."""
+        source = """\
+x = 2
+result = 0
+if x not in [1, 2, 3]:
+    result = 99
+"""
+        vm = run(
+            source,
+            language=Language.PYTHON,
+            max_steps=500,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars[VarName("result")] == 0
