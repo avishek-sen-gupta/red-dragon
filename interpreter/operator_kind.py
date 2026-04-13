@@ -31,6 +31,9 @@ class BinopKind(str, Enum):
     AND = "and"
     OR = "or"
     IN = "in"
+    NOT_IN = "not in"
+    IS = "is"
+    IS_NOT = "is not"
     # Bitwise
     BIT_AND = "&"
     BIT_OR = "|"

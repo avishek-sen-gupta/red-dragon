@@ -446,6 +446,11 @@ class Operators:
             "in": lambda a, b: (
                 a in b if hasattr(b, "__contains__") else Operators.UNCOMPUTABLE
             ),
+            "not in": lambda a, b: (
+                a not in b if hasattr(b, "__contains__") else Operators.UNCOMPUTABLE
+            ),
+            "is": lambda a, b: a is b,
+            "is not": lambda a, b: a is not b,
             "&": lambda a, b: a & b,
             "|": lambda a, b: a | b,
             "^": lambda a, b: a ^ b,
