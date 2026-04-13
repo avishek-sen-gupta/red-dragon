@@ -477,6 +477,7 @@ _OPCODE_CATEGORIES: dict[str, str] = {
     "STORE_INDIRECT": "memory",
     "SET_CONTINUATION": "continuations",
     "RESUME_CONTINUATION": "continuations",
+    "IMPORT_MODULE": "modules",
 }
 
 _OPCODE_NOTES: dict[str, str] = {
@@ -657,6 +658,12 @@ _OPCODE_NOTES: dict[str, str] = {
         "Transfers control to the continuation registered under name. Paired with "
         "SET_CONTINUATION. Used to resume a suspended generator or coroutine from the "
         "point where SET_CONTINUATION was executed."
+    ),
+    "IMPORT_MODULE": (
+        "Imports a module specified by module_path and stores the result in result_reg. "
+        "resolved_path contains the filesystem path if the module was resolved, or "
+        "NO_PATH_NAME if unresolved. This instruction is expanded by the linker into "
+        "existing opcodes (CONST, CALL_FUNCTION, etc.) during compilation."
     ),
 }
 
