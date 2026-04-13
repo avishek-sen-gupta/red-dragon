@@ -84,13 +84,8 @@ class TestPythonIdentityOperatorsExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is False
 
-    def test_not_in_lowers_without_crash(self):
-        """'x not in lst' should lower and execute without raising an error.
-
-        List literals lower to heap Pointers, so the VM produces a SymbolicValue
-        (UNCOMPUTABLE) rather than a concrete bool — same behaviour as 'in'.
-        The key assertion is that no ValueError is raised during lowering.
-        """
+    def test_not_in_list_true(self):
+        """'5 not in [1, 2, 3]' should evaluate to True."""
         vm = run(
             "lst = [1, 2, 3]\nresult = 5 not in lst",
             language=Language.PYTHON,
@@ -98,4 +93,26 @@ class TestPythonIdentityOperatorsExecution:
             entry_point=EntryPoint.top_level(),
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
-        assert VarName("result") in local_vars
+        assert local_vars[VarName("result")] is True
+
+    def test_in_list_true(self):
+        """'2 in [1, 2, 3]' should evaluate to True."""
+        vm = run(
+            "lst = [1, 2, 3]\nresult = 2 in lst",
+            language=Language.PYTHON,
+            max_steps=500,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars[VarName("result")] is True
+
+    def test_in_list_false(self):
+        """'5 in [1, 2, 3]' should evaluate to False."""
+        vm = run(
+            "lst = [1, 2, 3]\nresult = 5 in lst",
+            language=Language.PYTHON,
+            max_steps=500,
+            entry_point=EntryPoint.top_level(),
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars[VarName("result")] is False

@@ -64,7 +64,7 @@ class PythonFrontend(BaseFrontend):
             PythonNodeType.NONE: common_expr.lower_canonical_none,
             PythonNodeType.BINARY_OPERATOR: common_expr.lower_binop,
             PythonNodeType.BOOLEAN_OPERATOR: common_expr.lower_binop,
-            PythonNodeType.COMPARISON_OPERATOR: common_expr.lower_comparison,
+            PythonNodeType.COMPARISON_OPERATOR: py_expr.lower_python_comparison,
             PythonNodeType.UNARY_OPERATOR: common_expr.lower_unop,
             PythonNodeType.NOT_OPERATOR: common_expr.lower_unop,
             PythonNodeType.CALL: py_expr.lower_call,

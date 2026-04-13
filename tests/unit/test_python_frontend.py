@@ -1325,8 +1325,10 @@ class TestPythonIdentityOperators:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("is not" in inst.operands for inst in binops)
 
-    def test_not_in_lowers_to_binop(self):
-        """'x not in lst' should lower to a BINOP with operator 'not in'."""
+    def test_not_in_lowers_to_py_contains_call(self):
+        """'x not in lst' should lower to CALL_FUNCTION __py_contains__ + UNOP NOT."""
         instructions = _parse_python("result = x not in lst")
-        binops = _find_all(instructions, Opcode.BINOP)
-        assert any("not in" in inst.operands for inst in binops)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("__py_contains__" in inst.operands for inst in calls)
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any("not" in inst.operands for inst in unops)
