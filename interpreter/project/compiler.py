@@ -8,6 +8,7 @@ build_export_table(): IR + symbol tables → ExportTable
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 from interpreter.class_name import ClassName
@@ -26,11 +27,90 @@ from interpreter.project.resolver import (
     topological_sort,
     JavaImportResolver,
 )
+from interpreter.path_name import PathName, NO_PATH_NAME
+from interpreter.instructions import ImportModule
 from interpreter.project.source_roots import MavenSourceRootDiscovery
 from interpreter.project.linker import link_modules
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter import constants
+
+# ── Resolved imports mapping ─────────────────────────────────────
+
+
+def _build_resolved_imports_map(
+    modules: dict[Path, ModuleUnit],
+    import_graph: dict[Path, list[Path]],
+    resolver: "ImportResolver",
+    directory: Path,
+) -> dict[Path, dict[str, PathName]]:
+    """Build a mapping from each module to resolved import paths.
+
+    For each module, creates a dict mapping the original import strings (as they
+    appear in IMPORT_MODULE instructions) to PathName objects representing the
+    resolved file paths. This is used during Pass 2 (IMPORT_MODULE patching)
+    to fill in resolved_path fields.
+
+    Args:
+        modules: Dict of file path -> ModuleUnit
+        import_graph: Dict of file path -> list of dependency file paths
+        resolver: ImportResolver for resolving module names to paths
+        directory: Project root directory
+
+    Returns:
+        {module_path: {import_module_path: PathName(resolved_file), ...}, ...}
+    """
+    resolved_imports_map: dict[Path, dict[str, PathName]] = {}
+    # Build a normalized lookup table: resolved paths → module paths
+    # (handles symlinks and /private/ prefix on macOS)
+    normalized_modules: dict[Path, Path] = {p.resolve(): p for p in modules.keys()}
+
+    for module_path, module in modules.items():
+        resolved_imports_map[module_path] = {}
+        # For each ImportRef in the module's imports list, resolve it and store
+        # the mapping from the original module_path (as written in source) to the resolved file path
+        for import_ref in module.imports:
+            # Resolve this import to get all possible targets
+            for resolved in resolver.resolve(import_ref, directory):
+                if resolved.is_resolved():
+                    target = resolved.resolved_path.resolve()
+                    if target in normalized_modules:
+                        # Map the module_path string (as it appears in IMPORT_MODULE) to the resolved file path
+                        resolved_imports_map[module_path][import_ref.module_path] = (
+                            PathName(str(target))
+                        )
+
+    return resolved_imports_map
+
+
+def _patch_import_module_instructions(
+    module: ModuleUnit, resolved_map: dict[str, PathName]
+) -> tuple[InstructionBase, ...]:
+    """Patch IMPORT_MODULE instructions in a module's IR with resolved paths.
+
+    During Pass 1 (frontend lowering), IMPORT_MODULE instructions have
+    resolved_path=NO_PATH_NAME. This function patches them with actual PathName
+    objects from the resolved_map (built from the import_graph).
+
+    Args:
+        module: The ModuleUnit with potentially-unpatched IMPORT_MODULE instructions.
+        resolved_map: Mapping from module_path strings to PathName objects.
+
+    Returns:
+        A new IR tuple with IMPORT_MODULE instructions patched.
+    """
+    result: list[InstructionBase] = []
+
+    for inst in module.ir:
+        if isinstance(inst, ImportModule):
+            # Found an IMPORT_MODULE instruction. Try to patch its resolved_path.
+            resolved_path = resolved_map.get(inst.module_path, NO_PATH_NAME)
+            patched = dataclasses.replace(inst, resolved_path=resolved_path)
+            result.append(patched)
+        else:
+            result.append(inst)
+
+    return tuple(result)
 
 
 def build_export_table(
@@ -181,7 +261,7 @@ def compile_directory(
         tree = build_java_namespace_tree(scan_results, STDLIB_REGISTRY)
         namespace_resolver = JavaNamespaceResolver(tree)
 
-    # --- Compile each module (with namespace resolver if available) ---
+    # --- PASS 1: Compile each module (with namespace resolver if available) ---
     modules = {
         path: compile_module(path, language, namespace_resolver=namespace_resolver)
         for path in source_files
@@ -206,7 +286,7 @@ def compile_directory(
         for stub_key, stub_module in stdlib_needed.items():
             modules[stub_key] = stub_module
 
-    # Build import graph from modules' resolved imports
+    # --- Build import graph from modules' resolved imports ---
     if language == Language.JAVA:
         discovered_roots = MavenSourceRootDiscovery().discover(directory)
         resolver = (
@@ -231,6 +311,16 @@ def compile_directory(
         for dep in deps:
             if dep not in import_graph[user_path]:
                 import_graph[user_path].append(dep)
+
+    # --- PASS 2: Patch IMPORT_MODULE instructions with resolved paths ---
+    resolved_imports_map = _build_resolved_imports_map(
+        modules, import_graph, resolver, directory
+    )
+    for path, module in modules.items():
+        resolved_map = resolved_imports_map.get(path, {})
+        patched_ir = _patch_import_module_instructions(module, resolved_map)
+        # Create a new ModuleUnit with the patched IR
+        modules[path] = dataclasses.replace(module, ir=patched_ir)
 
     topo_order = topological_sort(import_graph)
 

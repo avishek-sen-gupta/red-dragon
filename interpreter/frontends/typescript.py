@@ -32,6 +32,7 @@ from interpreter.instructions import (
     Branch,
     BranchIf,
     Return_,
+    ImportModule,
 )
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
@@ -39,6 +40,7 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.typescript_node_types import TypeScriptNodeType
+from interpreter.path_name import NO_PATH_NAME
 from interpreter.types.type_expr import (
     UNKNOWN,
     EnumType,
@@ -740,15 +742,150 @@ def _lower_nested_identifier(
 
 
 def lower_ts_import_statement(ctx: TreeSitterEmitContext, node: Any) -> None:
-    """Lower import_statement: handle import_require_clause children.
+    """Lower import_statement: handle both CommonJS require and ESM imports.
 
-    import x = require('y') → CALL_FUNCTION require + STORE_VAR x.
-    Other import forms (ESM) are type-only at runtime — no IR needed.
+    - import x = require('y')       → CALL_FUNCTION require + STORE_VAR x
+    - import { a, b } from "./m"   → IMPORT_MODULE + LOAD_FIELD + DECL_VAR
+    - import foo from "./m"        → IMPORT_MODULE + DECL_VAR
+    - import * as ns from "./m"    → IMPORT_MODULE + DECL_VAR
     """
+    # Check for CommonJS require() style: import x = require('y')
     for child in node.children:
         if child.type == TypeScriptNodeType.IMPORT_REQUIRE_CLAUSE:
             _lower_import_require_clause(ctx, child, node)
             return
+
+    # ESM imports: emit IMPORT_MODULE
+    # Extract the module path from the import_statement
+    module_path = None
+    for child in node.children:
+        if child.type == "string":
+            raw = ctx.node_text(child)
+            module_path = raw.strip("'\"")
+            break
+
+    if module_path is None:
+        # No module path found, skip this import
+        return
+
+    # Emit IMPORT_MODULE to load the module
+    mod_reg = ctx.fresh_reg()
+    resolved = ctx.resolved_imports.get(module_path, NO_PATH_NAME)
+    ctx.emit_inst(
+        ImportModule(
+            result_reg=mod_reg,
+            module_path=module_path,
+            resolved_path=resolved,
+        ),
+        node=node,
+    )
+
+    # Find the import_clause to determine what to bind
+    import_clause = None
+    for child in node.children:
+        if child.type == "import_clause":
+            import_clause = child
+            break
+
+    if import_clause is None:
+        return
+
+    # Process the import_clause to bind imported names
+    _lower_ts_import_clause(ctx, import_clause, mod_reg, node)
+
+
+def _lower_ts_import_clause(
+    ctx: TreeSitterEmitContext,
+    clause: Any,
+    mod_reg: Any,
+    parent: Any,
+) -> None:
+    """Lower import_clause: process named_imports, namespace_import, or default_import."""
+    for child in clause.children:
+        if child.type == "named_imports":
+            # import { a, b, c } from "./module"
+            _lower_ts_named_imports(ctx, child, mod_reg, parent)
+        elif child.type == "namespace_import":
+            # import * as ns from "./module"
+            _lower_ts_namespace_import(ctx, child, mod_reg, parent)
+        elif child.type == "identifier":
+            # Default import: import foo from "./module"
+            # In an import_clause, a bare identifier is the default import
+            import_name = ctx.node_text(child)
+            ctx.emit_inst(
+                DeclVar(name=VarName(import_name), value_reg=mod_reg), node=parent
+            )
+
+
+def _lower_ts_named_imports(
+    ctx: TreeSitterEmitContext,
+    named_imports: Any,
+    mod_reg: Any,
+    parent: Any,
+) -> None:
+    """Lower named_imports: { a, b, c } or { a as x, b as y }."""
+    for child in named_imports.children:
+        if child.type == "import_specifier":
+            _lower_ts_import_specifier(ctx, child, mod_reg, parent)
+
+
+def _lower_ts_import_specifier(
+    ctx: TreeSitterEmitContext,
+    specifier: Any,
+    mod_reg: Any,
+    parent: Any,
+) -> None:
+    """Lower import_specifier: a or a as b."""
+    # import_specifier has children: [name] or [name, 'as', alias]
+    named_children = [c for c in specifier.children if c.is_named]
+    if len(named_children) == 1:
+        # Simple name: import { a } from "./module"
+        import_name = ctx.node_text(named_children[0])
+        field_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            LoadField(
+                result_reg=field_reg,
+                obj_reg=mod_reg,
+                field_name=FieldName(import_name),
+            ),
+            node=parent,
+        )
+        ctx.emit_inst(
+            DeclVar(name=VarName(import_name), value_reg=field_reg), node=parent
+        )
+    elif len(named_children) == 2:
+        # Aliased import: import { a as b } from "./module"
+        import_name = ctx.node_text(named_children[0])
+        alias_name = ctx.node_text(named_children[1])
+        field_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            LoadField(
+                result_reg=field_reg,
+                obj_reg=mod_reg,
+                field_name=FieldName(import_name),
+            ),
+            node=parent,
+        )
+        ctx.emit_inst(
+            DeclVar(name=VarName(alias_name), value_reg=field_reg), node=parent
+        )
+
+
+def _lower_ts_namespace_import(
+    ctx: TreeSitterEmitContext,
+    namespace_import: Any,
+    mod_reg: Any,
+    parent: Any,
+) -> None:
+    """Lower namespace_import: import * as ns from "./module"."""
+    # namespace_import: * as identifier
+    for child in namespace_import.children:
+        if child.type == "identifier":
+            ns_name = ctx.node_text(child)
+            ctx.emit_inst(
+                DeclVar(name=VarName(ns_name), value_reg=mod_reg), node=parent
+            )
+            break
 
 
 def _lower_import_require_clause(
