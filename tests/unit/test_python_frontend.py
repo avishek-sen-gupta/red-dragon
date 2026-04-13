@@ -1310,3 +1310,23 @@ class TestPythonFutureImportStatement:
         ir = _parse_python("from __future__ import annotations\nx = 42")
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
+
+
+class TestPythonIdentityOperators:
+    def test_is_lowers_to_binop(self):
+        """'x is None' should lower to a BINOP with operator 'is'."""
+        instructions = _parse_python("result = x is None")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("is" in inst.operands for inst in binops)
+
+    def test_is_not_lowers_to_binop(self):
+        """'x is not None' should lower to a BINOP with operator 'is not'."""
+        instructions = _parse_python("result = x is not None")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("is not" in inst.operands for inst in binops)
+
+    def test_not_in_lowers_to_binop(self):
+        """'x not in lst' should lower to a BINOP with operator 'not in'."""
+        instructions = _parse_python("result = x not in lst")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("not in" in inst.operands for inst in binops)
