@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Format ast-grep JSON stream output as a grouped violation report."""
+"""Format ast-grep JSON stream output as a grouped programming patterns lint report."""
 
 import json
 import sys
@@ -30,7 +30,7 @@ if not violations:
 total = sum(len(v) for v in violations.values())
 print(f"\n{'─' * 72}")
 print(
-    f"  Mutation/Design Lint Report  ({total} violations across {len(violations)} rules)"
+    f"  Programming Patterns Lint Report  ({total} violations across {len(violations)} rules)"
 )
 print(f"{'─' * 72}")
 
