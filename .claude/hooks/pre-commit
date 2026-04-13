@@ -93,6 +93,14 @@ echo_success "Running Black (auto-fix)..."
 poetry -C "$REPO_ROOT" run python -m black .
 git -C "$REPO_ROOT" add -u
 
+# ---------------------------------------------------------------------------
+# Mutation lint (non-blocking — warnings only)
+# ---------------------------------------------------------------------------
+if command -v ast-grep >/dev/null 2>&1; then
+  echo_success "Running mutation lint (interpreter/ only)..."
+  ast-grep scan --config "$REPO_ROOT/scripts/lint/sgconfig.yml" "$REPO_ROOT/interpreter/" || true
+fi
+
 echo_success "Running import-linter architectural contracts..."
 poetry -C "$REPO_ROOT" run lint-imports
 if [ $? -ne 0 ]; then

@@ -1,0 +1,6 @@
+id: no-list-extend
+language: python
+rule:
+  pattern: $LIST.extend($ITEMS)
+message: "list.extend() — use list concatenation"
+severity: warning
