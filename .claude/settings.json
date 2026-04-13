@@ -5,20 +5,13 @@
       "command": "uvx",
       "args": [
         "mcp-neo4j-cypher",
-        "--transport", "stdio"
+        "--transport",
+        "stdio"
       ]
     }
   },
   "hooks": {
     "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "~/.claude/plugins/context-injector/hooks/pre-tool-use.sh",
-            "type": "command"
-          }
-        ]
-      },
       {
         "matcher": "Grep",
         "hooks": [
@@ -30,22 +23,12 @@
         ]
       }
     ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/plugins/context-injector/hooks/session-start.sh"
-          }
-        ]
-      }
-    ],
     "UserPromptSubmit": [
       {
         "hooks": [
           {
-            "command": "~/.claude/plugins/context-injector/hooks/user-prompt-submit.sh",
-            "type": "command"
+            "type": "command",
+            "command": "~/.claude/plugins/context-injector/hooks/user-prompt-submit.sh"
           }
         ]
       }
@@ -89,7 +72,6 @@
       "Bash(python:*)",
       "Bash(realpath:*)",
       "Bash(rm:/tmp/ctx-locks/)",
-      "Bash(rm:/tmp/ctx-locks/*)",
       "Bash(rtk proxy:*)",
       "Bash(sed:*)",
       "Bash(shellcheck:*)",
