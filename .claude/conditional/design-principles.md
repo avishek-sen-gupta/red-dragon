@@ -24,15 +24,18 @@
 
 ### Types and values
 
+- Dataclasses must use `frozen=True`. No exceptions.
 - No defensive programming. No `None` checks, no generic exception handling. If unsure, pause and ask.
 - No `None` as a default parameter. Use empty structures (`{}`, `[]`, `()`).
 - No `None` returns from non-None return types. Use null object pattern.
 - No mutation after construction. Inject all dependencies at construction time.
 - Domain-appropriate wrapping types for data crossing function boundaries. Wrap/unwrap at boundary layers only.
 - Resolve enums into executable objects early in the call chain, then inject as dependencies.
+- Use `Sequence` and `Mapping` from `collections.abc` as type annotations for parameters that should not be mutated — never annotate a parameter as `list` or `dict` if the function doesn't need to mutate it.
 
 ### Architecture
 
 - Ports-and-adapters. Functional core, imperative shell.
+- Mutable state is permitted only in the imperative shell (I/O, Neo4j, file writes). The functional core receives and returns immutable values.
 - Dependency injection for external systems (Neo4j, OS, file I/O, clocks, GUIDs).
 - No static methods.
