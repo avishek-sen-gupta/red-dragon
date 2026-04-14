@@ -50,3 +50,5 @@ dolt-server.*
 .worktrees/
 .superpowers/
 
+.claude/audit/
+.claude/state/

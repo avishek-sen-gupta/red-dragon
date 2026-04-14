@@ -21,6 +21,14 @@
             "statusMessage": "ast-grep check..."
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/plugins/context-injector/hooks/bd-terminology-guard.sh"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
