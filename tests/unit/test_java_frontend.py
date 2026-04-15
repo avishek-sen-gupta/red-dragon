@@ -988,10 +988,10 @@ class TestJavaHexFloatingPointLiteral:
         )
 
     def test_hex_float_emits_const(self):
-        """Hex floating point literal should emit a CONST instruction."""
+        """Hex floating point literal should emit a CONST with the parsed float value."""
         ir = _parse_java("class T { void f() { double x = 0x1.0p10; } }")
         consts = _find_all(ir, Opcode.CONST)
-        assert any("0x1.0p10" in str(inst.operands) for inst in consts)
+        assert any("1024.0" in str(inst.operands) for inst in consts)
 
     def test_hex_float_stored(self):
         """Hex float should be stored to a variable."""
