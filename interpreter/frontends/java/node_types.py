@@ -63,6 +63,7 @@ class JavaNodeType:
     SYNCHRONIZED_STATEMENT = "synchronized_statement"
     IMPORT_DECLARATION = "import_declaration"
     PACKAGE_DECLARATION = "package_declaration"
+    MODULE_DECLARATION = "module_declaration"
 
     # ── Switch ───────────────────────────────────────────────────────
     YIELD_STATEMENT = "yield_statement"
