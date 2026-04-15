@@ -11,10 +11,13 @@ from __future__ import annotations
 from interpreter.var_name import VarName
 from interpreter.ir import Opcode
 from interpreter.types.typed_value import unwrap
+from interpreter.frontends.python.features import PythonFeature
+from tests.covers import covers
 from tests.unit.rosetta.conftest import parse_for_language, execute_for_language
 
 
 class TestListComprehensionScoping:
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_loop_var_does_not_shadow_outer(self):
         """Comprehension var 'x' should not overwrite outer 'x'."""
         vm, stats = execute_for_language(
@@ -31,6 +34,7 @@ answer = x
             f"answer={unwrap(frame.local_vars[VarName('answer')])}"
         )
 
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_loop_var_is_mangled_in_comprehension(self):
         """Comprehension var should be mangled to avoid leaking."""
         ir = parse_for_language(
@@ -53,6 +57,7 @@ result = [item for item in [1, 2, 3]]
 
 
 class TestDictComprehensionScoping:
+    @covers(PythonFeature.DICT_COMPREHENSION)
     def test_loop_var_does_not_shadow_outer(self):
         """Dict comprehension var should not overwrite outer variable."""
         vm, stats = execute_for_language(
@@ -71,6 +76,7 @@ answer = k
 
 
 class TestSetComprehensionScoping:
+    @covers(PythonFeature.SET_COMPREHENSION)
     def test_loop_var_does_not_shadow_outer(self):
         """Set comprehension var should not overwrite outer variable."""
         vm, stats = execute_for_language(
@@ -89,6 +95,7 @@ answer = x
 
 
 class TestGeneratorExpressionScoping:
+    @covers(PythonFeature.GENERATOR_EXPRESSION)
     def test_loop_var_does_not_shadow_outer(self):
         """Generator expression var should not overwrite outer variable."""
         vm, stats = execute_for_language(

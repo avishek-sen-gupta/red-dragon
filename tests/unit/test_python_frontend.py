@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from interpreter.frontends.python import PythonFrontend
+from interpreter.frontends.python.features import PythonFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import (
     NO_SOURCE_LOCATION,
@@ -12,6 +13,7 @@ from interpreter.ir import (
     CodeLabel,
 )
 from interpreter.instructions import InstructionBase, Label_
+from tests.covers import covers
 
 
 def _parse_python(source: str) -> list[InstructionBase]:
@@ -34,16 +36,19 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestPythonSmoke:
+    @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_empty_program(self):
         instructions = _parse_python("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_integer_literal(self):
         instructions = _parse_python("42")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
 
+    @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_string_literal(self):
         instructions = _parse_python('x = "hello"')
         consts = _find_all(instructions, Opcode.CONST)
@@ -51,6 +56,7 @@ class TestPythonSmoke:
 
 
 class TestPythonVariables:
+    @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_simple_assignment(self):
         instructions = _parse_python("x = 10")
         opcodes = _opcodes(instructions)
@@ -59,6 +65,7 @@ class TestPythonVariables:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_augmented_assignment(self):
         instructions = _parse_python("x += 1")
         opcodes = _opcodes(instructions)
@@ -69,6 +76,7 @@ class TestPythonVariables:
 
 
 class TestPythonExpressions:
+    @covers(PythonFeature.ARITHMETIC)
     def test_arithmetic(self):
         instructions = _parse_python("y = x + 5")
         opcodes = _opcodes(instructions)
@@ -78,17 +86,20 @@ class TestPythonExpressions:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(PythonFeature.COMPARISON)
     def test_conditional_expression(self):
         instructions = _parse_python("y = 1 if x > 0 else 0")
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_list_literal(self):
         instructions = _parse_python("arr = [1, 2, 3]")
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_ARRAY in opcodes
         assert Opcode.STORE_INDEX in opcodes
 
+    @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_dict_literal(self):
         instructions = _parse_python('d = {"a": 1, "b": 2}')
         opcodes = _opcodes(instructions)
@@ -97,6 +108,7 @@ class TestPythonExpressions:
 
 
 class TestPythonControlFlow:
+    @covers(PythonFeature.IF_ELSE)
     def test_if_else(self):
         instructions = _parse_python("if x > 5:\n    y = 1\nelse:\n    y = 0")
         opcodes = _opcodes(instructions)
@@ -104,6 +116,7 @@ class TestPythonControlFlow:
         assert Opcode.LABEL in opcodes
         assert Opcode.BRANCH in opcodes
 
+    @covers(PythonFeature.WHILE_LOOP)
     def test_while_loop(self):
         instructions = _parse_python("while x > 0:\n    x = x - 1")
         opcodes = _opcodes(instructions)
@@ -112,12 +125,14 @@ class TestPythonControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
 
+    @covers(PythonFeature.FOR_LOOP)
     def test_for_loop(self):
         instructions = _parse_python("for x in items:\n    y = x")
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.LOAD_INDEX in opcodes
 
+    @covers(PythonFeature.IF_ELSE)
     def test_if_elif_elif_else_all_branches_produce_ir(self):
         """All branches of if/elif/elif/else must produce IR — not just the first elif."""
         source = (
@@ -138,6 +153,7 @@ class TestPythonControlFlow:
         assert "30" in const_values, "second elif-branch value missing"
         assert "40" in const_values, "else-branch value missing"
 
+    @covers(PythonFeature.IF_ELSE)
     def test_if_elif_elif_else_branch_structure(self):
         """Multi-elif CFG must have correct BRANCH_IF count and all labels reachable."""
         source = (
@@ -165,6 +181,7 @@ class TestPythonControlFlow:
             label_set
         ), f"Unreachable targets: {branch_targets - label_set}"
 
+    @covers(PythonFeature.IF_ELSE)
     def test_if_single_elif_no_else(self):
         """if/elif without else still lowers both branches."""
         source = "if a:\n    x = 1\nelif b:\n    x = 2\n"
@@ -178,6 +195,7 @@ class TestPythonControlFlow:
 
 
 class TestPythonFunctions:
+    @covers(PythonFeature.FUNCTION_DECLARATION)
     def test_function_definition(self):
         instructions = _parse_python("def add(a, b):\n    return a + b")
         opcodes = _opcodes(instructions)
@@ -194,12 +212,14 @@ class TestPythonFunctions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.FUNCTION_CALL)
     def test_function_call(self):
         instructions = _parse_python("add(1, 2)")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) >= 1
         assert "add" in calls[0].operands
 
+    @covers(PythonFeature.METHOD_CALL)
     def test_method_call(self):
         instructions = _parse_python('obj.method("arg")')
         calls = _find_all(instructions, Opcode.CALL_METHOD)
@@ -208,6 +228,7 @@ class TestPythonFunctions:
 
 
 class TestPythonClasses:
+    @covers(PythonFeature.CLASS)
     def test_class_definition(self):
         instructions = _parse_python("class Dog:\n    pass")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -217,11 +238,13 @@ class TestPythonClasses:
 
 
 class TestPythonSpecial:
+    @covers(PythonFeature.TRY_EXCEPT)
     def test_raise_statement(self):
         instructions = _parse_python('raise ValueError("fail")')
         opcodes = _opcodes(instructions)
         assert Opcode.THROW in opcodes
 
+    @covers(PythonFeature.TUPLE_EXPRESSION)
     def test_tuple_literal(self):
         instructions = _parse_python("t = (1, 2, 3)")
         opcodes = _opcodes(instructions)
@@ -230,6 +253,7 @@ class TestPythonSpecial:
 
 
 class TestNonTrivialPython:
+    @covers(PythonFeature.FOR_LOOP)
     def test_for_loop_with_conditional_accumulator(self):
         source = """\
 total = 0
@@ -249,6 +273,7 @@ for item in items:
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 15
 
+    @covers(PythonFeature.IF_ELSE)
     def test_nested_if_elif_else_chain(self):
         source = """\
 if x > 100:
@@ -268,6 +293,7 @@ else:
         labels = _labels_in_order(instructions)
         assert len(labels) >= 4
 
+    @covers(PythonFeature.FUNCTION_DECLARATION)
     def test_function_with_conditional_return(self):
         source = """\
 def safe_divide(a, b):
@@ -285,6 +311,7 @@ def safe_divide(a, b):
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("safe_divide" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.CLASS)
     def test_class_with_init_and_method(self):
         source = """\
 class Counter:
@@ -304,6 +331,7 @@ class Counter:
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 20
 
+    @covers(PythonFeature.FOR_LOOP)
     def test_nested_for_loops_with_index_access(self):
         source = """\
 result = 0
@@ -321,6 +349,7 @@ for row in matrix:
         assert any("result" in inst.operands for inst in stores)
         assert len(instructions) > 20
 
+    @covers(PythonFeature.COMPARISON)
     def test_conditional_expression_in_assignment(self):
         source = """\
 x = 10
@@ -337,6 +366,7 @@ result = x if x > y else y
         labels = _labels_in_order(instructions)
         assert any("ternary" in lbl for lbl in labels)
 
+    @covers(PythonFeature.METHOD_CALL)
     def test_method_chaining(self):
         source = """\
 result = data.get("key").strip().lower()
@@ -350,6 +380,7 @@ result = data.get("key").strip().lower()
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.WHILE_LOOP)
     def test_while_with_nested_if_and_mutation(self):
         source = """\
 count = 0
@@ -374,6 +405,7 @@ while count < 100:
         assert any("while" in lbl for lbl in labels)
         assert len(instructions) > 20
 
+    @covers(PythonFeature.FUNCTION_DECLARATION)
     def test_function_calling_function(self):
         source = """\
 def double(x):
@@ -391,6 +423,7 @@ def quadruple(x):
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 2
 
+    @covers(PythonFeature.FUNCTION_DECLARATION)
     def test_raise_in_conditional(self):
         source = """\
 def validate(x):
@@ -406,6 +439,7 @@ def validate(x):
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("validate" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.ARITHMETIC)
     def test_augmented_assignment_operators(self):
         source = """\
 x = 10
@@ -423,6 +457,7 @@ x *= 2
         x_stores = [inst for inst in stores if "x" in inst.operands]
         assert len(x_stores) >= 4
 
+    @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_list_and_dict_construction(self):
         source = """\
 items = [1, 2, 3]
@@ -441,6 +476,7 @@ val = lookup["a"]
 
 
 class TestPythonForBreakContinue:
+    @covers(PythonFeature.BREAK_CONTINUE)
     def test_for_with_break(self):
         source = """\
 for x in items:
@@ -458,6 +494,7 @@ for x in items:
         end_labels = [lbl for lbl in labels if "for_end" in lbl]
         assert any(b.label in end_labels for b in branches)
 
+    @covers(PythonFeature.BREAK_CONTINUE)
     def test_for_with_continue(self):
         source = """\
 for x in items:
@@ -477,6 +514,7 @@ for x in items:
 
 
 class TestPythonListComprehension:
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_list_comp_basic(self):
         source = "result = [x * 2 for x in items]"
         instructions = _parse_python(source)
@@ -486,6 +524,7 @@ class TestPythonListComprehension:
         assert Opcode.STORE_INDEX in opcodes
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_list_comp_with_filter(self):
         source = "result = [x for x in items if x > 0]"
         instructions = _parse_python(source)
@@ -495,6 +534,7 @@ class TestPythonListComprehension:
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
 
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_list_comp_with_call(self):
         source = "result = [f(x) for x in items]"
         instructions = _parse_python(source)
@@ -504,6 +544,7 @@ class TestPythonListComprehension:
 
 
 class TestPythonDictComprehension:
+    @covers(PythonFeature.DICT_COMPREHENSION)
     def test_dict_comp_basic(self):
         source = "result = {k: v for k, v in items}"
         instructions = _parse_python(source)
@@ -512,6 +553,7 @@ class TestPythonDictComprehension:
         assert Opcode.STORE_INDEX in opcodes
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(PythonFeature.DICT_COMPREHENSION)
     def test_dict_comp_with_filter(self):
         source = "result = {k: v for k, v in items if v > 0}"
         instructions = _parse_python(source)
@@ -520,6 +562,7 @@ class TestPythonDictComprehension:
 
 
 class TestPythonWithStatement:
+    @covers(PythonFeature.WITH_STATEMENT)
     def test_with_basic(self):
         source = 'with open("f") as fh:\n    data = fh.read()'
         instructions = _parse_python(source)
@@ -530,6 +573,7 @@ class TestPythonWithStatement:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("fh" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.WITH_STATEMENT)
     def test_with_no_as(self):
         source = "with lock:\n    x = 1"
         instructions = _parse_python(source)
@@ -541,6 +585,7 @@ class TestPythonWithStatement:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.WITH_STATEMENT)
     def test_with_body_lowered(self):
         source = 'with open("a") as f, open("b") as g:\n    f.write(g.read())'
         instructions = _parse_python(source)
@@ -555,6 +600,7 @@ class TestPythonWithStatement:
 
 
 class TestPythonDecorators:
+    @covers(PythonFeature.DECORATOR)
     def test_decorator_basic(self):
         source = "@my_dec\ndef foo():\n    return 1"
         instructions = _parse_python(source)
@@ -568,6 +614,7 @@ class TestPythonDecorators:
             "my_dec" in inst.operands for inst in loads
         ), f"my_dec not loaded, got {[l.operands for l in loads]}"
 
+    @covers(PythonFeature.DECORATOR)
     def test_decorator_stacked(self):
         source = "@dec1\n@dec2\ndef bar():\n    return 1"
         instructions = _parse_python(source)
@@ -581,6 +628,7 @@ class TestPythonDecorators:
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) >= 2
 
+    @covers(PythonFeature.DECORATOR)
     def test_decorator_on_class(self):
         source = "@register\nclass MyClass:\n    pass"
         instructions = _parse_python(source)
@@ -591,6 +639,7 @@ class TestPythonDecorators:
 
 
 class TestPythonLambda:
+    @covers(PythonFeature.LAMBDA)
     def test_lambda_basic(self):
         source = "f = lambda x: x + 1"
         instructions = _parse_python(source)
@@ -602,6 +651,7 @@ class TestPythonLambda:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("func_" in str(inst.operands[0]) for inst in consts if inst.operands)
 
+    @covers(PythonFeature.LAMBDA)
     def test_lambda_multi_param(self):
         source = "add = lambda a, b: a + b"
         instructions = _parse_python(source)
@@ -614,6 +664,7 @@ class TestPythonLambda:
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
 
+    @covers(PythonFeature.LAMBDA)
     def test_lambda_in_call(self):
         source = "result = map(lambda x: x * 2, items)"
         instructions = _parse_python(source)
@@ -624,6 +675,7 @@ class TestPythonLambda:
 
 
 class TestPythonNestedComprehension:
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_nested_comprehension_basic(self):
         source = "result = [x * y for x in xs for y in ys]"
         instructions = _parse_python(source)
@@ -636,6 +688,7 @@ class TestPythonNestedComprehension:
         comp_labels = [lbl for lbl in labels if "comp_cond" in lbl]
         assert len(comp_labels) >= 2
 
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_nested_comprehension_with_filter(self):
         source = "result = [x + y for x in xs for y in ys if x != y]"
         instructions = _parse_python(source)
@@ -646,6 +699,7 @@ class TestPythonNestedComprehension:
         labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
         assert any("comp_store" in lbl for lbl in labels)
 
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_single_comprehension_regression(self):
         source = "result = [x * 2 for x in items]"
         instructions = _parse_python(source)
@@ -656,6 +710,7 @@ class TestPythonNestedComprehension:
 
 
 class TestPythonGeneratorExpression:
+    @covers(PythonFeature.GENERATOR_EXPRESSION)
     def test_generator_basic(self):
         source = "g = (x * 2 for x in items)"
         instructions = _parse_python(source)
@@ -664,6 +719,7 @@ class TestPythonGeneratorExpression:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("g" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.GENERATOR_EXPRESSION)
     def test_generator_with_filter(self):
         source = "g = (x for x in items if x > 0)"
         instructions = _parse_python(source)
@@ -673,6 +729,7 @@ class TestPythonGeneratorExpression:
         # loop condition + filter condition
         assert len(branches) >= 2
 
+    @covers(PythonFeature.GENERATOR_EXPRESSION)
     def test_generator_in_call(self):
         source = "result = sum(x * x for x in nums)"
         instructions = _parse_python(source)
@@ -683,6 +740,7 @@ class TestPythonGeneratorExpression:
 
 
 class TestPythonSetComprehension:
+    @covers(PythonFeature.SET_COMPREHENSION)
     def test_set_comp_basic(self):
         source = "s = {x * 2 for x in items}"
         instructions = _parse_python(source)
@@ -692,6 +750,7 @@ class TestPythonSetComprehension:
         assert any("set" in inst.operands for inst in new_objs)
         assert Opcode.STORE_INDEX in opcodes
 
+    @covers(PythonFeature.SET_COMPREHENSION)
     def test_set_comp_with_filter(self):
         source = "s = {x for x in items if x > 0}"
         instructions = _parse_python(source)
@@ -702,6 +761,7 @@ class TestPythonSetComprehension:
 
 
 class TestPythonSetLiteral:
+    @covers(PythonFeature.SET_LITERAL)
     def test_set_literal_basic(self):
         source = "s = {1, 2, 3}"
         instructions = _parse_python(source)
@@ -710,6 +770,7 @@ class TestPythonSetLiteral:
         store_idxs = _find_all(instructions, Opcode.STORE_INDEX)
         assert len(store_idxs) >= 3
 
+    @covers(PythonFeature.SET_LITERAL)
     def test_set_literal_single(self):
         source = "s = {42}"
         instructions = _parse_python(source)
@@ -718,6 +779,7 @@ class TestPythonSetLiteral:
         store_idxs = _find_all(instructions, Opcode.STORE_INDEX)
         assert len(store_idxs) >= 1
 
+    @covers(PythonFeature.SET_LITERAL)
     def test_set_literal_with_expressions(self):
         source = "s = {a + 1, b * 2}"
         instructions = _parse_python(source)
@@ -728,18 +790,21 @@ class TestPythonSetLiteral:
 
 
 class TestPythonYield:
+    @covers(PythonFeature.YIELD)
     def test_yield_with_value(self):
         source = "def gen():\n    yield 42"
         instructions = _parse_python(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("yield" in inst.operands for inst in calls)
 
+    @covers(PythonFeature.YIELD)
     def test_yield_bare(self):
         source = "def gen():\n    yield"
         instructions = _parse_python(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("yield" in inst.operands for inst in calls)
 
+    @covers(PythonFeature.YIELD)
     def test_yield_with_variable(self):
         source = "def gen(items):\n    for x in items:\n        yield x"
         instructions = _parse_python(source)
@@ -749,12 +814,14 @@ class TestPythonYield:
 
 
 class TestPythonAwait:
+    @covers(PythonFeature.ASYNC_AWAIT)
     def test_await_basic(self):
         source = "async def f():\n    await coro()"
         instructions = _parse_python(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("await" in inst.operands for inst in calls)
 
+    @covers(PythonFeature.ASYNC_AWAIT)
     def test_await_assignment(self):
         source = "async def f():\n    result = await fetch(url)"
         instructions = _parse_python(source)
@@ -765,6 +832,7 @@ class TestPythonAwait:
 
 
 class TestPythonNamedExpression:
+    @covers(PythonFeature.NAMED_EXPRESSION)
     def test_walrus_basic(self):
         source = "if (n := len(data)) > 10:\n    print(n)"
         instructions = _parse_python(source)
@@ -773,12 +841,14 @@ class TestPythonNamedExpression:
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("len" in inst.operands for inst in calls)
 
+    @covers(PythonFeature.NAMED_EXPRESSION)
     def test_walrus_in_while(self):
         source = 'while (line := readline()) != "":\n    process(line)'
         instructions = _parse_python(source)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("line" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.NAMED_EXPRESSION)
     def test_walrus_standalone(self):
         source = "(y := x + 1)"
         instructions = _parse_python(source)
@@ -789,12 +859,14 @@ class TestPythonNamedExpression:
 
 
 class TestPythonAssertStatement:
+    @covers(PythonFeature.ASSERT_STATEMENT)
     def test_assert_simple(self):
         source = "assert x > 0"
         instructions = _parse_python(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("assert" in inst.operands for inst in calls)
 
+    @covers(PythonFeature.ASSERT_STATEMENT)
     def test_assert_with_message(self):
         source = 'assert x > 0, "must be positive"'
         instructions = _parse_python(source)
@@ -804,6 +876,7 @@ class TestPythonAssertStatement:
         # Should have 2 arguments (condition + message)
         assert len(assert_calls[0].operands) >= 3
 
+    @covers(PythonFeature.ASSERT_STATEMENT)
     def test_assert_complex_condition(self):
         source = "assert len(items) == expected"
         instructions = _parse_python(source)
@@ -813,12 +886,14 @@ class TestPythonAssertStatement:
 
 
 class TestPythonGlobalNonlocal:
+    @covers(PythonFeature.GLOBAL_NONLOCAL)
     def test_global_no_op(self):
         source = "global x\nx = 10"
         instructions = _parse_python(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.GLOBAL_NONLOCAL)
     def test_nonlocal_no_op(self):
         source = "def outer():\n    x = 1\n    def inner():\n        nonlocal x\n        x = 2"
         instructions = _parse_python(source)
@@ -827,12 +902,14 @@ class TestPythonGlobalNonlocal:
 
 
 class TestPythonDeleteStatement:
+    @covers(PythonFeature.DELETE_STATEMENT)
     def test_delete_single(self):
         source = "del x"
         instructions = _parse_python(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("del" in inst.operands for inst in calls)
 
+    @covers(PythonFeature.DELETE_STATEMENT)
     def test_delete_multiple(self):
         source = "del x, y"
         instructions = _parse_python(source)
@@ -840,6 +917,7 @@ class TestPythonDeleteStatement:
         del_calls = [c for c in calls if "del" in c.operands]
         assert len(del_calls) >= 2
 
+    @covers(PythonFeature.DELETE_STATEMENT)
     def test_delete_attribute(self):
         source = "del obj.attr"
         instructions = _parse_python(source)
@@ -848,6 +926,7 @@ class TestPythonDeleteStatement:
 
 
 class TestPythonImportStatement:
+    @covers(PythonFeature.IMPORT)
     def test_import_simple(self):
         source = "import os"
         instructions = _parse_python(source)
@@ -856,6 +935,7 @@ class TestPythonImportStatement:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("os" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.IMPORT)
     def test_import_dotted(self):
         source = "import os.path"
         instructions = _parse_python(source)
@@ -864,6 +944,7 @@ class TestPythonImportStatement:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("os" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.IMPORT)
     def test_import_from_basic(self):
         source = "from os import path"
         instructions = _parse_python(source)
@@ -874,6 +955,7 @@ class TestPythonImportStatement:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("path" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.IMPORT)
     def test_import_from_multiple(self):
         source = "from os import path, getcwd"
         instructions = _parse_python(source)
@@ -887,6 +969,7 @@ class TestPythonImportStatement:
 
 
 class TestPythonMatchStatement:
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_match_basic(self):
         source = "match x:\n    case 1:\n        y = 1\n    case 2:\n        y = 2"
         instructions = _parse_python(source)
@@ -896,6 +979,7 @@ class TestPythonMatchStatement:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("==" in inst.operands for inst in binops)
 
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_match_with_wildcard(self):
         source = "match cmd:\n    case 1:\n        y = 1\n    case _:\n        y = 0"
         instructions = _parse_python(source)
@@ -904,6 +988,7 @@ class TestPythonMatchStatement:
         labels = _labels_in_order(instructions)
         assert any("match_end" in lbl for lbl in labels)
 
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_match_multiple_cases(self):
         source = 'match status:\n    case 200:\n        msg = "ok"\n    case 404:\n        msg = "not found"\n    case _:\n        msg = "error"'
         instructions = _parse_python(source)
@@ -915,12 +1000,14 @@ class TestPythonMatchStatement:
 
 
 class TestPythonTypeAlias:
+    @covers(PythonFeature.TYPE_ALIAS)
     def test_type_alias_no_op(self):
         source = "type Point = tuple[int, int]\nx = 1"
         instructions = _parse_python(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.TYPE_ALIAS)
     def test_type_alias_does_not_emit_ir(self):
         source = "type Vector = list[float]"
         instructions = _parse_python(source)
@@ -930,6 +1017,7 @@ class TestPythonTypeAlias:
 
 
 class TestPythonSlice:
+    @covers(PythonFeature.SLICE_EXPRESSION)
     def test_slice_basic(self):
         """a[1:3] should emit CALL_FUNCTION('slice', collection, start, stop, step)."""
         instructions = _parse_python("a[1:3]")
@@ -941,6 +1029,7 @@ class TestPythonSlice:
         # Should NOT have LOAD_INDEX — slice is handled directly
         assert Opcode.LOAD_INDEX not in _opcodes(instructions)
 
+    @covers(PythonFeature.SLICE_EXPRESSION)
     def test_slice_with_step(self):
         """a[1:3:2] should lower slice with collection, start=1, stop=3, step=2."""
         instructions = _parse_python("a[1:3:2]")
@@ -950,6 +1039,7 @@ class TestPythonSlice:
         # Should have 5 operands: 'slice', collection_reg, start, stop, step
         assert len(slice_calls[0].operands) == 5
 
+    @covers(PythonFeature.SLICE_EXPRESSION)
     def test_slice_no_start(self):
         """a[:3] should lower slice with start=None, stop=3."""
         instructions = _parse_python("a[:3]")
@@ -963,6 +1053,7 @@ class TestPythonSlice:
         ]
         assert len(unsupported_slices) == 0
 
+    @covers(PythonFeature.SLICE_EXPRESSION)
     def test_slice_no_stop(self):
         """a[1:] should lower slice with start=1, stop=None."""
         instructions = _parse_python("a[1:]")
@@ -970,6 +1061,7 @@ class TestPythonSlice:
         slice_calls = [c for c in calls if "slice" in c.operands]
         assert len(slice_calls) == 1
 
+    @covers(PythonFeature.SLICE_EXPRESSION)
     def test_slice_assignment(self):
         """result = a[::2] should store to result."""
         instructions = _parse_python("result = a[::2]")
@@ -979,6 +1071,7 @@ class TestPythonSlice:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(PythonFeature.SLICE_EXPRESSION)
     def test_simple_index_still_uses_load_index(self):
         """a[0] should still use LOAD_INDEX, not slice."""
         instructions = _parse_python("a[0]")
@@ -989,6 +1082,7 @@ class TestPythonSlice:
 
 
 class TestPythonParamSeparators:
+    @covers(PythonFeature.FUNCTION_DECLARATION)
     def test_keyword_separator_no_op(self):
         """def f(a, *, b): ... should not emit SYMBOLIC for *."""
         instructions = _parse_python("def f(a, *, b): pass")
@@ -1005,6 +1099,7 @@ class TestPythonParamSeparators:
         ]
         assert len(unsupported) == 0
 
+    @covers(PythonFeature.FUNCTION_DECLARATION)
     def test_positional_separator_no_op(self):
         """def f(a, /, b): ... should not emit SYMBOLIC for /."""
         instructions = _parse_python("def f(a, /, b): pass")
@@ -1020,6 +1115,7 @@ class TestPythonParamSeparators:
         ]
         assert len(unsupported) == 0
 
+    @covers(PythonFeature.FUNCTION_DECLARATION)
     def test_both_separators(self):
         """def f(a, /, b, *, c): ... should handle both separators."""
         instructions = _parse_python("def f(a, /, b, *, c): pass")
@@ -1034,6 +1130,7 @@ class TestPythonParamSeparators:
 
 
 class TestPythonListPattern:
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_list_pattern_basic(self):
         """match x: case [1, 2]: ... should emit len check + LOAD_INDEX for each element."""
         source = "match x:\n    case [1, 2]:\n        pass"
@@ -1044,6 +1141,7 @@ class TestPythonListPattern:
         load_idxs = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(load_idxs) >= 2
 
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_list_pattern_no_symbolic(self):
         """list_pattern should not emit SYMBOLIC unsupported:list_pattern."""
         source = "match x:\n    case [1, 2]:\n        pass"
@@ -1054,6 +1152,7 @@ class TestPythonListPattern:
         ]
         assert len(unsupported) == 0
 
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_list_pattern_with_body(self):
         """List pattern match with body should lower body."""
         source = "match x:\n    case [1, 2]:\n        y = 1"
@@ -1064,6 +1163,7 @@ class TestPythonListPattern:
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("len" in str(inst.operands) for inst in calls)
 
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_list_pattern_empty(self):
         """match x: case []: ... should check len == 0."""
         source = "match x:\n    case []:\n        pass"
@@ -1076,6 +1176,7 @@ class TestPythonListPattern:
 
 
 class TestPythonInterpolation:
+    @covers(PythonFeature.F_STRING)
     def test_interpolation_basic(self):
         """f'hello {name}' decomposes into CONST + LOAD_VAR + BINOP concatenation."""
         instructions = _parse_python('x = f"hello {name}"')
@@ -1088,6 +1189,7 @@ class TestPythonInterpolation:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(PythonFeature.F_STRING)
     def test_interpolation_no_symbolic(self):
         """f-string should not emit unsupported:interpolation."""
         instructions = _parse_python('f"hello {name}"')
@@ -1097,6 +1199,7 @@ class TestPythonInterpolation:
         ]
         assert len(unsupported) == 0
 
+    @covers(PythonFeature.F_STRING)
     def test_interpolation_handler_directly(self):
         """interpolation node lowered directly should lower the inner expression."""
         from tree_sitter_language_pack import get_parser
@@ -1132,10 +1235,12 @@ class TestPythonInterpolation:
 
 
 class TestSourceLocationModel:
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_source_location_str(self):
         loc = SourceLocation(start_line=3, start_col=8, end_line=3, end_col=10)
         assert str(loc) == "3:8-3:10"
 
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_source_location_fields_accessible(self):
         loc = SourceLocation(start_line=1, start_col=0, end_line=5, end_col=12)
         assert loc.start_line == 1
@@ -1143,16 +1248,19 @@ class TestSourceLocationModel:
         assert loc.end_line == 5
         assert loc.end_col == 12
 
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_no_source_location_is_unknown(self):
         assert NO_SOURCE_LOCATION.is_unknown()
         assert str(NO_SOURCE_LOCATION) == "<unknown>"
 
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_real_source_location_is_not_unknown(self):
         loc = SourceLocation(start_line=1, start_col=0, end_line=1, end_col=5)
         assert not loc.is_unknown()
 
 
 class TestSourceLocationTraceability:
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_every_non_label_instruction_has_real_source_location(self):
         """Every non-LABEL instruction from a simple program should have a real source_location."""
         source = "x = 10\ny = x + 1"
@@ -1165,6 +1273,7 @@ class TestSourceLocationTraceability:
                 f"has unknown source_location"
             )
 
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_source_location_is_structured(self):
         """source_location should be a SourceLocation object, not a string."""
         instructions = _parse_python("x = 42")
@@ -1173,6 +1282,7 @@ class TestSourceLocationTraceability:
                 inst.source_location, SourceLocation
             ), f"Expected SourceLocation, got {type(inst.source_location)}"
 
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_source_location_line_numbers_correct(self):
         """Line numbers should be 1-based and match source positions."""
         source = "x = 10\ny = 20"
@@ -1185,6 +1295,7 @@ class TestSourceLocationTraceability:
         y_store = next(s for s in stores if "y" in s.operands)
         assert y_store.source_location.start_line == 2
 
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_instruction_str_includes_source_location(self):
         """str(instruction) should include # line:col-line:col when source_location is set."""
         instructions = _parse_python("x = 42")
@@ -1193,6 +1304,7 @@ class TestSourceLocationTraceability:
         assert "  # " in text
         assert ":" in text.split("# ")[1]
 
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_label_str_without_source_location(self):
         """LABEL instructions should not have a source location comment."""
         instructions = _parse_python("x = 1")
@@ -1201,6 +1313,7 @@ class TestSourceLocationTraceability:
         text = str(label_inst)
         assert "#" not in text
 
+    @covers(PythonFeature.SOURCE_LOCATION)
     def test_function_instructions_have_locations(self):
         """Instructions inside a function body should have source locations."""
         source = "def add(a, b):\n    return a + b"
@@ -1211,12 +1324,14 @@ class TestSourceLocationTraceability:
 
 
 class TestPythonEllipsis:
+    @covers(PythonFeature.ELLIPSIS)
     def test_ellipsis_no_symbolic(self):
         source = "x = ..."
         instructions = _parse_python(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("ellipsis" in str(inst.operands) for inst in symbolics)
 
+    @covers(PythonFeature.ELLIPSIS)
     def test_ellipsis_as_const(self):
         source = "x = ..."
         instructions = _parse_python(source)
@@ -1225,12 +1340,14 @@ class TestPythonEllipsis:
 
 
 class TestPythonListSplat:
+    @covers(PythonFeature.SPREAD)
     def test_list_splat_no_symbolic(self):
         source = "x = [*a, 1]"
         instructions = _parse_python(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("list_splat" in str(inst.operands) for inst in symbolics)
 
+    @covers(PythonFeature.SPREAD)
     def test_list_splat_produces_spread_arguments(self):
         source = "x = [*items, 1]"
         instructions = _parse_python(source)
@@ -1242,6 +1359,7 @@ class TestPythonListSplat:
         ]
         assert len(spread_ops) >= 1
 
+    @covers(PythonFeature.SPREAD)
     def test_dict_splat_no_symbolic(self):
         source = "x = {**defaults, 'key': 1}"
         instructions = _parse_python(source)
@@ -1250,6 +1368,7 @@ class TestPythonListSplat:
 
 
 class TestPythonExpressionList:
+    @covers(PythonFeature.TUPLE_EXPRESSION)
     def test_expression_list_no_symbolic(self):
         source = "a, b = 2, 3"
         instructions = _parse_python(source)
@@ -1258,12 +1377,14 @@ class TestPythonExpressionList:
 
 
 class TestPythonDictPattern:
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_dict_pattern_no_symbolic(self):
         source = 'match data:\n    case {"text": message}:\n        pass'
         instructions = _parse_python(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("dict_pattern" in str(inst.operands) for inst in symbolics)
 
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_dict_pattern_load_field(self):
         source = 'match data:\n    case {"key": val}:\n        pass'
         instructions = _parse_python(source)
@@ -1273,6 +1394,7 @@ class TestPythonDictPattern:
 
 
 class TestPythonSplatPattern:
+    @covers(PythonFeature.MATCH_STATEMENT)
     def test_splat_pattern_no_symbolic(self):
         source = "match items:\n    case [first, *rest]:\n        pass"
         instructions = _parse_python(source)
@@ -1281,12 +1403,14 @@ class TestPythonSplatPattern:
 
 
 class TestPythonDottedName:
+    @covers(PythonFeature.FUNCTION_CALL)
     def test_dotted_name_in_expression(self):
         """dotted_name like os.path.join should lower without unsupported SYMBOLIC."""
         instructions = _parse_python("result = os.path.join(a, b)")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PythonFeature.FUNCTION_CALL)
     def test_dotted_name_attribute_access(self):
         """Accessing a module attribute via dotted name should produce LOAD_FIELD."""
         instructions = _parse_python("x = os.path.sep")
@@ -1297,6 +1421,7 @@ class TestPythonDottedName:
 
 
 class TestPythonFutureImportStatement:
+    @covers(PythonFeature.IMPORT)
     def test_future_import_no_symbolic(self):
         """from __future__ import annotations should not produce SYMBOLIC."""
         ir = _parse_python("from __future__ import annotations\nx = 42")
@@ -1305,6 +1430,7 @@ class TestPythonFutureImportStatement:
             "future_import_statement" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(PythonFeature.IMPORT)
     def test_future_import_does_not_block(self):
         """Code after future import should still execute."""
         ir = _parse_python("from __future__ import annotations\nx = 42")
@@ -1313,18 +1439,21 @@ class TestPythonFutureImportStatement:
 
 
 class TestPythonIdentityOperators:
+    @covers(PythonFeature.COMPARISON)
     def test_is_lowers_to_binop(self):
         """'x is None' should lower to a BINOP with operator 'is'."""
         instructions = _parse_python("result = x is None")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("is" in inst.operands for inst in binops)
 
+    @covers(PythonFeature.COMPARISON)
     def test_is_not_lowers_to_binop(self):
         """'x is not None' should lower to a BINOP with operator 'is not'."""
         instructions = _parse_python("result = x is not None")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("is not" in inst.operands for inst in binops)
 
+    @covers(PythonFeature.COMPARISON)
     def test_not_in_lowers_to_py_contains_call(self):
         """'x not in lst' should lower to CALL_FUNCTION __py_contains__ + UNOP NOT."""
         instructions = _parse_python("result = x not in lst")
