@@ -7,9 +7,11 @@ not a default nil return.
 from __future__ import annotations
 
 from interpreter.frontends.kotlin import KotlinFrontend
+from interpreter.frontends.kotlin.features import KotlinFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 
 
 def _parse_kotlin(source: str) -> list[InstructionBase]:
@@ -54,6 +56,7 @@ class TestKotlinExpressionBodyLiteral:
 
     SOURCE = "fun f() = 42"
 
+    @covers(KotlinFeature.FUNCTION_DECLARATION)
     def test_return_carries_literal_value(self):
         instructions = _parse_kotlin(self.SOURCE)
         func_body = _instructions_between_labels(instructions, "func_f", "end_f")
@@ -68,6 +71,7 @@ class TestKotlinExpressionBodyLiteral:
         assert len(consts) >= 1, "RETURN register should come from a CONST"
         assert "42" in consts[0].operands, "CONST should hold literal 42"
 
+    @covers(KotlinFeature.FUNCTION_DECLARATION)
     def test_no_default_return_value(self):
         instructions = _parse_kotlin(self.SOURCE)
         func_body = _instructions_between_labels(instructions, "func_f", "end_f")
@@ -90,6 +94,7 @@ class TestKotlinBlockBodyUnchanged:
 
     SOURCE = "fun f() { return 42 }"
 
+    @covers(KotlinFeature.FUNCTION_DECLARATION)
     def test_explicit_return_still_works(self):
         instructions = _parse_kotlin(self.SOURCE)
         func_body = _instructions_between_labels(instructions, "func_f", "end_f")
