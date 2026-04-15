@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from interpreter.var_name import VarName
 from interpreter.frontends.java import JavaFrontend
+from interpreter.frontends.java.features import JavaFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from tests.covers import covers
 
 
 def _parse_java(source: str) -> list[InstructionBase]:
@@ -34,11 +36,13 @@ def _find_all(
 
 
 class TestJavaSmoke:
+    @covers(JavaFeature.CLASS)
     def test_empty_program(self):
         instructions = _parse_java("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(JavaFeature.CLASS)
     def test_class_wrapper(self):
         instructions = _parse_java("class M { }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -46,6 +50,7 @@ class TestJavaSmoke:
 
 
 class TestJavaVariables:
+    @covers(JavaFeature.LOCAL_VARIABLE)
     def test_local_variable_declaration(self):
         instructions = _parse_java("class M { void m() { int x = 10; } }")
         opcodes = _opcodes(instructions)
@@ -54,6 +59,7 @@ class TestJavaVariables:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(JavaFeature.LOCAL_VARIABLE)
     def test_variable_without_initializer(self):
         instructions = _parse_java("class M { void m() { int x; } }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -61,6 +67,7 @@ class TestJavaVariables:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("None" in inst.operands for inst in consts)
 
+    @covers(JavaFeature.ASSIGNMENT)
     def test_assignment_expression(self):
         instructions = _parse_java("class M { void m() { int x; x = 5; } }")
         decls = _find_all(instructions, Opcode.DECL_VAR)
@@ -72,6 +79,7 @@ class TestJavaVariables:
 
 
 class TestJavaExpressions:
+    @covers(JavaFeature.ARITHMETIC)
     def test_arithmetic(self):
         instructions = _parse_java("class M { void m() { int y = x + 5; } }")
         opcodes = _opcodes(instructions)
@@ -79,6 +87,7 @@ class TestJavaExpressions:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(JavaFeature.CAST)
     def test_cast_expression(self):
         instructions = _parse_java(
             "class M { void m() { double d = 3.14; int x = (int) d; } }"
@@ -91,6 +100,7 @@ class TestJavaExpressions:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.TERNARY)
     def test_ternary_expression(self):
         instructions = _parse_java(
             'class M { void m() { String y = x > 0 ? "pos" : "neg"; } }'
@@ -100,6 +110,7 @@ class TestJavaExpressions:
 
 
 class TestJavaMethodCalls:
+    @covers(JavaFeature.METHOD_CALL)
     def test_method_call_on_object(self):
         instructions = _parse_java(
             'class M { void m() { System.out.println("hello"); } }'
@@ -108,12 +119,14 @@ class TestJavaMethodCalls:
         assert len(calls) == 1
         assert any("println" in inst.operands for inst in calls)
 
+    @covers(JavaFeature.FUNCTION_CALL)
     def test_standalone_method_call(self):
         instructions = _parse_java("class M { void m() { foo(1, 2); } }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) == 1
         assert "foo" in calls[0].operands
 
+    @covers(JavaFeature.OBJECT_CREATION)
     def test_object_creation(self):
         instructions = _parse_java('class M { void m() { Dog d = new Dog("Rex"); } }')
         calls = _find_all(instructions, Opcode.CALL_CTOR)
@@ -127,6 +140,7 @@ class TestJavaMethodCalls:
 
 
 class TestJavaControlFlow:
+    @covers(JavaFeature.IF_ELSE)
     def test_if_else(self):
         instructions = _parse_java(
             "class M { void m() { if (x > 5) { y = 1; } else { y = 0; } } }"
@@ -136,6 +150,7 @@ class TestJavaControlFlow:
         assert Opcode.LABEL in opcodes
         assert Opcode.BRANCH in opcodes
 
+    @covers(JavaFeature.IF_ELSE)
     def test_nested_if_else_chain(self):
         instructions = _parse_java(
             'class M { void m() { if (x > 100) { grade = "A"; }'
@@ -149,6 +164,7 @@ class TestJavaControlFlow:
         binops = _find_all(instructions, Opcode.BINOP)
         assert len(binops) >= 2
 
+    @covers(JavaFeature.WHILE_LOOP)
     def test_while_loop(self):
         instructions = _parse_java("class M { void m() { while (x > 0) { x--; } } }")
         opcodes = _opcodes(instructions)
@@ -188,6 +204,7 @@ class TestJavaControlFlow:
             cond_idx < brif_idx < body_idx < back_idx
         ), "while loop structure out of order"
 
+    @covers(JavaFeature.FOR_LOOP)
     def test_c_style_for_loop(self):
         instructions = _parse_java(
             "class M { void m() { for (int i = 0; i < 10; i++) { x = x + i; } } }"
@@ -232,6 +249,7 @@ class TestJavaControlFlow:
             init_idx < cond_idx < brif_idx < body_idx
         ), "for loop structure out of order"
 
+    @covers(JavaFeature.ENHANCED_FOR_LOOP)
     def test_enhanced_for_loop(self):
         instructions = _parse_java(
             "class M { void m() { int[] items = {1,2,3}; for (int x : items) { y = x; } } }"
@@ -264,6 +282,7 @@ class TestJavaControlFlow:
         )
         assert brif_idx < idx_idx < body_idx, "for-each loop structure out of order"
 
+    @covers(JavaFeature.IF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         instructions = _parse_java(
@@ -293,6 +312,7 @@ class TestJavaControlFlow:
 
 
 class TestJavaFunctions:
+    @covers(JavaFeature.METHOD_DECLARATION)
     def test_method_declaration_with_return(self):
         instructions = _parse_java(
             "class M { int add(int a, int b) { return a + b; } }"
@@ -309,6 +329,7 @@ class TestJavaFunctions:
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
 
+    @covers(JavaFeature.CONSTRUCTOR)
     def test_constructor(self):
         instructions = _parse_java(
             "class Dog { String name; Dog(String n) { this.name = n; } }"
@@ -318,6 +339,7 @@ class TestJavaFunctions:
 
 
 class TestJavaClasses:
+    @covers(JavaFeature.CLASS)
     def test_class_definition(self):
         instructions = _parse_java("class Dog { void bark() { } }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -325,6 +347,7 @@ class TestJavaClasses:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(JavaFeature.INTERFACE)
     def test_interface_emits_class_block(self):
         """Interface lowered as CLASS block with method defs (not NEW_OBJECT)."""
         instructions = _parse_java("interface Runnable { void run(); }")
@@ -338,6 +361,7 @@ class TestJavaClasses:
         ]
         assert any("func_" in l and "run" in l for l in labels)
 
+    @covers(JavaFeature.ENUM)
     def test_enum_declaration(self):
         instructions = _parse_java("enum Color { RED, GREEN, BLUE }")
         opcodes = _opcodes(instructions)
@@ -352,6 +376,7 @@ class TestJavaClasses:
         assert "GREEN" in const_vals
         assert "BLUE" in const_vals
 
+    @covers(JavaFeature.ENUM)
     def test_enum_single_member(self):
         instructions = _parse_java("enum Status { ACTIVE }")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
@@ -361,6 +386,7 @@ class TestJavaClasses:
 
 
 class TestJavaSpecial:
+    @covers(JavaFeature.THROW)
     def test_throw_statement(self):
         instructions = _parse_java(
             'class M { void m() { throw new RuntimeException("fail"); } }'
@@ -368,6 +394,7 @@ class TestJavaSpecial:
         opcodes = _opcodes(instructions)
         assert Opcode.THROW in opcodes
 
+    @covers(JavaFeature.SYNCHRONIZED)
     def test_synchronized_no_longer_unsupported(self):
         instructions = _parse_java("class M { void m() { synchronized(this) { } } }")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
@@ -379,6 +406,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialJava:
+    @covers(JavaFeature.ENHANCED_FOR_LOOP)
     def test_enhanced_for_with_conditional_accumulator(self):
         source = """\
 class M {
@@ -403,6 +431,7 @@ class M {
         assert any("total" in inst.operands for inst in stores)
         assert len(instructions) > 20
 
+    @covers(JavaFeature.METHOD_CALL)
     def test_method_chaining(self):
         source = """\
 class M {
@@ -423,13 +452,13 @@ class M {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
-    def test_interface_and_instanceof(self):
+    @covers(JavaFeature.INTERFACE)
+    def test_interface_lowers_as_class_ref(self):
         source = """\
 interface Shape {}
 class Circle implements Shape {
     double radius;
     Circle(double r) { this.radius = r; }
-    boolean check(Object o) { return o instanceof Shape; }
 }
 """
         instructions = _parse_java(source)
@@ -441,9 +470,20 @@ class Circle implements Shape {
         assert any("Circle" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("radius" in inst.operands for inst in store_fields)
+
+    @covers(JavaFeature.INSTANCEOF)
+    def test_instanceof_emits_isinstance_call(self):
+        source = """\
+interface Shape {}
+class Circle implements Shape {
+    boolean check(Object o) { return o instanceof Shape; }
+}
+"""
+        instructions = _parse_java(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("isinstance" in inst.operands for inst in calls)
 
+    @covers(JavaFeature.TRY_CATCH)
     def test_try_catch_with_throw(self):
         source = """\
 class M {
@@ -471,6 +511,7 @@ class M {
         assert not any("catch_clause:" in str(s.operands) for s in symbolics)
         assert len(instructions) > 10
 
+    @covers(JavaFeature.CONSTRUCTOR)
     def test_constructor_with_field_init(self):
         source = """\
 class Dog {
@@ -495,6 +536,7 @@ class Dog {
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 20
 
+    @covers(JavaFeature.FOR_LOOP)
     def test_nested_for_loops_with_array(self):
         source = """\
 class M {
@@ -518,6 +560,7 @@ class M {
         assert any("j" in inst.operands for inst in stores)
         assert len(instructions) > 25
 
+    @covers(JavaFeature.ENUM)
     def test_enum_usage(self):
         source = """\
 enum Color { RED, GREEN, BLUE }
@@ -537,6 +580,7 @@ class M {
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(JavaFeature.WHILE_LOOP)
     def test_while_with_method_calls(self):
         source = """\
 class M {
@@ -564,6 +608,7 @@ class M {
 
 
 class TestJavaArrayCreation:
+    @covers(JavaFeature.ARRAY_CREATION)
     def test_array_creation_with_initializer(self):
         instructions = _parse_java(
             "class M { void m() { int[] a = new int[]{1, 2, 3}; } }"
@@ -573,11 +618,13 @@ class TestJavaArrayCreation:
         stores = _find_all(instructions, Opcode.STORE_INDEX)
         assert len(stores) >= 3
 
+    @covers(JavaFeature.ARRAY_CREATION)
     def test_array_creation_sized(self):
         instructions = _parse_java("class M { void m() { int[] a = new int[5]; } }")
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_ARRAY in opcodes
 
+    @covers(JavaFeature.ARRAY_CREATION)
     def test_array_initializer_bare(self):
         instructions = _parse_java("class M { void m() { int[] a = {1, 2, 3}; } }")
         opcodes = _opcodes(instructions)
@@ -589,6 +636,7 @@ class TestJavaArrayCreation:
 class TestJavaIntegerLiterals:
     """Hex, octal, and binary integer literals must be lowered to decimal strings."""
 
+    @covers(JavaFeature.INTEGER_LITERALS)
     def test_hex_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0x7f; } }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -597,6 +645,7 @@ class TestJavaIntegerLiterals:
             hex_const
         ), f"Expected CONST '127', got values: {[c.value for c in consts]}"
 
+    @covers(JavaFeature.INTEGER_LITERALS)
     def test_hex_literal_with_long_suffix(self):
         instructions = _parse_java("class M { void m() { long x = 0x7fffffffL; } }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -605,6 +654,7 @@ class TestJavaIntegerLiterals:
             hex_const
         ), f"Expected CONST '2147483647', got values: {[c.value for c in consts]}"
 
+    @covers(JavaFeature.INTEGER_LITERALS)
     def test_octal_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0777; } }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -613,6 +663,7 @@ class TestJavaIntegerLiterals:
             oct_const
         ), f"Expected CONST '511', got values: {[c.value for c in consts]}"
 
+    @covers(JavaFeature.INTEGER_LITERALS)
     def test_binary_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0b1010; } }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -621,6 +672,7 @@ class TestJavaIntegerLiterals:
             bin_const
         ), f"Expected CONST '10', got values: {[c.value for c in consts]}"
 
+    @covers(JavaFeature.INTEGER_LITERALS)
     def test_decimal_literal_unchanged(self):
         instructions = _parse_java("class M { void m() { int x = 42; } }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -629,6 +681,7 @@ class TestJavaIntegerLiterals:
 
 
 class TestJavaMethodReference:
+    @covers(JavaFeature.METHOD_REFERENCE)
     def test_type_method_reference(self):
         instructions = _parse_java(
             "class M { void m() { Function f = String::valueOf; } }"
@@ -646,6 +699,7 @@ class TestJavaMethodReference:
         assert not any("method_reference" in str(inst.operands) for inst in symbolics)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.METHOD_REFERENCE)
     def test_this_method_reference(self):
         instructions = _parse_java(
             "class M { void m() { Runnable r = this::doStuff; } }"
@@ -663,6 +717,7 @@ class TestJavaMethodReference:
         assert not any("method_reference" in str(inst.operands) for inst in symbolics)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.METHOD_REFERENCE)
     def test_constructor_reference(self):
         instructions = _parse_java(
             "class M { void m() { Supplier s = ArrayList::new; } }"
@@ -682,6 +737,7 @@ class TestJavaMethodReference:
 
 
 class TestJavaClassLiteral:
+    @covers(JavaFeature.CLASS_LITERAL)
     def test_class_literal(self):
         instructions = _parse_java("class M { void m() { Class c = String.class; } }")
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
@@ -697,6 +753,7 @@ class TestJavaClassLiteral:
         assert not any("class_literal" in str(inst.operands) for inst in symbolics)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.CLASS_LITERAL)
     def test_class_literal_in_expression(self):
         instructions = _parse_java(
             "class M { void m() { boolean b = Integer.class.equals(x.getClass()); } }"
@@ -716,6 +773,7 @@ class TestJavaClassLiteral:
 
 
 class TestJavaLambdaExpression:
+    @covers(JavaFeature.LAMBDA)
     def test_lambda_expression_body(self):
         instructions = _parse_java(
             'class M { void m() { Runnable r = () -> System.out.println("hi"); } }'
@@ -725,6 +783,7 @@ class TestJavaLambdaExpression:
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(JavaFeature.LAMBDA)
     def test_lambda_with_params_and_block(self):
         instructions = _parse_java(
             "class M { void m() { Comparator c = (a, b) -> { return a - b; }; } }"
@@ -740,6 +799,7 @@ class TestJavaLambdaExpression:
         assert not any("lambda_expression" in str(inst.operands) for inst in symbolics)
         assert Opcode.BINOP in _opcodes(instructions)
 
+    @covers(JavaFeature.LAMBDA)
     def test_lambda_with_typed_params(self):
         instructions = _parse_java(
             "class M { void m() { BiFunction f = (int x, int y) -> x + y; } }"
@@ -754,6 +814,7 @@ class TestJavaLambdaExpression:
         assert any("y" in p for p in param_names)
         assert not any("lambda_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.LAMBDA)
     def test_lambda_emits_func_ref(self):
         instructions = _parse_java(
             "class M { void m() { Runnable r = () -> doStuff(); } }"
@@ -769,6 +830,7 @@ class TestJavaLambdaExpression:
 
 
 class TestJavaInstanceof:
+    @covers(JavaFeature.INSTANCEOF)
     def test_instanceof_expression(self):
         instructions = _parse_java(
             "class M { void m() { boolean b = obj instanceof String; } }"
@@ -778,6 +840,7 @@ class TestJavaInstanceof:
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("isinstance" in inst.operands for inst in calls)
 
+    @covers(JavaFeature.INSTANCEOF)
     def test_instanceof_in_condition(self):
         instructions = _parse_java(
             "class M { void m() { if (x instanceof Number) { y = 1; } } }"
@@ -788,6 +851,7 @@ class TestJavaInstanceof:
 
 
 class TestJavaSuperExpression:
+    @covers(JavaFeature.SUPER)
     def test_super_field_access(self):
         instructions = _parse_java(
             "class M extends B { void m() { int x = super.field; } }"
@@ -797,6 +861,7 @@ class TestJavaSuperExpression:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.SUPER)
     def test_super_method_call(self):
         instructions = _parse_java(
             "class M extends B { void m() { super.doStuff(1); } }"
@@ -808,6 +873,7 @@ class TestJavaSuperExpression:
 
 
 class TestJavaDoStatement:
+    @covers(JavaFeature.DO_WHILE_LOOP)
     def test_do_while_basic(self):
         instructions = _parse_java(
             "class M { void m() { int x = 0; do { x = x + 1; } while (x < 10); } }"
@@ -822,6 +888,7 @@ class TestJavaDoStatement:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.BREAK_CONTINUE)
     def test_do_while_with_break(self):
         instructions = _parse_java(
             "class M { void m() { do { if (done) { break; } } while (true); } }"
@@ -832,6 +899,7 @@ class TestJavaDoStatement:
 
 
 class TestJavaAssertStatement:
+    @covers(JavaFeature.ASSERT)
     def test_assert_simple(self):
         instructions = _parse_java("class M { void m() { assert x > 0; } }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -839,6 +907,7 @@ class TestJavaAssertStatement:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.ASSERT)
     def test_assert_with_message(self):
         instructions = _parse_java(
             'class M { void m() { assert x > 0 : "x must be positive"; } }'
@@ -850,6 +919,7 @@ class TestJavaAssertStatement:
 
 
 class TestJavaLabeledStatement:
+    @covers(JavaFeature.LABELED_STATEMENT)
     def test_labeled_statement(self):
         instructions = _parse_java(
             "class M { void m() { outer: for (int i = 0; i < 5; i++) { x = i; } } }"
@@ -861,6 +931,7 @@ class TestJavaLabeledStatement:
 
 
 class TestJavaSynchronizedStatement:
+    @covers(JavaFeature.SYNCHRONIZED)
     def test_synchronized_block(self):
         instructions = _parse_java(
             "class M { void m() { synchronized(lock) { x = 1; } } }"
@@ -870,6 +941,7 @@ class TestJavaSynchronizedStatement:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.SYNCHRONIZED)
     def test_synchronized_this(self):
         instructions = _parse_java(
             "class M { void m() { synchronized(this) { doStuff(); } } }"
@@ -881,6 +953,7 @@ class TestJavaSynchronizedStatement:
 
 
 class TestJavaStaticInitializer:
+    @covers(JavaFeature.STATIC_INITIALIZER)
     def test_static_initializer_block(self):
         instructions = _parse_java("class M { static { x = 10; } }")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -888,6 +961,7 @@ class TestJavaStaticInitializer:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.STATIC_INITIALIZER)
     def test_static_initializer_with_method_call(self):
         instructions = _parse_java("class M { static { init(); } }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -895,6 +969,7 @@ class TestJavaStaticInitializer:
 
 
 class TestJavaExplicitConstructorInvocation:
+    @covers(JavaFeature.EXPLICIT_CONSTRUCTOR_INVOCATION)
     def test_super_constructor_call(self):
         instructions = _parse_java(
             "class M extends B { M(int x) { super(x); this.val = x; } }"
@@ -904,6 +979,7 @@ class TestJavaExplicitConstructorInvocation:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.EXPLICIT_CONSTRUCTOR_INVOCATION)
     def test_this_constructor_call(self):
         instructions = _parse_java("class M { M() { this(0); } M(int x) { } }")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
@@ -913,6 +989,7 @@ class TestJavaExplicitConstructorInvocation:
 
 
 class TestJavaAnnotationTypeDeclaration:
+    @covers(JavaFeature.ANNOTATION_TYPE)
     def test_annotation_type(self):
         instructions = _parse_java("public @interface MyAnnotation { String value(); }")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
@@ -922,6 +999,7 @@ class TestJavaAnnotationTypeDeclaration:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.ANNOTATION_TYPE)
     def test_annotation_type_with_members(self):
         instructions = _parse_java(
             "public @interface Config { String name(); int value(); }"
@@ -931,6 +1009,7 @@ class TestJavaAnnotationTypeDeclaration:
 
 
 class TestJavaRecordDeclaration:
+    @covers(JavaFeature.RECORD)
     def test_record_basic(self):
         instructions = _parse_java("record Point(int x, int y) { }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -940,6 +1019,7 @@ class TestJavaRecordDeclaration:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.RECORD)
     def test_record_with_method(self):
         instructions = _parse_java(
             "record Point(int x, int y) { double distance() { return Math.sqrt(x*x + y*y); } }"
@@ -950,6 +1030,7 @@ class TestJavaRecordDeclaration:
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(JavaFeature.RECORD)
     def test_record_empty_body(self):
         instructions = _parse_java("record Empty() { }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -962,6 +1043,7 @@ class TestJavaRecordDeclaration:
 
 
 class TestJavaScopedIdentifier:
+    @covers(JavaFeature.SCOPED_IDENTIFIER)
     def test_scoped_identifier_in_annotation(self):
         """Annotations use scoped_identifier for qualified names like java.lang.Override."""
         instructions = _parse_java("@java.lang.Override class M { }")
@@ -969,6 +1051,7 @@ class TestJavaScopedIdentifier:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("scoped_identifier" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.SCOPED_IDENTIFIER)
     def test_scoped_identifier_dispatch_registered(self):
         """Verify scoped_identifier is registered in the expression dispatch table."""
         frontend = JavaFrontend(TreeSitterParserFactory(), "java")
@@ -977,6 +1060,7 @@ class TestJavaScopedIdentifier:
 
 
 class TestJavaTextBlock:
+    @covers(JavaFeature.TEXT_BLOCK)
     def test_text_block_basic(self):
         source = (
             'class M { void m() { String s = """\n    hello\n    world\n    """; } }'
@@ -989,6 +1073,7 @@ class TestJavaTextBlock:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.TEXT_BLOCK)
     def test_text_block_in_expression(self):
         source = 'class M { void m() { String s = """\n    SELECT *\n    FROM table\n    """.trim(); } }'
         instructions = _parse_java(source)
@@ -997,6 +1082,7 @@ class TestJavaTextBlock:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.TEXT_BLOCK)
     def test_text_block_assigned(self):
         source = (
             'class M { void m() { var json = """\n    {"key": "value"}\n    """; } }'
@@ -1009,12 +1095,14 @@ class TestJavaTextBlock:
 
 
 class TestJavaSwitchExpression:
+    @covers(JavaFeature.SWITCH_EXPRESSION)
     def test_switch_expression_no_symbolic(self):
         source = 'class M { String m(int x) { return switch (x) { case 1 -> "one"; default -> "other"; }; } }'
         instructions = _parse_java(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("switch_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.SWITCH_EXPRESSION)
     def test_switch_expression_returns_value(self):
         source = 'class M { String m(int x) { return switch (x) { case 1 -> "one"; default -> "other"; }; } }'
         instructions = _parse_java(source)
@@ -1023,6 +1111,7 @@ class TestJavaSwitchExpression:
 
 
 class TestJavaExpressionStatementInSwitch:
+    @covers(JavaFeature.SWITCH_EXPRESSION)
     def test_expression_statement_in_switch_expression(self):
         """expression_statement inside switch expression should not produce unsupported SYMBOLIC."""
         source = 'class M { String m(int day) { return switch (day) { case 1 -> "work"; default -> "rest"; }; } }'
@@ -1030,6 +1119,7 @@ class TestJavaExpressionStatementInSwitch:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.SWITCH_EXPRESSION)
     def test_expression_statement_switch_multiple_cases(self):
         source = 'class M { String m(int x) { return switch (x) { case 1 -> "a"; case 2 -> "b"; default -> "c"; }; } }'
         instructions = _parse_java(source)
@@ -1038,6 +1128,7 @@ class TestJavaExpressionStatementInSwitch:
 
 
 class TestJavaThrowStatementInSwitch:
+    @covers(JavaFeature.SWITCH_EXPRESSION)
     def test_throw_statement_in_switch_expression(self):
         """throw_statement inside switch expression should not produce unsupported SYMBOLIC."""
         source = """\
@@ -1059,24 +1150,28 @@ class TestJavaGenericTypeSeeding:
     """Verify that Java generic types (List<String>, Map<K,V>) are extracted
     as parameterised bracket-notation strings in the TypeEnvironmentBuilder."""
 
+    @covers(JavaFeature.GENERIC_TYPES)
     def test_local_var_list_of_string(self):
         """List<String> items = ... should seed var_types['items'] = 'List[String]'."""
         source = "class M { void m() { List<String> items = new ArrayList<>(); } }"
         _, builder = _parse_java_with_types(source)
         assert builder.var_types["items"] == "List[String]"
 
+    @covers(JavaFeature.GENERIC_TYPES)
     def test_local_var_map_of_string_integer(self):
         """Map<String, Integer> m = ... should seed 'Map[String, Int]' (Integer normalised)."""
         source = "class M { void m() { Map<String, Integer> m = new HashMap<>(); } }"
         _, builder = _parse_java_with_types(source)
         assert builder.var_types["m"] == "Map[String, Int]"
 
+    @covers(JavaFeature.GENERIC_TYPES)
     def test_nested_generic_type(self):
         """List<Map<String, Integer>> should produce 'List[Map[String, Int]]'."""
         source = "class M { void m() { List<Map<String, Integer>> x = null; } }"
         _, builder = _parse_java_with_types(source)
         assert builder.var_types["x"] == "List[Map[String, Int]]"
 
+    @covers(JavaFeature.GENERIC_TYPES)
     def test_method_return_generic_type(self):
         """Method returning List<String> should seed func_return_types with 'List[String]'."""
         source = "class M { List<String> getNames() { return null; } }"
@@ -1084,6 +1179,7 @@ class TestJavaGenericTypeSeeding:
         return_types = builder.func_return_types
         assert any(v == "List[String]" for v in return_types.values())
 
+    @covers(JavaFeature.GENERIC_TYPES)
     def test_param_generic_type(self):
         """Parameter List<String> items should seed param type 'List[String]'."""
         source = "class M { void process(List<String> items) { } }"
@@ -1094,12 +1190,14 @@ class TestJavaGenericTypeSeeding:
             for params in param_types.values()
         )
 
+    @covers(JavaFeature.GENERIC_TYPES)
     def test_field_generic_type(self):
         """Field List<String> names; should seed var_types['names'] = 'List[String]'."""
         source = "class M { List<String> names = new ArrayList<>(); }"
         _, builder = _parse_java_with_types(source)
         assert builder.var_types["names"] == "List[String]"
 
+    @covers(JavaFeature.GENERIC_TYPES)
     def test_non_generic_type_unchanged(self):
         """Plain int x = 42; should still seed 'Int' (regression check)."""
         source = "class M { void m() { int x = 42; } }"
@@ -1108,6 +1206,7 @@ class TestJavaGenericTypeSeeding:
 
 
 class TestJavaHexFloatingPointLiteral:
+    @covers(JavaFeature.HEX_FLOAT_LITERAL)
     def test_hex_float_no_symbolic(self):
         """0x1.0p10 should not produce SYMBOLIC fallthrough."""
         ir = _parse_java("class T { void f() { double x = 0x1.0p10; } }")
@@ -1116,6 +1215,7 @@ class TestJavaHexFloatingPointLiteral:
             "hex_floating_point_literal" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(JavaFeature.HEX_FLOAT_LITERAL)
     def test_hex_float_emits_const(self):
         """Hex floating point literal should emit a CONST with the parsed float value."""
         ir = _parse_java("class T { void f() { double x = 0x1.0p10; } }")
@@ -1126,6 +1226,7 @@ class TestJavaHexFloatingPointLiteral:
             v == 1024.0 or v == "1024.0" for v in const_values
         ), f"expected CONST 1024.0, got values: {const_values}"
 
+    @covers(JavaFeature.HEX_FLOAT_LITERAL)
     def test_hex_float_stored(self):
         """Hex float should be stored to a variable."""
         ir = _parse_java("class T { void f() { double x = 0x1.0p10; } }")
@@ -1143,6 +1244,7 @@ interface Shape {
 }
 """
 
+    @covers(JavaFeature.INTERFACE)
     def test_interface_methods_produce_func_labels(self):
         """Interface method declarations should emit LABEL instructions for function defs."""
         ir = _parse_java(self.INTERFACE_SOURCE)
@@ -1169,6 +1271,7 @@ interface Shape {
         else:
             raise AssertionError("area func label not found in IR")
 
+    @covers(JavaFeature.INTERFACE)
     def test_interface_methods_seed_return_types(self):
         """Interface methods should seed return types into the type environment builder."""
         ir, type_builder = _parse_java_with_types(self.INTERFACE_SOURCE)
@@ -1182,6 +1285,7 @@ interface Shape {
             len(name_entries) >= 1
         ), f"Expected return type seeded for 'name', got: {func_return_types}"
 
+    @covers(JavaFeature.INTERFACE)
     def test_interface_stored_as_class_ref(self):
         """Interface should be stored as a class reference, not a NEW_OBJECT."""
         ir = _parse_java(self.INTERFACE_SOURCE)
@@ -1199,6 +1303,7 @@ interface Shape {
 
 
 class TestJavaTypePattern:
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_instanceof_binds_variable(self):
         """o instanceof String s should bind 's' to the matched value."""
         ir = _parse_java(
@@ -1215,6 +1320,7 @@ class TestJavaTypePattern:
         ]
         assert len(stores_s) >= 1, "instanceof type_pattern did not bind 's'"
 
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_switch_type_pattern_no_symbolic(self):
         """case String s -> ... should not produce SYMBOLIC unsupported:pattern."""
         ir = _parse_java(
@@ -1231,6 +1337,7 @@ class TestJavaTypePattern:
         ]
         assert len(symbolics) == 0, f"type_pattern produced SYMBOLIC: {symbolics}"
 
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_switch_type_pattern_emits_isinstance(self):
         """case String s should emit an isinstance check."""
         ir = _parse_java(
@@ -1249,6 +1356,7 @@ class TestJavaTypePattern:
 
 
 class TestJavaRecordPatternInstanceof:
+    @covers(JavaFeature.RECORD_PATTERN)
     def test_instanceof_record_pattern_binds_components(self):
         """o instanceof Point(int a, int b) should bind a and b."""
         ir = _parse_java(
@@ -1279,6 +1387,7 @@ class TestJavaRecordPatternInstanceof:
 
 
 class TestJavaStringLengthExecution:
+    @covers(JavaFeature.METHOD_CALL)
     def test_string_length_returns_concrete(self):
         """s.length() on a concrete string should return a concrete int."""
         from interpreter.run import run
@@ -1298,6 +1407,7 @@ class TestJavaStringLengthExecution:
 class TestJavaAnnotatedType:
     """annotated_type in variable and parameter positions must not crash or produce symbolics."""
 
+    @covers(JavaFeature.ANNOTATIONS)
     def test_annotated_local_var_emits_decl(self):
         """@NonNull String x = 'hello' — variable must be declared despite annotated type."""
         instructions = _parse_java(
@@ -1308,6 +1418,7 @@ class TestJavaAnnotatedType:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.ANNOTATIONS)
     def test_annotated_param_type_in_method(self):
         """Method with @NonNull parameter type must lower to a function definition."""
         instructions = _parse_java("class M { void greet(@NonNull String name) { } }")
@@ -1318,6 +1429,7 @@ class TestJavaAnnotatedType:
 class TestJavaMarkerAnnotation:
     """marker_annotation (@Override, @Deprecated) on methods must not crash lowering."""
 
+    @covers(JavaFeature.ANNOTATIONS)
     def test_override_annotation_on_method(self):
         """@Override method must produce a function definition, not crash."""
         instructions = _parse_java("class M { @Override void foo() { int x = 1; } }")
@@ -1327,6 +1439,7 @@ class TestJavaMarkerAnnotation:
         decls = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in decls)
 
+    @covers(JavaFeature.ANNOTATIONS)
     def test_deprecated_annotation_on_method(self):
         """@Deprecated marker on a method must not suppress IR generation."""
         instructions = _parse_java(
@@ -1335,6 +1448,7 @@ class TestJavaMarkerAnnotation:
         decls = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in decls)
 
+    @covers(JavaFeature.ANNOTATIONS)
     def test_multiple_marker_annotations(self):
         """Multiple marker annotations must all be silently skipped."""
         instructions = _parse_java(
@@ -1349,6 +1463,7 @@ class TestJavaMarkerAnnotation:
 class TestJavaAnnotation:
     """annotation (@SuppressWarnings("x")) must be skipped without producing symbolics."""
 
+    @covers(JavaFeature.ANNOTATIONS)
     def test_suppress_warnings_on_method(self):
         """@SuppressWarnings annotation with argument must not crash lowering."""
         instructions = _parse_java(
@@ -1363,6 +1478,7 @@ class TestJavaAnnotation:
 class TestJavaModifiersUnit:
     """Modifiers (public, static, final) must be skipped without producing symbolics."""
 
+    @covers(JavaFeature.MODIFIERS)
     def test_public_static_final_field(self):
         """public static final int X = 5 — variable must be declared, no symbolics."""
         instructions = _parse_java("class M { public static final int X = 5; }")
@@ -1371,6 +1487,7 @@ class TestJavaModifiersUnit:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.MODIFIERS)
     def test_private_method_modifiers(self):
         """private int x in method body must lower cleanly."""
         instructions = _parse_java("class M { void m() { int x = 10; } }")
@@ -1381,6 +1498,7 @@ class TestJavaModifiersUnit:
 class TestJavaFormalParametersUnit:
     """formal_parameters in method declarations must lower all parameter names."""
 
+    @covers(JavaFeature.FORMAL_PARAMETERS)
     def test_single_param_method(self):
         """Method with one parameter must declare it as a local."""
         instructions = _parse_java("class M { int double_(int x) { return x * 2; } }")
@@ -1390,6 +1508,7 @@ class TestJavaFormalParametersUnit:
         ]
         assert param_symbolics, "Expected SYMBOLIC for parameter x"
 
+    @covers(JavaFeature.FORMAL_PARAMETERS)
     def test_multi_param_method(self):
         """Method with multiple parameters must declare each one."""
         instructions = _parse_java(
@@ -1404,6 +1523,7 @@ class TestJavaFormalParametersUnit:
 class TestJavaInferredParametersUnit:
     """inferred_parameters (lambdas without type annotations) must lower each param."""
 
+    @covers(JavaFeature.INFERRED_PARAMETERS)
     def test_single_inferred_param_lambda(self):
         """Lambda (x) -> x + 1 must declare x via SYMBOLIC + DECL_VAR."""
         instructions = _parse_java(
@@ -1412,6 +1532,7 @@ class TestJavaInferredParametersUnit:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert any("param:x" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaFeature.INFERRED_PARAMETERS)
     def test_two_inferred_params_lambda(self):
         """Lambda (a, b) -> a + b must declare both a and b."""
         instructions = _parse_java(
@@ -1429,6 +1550,7 @@ class TestInlineCommentsInExpressions:
     Our lowerers must skip them — otherwise they get mistaken for operators.
     """
 
+    @covers(JavaFeature.COMMENT_HANDLING)
     def test_line_comment_inside_binary_expression(self):
         ir = _parse_java("""class Foo {
             void bar() {
@@ -1446,6 +1568,7 @@ class TestInlineCommentsInExpressions:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("comment" in str(s.operands) for s in symbolics)
 
+    @covers(JavaFeature.COMMENT_HANDLING)
     def test_block_comment_inside_binary_expression(self):
         ir = _parse_java("""class Foo {
             void bar() {

@@ -7,6 +7,8 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from interpreter.frontends.java.features import JavaFeature
+from tests.covers import covers
 
 
 def _run_java(source: str, max_steps: int = 500) -> dict:
@@ -20,6 +22,7 @@ def _run_java(source: str, max_steps: int = 500) -> dict:
 
 
 class TestJavaYieldExecution:
+    @covers(JavaFeature.YIELD)
     def test_yield_in_switch_expression(self):
         """yield inside switch expression block arm should produce correct value."""
         source = """\
@@ -39,6 +42,7 @@ int result = m.compute(2);
         local_vars = _run_java(source)
         assert local_vars[VarName("result")] == 20
 
+    @covers(JavaFeature.YIELD)
     def test_yield_with_computation(self):
         """yield with computed expression should evaluate correctly."""
         source = """\
@@ -57,6 +61,7 @@ int result = m.compute(1);
         local_vars = _run_java(source)
         assert local_vars[VarName("result")] == 10
 
+    @covers(JavaFeature.YIELD)
     def test_yield_default_arm(self):
         """When no case matches, the default arm's yield should produce the value."""
         source = """\
