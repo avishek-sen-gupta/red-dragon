@@ -12,11 +12,13 @@ from __future__ import annotations
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.frontends.c import CFrontend
+from interpreter.frontends.c.features import CFeature
 from interpreter.ir import Opcode
 from interpreter.project.entry_point import EntryPoint
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from tests.covers import covers
 
 
 def _parse_and_lower(source: str):
@@ -43,6 +45,7 @@ def _run_c(source: str, max_steps: int = 300) -> dict:
 
 
 class TestArrowOperatorLowering:
+    @covers(CFeature.ARROW_OPERATOR)
     def test_arrow_read_lowers_to_load_field(self):
         """p->x should lower to LOAD_FIELD, same as p.x."""
         source = (
@@ -54,6 +57,7 @@ class TestArrowOperatorLowering:
         field_loads = [l for l in loads if "x" in l.operands]
         assert len(field_loads) == 1
 
+    @covers(CFeature.ARROW_OPERATOR)
     def test_arrow_write_lowers_to_store_field(self):
         """p->x = 5 should lower to STORE_FIELD with value 5."""
         source = (
@@ -78,6 +82,7 @@ class TestArrowOperatorLowering:
 
 
 class TestAddressOfHeapObject:
+    @covers(CFeature.ADDRESS_OF)
     def test_address_of_struct_returns_pointer(self):
         """&struct_var should return a Pointer wrapping the heap address."""
         source = (
@@ -99,6 +104,7 @@ class TestAddressOfHeapObject:
 
 
 class TestStructPointerRead:
+    @covers(CFeature.ARROW_OPERATOR)
     def test_read_field_via_arrow(self):
         """p->x and p->y should read the struct's fields."""
         source = (
@@ -121,6 +127,7 @@ class TestStructPointerRead:
 
 
 class TestStructPointerWrite:
+    @covers(CFeature.ARROW_OPERATOR)
     def test_write_field_via_arrow(self):
         """p->x = val should mutate the underlying struct."""
         source = (
