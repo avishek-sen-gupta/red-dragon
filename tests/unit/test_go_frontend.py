@@ -7,6 +7,8 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.frontends.go.features import GoFeature
+from tests.covers import covers
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:
@@ -33,6 +35,7 @@ def _find_all(
 
 
 class TestGoFrontendShortVarDecl:
+    @covers(GoFeature.SHORT_VAR_DECL)
     def test_short_var_decl_produces_const_and_store(self):
         ir = _parse_and_lower("package main; func main() { x := 10 }")
         opcodes = _opcodes(ir)
@@ -42,6 +45,7 @@ class TestGoFrontendShortVarDecl:
         x_stores = [s for s in stores if "x" in s.operands]
         assert len(x_stores) >= 1
 
+    @covers(GoFeature.SHORT_VAR_DECL)
     def test_short_var_decl_string_value(self):
         ir = _parse_and_lower('package main; func main() { name := "hello" }')
         stores = _find_all(ir, Opcode.DECL_VAR)
@@ -50,6 +54,7 @@ class TestGoFrontendShortVarDecl:
 
 
 class TestGoFrontendAssignment:
+    @covers(GoFeature.ASSIGNMENT)
     def test_assignment_produces_store(self):
         source = "package main; func main() { x := 10; x = x + 5 }"
         ir = _parse_and_lower(source)
@@ -60,6 +65,7 @@ class TestGoFrontendAssignment:
         assert len(x_decls) >= 1
         assert len(x_stores) >= 1
 
+    @covers(GoFeature.ARITHMETIC)
     def test_assignment_with_binop(self):
         source = "package main; func main() { x := 10; x = x + 5 }"
         ir = _parse_and_lower(source)
@@ -69,6 +75,7 @@ class TestGoFrontendAssignment:
 
 
 class TestGoFrontendFunctionDecl:
+    @covers(GoFeature.FUNCTION_DECLARATION)
     def test_function_declaration_produces_label_and_return(self):
         source = "package main; func add(a int, b int) int { return a + b }"
         ir = _parse_and_lower(source)
@@ -76,6 +83,7 @@ class TestGoFrontendFunctionDecl:
         assert Opcode.LABEL in opcodes
         assert Opcode.RETURN in opcodes
 
+    @covers(GoFeature.FUNCTION_DECLARATION)
     def test_function_params_lowered_as_symbolic(self):
         source = "package main; func add(a int, b int) int { return a + b }"
         ir = _parse_and_lower(source)
@@ -85,6 +93,7 @@ class TestGoFrontendFunctionDecl:
         ]
         assert len(param_symbolics) >= 2
 
+    @covers(GoFeature.FUNCTION_DECLARATION)
     def test_function_name_stored(self):
         source = "package main; func add(a int, b int) int { return a + b }"
         ir = _parse_and_lower(source)
@@ -94,6 +103,7 @@ class TestGoFrontendFunctionDecl:
 
 
 class TestGoFrontendFunctionCall:
+    @covers(GoFeature.FUNCTION_CALL)
     def test_function_call_produces_call_function(self):
         source = "package main; func main() { add(1, 2) }"
         ir = _parse_and_lower(source)
@@ -103,6 +113,7 @@ class TestGoFrontendFunctionCall:
 
 
 class TestGoFrontendIfElse:
+    @covers(GoFeature.IF_ELSE)
     def test_if_produces_branch_if_and_labels(self):
         source = """package main
 func main() {
@@ -119,6 +130,7 @@ func main() {
         labels = _find_all(ir, Opcode.LABEL)
         assert len(labels) >= 3
 
+    @covers(GoFeature.IF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         source = """package main
@@ -147,6 +159,7 @@ func f() {
 
 
 class TestGoFrontendForLoop:
+    @covers(GoFeature.FOR_LOOP)
     def test_c_style_for_loop(self):
         source = """package main
 func main() {
@@ -163,6 +176,7 @@ func main() {
         for_labels = [l for l in label_names if l and "for_" in l]
         assert len(for_labels) >= 2
 
+    @covers(GoFeature.FOR_LOOP)
     def test_condition_only_for_loop(self):
         source = """package main
 func main() {
@@ -178,6 +192,7 @@ func main() {
 
 
 class TestGoFrontendSelectorExpression:
+    @covers(GoFeature.FIELD_ACCESS)
     def test_field_access_produces_load_field(self):
         source = "package main; func main() { x := obj.field }"
         ir = _parse_and_lower(source)
@@ -187,6 +202,7 @@ class TestGoFrontendSelectorExpression:
 
 
 class TestGoFrontendMethodCall:
+    @covers(GoFeature.METHOD_CALL)
     def test_method_call_produces_call_method(self):
         source = 'package main; import "fmt"; func main() { fmt.Println("hello") }'
         ir = _parse_and_lower(source)
@@ -196,6 +212,7 @@ class TestGoFrontendMethodCall:
 
 
 class TestGoFrontendStructDef:
+    @covers(GoFeature.STRUCT)
     def test_struct_definition_produces_class_ref(self):
         source = """package main
 type Point struct {
@@ -214,6 +231,7 @@ type Point struct {
 
 
 class TestGoFrontendIncDec:
+    @covers(GoFeature.INC_DEC)
     def test_inc_statement(self):
         source = "package main; func main() { i := 0; i++ }"
         ir = _parse_and_lower(source)
@@ -221,6 +239,7 @@ class TestGoFrontendIncDec:
         plus_ops = [b for b in binops if "+" in b.operands]
         assert len(plus_ops) >= 1
 
+    @covers(GoFeature.INC_DEC)
     def test_dec_statement(self):
         source = "package main; func main() { i := 10; i-- }"
         ir = _parse_and_lower(source)
@@ -230,12 +249,14 @@ class TestGoFrontendIncDec:
 
 
 class TestGoFrontendReturn:
+    @covers(GoFeature.RETURN)
     def test_return_with_value(self):
         source = "package main; func f() int { return 42 }"
         ir = _parse_and_lower(source)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(GoFeature.RETURN)
     def test_return_without_value(self):
         """Bare return emits CONST with default value followed by RETURN."""
         source = "package main; func f() { return }"
@@ -250,6 +271,7 @@ class TestGoFrontendReturn:
 
 
 class TestGoFrontendMultipleReturn:
+    @covers(GoFeature.MULTIPLE_RETURN)
     def test_multiple_return_values(self):
         source = """package main
 func swap(a int, b int) (int, int) {
@@ -265,12 +287,14 @@ func swap(a int, b int) (int, int) {
 
 
 class TestGoFrontendFallback:
+    @covers(GoFeature.GO_STATEMENT)
     def test_go_statement_produces_call_function(self):
         source = "package main; func main() { go func() {} () }"
         ir = _parse_and_lower(source)
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("go" in inst.operands for inst in calls)
 
+    @covers(GoFeature.FUNCTION_DECLARATION)
     def test_entry_label_always_present(self):
         source = "package main"
         ir = _parse_and_lower(source)
@@ -283,6 +307,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialGo:
+    @covers(GoFeature.FOR_RANGE)
     def test_for_range_with_accumulator(self):
         source = """\
 package main
@@ -306,6 +331,7 @@ func main() {
         assert any("v" in s.operands for s in stores)
         assert len(ir) > 20
 
+    @covers(GoFeature.METHOD_CALL)
     def test_struct_method_with_receiver(self):
         source = """\
 package main
@@ -325,6 +351,7 @@ func (c Counter) Value() int {
         assert any("Counter" in s.operands for s in stores)
         assert any("Value" in s.operands for s in stores)
 
+    @covers(GoFeature.MULTIPLE_RETURN)
     def test_multiple_return_values(self):
         source = """\
 package main
@@ -340,6 +367,7 @@ func divide(a int, b int) (int, int) {
         assert "/" in operators
         assert "%" in operators
 
+    @covers(GoFeature.FIELD_ACCESS)
     def test_nested_for_with_field_access(self):
         source = """\
 package main
@@ -359,6 +387,7 @@ func main() {
         assert any("value" in inst.operands for inst in load_fields)
         assert len(ir) > 25
 
+    @covers(GoFeature.IF_ELSE)
     def test_if_else_chain(self):
         source = """\
 package main
@@ -378,6 +407,7 @@ func classify(x int) string {
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 3
 
+    @covers(GoFeature.FOR_LOOP)
     def test_for_with_short_var_and_condition(self):
         source = """\
 package main
@@ -400,6 +430,7 @@ func main() {
         labels = _labels_in_order(ir)
         assert any("for_" in lbl for lbl in labels)
 
+    @covers(GoFeature.FUNCTION_CALL)
     def test_function_calling_function(self):
         source = """\
 package main
@@ -419,6 +450,7 @@ func quadruple(x int) int {
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 2
 
+    @covers(GoFeature.DEFER)
     def test_defer_produces_call_function(self):
         source = """\
 package main
@@ -434,6 +466,7 @@ func main() {
 
 
 class TestGoCompositeLiteral:
+    @covers(GoFeature.COMPOSITE_LITERAL)
     def test_composite_keyed(self):
         source = """\
 package main
@@ -450,6 +483,7 @@ func main() { p := Point{X: 1, Y: 2} }
         assert "X" in field_names
         assert "Y" in field_names
 
+    @covers(GoFeature.COMPOSITE_LITERAL)
     def test_composite_positional(self):
         source = """\
 package main
@@ -464,6 +498,7 @@ func main() { nums := []int{1, 2, 3} }
 
 
 class TestGoTypeAssertionExpression:
+    @covers(GoFeature.TYPE_ASSERTION)
     def test_type_assertion_produces_call_function(self):
         source = """\
 package main
@@ -476,6 +511,7 @@ func main() {
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("type_assert" in inst.operands for inst in calls)
 
+    @covers(GoFeature.TYPE_ASSERTION)
     def test_type_assertion_includes_type(self):
         source = """\
 package main
@@ -491,6 +527,7 @@ func main() {
 
 
 class TestGoSliceExpression:
+    @covers(GoFeature.SLICE_EXPRESSION)
     def test_slice_produces_call_function(self):
         source = """\
 package main
@@ -503,6 +540,7 @@ func main() {
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("slice" in inst.operands for inst in calls)
 
+    @covers(GoFeature.SLICE_EXPRESSION)
     def test_slice_with_indices(self):
         source = """\
 package main
@@ -516,6 +554,7 @@ func main() {
         slice_calls = [c for c in calls if "slice" in c.operands]
         assert len(slice_calls) >= 1
 
+    @covers(GoFeature.SLICE_EXPRESSION)
     def test_slice_without_end(self):
         source = """\
 package main
@@ -530,6 +569,7 @@ func main() {
 
 
 class TestGoFuncLiteral:
+    @covers(GoFeature.FUNC_LITERAL)
     def test_func_literal_produces_function_ref(self):
         source = """\
 package main
@@ -541,6 +581,7 @@ func main() {
         consts = _find_all(ir, Opcode.CONST)
         assert any("__anon" in str(inst.operands) for inst in consts)
 
+    @covers(GoFeature.FUNC_LITERAL)
     def test_func_literal_has_return(self):
         source = """\
 package main
@@ -552,6 +593,7 @@ func main() {
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(GoFeature.FUNC_LITERAL)
     def test_func_literal_params_lowered(self):
         source = """\
 package main
@@ -568,6 +610,7 @@ func main() {
 
 
 class TestGoDeferStatement:
+    @covers(GoFeature.DEFER)
     def test_defer_produces_defer_call(self):
         source = """\
 package main
@@ -579,6 +622,7 @@ func main() {
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("defer" in inst.operands for inst in calls)
 
+    @covers(GoFeature.DEFER)
     def test_defer_method_call(self):
         source = """\
 package main
@@ -593,6 +637,7 @@ func main() {
 
 
 class TestGoGoStatement:
+    @covers(GoFeature.GO_STATEMENT)
     def test_go_statement_produces_go_call(self):
         source = """\
 package main
@@ -604,6 +649,7 @@ func main() {
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("go" in inst.operands for inst in calls)
 
+    @covers(GoFeature.GO_STATEMENT)
     def test_go_with_func_literal(self):
         source = """\
 package main
@@ -617,6 +663,7 @@ func main() {
 
 
 class TestGoExpressionSwitch:
+    @covers(GoFeature.SWITCH_STATEMENT)
     def test_switch_produces_branch_if(self):
         source = """\
 package main
@@ -636,6 +683,7 @@ func main() {
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 2
 
+    @covers(GoFeature.SWITCH_STATEMENT)
     def test_switch_case_bodies_lowered(self):
         source = """\
 package main
@@ -652,6 +700,7 @@ func main() {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(GoFeature.SWITCH_STATEMENT)
     def test_switch_end_label(self):
         source = """\
 package main
@@ -668,6 +717,7 @@ func main() {
 
 
 class TestGoTypeSwitchStatement:
+    @covers(GoFeature.TYPE_SWITCH)
     def test_type_switch_produces_type_check(self):
         source = """\
 package main
@@ -685,6 +735,7 @@ func main() {
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("type_check" in inst.operands for inst in calls)
 
+    @covers(GoFeature.TYPE_SWITCH)
     def test_type_switch_produces_branches(self):
         source = """\
 package main
@@ -703,6 +754,7 @@ func main() {
 
 
 class TestGoSelectStatement:
+    @covers(GoFeature.SELECT_STATEMENT)
     def test_select_produces_labels(self):
         source = """\
 package main
@@ -719,6 +771,7 @@ func main() {
         labels = _labels_in_order(ir)
         assert any("select" in lbl for lbl in labels)
 
+    @covers(GoFeature.SELECT_STATEMENT)
     def test_select_end_label(self):
         source = """\
 package main
@@ -735,6 +788,7 @@ func main() {
 
 
 class TestGoSendStatement:
+    @covers(GoFeature.SEND_STATEMENT)
     def test_send_produces_chan_send(self):
         source = """\
 package main
@@ -746,6 +800,7 @@ func main() {
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("chan_send" in inst.operands for inst in calls)
 
+    @covers(GoFeature.SEND_STATEMENT)
     def test_send_with_variable(self):
         source = """\
 package main
@@ -759,6 +814,7 @@ func main() {
 
 
 class TestGoLabeledStatement:
+    @covers(GoFeature.LABELED_STATEMENT)
     def test_labeled_statement_produces_label(self):
         source = """\
 package main
@@ -773,6 +829,7 @@ func main() {
         labels = _labels_in_order(ir)
         assert any("outer" in lbl for lbl in labels)
 
+    @covers(GoFeature.LABELED_STATEMENT)
     def test_labeled_statement_body_lowered(self):
         source = """\
 package main
@@ -789,6 +846,7 @@ func main() {
 
 
 class TestGoConstDeclaration:
+    @covers(GoFeature.CONST_DECLARATION)
     def test_const_with_value(self):
         source = """\
 package main
@@ -798,6 +856,7 @@ const Pi = 3
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Pi" in inst.operands for inst in stores)
 
+    @covers(GoFeature.CONST_DECLARATION)
     def test_const_multiple(self):
         source = """\
 package main
@@ -811,6 +870,7 @@ const (
         assert any("A" in inst.operands for inst in stores)
         assert any("B" in inst.operands for inst in stores)
 
+    @covers(GoFeature.CONST_DECLARATION)
     def test_const_with_explicit_type(self):
         source = """\
 package main
@@ -822,6 +882,7 @@ const X int = 10
 
 
 class TestGoGotoStatement:
+    @covers(GoFeature.GOTO)
     def test_goto_produces_branch(self):
         source = """\
 package main
@@ -835,6 +896,7 @@ func main() {
         branches = _find_all(ir, Opcode.BRANCH)
         assert any(inst.label == "end" for inst in branches)
 
+    @covers(GoFeature.GOTO)
     def test_goto_with_label(self):
         source = """\
 package main
@@ -850,6 +912,7 @@ func main() {
 
 
 class TestGoVarDeclarationMultiName:
+    @covers(GoFeature.VAR_DECLARATION)
     def test_var_multi_name_with_values(self):
         source = "package main\nvar a, b = 1, 2"
         ir = _parse_and_lower(source)
@@ -858,6 +921,7 @@ class TestGoVarDeclarationMultiName:
         assert "a" in store_names
         assert "b" in store_names
 
+    @covers(GoFeature.VAR_DECLARATION)
     def test_var_multi_name_without_values(self):
         source = "package main\nvar a, b int"
         ir = _parse_and_lower(source)
@@ -866,6 +930,7 @@ class TestGoVarDeclarationMultiName:
         assert "a" in store_names
         assert "b" in store_names
 
+    @covers(GoFeature.VAR_DECLARATION)
     def test_var_block_form(self):
         source = "package main\nvar (\n    x = 10\n    y = 20\n)"
         ir = _parse_and_lower(source)
@@ -874,6 +939,7 @@ class TestGoVarDeclarationMultiName:
         assert "x" in store_names
         assert "y" in store_names
 
+    @covers(GoFeature.VAR_DECLARATION)
     def test_var_multi_name_three_elements(self):
         source = "package main\nfunc f() { var x, y, z = 1, 2, 3 }"
         ir = _parse_and_lower(source)
@@ -885,6 +951,7 @@ class TestGoVarDeclarationMultiName:
 
 
 class TestGoReceiveStatement:
+    @covers(GoFeature.RECEIVE_STATEMENT)
     def test_receive_statement_no_symbolic(self):
         source = (
             "package main\nfunc f() {\n  ch := make(chan int)\n"
@@ -894,6 +961,7 @@ class TestGoReceiveStatement:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("receive_statement" in str(inst.operands) for inst in symbolics)
 
+    @covers(GoFeature.RECEIVE_STATEMENT)
     def test_receive_statement_chan_recv(self):
         source = (
             "package main\nfunc f() {\n  ch := make(chan int)\n"
@@ -905,6 +973,7 @@ class TestGoReceiveStatement:
 
 
 class TestGoChannelType:
+    @covers(GoFeature.CHANNEL_TYPE)
     def test_channel_type_no_symbolic(self):
         source = "package main\nfunc f() { var ch chan int }"
         ir = _parse_and_lower(source)
@@ -913,6 +982,7 @@ class TestGoChannelType:
 
 
 class TestGoSliceType:
+    @covers(GoFeature.SLICE_TYPE)
     def test_slice_type_no_symbolic(self):
         source = "package main\nfunc f() { var s []int }"
         ir = _parse_and_lower(source)
@@ -928,6 +998,7 @@ class TestGoTypeConversionExpression:
     type_conversion_expression is only triggered for complex type syntax.
     """
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_slice_byte_conversion_produces_call_ctor(self):
         """[]byte(s) should produce CALL_CTOR with '[]byte' as function name."""
         source = 'package main\nfunc main() { s := "hello"; x := []byte(s) }'
@@ -936,6 +1007,7 @@ class TestGoTypeConversionExpression:
         byte_calls = [c for c in calls if "[]byte" in c.operands]
         assert len(byte_calls) >= 1
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_slice_byte_conversion_no_symbolic(self):
         source = 'package main\nfunc main() { x := []byte("hello") }'
         ir = _parse_and_lower(source)
@@ -944,6 +1016,7 @@ class TestGoTypeConversionExpression:
             "type_conversion_expression" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_generic_type_conversion_produces_call_ctor(self):
         """Foo[int](y) should produce CALL_CTOR."""
         source = "package main\nfunc main() { x := Foo[int](y) }"
@@ -951,6 +1024,7 @@ class TestGoTypeConversionExpression:
         calls = _find_all(ir, Opcode.CALL_CTOR)
         assert len(calls) >= 1
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_generic_type_conversion_no_symbolic(self):
         source = "package main\nfunc main() { x := Foo[int](y) }"
         ir = _parse_and_lower(source)
@@ -959,6 +1033,7 @@ class TestGoTypeConversionExpression:
             "type_conversion_expression" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_type_conversion_operand_is_lowered(self):
         """The operand expression should be lowered and passed as argument."""
         source = 'package main\nfunc main() { s := "hi"; x := []byte(s) }'
@@ -969,6 +1044,7 @@ class TestGoTypeConversionExpression:
         # The call should have 2 operands: function name + 1 arg register
         assert len(byte_calls[0].operands) == 2
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_simple_int_conversion_still_works(self):
         """int(y) is call_expression — verify existing handler still covers it."""
         source = "package main\nfunc main() { y := 3; x := int(y) }"
@@ -985,6 +1061,7 @@ class TestGoGenericType:
     generic_type appears in composite_literal types and var declarations.
     """
 
+    @covers(GoFeature.GENERIC_TYPE)
     def test_generic_composite_literal_no_symbolic(self):
         """Foo[int]{} should not produce any unsupported symbolics."""
         source = "package main\nfunc main() { x := Foo[int]{} }"
@@ -992,6 +1069,7 @@ class TestGoGenericType:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("generic_type" in str(inst.operands) for inst in symbolics)
 
+    @covers(GoFeature.GENERIC_TYPE)
     def test_generic_var_decl_no_symbolic(self):
         """var x Foo[int] should not produce any unsupported symbolics."""
         source = "package main\nfunc main() { var x Foo[int] }"
@@ -1001,18 +1079,21 @@ class TestGoGenericType:
 
 
 class TestGoRuneLiteral:
+    @covers(GoFeature.RUNE_LITERAL)
     def test_rune_literal_no_symbolic(self):
         """Rune literal 'a' should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("package main; func main() { x := 'a' }")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("rune_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(GoFeature.RUNE_LITERAL)
     def test_rune_literal_emits_const(self):
         """Rune literal should emit a CONST instruction."""
         ir = _parse_and_lower("package main; func main() { x := 'a' }")
         consts = _find_all(ir, Opcode.CONST)
         assert any("'a'" in str(inst.operands) for inst in consts)
 
+    @covers(GoFeature.RUNE_LITERAL)
     def test_rune_literal_stored_to_variable(self):
         """Rune literal should be stored in a variable."""
         ir = _parse_and_lower("package main; func main() { x := 'a' }")
@@ -1021,6 +1102,7 @@ class TestGoRuneLiteral:
 
 
 class TestGoBlankIdentifier:
+    @covers(GoFeature.BLANK_IDENTIFIER)
     def test_blank_identifier_no_symbolic(self):
         """Blank identifier _ should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("package main; func main() { _ = 42 }")
@@ -1029,6 +1111,7 @@ class TestGoBlankIdentifier:
 
 
 class TestGoFallthroughStatement:
+    @covers(GoFeature.FALLTHROUGH)
     def test_fallthrough_no_symbolic(self):
         """fallthrough should not produce SYMBOLIC fallthrough."""
         source = """\
@@ -1050,6 +1133,7 @@ func main() {
             "fallthrough_statement" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(GoFeature.FALLTHROUGH)
     def test_fallthrough_is_noop(self):
         """fallthrough should not emit any branch/jump — it's a no-op in our model."""
         source = """\
@@ -1075,6 +1159,7 @@ func main() {
 
 
 class TestGoVariadicArgument:
+    @covers(GoFeature.VARIADIC)
     def test_variadic_argument_no_symbolic(self):
         """args... in function call should not produce SYMBOLIC."""
         ir = _parse_and_lower("func main() { fmt.Println(args...) }")
@@ -1085,6 +1170,7 @@ class TestGoVariadicArgument:
 class TestGoInterfaceLowering:
     """Go interface type declarations should emit CLASS blocks with method stubs."""
 
+    @covers(GoFeature.INTERFACE)
     def test_interface_emits_class_block(self):
         """Interface produces BRANCH-LABEL...LABEL-CONST(<class:>)-STORE_VAR."""
         ir = _parse_and_lower("""\
@@ -1099,6 +1185,7 @@ type Shape interface {
         assert len(class_refs) == 1
         assert "Shape" in str(class_refs[0].operands[0])
 
+    @covers(GoFeature.INTERFACE)
     def test_interface_methods_emit_function_labels(self):
         """Each interface method should produce a function label."""
         ir = _parse_and_lower("""\
@@ -1114,6 +1201,7 @@ type Shape interface {
         assert any("Area" in lbl for lbl in func_labels)
         assert any("Perimeter" in lbl for lbl in func_labels)
 
+    @covers(GoFeature.INTERFACE)
     def test_interface_methods_seed_return_types(self):
         """Interface method return types are seeded in type_env_builder."""
         _ir, builder = _parse_go_with_types("""\
@@ -1136,6 +1224,7 @@ type Calculator interface {
 class TestGoIota:
     """iota in const blocks should emit sequential integer constants."""
 
+    @covers(GoFeature.IOTA)
     def test_simple_iota_emits_sequential_consts(self):
         """const (A = iota; B; C) should emit CONST 0, 1, 2."""
         ir = _parse_and_lower("""
@@ -1152,6 +1241,7 @@ class TestGoIota:
         assert "1" in const_values, f"Expected CONST 1 for iota, got: {const_values}"
         assert "2" in const_values, f"Expected CONST 2 for iota, got: {const_values}"
 
+    @covers(GoFeature.IOTA)
     def test_iota_with_expression(self):
         """const (X = iota * 10; Y; Z) should emit 0, 10, 20."""
         ir = _parse_and_lower("""
@@ -1169,6 +1259,7 @@ class TestGoIota:
         assert "Y" in decl_names, f"Expected DECL_VAR for 'Y', got: {decl_names}"
         assert "Z" in decl_names, f"Expected DECL_VAR for 'Z', got: {decl_names}"
 
+    @covers(GoFeature.IOTA)
     def test_iota_does_not_produce_symbolic(self):
         """iota should not produce SYMBOLIC."""
         ir = _parse_and_lower("""
@@ -1185,6 +1276,7 @@ class TestGoIota:
 
 
 class TestGoMakeDesugaring:
+    @covers(GoFeature.MAKE)
     def test_make_map_emits_new_object(self):
         """make(map[string]int) should desugar to NEW_OBJECT."""
         ir = _parse_and_lower("package main\nfunc main() { m := make(map[string]int) }")
@@ -1193,18 +1285,21 @@ class TestGoMakeDesugaring:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("map_type" in str(s.operands) for s in symbolics)
 
+    @covers(GoFeature.MAKE)
     def test_make_map_no_call_function(self):
         """make(map[...]) should NOT emit CALL_FUNCTION make."""
         ir = _parse_and_lower("package main\nfunc main() { m := make(map[string]int) }")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert not any("make" in inst.operands for inst in calls)
 
+    @covers(GoFeature.MAKE)
     def test_make_slice_emits_new_array(self):
         """make([]int, 5) should desugar to NEW_ARRAY."""
         ir = _parse_and_lower("package main\nfunc main() { s := make([]int, 5) }")
         new_arrs = _find_all(ir, Opcode.NEW_ARRAY)
         assert len(new_arrs) >= 1
 
+    @covers(GoFeature.MAKE)
     def test_make_chan_emits_new_object(self):
         """make(chan int) should desugar to NEW_OBJECT."""
         ir = _parse_and_lower("package main\nfunc main() { c := make(chan int) }")

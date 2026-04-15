@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.frontends.kotlin.features import KotlinFeature
 from interpreter.var_name import VarName
+from tests.covers import covers
 from interpreter.constants import Language
 from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.func_name import FuncName
@@ -24,11 +26,13 @@ def _run_kotlin(source: str, max_steps: int = 500) -> dict:
 
 
 class TestKotlinUnsignedLiteralExecution:
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_literal_assigned(self):
         """val x = 42u should execute and store 42."""
         vars_ = _run_kotlin("val x = 42u")
         assert vars_[VarName("x")] == 42
 
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_literal_in_arithmetic(self):
         """Unsigned literal should be usable in arithmetic."""
         vars_ = _run_kotlin("""\
@@ -37,6 +41,7 @@ val z = x + 1
 """)
         assert vars_[VarName("z")] == 11
 
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_long_literal(self):
         """val x = 42UL should store 42."""
         vars_ = _run_kotlin("val x = 42UL")
@@ -44,6 +49,7 @@ val z = x + 1
 
 
 class TestKotlinCallableReferenceExecution:
+    @covers(KotlinFeature.CALLABLE_REFERENCE)
     def test_callable_reference_assigned(self):
         """val f = ::someFunc should store a BoundFuncRef."""
         vars_ = _run_kotlin("""\
@@ -53,6 +59,7 @@ val f = ::double
         assert isinstance(vars_[VarName("f")], BoundFuncRef)
         assert vars_[VarName("f")].func_ref.name == FuncName("double")
 
+    @covers(KotlinFeature.CALLABLE_REFERENCE)
     def test_callable_reference_does_not_block_execution(self):
         """Callable reference should not prevent subsequent code from executing."""
         vars_ = _run_kotlin("""\
@@ -64,6 +71,7 @@ val y = 42
 
 
 class TestKotlinSpreadExpressionExecution:
+    @covers(KotlinFeature.SPREAD)
     def test_spread_does_not_crash(self):
         """Spread operator (*) in function call should produce correct result."""
         vars_ = _run_kotlin("""\
@@ -75,6 +83,7 @@ val answer = sum(*arr)
 
 
 class TestKotlinSetterExecution:
+    @covers(KotlinFeature.SETTER)
     def test_code_after_class_with_setter_executes(self):
         """Code after class with property setter should execute."""
         locals_ = _run_kotlin("""\
@@ -89,6 +98,7 @@ val y = 42""")
 class TestKotlinPrimaryConstructorExecution:
     """Primary constructor with val params produces concrete field values."""
 
+    @covers(KotlinFeature.PRIMARY_CONSTRUCTOR)
     def test_field_access_on_constructed_object(self):
         """Constructing a class with primary constructor val params
         and accessing fields should return concrete values."""
@@ -99,6 +109,7 @@ val answer = b.x
 """)
         assert vars_[VarName("answer")] == 42
 
+    @covers(KotlinFeature.PRIMARY_CONSTRUCTOR)
     def test_linked_list_field_traversal(self):
         """Linked list built with primary constructor should allow
         field traversal to produce concrete sum."""
@@ -126,6 +137,7 @@ val answer = sumList(n1, 3)
 class TestKotlinSecondaryConstructorExecution:
     """Secondary constructors with this() delegation execute correctly."""
 
+    @covers(KotlinFeature.SECONDARY_CONSTRUCTOR)
     def test_secondary_constructor_delegates_to_primary(self):
         """constructor(side) : this(side, side) should create object with both fields."""
         vars_ = _run_kotlin("""\
@@ -137,6 +149,7 @@ val answer = r.w
 """)
         assert vars_[VarName("answer")] == 5
 
+    @covers(KotlinFeature.SECONDARY_CONSTRUCTOR)
     def test_secondary_constructor_with_body(self):
         """Secondary constructor body should execute after delegation."""
         vars_ = _run_kotlin(
@@ -153,6 +166,7 @@ val answer = p.b
         )
         assert vars_[VarName("answer")] == 4
 
+    @covers(KotlinFeature.SECONDARY_CONSTRUCTOR)
     def test_zero_arg_secondary_constructor(self):
         """constructor() : this(default) should work with no args."""
         vars_ = _run_kotlin("""\
@@ -168,6 +182,7 @@ val answer = b.x
 class TestKotlinImplicitThisFieldExecution:
     """Bare field names in method/constructor bodies resolve via implicit this."""
 
+    @covers(KotlinFeature.PRIMARY_CONSTRUCTOR)
     def test_method_reads_field_by_bare_name(self):
         """this.value accessed as bare 'value' in method body."""
         vars_ = _run_kotlin("""\
@@ -181,6 +196,7 @@ val answer = b.get()
 """)
         assert vars_[VarName("answer")] == 42
 
+    @covers(KotlinFeature.SECONDARY_CONSTRUCTOR)
     def test_secondary_constructor_body_reads_field(self):
         """Field set by delegation readable by bare name in constructor body."""
         vars_ = _run_kotlin(
@@ -202,6 +218,7 @@ val answer = c.doubled
 class TestKotlinPropertyAccessorExecution:
     """Integration tests for custom property getter/setter execution."""
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_getter_transforms_read(self):
         """Custom getter should transform the read value."""
         vars_ = _run_kotlin(
@@ -219,6 +236,7 @@ val result = foo.getX()""",
         )
         assert vars_[VarName("result")] == 11
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_setter_transforms_write(self):
         """Custom setter should transform the written value."""
         vars_ = _run_kotlin(
@@ -240,6 +258,7 @@ val result = foo.getX()""",
         )
         assert vars_[VarName("result")] == 10
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_getter_and_setter_together(self):
         """Both getter and setter should apply their transformations."""
         vars_ = _run_kotlin(
@@ -263,6 +282,7 @@ val result = foo.getX()""",
         # setter stores 5 * 2 = 10, getter returns 10 + 1 = 11
         assert vars_[VarName("result")] == 11
 
+    @covers(KotlinFeature.VAR_DECLARATION)
     def test_property_without_accessors_regression(self):
         """Property without custom accessors should still work as plain field."""
         vars_ = _run_kotlin(
