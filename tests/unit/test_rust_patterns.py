@@ -6,6 +6,8 @@ import tree_sitter_language_pack as tslp
 
 from interpreter.constants import Language
 from interpreter.frontend_observer import NullFrontendObserver
+from interpreter.frontends.rust.features import RustFeature
+from tests.covers import covers
 from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
@@ -65,6 +67,7 @@ def _find_all_nodes(node, type_name: str) -> list:
 
 
 class TestIntegerLiteralPattern:
+    @covers(RustFeature.DESTRUCTURING)
     def test_integer_literal_maps_to_literal_pattern(self):
         snippet = "fn main() { match x { 42 => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -72,6 +75,7 @@ class TestIntegerLiteralPattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == LiteralPattern(42)
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_integer_literal_zero(self):
         snippet = "fn main() { match x { 0 => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -79,6 +83,7 @@ class TestIntegerLiteralPattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == LiteralPattern(0)
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_integer_literal_with_underscore_separator(self):
         snippet = "fn main() { match x { 1_000 => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -88,6 +93,7 @@ class TestIntegerLiteralPattern:
 
 
 class TestFloatLiteralPattern:
+    @covers(RustFeature.DESTRUCTURING)
     def test_float_literal_maps_to_literal_pattern(self):
         snippet = "fn main() { match x { 3.14 => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -97,6 +103,7 @@ class TestFloatLiteralPattern:
 
 
 class TestStringLiteralPattern:
+    @covers(RustFeature.DESTRUCTURING)
     def test_string_literal_maps_to_literal_pattern(self):
         snippet = 'fn main() { match x { "hello" => 1, _ => 0 } }'
         ctx = _make_rust_ctx(snippet)
@@ -104,6 +111,7 @@ class TestStringLiteralPattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == LiteralPattern("hello")
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_empty_string_literal(self):
         snippet = 'fn main() { match x { "" => 1, _ => 0 } }'
         ctx = _make_rust_ctx(snippet)
@@ -113,6 +121,7 @@ class TestStringLiteralPattern:
 
 
 class TestBooleanLiteralPattern:
+    @covers(RustFeature.DESTRUCTURING)
     def test_true_maps_to_literal_true(self):
         snippet = "fn main() { match x { true => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -120,6 +129,7 @@ class TestBooleanLiteralPattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == LiteralPattern(True)
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_false_maps_to_literal_false(self):
         snippet = "fn main() { match x { false => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -129,6 +139,7 @@ class TestBooleanLiteralPattern:
 
 
 class TestNegativeLiteralPattern:
+    @covers(RustFeature.NEGATIVE_LITERAL)
     def test_negative_integer_maps_to_literal_pattern(self):
         snippet = "fn main() { match x { -1 => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -136,6 +147,7 @@ class TestNegativeLiteralPattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == LiteralPattern(-1)
 
+    @covers(RustFeature.NEGATIVE_LITERAL)
     def test_negative_float_maps_to_literal_pattern(self):
         snippet = "fn main() { match x { -3.14 => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -145,6 +157,7 @@ class TestNegativeLiteralPattern:
 
 
 class TestWildcardPattern:
+    @covers(RustFeature.DESTRUCTURING)
     def test_wildcard_underscore_maps_to_wildcard_pattern(self):
         snippet = "fn main() { match x { _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -152,6 +165,7 @@ class TestWildcardPattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == WildcardPattern()
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_wildcard_is_not_a_capture(self):
         snippet = "fn main() { match x { _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -161,6 +175,7 @@ class TestWildcardPattern:
 
 
 class TestCapturePattern:
+    @covers(RustFeature.DESTRUCTURING)
     def test_bare_identifier_maps_to_capture_pattern(self):
         snippet = "fn main() { match x { y => y + 1 } }"
         ctx = _make_rust_ctx(snippet)
@@ -168,6 +183,7 @@ class TestCapturePattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == CapturePattern("y")
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_capture_name_is_preserved(self):
         snippet = "fn main() { match x { value => value, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -177,6 +193,7 @@ class TestCapturePattern:
 
 
 class TestReferencePattern:
+    @covers(RustFeature.DESTRUCTURING)
     def test_ref_capture(self):
         """&val in match should produce DerefPattern(CapturePattern('val'))."""
         snippet = "fn main() { match r { &val => 1, _ => 0 } }"
@@ -187,6 +204,7 @@ class TestReferencePattern:
         assert isinstance(result.inner, CapturePattern)
         assert result.inner.name == "val"
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_ref_literal(self):
         """&42 in match should produce DerefPattern(LiteralPattern(42))."""
         snippet = "fn main() { match r { &42 => 1, _ => 0 } }"
@@ -197,6 +215,7 @@ class TestReferencePattern:
         assert isinstance(result.inner, LiteralPattern)
         assert result.inner.value == 42
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_ref_wildcard(self):
         """&_ in match should produce DerefPattern(WildcardPattern())."""
         snippet = "fn main() { match r { &_ => 1, } }"
@@ -208,6 +227,7 @@ class TestReferencePattern:
 
 
 class TestSlicePattern:
+    @covers(RustFeature.RANGE_SLICE)
     def test_slice_two_captures(self):
         """[a, b] should produce SequencePattern with two CapturePatterns."""
         snippet = "fn main() { match arr { [a, b] => 1, _ => 0 } }"
@@ -219,6 +239,7 @@ class TestSlicePattern:
         assert result.elements[0] == CapturePattern("a")
         assert result.elements[1] == CapturePattern("b")
 
+    @covers(RustFeature.RANGE_SLICE)
     def test_slice_with_rest(self):
         """[a, b, ..] should produce SequencePattern with StarPattern('_')."""
         snippet = "fn main() { match arr { [a, b, ..] => 1, _ => 0 } }"
@@ -232,6 +253,7 @@ class TestSlicePattern:
         assert isinstance(result.elements[2], StarPattern)
         assert result.elements[2].name == "_"
 
+    @covers(RustFeature.RANGE_SLICE)
     def test_slice_with_named_rest(self):
         """[first, rest @ ..] should produce SequencePattern with StarPattern('rest')."""
         snippet = "fn main() { match arr { [first, rest @ ..] => 1, _ => 0 } }"
@@ -244,6 +266,7 @@ class TestSlicePattern:
         assert isinstance(result.elements[1], StarPattern)
         assert result.elements[1].name == "rest"
 
+    @covers(RustFeature.RANGE_SLICE)
     def test_slice_empty(self):
         """[] should produce SequencePattern with no elements."""
         snippet = "fn main() { match arr { [] => 1, _ => 0 } }"
@@ -253,6 +276,7 @@ class TestSlicePattern:
         assert isinstance(result, SequencePattern)
         assert len(result.elements) == 0
 
+    @covers(RustFeature.RANGE_SLICE)
     def test_slice_with_wildcards(self):
         """[_, _, third] should have wildcards and capture."""
         snippet = "fn main() { match arr { [_, _, third] => 1, _ => 0 } }"
@@ -267,6 +291,7 @@ class TestSlicePattern:
 
 
 class TestOrPattern:
+    @covers(RustFeature.OR_PATTERN)
     def test_or_pattern_three_literals(self):
         snippet = "fn main() { match x { 1 | 2 | 3 => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -276,6 +301,7 @@ class TestOrPattern:
             (LiteralPattern(1), LiteralPattern(2), LiteralPattern(3))
         )
 
+    @covers(RustFeature.OR_PATTERN)
     def test_or_pattern_two_literals(self):
         snippet = "fn main() { match x { 0 | 1 => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -285,6 +311,7 @@ class TestOrPattern:
 
 
 class TestTuplePattern:
+    @covers(RustFeature.DESTRUCTURING)
     def test_tuple_two_captures(self):
         snippet = "fn main() { match p { (x, y) => x + y, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -292,6 +319,7 @@ class TestTuplePattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == SequencePattern((CapturePattern("x"), CapturePattern("y")))
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_tuple_with_wildcard(self):
         snippet = "fn main() { match p { (_, y) => y, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -299,6 +327,7 @@ class TestTuplePattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == SequencePattern((WildcardPattern(), CapturePattern("y")))
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_tuple_with_literal(self):
         snippet = "fn main() { match p { (0, y) => y, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -308,6 +337,7 @@ class TestTuplePattern:
 
 
 class TestTupleStructPattern:
+    @covers(RustFeature.TUPLE_STRUCT_PATTERN)
     def test_some_with_capture(self):
         snippet = "fn main() { match v { Some(x) => x, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -317,6 +347,7 @@ class TestTupleStructPattern:
             "Option", positional=(CapturePattern("x"),), keyword=()
         )
 
+    @covers(RustFeature.TUPLE_STRUCT_PATTERN)
     def test_some_with_wildcard(self):
         snippet = "fn main() { match v { Some(_) => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -326,6 +357,7 @@ class TestTupleStructPattern:
             "Option", positional=(WildcardPattern(),), keyword=()
         )
 
+    @covers(RustFeature.TUPLE_STRUCT_PATTERN)
     def test_some_with_tuple_inner(self):
         snippet = "fn main() { match v { Some((a, b)) => a, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -337,6 +369,7 @@ class TestTupleStructPattern:
             keyword=(),
         )
 
+    @covers(RustFeature.TUPLE_STRUCT_PATTERN)
     def test_nested_some_some(self):
         snippet = "fn main() { match v { Some(Some(x)) => x, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -352,6 +385,7 @@ class TestTupleStructPattern:
 
 
 class TestStructPattern:
+    @covers(RustFeature.STRUCT_PATTERN)
     def test_point_shorthand_fields(self):
         snippet = "fn main() { match p { Point { x, y } => x + y, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -363,6 +397,7 @@ class TestStructPattern:
             keyword=(("x", CapturePattern("x")), ("y", CapturePattern("y"))),
         )
 
+    @covers(RustFeature.STRUCT_PATTERN)
     def test_struct_explicit_field(self):
         snippet = "fn main() { match p { Point { x: a, y: b } => a + b, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -374,6 +409,7 @@ class TestStructPattern:
             keyword=(("x", CapturePattern("a")), ("y", CapturePattern("b"))),
         )
 
+    @covers(RustFeature.STRUCT_PATTERN)
     def test_struct_single_shorthand_field(self):
         snippet = "fn main() { match s { Foo { val } => val, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -387,6 +423,7 @@ class TestStructPattern:
 
 
 class TestScopedIdentifierPattern:
+    @covers(RustFeature.SCOPED_IDENTIFIER)
     def test_scoped_identifier_maps_to_value_pattern(self):
         snippet = "fn main() { match c { Color::Red => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)
@@ -394,6 +431,7 @@ class TestScopedIdentifierPattern:
         result = parse_rust_pattern(ctx, inner)
         assert result == ValuePattern(("Color", "Red"))
 
+    @covers(RustFeature.SCOPED_IDENTIFIER)
     def test_scoped_identifier_preserves_parts(self):
         snippet = "fn main() { match s { Shape::Circle => 1, _ => 0 } }"
         ctx = _make_rust_ctx(snippet)

@@ -1,8 +1,10 @@
 """Tests for Rust frontend Box::new and Some call lowering."""
 
 from interpreter.frontends.rust.frontend import RustFrontend
+from interpreter.frontends.rust.features import RustFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
+from tests.covers import covers
 
 
 def _parse_rust(source: str):
@@ -15,6 +17,7 @@ def _find_all(instructions, opcode):
 
 
 class TestBoxNewLowering:
+    @covers(RustFeature.BOX_OPTION)
     def test_box_new_emits_call_function_box(self):
         """Box::new(x) should emit CALL_FUNCTION with 'Box'."""
         instructions = _parse_rust("""\
@@ -32,6 +35,7 @@ let b = Box::new(n);
             len(box_calls) == 1
         ), f"Expected exactly one CALL_FUNCTION 'Box', got {[c.operands for c in calls]}"
 
+    @covers(RustFeature.BOX_OPTION)
     def test_box_new_operand_is_not_call_unknown(self):
         """Box::new should NOT produce CALL_UNKNOWN."""
         instructions = _parse_rust("""\
@@ -49,6 +53,7 @@ let b = Box::new(n);
 
 
 class TestStringFromLowering:
+    @covers(RustFeature.BOX_OPTION)
     def test_string_from_is_pass_through(self):
         """String::from(x) should be pass-through — no CALL_FUNCTION for String."""
         instructions = _parse_rust("""\
@@ -66,6 +71,7 @@ let s = String::from("hello");
 
 
 class TestSomeLowering:
+    @covers(RustFeature.BOX_OPTION)
     def test_some_emits_call_function_option(self):
         """Some(x) should emit CALL_FUNCTION with Option."""
         instructions = _parse_rust("""\
@@ -85,6 +91,7 @@ let opt = Some(n);
 
 
 class TestDerefLowering:
+    @covers(RustFeature.BOX_OPTION)
     def test_deref_emits_load_indirect(self):
         """*box_val should emit LOAD_INDIRECT (unified Box unwrap / ref deref)."""
         instructions = _parse_rust("""\
@@ -96,6 +103,7 @@ let inner = *b;
         indirects = _find_all(instructions, Opcode.LOAD_INDIRECT)
         assert len(indirects) >= 1, f"Expected LOAD_INDIRECT for deref, got none"
 
+    @covers(RustFeature.BOX_OPTION)
     def test_deref_does_not_emit_load_field_boxed(self):
         """*expr should NOT produce LOAD_FIELD for deref — uses LOAD_INDIRECT."""
         instructions = _parse_rust("""\
