@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from interpreter.frontends.rust import RustFrontend
+from interpreter.frontends.rust.features import RustFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 
 
 def _parse_rust(source: str) -> list[InstructionBase]:
@@ -24,6 +26,7 @@ def _find_all(
 
 
 class TestRustDeclarations:
+    @covers(RustFeature.LET_BINDING)
     def test_let_declaration(self):
         instructions = _parse_rust("fn main() { let x = 10; }")
         opcodes = _opcodes(instructions)
@@ -32,6 +35,7 @@ class TestRustDeclarations:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RustFeature.LET_BINDING)
     def test_let_mut_declaration(self):
         instructions = _parse_rust("fn main() { let mut x = 5; }")
         opcodes = _opcodes(instructions)
@@ -40,6 +44,7 @@ class TestRustDeclarations:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RustFeature.LET_BINDING)
     def test_let_without_initializer(self):
         instructions = _parse_rust("fn main() { let x: i32; }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -47,6 +52,7 @@ class TestRustDeclarations:
 
 
 class TestRustFunctions:
+    @covers(RustFeature.FUNCTION_DECLARATION)
     def test_function_definition(self):
         instructions = _parse_rust("fn add(a: i32, b: i32) -> i32 { a + b }")
         opcodes = _opcodes(instructions)
@@ -63,11 +69,13 @@ class TestRustFunctions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
+    @covers(RustFeature.FUNCTION_CALL)
     def test_function_call(self):
         instructions = _parse_rust("fn main() { add(1, 2); }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("add" in inst.operands for inst in calls)
 
+    @covers(RustFeature.RETURN)
     def test_return_expression(self):
         instructions = _parse_rust("fn main() { return 42; }")
         opcodes = _opcodes(instructions)
@@ -77,6 +85,7 @@ class TestRustFunctions:
 
 
 class TestRustControlFlow:
+    @covers(RustFeature.IF_ELSE)
     def test_if_expression_value_producing(self):
         instructions = _parse_rust("fn main() { let y = if x > 0 { 1 } else { 0 }; }")
         opcodes = _opcodes(instructions)
@@ -88,6 +97,7 @@ class TestRustControlFlow:
         assert any(inst.label.contains("if_true") for inst in labels)
         assert any(inst.label.contains("if_false") for inst in labels)
 
+    @covers(RustFeature.WHILE_LOOP)
     def test_while_loop_produces_ir(self):
         """While loop should produce condition label, body label, back-edge, and conditional branch."""
         instructions = _parse_rust(
@@ -113,6 +123,7 @@ class TestRustControlFlow:
         # Conditional branch to body/end
         assert Opcode.BRANCH_IF in _opcodes(instructions)
 
+    @covers(RustFeature.MATCH_EXPRESSION)
     def test_match_expression(self):
         instructions = _parse_rust(
             "fn main() { let r = match x { 1 => 10, 2 => 20, _ => 0 }; }"
@@ -124,6 +135,7 @@ class TestRustControlFlow:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
+    @covers(RustFeature.IF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         instructions = _parse_rust(
@@ -153,6 +165,7 @@ class TestRustControlFlow:
 
 
 class TestRustStructs:
+    @covers(RustFeature.STRUCT)
     def test_struct_definition(self):
         instructions = _parse_rust("struct Dog { name: String }")
         opcodes = _opcodes(instructions)
@@ -162,6 +175,7 @@ class TestRustStructs:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(RustFeature.IMPL_BLOCK)
     def test_impl_block_with_methods(self):
         instructions = _parse_rust(
             'impl Dog { fn bark(&self) -> String { return String::from("woof"); } }'
@@ -176,6 +190,7 @@ class TestRustStructs:
 
 
 class TestRustExpressions:
+    @covers(RustFeature.FUNCTION_CALL)
     def test_closure_expression(self):
         instructions = _parse_rust("fn main() { let f = |a, b| a + b; }")
         opcodes = _opcodes(instructions)
@@ -186,21 +201,25 @@ class TestRustExpressions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
+    @covers(RustFeature.FIELD_ACCESS)
     def test_reference_expression(self):
         instructions = _parse_rust("fn main() { let r = &x; }")
         addr_ofs = _find_all(instructions, Opcode.ADDRESS_OF)
         assert any("x" in inst.operands for inst in addr_ofs)
 
+    @covers(RustFeature.FIELD_ACCESS)
     def test_dereference_expression(self):
         instructions = _parse_rust("fn main() { let v = *x; }")
         indirects = _find_all(instructions, Opcode.LOAD_INDIRECT)
         assert len(indirects) >= 1
 
+    @covers(RustFeature.ARITHMETIC)
     def test_assignment_expression(self):
         instructions = _parse_rust("fn main() { x = 10; }")
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RustFeature.ARITHMETIC)
     def test_compound_assignment(self):
         """x += 5 should lower to LOAD_VAR x, CONST 5, BINOP +, STORE_VAR x."""
         instructions = _parse_rust("fn main() { x += 5; }")
@@ -217,6 +236,7 @@ class TestRustExpressions:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RustFeature.MACRO_CALL)
     def test_macro_invocation(self):
         instructions = _parse_rust('fn main() { println!("hello"); }')
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -224,16 +244,19 @@ class TestRustExpressions:
 
 
 class TestRustSpecial:
+    @covers(RustFeature.LET_BINDING)
     def test_empty_program(self):
         instructions = _parse_rust("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(RustFeature.ARITHMETIC)
     def test_binary_expression(self):
         instructions = _parse_rust("fn main() { let z = x + y; }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(RustFeature.ARITHMETIC)
     def test_block_expression_returns_last(self):
         instructions = _parse_rust("fn main() { let v = { let a = 1; a + 2 }; }")
         opcodes = _opcodes(instructions)
@@ -247,6 +270,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialRust:
+    @covers(RustFeature.MATCH_EXPRESSION)
     def test_match_with_multiple_arms(self):
         source = """\
 fn main() {
@@ -267,6 +291,7 @@ fn main() {
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 20
 
+    @covers(RustFeature.IMPL_BLOCK)
     def test_impl_with_constructor_and_method(self):
         source = """\
 struct Counter { count: i32 }
@@ -288,6 +313,7 @@ impl Counter {
         assert len(returns) >= 1
         assert len(instructions) > 15
 
+    @covers(RustFeature.METHOD_CALL)
     def test_closure_in_method_call(self):
         source = """\
 fn main() {
@@ -304,6 +330,7 @@ fn main() {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("doubled" in inst.operands for inst in stores)
 
+    @covers(RustFeature.FOR_LOOP)
     def test_for_range_with_mutation(self):
         source = """\
 fn main() {
@@ -327,6 +354,7 @@ fn main() {
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 10
 
+    @covers(RustFeature.IF_ELSE)
     def test_nested_if_as_expression(self):
         source = """\
 fn main() {
@@ -347,6 +375,7 @@ fn main() {
         labels = _labels_in_order(instructions)
         assert any("if_true" in lbl for lbl in labels)
 
+    @covers(RustFeature.FIELD_ACCESS)
     def test_reference_and_dereference(self):
         source = """\
 fn main() {
@@ -369,6 +398,7 @@ fn main() {
         assert any("val" in inst.operands for inst in stores)
         assert any("y" in inst.operands for inst in stores)
 
+    @covers(RustFeature.WHILE_LOOP)
     def test_while_loop_with_nested_if(self):
         source = """\
 fn main() {
@@ -392,6 +422,7 @@ fn main() {
         assert any("sum" in inst.operands for inst in stores)
         assert len(instructions) > 25
 
+    @covers(RustFeature.FUNCTION_CALL)
     def test_function_calling_function(self):
         source = """\
 fn double(x: i32) -> i32 {
@@ -412,16 +443,19 @@ fn quadruple(x: i32) -> i32 {
 
 
 class TestRustTryExpression:
+    @covers(RustFeature.TRY_EXPRESSION)
     def test_try_expression_question_mark(self):
         instructions = _parse_rust("fn main() { let v = read_file()?; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("try_unwrap" in inst.operands for inst in calls)
 
+    @covers(RustFeature.TRY_EXPRESSION)
     def test_try_expression_chained(self):
         instructions = _parse_rust("fn main() { let v = foo()?.bar()?; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert sum(1 for inst in calls if "try_unwrap" in inst.operands) >= 2
 
+    @covers(RustFeature.TRY_EXPRESSION)
     def test_try_expression_stores_result(self):
         instructions = _parse_rust("fn main() { let x = some_fn()?; }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -429,11 +463,13 @@ class TestRustTryExpression:
 
 
 class TestRustAwaitExpression:
+    @covers(RustFeature.ASYNC_AWAIT)
     def test_await_expression(self):
         instructions = _parse_rust("async fn main() { let v = fetch().await; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("await" in inst.operands for inst in calls)
 
+    @covers(RustFeature.ASYNC_AWAIT)
     def test_await_stores_result(self):
         instructions = _parse_rust("async fn main() { let r = get_data().await; }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -441,6 +477,7 @@ class TestRustAwaitExpression:
 
 
 class TestRustAsyncBlock:
+    @covers(RustFeature.ASYNC_BLOCK)
     def test_async_block_produces_ir(self):
         instructions = _parse_rust("fn main() { let f = async { 42 }; }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -448,6 +485,7 @@ class TestRustAsyncBlock:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
+    @covers(RustFeature.ASYNC_BLOCK)
     def test_async_block_with_statements(self):
         instructions = _parse_rust("fn main() { let f = async { let x = 1; x + 2 }; }")
         opcodes = _opcodes(instructions)
@@ -457,6 +495,7 @@ class TestRustAsyncBlock:
 
 
 class TestRustTraitItem:
+    @covers(RustFeature.TRAIT)
     def test_trait_definition(self):
         instructions = _parse_rust("trait Animal { fn speak(&self); }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -464,6 +503,7 @@ class TestRustTraitItem:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(RustFeature.TRAIT)
     def test_trait_with_default_method(self):
         instructions = _parse_rust(
             'trait Greet { fn hello(&self) -> String { return String::from("hi"); } }'
@@ -473,6 +513,7 @@ class TestRustTraitItem:
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
 
+    @covers(RustFeature.TRAIT)
     def test_trait_labels(self):
         instructions = _parse_rust("trait Drawable { fn draw(&self); }")
         labels = _labels_in_order(instructions)
@@ -480,6 +521,7 @@ class TestRustTraitItem:
 
 
 class TestRustEnumItem:
+    @covers(RustFeature.ENUM)
     def test_enum_basic(self):
         instructions = _parse_rust("enum Color { Red, Green, Blue }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -487,11 +529,13 @@ class TestRustEnumItem:
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
         assert any("enum:Color" in inst.operands for inst in new_objs)
 
+    @covers(RustFeature.ENUM)
     def test_enum_store_fields(self):
         instructions = _parse_rust("enum Direction { North, South, East, West }")
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert len(store_fields) >= 4
 
+    @covers(RustFeature.ENUM)
     def test_enum_with_data(self):
         instructions = _parse_rust("enum Shape { Circle(f64), Rect(f64, f64) }")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
@@ -501,6 +545,7 @@ class TestRustEnumItem:
 
 
 class TestRustConstItem:
+    @covers(RustFeature.CONST_ITEM)
     def test_const_item(self):
         instructions = _parse_rust("const MAX: i32 = 100;")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -508,6 +553,7 @@ class TestRustConstItem:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("100" in inst.operands for inst in consts)
 
+    @covers(RustFeature.CONST_ITEM)
     def test_const_item_string(self):
         instructions = _parse_rust('const NAME: &str = "hello";')
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -515,6 +561,7 @@ class TestRustConstItem:
 
 
 class TestRustStaticItem:
+    @covers(RustFeature.STATIC_ITEM)
     def test_static_item(self):
         instructions = _parse_rust("static COUNT: i32 = 0;")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -522,6 +569,7 @@ class TestRustStaticItem:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("0" in inst.operands for inst in consts)
 
+    @covers(RustFeature.STATIC_ITEM)
     def test_static_mut_item(self):
         instructions = _parse_rust("static mut COUNTER: i32 = 0;")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -529,11 +577,13 @@ class TestRustStaticItem:
 
 
 class TestRustTypeItem:
+    @covers(RustFeature.TYPE_ITEM)
     def test_type_alias(self):
         instructions = _parse_rust("type Pair = (i32, i32);")
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Pair" in inst.operands for inst in stores)
 
+    @covers(RustFeature.TYPE_ITEM)
     def test_type_alias_const_value(self):
         instructions = _parse_rust("type Meters = f64;")
         consts = _find_all(instructions, Opcode.CONST)
@@ -543,11 +593,13 @@ class TestRustTypeItem:
 
 
 class TestRustModItem:
+    @covers(RustFeature.MOD_ITEM)
     def test_mod_item_with_body(self):
         instructions = _parse_rust("mod utils { fn helper() { } }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("helper" in inst.operands for inst in stores)
 
+    @covers(RustFeature.MOD_ITEM)
     def test_mod_item_nested_function(self):
         instructions = _parse_rust(
             "mod math { fn add(a: i32, b: i32) -> i32 { a + b } }"
@@ -557,6 +609,7 @@ class TestRustModItem:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
+    @covers(RustFeature.MOD_ITEM)
     def test_mod_item_empty(self):
         instructions = _parse_rust("mod empty { }")
         # Should not crash, should just produce entry label
@@ -564,12 +617,14 @@ class TestRustModItem:
 
 
 class TestRustExternCrate:
+    @covers(RustFeature.EXTERN_CRATE)
     def test_extern_crate_noop(self):
         instructions = _parse_rust("extern crate serde;")
         # Should be a no-op, just the entry label
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(RustFeature.EXTERN_CRATE)
     def test_extern_crate_with_other_code(self):
         instructions = _parse_rust("extern crate serde; const X: i32 = 1;")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -577,6 +632,7 @@ class TestRustExternCrate:
 
 
 class TestRustUnsafeBlock:
+    @covers(RustFeature.UNSAFE_BLOCK)
     def test_unsafe_block_lowers_body(self):
         instructions = _parse_rust("fn main() { unsafe { let x = 1; x + 2 } }")
         opcodes = _opcodes(instructions)
@@ -584,6 +640,7 @@ class TestRustUnsafeBlock:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RustFeature.UNSAFE_BLOCK)
     def test_unsafe_block_with_call(self):
         instructions = _parse_rust("fn main() { unsafe { do_risky(); } }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -591,22 +648,26 @@ class TestRustUnsafeBlock:
 
 
 class TestRustTypeCastExpression:
+    @covers(RustFeature.TYPE_CAST)
     def test_type_cast_basic(self):
         instructions = _parse_rust("fn main() { let x = y as f64; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("as" in inst.operands for inst in calls)
         assert any("f64" in str(inst.operands) for inst in calls)
 
+    @covers(RustFeature.TYPE_CAST)
     def test_type_cast_stores_result(self):
         instructions = _parse_rust("fn main() { let x = count as f64; }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RustFeature.TYPE_CAST)
     def test_type_cast_not_symbolic(self):
         instructions = _parse_rust("fn main() { let x = y as i32; }")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("type_cast" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.TYPE_CAST)
     def test_type_cast_in_expression(self):
         instructions = _parse_rust("fn main() { let x = (a as f64) + 1.0; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -616,11 +677,13 @@ class TestRustTypeCastExpression:
 
 
 class TestRustScopedIdentifier:
+    @covers(RustFeature.SCOPED_IDENTIFIER)
     def test_scoped_identifier_enum_variant(self):
         instructions = _parse_rust("fn main() { let x = Shape::Circle; }")
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("Shape::Circle" in inst.operands for inst in loads)
 
+    @covers(RustFeature.SCOPED_IDENTIFIER)
     def test_scoped_identifier_in_call(self):
         instructions = _parse_rust("fn main() { let m = HashMap::new(); }")
         # scoped_identifier is the callee inside call_expression
@@ -630,6 +693,7 @@ class TestRustScopedIdentifier:
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("HashMap::new" in inst.operands for inst in loads)
 
+    @covers(RustFeature.SCOPED_IDENTIFIER)
     def test_scoped_identifier_stores_result(self):
         instructions = _parse_rust("fn main() { let v = Option::None; }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -639,6 +703,7 @@ class TestRustScopedIdentifier:
 
 
 class TestRustDestructuring:
+    @covers(RustFeature.DESTRUCTURING)
     def test_tuple_destructure_two_elements(self):
         instructions = _parse_rust("fn main() { let (a, b) = get_pair(); }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -648,6 +713,7 @@ class TestRustDestructuring:
         load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(load_indices) >= 2
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_tuple_destructure_three_elements(self):
         instructions = _parse_rust("fn main() { let (x, y, z) = get_triple(); }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -658,6 +724,7 @@ class TestRustDestructuring:
         load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(load_indices) >= 3
 
+    @covers(RustFeature.DESTRUCTURING)
     def test_struct_destructure(self):
         instructions = _parse_rust("fn main() { let Point { x, y } = point; }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -669,6 +736,7 @@ class TestRustDestructuring:
 
 
 class TestRustRangeExpression:
+    @covers(RustFeature.RANGE_EXPRESSION)
     def test_range_expression_basic(self):
         instructions = _parse_rust("fn main() { let r = 0..10; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -677,11 +745,13 @@ class TestRustRangeExpression:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("range_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.RANGE_EXPRESSION)
     def test_range_inclusive(self):
         instructions = _parse_rust("fn main() { let r = 0..=10; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("range" in inst.operands for inst in calls)
 
+    @covers(RustFeature.RANGE_EXPRESSION)
     def test_range_in_for_loop(self):
         instructions = _parse_rust("fn main() { for i in 0..n {} }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -689,6 +759,7 @@ class TestRustRangeExpression:
 
 
 class TestRustTupleStructPattern:
+    @covers(RustFeature.TUPLE_STRUCT_PATTERN)
     def test_tuple_struct_pattern_no_symbolic(self):
         source = "fn f(x: Option<i32>) { match x { Some(v) => v, None => 0 } }"
         instructions = _parse_rust(source)
@@ -697,6 +768,7 @@ class TestRustTupleStructPattern:
             "tuple_struct_pattern" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(RustFeature.TUPLE_STRUCT_PATTERN)
     def test_tuple_struct_pattern_const(self):
         """Some(v) in match arm emits isinstance check with 'Option' class name."""
         source = "fn f(x: Option<i32>) { match x { Some(v) => v, None => 0 } }"
@@ -707,6 +779,7 @@ class TestRustTupleStructPattern:
 
 
 class TestRustGenericFunction:
+    @covers(RustFeature.GENERIC_FUNCTION)
     def test_generic_function_no_symbolic(self):
         source = 'fn f() { let x = "42".parse::<i32>(); }'
         instructions = _parse_rust(source)
@@ -715,6 +788,7 @@ class TestRustGenericFunction:
 
 
 class TestRustLetCondition:
+    @covers(RustFeature.LET_CONDITION)
     def test_let_condition_no_symbolic(self):
         source = "fn f(x: Option<i32>) { if let Some(v) = x { v } }"
         instructions = _parse_rust(source)
@@ -723,6 +797,7 @@ class TestRustLetCondition:
 
 
 class TestRustStructPattern:
+    @covers(RustFeature.STRUCT_PATTERN)
     def test_struct_pattern_no_symbolic(self):
         source = "fn f(p: Point) { match p { Point { x, y } => x + y } }"
         instructions = _parse_rust(source)
@@ -733,12 +808,14 @@ class TestRustStructPattern:
 
 
 class TestRustMatchPatternUnwrap:
+    @covers(RustFeature.MATCH_PATTERN_UNWRAP)
     def test_match_pattern_no_symbolic(self):
         source = "fn f() { match x { (1) => 2, _ => 0 } }"
         instructions = _parse_rust(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("match_pattern" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.MATCH_PATTERN_UNWRAP)
     def test_match_pattern_lowers_inner(self):
         source = "fn f() { match x { (y) => y + 1, _ => 0 } }"
         instructions = _parse_rust(source)
@@ -747,6 +824,7 @@ class TestRustMatchPatternUnwrap:
 
 
 class TestRustUnitExpression:
+    @covers(RustFeature.UNIT_EXPRESSION)
     def test_unit_expression_emits_const(self):
         """Rust's unit expression `()` should emit a CONST, not fall through to SYMBOLIC."""
         instructions = _parse_rust("fn main() { let x = (); }")
@@ -759,17 +837,20 @@ class TestRustUnitExpression:
 
 
 class TestRustFunctionSignatureItem:
+    @covers(RustFeature.FUNCTION_SIGNATURE)
     def test_function_signature_item_no_unsupported(self):
         """trait Shape { fn area(&self) -> f64; } should not produce unsupported SYMBOLIC for the signature."""
         instructions = _parse_rust("trait Shape { fn area(&self) -> f64; }")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.FUNCTION_SIGNATURE)
     def test_function_signature_item_stores_name(self):
         instructions = _parse_rust("trait Drawable { fn draw(&self); }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("draw" in inst.operands for inst in stores)
 
+    @covers(RustFeature.FUNCTION_SIGNATURE)
     def test_function_signature_item_in_trait_with_default(self):
         """Trait with both signatures and default methods should lower without unsupported SYMBOLIC."""
         source = """\
@@ -786,6 +867,7 @@ trait Animal {
 
 
 class TestRustOrPattern:
+    @covers(RustFeature.OR_PATTERN)
     def test_or_pattern_no_symbolic(self):
         """match x { 1 | 2 => ... } should NOT produce SYMBOLIC for or_pattern."""
         source = """\
@@ -800,6 +882,7 @@ fn main() {
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("or_pattern" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.OR_PATTERN)
     def test_or_pattern_generates_multiple_comparisons(self):
         """1 | 2 in match should generate two == comparisons."""
         source = """\
@@ -816,6 +899,7 @@ fn main() {
         # At least 2 comparisons for the or_pattern arm (1 == x, 2 == x)
         assert len(eq_comparisons) >= 2
 
+    @covers(RustFeature.OR_PATTERN)
     def test_or_pattern_both_alternatives_branch_to_same_arm(self):
         """Both 1 and 2 in '1 | 2 => 10' should branch to the same arm body."""
         source = """\
@@ -832,6 +916,7 @@ fn main() {
         or_ops = [inst for inst in binops if "||" in inst.operands]
         assert len(or_ops) >= 1, "Expected a || combining the two == comparisons"
 
+    @covers(RustFeature.OR_PATTERN)
     def test_or_pattern_three_alternatives(self):
         """match x { 1 | 2 | 3 => ... } should handle three alternatives."""
         source = """\
@@ -849,6 +934,7 @@ fn main() {
         eq_comparisons = [inst for inst in binops if "==" in inst.operands]
         assert len(eq_comparisons) >= 3
 
+    @covers(RustFeature.OR_PATTERN)
     def test_or_pattern_with_normal_arms(self):
         """match with or_pattern alongside normal arms should produce correct IR."""
         source = """\
@@ -872,18 +958,21 @@ fn main() {
 
 
 class TestRustRawStringLiteral:
+    @covers(RustFeature.RAW_STRING_LITERAL)
     def test_raw_string_no_symbolic(self):
         """r\"hello\" should not produce SYMBOLIC fallthrough."""
         ir = _parse_rust('fn main() { let x = r"hello"; }')
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("raw_string_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.RAW_STRING_LITERAL)
     def test_raw_string_emits_const(self):
         """Raw string literal should emit a CONST instruction."""
         ir = _parse_rust('fn main() { let x = r"hello"; }')
         consts = _find_all(ir, Opcode.CONST)
         assert any("hello" in str(inst.operands) for inst in consts)
 
+    @covers(RustFeature.RAW_STRING_LITERAL)
     def test_raw_string_stored(self):
         """Raw string literal should be stored in the variable."""
         ir = _parse_rust('fn main() { let x = r"hello"; }')
@@ -892,12 +981,14 @@ class TestRustRawStringLiteral:
 
 
 class TestRustNegativeLiteral:
+    @covers(RustFeature.NEGATIVE_LITERAL)
     def test_negative_literal_no_symbolic(self):
         """let x = -1; the negative_literal should not produce SYMBOLIC."""
         ir = _parse_rust("fn main() { let x: i32 = -1; }")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("negative_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.NEGATIVE_LITERAL)
     def test_negative_literal_emits_const(self):
         """Negative literal should emit a CONST with the negative value."""
         ir = _parse_rust("fn main() { let x: i32 = -1; }")
@@ -905,6 +996,7 @@ class TestRustNegativeLiteral:
         # Should contain -1 as a literal value
         assert len(consts) >= 1
 
+    @covers(RustFeature.NEGATIVE_LITERAL)
     def test_negative_literal_stored(self):
         """Negative literal should be stored in the variable."""
         ir = _parse_rust("fn main() { let x: i32 = -1; }")
@@ -913,12 +1005,14 @@ class TestRustNegativeLiteral:
 
 
 class TestRustForeignModItem:
+    @covers(RustFeature.FOREIGN_MOD)
     def test_foreign_mod_no_symbolic(self):
         """extern { fn foo(); } should not produce SYMBOLIC fallthrough."""
         ir = _parse_rust('extern "C" { fn foo(); }')
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("foreign_mod_item" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.FOREIGN_MOD)
     def test_foreign_mod_body_lowered(self):
         """Declarations inside extern block should be lowered."""
         ir = _parse_rust('extern "C" { fn foo(); }')
@@ -927,12 +1021,14 @@ class TestRustForeignModItem:
 
 
 class TestRustUnionItem:
+    @covers(RustFeature.UNION)
     def test_union_no_symbolic(self):
         """union Foo { x: i32, y: f64 } should not produce SYMBOLIC."""
         ir = _parse_rust("union Foo { x: i32, y: f64 }")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("union_item" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.UNION)
     def test_union_stores_name(self):
         """union Foo should produce a STORE_VAR for Foo."""
         ir = _parse_rust("union Foo { x: i32, y: f64 }")
@@ -941,12 +1037,14 @@ class TestRustUnionItem:
 
 
 class TestRustMacroDefinition:
+    @covers(RustFeature.MACRO_DEFINITION)
     def test_macro_definition_no_symbolic(self):
         """macro_rules! should not produce SYMBOLIC fallthrough."""
         ir = _parse_rust("macro_rules! my_macro { () => {} }")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("macro_definition" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.MACRO_DEFINITION)
     def test_macro_definition_does_not_block(self):
         """Code after macro_rules! should still be lowered."""
         ir = _parse_rust("macro_rules! my_macro { () => {} }\nlet x = 42;")
@@ -955,12 +1053,14 @@ class TestRustMacroDefinition:
 
 
 class TestRustMutPattern:
+    @covers(RustFeature.MUT_PATTERN)
     def test_mut_pattern_no_symbolic(self):
         """mut x in let should not produce SYMBOLIC fallthrough."""
         ir = _parse_rust("let mut x = 42;")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("mut_pattern" in str(inst.operands) for inst in symbolics)
 
+    @covers(RustFeature.MUT_PATTERN)
     def test_mut_pattern_stores_var(self):
         """let mut x = 42 should produce STORE_VAR for x."""
         ir = _parse_rust("let mut x = 42;")
@@ -969,6 +1069,7 @@ class TestRustMutPattern:
 
 
 class TestRustVecMacro:
+    @covers(RustFeature.MACRO_CALL)
     def test_vec_macro_emits_new_array(self):
         """vec![1, 2, 3] should emit NEW_ARRAY, not CALL_FUNCTION."""
         ir = _parse_rust("let v = vec![1, 2, 3];")
@@ -978,12 +1079,14 @@ class TestRustVecMacro:
         vec_calls = [c for c in call_funcs if "vec!" in str(c.operands)]
         assert vec_calls == [], f"expected no vec! CallFunction, got {vec_calls}"
 
+    @covers(RustFeature.MACRO_CALL)
     def test_vec_macro_emits_store_index_per_element(self):
         """vec![1, 2, 3] should emit one STORE_INDEX per element."""
         ir = _parse_rust("let v = vec![1, 2, 3];")
         stores = _find_all(ir, Opcode.STORE_INDEX)
         assert len(stores) == 3, f"expected 3 STORE_INDEX, got {len(stores)}"
 
+    @covers(RustFeature.MACRO_CALL)
     def test_vec_macro_result_bound_to_variable(self):
         """The array register should be bound to v via DECL_VAR."""
         ir = _parse_rust("let v = vec![1, 2, 3];")
@@ -992,6 +1095,7 @@ class TestRustVecMacro:
 
 
 class TestRustRangeSlice:
+    @covers(RustFeature.RANGE_SLICE)
     def test_range_slice_emits_call_function(self):
         """arr[1..3] should emit CALL_FUNCTION('slice')."""
         ir = _parse_rust("fn main() { let arr = [10, 20, 30, 40]; let r = arr[1..3]; }")
@@ -1001,6 +1105,7 @@ class TestRustRangeSlice:
             len(slice_calls) == 1
         ), f"expected 1 slice call, got {[c.operands for c in calls]}"
 
+    @covers(RustFeature.RANGE_SLICE)
     def test_simple_index_still_uses_load_index(self):
         """arr[0] should still use LOAD_INDEX."""
         ir = _parse_rust("fn main() { let arr = [1, 2]; let x = arr[0]; }")
