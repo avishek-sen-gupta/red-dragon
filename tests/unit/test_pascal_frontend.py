@@ -6,6 +6,8 @@ from interpreter.frontends.pascal import PascalFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.frontends.pascal.features import PascalFeature
+from tests.covers import covers
 
 
 def _parse_pascal(source: str) -> list[InstructionBase]:
@@ -24,11 +26,13 @@ def _find_all(
 
 
 class TestPascalSmoke:
+    @covers(PascalFeature.PROCEDURE_CALL)
     def test_empty_program(self):
         instructions = _parse_pascal("program M; begin end.")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(PascalFeature.PROCEDURE_CALL)
     def test_entry_label_always_present(self):
         instructions = _parse_pascal("program M; begin x := 1; end.")
         assert instructions[0].opcode == Opcode.LABEL
@@ -36,6 +40,7 @@ class TestPascalSmoke:
 
 
 class TestPascalAssignment:
+    @covers(PascalFeature.ASSIGNMENT)
     def test_simple_assignment(self):
         instructions = _parse_pascal("program M; begin x := 10; end.")
         opcodes = _opcodes(instructions)
@@ -46,6 +51,7 @@ class TestPascalAssignment:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("10" in inst.operands for inst in consts)
 
+    @covers(PascalFeature.ASSIGNMENT)
     def test_arithmetic_assignment(self):
         instructions = _parse_pascal("program M; begin x := 5 + 3; end.")
         opcodes = _opcodes(instructions)
@@ -60,26 +66,31 @@ class TestPascalAssignment:
 
 
 class TestPascalExpressions:
+    @covers(PascalFeature.ARITHMETIC)
     def test_number_literal(self):
         instructions = _parse_pascal("program M; begin x := 42; end.")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
 
+    @covers(PascalFeature.ARITHMETIC)
     def test_string_literal(self):
         instructions = _parse_pascal("program M; begin x := 'hello'; end.")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("'hello'" in str(inst.operands) for inst in consts)
 
+    @covers(PascalFeature.ARITHMETIC)
     def test_binary_operator_greater_than(self):
         instructions = _parse_pascal("program M; begin if x > 5 then x := 0; end.")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any(">" in inst.operands for inst in binops)
 
+    @covers(PascalFeature.ARITHMETIC)
     def test_binary_operator_less_than(self):
         instructions = _parse_pascal("program M; begin if x < 5 then x := 0; end.")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("<" in inst.operands for inst in binops)
 
+    @covers(PascalFeature.ARITHMETIC)
     def test_binary_operator_subtraction(self):
         instructions = _parse_pascal("program M; begin x := 10 - 3; end.")
         binops = _find_all(instructions, Opcode.BINOP)
@@ -87,12 +98,14 @@ class TestPascalExpressions:
 
 
 class TestPascalFunctions:
+    @covers(PascalFeature.FUNCTION_CALL)
     def test_function_call(self):
         instructions = _parse_pascal("program M; begin WriteLn(10); end.")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) >= 1
         assert "WriteLn" in calls[0].operands
 
+    @covers(PascalFeature.FUNCTION_DECLARATION)
     def test_function_definition(self):
         instructions = _parse_pascal(
             "program M; function Add(a, b: Integer): Integer; begin Add := a + b; end; begin end."
@@ -109,6 +122,7 @@ class TestPascalFunctions:
             if inst.operands
         )
 
+    @covers(PascalFeature.FUNCTION_DECLARATION)
     def test_function_params_are_lowered(self):
         # The Pascal frontend extracts params from declArgs inside defProc
         # and emits SYMBOLIC param:x + STORE_VAR for each parameter.
@@ -127,6 +141,7 @@ class TestPascalFunctions:
 
 
 class TestPascalControlFlow:
+    @covers(PascalFeature.IF_ELSE)
     def test_if_statement(self):
         instructions = _parse_pascal(
             "program M; begin if x > 5 then WriteLn('big'); end."
@@ -135,6 +150,7 @@ class TestPascalControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.LABEL in opcodes
 
+    @covers(PascalFeature.IF_ELSE)
     def test_if_else_statement(self):
         instructions = _parse_pascal(
             "program M; begin if x > 5 then WriteLn('big') else WriteLn('small'); end."
@@ -146,6 +162,7 @@ class TestPascalControlFlow:
         assert any("if_true" in (lbl or "") for lbl in label_names)
         assert any("if_false" in (lbl or "") for lbl in label_names)
 
+    @covers(PascalFeature.WHILE_LOOP)
     def test_while_loop(self):
         instructions = _parse_pascal("program M; begin while x > 0 do x := x - 1; end.")
         opcodes = _opcodes(instructions)
@@ -154,6 +171,7 @@ class TestPascalControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
 
+    @covers(PascalFeature.FOR_LOOP)
     def test_for_loop(self):
         instructions = _parse_pascal(
             "program M; begin for x := 1 to 10 do WriteLn(x); end."
@@ -167,6 +185,7 @@ class TestPascalControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("for_") for inst in labels)
 
+    @covers(PascalFeature.IF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         instructions = _parse_pascal(
@@ -198,6 +217,7 @@ class TestPascalControlFlow:
 
 
 class TestPascalVariableDeclarations:
+    @covers(PascalFeature.VARIABLE_DECLARATION)
     def test_var_declaration(self):
         instructions = _parse_pascal("program M; var x: Integer; begin x := 10; end.")
         opcodes = _opcodes(instructions)
@@ -209,6 +229,7 @@ class TestPascalVariableDeclarations:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("None" in inst.operands for inst in consts)
 
+    @covers(PascalFeature.VARIABLE_DECLARATION)
     def test_var_declaration_then_assignment(self):
         instructions = _parse_pascal("program M; var x: Integer; begin x := 42; end.")
         decls = _find_all(instructions, Opcode.DECL_VAR)
@@ -221,6 +242,7 @@ class TestPascalVariableDeclarations:
 
 
 class TestPascalFallback:
+    @covers(PascalFeature.FALLBACK)
     def test_unsupported_construct_symbolic(self):
         # A construct the frontend does not have a handler for should produce SYMBOLIC
         instructions = _parse_pascal("program M; begin asm mov ax, bx; end; end.")
@@ -238,6 +260,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialPascal:
+    @covers(PascalFeature.PROCEDURE_DECLARATION)
     def test_procedure_with_if_else(self):
         source = """\
 program M;
@@ -266,6 +289,7 @@ end.
         )
         assert len(instructions) > 10
 
+    @covers(PascalFeature.FUNCTION_DECLARATION)
     def test_function_with_while_loop(self):
         source = """\
 program M;
@@ -296,6 +320,7 @@ end.
         assert any("while" in lbl for lbl in labels)
         assert len(instructions) > 15
 
+    @covers(PascalFeature.ARITHMETIC)
     def test_nested_begin_end_blocks(self):
         source = """\
 program M;
@@ -319,6 +344,7 @@ end.
         assert "+" in operators
         assert "*" in operators
 
+    @covers(PascalFeature.WHILE_LOOP)
     def test_while_with_nested_if_else(self):
         source = """\
 program M;
@@ -342,6 +368,7 @@ end.
         assert any("total" in inst.operands for inst in stores)
         assert len(instructions) > 15
 
+    @covers(PascalFeature.FUNCTION_DECLARATION)
     def test_nested_function(self):
         source = """\
 program M;
@@ -367,6 +394,7 @@ end.
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(PascalFeature.FOR_LOOP)
     def test_for_downto_loop(self):
         source = """\
 program M;
@@ -385,6 +413,7 @@ end.
         # downto uses >= comparison
         assert any(">=" in inst.operands for inst in binops)
 
+    @covers(PascalFeature.PROCEDURE_CALL)
     def test_procedure_calling_procedure(self):
         source = """\
 program M;
@@ -438,6 +467,7 @@ end.
             main_label_idx < idx < end_main_idx for idx in greet_call_indices
         ), "Greet() call must appear inside Main's body"
 
+    @covers(PascalFeature.FUNCTION_RESULT)
     def test_function_result_assignment(self):
         source = """\
 program M;
@@ -460,17 +490,20 @@ end.
 class TestPascalExprDot:
     """Tests for exprDot (obj.field) access."""
 
+    @covers(PascalFeature.DOT_ACCESS)
     def test_dot_access_produces_load_field(self):
         instructions = _parse_pascal("program M; begin x := rec.field; end.")
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
         assert len(loads) >= 1
         assert "field" in loads[0].operands
 
+    @covers(PascalFeature.DOT_ACCESS)
     def test_dot_access_chain(self):
         instructions = _parse_pascal("program M; begin x := a.b.c; end.")
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
         assert len(loads) >= 2
 
+    @covers(PascalFeature.DOT_ACCESS)
     def test_dot_access_in_assignment(self):
         instructions = _parse_pascal("program M; begin x := obj.name; end.")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -482,11 +515,13 @@ class TestPascalExprDot:
 class TestPascalExprSubscript:
     """Tests for exprSubscript (arr[idx]) access."""
 
+    @covers(PascalFeature.SUBSCRIPT_ACCESS)
     def test_subscript_produces_load_index(self):
         instructions = _parse_pascal("program M; begin x := arr[1]; end.")
         loads = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(loads) >= 1
 
+    @covers(PascalFeature.SUBSCRIPT_ACCESS)
     def test_subscript_with_variable_index(self):
         instructions = _parse_pascal("program M; begin x := arr[i]; end.")
         loads = _find_all(instructions, Opcode.LOAD_INDEX)
@@ -498,12 +533,14 @@ class TestPascalExprSubscript:
 class TestPascalExprUnary:
     """Tests for exprUnary (not, -, +)."""
 
+    @covers(PascalFeature.UNARY_EXPRESSION)
     def test_not_operator(self):
         instructions = _parse_pascal("program M; begin if not done then x := 1; end.")
         unops = _find_all(instructions, Opcode.UNOP)
         assert len(unops) >= 1
         assert any("not" in inst.operands for inst in unops)
 
+    @covers(PascalFeature.UNARY_EXPRESSION)
     def test_negation_operator(self):
         instructions = _parse_pascal("program M; begin x := -y; end.")
         unops = _find_all(instructions, Opcode.UNOP)
@@ -514,6 +551,7 @@ class TestPascalExprUnary:
 class TestPascalCaseStatement:
     """Tests for case statement."""
 
+    @covers(PascalFeature.CASE_STATEMENT)
     def test_case_produces_branch_if(self):
         instructions = _parse_pascal(
             "program M; begin case x of 1: WriteLn('one'); 2: WriteLn('two'); end; end."
@@ -524,6 +562,7 @@ class TestPascalCaseStatement:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("==" in inst.operands for inst in binops)
 
+    @covers(PascalFeature.CASE_STATEMENT)
     def test_case_calls_correct_branches(self):
         instructions = _parse_pascal(
             "program M; begin case x of 1: WriteLn('one'); 2: WriteLn('two'); end; end."
@@ -533,6 +572,7 @@ class TestPascalCaseStatement:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("case_match") for inst in labels)
 
+    @covers(PascalFeature.CASE_STATEMENT)
     def test_case_with_end_label(self):
         instructions = _parse_pascal(
             "program M; begin case x of 1: WriteLn('one'); end; end."
@@ -544,6 +584,7 @@ class TestPascalCaseStatement:
 class TestPascalRepeatUntil:
     """Tests for repeat ... until loop."""
 
+    @covers(PascalFeature.REPEAT_UNTIL)
     def test_repeat_produces_branch_if(self):
         instructions = _parse_pascal(
             "program M; begin repeat x := x - 1; until x = 0; end."
@@ -551,6 +592,7 @@ class TestPascalRepeatUntil:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(PascalFeature.REPEAT_UNTIL)
     def test_repeat_has_body_label(self):
         instructions = _parse_pascal(
             "program M; begin repeat x := x + 1; until x = 10; end."
@@ -558,6 +600,7 @@ class TestPascalRepeatUntil:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("repeat") for inst in labels)
 
+    @covers(PascalFeature.REPEAT_UNTIL)
     def test_repeat_lowers_body_before_condition(self):
         """Body should appear before condition check in instruction order."""
         instructions = _parse_pascal(
@@ -576,6 +619,7 @@ class TestPascalRepeatUntil:
 class TestPascalExprBrackets:
     """Tests for exprBrackets (set literal [1,2,3])."""
 
+    @covers(PascalFeature.PARENTHESIZED_EXPRESSION)
     def test_set_literal_produces_new_array(self):
         instructions = _parse_pascal("program M; begin x := [1, 2, 3]; end.")
         opcodes = _opcodes(instructions)
@@ -583,6 +627,7 @@ class TestPascalExprBrackets:
         arrays = _find_all(instructions, Opcode.NEW_ARRAY)
         assert any("set" in inst.operands for inst in arrays)
 
+    @covers(PascalFeature.PARENTHESIZED_EXPRESSION)
     def test_set_literal_stores_elements(self):
         instructions = _parse_pascal("program M; begin x := [1, 2, 3]; end.")
         stores = _find_all(instructions, Opcode.STORE_INDEX)
@@ -592,6 +637,7 @@ class TestPascalExprBrackets:
 class TestPascalDeclConsts:
     """Tests for const declarations."""
 
+    @covers(PascalFeature.CONST_DECLARATION)
     def test_const_declaration(self):
         instructions = _parse_pascal("program M; const MAX = 100; begin end.")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -599,6 +645,7 @@ class TestPascalDeclConsts:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("100" in inst.operands for inst in consts)
 
+    @covers(PascalFeature.CONST_DECLARATION)
     def test_multiple_consts(self):
         instructions = _parse_pascal("program M; const A = 1; B = 2; begin end.")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -607,6 +654,7 @@ class TestPascalDeclConsts:
 
 
 class TestPascalParenthesizedExpression:
+    @covers(PascalFeature.PARENTHESIZED_EXPRESSION)
     def test_parenthesized_expression_no_symbolic(self):
         instructions = _parse_pascal("program M; begin x := (5 + 3); end.")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
@@ -615,6 +663,7 @@ class TestPascalParenthesizedExpression:
             "parenthesized_expression" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(PascalFeature.PARENTHESIZED_EXPRESSION)
     def test_parenthesized_expression_evaluates(self):
         instructions = _parse_pascal("program M; begin x := (10); end.")
         consts = _find_all(instructions, Opcode.CONST)
@@ -622,6 +671,7 @@ class TestPascalParenthesizedExpression:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(PascalFeature.PARENTHESIZED_EXPRESSION)
     def test_parenthesized_nested(self):
         instructions = _parse_pascal("program M; begin x := ((2 + 3) * 4); end.")
         binops = _find_all(instructions, Opcode.BINOP)
@@ -635,6 +685,7 @@ class TestPascalParenthesizedExpression:
 class TestPascalDeclTypeNoop:
     """Tests for type declarations (should be no-op)."""
 
+    @covers(PascalFeature.TYPE_DECLARATION)
     def test_type_declaration_does_not_crash(self):
         instructions = _parse_pascal(
             "program M; type MyInt = Integer; begin x := 1; end."
@@ -642,6 +693,7 @@ class TestPascalDeclTypeNoop:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(PascalFeature.TYPE_DECLARATION)
     def test_type_declaration_produces_no_symbolic(self):
         instructions = _parse_pascal("program M; type MyInt = Integer; begin end.")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
@@ -652,6 +704,7 @@ class TestPascalDeclTypeNoop:
 
 
 class TestPascalTry:
+    @covers(PascalFeature.TRY_FINALLY)
     def test_try_no_symbolic(self):
         instructions = _parse_pascal(
             "program M; begin try x := 1; except x := 0; end; end."
@@ -659,6 +712,7 @@ class TestPascalTry:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:try" in str(inst.operands) for inst in symbolics)
 
+    @covers(PascalFeature.TRY_FINALLY)
     def test_try_lowers_body(self):
         instructions = _parse_pascal(
             "program M; begin try x := 1; except x := 0; end; end."
@@ -676,6 +730,7 @@ class TestPascalTry:
 
 
 class TestPascalDeclUsesNoop:
+    @covers(PascalFeature.USES_CLAUSE)
     def test_uses_declaration_no_symbolic(self):
         instructions = _parse_pascal(
             "program M; uses SysUtils, Classes; begin x := 1; end."
@@ -683,12 +738,14 @@ class TestPascalDeclUsesNoop:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("declUses" in str(inst.operands) for inst in symbolics)
 
+    @covers(PascalFeature.USES_CLAUSE)
     def test_uses_declaration_does_not_crash(self):
         instructions = _parse_pascal("program M; uses SysUtils; begin end.")
         assert instructions[0].opcode == Opcode.LABEL
 
 
 class TestPascalExceptionHandler:
+    @covers(PascalFeature.EXCEPTION_HANDLER)
     def test_exception_handler_no_unsupported(self):
         """on E: Exception do ... should not produce unsupported SYMBOLIC."""
         source = """\
@@ -706,6 +763,7 @@ end.
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PascalFeature.EXCEPTION_HANDLER)
     def test_exception_handler_lowers_body(self):
         source = """\
 program M;
@@ -724,6 +782,7 @@ end.
 
 
 class TestPascalRaise:
+    @covers(PascalFeature.RAISE)
     def test_raise_no_unsupported(self):
         """raise Exception.Create('error') should not produce unsupported SYMBOLIC."""
         source = "program M; begin raise Exception.Create('error'); end."
@@ -731,6 +790,7 @@ class TestPascalRaise:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PascalFeature.RAISE)
     def test_raise_produces_throw(self):
         source = "program M; begin raise Exception.Create('error'); end."
         instructions = _parse_pascal(source)
@@ -739,6 +799,7 @@ class TestPascalRaise:
 
 
 class TestPascalRange:
+    @covers(PascalFeature.RANGE_EXPRESSION)
     def test_range_no_unsupported(self):
         """case x of 1..10: should not produce unsupported SYMBOLIC for the range."""
         source = "program M; begin case x of 1..10: WriteLn('range'); end; end."
@@ -748,6 +809,7 @@ class TestPascalRange:
 
 
 class TestPascalWith:
+    @covers(PascalFeature.WITH_STATEMENT)
     def test_with_no_unsupported(self):
         """with rec do ... should not produce unsupported SYMBOLIC."""
         source = """\
@@ -764,6 +826,7 @@ end.
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PascalFeature.WITH_STATEMENT)
     def test_with_lowers_body(self):
         source = "program M; begin with rec do x := 10; end."
         instructions = _parse_pascal(source)
@@ -772,6 +835,7 @@ end.
 
 
 class TestPascalInherited:
+    @covers(PascalFeature.INHERITED)
     def test_inherited_no_unsupported(self):
         """inherited Create; should not produce unsupported SYMBOLIC."""
         source = """\
@@ -787,6 +851,7 @@ end.
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PascalFeature.INHERITED)
     def test_inherited_produces_call(self):
         source = """\
 program M;
@@ -805,6 +870,7 @@ end.
 
 
 class TestPascalTryExcept:
+    @covers(PascalFeature.TRY_EXCEPT)
     def test_try_except_generates_caught_exception(self):
         """Pascal try/except with 'on e: Exception do' should lower to
         SYMBOLIC caught_exception, not be executed sequentially."""
@@ -832,6 +898,7 @@ end.
             f"got {len(caught)}"
         )
 
+    @covers(PascalFeature.TRY_EXCEPT)
     def test_try_except_stores_exception_variable(self):
         """The exception variable 'e' should be stored via STORE_VAR."""
         source = """\
@@ -852,6 +919,7 @@ end.
             "e" in stored_names
         ), f"Expected 'e' in stored variables, got {stored_names}"
 
+    @covers(PascalFeature.TRY_EXCEPT)
     def test_try_except_has_try_end_label(self):
         """Try body should BRANCH past the except block to try_end."""
         source = """\
@@ -870,6 +938,7 @@ end.
         try_end_labels = [l for l in labels if l.label.contains("try_end")]
         assert len(try_end_labels) >= 1, "Expected at least 1 try_end label in IR"
 
+    @covers(PascalFeature.TRY_FINALLY)
     def test_try_finally_has_finally_label(self):
         """Pascal try/finally should generate try_finally label."""
         source = """\
@@ -890,6 +959,7 @@ end.
         assert any("try_finally" in name for name in label_names)
         assert any("try_end" in name for name in label_names)
 
+    @covers(PascalFeature.TRY_EXCEPT)
     def test_try_except_body_not_sequential_with_catch(self):
         """Catch block should NOT execute sequentially after try body.
         The try body should BRANCH to try_end, skipping the catch."""
@@ -916,6 +986,7 @@ end.
 
 
 class TestPascalForeach:
+    @covers(PascalFeature.FOREACH)
     def test_foreach_no_symbolic(self):
         instructions = _parse_pascal(
             "program M; var i: Integer; begin for i in arr do writeln(i); end."
@@ -925,6 +996,7 @@ class TestPascalForeach:
             "unsupported:foreach" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(PascalFeature.FOREACH)
     def test_foreach_produces_loop_structure(self):
         instructions = _parse_pascal(
             "program M; var i: Integer; begin for i in arr do writeln(i); end."
@@ -933,6 +1005,7 @@ class TestPascalForeach:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
 
+    @covers(PascalFeature.FOREACH)
     def test_foreach_stores_loop_variable(self):
         instructions = _parse_pascal(
             "program M; var i: Integer; begin for i in arr do writeln(i); end."
@@ -940,6 +1013,7 @@ class TestPascalForeach:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
 
+    @covers(PascalFeature.FOREACH)
     def test_foreach_lowers_body(self):
         instructions = _parse_pascal(
             "program M; var i: Integer; begin for i in arr do writeln(i); end."
@@ -949,6 +1023,7 @@ class TestPascalForeach:
 
 
 class TestPascalGoto:
+    @covers(PascalFeature.GOTO)
     def test_goto_no_symbolic(self):
         instructions = _parse_pascal(
             "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
@@ -956,6 +1031,7 @@ class TestPascalGoto:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:goto" in str(inst.operands) for inst in symbolics)
 
+    @covers(PascalFeature.GOTO)
     def test_goto_produces_branch(self):
         instructions = _parse_pascal(
             "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
@@ -963,6 +1039,7 @@ class TestPascalGoto:
         branches = _find_all(instructions, Opcode.BRANCH)
         assert any(inst.label.contains("myLabel") for inst in branches)
 
+    @covers(PascalFeature.GOTO)
     def test_label_produces_label_instruction(self):
         instructions = _parse_pascal(
             "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
@@ -970,6 +1047,7 @@ class TestPascalGoto:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("myLabel") for inst in labels)
 
+    @covers(PascalFeature.GOTO)
     def test_decl_labels_no_symbolic(self):
         instructions = _parse_pascal(
             "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
@@ -981,6 +1059,7 @@ class TestPascalGoto:
 
 
 class TestPascalDeclClass:
+    @covers(PascalFeature.CLASS_DECLARATION)
     def test_class_no_symbolic(self):
         source = """\
 program M;
@@ -997,6 +1076,7 @@ end."""
             "unsupported:declClass" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(PascalFeature.CLASS_DECLARATION)
     def test_class_produces_class_ref(self):
         source = """\
 program M;
@@ -1015,6 +1095,7 @@ end."""
 class TestPascalClassBodyTraversal:
     """Tests for class body traversal: fields -> synthetic __init__, methods."""
 
+    @covers(PascalFeature.CLASS_BODY)
     def test_class_with_field_emits_synthetic_init(self):
         """declField inside declClass should produce a synthetic __init__ with STORE_FIELD."""
         source = """\
@@ -1036,6 +1117,7 @@ end."""
             "FName" in inst.operands for inst in stores
         ), f"Expected STORE_FIELD for FName, got {[s.operands for s in stores]}"
 
+    @covers(PascalFeature.CLASS_BODY)
     def test_method_inside_class_has_this_param(self):
         """declProc inside declClass should emit SYMBOLIC param:this."""
         source = """\
@@ -1056,6 +1138,7 @@ end."""
             len(this_params) >= 2
         ), f"Expected >= 2 param:this (init + method), got {len(this_params)}"
 
+    @covers(PascalFeature.CLASS_BODY)
     def test_class_with_multiple_fields_emits_store_field_per_field(self):
         source = """\
 program M;
@@ -1077,6 +1160,7 @@ end."""
 class TestPascalBitwiseOperators:
     """Pascal 'and', 'or', 'xor' keywords emit bitwise BINOP operators."""
 
+    @covers(PascalFeature.BITWISE_OPERATORS)
     def test_and_emits_bitwise_binop(self):
         instructions = _parse_pascal("""\
 program M;
@@ -1091,6 +1175,7 @@ end.""")
             "&" in inst.operands for inst in binops
         ), "Expected BINOP with '&' for Pascal 'and'"
 
+    @covers(PascalFeature.BITWISE_OPERATORS)
     def test_xor_emits_bitwise_binop(self):
         instructions = _parse_pascal("""\
 program M;
@@ -1104,6 +1189,7 @@ end.""")
             "^" in inst.operands for inst in binops
         ), "Expected BINOP with '^' for Pascal 'xor'"
 
+    @covers(PascalFeature.BITWISE_OPERATORS)
     def test_or_emits_bitwise_binop(self):
         instructions = _parse_pascal("""\
 program M;
@@ -1117,6 +1203,7 @@ end.""")
             "|" in inst.operands for inst in binops
         ), "Expected BINOP with '|' for Pascal 'or'"
 
+    @covers(PascalFeature.BITWISE_OPERATORS)
     def test_bitwise_execution(self):
         """Pascal bitwise operators produce correct result through VM."""
         from tests.unit.rosetta.conftest import execute_for_language, extract_answer
@@ -1140,6 +1227,7 @@ end.""",
 class TestPascalPropertyAccessors:
     """Tests for declProp -> synthetic __get_<prop>__/__set_<prop>__ methods."""
 
+    @covers(PascalFeature.PROPERTY_ACCESSORS)
     def test_field_read_accessor_emits_getter_with_load_field(self):
         """property Name: string read FName -> __get_Name__ with LOAD_FIELD this FName."""
         source = """\
@@ -1163,6 +1251,7 @@ end."""
             "FName" in inst.operands for inst in loads
         ), f"Expected LOAD_FIELD with FName, got {[l.operands for l in loads]}"
 
+    @covers(PascalFeature.PROPERTY_ACCESSORS)
     def test_method_write_accessor_emits_setter_with_call_method(self):
         """property Name: string write SetName -> __set_Name__ with CALL_METHOD this SetName."""
         source = """\
@@ -1187,6 +1276,7 @@ end."""
             "SetName" in inst.operands for inst in calls
         ), f"Expected CALL_METHOD with SetName, got {[c.operands for c in calls]}"
 
+    @covers(PascalFeature.PROPERTY_ACCESSORS)
     def test_read_only_property_no_setter(self):
         """property Name: string read FName (no write) -> only getter, no setter."""
         source = """\
@@ -1207,6 +1297,7 @@ end."""
             "__set_Name__" in lbl for lbl in labels
         ), f"Read-only property should not emit setter, got labels {labels}"
 
+    @covers(PascalFeature.PROPERTY_ACCESSORS)
     def test_field_write_accessor_emits_store_field(self):
         """property Name: string write FName -> __set_Name__ with STORE_FIELD this FName."""
         source = """\
@@ -1229,6 +1320,7 @@ end."""
             len(fname_stores) >= 2
         ), f"Expected >= 2 STORE_FIELD for FName, got {len(fname_stores)}"
 
+    @covers(PascalFeature.PROPERTY_ACCESSORS)
     def test_method_read_accessor_emits_call_method(self):
         """property Name: string read GetName -> __get_Name__ with CALL_METHOD this GetName."""
         source = """\
@@ -1255,6 +1347,7 @@ end."""
 class TestPascalVarTypeTracking:
     """Tests for _pascal_var_types population -- verified via getter interception."""
 
+    @covers(PascalFeature.VAR_TYPE_TRACKING)
     def test_var_declaration_of_class_type_enables_getter_interception(self):
         """var foo: TFoo should enable foo.Name to route through __get_Name__."""
         source = """\
@@ -1280,6 +1373,7 @@ end."""
             f"got {[c.operands for c in calls]}"
         )
 
+    @covers(PascalFeature.VAR_TYPE_TRACKING)
     def test_dot_access_on_untyped_var_emits_plain_load_field(self):
         """rec.field on unknown-type variable -> plain LOAD_FIELD (no interception)."""
         instructions = _parse_pascal("program M; begin x := rec.field; end.")
@@ -1290,6 +1384,7 @@ end."""
         getter_calls = [c for c in calls if "__get_" in str(c.operands)]
         assert len(getter_calls) == 0
 
+    @covers(PascalFeature.VAR_TYPE_TRACKING)
     def test_param_of_class_type_enables_getter_interception(self):
         """procedure Foo(bar: TBar) -> bar.X should use getter if registered."""
         source = """\
@@ -1319,6 +1414,7 @@ end."""
 class TestPascalAssignmentInterception:
     """Tests for property setter interception in lower_pascal_assignment."""
 
+    @covers(PascalFeature.ASSIGNMENT_INTERCEPTION)
     def test_dot_assign_on_typed_var_with_setter_emits_call_method(self):
         """foo.Name := 'x' on class-typed var with setter -> CALL_METHOD __set_Name__."""
         source = """\
@@ -1344,6 +1440,7 @@ end."""
             len(setter_calls) >= 1
         ), f"Expected CALL_METHOD __set_Name__, got {[c.operands for c in calls]}"
 
+    @covers(PascalFeature.ASSIGNMENT_INTERCEPTION)
     def test_dot_assign_on_untyped_var_emits_plain_store_field(self):
         """rec.field := 10 on unknown-type variable -> plain STORE_FIELD."""
         instructions = _parse_pascal("program M; begin rec.field := 10; end.")
@@ -1357,6 +1454,7 @@ end."""
 class TestPascalQualifiedDefProc:
     """Tests for defProc with qualified name (procedure TFoo.MethodName)."""
 
+    @covers(PascalFeature.QUALIFIED_PROCEDURE)
     def test_qualified_defproc_emits_this_and_self_params(self):
         """procedure TFoo.SetName(...) should inject this+self and use correct name."""
         source = """\
@@ -1395,6 +1493,7 @@ end."""
         self_decls = [d for d in decl_vars if d.operands[0] == "self"]
         assert len(self_decls) >= 1, "Expected DECL_VAR self alias in qualified defProc"
 
+    @covers(PascalFeature.QUALIFIED_PROCEDURE)
     def test_unqualified_defproc_unchanged(self):
         """Plain procedure (no dot) should NOT inject this/self."""
         source = """\
@@ -1411,6 +1510,7 @@ end."""
 
 
 class TestPascalEnumDeclaration:
+    @covers(PascalFeature.ENUM_DECLARATION)
     def test_enum_creates_new_object(self):
         """type TColor = (Red, Green, Blue) should emit NEW_OBJECT."""
         ir = _parse_pascal("""\
@@ -1420,6 +1520,7 @@ begin end.""")
         new_objs = _find_all(ir, Opcode.NEW_OBJECT)
         assert len(new_objs) >= 1
 
+    @covers(PascalFeature.ENUM_DECLARATION)
     def test_enum_stores_members_with_ordinals(self):
         """Each enum member should be stored with STORE_INDEX and ordinal value."""
         ir = _parse_pascal("""\
@@ -1429,6 +1530,7 @@ begin end.""")
         stores = _find_all(ir, Opcode.STORE_INDEX)
         assert len(stores) >= 3
 
+    @covers(PascalFeature.ENUM_DECLARATION)
     def test_enum_declares_member_variables(self):
         """Each enum member should be declared as a top-level variable."""
         ir = _parse_pascal("""\
@@ -1441,6 +1543,7 @@ begin end.""")
         assert "Green" in decl_names
         assert "Blue" in decl_names
 
+    @covers(PascalFeature.ENUM_DECLARATION)
     def test_enum_declares_type_name(self):
         """The enum type name TColor should be declared."""
         ir = _parse_pascal("""\
@@ -1455,6 +1558,7 @@ begin end.""")
 class TestPascalFunctionResult:
     """Pascal functions return via the Result variable, not explicit return."""
 
+    @covers(PascalFeature.FUNCTION_RESULT)
     def test_function_returns_result_variable(self):
         ir = _parse_pascal(
             "function add(a, b: Integer): Integer;\n"
@@ -1483,6 +1587,7 @@ class TestPascalFunctionResult:
             [inst for inst in ir if str(inst.result_reg) == ret_reg]
         )
 
+    @covers(PascalFeature.FUNCTION_RESULT)
     def test_procedure_still_returns_none(self):
         ir = _parse_pascal(
             "procedure doStuff(x: Integer);\n" "begin\n" "  y := x + 1;\n" "end;\n"
