@@ -101,6 +101,12 @@ class GrammarConstants:
     comment_types: frozenset[str] = frozenset({"comment"})
     noise_types: frozenset[str] = frozenset({"newline", "\n"})
 
+    # Node types that are intentionally absent from dispatch tables because
+    # they are handled via other mechanisms (text extraction, parent lowerers,
+    # type-map lookup, etc.).  Listing them here prevents the grammar coverage
+    # audit from re-flagging them as gaps on every run.
+    known_benign_types: frozenset[str] = frozenset()
+
     # Expression node types
     paren_expr_type: str = "parenthesized_expression"
     attribute_node_type: str = "attribute"
