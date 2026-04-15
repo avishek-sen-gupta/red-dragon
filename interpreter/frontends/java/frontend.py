@@ -123,6 +123,11 @@ class JavaFrontend(BaseFrontend):
             JavaNodeType.THROW_STATEMENT: java_cf.lower_throw,
             JavaNodeType.IMPORT_DECLARATION: lambda ctx, node: None,
             JavaNodeType.PACKAGE_DECLARATION: lambda ctx, node: None,
+            # module_declaration appears in Java 9+ module-info.java files (e.g.
+            # `module com.myapp { requires java.base; }`).  It carries no
+            # executable semantics — it is pure metadata for the module system —
+            # so we silently skip it exactly as we do for imports and packages.
+            JavaNodeType.MODULE_DECLARATION: lambda ctx, node: None,
             JavaNodeType.BREAK_STATEMENT: common_cf.lower_break,
             JavaNodeType.CONTINUE_STATEMENT: common_cf.lower_continue,
             JavaNodeType.SWITCH_EXPRESSION: java_cf.lower_java_switch,
