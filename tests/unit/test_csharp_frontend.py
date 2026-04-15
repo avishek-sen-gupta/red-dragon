@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from interpreter.frontends.csharp import CSharpFrontend
+from interpreter.frontends.csharp.features import CSharpFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from tests.covers import covers
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:
@@ -33,6 +35,7 @@ def _find_all(
 
 
 class TestCSharpFrontendVariableDeclaration:
+    @covers(CSharpFeature.VARIABLE_DECLARATION)
     def test_variable_decl_produces_const_and_store(self):
         ir = _parse_and_lower("int x = 10;")
         opcodes = _opcodes(ir)
@@ -42,6 +45,7 @@ class TestCSharpFrontendVariableDeclaration:
         x_stores = [s for s in stores if "x" in s.operands]
         assert len(x_stores) >= 1
 
+    @covers(CSharpFeature.VARIABLE_DECLARATION)
     def test_variable_decl_without_initializer(self):
         ir = _parse_and_lower("int x;")
         stores = _find_all(ir, Opcode.DECL_VAR)
@@ -50,12 +54,14 @@ class TestCSharpFrontendVariableDeclaration:
 
 
 class TestCSharpFrontendArithmetic:
+    @covers(CSharpFeature.ARITHMETIC)
     def test_arithmetic_produces_binop(self):
         ir = _parse_and_lower("int x = 10; int y = x + 5;")
         binops = _find_all(ir, Opcode.BINOP)
         assert len(binops) >= 1
         assert "+" in binops[0].operands
 
+    @covers(CSharpFeature.ARITHMETIC)
     def test_arithmetic_stores_result(self):
         ir = _parse_and_lower("int x = 10; int y = x + 5;")
         stores = _find_all(ir, Opcode.DECL_VAR)
@@ -64,6 +70,7 @@ class TestCSharpFrontendArithmetic:
 
 
 class TestCSharpFrontendMethodDeclaration:
+    @covers(CSharpFeature.FUNCTION_DECLARATION)
     def test_method_decl_produces_label_and_return(self):
         source = """
 class Calc {
@@ -77,6 +84,7 @@ class Calc {
         assert Opcode.LABEL in opcodes
         assert Opcode.RETURN in opcodes
 
+    @covers(CSharpFeature.FUNCTION_DECLARATION)
     def test_method_params_lowered_as_symbolic(self):
         source = """
 class Calc {
@@ -94,6 +102,7 @@ class Calc {
 
 
 class TestCSharpFrontendMethodCall:
+    @covers(CSharpFeature.FUNCTION_CALL)
     def test_simple_function_call(self):
         ir = _parse_and_lower("Add(1, 2);")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
@@ -102,6 +111,7 @@ class TestCSharpFrontendMethodCall:
 
 
 class TestCSharpFrontendIfElse:
+    @covers(CSharpFeature.IF_ELSE)
     def test_if_else_produces_branch_if(self):
         source = """
 if (x > 5) {
@@ -114,6 +124,7 @@ if (x > 5) {
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(CSharpFeature.IF_ELSE)
     def test_if_else_produces_labels(self):
         source = """
 if (x > 5) {
@@ -126,6 +137,7 @@ if (x > 5) {
         labels = _find_all(ir, Opcode.LABEL)
         assert len(labels) >= 3
 
+    @covers(CSharpFeature.IF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         source = """\
@@ -156,6 +168,7 @@ else { y = 40; }
 
 
 class TestCSharpFrontendWhileLoop:
+    @covers(CSharpFeature.WHILE_LOOP)
     def test_while_loop_produces_branch_if_and_branch(self):
         source = """
 while (x > 0) {
@@ -169,6 +182,7 @@ while (x > 0) {
 
 
 class TestCSharpFrontendForLoop:
+    @covers(CSharpFeature.FOR_LOOP)
     def test_for_loop_produces_branch_if(self):
         source = """
 for (int i = 0; i < 10; i++) {
@@ -185,6 +199,7 @@ for (int i = 0; i < 10; i++) {
 
 
 class TestCSharpFrontendClassDeclaration:
+    @covers(CSharpFeature.CLASS)
     def test_class_declaration(self):
         source = """
 class Dog {
@@ -205,6 +220,7 @@ class Dog {
 
 
 class TestCSharpFrontendInvocationExpression:
+    @covers(CSharpFeature.METHOD_CALL)
     def test_console_writeline_produces_call_method(self):
         source = 'Console.WriteLine("hello");'
         ir = _parse_and_lower(source)
@@ -214,6 +230,7 @@ class TestCSharpFrontendInvocationExpression:
 
 
 class TestCSharpFrontendMemberAccess:
+    @covers(CSharpFeature.MEMBER_ACCESS)
     def test_member_access_produces_load_field(self):
         ir = _parse_and_lower("var z = obj.field;")
         load_fields = _find_all(ir, Opcode.LOAD_FIELD)
@@ -222,6 +239,7 @@ class TestCSharpFrontendMemberAccess:
 
 
 class TestCSharpFrontendObjectCreation:
+    @covers(CSharpFeature.OBJECT_CREATION)
     def test_object_creation_produces_call_ctor(self):
         source = 'var dog = new Dog("Rex");'
         ir = _parse_and_lower(source)
@@ -231,6 +249,7 @@ class TestCSharpFrontendObjectCreation:
 
 
 class TestCSharpFrontendReturn:
+    @covers(CSharpFeature.RETURN)
     def test_return_with_value(self):
         source = """
 class C {
@@ -246,6 +265,7 @@ class C {
 
 
 class TestCSharpFrontendAssignmentExpression:
+    @covers(CSharpFeature.ASSIGNMENT)
     def test_assignment_expression(self):
         ir = _parse_and_lower("x = 10;")
         stores = _find_all(ir, Opcode.STORE_VAR)
@@ -254,11 +274,13 @@ class TestCSharpFrontendAssignmentExpression:
 
 
 class TestCSharpFrontendFallback:
+    @covers(CSharpFeature.EMPTY_STATEMENT)
     def test_entry_label_always_present(self):
         ir = _parse_and_lower("")
         assert ir[0].opcode == Opcode.LABEL
         assert ir[0].label == "entry"
 
+    @covers(CSharpFeature.LAMBDA)
     def test_lambda_produces_func_ref(self):
         # A lambda expression is now lowered as an inline function
         source = "var f = (x) => x + 1;"
@@ -278,6 +300,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialCSharp:
+    @covers(CSharpFeature.FOREACH_LOOP)
     def test_foreach_with_method_calls(self):
         source = """\
 foreach (var item in items) {
@@ -294,6 +317,7 @@ foreach (var item in items) {
         assert "Add" in method_names
         assert len(ir) > 10
 
+    @covers(CSharpFeature.DO_WHILE_LOOP)
     def test_do_while_loop(self):
         source = """\
 int x = 10;
@@ -310,6 +334,7 @@ do {
         assert any("do_" in lbl for lbl in labels)
         assert len(ir) > 8
 
+    @covers(CSharpFeature.CLASS)
     def test_class_with_constructor_and_property(self):
         source = """\
 class Counter {
@@ -333,6 +358,7 @@ class Counter {
         assert len(returns) >= 1
         assert len(ir) > 15
 
+    @covers(CSharpFeature.TRY_CATCH)
     def test_try_catch_with_throw(self):
         source = """\
 try {
@@ -356,6 +382,7 @@ try {
         assert not any("finally_clause:" in str(s.operands) for s in symbolics)
         assert len(ir) > 10
 
+    @covers(CSharpFeature.IF_ELSE)
     def test_nested_if_else_chain(self):
         source = """\
 if (x > 100) {
@@ -376,6 +403,7 @@ if (x > 100) {
         labels = _labels_in_order(ir)
         assert len(labels) >= 3
 
+    @covers(CSharpFeature.LAMBDA)
     def test_lambda_in_declaration(self):
         source = "var square = (x) => x * x;"
         ir = _parse_and_lower(source)
@@ -388,6 +416,7 @@ if (x > 100) {
             if inst.operands
         )
 
+    @covers(CSharpFeature.FOR_LOOP)
     def test_for_loop_with_nested_if(self):
         source = """\
 int total = 0;
@@ -407,6 +436,7 @@ for (int i = 0; i < 20; i++) {
         assert any("WriteLine" in inst.operands for inst in calls)
         assert len(ir) > 20
 
+    @covers(CSharpFeature.SWITCH_STATEMENT)
     def test_switch_produces_if_else_chain(self):
         source = """\
 switch (x) {
@@ -425,6 +455,7 @@ switch (x) {
 
 
 class TestCSharpLambda:
+    @covers(CSharpFeature.LAMBDA)
     def test_lambda_expr_body(self):
         source = "var f = (int x) => x + 1;"
         ir = _parse_and_lower(source)
@@ -440,6 +471,7 @@ class TestCSharpLambda:
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.LAMBDA)
     def test_lambda_block_body(self):
         source = "var f = (int x) => { return x + 1; };"
         ir = _parse_and_lower(source)
@@ -455,6 +487,7 @@ class TestCSharpLambda:
 
 
 class TestCSharpArrayCreation:
+    @covers(CSharpFeature.ARRAY_CREATION)
     def test_array_creation_with_initializer(self):
         source = "int[] a = new int[] { 1, 2, 3 };"
         ir = _parse_and_lower(source)
@@ -463,12 +496,14 @@ class TestCSharpArrayCreation:
         stores = _find_all(ir, Opcode.STORE_INDEX)
         assert len(stores) >= 3
 
+    @covers(CSharpFeature.ARRAY_CREATION)
     def test_implicit_array_creation(self):
         source = "var a = new[] { 1, 2, 3 };"
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
         assert Opcode.NEW_ARRAY in opcodes
 
+    @covers(CSharpFeature.ARRAY_CREATION)
     def test_array_creation_sized(self):
         source = "int[] a = new int[5];"
         ir = _parse_and_lower(source)
@@ -477,6 +512,7 @@ class TestCSharpArrayCreation:
 
 
 class TestCSharpEnumDeclaration:
+    @covers(CSharpFeature.ENUM)
     def test_enum_declaration(self):
         source = "enum Color { Red, Green, Blue }"
         ir = _parse_and_lower(source)
@@ -487,6 +523,7 @@ class TestCSharpEnumDeclaration:
         stores = _find_all(ir, Opcode.STORE_INDEX)
         assert len(stores) >= 3
 
+    @covers(CSharpFeature.ENUM)
     def test_enum_with_values(self):
         """Enum members should have implicit ordinal values 0, 1, 2."""
         source = "enum Priority { Low, Medium, High }"
@@ -504,6 +541,7 @@ class TestCSharpEnumDeclaration:
 
 
 class TestCSharpTypeofAndIsCheck:
+    @covers(CSharpFeature.TYPEOF)
     def test_typeof_expression(self):
         source = "class C { void M() { var t = typeof(int); } }"
         ir = _parse_and_lower(source)
@@ -513,12 +551,14 @@ class TestCSharpTypeofAndIsCheck:
         const_vals = [inst.operands[0] for inst in consts if inst.operands]
         assert "int" in const_vals
 
+    @covers(CSharpFeature.TYPEOF)
     def test_typeof_with_class_type(self):
         source = "class C { void M() { var t = typeof(string); } }"
         ir = _parse_and_lower(source)
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("typeof" in inst.operands for inst in calls)
 
+    @covers(CSharpFeature.IS_CHECK)
     def test_is_check_expression(self):
         source = "class C { void M(object x) { bool b = x is string; } }"
         ir = _parse_and_lower(source)
@@ -528,6 +568,7 @@ class TestCSharpTypeofAndIsCheck:
         const_vals = [inst.operands[0] for inst in consts if inst.operands]
         assert "string" in const_vals
 
+    @covers(CSharpFeature.IS_CHECK)
     def test_is_check_in_condition(self):
         source = """\
 class C {
@@ -546,6 +587,7 @@ class C {
 
 
 class TestCSharpInterfaceDeclaration:
+    @covers(CSharpFeature.INTERFACE)
     def test_interface_emits_class_block(self):
         """Interface lowered as CLASS block with method defs (not NEW_OBJECT)."""
         source = "interface IShape { void Draw(); }"
@@ -559,6 +601,7 @@ class TestCSharpInterfaceDeclaration:
         labels = [str(inst.label) for inst in ir if inst.opcode == Opcode.LABEL]
         assert any("func_" in l and "Draw" in l for l in labels)
 
+    @covers(CSharpFeature.INTERFACE)
     def test_interface_methods_produce_func_labels(self):
         source = "interface IAnimal { void Speak(); string Name(); }"
         ir = _parse_and_lower(source)
@@ -567,6 +610,7 @@ class TestCSharpInterfaceDeclaration:
         assert any("Speak" in l for l in func_labels)
         assert any("Name" in l for l in func_labels)
 
+    @covers(CSharpFeature.INTERFACE)
     def test_interface_methods_seed_return_types(self):
         source = "interface ICalc { int Compute(int x); string Describe(); }"
         ir, type_builder = _parse_csharp_with_types(source)
@@ -584,6 +628,7 @@ class TestCSharpInterfaceDeclaration:
 
 
 class TestCSharpPropertyDeclaration:
+    @covers(CSharpFeature.PROPERTY)
     def test_auto_property(self):
         source = "class C { public int X { get; set; } }"
         ir = _parse_and_lower(source)
@@ -592,6 +637,7 @@ class TestCSharpPropertyDeclaration:
         load_vars = _find_all(ir, Opcode.LOAD_VAR)
         assert any("this" in inst.operands for inst in load_vars)
 
+    @covers(CSharpFeature.PROPERTY)
     def test_property_with_initializer(self):
         source = "class C { public int X { get; set; } = 42; }"
         ir = _parse_and_lower(source)
@@ -601,6 +647,7 @@ class TestCSharpPropertyDeclaration:
         const_vals = [inst.operands[0] for inst in consts if inst.operands]
         assert "42" in const_vals
 
+    @covers(CSharpFeature.PROPERTY)
     def test_property_with_accessor_body(self):
         source = """\
 class C {
@@ -619,6 +666,7 @@ class C {
 
 
 class TestCSharpAwaitExpression:
+    @covers(CSharpFeature.AWAIT)
     def test_await_produces_call_function(self):
         source = """\
 class C {
@@ -631,6 +679,7 @@ class C {
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("await" in inst.operands for inst in calls)
 
+    @covers(CSharpFeature.AWAIT)
     def test_await_in_assignment(self):
         source = """\
 class C {
@@ -647,6 +696,7 @@ class C {
 
 
 class TestCSharpSwitchExpression:
+    @covers(CSharpFeature.SWITCH_EXPRESSION)
     def test_switch_expression_basic(self):
         source = """\
 class C {
@@ -668,6 +718,7 @@ class C {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.SWITCH_EXPRESSION)
     def test_switch_expression_with_default(self):
         source = """\
 class C {
@@ -685,6 +736,7 @@ class C {
 
 
 class TestCSharpYieldStatement:
+    @covers(CSharpFeature.YIELD)
     def test_yield_return(self):
         source = """\
 class C {
@@ -699,6 +751,7 @@ class C {
         yield_calls = [c for c in calls if "yield" in c.operands]
         assert len(yield_calls) >= 2
 
+    @covers(CSharpFeature.YIELD)
     def test_yield_break(self):
         source = """\
 class C {
@@ -714,6 +767,7 @@ class C {
 
 
 class TestCSharpLockStatement:
+    @covers(CSharpFeature.LOCK)
     def test_lock_lowers_body(self):
         source = """\
 class C {
@@ -728,6 +782,7 @@ class C {
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.LOCK)
     def test_lock_with_expression(self):
         source = """\
 class C {
@@ -745,6 +800,7 @@ class C {
 
 
 class TestCSharpUsingStatement:
+    @covers(CSharpFeature.USING)
     def test_using_with_declaration(self):
         source = """\
 class C {
@@ -759,6 +815,7 @@ class C {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("stream" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.USING)
     def test_using_lowers_body(self):
         source = """\
 class C {
@@ -779,6 +836,7 @@ class C {
 
 
 class TestCSharpCheckedStatement:
+    @covers(CSharpFeature.CHECKED)
     def test_checked_lowers_body(self):
         source = """\
 class C {
@@ -793,6 +851,7 @@ class C {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.CHECKED)
     def test_checked_with_arithmetic(self):
         source = """\
 class C {
@@ -812,6 +871,7 @@ class C {
 
 
 class TestCSharpFixedStatement:
+    @covers(CSharpFeature.FIXED)
     def test_fixed_lowers_body(self):
         source = """\
 class C {
@@ -828,6 +888,7 @@ class C {
 
 
 class TestCSharpEventFieldDeclaration:
+    @covers(CSharpFeature.EVENT_FIELD)
     def test_event_field_declaration(self):
         source = """\
 class C {
@@ -838,6 +899,7 @@ class C {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("OnClick" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.EVENT_FIELD)
     def test_event_field_with_initializer(self):
         source = """\
 class C {
@@ -854,6 +916,7 @@ class C {
 
 
 class TestCSharpEventDeclaration:
+    @covers(CSharpFeature.EVENT)
     def test_event_declaration_with_accessors(self):
         source = """\
 class C {
@@ -871,16 +934,19 @@ class C {
 
 
 class TestCSharpConditionalAccess:
+    @covers(CSharpFeature.CONDITIONAL_ACCESS)
     def test_conditional_access_basic(self):
         ir = _parse_and_lower("var x = obj?.Field;")
         load_fields = _find_all(ir, Opcode.LOAD_FIELD)
         assert any("Field" in inst.operands for inst in load_fields)
 
+    @covers(CSharpFeature.CONDITIONAL_ACCESS)
     def test_conditional_access_stores(self):
         ir = _parse_and_lower("var x = obj?.Name;")
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.CONDITIONAL_ACCESS)
     def test_conditional_access_nested(self):
         ir = _parse_and_lower("var x = a?.b?.c;")
         load_fields = _find_all(ir, Opcode.LOAD_FIELD)
@@ -888,6 +954,7 @@ class TestCSharpConditionalAccess:
 
 
 class TestCSharpLocalFunction:
+    @covers(CSharpFeature.LOCAL_FUNCTION)
     def test_local_function_basic(self):
         source = """\
 void Main() {
@@ -898,6 +965,7 @@ void Main() {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Add" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.LOCAL_FUNCTION)
     def test_local_function_params(self):
         source = """\
 void Main() {
@@ -911,6 +979,7 @@ void Main() {
         ]
         assert len(param_symbolics) >= 2
 
+    @covers(CSharpFeature.LOCAL_FUNCTION)
     def test_local_function_has_return(self):
         source = """\
 void Main() {
@@ -923,17 +992,20 @@ void Main() {
 
 
 class TestCSharpTupleExpression:
+    @covers(CSharpFeature.TUPLE)
     def test_tuple_basic(self):
         ir = _parse_and_lower("var t = (1, 2, 3);")
         opcodes = _opcodes(ir)
         assert Opcode.NEW_ARRAY in opcodes
         assert Opcode.STORE_INDEX in opcodes
 
+    @covers(CSharpFeature.TUPLE)
     def test_tuple_stores_result(self):
         ir = _parse_and_lower("var t = (1, 2);")
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("t" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.TUPLE)
     def test_tuple_element_count(self):
         ir = _parse_and_lower("var t = (10, 20, 30);")
         store_indices = _find_all(ir, Opcode.STORE_INDEX)
@@ -941,6 +1013,7 @@ class TestCSharpTupleExpression:
 
 
 class TestCSharpStringInterpolation:
+    @covers(CSharpFeature.STRING_INTERPOLATION)
     def test_interpolation_basic(self):
         """$"Hello {name}" should decompose into CONST + LOAD_VAR + BINOP '+'."""
         ir = _parse_and_lower('var x = $"Hello {name}";')
@@ -949,6 +1022,7 @@ class TestCSharpStringInterpolation:
         binops = _find_all(ir, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(CSharpFeature.STRING_INTERPOLATION)
     def test_interpolation_expression(self):
         """$"Hello {x + 1}" should produce BINOP for the expression and BINOP '+' for concatenation."""
         ir = _parse_and_lower('var y = $"Hello {x + 1}";')
@@ -956,6 +1030,7 @@ class TestCSharpStringInterpolation:
         plus_ops = [b for b in binops if "+" in b.operands]
         assert len(plus_ops) >= 2  # one for x+1, one for string concat
 
+    @covers(CSharpFeature.STRING_INTERPOLATION)
     def test_interpolation_multiple(self):
         """$"{a} and {b}" should produce two LOAD_VAR and multiple BINOP '+'."""
         ir = _parse_and_lower('var x = $"{a} and {b}";')
@@ -966,6 +1041,7 @@ class TestCSharpStringInterpolation:
         plus_ops = [b for b in binops if "+" in b.operands]
         assert len(plus_ops) >= 2
 
+    @covers(CSharpFeature.STRING_INTERPOLATION)
     def test_no_interpolation_is_const(self):
         """Plain "hello" remains CONST — no interpolation."""
         ir = _parse_and_lower('var x = "hello";')
@@ -974,16 +1050,19 @@ class TestCSharpStringInterpolation:
 
 
 class TestCSharpIsPatternExpression:
+    @covers(CSharpFeature.IS_PATTERN)
     def test_is_pattern_basic(self):
         ir = _parse_and_lower("var r = x is int y;")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("is_check" in inst.operands for inst in calls)
 
+    @covers(CSharpFeature.IS_PATTERN)
     def test_is_pattern_stores(self):
         ir = _parse_and_lower("var r = obj is string s;")
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.IS_PATTERN)
     def test_is_pattern_has_type_const(self):
         ir = _parse_and_lower("var r = x is int y;")
         consts = _find_all(ir, Opcode.CONST)
@@ -992,12 +1071,14 @@ class TestCSharpIsPatternExpression:
 
 
 class TestCSharpRecordDeclaration:
+    @covers(CSharpFeature.RECORD)
     def test_record_no_symbolic(self):
         source = "record Person { public string Name { get; set; } }"
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("record_declaration" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.RECORD)
     def test_record_stores_class_name(self):
         source = "record Point(int X, int Y);"
         ir = _parse_and_lower(source)
@@ -1006,6 +1087,7 @@ class TestCSharpRecordDeclaration:
 
 
 class TestCSharpVariableDeclaration:
+    @covers(CSharpFeature.VARIABLE_DECLARATION)
     def test_variable_declaration_no_symbolic(self):
         ir = _parse_and_lower("for (int i = 0; i < 10; i++) { }")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
@@ -1015,6 +1097,7 @@ class TestCSharpVariableDeclaration:
 
 
 class TestCSharpDeclarationPattern:
+    @covers(CSharpFeature.DECLARATION_PATTERN)
     def test_declaration_pattern_no_symbolic(self):
         ir = _parse_and_lower("var r = x switch { int i => i, _ => 0 };")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
@@ -1022,6 +1105,7 @@ class TestCSharpDeclarationPattern:
             "declaration_pattern" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(CSharpFeature.DECLARATION_PATTERN)
     def test_declaration_pattern_stores_var(self):
         ir = _parse_and_lower("var r = x switch { int n => n, _ => 0 };")
         # compile_pattern_bindings emits STORE_VAR for captured variables
@@ -1030,6 +1114,7 @@ class TestCSharpDeclarationPattern:
 
 
 class TestCSharpVerbatimStringLiteral:
+    @covers(CSharpFeature.VERBATIM_STRING)
     def test_verbatim_string_no_symbolic(self):
         ir = _parse_and_lower('var p = @"C:\\Users\\test";')
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
@@ -1037,6 +1122,7 @@ class TestCSharpVerbatimStringLiteral:
             "verbatim_string_literal" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(CSharpFeature.VERBATIM_STRING)
     def test_verbatim_string_as_const(self):
         ir = _parse_and_lower('var p = @"hello";')
         consts = _find_all(ir, Opcode.CONST)
@@ -1044,6 +1130,7 @@ class TestCSharpVerbatimStringLiteral:
 
 
 class TestCSharpConstantPattern:
+    @covers(CSharpFeature.CONSTANT_PATTERN)
     def test_constant_pattern_no_symbolic(self):
         ir = _parse_and_lower("var r = x switch { null => 0, _ => 1 };")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
@@ -1051,6 +1138,7 @@ class TestCSharpConstantPattern:
 
 
 class TestCSharpDelegateDeclaration:
+    @covers(CSharpFeature.DELEGATE)
     def test_delegate_declaration_no_unsupported(self):
         """delegate int Transform(int x); should not produce unsupported SYMBOLIC."""
         source = "delegate int Transform(int x);"
@@ -1058,6 +1146,7 @@ class TestCSharpDelegateDeclaration:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.DELEGATE)
     def test_delegate_declaration_stores(self):
         source = "delegate void Action();"
         ir = _parse_and_lower(source)
@@ -1066,6 +1155,7 @@ class TestCSharpDelegateDeclaration:
 
 
 class TestCSharpImplicitObjectCreationExpression:
+    @covers(CSharpFeature.IMPLICIT_OBJECT_CREATION)
     def test_implicit_object_creation_no_unsupported(self):
         """Point p = new(1, 2); should not produce unsupported SYMBOLIC."""
         source = "class C { void M() { Point p = new(1, 2); } }"
@@ -1073,6 +1163,7 @@ class TestCSharpImplicitObjectCreationExpression:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.IMPLICIT_OBJECT_CREATION)
     def test_implicit_object_creation_stores(self):
         source = "class C { void M() { List<int> items = new(); } }"
         ir = _parse_and_lower(source)
@@ -1081,6 +1172,7 @@ class TestCSharpImplicitObjectCreationExpression:
 
 
 class TestCSharpQueryExpression:
+    @covers(CSharpFeature.QUERY_EXPRESSION)
     def test_query_expression_no_unsupported(self):
         """LINQ query expression should not produce unsupported SYMBOLIC."""
         source = """\
@@ -1096,6 +1188,7 @@ class C {
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.QUERY_EXPRESSION)
     def test_query_expression_stores_result(self):
         source = """\
 class C {
@@ -1114,24 +1207,28 @@ class TestCSharpGenericTypeSeeding:
     """Verify that C# generic types (List<string>, Dictionary<K,V>) are extracted
     as parameterised bracket-notation strings in the TypeEnvironmentBuilder."""
 
+    @covers(CSharpFeature.GENERIC_TYPE)
     def test_local_var_list_of_string(self):
         """List<string> items = ... should seed var_types['items'] = 'List[String]'."""
         source = "class M { void m() { List<string> items = new List<string>(); } }"
         _, builder = _parse_csharp_with_types(source)
         assert builder.var_types["items"] == "List[String]"
 
+    @covers(CSharpFeature.GENERIC_TYPE)
     def test_local_var_dictionary(self):
         """Dictionary<string, int> d = ... should seed 'Dictionary[String, Int]'."""
         source = "class M { void m() { Dictionary<string, int> d = new Dictionary<string, int>(); } }"
         _, builder = _parse_csharp_with_types(source)
         assert builder.var_types["d"] == "Dictionary[String, Int]"
 
+    @covers(CSharpFeature.GENERIC_TYPE)
     def test_nested_generic_type(self):
         """List<Dictionary<string, int>> should produce 'List[Dictionary[String, Int]]'."""
         source = "class M { void m() { List<Dictionary<string, int>> x = null; } }"
         _, builder = _parse_csharp_with_types(source)
         assert builder.var_types["x"] == "List[Dictionary[String, Int]]"
 
+    @covers(CSharpFeature.GENERIC_TYPE)
     def test_method_return_generic_type(self):
         """Method returning List<string> should seed func_return_types with 'List[String]'."""
         source = "class M { List<string> GetNames() { return null; } }"
@@ -1139,6 +1236,7 @@ class TestCSharpGenericTypeSeeding:
         return_types = builder.func_return_types
         assert any(v == "List[String]" for v in return_types.values())
 
+    @covers(CSharpFeature.GENERIC_TYPE)
     def test_param_generic_type(self):
         """Parameter List<string> items should seed param type 'List[String]'."""
         source = "class M { void Process(List<string> items) { } }"
@@ -1149,6 +1247,7 @@ class TestCSharpGenericTypeSeeding:
             for params in param_types.values()
         )
 
+    @covers(CSharpFeature.GENERIC_TYPE)
     def test_non_generic_type_unchanged(self):
         """Plain int x = 42; should still seed 'Int' (regression check)."""
         source = "class M { void m() { int x = 42; } }"
@@ -1159,18 +1258,21 @@ class TestCSharpGenericTypeSeeding:
 class TestCSharpEmptyStatement:
     """Bare `;` (empty_statement) must be a no-op — no SYMBOLIC fallthrough."""
 
+    @covers(CSharpFeature.EMPTY_STATEMENT)
     def test_empty_statement_produces_no_symbolic(self):
         """A bare `;` should not produce any SYMBOLIC instructions."""
         ir = _parse_and_lower(";")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("empty_statement" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.EMPTY_STATEMENT)
     def test_multiple_empty_statements_no_symbolic(self):
         """Multiple bare `;` should not produce any SYMBOLIC instructions."""
         ir = _parse_and_lower(";;;")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("empty_statement" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.EMPTY_STATEMENT)
     def test_empty_statement_among_real_statements(self):
         """Empty statements mixed with real code should not affect IR output."""
         source = "int x = 10; ; int y = 20; ;"
@@ -1181,6 +1283,7 @@ class TestCSharpEmptyStatement:
         assert any("x" in inst.operands for inst in stores)
         assert any("y" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.EMPTY_STATEMENT)
     def test_empty_statement_in_method_body(self):
         """Empty statement inside a method body should be silently skipped."""
         source = """\
@@ -1201,18 +1304,21 @@ class C {
 
 
 class TestCSharpDefaultExpression:
+    @covers(CSharpFeature.DEFAULT)
     def test_default_no_symbolic(self):
         """default should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("int x = default;")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("default_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.DEFAULT)
     def test_default_emits_const(self):
         """default expression should emit a CONST."""
         ir = _parse_and_lower("int x = default;")
         consts = _find_all(ir, Opcode.CONST)
         assert len(consts) >= 1
 
+    @covers(CSharpFeature.DEFAULT)
     def test_default_stored(self):
         """default expression should be stored to a variable."""
         ir = _parse_and_lower("int x = default;")
@@ -1221,12 +1327,14 @@ class TestCSharpDefaultExpression:
 
 
 class TestCSharpSizeofExpression:
+    @covers(CSharpFeature.SIZEOF)
     def test_sizeof_no_symbolic(self):
         """sizeof(int) should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("int x = sizeof(int);")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("sizeof_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.SIZEOF)
     def test_sizeof_emits_const(self):
         """sizeof(int) should emit a CONST."""
         ir = _parse_and_lower("int x = sizeof(int);")
@@ -1235,12 +1343,14 @@ class TestCSharpSizeofExpression:
 
 
 class TestCSharpCheckedExpression:
+    @covers(CSharpFeature.CHECKED)
     def test_checked_no_symbolic(self):
         """checked(1 + 2) should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("int x = checked(1 + 2);")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("checked_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.CHECKED)
     def test_checked_lowers_inner_expr(self):
         """checked(1 + 2) should lower the inner expression (1 + 2)."""
         ir = _parse_and_lower("int x = checked(1 + 2);")
@@ -1249,6 +1359,7 @@ class TestCSharpCheckedExpression:
 
 
 class TestCSharpFileScopedNamespace:
+    @covers(CSharpFeature.FILE_SCOPED_NAMESPACE)
     def test_file_scoped_ns_no_symbolic(self):
         """namespace Foo; should not produce SYMBOLIC."""
         ir = _parse_and_lower("""\
@@ -1262,6 +1373,7 @@ class Bar {
             for inst in symbolics
         )
 
+    @covers(CSharpFeature.FILE_SCOPED_NAMESPACE)
     def test_file_scoped_ns_body_lowered(self):
         """Declarations inside file-scoped namespace should be lowered."""
         ir = _parse_and_lower("""\
@@ -1276,18 +1388,21 @@ class Bar {
 class TestCSharpOutVarDeclaration:
     """out int x / out var x should declare the variable and pass it as arg."""
 
+    @covers(CSharpFeature.OUT_VAR_DECLARATION)
     def test_out_int_declares_variable(self):
         """int.TryParse(s, out int result) should DECL_VAR result."""
         ir = _parse_and_lower("int.TryParse(s, out int result);")
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.OUT_VAR_DECLARATION)
     def test_out_var_declares_variable(self):
         """int.TryParse(s, out var result) should DECL_VAR result."""
         ir = _parse_and_lower("int.TryParse(s, out var result);")
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(CSharpFeature.OUT_VAR_DECLARATION)
     def test_out_int_no_symbolic(self):
         """declaration_expression should not fall through to SYMBOLIC."""
         ir = _parse_and_lower("int.TryParse(s, out int result);")
@@ -1296,6 +1411,7 @@ class TestCSharpOutVarDeclaration:
             "declaration_expression" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(CSharpFeature.OUT_VAR_DECLARATION)
     def test_out_var_passed_as_argument(self):
         """The declared variable should be passed as a CALL_METHOD argument."""
         ir = _parse_and_lower("int.TryParse(s, out int result);")
@@ -1304,12 +1420,14 @@ class TestCSharpOutVarDeclaration:
 
 
 class TestCSharpRangeExpression:
+    @covers(CSharpFeature.RANGE)
     def test_range_no_symbolic(self):
         """0..5 should not produce SYMBOLIC."""
         ir = _parse_and_lower("var r = 0..5;")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("range_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.RANGE)
     def test_range_produces_call(self):
         """0..5 should produce a CALL_FUNCTION for range."""
         ir = _parse_and_lower("var r = 0..5;")
@@ -1320,6 +1438,7 @@ class TestCSharpRangeExpression:
 class TestCSharpByrefParamIR:
     """Unit tests for out/ref/in byref parameter IR emission."""
 
+    @covers(CSharpFeature.OUT_PARAM)
     def test_out_param_write_emits_store_indirect(self):
         """Assignment to out param should emit LOAD_VAR + STORE_INDIRECT."""
         ir = _parse_and_lower("""\
@@ -1331,6 +1450,7 @@ class C {
         store_indirects = _find_all(ir, Opcode.STORE_INDIRECT)
         assert len(store_indirects) >= 1
 
+    @covers(CSharpFeature.REF_PARAM)
     def test_ref_param_read_emits_load_indirect(self):
         """Reading a ref param should emit LOAD_VAR + LOAD_INDIRECT."""
         ir = _parse_and_lower("""\
@@ -1342,6 +1462,7 @@ class C {
         load_indirects = _find_all(ir, Opcode.LOAD_INDIRECT)
         assert len(load_indirects) >= 1
 
+    @covers(CSharpFeature.IN_PARAM)
     def test_in_param_read_emits_load_indirect(self):
         """Reading an in param should emit LOAD_VAR + LOAD_INDIRECT."""
         ir = _parse_and_lower("""\
@@ -1353,18 +1474,21 @@ class C {
         load_indirects = _find_all(ir, Opcode.LOAD_INDIRECT)
         assert len(load_indirects) >= 1
 
+    @covers(CSharpFeature.OUT_VAR_DECLARATION)
     def test_out_int_call_site_emits_address_of(self):
         """out int result at call site should emit DECL_VAR + ADDRESS_OF."""
         ir = _parse_and_lower("int.TryParse(s, out int result);")
         address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
         assert any("result" in inst.operands for inst in address_ofs)
 
+    @covers(CSharpFeature.OUT_VAR_DECLARATION)
     def test_out_var_call_site_emits_address_of(self):
         """out var result at call site should emit DECL_VAR + ADDRESS_OF."""
         ir = _parse_and_lower("int.TryParse(s, out var result);")
         address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
         assert any("result" in inst.operands for inst in address_ofs)
 
+    @covers(CSharpFeature.REF_PARAM)
     def test_ref_arg_call_site_emits_address_of(self):
         """ref x at call site should emit ADDRESS_OF."""
         ir = _parse_and_lower("""\
@@ -1379,6 +1503,7 @@ class C {
         address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
         assert len(address_ofs) >= 2
 
+    @covers(CSharpFeature.FUNCTION_DECLARATION)
     def test_regular_param_no_deref(self):
         """Regular param should NOT emit LOAD_INDIRECT."""
         ir = _parse_and_lower("""\
@@ -1394,6 +1519,7 @@ class C {
 class TestCSharpRefLocalIR:
     """Unit tests for ref local variable IR emission."""
 
+    @covers(CSharpFeature.REF_LOCAL)
     def test_ref_local_emits_address_of(self):
         """ref int x = ref y; should emit ADDRESS_OF y."""
         ir = _parse_and_lower("""\
@@ -1402,6 +1528,7 @@ ref int x = ref y;""")
         address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
         assert any("y" in inst.operands for inst in address_ofs)
 
+    @covers(CSharpFeature.REF_LOCAL)
     def test_ref_local_read_emits_load_indirect(self):
         """Reading a ref local should emit LOAD_INDIRECT."""
         ir = _parse_and_lower("""\
@@ -1411,6 +1538,7 @@ int z = x;""")
         load_indirects = _find_all(ir, Opcode.LOAD_INDIRECT)
         assert len(load_indirects) >= 1
 
+    @covers(CSharpFeature.REF_LOCAL)
     def test_ref_local_write_emits_store_indirect(self):
         """Writing to a ref local should emit STORE_INDIRECT."""
         ir = _parse_and_lower("""\
@@ -1422,18 +1550,21 @@ x = 42;""")
 
 
 class TestCSharpAnonymousObjectCreation:
+    @covers(CSharpFeature.ANONYMOUS_OBJECT)
     def test_anonymous_object_no_symbolic(self):
         """new { Name = 'foo', Age = 42 } should not produce SYMBOLIC."""
         ir = _parse_and_lower('var obj = new { Name = "foo", Age = 42 };')
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("anonymous_object" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.ANONYMOUS_OBJECT)
     def test_anonymous_object_creates_heap_object(self):
         """Should emit NEW_OBJECT for the anonymous object."""
         ir = _parse_and_lower('var obj = new { Name = "foo", Age = 42 };')
         new_objs = _find_all(ir, Opcode.NEW_OBJECT)
         assert len(new_objs) >= 1
 
+    @covers(CSharpFeature.ANONYMOUS_OBJECT)
     def test_anonymous_object_stores_fields(self):
         """Should emit STORE_FIELD for each property."""
         ir = _parse_and_lower('var obj = new { Name = "foo", Age = 42 };')
@@ -1444,18 +1575,21 @@ class TestCSharpAnonymousObjectCreation:
 
 
 class TestCSharpWithExpression:
+    @covers(CSharpFeature.WITH_EXPRESSION)
     def test_with_no_symbolic(self):
         """p1 with { Age = 31 } should not produce SYMBOLIC."""
         ir = _parse_and_lower("var p1 = new Person(); var p2 = p1 with { Age = 31 };")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("with_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.WITH_EXPRESSION)
     def test_with_emits_clone(self):
         """with expression should emit CALL_FUNCTION clone."""
         ir = _parse_and_lower("var p1 = new Person(); var p2 = p1 with { Age = 31 };")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("clone" in inst.operands for inst in calls)
 
+    @covers(CSharpFeature.WITH_EXPRESSION)
     def test_with_emits_store_field_for_overrides(self):
         """with expression should emit STORE_FIELD for each property override."""
         ir = _parse_and_lower("var p1 = new Person(); var p2 = p1 with { Age = 31 };")
@@ -1465,6 +1599,7 @@ class TestCSharpWithExpression:
 
 
 class TestCSharpParenthesizedPattern:
+    @covers(CSharpFeature.PARENTHESIZED_PATTERN)
     def test_parenthesized_pattern_no_symbolic(self):
         """(pattern) should not produce SYMBOLIC."""
         ir = _parse_and_lower(
@@ -1475,6 +1610,7 @@ class TestCSharpParenthesizedPattern:
             "parenthesized_pattern" in str(inst.operands) for inst in symbolics
         ), f"parenthesized_pattern produced SYMBOLIC: {symbolics}"
 
+    @covers(CSharpFeature.PARENTHESIZED_PATTERN)
     def test_parenthesized_pattern_unwraps_inner(self):
         """(constant) should produce same IR as the constant alone."""
         ir_bare = _parse_and_lower(
@@ -1498,6 +1634,7 @@ class TestCSharpParenthesizedPattern:
 
 
 class TestCSharpOrPattern:
+    @covers(CSharpFeature.OR_PATTERN)
     def test_or_pattern_no_symbolic(self):
         """1 or 2 should not produce SYMBOLIC."""
         ir = _parse_and_lower(
@@ -1508,6 +1645,7 @@ class TestCSharpOrPattern:
             "or_pattern" in str(inst.operands) for inst in symbolics
         ), f"or_pattern produced SYMBOLIC: {symbolics}"
 
+    @covers(CSharpFeature.OR_PATTERN)
     def test_or_pattern_emits_two_comparisons(self):
         """1 or 2 should emit two == comparisons (one per alternative)."""
         ir = _parse_and_lower(
@@ -1522,6 +1660,7 @@ class TestCSharpOrPattern:
 
 
 class TestCSharpListPattern:
+    @covers(CSharpFeature.LIST_PATTERN)
     def test_list_pattern_no_symbolic(self):
         """[1, 2] list pattern should not produce SYMBOLIC."""
         ir = _parse_and_lower(
@@ -1532,6 +1671,7 @@ class TestCSharpListPattern:
             "list_pattern" in str(inst.operands) for inst in symbolics
         ), f"list_pattern produced SYMBOLIC: {symbolics}"
 
+    @covers(CSharpFeature.LIST_PATTERN)
     def test_list_pattern_checks_elements(self):
         """[1, 2] should emit == comparisons for each element."""
         ir = _parse_and_lower(
@@ -1546,6 +1686,7 @@ class TestCSharpListPattern:
 
 
 class TestCSharpRelationalPattern:
+    @covers(CSharpFeature.RELATIONAL_PATTERN)
     def test_relational_pattern_no_symbolic(self):
         """> 5 pattern should not produce SYMBOLIC."""
         ir = _parse_and_lower(
@@ -1570,6 +1711,7 @@ class TestCSharpRelationalPattern:
 
 
 class TestCSharpAndPattern:
+    @covers(CSharpFeature.AND_PATTERN)
     def test_and_pattern_no_symbolic(self):
         """> 0 and < 10 should not produce SYMBOLIC."""
         ir = _parse_and_lower(
@@ -1580,6 +1722,7 @@ class TestCSharpAndPattern:
             "and_pattern" in str(inst.operands) for inst in symbolics
         ), f"and_pattern produced SYMBOLIC: {symbolics}"
 
+    @covers(CSharpFeature.AND_PATTERN)
     def test_and_pattern_emits_both_comparisons(self):
         """> 0 and < 10 should emit both > and < comparisons."""
         ir = _parse_and_lower(
@@ -1600,6 +1743,7 @@ class TestCSharpAndPattern:
 
 
 class TestCSharpNegatedPattern:
+    @covers(CSharpFeature.NOT_PATTERN)
     def test_negated_pattern_no_symbolic(self):
         """not 0 should not produce SYMBOLIC."""
         ir = _parse_and_lower(
@@ -1610,6 +1754,7 @@ class TestCSharpNegatedPattern:
             "negated_pattern" in str(inst.operands) for inst in symbolics
         ), f"negated_pattern produced SYMBOLIC: {symbolics}"
 
+    @covers(CSharpFeature.NOT_PATTERN)
     def test_negated_pattern_emits_not(self):
         """not 0 should emit an == comparison then a UNOP not."""
         ir = _parse_and_lower(
@@ -1621,3 +1766,112 @@ class TestCSharpNegatedPattern:
             if inst.opcode == Opcode.UNOP and "not" in str(inst.operands)
         ]
         assert len(unops) >= 1
+
+
+class TestCSharpComparison:
+    @covers(CSharpFeature.COMPARISON)
+    def test_comparison_greater_than(self):
+        """Comparison operators should produce BINOP with ==, <, >, etc."""
+        ir = _parse_and_lower("bool result = x > 5;")
+        binops = _find_all(ir, Opcode.BINOP)
+        gt_ops = [b for b in binops if ">" in b.operands]
+        assert len(gt_ops) >= 1
+
+    @covers(CSharpFeature.COMPARISON)
+    def test_comparison_equality(self):
+        """Equality operators should produce BINOP."""
+        ir = _parse_and_lower("bool result = x == 10;")
+        binops = _find_all(ir, Opcode.BINOP)
+        eq_ops = [b for b in binops if "==" in b.operands]
+        assert len(eq_ops) >= 1
+
+
+class TestCSharpFieldDeclaration:
+    @covers(CSharpFeature.FIELD)
+    def test_field_declaration_in_constructor(self):
+        """Field assignment in constructor should produce STORE_FIELD."""
+        source = """\
+class C {
+    int count;
+    C() { this.count = 0; }
+}
+"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("count" in inst.operands for inst in store_fields)
+
+    @covers(CSharpFeature.FIELD)
+    def test_field_access_in_method(self):
+        """Field access in a method should produce LOAD_FIELD."""
+        source = """\
+class C {
+    int count;
+    int GetCount() { return this.count; }
+}
+"""
+        ir = _parse_and_lower(source)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("count" in inst.operands for inst in load_fields)
+
+
+class TestCSharpThrowStatement:
+    @covers(CSharpFeature.THROW)
+    def test_throw_statement_basic(self):
+        """throw statement should produce THROW opcode."""
+        source = """\
+class C {
+    void M() {
+        throw new Exception("error");
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        throws = _find_all(ir, Opcode.THROW)
+        assert len(throws) >= 1
+
+    @covers(CSharpFeature.THROW)
+    def test_throw_with_message(self):
+        """throw with message string should produce CONST and THROW."""
+        source = """\
+class C {
+    void M() {
+        throw new InvalidOperationException("Operation failed");
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("Operation failed" in str(inst.operands) for inst in consts)
+        throws = _find_all(ir, Opcode.THROW)
+        assert len(throws) >= 1
+
+
+class TestCSharpBreakContinueStatement:
+    @covers(CSharpFeature.BREAK_CONTINUE)
+    def test_break_in_loop(self):
+        """break statement should produce BRANCH."""
+        source = """\
+for (int i = 0; i < 10; i++) {
+    if (i == 5) {
+        break;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH)
+        assert len(branches) >= 1
+
+    @covers(CSharpFeature.BREAK_CONTINUE)
+    def test_continue_in_loop(self):
+        """continue statement should produce BRANCH."""
+        source = """\
+for (int i = 0; i < 10; i++) {
+    if (i % 2 == 0) {
+        continue;
+    }
+    x = i;
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH)
+        assert len(branches) >= 1

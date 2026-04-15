@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from interpreter.frontends.csharp import CSharpFrontend
+from interpreter.frontends.csharp.features import CSharpFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 
 
 def _parse_csharp(source: str) -> list[InstructionBase]:
@@ -25,6 +27,7 @@ def _find_all(
 class TestCSharpThrowExpression:
     """C# throw as an expression: x ?? throw new Exception()."""
 
+    @covers(CSharpFeature.THROW_EXPRESSION)
     def test_throw_expression_no_unsupported_symbolic(self):
         """throw_expression should not produce unsupported SYMBOLIC."""
         source = """\
@@ -37,6 +40,7 @@ string result = name ?? throw new ArgumentNullException("name");
             "unsupported:" in str(inst.operands) for inst in symbolics
         ), f"Found unsupported: {[s for s in symbolics if 'unsupported:' in str(s.operands)]}"
 
+    @covers(CSharpFeature.THROW_EXPRESSION)
     def test_throw_expression_emits_throw(self):
         """throw_expression should emit a THROW opcode."""
         source = """\
@@ -54,6 +58,7 @@ string result = name ?? throw new ArgumentNullException("name");
 class TestCSharpGotoStatement:
     """C# goto statement: goto label;"""
 
+    @covers(CSharpFeature.GOTO)
     def test_goto_no_unsupported_symbolic(self):
         """goto_statement should not produce unsupported SYMBOLIC."""
         source = """\
@@ -67,6 +72,7 @@ int y = 2;
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.GOTO)
     def test_goto_emits_branch(self):
         """goto should emit a BRANCH to the target label."""
         source = """\
@@ -89,6 +95,7 @@ int y = 2;
 class TestCSharpLabeledStatement:
     """C# labeled statements: label: statement."""
 
+    @covers(CSharpFeature.LABELED_STATEMENT)
     def test_labeled_statement_no_unsupported_symbolic(self):
         """labeled_statement should not produce unsupported SYMBOLIC."""
         source = """\
@@ -100,6 +107,7 @@ int y = 2;
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CSharpFeature.LABELED_STATEMENT)
     def test_labeled_statement_emits_label(self):
         """labeled_statement should emit a LABEL opcode."""
         source = """\
@@ -113,6 +121,7 @@ int y = 2;
             inst.label.contains("myLabel") for inst in labels
         ), "labeled_statement should emit LABEL 'myLabel'"
 
+    @covers(CSharpFeature.LABELED_STATEMENT)
     def test_labeled_statement_lowers_body(self):
         """The statement after the label should be lowered."""
         source = """\
