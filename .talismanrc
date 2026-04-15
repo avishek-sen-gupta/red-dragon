@@ -129,4 +129,6 @@ fileignoreconfig:
   checksum: 47d84e6284172705d13008b2b7fde4aa9da8625450e9a916582a2e35bb2b03b6
 - filename: interpreter/frontends/java/verified_features.py
   checksum: f57395e26834200675312ac1e170e10400beb9c11f88dc6cb904273039a05cba
+- filename: viz/pipeline-showcase.html
+  checksum: 134fbb293001a116958bff315bbaa907d13176cc9ffd7448876c722fda45720b
 version: "1.0"
