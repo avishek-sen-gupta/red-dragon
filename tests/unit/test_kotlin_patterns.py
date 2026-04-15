@@ -30,8 +30,10 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.kotlin import KotlinFrontend
+from interpreter.frontends.kotlin.features import KotlinFeature
 from interpreter.frontends.kotlin.patterns import parse_kotlin_pattern
 from interpreter.parser import TreeSitterParserFactory
+from tests.covers import covers
 
 
 def _make_kotlin_ctx(source: str) -> TreeSitterEmitContext:
@@ -72,6 +74,7 @@ def _parse_pattern_from_snippet(snippet: str, entry_index: int = 0):
 
 
 class TestIntegerLiteralPattern:
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_integer_literal_maps_to_literal_pattern(self):
         snippet = "fun test(x: Any) { when (x) { 42 -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -79,6 +82,7 @@ class TestIntegerLiteralPattern:
         result = parse_kotlin_pattern(ctx, node)
         assert result == LiteralPattern(42)
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_integer_literal_zero(self):
         snippet = "fun test(x: Any) { when (x) { 0 -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -86,6 +90,7 @@ class TestIntegerLiteralPattern:
         result = parse_kotlin_pattern(ctx, node)
         assert result == LiteralPattern(0)
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_integer_literal_with_underscore_separator(self):
         snippet = "fun test(x: Any) { when (x) { 1_000 -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -95,6 +100,7 @@ class TestIntegerLiteralPattern:
 
 
 class TestRealLiteralPattern:
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_real_literal_maps_to_literal_pattern(self):
         snippet = "fun test(x: Any) { when (x) { 3.14 -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -102,6 +108,7 @@ class TestRealLiteralPattern:
         result = parse_kotlin_pattern(ctx, node)
         assert result == LiteralPattern(3.14)
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_real_literal_with_f_suffix(self):
         snippet = "fun test(x: Any) { when (x) { 2.5f -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -111,6 +118,7 @@ class TestRealLiteralPattern:
 
 
 class TestStringLiteralPattern:
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_string_literal_maps_to_literal_pattern(self):
         snippet = 'fun test(x: Any) { when (x) { "hello" -> 1; else -> 0 } }'
         ctx = _make_kotlin_ctx(snippet)
@@ -118,6 +126,7 @@ class TestStringLiteralPattern:
         result = parse_kotlin_pattern(ctx, node)
         assert result == LiteralPattern("hello")
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_empty_string_literal(self):
         snippet = 'fun test(x: Any) { when (x) { "" -> 1; else -> 0 } }'
         ctx = _make_kotlin_ctx(snippet)
@@ -127,6 +136,7 @@ class TestStringLiteralPattern:
 
 
 class TestBooleanLiteralPattern:
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_true_maps_to_literal_true(self):
         snippet = "fun test(x: Any) { when (x) { true -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -134,6 +144,7 @@ class TestBooleanLiteralPattern:
         result = parse_kotlin_pattern(ctx, node)
         assert result == LiteralPattern(True)
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_false_maps_to_literal_false(self):
         snippet = "fun test(x: Any) { when (x) { false -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -143,6 +154,7 @@ class TestBooleanLiteralPattern:
 
 
 class TestNullLiteralPattern:
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_null_maps_to_literal_none(self):
         snippet = "fun test(x: Any?) { when (x) { null -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -152,6 +164,7 @@ class TestNullLiteralPattern:
 
 
 class TestCapturePattern:
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_simple_identifier_maps_to_capture_pattern(self):
         # In Kotlin when without subject, a bare identifier in an entry is a capture
         snippet = "fun test(x: Int) { when (x) { 1 -> 1; else -> 0 } }"
@@ -174,6 +187,7 @@ class TestCapturePattern:
         result = parse_kotlin_pattern(capture_ctx, inner)
         assert result == CapturePattern("y")
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_capture_name_preserved(self):
         capture_snippet = (
             "fun test(x: Int) { val value = 5; when (x) { value -> 1; else -> 0 } }"
@@ -190,6 +204,7 @@ class TestCapturePattern:
 
 
 class TestIsTypePattern:
+    @covers(KotlinFeature.TYPE_TEST)
     def test_is_int_maps_to_class_pattern(self):
         """Diagnostic: verify tree-sitter emits type_test for `is Int`."""
         snippet = "fun test(x: Any) { when (x) { is Int -> 1; else -> 0 } }"
@@ -203,6 +218,7 @@ class TestIsTypePattern:
         result = parse_kotlin_pattern(ctx, node)
         assert result == ClassPattern("Int", positional=(), keyword=())
 
+    @covers(KotlinFeature.TYPE_TEST)
     def test_is_string_maps_to_class_pattern(self):
         snippet = "fun test(x: Any) { when (x) { is String -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -210,6 +226,7 @@ class TestIsTypePattern:
         result = parse_kotlin_pattern(ctx, node)
         assert result == ClassPattern("String", positional=(), keyword=())
 
+    @covers(KotlinFeature.TYPE_TEST)
     def test_is_type_has_empty_positional_and_keyword(self):
         snippet = "fun test(x: Any) { when (x) { is Double -> 1; else -> 0 } }"
         ctx = _make_kotlin_ctx(snippet)
@@ -219,6 +236,7 @@ class TestIsTypePattern:
         assert result.positional == ()
         assert result.keyword == ()
 
+    @covers(KotlinFeature.TYPE_TEST)
     def test_multiple_is_type_entries(self):
         """Verify correct class name extraction for multiple is-type entries."""
         snippet = (
