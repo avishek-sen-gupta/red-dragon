@@ -7,6 +7,8 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode, SpreadArguments
 from interpreter.instructions import InstructionBase
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+from interpreter.frontends.javascript.features import JavaScriptFeature
+from tests.covers import covers
 
 
 def _parse_js(source: str) -> list[InstructionBase]:
@@ -25,11 +27,13 @@ def _find_all(
 
 
 class TestJavaScriptSmoke:
+    @covers(JavaScriptFeature.VARIABLE_DECLARATION)
     def test_empty_program(self):
         instructions = _parse_js("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(JavaScriptFeature.VARIABLE_DECLARATION)
     def test_number_literal(self):
         instructions = _parse_js("42;")
         consts = _find_all(instructions, Opcode.CONST)
@@ -37,6 +41,7 @@ class TestJavaScriptSmoke:
 
 
 class TestJavaScriptExpressions:
+    @covers(JavaScriptFeature.VARIABLE_DECLARATION)
     def test_variable_assignment(self):
         instructions = _parse_js("let x = 10;")
         opcodes = _opcodes(instructions)
@@ -45,6 +50,7 @@ class TestJavaScriptExpressions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.ARITHMETIC)
     def test_arithmetic_expression(self):
         instructions = _parse_js("let y = x + 5;")
         opcodes = _opcodes(instructions)
@@ -55,12 +61,14 @@ class TestJavaScriptExpressions:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(JavaScriptFeature.TERNARY)
     def test_ternary_expression(self):
         instructions = _parse_js('let y = x > 0 ? "pos" : "neg";')
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.DECL_VAR in opcodes
 
+    @covers(JavaScriptFeature.TEMPLATE_LITERAL)
     def test_template_literal(self):
         instructions = _parse_js("const s = `hello`;")
         consts = _find_all(instructions, Opcode.CONST)
@@ -68,6 +76,7 @@ class TestJavaScriptExpressions:
 
 
 class TestJavaScriptControlFlow:
+    @covers(JavaScriptFeature.IF_ELSE)
     def test_if_else(self):
         instructions = _parse_js("if (x > 5) { y = 1; } else { y = 0; }")
         opcodes = _opcodes(instructions)
@@ -75,6 +84,7 @@ class TestJavaScriptControlFlow:
         assert Opcode.LABEL in opcodes
         assert Opcode.BRANCH in opcodes
 
+    @covers(JavaScriptFeature.WHILE_LOOP)
     def test_while_loop(self):
         instructions = _parse_js("while (x > 0) { x--; }")
         opcodes = _opcodes(instructions)
@@ -83,6 +93,7 @@ class TestJavaScriptControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
 
+    @covers(JavaScriptFeature.FOR_LOOP)
     def test_for_loop(self):
         instructions = _parse_js("for (let i = 0; i < 10; i++) { x = x + i; }")
         opcodes = _opcodes(instructions)
@@ -92,6 +103,7 @@ class TestJavaScriptControlFlow:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.FOR_IN_LOOP)
     def test_for_in_loop(self):
         instructions = _parse_js("for (let k in obj) { x = k; }")
         opcodes = _opcodes(instructions)
@@ -100,6 +112,7 @@ class TestJavaScriptControlFlow:
         assert any("keys" in inst.operands for inst in calls)
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(JavaScriptFeature.IF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         instructions = _parse_js(
@@ -129,6 +142,7 @@ class TestJavaScriptControlFlow:
 
 
 class TestJavaScriptFunctions:
+    @covers(JavaScriptFeature.FUNCTION_DECLARATION)
     def test_function_declaration(self):
         instructions = _parse_js("function add(a, b) { return a + b; }")
         opcodes = _opcodes(instructions)
@@ -143,12 +157,14 @@ class TestJavaScriptFunctions:
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
 
+    @covers(JavaScriptFeature.FUNCTION_CALL)
     def test_function_call(self):
         instructions = _parse_js("add(1, 2);")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) == 1
         assert "add" in calls[0].operands
 
+    @covers(JavaScriptFeature.ARROW_FUNCTION)
     def test_arrow_function(self):
         instructions = _parse_js("const f = (a, b) => a + b;")
         opcodes = _opcodes(instructions)
@@ -157,6 +173,7 @@ class TestJavaScriptFunctions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.METHOD_CALL)
     def test_method_call(self):
         instructions = _parse_js('console.log("hello");')
         calls = _find_all(instructions, Opcode.CALL_METHOD)
@@ -165,6 +182,7 @@ class TestJavaScriptFunctions:
 
 
 class TestJavaScriptClasses:
+    @covers(JavaScriptFeature.CLASS)
     def test_class_definition(self):
         instructions = _parse_js(
             'class Dog { constructor(n) { this.name = n; } bark() { return "woof"; } }'
@@ -178,12 +196,14 @@ class TestJavaScriptClasses:
 
 
 class TestJavaScriptLiterals:
+    @covers(JavaScriptFeature.OBJECT_LITERAL)
     def test_object_literal(self):
         instructions = _parse_js("const obj = {a: 1, b: 2};")
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_OBJECT in opcodes
         assert Opcode.STORE_INDEX in opcodes
 
+    @covers(JavaScriptFeature.ARRAY_LITERAL)
     def test_array_literal(self):
         instructions = _parse_js("const arr = [1, 2, 3];")
         opcodes = _opcodes(instructions)
@@ -192,11 +212,13 @@ class TestJavaScriptLiterals:
 
 
 class TestJavaScriptSpecial:
+    @covers(JavaScriptFeature.THROW)
     def test_throw_statement(self):
         instructions = _parse_js('throw new Error("fail");')
         opcodes = _opcodes(instructions)
         assert Opcode.THROW in opcodes
 
+    @covers(JavaScriptFeature.ARITHMETIC)
     def test_update_expression_decrement(self):
         instructions = _parse_js("x--;")
         opcodes = _opcodes(instructions)
@@ -204,6 +226,7 @@ class TestJavaScriptSpecial:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("-" in inst.operands for inst in binops)
 
+    @covers(JavaScriptFeature.ARITHMETIC)
     def test_update_expression_increment(self):
         instructions = _parse_js("x++;")
         binops = _find_all(instructions, Opcode.BINOP)
@@ -222,6 +245,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialJavaScript:
+    @covers(JavaScriptFeature.ARROW_FUNCTION)
     def test_arrow_function_in_method_call(self):
         source = "const doubled = items.map((x) => x * 2);"
         instructions = _parse_js(source)
@@ -232,6 +256,7 @@ class TestNonTrivialJavaScript:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("doubled" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.FOR_OF_LOOP)
     def test_for_of_loop_with_method_body(self):
         source = """\
 for (const item of items) {
@@ -249,6 +274,7 @@ for (const item of items) {
         assert "push" in method_names
         assert len(instructions) > 10
 
+    @covers(JavaScriptFeature.TERNARY)
     def test_nested_ternary(self):
         source = 'const label = x > 100 ? "high" : x > 50 ? "mid" : "low";'
         instructions = _parse_js(source)
@@ -257,6 +283,7 @@ for (const item of items) {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("label" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.CLASS)
     def test_class_with_constructor_and_methods(self):
         source = """\
 class Counter {
@@ -282,6 +309,7 @@ class Counter {
         assert len(returns) >= 1
         assert len(instructions) > 20
 
+    @covers(JavaScriptFeature.FOR_LOOP)
     def test_for_loop_building_array(self):
         source = """\
 const result = [];
@@ -299,6 +327,7 @@ for (let i = 0; i < 10; i++) {
         assert any("*" in inst.operands for inst in binops)
         assert len(instructions) > 15
 
+    @covers(JavaScriptFeature.IF_ELSE)
     def test_if_else_chain_with_early_return(self):
         source = """\
 function classify(x) {
@@ -319,6 +348,7 @@ function classify(x) {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("classify" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.TEMPLATE_LITERAL)
     def test_template_literal_with_expressions(self):
         source = """\
 const name = "world";
@@ -331,6 +361,7 @@ const msg = `Hello ${name}, you have ${count} items`;
         assert any("count" in inst.operands for inst in stores)
         assert any("msg" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.WHILE_LOOP)
     def test_while_with_object_mutation(self):
         source = """\
 let i = 0;
@@ -349,6 +380,7 @@ while (i < 10) {
         assert any("while" in lbl for lbl in labels)
         assert len(instructions) > 15
 
+    @covers(JavaScriptFeature.TRY_CATCH)
     def test_try_catch_with_throw(self):
         source = """\
 try {
@@ -371,6 +403,7 @@ try {
         assert not any("catch_clause:" in str(s.operands) for s in symbolics)
         assert len(instructions) > 10
 
+    @covers(JavaScriptFeature.OBJECT_LITERAL)
     def test_object_literal_with_method_calls(self):
         source = """\
 const config = {name: "app", version: 1};
@@ -388,6 +421,7 @@ const upper = config.name.toUpperCase();
 
 
 class TestJavaScriptForOf:
+    @covers(JavaScriptFeature.FOR_OF_LOOP)
     def test_for_of_basic(self):
         """for...of should produce index-based IR (LOAD_INDEX, not SYMBOLIC)."""
         source = "for (const x of items) { y = x; }"
@@ -400,6 +434,7 @@ class TestJavaScriptForOf:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.BREAK_CONTINUE)
     def test_for_of_with_break(self):
         source = """\
 for (const x of items) {
@@ -413,6 +448,7 @@ for (const x of items) {
         end_labels = [lbl for lbl in labels if "for_of_end" in lbl]
         assert any(b.label in end_labels for b in branches)
 
+    @covers(JavaScriptFeature.FOR_IN_LOOP)
     def test_for_in_basic(self):
         """for...in should emit CALL_FUNCTION keys + index-based loop."""
         source = "for (let k in obj) { x = k; }"
@@ -425,6 +461,7 @@ for (const x of items) {
         labels = _labels_in_order(instructions)
         assert any("for_in" in lbl for lbl in labels)
 
+    @covers(JavaScriptFeature.FOR_IN_LOOP)
     def test_for_in_with_body(self):
         """for...in loop body is lowered."""
         source = "for (let k in obj) { console.log(k); }"
@@ -432,6 +469,7 @@ for (const x of items) {
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("log" in inst.operands for inst in calls)
 
+    @covers(JavaScriptFeature.BREAK_CONTINUE)
     def test_for_in_with_break(self):
         """for...in supports break."""
         source = "for (let k in obj) { if (k === 'x') break; }"
@@ -441,6 +479,7 @@ for (const x of items) {
 
 
 class TestJavaScriptDestructuring:
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_obj_destructure_basic(self):
         source = "const { a, b } = obj;"
         instructions = _parse_js(source)
@@ -454,6 +493,7 @@ class TestJavaScriptDestructuring:
         assert any("a" in inst.operands for inst in stores)
         assert any("b" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_obj_destructure_rename(self):
         source = "const { x: localX, y: localY } = obj;"
         instructions = _parse_js(source)
@@ -465,6 +505,7 @@ class TestJavaScriptDestructuring:
         assert any("localX" in inst.operands for inst in stores)
         assert any("localY" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_arr_destructure_basic(self):
         source = "const [a, b] = arr;"
         instructions = _parse_js(source)
@@ -474,6 +515,7 @@ class TestJavaScriptDestructuring:
         assert any("a" in inst.operands for inst in stores)
         assert any("b" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_arr_destructure_three(self):
         source = "const [x, y, z] = arr;"
         instructions = _parse_js(source)
@@ -484,6 +526,7 @@ class TestJavaScriptDestructuring:
         assert any("y" in inst.operands for inst in stores)
         assert any("z" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_arr_destructure_rest(self):
         """const [first, ...rest] = arr; should LOAD_INDEX first, then slice for rest."""
         source = "const [first, ...rest] = arr;"
@@ -500,6 +543,7 @@ class TestJavaScriptDestructuring:
             "slice" in inst.operands for inst in calls
         ), f"expected slice call, got {[inst.operands for inst in calls]}"
 
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_arr_destructure_rest_middle_elements(self):
         """const [a, b, ...rest] = arr; — rest starts at index 2."""
         source = "const [a, b, ...rest] = arr;"
@@ -515,6 +559,7 @@ class TestJavaScriptDestructuring:
         assert "b" in store_names
         assert "rest" in store_names
 
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_obj_destructure_rest(self):
         """const {a, ...rest} = obj; should LOAD_FIELD a, then object_rest for rest."""
         source = "const {a, ...rest} = obj;"
@@ -532,6 +577,7 @@ class TestJavaScriptDestructuring:
             "object_rest" in inst.operands for inst in calls
         ), f"expected object_rest call, got {[inst.operands for inst in calls]}"
 
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_obj_destructure_rest_with_rename(self):
         """const {x: localX, ...rest} = obj; — renamed + rest."""
         source = "const {x: localX, ...rest} = obj;"
@@ -546,6 +592,7 @@ class TestJavaScriptDestructuring:
 
 
 class TestJavaScriptRestParameter:
+    @covers(JavaScriptFeature.SPREAD)
     def test_rest_param_emits_slice(self):
         """function foo(a, ...rest) {} should emit slice(arguments, 1) for rest."""
         source = "function foo(a, ...rest) { return rest; }"
@@ -565,6 +612,7 @@ class TestJavaScriptRestParameter:
         store_names = [inst.operands[0] for inst in stores]
         assert "rest" in store_names
 
+    @covers(JavaScriptFeature.SPREAD)
     def test_rest_param_only(self):
         """function foo(...args) {} should slice from index 0."""
         source = "function foo(...args) { return args; }"
@@ -577,6 +625,7 @@ class TestJavaScriptRestParameter:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("args" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.SPREAD)
     def test_rest_param_loads_arguments(self):
         """Rest param should emit LOAD_VAR arguments."""
         source = "function foo(x, y, ...rest) {}"
@@ -591,6 +640,7 @@ class TestJavaScriptRestParameter:
 class TestJavaScriptUsingDeclaration:
     """using x = expr should lower identically to const x = expr."""
 
+    @covers(JavaScriptFeature.VARIABLE_DECLARATION)
     def test_using_simple_assignment(self):
         """using file = openFile() should emit CALL_FUNCTION + STORE_VAR."""
         source = "using file = openFile();"
@@ -603,6 +653,7 @@ class TestJavaScriptUsingDeclaration:
         store_names = [inst.operands[0] for inst in stores]
         assert "file" in store_names, f"expected STORE_VAR file, got {store_names}"
 
+    @covers(JavaScriptFeature.VARIABLE_DECLARATION)
     def test_using_produces_same_ir_as_const(self):
         """using x = expr and const x = expr should produce equivalent IR."""
         using_ir = _parse_js("using res = getResource();")
@@ -614,6 +665,7 @@ class TestJavaScriptUsingDeclaration:
             f"  using: {using_ops}\n  const: {const_ops}"
         )
 
+    @covers(JavaScriptFeature.DESTRUCTURING)
     def test_using_with_destructuring(self):
         """using with object destructuring should work like const."""
         source = "using {conn, pool} = createPool();"
@@ -625,6 +677,7 @@ class TestJavaScriptUsingDeclaration:
 
 
 class TestJavaScriptNewExpression:
+    @covers(JavaScriptFeature.OBJECT_CREATION)
     def test_new_expression_basic(self):
         instructions = _parse_js("const obj = new Foo();")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
@@ -632,6 +685,7 @@ class TestJavaScriptNewExpression:
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("constructor" in inst.operands for inst in calls)
 
+    @covers(JavaScriptFeature.OBJECT_CREATION)
     def test_new_expression_with_args(self):
         instructions = _parse_js("const obj = new Dog(name, age);")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
@@ -645,6 +699,7 @@ class TestJavaScriptNewExpression:
         assert any("name" in inst.operands for inst in loads)
         assert any("age" in inst.operands for inst in loads)
 
+    @covers(JavaScriptFeature.OBJECT_CREATION)
     def test_new_expression_in_throw(self):
         instructions = _parse_js('throw new Error("fail");')
         opcodes = _opcodes(instructions)
@@ -653,6 +708,7 @@ class TestJavaScriptNewExpression:
 
 
 class TestJavaScriptAwaitExpression:
+    @covers(JavaScriptFeature.ASYNC_AWAIT)
     def test_await_basic(self):
         instructions = _parse_js("const result = await fetch(url);")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -660,11 +716,13 @@ class TestJavaScriptAwaitExpression:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.ASYNC_AWAIT)
     def test_await_in_assignment(self):
         instructions = _parse_js("const data = await response.json();")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("await" in inst.operands for inst in calls)
 
+    @covers(JavaScriptFeature.ASYNC_AWAIT)
     def test_await_nested(self):
         instructions = _parse_js("const x = await (await fetch(url)).json();")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -673,16 +731,19 @@ class TestJavaScriptAwaitExpression:
 
 
 class TestJavaScriptYieldExpression:
+    @covers(JavaScriptFeature.GENERATOR)
     def test_yield_with_value(self):
         instructions = _parse_js("function* gen() { yield 42; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("yield" in inst.operands for inst in calls)
 
+    @covers(JavaScriptFeature.GENERATOR)
     def test_bare_yield(self):
         instructions = _parse_js("function* gen() { yield; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("yield" in inst.operands for inst in calls)
 
+    @covers(JavaScriptFeature.GENERATOR)
     def test_yield_with_expression(self):
         instructions = _parse_js("function* gen() { const x = yield getValue(); }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -690,11 +751,13 @@ class TestJavaScriptYieldExpression:
 
 
 class TestJavaScriptRegex:
+    @covers(JavaScriptFeature.REGEX_LITERAL)
     def test_regex_literal(self):
         instructions = _parse_js("const r = /abc/gi;")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("/abc/gi" in inst.operands for inst in consts)
 
+    @covers(JavaScriptFeature.REGEX_LITERAL)
     def test_regex_in_condition(self):
         instructions = _parse_js("if (/test/.test(str)) { x = 1; }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -702,6 +765,7 @@ class TestJavaScriptRegex:
 
 
 class TestJavaScriptSequenceExpression:
+    @covers(JavaScriptFeature.ARITHMETIC)
     def test_sequence_basic(self):
         instructions = _parse_js("const x = (1, 2, 3);")
         consts = _find_all(instructions, Opcode.CONST)
@@ -711,6 +775,7 @@ class TestJavaScriptSequenceExpression:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.ARITHMETIC)
     def test_sequence_with_side_effects(self):
         instructions = _parse_js("const x = (a++, b++, c);")
         binops = _find_all(instructions, Opcode.BINOP)
@@ -723,6 +788,7 @@ class TestJavaScriptSequenceExpression:
 
 
 class TestJavaScriptSpreadElement:
+    @covers(JavaScriptFeature.SPREAD)
     def test_spread_in_call(self):
         instructions = _parse_js("foo(...args);")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -731,6 +797,7 @@ class TestJavaScriptSpreadElement:
             for inst in calls
         )
 
+    @covers(JavaScriptFeature.SPREAD)
     def test_spread_in_array(self):
         instructions = _parse_js("const arr = [...items, 4, 5];")
         spread_ops = [
@@ -741,6 +808,7 @@ class TestJavaScriptSpreadElement:
         ]
         assert len(spread_ops) >= 1
 
+    @covers(JavaScriptFeature.SPREAD)
     def test_spread_multiple(self):
         instructions = _parse_js("foo(...a, ...b);")
         spread_ops = [
@@ -753,6 +821,7 @@ class TestJavaScriptSpreadElement:
 
 
 class TestJavaScriptFunctionExpression:
+    @covers(JavaScriptFeature.LAMBDA)
     def test_anonymous_function(self):
         instructions = _parse_js("const f = function(x) { return x + 1; };")
         opcodes = _opcodes(instructions)
@@ -766,6 +835,7 @@ class TestJavaScriptFunctionExpression:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.LAMBDA)
     def test_named_function_expression(self):
         instructions = _parse_js("const f = function myFunc(x) { return x; };")
         consts = _find_all(instructions, Opcode.CONST)
@@ -776,6 +846,7 @@ class TestJavaScriptFunctionExpression:
         )
         assert any("myFunc" in str(inst.operands) for inst in consts)
 
+    @covers(JavaScriptFeature.LAMBDA)
     def test_function_expression_as_callback(self):
         instructions = _parse_js("arr.forEach(function(item) { process(item); });")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
@@ -790,6 +861,7 @@ class TestJavaScriptFunctionExpression:
 
 
 class TestJavaScriptSuperExpression:
+    @covers(JavaScriptFeature.SUPER)
     def test_super_call(self):
         source = """\
 class Dog extends Animal {
@@ -802,6 +874,7 @@ class Dog extends Animal {
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("super" in inst.operands for inst in loads)
 
+    @covers(JavaScriptFeature.SUPER)
     def test_super_method_call(self):
         source = """\
 class Dog extends Animal {
@@ -816,6 +889,7 @@ class Dog extends Animal {
 
 
 class TestJavaScriptSwitchStatement:
+    @covers(JavaScriptFeature.SWITCH_STATEMENT)
     def test_switch_basic(self):
         source = """\
 switch (x) {
@@ -837,6 +911,7 @@ switch (x) {
         labels = _labels_in_order(instructions)
         assert any("switch_end" in lbl for lbl in labels)
 
+    @covers(JavaScriptFeature.SWITCH_STATEMENT)
     def test_switch_with_expressions(self):
         source = """\
 switch (status) {
@@ -851,6 +926,7 @@ switch (status) {
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("===" in inst.operands for inst in binops)
 
+    @covers(JavaScriptFeature.SWITCH_STATEMENT)
     def test_switch_break_targets(self):
         source = """\
 switch (x) {
@@ -869,6 +945,7 @@ switch (x) {
 
 
 class TestJavaScriptDoWhileStatement:
+    @covers(JavaScriptFeature.DO_WHILE_LOOP)
     def test_do_while_basic(self):
         source = "do { x++; } while (x < 10);"
         instructions = _parse_js(source)
@@ -879,6 +956,7 @@ class TestJavaScriptDoWhileStatement:
         assert any("do_cond" in lbl for lbl in labels)
         assert any("do_end" in lbl for lbl in labels)
 
+    @covers(JavaScriptFeature.DO_WHILE_LOOP)
     def test_do_while_with_break(self):
         source = "do { if (x > 5) break; x++; } while (true);"
         instructions = _parse_js(source)
@@ -888,6 +966,7 @@ class TestJavaScriptDoWhileStatement:
         branches = _find_all(instructions, Opcode.BRANCH)
         assert any(b.label in end_labels for b in branches)
 
+    @covers(JavaScriptFeature.DO_WHILE_LOOP)
     def test_do_while_with_continue(self):
         source = "do { if (x > 5) continue; x++; } while (x < 10);"
         instructions = _parse_js(source)
@@ -899,12 +978,14 @@ class TestJavaScriptDoWhileStatement:
 
 
 class TestJavaScriptLabeledStatement:
+    @covers(JavaScriptFeature.LABELED_STATEMENT)
     def test_labeled_statement_basic(self):
         source = "outer: for (let i = 0; i < 10; i++) { x = i; }"
         instructions = _parse_js(source)
         labels = _labels_in_order(instructions)
         assert any("outer" in lbl for lbl in labels)
 
+    @covers(JavaScriptFeature.LABELED_STATEMENT)
     def test_labeled_statement_with_block(self):
         source = "myLabel: { x = 1; y = 2; }"
         instructions = _parse_js(source)
@@ -916,6 +997,7 @@ class TestJavaScriptLabeledStatement:
 
 
 class TestJavaScriptTemplateSubstitution:
+    @covers(JavaScriptFeature.TEMPLATE_LITERAL)
     def test_template_with_substitution(self):
         source = "const msg = `Hello ${name}!`;"
         instructions = _parse_js(source)
@@ -926,6 +1008,7 @@ class TestJavaScriptTemplateSubstitution:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(JavaScriptFeature.TEMPLATE_LITERAL)
     def test_template_multiple_substitutions(self):
         source = "const msg = `${a} and ${b}`;"
         instructions = _parse_js(source)
@@ -936,6 +1019,7 @@ class TestJavaScriptTemplateSubstitution:
         binops = _find_all(instructions, Opcode.BINOP)
         assert len(binops) >= 2
 
+    @covers(JavaScriptFeature.TEMPLATE_LITERAL)
     def test_template_no_substitution(self):
         source = "const msg = `plain text`;"
         instructions = _parse_js(source)
@@ -944,6 +1028,7 @@ class TestJavaScriptTemplateSubstitution:
 
 
 class TestJavaScriptClassStaticBlock:
+    @covers(JavaScriptFeature.CLASS)
     def test_class_static_block(self):
         source = """\
 class Foo {
@@ -961,6 +1046,7 @@ class Foo {
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("count" in inst.operands for inst in store_fields)
 
+    @covers(JavaScriptFeature.CLASS)
     def test_class_static_block_with_logic(self):
         source = """\
 class Config {
@@ -979,11 +1065,13 @@ class Config {
 
 
 class TestJavaScriptImportStatement:
+    @covers(JavaScriptFeature.IMPORT)
     def test_import_default_is_noop(self):
         instructions = _parse_js('import foo from "bar";')
         # Should not crash; import is a no-op
         assert instructions[0].opcode == Opcode.LABEL
 
+    @covers(JavaScriptFeature.IMPORT)
     def test_import_named_is_noop(self):
         instructions = _parse_js('import { a, b } from "module";')
         assert instructions[0].opcode == Opcode.LABEL
@@ -991,12 +1079,14 @@ class TestJavaScriptImportStatement:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("import" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaScriptFeature.IMPORT)
     def test_import_star_is_noop(self):
         instructions = _parse_js('import * as utils from "./utils";')
         assert instructions[0].opcode == Opcode.LABEL
 
 
 class TestJavaScriptExportStatement:
+    @covers(JavaScriptFeature.EXPORT)
     def test_export_function_declaration(self):
         instructions = _parse_js("export function add(a, b) { return a + b; }")
         opcodes = _opcodes(instructions)
@@ -1004,6 +1094,7 @@ class TestJavaScriptExportStatement:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
+    @covers(JavaScriptFeature.EXPORT)
     def test_export_variable_declaration(self):
         instructions = _parse_js("export const x = 42;")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -1011,6 +1102,7 @@ class TestJavaScriptExportStatement:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
 
+    @covers(JavaScriptFeature.EXPORT)
     def test_export_class_declaration(self):
         instructions = _parse_js("export class Foo { constructor() {} }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -1022,6 +1114,7 @@ class TestJavaScriptExportStatement:
 class TestJavaScriptOperatorExecution:
     """VM execution tests for JavaScript-specific operators."""
 
+    @covers(JavaScriptFeature.SWITCH_STATEMENT)
     def test_strict_equality_in_switch(self):
         source = """\
 function classify(x) {
@@ -1038,6 +1131,7 @@ let answer = classify(2);
         assert extract_answer(vm, "javascript") == "two"
         assert stats.llm_calls == 0
 
+    @covers(JavaScriptFeature.SWITCH_STATEMENT)
     def test_strict_equality_switch_default(self):
         source = """\
 function classify(x) {
@@ -1056,12 +1150,14 @@ let answer = classify(99);
 
 
 class TestJSStringFragment:
+    @covers(JavaScriptFeature.TEMPLATE_LITERAL)
     def test_string_fragment_no_symbolic(self):
         source = "let x = `hello ${name} world`;"
         ir = _parse_js(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("string_fragment" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaScriptFeature.TEMPLATE_LITERAL)
     def test_string_fragment_as_const(self):
         source = "let x = `prefix ${y}`;"
         ir = _parse_js(source)
@@ -1070,6 +1166,7 @@ class TestJSStringFragment:
 
 
 class TestJavaScriptExportClause:
+    @covers(JavaScriptFeature.EXPORT)
     def test_export_clause_no_unsupported(self):
         """export { a, b } from './module' should not produce unsupported SYMBOLIC."""
         source = 'export { a, b } from "./module";'
@@ -1077,6 +1174,7 @@ class TestJavaScriptExportClause:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaScriptFeature.EXPORT)
     def test_export_clause_basic(self):
         source = 'export { foo, bar } from "./lib";'
         instructions = _parse_js(source)
@@ -1085,6 +1183,7 @@ class TestJavaScriptExportClause:
 
 
 class TestJavaScriptFieldDefinition:
+    @covers(JavaScriptFeature.CLASS)
     def test_private_field_no_unsupported(self):
         """Class with #privateField = 0 should not produce unsupported SYMBOLIC."""
         source = """\
@@ -1099,6 +1198,7 @@ class Foo {
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaScriptFeature.CLASS)
     def test_field_definition_stores(self):
         source = """\
 class Bar {
@@ -1122,6 +1222,7 @@ class TestJavaScriptWithStatement:
 
 
 class TestJSMetaProperty:
+    @covers(JavaScriptFeature.CLASS)
     def test_meta_property_no_symbolic(self):
         """new.target should not produce SYMBOLIC fallthrough."""
         frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
@@ -1129,6 +1230,7 @@ class TestJSMetaProperty:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("meta_property" in str(inst.operands) for inst in symbolics)
 
+    @covers(JavaScriptFeature.CLASS)
     def test_meta_property_stores_value(self):
         """new.target should be stored as a const."""
         frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
@@ -1140,6 +1242,7 @@ class TestJSMetaProperty:
 class TestJavaScriptForLoopUpdate:
     """C-style for-loop update expression must be lowered correctly."""
 
+    @covers(JavaScriptFeature.FOR_LOOP)
     def test_for_loop_update_produces_correct_result(self):
         """for (let i = 0; i < 5; i = i + 1) should terminate and sum correctly."""
         vm, stats = execute_for_language(
@@ -1154,6 +1257,7 @@ for (let i = 0; i < 5; i = i + 1) {
         assert extract_answer(vm, "javascript") == 10
         assert stats.llm_calls == 0
 
+    @covers(JavaScriptFeature.FOR_LOOP)
     def test_for_loop_update_emits_store(self):
         """The update expression i = i + 1 must emit a STORE_VAR in the IR."""
         ir = _parse_js("""\
@@ -1181,6 +1285,7 @@ for (let i = 0; i < 3; i = i + 1) {
 class TestOptionalChain:
     """optional_chain (?.) emits null-guard conditional around access."""
 
+    @covers(JavaScriptFeature.OPTIONAL_CHAIN)
     def test_optional_chain_property_emits_null_guard(self):
         """obj?.prop should emit BRANCH_IF (null check) + LOAD_FIELD."""
         ir = _parse_js("const x = obj?.prop;")
@@ -1195,6 +1300,7 @@ class TestOptionalChain:
             "optional_chain" in str(s.operands) for s in symbolics
         ), "optional_chain should not produce SYMBOLIC"
 
+    @covers(JavaScriptFeature.OPTIONAL_CHAIN)
     def test_optional_chain_method_call_emits_null_guard(self):
         """obj?.method(1) should emit BRANCH_IF + CALL_METHOD."""
         ir = _parse_js("const y = obj?.method(1);")
@@ -1205,6 +1311,7 @@ class TestOptionalChain:
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 1, "Expected BRANCH_IF for null guard"
 
+    @covers(JavaScriptFeature.OPTIONAL_CHAIN)
     def test_optional_chain_index_emits_null_guard(self):
         """obj?.[0] should emit BRANCH_IF + LOAD_INDEX."""
         ir = _parse_js("const z = obj?.[0];")
@@ -1213,6 +1320,7 @@ class TestOptionalChain:
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 1, "Expected BRANCH_IF for null guard"
 
+    @covers(JavaScriptFeature.OPTIONAL_CHAIN)
     def test_optional_chain_nested(self):
         """a?.b?.c should emit two null guards and two LOAD_FIELDs."""
         ir = _parse_js("const w = a?.b?.c;")
@@ -1225,6 +1333,7 @@ class TestOptionalChain:
             len(branches) >= 2
         ), f"Expected 2 BRANCH_IFs for chained guards, got {len(branches)}"
 
+    @covers(JavaScriptFeature.OPTIONAL_CHAIN)
     def test_regular_member_access_no_guard(self):
         """obj.prop should NOT emit BRANCH_IF — only ?. gets a guard."""
         ir = _parse_js("const x = obj.prop;")
@@ -1237,6 +1346,7 @@ class TestOptionalChain:
 class TestComputedPropertyName:
     """computed_property_name ({ [expr]: value }) evaluates expression as key (ADR-101)."""
 
+    @covers(JavaScriptFeature.OBJECT_LITERAL)
     def test_computed_property_identifier_key(self):
         """{ [key]: 1 } should evaluate 'key' via LOAD_VAR, not as const literal."""
         ir = _parse_js("const obj = { [key]: 1 };")
@@ -1249,6 +1359,7 @@ class TestComputedPropertyName:
             len(stores) >= 1
         ), f"Expected STORE_INDEX for computed key, got: {_opcodes(ir)}"
 
+    @covers(JavaScriptFeature.OBJECT_LITERAL)
     def test_computed_property_expression_key(self):
         """{ [1 + 2]: 'x' } should evaluate binary expression as key."""
         ir = _parse_js("const obj = { [1 + 2]: 'x' };")
@@ -1259,6 +1370,7 @@ class TestComputedPropertyName:
         stores = _find_all(ir, Opcode.STORE_INDEX)
         assert len(stores) >= 1, f"Expected STORE_INDEX for computed key"
 
+    @covers(JavaScriptFeature.OBJECT_LITERAL)
     def test_mixed_computed_and_static_keys(self):
         """{ [key]: 1, normal: 2 } should handle both key types."""
         ir = _parse_js("const obj = { [key]: 1, normal: 2 };")
@@ -1271,6 +1383,7 @@ class TestComputedPropertyName:
 class TestAnonymousClassExpression:
     """Anonymous class expression: const Foo = class { ... }"""
 
+    @covers(JavaScriptFeature.CLASS)
     def test_anonymous_class_no_symbolic(self):
         ir = _parse_js("const Foo = class { constructor() {} };")
         symbolics = [
@@ -1282,6 +1395,7 @@ class TestAnonymousClassExpression:
             len(symbolics) == 0
         ), f"class expression should not produce SYMBOLIC: {symbolics}"
 
+    @covers(JavaScriptFeature.CLASS)
     def test_anonymous_class_emits_class_block(self):
         ir = _parse_js("const Foo = class { constructor() {} };")
         labels = [
@@ -1292,6 +1406,7 @@ class TestAnonymousClassExpression:
         class_labels = [l for l in labels if l.startswith("class_")]
         assert len(class_labels) >= 1, f"Expected class_ label, got: {labels}"
 
+    @covers(JavaScriptFeature.CLASS)
     def test_anonymous_class_methods_lowered(self):
         ir = _parse_js("""
             const Foo = class {
@@ -1312,6 +1427,7 @@ class TestAnonymousClassExpression:
             "greet" in l for l in func_labels
         ), f"Expected 'greet' method, got: {func_labels}"
 
+    @covers(JavaScriptFeature.CLASS)
     def test_named_class_expression(self):
         """const Foo = class MyClass { ... } — class has explicit name."""
         ir = _parse_js("const Foo = class MyClass { constructor() {} };")
@@ -1325,6 +1441,7 @@ class TestAnonymousClassExpression:
             "MyClass" in l for l in class_labels
         ), f"Expected class label with 'MyClass', got: {class_labels}"
 
+    @covers(JavaScriptFeature.CLASS)
     def test_anonymous_class_stored_in_variable(self):
         ir = _parse_js("const Foo = class { constructor() {} };")
         stores = _find_all(ir, Opcode.DECL_VAR)

@@ -11,6 +11,8 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from interpreter.frontends.go.features import GoFeature
+from tests.covers import covers
 
 
 def _run_go(source: str, max_steps: int = 500) -> dict:
@@ -24,6 +26,7 @@ def _run_go(source: str, max_steps: int = 500) -> dict:
 
 
 class TestGoTypeConversionExecution:
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_int_conversion_executes(self):
         """int(y) should execute without errors (call_expression path)."""
         source = """\
@@ -36,6 +39,7 @@ func main() {
         vars_ = _run_go(source)
         assert vars_[VarName("x")] == 3
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_type_conversion_in_arithmetic(self):
         """Type conversion result used in arithmetic should work."""
         source = """\
@@ -48,6 +52,7 @@ func main() {
         vars_ = _run_go(source)
         assert vars_[VarName("b")] == 15
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_slice_byte_conversion_does_not_crash(self):
         """[]byte(s) should produce IR that does not crash the VM.
 
@@ -64,6 +69,7 @@ func main() {
         # Should not raise — the lowering produces a CALL_FUNCTION
         _run_go(source)
 
+    @covers(GoFeature.TYPE_CONVERSION)
     def test_float_to_int_truncation(self):
         """int(3.7) should truncate to 3."""
         source = """\
