@@ -152,28 +152,117 @@ class TestJavaControlFlow:
     def test_while_loop(self):
         instructions = _parse_java("class M { void m() { while (x > 0) { x--; } } }")
         opcodes = _opcodes(instructions)
-        assert Opcode.BRANCH_IF in opcodes
-        assert Opcode.BRANCH in opcodes
+        assert Opcode.BRANCH_IF in opcodes, "while needs conditional branch"
+        assert Opcode.BRANCH in opcodes, "while needs unconditional back-edge"
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
+        # Condition check: x > 0
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(
+            ">" in inst.operands for inst in binops
+        ), "while condition > not lowered"
+        # Body: x-- produces an update expression
+        assert Opcode.STORE_VAR in opcodes, "while body must update x"
+        # Temporal: condition (BINOP >) before branch_if before body (STORE_VAR) before back-edge (BRANCH)
+        cond_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.BINOP and ">" in inst.operands
+        )
+        brif_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.BRANCH_IF and i > cond_idx
+        )
+        body_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.STORE_VAR and i > brif_idx
+        )
+        back_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.BRANCH and i > body_idx
+        )
+        assert (
+            cond_idx < brif_idx < body_idx < back_idx
+        ), "while loop structure out of order"
 
     def test_c_style_for_loop(self):
         instructions = _parse_java(
             "class M { void m() { for (int i = 0; i < 10; i++) { x = x + i; } } }"
         )
         opcodes = _opcodes(instructions)
-        assert Opcode.BRANCH_IF in opcodes
-        assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.DECL_VAR)
-        assert any("i" in inst.operands for inst in stores)
+        assert Opcode.BRANCH_IF in opcodes, "for needs conditional branch"
+        assert Opcode.BRANCH in opcodes, "for needs unconditional back-edge"
+        # Init: int i = 0
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("i" in inst.operands for inst in decls), "loop var i not declared"
+        # Condition: i < 10
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(
+            "<" in inst.operands for inst in binops
+        ), "for condition < not lowered"
+        # Body: x = x + i
+        assert any(
+            "+" in inst.operands for inst in binops
+        ), "for body addition not lowered"
+        # Temporal: init (DECL_VAR i) before condition (<) before branch_if before body (+)
+        init_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.DECL_VAR and "i" in inst.operands
+        )
+        cond_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.BINOP and "<" in inst.operands and i > init_idx
+        )
+        brif_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.BRANCH_IF and i > cond_idx
+        )
+        body_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.BINOP and "+" in inst.operands and i > brif_idx
+        )
+        assert (
+            init_idx < cond_idx < brif_idx < body_idx
+        ), "for loop structure out of order"
 
     def test_enhanced_for_loop(self):
         instructions = _parse_java(
             "class M { void m() { int[] items = {1,2,3}; for (int x : items) { y = x; } } }"
         )
         opcodes = _opcodes(instructions)
-        assert Opcode.BRANCH_IF in opcodes
-        assert Opcode.LOAD_INDEX in opcodes
+        assert Opcode.BRANCH_IF in opcodes, "for-each needs conditional branch"
+        assert Opcode.BRANCH in opcodes, "for-each needs unconditional back-edge"
+        assert Opcode.LOAD_INDEX in opcodes, "for-each needs array index access"
+        # Loop variable declared
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("x" in inst.operands for inst in decls), "loop var x not declared"
+        # Body: y = x
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any(
+            "y" in inst.operands for inst in stores
+        ), "for-each body assignment not lowered"
+        # Temporal: condition (BRANCH_IF) before index access (LOAD_INDEX) before body store (STORE_VAR y)
+        brif_idx = next(
+            i for i, inst in enumerate(instructions) if inst.opcode == Opcode.BRANCH_IF
+        )
+        idx_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.LOAD_INDEX and i > brif_idx
+        )
+        body_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.STORE_VAR and "y" in inst.operands and i > idx_idx
+        )
+        assert brif_idx < idx_idx < body_idx, "for-each loop structure out of order"
 
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
@@ -545,45 +634,85 @@ class TestJavaMethodReference:
             "class M { void m() { Function f = String::valueOf; } }"
         )
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
-        assert any("valueOf" in inst.operands for inst in loads)
+        assert any(
+            "valueOf" in inst.operands for inst in loads
+        ), "method name not extracted"
+        # Stored into f
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any(
+            "f" in inst.operands for inst in decls
+        ), "reference not stored to var f"
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("method_reference" in str(inst.operands) for inst in symbolics)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
     def test_this_method_reference(self):
         instructions = _parse_java(
             "class M { void m() { Runnable r = this::doStuff; } }"
         )
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
-        assert any("doStuff" in inst.operands for inst in loads)
+        assert any(
+            "doStuff" in inst.operands for inst in loads
+        ), "method name not extracted"
+        # Stored into r
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any(
+            "r" in inst.operands for inst in decls
+        ), "reference not stored to var r"
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("method_reference" in str(inst.operands) for inst in symbolics)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
     def test_constructor_reference(self):
         instructions = _parse_java(
             "class M { void m() { Supplier s = ArrayList::new; } }"
         )
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
-        assert any("new" in inst.operands for inst in loads)
+        assert any(
+            "new" in inst.operands for inst in loads
+        ), "constructor ref not extracted"
+        # Stored into s
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any(
+            "s" in inst.operands for inst in decls
+        ), "reference not stored to var s"
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("method_reference" in str(inst.operands) for inst in symbolics)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
 
 class TestJavaClassLiteral:
     def test_class_literal(self):
         instructions = _parse_java("class M { void m() { Class c = String.class; } }")
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
-        assert any("class" in inst.operands for inst in loads)
+        assert any(
+            "class" in inst.operands for inst in loads
+        ), ".class field not extracted"
+        # Stored into c
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any(
+            "c" in inst.operands for inst in decls
+        ), "class literal not stored to var c"
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("class_literal" in str(inst.operands) for inst in symbolics)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
     def test_class_literal_in_expression(self):
         instructions = _parse_java(
             "class M { void m() { boolean b = Integer.class.equals(x.getClass()); } }"
         )
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
-        assert any("class" in inst.operands for inst in loads)
+        assert any(
+            "class" in inst.operands for inst in loads
+        ), ".class field not extracted"
+        # .equals() call emitted
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any(
+            "equals" in str(inst.operands) for inst in calls
+        ), ".equals() call not emitted"
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("class_literal" in str(inst.operands) for inst in symbolics)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
 
 class TestJavaLambdaExpression:
@@ -991,7 +1120,11 @@ class TestJavaHexFloatingPointLiteral:
         """Hex floating point literal should emit a CONST with the parsed float value."""
         ir = _parse_java("class T { void f() { double x = 0x1.0p10; } }")
         consts = _find_all(ir, Opcode.CONST)
-        assert any("1024.0" in str(inst.operands) for inst in consts)
+        # Verify the actual numeric value, not just string repr
+        const_values = [inst.operands[0] for inst in consts]
+        assert any(
+            v == 1024.0 or v == "1024.0" for v in const_values
+        ), f"expected CONST 1024.0, got values: {const_values}"
 
     def test_hex_float_stored(self):
         """Hex float should be stored to a variable."""
@@ -1021,6 +1154,20 @@ interface Shape {
         assert any(
             "name" in l for l in func_labels
         ), f"Expected a function label for 'name', got labels: {func_labels}"
+        # Each function label should be followed by a RET (function entry point pattern)
+        for i, inst in enumerate(ir):
+            if (
+                inst.opcode == Opcode.LABEL
+                and "func_" in str(inst.label)
+                and "area" in str(inst.label)
+            ):
+                remaining = [r.opcode for r in ir[i + 1 :]]
+                assert (
+                    Opcode.RETURN in remaining
+                ), "area func label not followed by RETURN"
+                break
+        else:
+            raise AssertionError("area func label not found in IR")
 
     def test_interface_methods_seed_return_types(self):
         """Interface methods should seed return types into the type environment builder."""
