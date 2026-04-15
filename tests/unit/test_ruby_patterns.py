@@ -18,6 +18,8 @@ from __future__ import annotations
 import tree_sitter_language_pack as tslp
 
 from interpreter.constants import Language
+from interpreter.frontends.ruby.features import RubyFeature
+from tests.covers import covers
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.common.patterns import (
     AsPattern,
@@ -72,6 +74,7 @@ def _parse_pattern_from_case_in(snippet: str, arm_index: int = 0):
 
 
 class TestIntegerLiteralPattern:
+    @covers(RubyFeature.LITERAL_PATTERN)
     def test_integer_literal_maps_to_literal_pattern(self):
         snippet = "case x\n  in 42 then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -79,6 +82,7 @@ class TestIntegerLiteralPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == LiteralPattern(42)
 
+    @covers(RubyFeature.LITERAL_PATTERN)
     def test_integer_zero_maps_to_literal_pattern(self):
         snippet = "case x\n  in 0 then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -86,6 +90,7 @@ class TestIntegerLiteralPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == LiteralPattern(0)
 
+    @covers(RubyFeature.LITERAL_PATTERN)
     def test_negative_integer_maps_to_literal_pattern(self):
         snippet = "case x\n  in -1 then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -95,6 +100,7 @@ class TestIntegerLiteralPattern:
 
 
 class TestStringLiteralPattern:
+    @covers(RubyFeature.LITERAL_PATTERN)
     def test_string_literal_maps_to_literal_pattern(self):
         snippet = 'case x\n  in "hello" then 1\n  else 0\nend'
         ctx = _make_ruby_ctx(snippet)
@@ -102,6 +108,7 @@ class TestStringLiteralPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == LiteralPattern("hello")
 
+    @covers(RubyFeature.LITERAL_PATTERN)
     def test_empty_string_maps_to_literal_pattern(self):
         snippet = 'case x\n  in "" then 1\n  else 0\nend'
         ctx = _make_ruby_ctx(snippet)
@@ -111,6 +118,7 @@ class TestStringLiteralPattern:
 
 
 class TestWildcardPattern:
+    @covers(RubyFeature.WILDCARD_PATTERN)
     def test_underscore_maps_to_wildcard_pattern(self):
         snippet = "case x\n  in _ then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -118,6 +126,7 @@ class TestWildcardPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == WildcardPattern()
 
+    @covers(RubyFeature.WILDCARD_PATTERN)
     def test_wildcard_is_not_a_capture(self):
         snippet = "case x\n  in _ then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -127,6 +136,7 @@ class TestWildcardPattern:
 
 
 class TestCapturePattern:
+    @covers(RubyFeature.CAPTURE_PATTERN)
     def test_bare_identifier_maps_to_capture_pattern(self):
         snippet = "case x\n  in y then y\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -134,6 +144,7 @@ class TestCapturePattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == CapturePattern("y")
 
+    @covers(RubyFeature.CAPTURE_PATTERN)
     def test_capture_name_is_preserved(self):
         snippet = "case x\n  in value then value\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -143,6 +154,7 @@ class TestCapturePattern:
 
 
 class TestOrPattern:
+    @covers(RubyFeature.OR_PATTERN)
     def test_two_integer_alternatives(self):
         snippet = "case x\n  in 1 | 2 then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -150,6 +162,7 @@ class TestOrPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == OrPattern((LiteralPattern(1), LiteralPattern(2)))
 
+    @covers(RubyFeature.OR_PATTERN)
     def test_three_integer_alternatives(self):
         snippet = "case x\n  in 1 | 2 | 3 then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -161,6 +174,7 @@ class TestOrPattern:
         ]
         assert set(literals) == {1, 2, 3}
 
+    @covers(RubyFeature.OR_PATTERN)
     def test_string_alternatives(self):
         snippet = 'case x\n  in "a" | "b" then 1\n  else 0\nend'
         ctx = _make_ruby_ctx(snippet)
@@ -172,6 +186,7 @@ class TestOrPattern:
 
 
 class TestArrayPattern:
+    @covers(RubyFeature.ARRAY_PATTERN)
     def test_two_element_capture_array(self):
         snippet = "case x\n  in [a, b] then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -179,6 +194,7 @@ class TestArrayPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == SequencePattern((CapturePattern("a"), CapturePattern("b")))
 
+    @covers(RubyFeature.ARRAY_PATTERN)
     def test_array_with_wildcard(self):
         snippet = "case x\n  in [_, b] then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -186,6 +202,7 @@ class TestArrayPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == SequencePattern((WildcardPattern(), CapturePattern("b")))
 
+    @covers(RubyFeature.ARRAY_PATTERN)
     def test_array_with_literals(self):
         snippet = "case x\n  in [1, 2] then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -193,6 +210,7 @@ class TestArrayPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == SequencePattern((LiteralPattern(1), LiteralPattern(2)))
 
+    @covers(RubyFeature.ARRAY_PATTERN)
     def test_array_with_splat(self):
         snippet = "case x\n  in [first, *rest] then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -200,6 +218,7 @@ class TestArrayPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == SequencePattern((CapturePattern("first"), StarPattern("rest")))
 
+    @covers(RubyFeature.ARRAY_PATTERN)
     def test_array_with_anonymous_splat(self):
         snippet = "case x\n  in [first, *] then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -209,6 +228,7 @@ class TestArrayPattern:
 
 
 class TestAsPattern:
+    @covers(RubyFeature.AS_PATTERN)
     def test_constant_as_capture(self):
         snippet = "case x\n  in Integer => a then a\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -218,6 +238,7 @@ class TestAsPattern:
             ClassPattern("Integer", positional=(), keyword=()), "a"
         )
 
+    @covers(RubyFeature.AS_PATTERN)
     def test_literal_as_capture(self):
         snippet = "case x\n  in 42 => n then n\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -227,6 +248,7 @@ class TestAsPattern:
 
 
 class TestHashPattern:
+    @covers(RubyFeature.HASH_PATTERN)
     def test_single_key_capture(self):
         snippet = "case x\n  in {name: n} then n\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -234,6 +256,7 @@ class TestHashPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == MappingPattern((("name", CapturePattern("n")),))
 
+    @covers(RubyFeature.HASH_PATTERN)
     def test_two_key_captures(self):
         snippet = "case x\n  in {name: n, age: a} then n\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -245,6 +268,7 @@ class TestHashPattern:
 
 
 class TestClassPattern:
+    @covers(RubyFeature.CLASS_PATTERN)
     def test_constant_maps_to_class_pattern(self):
         snippet = "case x\n  in Integer then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)
@@ -252,6 +276,7 @@ class TestClassPattern:
         result = parse_ruby_pattern(ctx, pattern)
         assert result == ClassPattern("Integer", positional=(), keyword=())
 
+    @covers(RubyFeature.CLASS_PATTERN)
     def test_class_with_positional_args(self):
         snippet = "case x\n  in Point[px, py] then 1\n  else 0\nend"
         ctx = _make_ruby_ctx(snippet)

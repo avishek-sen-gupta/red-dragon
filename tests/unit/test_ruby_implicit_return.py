@@ -8,9 +8,11 @@ not a default nil return.
 from __future__ import annotations
 
 from interpreter.frontends.ruby import RubyFrontend
+from interpreter.frontends.ruby.features import RubyFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 
 
 def _parse_ruby(source: str) -> list[InstructionBase]:
@@ -59,6 +61,7 @@ def f
 end
 """
 
+    @covers(RubyFeature.IMPLICIT_RETURN)
     def test_return_carries_literal(self):
         instructions = _parse_ruby(self.SOURCE)
         func_body = _instructions_between_labels(instructions, "func_f", "end_f")
@@ -85,6 +88,7 @@ class Dog
 end
 """
 
+    @covers(RubyFeature.IMPLICIT_RETURN)
     def test_return_carries_load_field(self):
         instructions = _parse_ruby(self.SOURCE)
         func_body = _instructions_between_labels(
@@ -110,6 +114,7 @@ class Dog
 end
 """
 
+    @covers(RubyFeature.IMPLICIT_RETURN)
     def test_explicit_return_still_works(self):
         instructions = _parse_ruby(self.SOURCE)
         func_body = _instructions_between_labels(
@@ -133,6 +138,7 @@ def f
 end
 """
 
+    @covers(RubyFeature.IMPLICIT_RETURN)
     def test_assignment_returns_nil(self):
         instructions = _parse_ruby(self.SOURCE)
         func_body = _instructions_between_labels(instructions, "func_f", "end_f")
