@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from interpreter.ir import Opcode
 from tests.unit.rosetta.conftest import parse_for_language
+from interpreter.frontends.lua.features import LuaFeature
+from tests.covers import covers
 
 
 class TestLuaGenericForStripsIpairs:
+    @covers(LuaFeature.GENERIC_FOR)
     def test_no_ipairs_call_in_ir(self):
         """ipairs() should be stripped — no CALL_FUNCTION 'ipairs' in IR."""
         ir = parse_for_language(
@@ -34,6 +37,7 @@ end
             len(ipairs_calls) == 0
         ), f"Expected ipairs() to be stripped, found {len(ipairs_calls)} calls"
 
+    @covers(LuaFeature.GENERIC_FOR)
     def test_len_called_on_array_not_symbolic(self):
         """len() should receive the array register directly."""
         ir = parse_for_language(
@@ -61,6 +65,7 @@ end
 
 
 class TestLuaGenericForStripsPairs:
+    @covers(LuaFeature.GENERIC_FOR)
     def test_no_pairs_call_in_ir(self):
         """pairs() should be stripped — no CALL_FUNCTION 'pairs' in IR."""
         ir = parse_for_language(
