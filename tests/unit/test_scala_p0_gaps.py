@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from interpreter.frontends.scala import ScalaFrontend
+from interpreter.frontends.scala.features import ScalaFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 
 
 def _parse_scala(source: str) -> list[InstructionBase]:
@@ -29,6 +31,7 @@ def _find_all(
 class TestScalaGenericFunction:
     """generic_function: foo[Int](x), list.asInstanceOf[Bar], List.empty[Int]."""
 
+    @covers(ScalaFeature.GENERIC_FUNCTION)
     def test_generic_function_call_no_symbolic(self):
         """foo[Int](x) should NOT produce unsupported:generic_function."""
         instructions = _parse_scala("object M { val r = foo[Int](x) }")
@@ -37,12 +40,14 @@ class TestScalaGenericFunction:
             "unsupported:generic_function" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(ScalaFeature.GENERIC_FUNCTION)
     def test_generic_function_call_produces_call(self):
         """foo[Int](x) should lower as CALL_FUNCTION to 'foo'."""
         instructions = _parse_scala("object M { val r = foo[Int](x) }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("foo" in inst.operands for inst in calls)
 
+    @covers(ScalaFeature.GENERIC_FUNCTION)
     def test_generic_method_call_no_symbolic(self):
         """list.asInstanceOf[Bar] should NOT produce unsupported:generic_function."""
         instructions = _parse_scala("object M { val r = list.asInstanceOf[Bar] }")
@@ -51,18 +56,21 @@ class TestScalaGenericFunction:
             "unsupported:generic_function" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(ScalaFeature.GENERIC_FUNCTION)
     def test_generic_method_call_produces_load_field(self):
         """list.asInstanceOf[Bar] (no call parens) should produce LOAD_FIELD for asInstanceOf."""
         instructions = _parse_scala("object M { val r = list.asInstanceOf[Bar] }")
         fields = _find_all(instructions, Opcode.LOAD_FIELD)
         assert any("asInstanceOf" in inst.operands for inst in fields)
 
+    @covers(ScalaFeature.GENERIC_FUNCTION)
     def test_generic_method_with_args_produces_call_method(self):
         """list.map[Int](f) should produce CALL_METHOD."""
         instructions = _parse_scala("object M { val r = list.map[Int](f) }")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("map" in inst.operands for inst in calls)
 
+    @covers(ScalaFeature.GENERIC_FUNCTION)
     def test_generic_static_call_no_symbolic(self):
         """List.empty[Int] should NOT produce unsupported:generic_function."""
         instructions = _parse_scala("object M { val r = List.empty[Int] }")
@@ -71,12 +79,14 @@ class TestScalaGenericFunction:
             "unsupported:generic_function" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(ScalaFeature.GENERIC_FUNCTION)
     def test_generic_static_call_produces_load_field(self):
         """List.empty[Int] (no call parens) should produce LOAD_FIELD for 'empty'."""
         instructions = _parse_scala("object M { val r = List.empty[Int] }")
         fields = _find_all(instructions, Opcode.LOAD_FIELD)
         assert any("empty" in inst.operands for inst in fields)
 
+    @covers(ScalaFeature.GENERIC_FUNCTION)
     def test_generic_function_result_stored(self):
         """Result of foo[Int](x) should be stored in 'r'."""
         instructions = _parse_scala("object M { val r = foo[Int](x) }")
@@ -90,6 +100,7 @@ class TestScalaGenericFunction:
 class TestScalaPostfixExpression:
     """postfix_expression: list sorted, future await."""
 
+    @covers(ScalaFeature.POSTFIX_EXPRESSION)
     def test_postfix_no_symbolic(self):
         """'list sorted' should NOT produce unsupported:postfix_expression."""
         instructions = _parse_scala("object M { val r = list sorted }")
@@ -98,24 +109,28 @@ class TestScalaPostfixExpression:
             "unsupported:postfix_expression" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(ScalaFeature.POSTFIX_EXPRESSION)
     def test_postfix_produces_call_method(self):
         """'list sorted' should lower as CALL_METHOD('sorted') on 'list' with 0 args."""
         instructions = _parse_scala("object M { val r = list sorted }")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("sorted" in inst.operands for inst in calls)
 
+    @covers(ScalaFeature.POSTFIX_EXPRESSION)
     def test_postfix_loads_receiver(self):
         """The receiver 'list' should be loaded."""
         instructions = _parse_scala("object M { val r = list sorted }")
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("list" in inst.operands for inst in loads)
 
+    @covers(ScalaFeature.POSTFIX_EXPRESSION)
     def test_postfix_result_stored(self):
         """Result of 'list sorted' should be stored in 'r'."""
         instructions = _parse_scala("object M { val r = list sorted }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.POSTFIX_EXPRESSION)
     def test_postfix_call_method_has_zero_extra_args(self):
         """CALL_METHOD for 'list sorted' should have [receiver_reg, 'sorted'] only."""
         instructions = _parse_scala("object M { val r = list sorted }")
@@ -132,6 +147,7 @@ class TestScalaPostfixExpression:
 class TestScalaStableTypeIdentifier:
     """stable_type_identifier: pkg.MyClass in type positions."""
 
+    @covers(ScalaFeature.STABLE_TYPE_IDENTIFIER)
     def test_stable_type_id_in_typed_pattern_no_symbolic(self):
         """'case _: pkg.MyClass => ...' should NOT produce unsupported:stable_type_identifier."""
         instructions = _parse_scala(
@@ -143,6 +159,7 @@ class TestScalaStableTypeIdentifier:
             for inst in symbolics
         )
 
+    @covers(ScalaFeature.STABLE_TYPE_IDENTIFIER)
     def test_stable_type_id_in_case_class_pattern_no_symbolic(self):
         """'case pkg.Foo(x) => x' should NOT produce unsupported:stable_type_identifier."""
         instructions = _parse_scala(
@@ -154,6 +171,7 @@ class TestScalaStableTypeIdentifier:
             for inst in symbolics
         )
 
+    @covers(ScalaFeature.STABLE_TYPE_IDENTIFIER)
     def test_stable_type_id_in_case_class_pattern_isinstance_check(self):
         """'case pkg.Foo(y) => y' should produce isinstance check with 'pkg.Foo'."""
         instructions = _parse_scala(
@@ -164,6 +182,7 @@ class TestScalaStableTypeIdentifier:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("pkg.Foo" in inst.operands for inst in consts)
 
+    @covers(ScalaFeature.STABLE_TYPE_IDENTIFIER)
     def test_stable_type_id_lowered_directly_produces_load_chain(self):
         """When stable_type_identifier appears in expression context, it produces
         LOAD_VAR + LOAD_FIELD chain."""
@@ -171,6 +190,7 @@ class TestScalaStableTypeIdentifier:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.STABLE_TYPE_IDENTIFIER)
     def test_stable_type_id_as_val_type_annotation(self):
         """'val r: pkg.MyClass = null' -- type annotation should not crash."""
         frontend = ScalaFrontend(TreeSitterParserFactory(), "scala")

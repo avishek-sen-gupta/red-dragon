@@ -18,8 +18,10 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.scala import ScalaFrontend
+from interpreter.frontends.scala.features import ScalaFeature
 from interpreter.frontends.scala.patterns import parse_scala_pattern
 from interpreter.parser import TreeSitterParserFactory
+from tests.covers import covers
 
 
 def _make_scala_ctx(source: str) -> TreeSitterEmitContext:
@@ -54,6 +56,7 @@ def _parse_pattern_from_snippet(snippet: str, arm_index: int = 0):
 
 
 class TestIntegerLiteralPattern:
+    @covers(ScalaFeature.LITERAL_PATTERN)
     def test_integer_literal_maps_to_literal_pattern(self):
         snippet = "object M { def f(x: Any) = x match { case 42 => 1; case _ => 0 } }"
         ctx = _make_scala_ctx(snippet)
@@ -61,6 +64,7 @@ class TestIntegerLiteralPattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == LiteralPattern(42)
 
+    @covers(ScalaFeature.LITERAL_PATTERN)
     def test_integer_literal_zero(self):
         snippet = "object M { def f(x: Any) = x match { case 0 => 1; case _ => 0 } }"
         ctx = _make_scala_ctx(snippet)
@@ -68,6 +72,7 @@ class TestIntegerLiteralPattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == LiteralPattern(0)
 
+    @covers(ScalaFeature.LITERAL_PATTERN)
     def test_integer_literal_with_underscore_separator(self):
         snippet = (
             "object M { def f(x: Any) = x match { case 1_000 => 1; case _ => 0 } }"
@@ -79,6 +84,7 @@ class TestIntegerLiteralPattern:
 
 
 class TestFloatLiteralPattern:
+    @covers(ScalaFeature.LITERAL_PATTERN)
     def test_float_literal_maps_to_literal_pattern(self):
         snippet = "object M { def f(x: Any) = x match { case 3.14 => 1; case _ => 0 } }"
         ctx = _make_scala_ctx(snippet)
@@ -88,6 +94,7 @@ class TestFloatLiteralPattern:
 
 
 class TestStringLiteralPattern:
+    @covers(ScalaFeature.LITERAL_PATTERN)
     def test_string_literal_maps_to_literal_pattern(self):
         snippet = (
             'object M { def f(x: Any) = x match { case "hello" => 1; case _ => 0 } }'
@@ -97,6 +104,7 @@ class TestStringLiteralPattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == LiteralPattern("hello")
 
+    @covers(ScalaFeature.LITERAL_PATTERN)
     def test_empty_string_literal(self):
         snippet = 'object M { def f(x: Any) = x match { case "" => 1; case _ => 0 } }'
         ctx = _make_scala_ctx(snippet)
@@ -106,6 +114,7 @@ class TestStringLiteralPattern:
 
 
 class TestBooleanLiteralPattern:
+    @covers(ScalaFeature.LITERAL_PATTERN)
     def test_true_maps_to_literal_true(self):
         snippet = "object M { def f(x: Any) = x match { case true => 1; case _ => 0 } }"
         ctx = _make_scala_ctx(snippet)
@@ -113,6 +122,7 @@ class TestBooleanLiteralPattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == LiteralPattern(True)
 
+    @covers(ScalaFeature.LITERAL_PATTERN)
     def test_false_maps_to_literal_false(self):
         snippet = (
             "object M { def f(x: Any) = x match { case false => 1; case _ => 0 } }"
@@ -124,6 +134,7 @@ class TestBooleanLiteralPattern:
 
 
 class TestWildcardPattern:
+    @covers(ScalaFeature.WILDCARD_PATTERN)
     def test_wildcard_maps_to_wildcard_pattern(self):
         snippet = "object M { def f(x: Any) = x match { case _ => 0 } }"
         ctx = _make_scala_ctx(snippet)
@@ -131,6 +142,7 @@ class TestWildcardPattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == WildcardPattern()
 
+    @covers(ScalaFeature.WILDCARD_PATTERN)
     def test_wildcard_is_not_a_capture(self):
         snippet = "object M { def f(x: Any) = x match { case _ => 0 } }"
         ctx = _make_scala_ctx(snippet)
@@ -140,6 +152,7 @@ class TestWildcardPattern:
 
 
 class TestCapturePattern:
+    @covers(ScalaFeature.CAPTURE_PATTERN)
     def test_bare_identifier_maps_to_capture_pattern(self):
         snippet = "object M { def f(x: Any) = x match { case y => y } }"
         ctx = _make_scala_ctx(snippet)
@@ -147,6 +160,7 @@ class TestCapturePattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == CapturePattern("y")
 
+    @covers(ScalaFeature.CAPTURE_PATTERN)
     def test_capture_name_is_preserved(self):
         snippet = (
             "object M { def f(x: Any) = x match { case value => value; case _ => 0 } }"
@@ -158,6 +172,7 @@ class TestCapturePattern:
 
 
 class TestAlternativePattern:
+    @covers(ScalaFeature.ALTERNATIVE_PATTERN)
     def test_two_alternatives(self):
         snippet = (
             "object M { def f(x: Any) = x match { case 1 | 2 => 1; case _ => 0 } }"
@@ -167,6 +182,7 @@ class TestAlternativePattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == OrPattern((LiteralPattern(1), LiteralPattern(2)))
 
+    @covers(ScalaFeature.ALTERNATIVE_PATTERN)
     def test_three_alternatives(self):
         snippet = (
             "object M { def f(x: Any) = x match { case 1 | 2 | 3 => 1; case _ => 0 } }"
@@ -188,6 +204,7 @@ class TestAlternativePattern:
         literals = collect_literals(result)
         assert set(lit.value for lit in literals) == {1, 2, 3}
 
+    @covers(ScalaFeature.ALTERNATIVE_PATTERN)
     def test_alternatives_with_captures(self):
         snippet = (
             'object M { def f(x: Any) = x match { case "a" | "b" => 1; case _ => 0 } }'
@@ -201,6 +218,7 @@ class TestAlternativePattern:
 
 
 class TestTuplePattern:
+    @covers(ScalaFeature.TUPLE_PATTERN)
     def test_two_element_tuple(self):
         snippet = (
             "object M { def f(x: Any) = x match { case (a, b) => 1; case _ => 0 } }"
@@ -210,6 +228,7 @@ class TestTuplePattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == SequencePattern((CapturePattern("a"), CapturePattern("b")))
 
+    @covers(ScalaFeature.TUPLE_PATTERN)
     def test_tuple_with_wildcard(self):
         snippet = (
             "object M { def f(x: Any) = x match { case (_, b) => 1; case _ => 0 } }"
@@ -219,6 +238,7 @@ class TestTuplePattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == SequencePattern((WildcardPattern(), CapturePattern("b")))
 
+    @covers(ScalaFeature.TUPLE_PATTERN)
     def test_tuple_with_literals(self):
         snippet = (
             "object M { def f(x: Any) = x match { case (1, 2) => 1; case _ => 0 } }"
@@ -230,6 +250,7 @@ class TestTuplePattern:
 
 
 class TestCaseClassPattern:
+    @covers(ScalaFeature.CASE_CLASS_PATTERN)
     def test_single_arg_case_class(self):
         snippet = (
             "object M { def f(x: Any) = x match { case Circle(r) => 1; case _ => 0 } }"
@@ -241,6 +262,7 @@ class TestCaseClassPattern:
             "Circle", positional=(CapturePattern("r"),), keyword=()
         )
 
+    @covers(ScalaFeature.CASE_CLASS_PATTERN)
     def test_two_arg_case_class(self):
         snippet = "object M { def f(x: Any) = x match { case Point(x, y) => 1; case _ => 0 } }"
         ctx = _make_scala_ctx(snippet)
@@ -252,6 +274,7 @@ class TestCaseClassPattern:
             keyword=(),
         )
 
+    @covers(ScalaFeature.CASE_CLASS_PATTERN)
     def test_nested_case_class(self):
         snippet = "object M { def f(x: Any) = x match { case Some(Circle(r)) => 1; case _ => 0 } }"
         ctx = _make_scala_ctx(snippet)
@@ -267,6 +290,7 @@ class TestCaseClassPattern:
 
 
 class TestTypedPattern:
+    @covers(ScalaFeature.TYPED_PATTERN)
     def test_typed_with_identifier(self):
         snippet = (
             "object M { def f(x: Any) = x match { case i: Int => i; case _ => 0 } }"
@@ -276,6 +300,7 @@ class TestTypedPattern:
         result = parse_scala_pattern(ctx, pattern)
         assert result == AsPattern(ClassPattern("Int", positional=(), keyword=()), "i")
 
+    @covers(ScalaFeature.TYPED_PATTERN)
     def test_typed_with_wildcard(self):
         snippet = (
             "object M { def f(x: Any) = x match { case _: Int => 1; case _ => 0 } }"
@@ -287,6 +312,7 @@ class TestTypedPattern:
 
 
 class TestValuePattern:
+    @covers(ScalaFeature.VALUE_PATTERN)
     def test_stable_identifier_two_parts(self):
         snippet = (
             "object M { def f(x: Any) = x match { case Color.Red => 1; case _ => 0 } }"
