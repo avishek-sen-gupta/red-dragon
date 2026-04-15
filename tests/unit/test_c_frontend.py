@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from interpreter.frontends.c import CFrontend
+from interpreter.frontends.c.features import CFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from tests.covers import covers
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:
@@ -33,6 +35,7 @@ def _find_all(
 
 
 class TestCFrontendDeclaration:
+    @covers(CFeature.VARIABLE_DECLARATION)
     def test_declaration_with_init_produces_const_and_decl_var(self):
         """int x = 10 produces CONST and DECL_VAR with value operand."""
         ir = _parse_and_lower("int x = 10;")
@@ -44,6 +47,7 @@ class TestCFrontendDeclaration:
         x_decls = [d for d in decls if "x" in str(d.operands)]
         assert len(x_decls) >= 1, "Expected DECL_VAR for x"
 
+    @covers(CFeature.VARIABLE_DECLARATION)
     def test_declaration_without_initializer(self):
         ir = _parse_and_lower("int x;")
         stores = _find_all(ir, Opcode.DECL_VAR)
@@ -52,6 +56,7 @@ class TestCFrontendDeclaration:
 
 
 class TestCFrontendFunctionDefinition:
+    @covers(CFeature.FUNCTION_DECLARATION)
     def test_function_def_produces_label_and_return(self):
         source = "int add(int a, int b) { return a + b; }"
         ir = _parse_and_lower(source)
@@ -59,6 +64,7 @@ class TestCFrontendFunctionDefinition:
         assert Opcode.LABEL in opcodes
         assert Opcode.RETURN in opcodes
 
+    @covers(CFeature.FUNCTION_DECLARATION)
     def test_function_params_lowered_as_symbolic(self):
         source = "int add(int a, int b) { return a + b; }"
         ir = _parse_and_lower(source)
@@ -68,6 +74,7 @@ class TestCFrontendFunctionDefinition:
         ]
         assert len(param_symbolics) >= 2
 
+    @covers(CFeature.FUNCTION_DECLARATION)
     def test_function_name_stored(self):
         source = "int add(int a, int b) { return a + b; }"
         ir = _parse_and_lower(source)
@@ -77,6 +84,7 @@ class TestCFrontendFunctionDefinition:
 
 
 class TestCFrontendFunctionCall:
+    @covers(CFeature.FUNCTION_CALL)
     def test_function_call_produces_call_function(self):
         source = "void f() { add(1, 2); }"
         ir = _parse_and_lower(source)
@@ -86,6 +94,7 @@ class TestCFrontendFunctionCall:
 
 
 class TestCFrontendIfElse:
+    @covers(CFeature.IF_ELSE)
     def test_if_else_produces_branch_if(self):
         source = """
 void f() {
@@ -101,6 +110,7 @@ void f() {
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(CFeature.IF_ELSE)
     def test_if_else_produces_labels(self):
         """if-else produces LABEL opcodes for branch targets (then/else/merge)."""
         source = """
@@ -119,6 +129,7 @@ void f() {
             len(labels) >= 3
         ), f"Expected >= 3 LABEL opcodes for if-else structure (then/else/merge), got {len(labels)}"
 
+    @covers(CFeature.IF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         source = """
@@ -151,6 +162,7 @@ void f() {
 
 
 class TestCFrontendWhileLoop:
+    @covers(CFeature.WHILE_LOOP)
     def test_while_loop_produces_branch_if_and_branch(self):
         source = """
 void f() {
@@ -167,6 +179,7 @@ void f() {
 
 
 class TestCFrontendForLoop:
+    @covers(CFeature.FOR_LOOP)
     def test_c_style_for_loop(self):
         source = """
 void f() {
@@ -185,6 +198,7 @@ void f() {
 
 
 class TestCFrontendStructDefinition:
+    @covers(CFeature.STRUCT)
     def test_struct_definition_produces_class_label(self):
         source = """
 struct Point {
@@ -202,6 +216,7 @@ struct Point {
         ]
         assert len(class_refs) >= 1
 
+    @covers(CFeature.STRUCT)
     def test_struct_fields_lowered_as_store_field(self):
         source = """
 struct Point {
@@ -219,6 +234,7 @@ struct Point {
         load_vars = _find_all(ir, Opcode.LOAD_VAR)
         assert any("this" in inst.operands for inst in load_vars)
 
+    @covers(CFeature.STRUCT)
     def test_plain_struct_var_decl_emits_new_object(self):
         """struct Circle c; should emit NEW_OBJECT to create a heap-backed instance."""
         source = """
@@ -230,6 +246,7 @@ struct Circle c;
         assert len(new_objects) >= 1
         assert any("Circle" in str(inst.operands) for inst in new_objects)
 
+    @covers(CFeature.STRUCT)
     def test_struct_field_store_load_emits_correct_opcodes(self):
         """c.radius = 5; int result = c.radius; should emit STORE_FIELD then LOAD_FIELD."""
         source = """
@@ -248,6 +265,7 @@ int result = c.radius;
 
 
 class TestCFrontendAssignmentExpression:
+    @covers(CFeature.ASSIGNMENT)
     def test_assignment_expression(self):
         source = "void f() { int x; x = 10; }"
         ir = _parse_and_lower(source)
@@ -260,6 +278,7 @@ class TestCFrontendAssignmentExpression:
 
 
 class TestCFrontendFieldAccess:
+    @covers(CFeature.FIELD_ACCESS)
     def test_dot_field_access_produces_load_field(self):
         source = "void f() { int z = obj.field; }"
         ir = _parse_and_lower(source)
@@ -267,6 +286,7 @@ class TestCFrontendFieldAccess:
         assert len(load_fields) >= 1
         assert "field" in load_fields[0].operands
 
+    @covers(CFeature.ARROW_OPERATOR)
     def test_arrow_field_access_produces_load_field(self):
         source = "void f() { int z = ptr->field; }"
         ir = _parse_and_lower(source)
@@ -276,12 +296,14 @@ class TestCFrontendFieldAccess:
 
 
 class TestCFrontendReturn:
+    @covers(CFeature.RETURN)
     def test_return_with_value(self):
         source = "int f() { return 42; }"
         ir = _parse_and_lower(source)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(CFeature.RETURN)
     def test_return_without_value(self):
         source = "void f() { return; }"
         ir = _parse_and_lower(source)
@@ -290,6 +312,7 @@ class TestCFrontendReturn:
 
 
 class TestCFrontendUpdateExpression:
+    @covers(CFeature.ARITHMETIC)
     def test_increment_expression(self):
         source = "void f() { int i = 0; i++; }"
         ir = _parse_and_lower(source)
@@ -297,6 +320,7 @@ class TestCFrontendUpdateExpression:
         plus_ops = [b for b in binops if "+" in b.operands]
         assert len(plus_ops) >= 1
 
+    @covers(CFeature.ARITHMETIC)
     def test_decrement_expression(self):
         source = "void f() { int i = 10; i--; }"
         ir = _parse_and_lower(source)
@@ -306,6 +330,7 @@ class TestCFrontendUpdateExpression:
 
 
 class TestCFrontendCastExpression:
+    @covers(CFeature.CAST)
     def test_cast_expression_lowers_value(self):
         source = "void f() { int y = (int)x; }"
         ir = _parse_and_lower(source)
@@ -318,6 +343,7 @@ class TestCFrontendCastExpression:
 
 
 class TestCFrontendPreprocessor:
+    @covers(CFeature.PREPROCESSOR)
     def test_preprocessor_is_skipped(self):
         source = """
 #include <stdio.h>
@@ -338,12 +364,14 @@ int x = 10;
 
 
 class TestCFrontendPointerOps:
+    @covers(CFeature.POINTER_DEREFERENCE)
     def test_pointer_dereference(self):
         source = "void f() { int z = *ptr; }"
         ir = _parse_and_lower(source)
         loads = _find_all(ir, Opcode.LOAD_INDIRECT)
         assert len(loads) >= 1
 
+    @covers(CFeature.ADDRESS_OF)
     def test_address_of(self):
         source = "void f() { int *p = &x; }"
         ir = _parse_and_lower(source)
@@ -352,12 +380,14 @@ class TestCFrontendPointerOps:
         addr_ofs = _find_all(ir, Opcode.ADDRESS_OF)
         assert any("x" in inst.operands for inst in addr_ofs)
 
+    @covers(CFeature.POINTER_STORE)
     def test_pointer_store(self):
         source = "void f() { *ptr = 42; }"
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_INDIRECT)
         assert len(stores) >= 1
 
+    @covers(CFeature.SIZEOF)
     def test_sizeof_type(self):
         source = "void f() { int s = sizeof(int); }"
         ir = _parse_and_lower(source)
@@ -366,6 +396,7 @@ class TestCFrontendPointerOps:
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("sizeof" in inst.operands for inst in calls)
 
+    @covers(CFeature.COMPOUND_LITERAL)
     def test_compound_literal(self):
         source = "void f() { struct Point p = (struct Point){1, 2}; }"
         ir = _parse_and_lower(source)
@@ -375,6 +406,7 @@ class TestCFrontendPointerOps:
 
 
 class TestCFrontendFallback:
+    @covers(CFeature.ENTRY_LABEL)
     def test_entry_label_always_present(self):
         ir = _parse_and_lower("")
         assert ir[0].opcode == Opcode.LABEL
@@ -386,6 +418,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialC:
+    @covers(CFeature.ARRAY_ACCESS)
     def test_nested_for_with_array_access(self):
         source = """\
 void f() {
@@ -414,6 +447,7 @@ void f() {
             load_indices[0].result_reg
         ), "grid[i][j]: second subscript should use result of first as base"
 
+    @covers(CFeature.FIELD_ACCESS)
     def test_struct_field_access_and_mutation(self):
         source = """\
 struct Point { int x; int y; };
@@ -432,6 +466,7 @@ void f() {
         binops = _find_all(ir, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(CFeature.ADDRESS_OF)
     def test_pointer_dereference_and_address(self):
         source = """\
 void f() {
@@ -454,6 +489,7 @@ void f() {
         assert any("p" in s.operands for s in stores)
         assert any("y" in s.operands for s in stores)
 
+    @covers(CFeature.FUNCTION_CALL)
     def test_function_calling_function(self):
         source = """\
 int double_val(int x) { return x * 2; }
@@ -468,6 +504,7 @@ int quadruple(int x) { return double_val(double_val(x)); }
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 2
 
+    @covers(CFeature.WHILE_LOOP)
     def test_while_with_nested_if_else(self):
         source = """\
 void f() {
@@ -493,6 +530,7 @@ void f() {
         assert any("count" in s.operands for s in stores)
         assert len(ir) > 25
 
+    @covers(CFeature.SWITCH)
     def test_switch_statement(self):
         source = """\
 void f() {
@@ -510,6 +548,7 @@ void f() {
         ), "switch should lower to BRANCH_IF, not fall back to SYMBOLIC"
         assert len(ir) > 3
 
+    @covers(CFeature.DO_WHILE)
     def test_do_while_loop(self):
         source = """\
 void f() {
@@ -527,6 +566,7 @@ void f() {
         assert any("x" in s.operands for s in stores)
         assert len(ir) > 10
 
+    @covers(CFeature.ARROW_OPERATOR)
     def test_field_access_arrow_operator(self):
         source = """\
 void f() {
@@ -543,6 +583,7 @@ void f() {
 
 
 class TestCFrontendStructFieldDeclaration:
+    @covers(CFeature.STRUCT)
     def test_struct_multi_field_lowering(self):
         source = """
 struct Vec3 {
@@ -560,6 +601,7 @@ struct Vec3 {
         assert "y" in field_names
         assert "z" in field_names
 
+    @covers(CFeature.STRUCT)
     def test_struct_field_loads_this(self):
         source = """
 struct Pair {
@@ -574,6 +616,7 @@ struct Pair {
 
 
 class TestCFrontendGoto:
+    @covers(CFeature.GOTO)
     def test_goto_emits_branch(self):
         source = """\
 void f() {
@@ -588,6 +631,7 @@ void f() {
         branches = _find_all(ir, Opcode.BRANCH)
         assert any(inst.label.contains("user_start") for inst in branches)
 
+    @covers(CFeature.GOTO)
     def test_goto_with_different_label(self):
         source = """\
 void f() {
@@ -602,6 +646,7 @@ void f() {
 
 
 class TestCFrontendTypedef:
+    @covers(CFeature.TYPEDEF)
     def test_typedef_simple(self):
         """typedef int myint; seeds alias myint → Int."""
         source = "typedef int myint;"
@@ -609,6 +654,7 @@ class TestCFrontendTypedef:
         assert "myint" in builder.type_aliases
         assert str(builder.type_aliases["myint"]) == "Int"
 
+    @covers(CFeature.TYPEDEF)
     def test_typedef_struct(self):
         """typedef struct Point { ... } Point; seeds alias Point."""
         source = "typedef struct Point { int x; int y; } Point;"
@@ -616,6 +662,7 @@ class TestCFrontendTypedef:
         # Point should be seeded as alias (the struct body is still lowered)
         assert "Point" in builder.type_aliases
 
+    @covers(CFeature.TYPEDEF)
     def test_typedef_unsigned(self):
         """typedef unsigned long ulong; seeds alias ulong → Int."""
         source = "typedef unsigned long ulong;"
@@ -624,6 +671,7 @@ class TestCFrontendTypedef:
 
 
 class TestCFrontendEnumSpecifier:
+    @covers(CFeature.ENUM)
     def test_enum_produces_new_object_and_store_field(self):
         source = "enum Color { Red, Green, Blue };"
         ir = _parse_and_lower(source)
@@ -637,6 +685,7 @@ class TestCFrontendEnumSpecifier:
         assert "Green" in field_names
         assert "Blue" in field_names
 
+    @covers(CFeature.ENUM)
     def test_enum_ordinal_values(self):
         source = "enum Priority { Low, Medium, High };"
         ir = _parse_and_lower(source)
@@ -646,6 +695,7 @@ class TestCFrontendEnumSpecifier:
         assert "1" in const_vals
         assert "2" in const_vals
 
+    @covers(CFeature.ENUM)
     def test_enum_with_explicit_values(self):
         source = "enum Bits { A = 1, B = 2, C = 4 };"
         ir = _parse_and_lower(source)
@@ -661,6 +711,7 @@ class TestCFrontendEnumSpecifier:
 
 
 class TestCFrontendUnionSpecifier:
+    @covers(CFeature.UNION)
     def test_union_produces_class_ref(self):
         source = """\
 union Data {
@@ -674,6 +725,7 @@ union Data {
         consts = _find_all(ir, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(CFeature.UNION)
     def test_union_fields_lowered(self):
         source = """\
 union Value {
@@ -691,6 +743,7 @@ union Value {
 
 
 class TestCFrontendCharLiteral:
+    @covers(CFeature.CHAR_LITERAL)
     def test_char_literal_produces_const(self):
         source = "void f() { char c = 'A'; }"
         ir = _parse_and_lower(source)
@@ -699,6 +752,7 @@ class TestCFrontendCharLiteral:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("char_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(CFeature.CHAR_LITERAL)
     def test_char_literal_no_symbolic_fallback(self):
         source = "void f() { char c = 'x'; }"
         ir = _parse_and_lower(source)
@@ -706,6 +760,7 @@ class TestCFrontendCharLiteral:
         assert not any("char_literal" in str(inst.operands) for inst in symbolics)
         assert not any("character_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(CFeature.CHAR_LITERAL)
     def test_char_literal_stored_to_variable(self):
         source = "void f() { char c = 'Z'; }"
         ir = _parse_and_lower(source)
@@ -714,6 +769,7 @@ class TestCFrontendCharLiteral:
 
 
 class TestCFrontendInitializerList:
+    @covers(CFeature.INITIALIZER_LIST)
     def test_initializer_list_produces_new_array(self):
         source = "void f() { int arr[] = {1, 2, 3}; }"
         ir = _parse_and_lower(source)
@@ -722,12 +778,14 @@ class TestCFrontendInitializerList:
         store_indexes = _find_all(ir, Opcode.STORE_INDEX)
         assert len(store_indexes) >= 3
 
+    @covers(CFeature.INITIALIZER_LIST)
     def test_initializer_list_empty(self):
         source = "void f() { int arr[] = {}; }"
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
         assert Opcode.NEW_ARRAY in opcodes
 
+    @covers(CFeature.INITIALIZER_LIST)
     def test_initializer_list_nested(self):
         source = "void f() { int m[2][2] = {{1, 2}, {3, 4}}; }"
         ir = _parse_and_lower(source)
@@ -738,12 +796,14 @@ class TestCFrontendInitializerList:
 
 
 class TestCInitializerPair:
+    @covers(CFeature.DESIGNATED_INITIALIZER)
     def test_designated_initializer_no_symbolic(self):
         source = "void f() { struct S s = {.x = 1, .y = 2}; }"
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("initializer_pair" in str(inst.operands) for inst in symbolics)
 
+    @covers(CFeature.DESIGNATED_INITIALIZER)
     def test_designated_initializer_lowers_values(self):
         source = "void f() { struct S s = {.x = 10, .y = 20}; }"
         ir = _parse_and_lower(source)
@@ -753,6 +813,7 @@ class TestCInitializerPair:
 
 
 class TestCFrontendPreprocFunctionDef:
+    @covers(CFeature.MACRO)
     def test_preproc_function_def_no_unsupported(self):
         """#define MAX(a, b) ((a) > (b) ? (a) : (b)) should not produce unsupported SYMBOLIC."""
         source = "#define MAX(a, b) ((a) > (b) ? (a) : (b))"
@@ -760,6 +821,7 @@ class TestCFrontendPreprocFunctionDef:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CFeature.MACRO)
     def test_preproc_function_def_with_other_code(self):
         source = """\
 #define SQUARE(x) ((x) * (x))
@@ -775,11 +837,13 @@ int y = 10;
 class TestCFrontendCaseStatementDefensive:
     """Verify case_statement has a dispatch entry for defensive handling."""
 
+    @covers(CFeature.SWITCH)
     def test_case_statement_has_dispatch_entry(self):
         """case_statement is registered in stmt dispatch for defensive handling."""
         frontend = CFrontend(TreeSitterParserFactory(), "c")
         assert "case_statement" in frontend._build_stmt_dispatch()
 
+    @covers(CFeature.SWITCH)
     def test_switch_case_still_works_after_dispatch_entry(self):
         """Adding case_statement to _STMT_DISPATCH must not break normal
         switch/case lowering (which bypasses _lower_block on the body)."""
@@ -804,26 +868,31 @@ void f() {
 class TestCFrontendPointerTypeSeed:
     """Pointer declarations should seed Pointer[BaseType] in type_env_builder."""
 
+    @covers(CFeature.POINTER_TYPE)
     def test_int_pointer_variable_gets_pointer_int(self):
         """int *p = &x; should seed var_types['p'] = 'Pointer[Int]'."""
         _, builder = _parse_and_lower_with_types("void f() { int *p = &x; }")
         assert builder.var_types["p"] == "Pointer[Int]"
 
+    @covers(CFeature.POINTER_TYPE)
     def test_float_pointer_variable(self):
         """float *fp; should seed var_types['fp'] = 'Pointer[Float]'."""
         _, builder = _parse_and_lower_with_types("void f() { float *fp; }")
         assert builder.var_types["fp"] == "Pointer[Float]"
 
+    @covers(CFeature.POINTER_TYPE)
     def test_double_pointer_variable(self):
         """int **pp; should seed var_types['pp'] = 'Pointer[Pointer[Int]]'."""
         _, builder = _parse_and_lower_with_types("void f() { int **pp; }")
         assert builder.var_types["pp"] == "Pointer[Pointer[Int]]"
 
+    @covers(CFeature.VARIABLE_DECLARATION)
     def test_non_pointer_unchanged(self):
         """int x = 42; should still seed var_types['x'] = 'Int'."""
         _, builder = _parse_and_lower_with_types("void f() { int x = 42; }")
         assert builder.var_types["x"] == "Int"
 
+    @covers(CFeature.POINTER_TYPE)
     def test_pointer_parameter_gets_pointer_type(self):
         """int f(int *arr) should seed param type as Pointer[Int]."""
         _, builder = _parse_and_lower_with_types("int f(int *arr) { return *arr; }")
@@ -832,11 +901,13 @@ class TestCFrontendPointerTypeSeed:
         param_types = dict(builder.func_param_types[func_label])
         assert param_types["arr"] == "Pointer[Int]"
 
+    @covers(CFeature.POINTER_TYPE)
     def test_char_pointer_gets_pointer_int(self):
         """char *s; — char maps to Int, so char* is Pointer[Int]."""
         _, builder = _parse_and_lower_with_types("void f() { char *s; }")
         assert builder.var_types["s"] == "Pointer[Int]"
 
+    @covers(CFeature.POINTER_TYPE)
     def test_void_pointer(self):
         """void *vp; — void maps to Any, so void* is Pointer[Any]."""
         _, builder = _parse_and_lower_with_types("void f() { void *vp; }")
@@ -844,6 +915,7 @@ class TestCFrontendPointerTypeSeed:
 
 
 class TestCLinkageSpecification:
+    @covers(CFeature.PREPROCESSOR)
     def test_linkage_spec_no_symbolic(self):
         """extern 'C' { ... } should not produce SYMBOLIC fallthrough."""
         frontend = CFrontend(TreeSitterParserFactory(), "c")
@@ -853,6 +925,7 @@ class TestCLinkageSpecification:
             "linkage_specification" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(CFeature.PREPROCESSOR)
     def test_linkage_spec_body_lowered(self):
         """Declarations inside extern 'C' should still be lowered."""
         frontend = CFrontend(TreeSitterParserFactory(), "c")
@@ -864,6 +937,7 @@ class TestCLinkageSpecification:
 class TestCStructInitializerList:
     """Struct initializer lists must emit CALL_FUNCTION + STORE_FIELD, not NEW_ARRAY."""
 
+    @covers(CFeature.INITIALIZER_LIST)
     def test_positional_init_emits_call_function_not_new_array(self):
         """struct Node n = {3, 0} should create an object, not an array."""
         ir = _parse_and_lower("""\
@@ -880,6 +954,7 @@ struct Node n = {3, 0};
         node_calls = [c for c in calls if "Node" in str(c.operands)]
         assert len(node_calls) >= 1, f"Expected CALL_FUNCTION Node, got {calls}"
 
+    @covers(CFeature.INITIALIZER_LIST)
     def test_positional_init_stores_fields_by_name(self):
         """Positional initializer {3, 0} should emit STORE_FIELD with field names."""
         ir = _parse_and_lower("""\
@@ -899,6 +974,7 @@ struct Node n = {3, 0};
             "next" in init_fields
         ), f"Expected STORE_FIELD for 'next' from initializer, got {init_fields}"
 
+    @covers(CFeature.DESIGNATED_INITIALIZER)
     def test_designated_init_stores_fields_by_name(self):
         """Designated initializer {.value = 3, .next = 0} should emit STORE_FIELD."""
         ir = _parse_and_lower("""\
@@ -916,6 +992,7 @@ struct Node n = {.value = 3, .next = 0};
         assert "value" in init_fields
         assert "next" in init_fields
 
+    @covers(CFeature.STRUCT)
     def test_pointer_field_included_in_struct_body(self):
         """struct Node { int value; struct Node* next; } should emit
         STORE_FIELD for both fields, including the pointer field."""
@@ -927,6 +1004,7 @@ struct Node { int value; struct Node* next; };
         assert "value" in field_names, f"Missing 'value' field, got {field_names}"
         assert "next" in field_names, f"Missing 'next' pointer field, got {field_names}"
 
+    @covers(CFeature.INITIALIZER_LIST)
     def test_array_init_still_uses_new_array(self):
         """int arr[] = {1, 2, 3} should still use NEW_ARRAY (not affected by fix)."""
         ir = _parse_and_lower("int arr[] = {1, 2, 3};")
