@@ -1148,6 +1148,134 @@ class TestJavaStringLengthExecution:
         assert local_vars[VarName("result")] == 5
 
 
+class TestJavaAnnotatedType:
+    """annotated_type in variable and parameter positions must not crash or produce symbolics."""
+
+    def test_annotated_local_var_emits_decl(self):
+        """@NonNull String x = 'hello' — variable must be declared despite annotated type."""
+        instructions = _parse_java(
+            'class M { void m() { @NonNull String x = "hello"; } }'
+        )
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("x" in inst.operands for inst in decls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_annotated_param_type_in_method(self):
+        """Method with @NonNull parameter type must lower to a function definition."""
+        instructions = _parse_java("class M { void greet(@NonNull String name) { } }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaMarkerAnnotation:
+    """marker_annotation (@Override, @Deprecated) on methods must not crash lowering."""
+
+    def test_override_annotation_on_method(self):
+        """@Override method must produce a function definition, not crash."""
+        instructions = _parse_java("class M { @Override void foo() { int x = 1; } }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+        # Variable inside the method body must still lower
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("x" in inst.operands for inst in decls)
+
+    def test_deprecated_annotation_on_method(self):
+        """@Deprecated marker on a method must not suppress IR generation."""
+        instructions = _parse_java(
+            "class M { @Deprecated void legacy() { int y = 2; } }"
+        )
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("y" in inst.operands for inst in decls)
+
+    def test_multiple_marker_annotations(self):
+        """Multiple marker annotations must all be silently skipped."""
+        instructions = _parse_java(
+            "class M { @Override @Deprecated void old() { int z = 3; } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("z" in inst.operands for inst in decls)
+
+
+class TestJavaAnnotation:
+    """annotation (@SuppressWarnings("x")) must be skipped without producing symbolics."""
+
+    def test_suppress_warnings_on_method(self):
+        """@SuppressWarnings annotation with argument must not crash lowering."""
+        instructions = _parse_java(
+            'class M { @SuppressWarnings("unused") void foo() { int x = 1; } }'
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("x" in inst.operands for inst in decls)
+
+
+class TestJavaModifiersUnit:
+    """Modifiers (public, static, final) must be skipped without producing symbolics."""
+
+    def test_public_static_final_field(self):
+        """public static final int X = 5 — variable must be declared, no symbolics."""
+        instructions = _parse_java("class M { public static final int X = 5; }")
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("X" in inst.operands for inst in decls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_private_method_modifiers(self):
+        """private int x in method body must lower cleanly."""
+        instructions = _parse_java("class M { void m() { int x = 10; } }")
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("x" in inst.operands for inst in decls)
+
+
+class TestJavaFormalParametersUnit:
+    """formal_parameters in method declarations must lower all parameter names."""
+
+    def test_single_param_method(self):
+        """Method with one parameter must declare it as a local."""
+        instructions = _parse_java("class M { int double_(int x) { return x * 2; } }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_symbolics = [
+            inst for inst in symbolics if "param:x" in str(inst.operands)
+        ]
+        assert param_symbolics, "Expected SYMBOLIC for parameter x"
+
+    def test_multi_param_method(self):
+        """Method with multiple parameters must declare each one."""
+        instructions = _parse_java(
+            "class M { int add(int a, int b) { return a + b; } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = {str(inst.operands) for inst in symbolics}
+        assert any("param:a" in p for p in param_names)
+        assert any("param:b" in p for p in param_names)
+
+
+class TestJavaInferredParametersUnit:
+    """inferred_parameters (lambdas without type annotations) must lower each param."""
+
+    def test_single_inferred_param_lambda(self):
+        """Lambda (x) -> x + 1 must declare x via SYMBOLIC + DECL_VAR."""
+        instructions = _parse_java(
+            "class M { void m() { Function<Integer,Integer> f = (x) -> x + 1; } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("param:x" in str(inst.operands) for inst in symbolics)
+
+    def test_two_inferred_params_lambda(self):
+        """Lambda (a, b) -> a + b must declare both a and b."""
+        instructions = _parse_java(
+            "class M { void m() { BiFunction<Integer,Integer,Integer> f = (a, b) -> a + b; } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = {str(inst.operands) for inst in symbolics}
+        assert any("param:a" in p for p in param_names)
+        assert any("param:b" in p for p in param_names)
+
+
 class TestInlineCommentsInExpressions:
     """Tree-sitter injects comment nodes as extras inside expressions.
 
