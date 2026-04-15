@@ -1,8 +1,10 @@
 """Tests for Go frontend emitting parameterized types for slices and maps."""
 
 from interpreter.frontends.go.frontend import GoFrontend
+from interpreter.frontends.go.features import GoFeature
 from interpreter.instructions import NewArray, NewObject
 from interpreter.types.type_expr import ParameterizedType, ScalarType, scalar
+from tests.covers import covers
 
 
 def _parse_go(code: str):
@@ -14,6 +16,7 @@ def _parse_go(code: str):
 
 
 class TestGoSliceParameterizedType:
+    @covers(GoFeature.MAKE)
     def test_make_slice_int(self):
         instructions = _parse_go("package main\nfunc main() { x := make([]int, 5) }")
         new_arrays = [i for i in instructions if isinstance(i, NewArray)]
@@ -23,6 +26,7 @@ class TestGoSliceParameterizedType:
         assert arr.type_hint.constructor == "Array"
         assert arr.type_hint.arguments == (scalar("int"),)
 
+    @covers(GoFeature.MAKE)
     def test_make_slice_string(self):
         instructions = _parse_go("package main\nfunc main() { x := make([]string, 3) }")
         new_arrays = [i for i in instructions if isinstance(i, NewArray)]
@@ -33,6 +37,7 @@ class TestGoSliceParameterizedType:
 
 
 class TestGoMapParameterizedType:
+    @covers(GoFeature.MAKE)
     def test_make_map(self):
         instructions = _parse_go(
             "package main\nfunc main() { x := make(map[string]bool) }"
