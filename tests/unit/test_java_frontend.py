@@ -1292,7 +1292,12 @@ class TestInlineCommentsInExpressions:
                 }
             }
         }""")
-        assert len(ir) > 0
+        binops = _find_all(ir, Opcode.BINOP)
+        binop_ops = [inst.operands[0] for inst in binops]
+        assert "==" in binop_ops, "comment should not prevent == from lowering"
+        assert "||" in binop_ops, "comment should not prevent || from lowering"
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("comment" in str(s.operands) for s in symbolics)
 
     def test_block_comment_inside_binary_expression(self):
         ir = _parse_java("""class Foo {
@@ -1303,4 +1308,9 @@ class TestInlineCommentsInExpressions:
                 }
             }
         }""")
-        assert len(ir) > 0
+        binops = _find_all(ir, Opcode.BINOP)
+        binop_ops = [inst.operands[0] for inst in binops]
+        assert "==" in binop_ops, "comment should not prevent == from lowering"
+        assert "||" in binop_ops, "comment should not prevent || from lowering"
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("comment" in str(s.operands) for s in symbolics)
