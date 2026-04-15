@@ -7,6 +7,8 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from interpreter.frontends.go.features import GoFeature
+from tests.covers import covers
 
 
 def _run_go(source: str, max_steps: int = 500) -> dict:
@@ -20,6 +22,7 @@ def _run_go(source: str, max_steps: int = 500) -> dict:
 
 
 class TestGoRuneLiteralExecution:
+    @covers(GoFeature.RUNE_LITERAL)
     def test_rune_literal_assigned(self):
         """x := 'a' should execute and store the rune value."""
         source = """\
@@ -31,6 +34,7 @@ func main() {
         vars_ = _run_go(source)
         assert vars_[VarName("x")] == "a"
 
+    @covers(GoFeature.RUNE_LITERAL)
     def test_rune_literal_in_comparison(self):
         """Rune literal should be usable in comparisons."""
         source = """\
@@ -44,6 +48,7 @@ func main() {
         vars_ = _run_go(source)
         assert vars_[VarName("same")] is True
 
+    @covers(GoFeature.RUNE_LITERAL)
     def test_rune_literal_different_chars(self):
         """Different rune literals should compare as not equal."""
         source = """\
@@ -59,6 +64,7 @@ func main() {
 
 
 class TestGoBlankIdentifierExecution:
+    @covers(GoFeature.BLANK_IDENTIFIER)
     def test_blank_identifier_discard(self):
         """_ = expr should execute without errors (value is discarded)."""
         source = """\
@@ -71,6 +77,7 @@ func main() {
         vars_ = _run_go(source)
         assert vars_[VarName("x")] == 10
 
+    @covers(GoFeature.BLANK_IDENTIFIER)
     def test_blank_identifier_in_assignment(self):
         """Blank identifier should not prevent subsequent code from executing."""
         source = """\
@@ -86,6 +93,7 @@ func main() {
 
 
 class TestGoFallthroughExecution:
+    @covers(GoFeature.FALLTHROUGH)
     def test_fallthrough_does_not_crash(self):
         """Switch with fallthrough should execute without errors."""
         source = """\
@@ -107,6 +115,7 @@ func main() {
         # case 1 matched, set y=10, fallthrough is no-op, case 2 body skipped.
         assert vars_[VarName("y")] == 10
 
+    @covers(GoFeature.SWITCH_STATEMENT)
     def test_switch_without_fallthrough_still_works(self):
         """Switch without fallthrough should still match correctly."""
         source = """\
@@ -127,6 +136,7 @@ func main() {
 
 
 class TestGoVariadicArgumentExecution:
+    @covers(GoFeature.VARIADIC)
     def test_code_with_variadic_call(self):
         """Variadic function call should execute without crashing."""
         locals_ = _run_go("""\
@@ -144,6 +154,7 @@ func main() {
 class TestGoIotaExecution:
     """iota in const blocks produces sequential integer values at runtime."""
 
+    @covers(GoFeature.IOTA)
     def test_simple_iota(self):
         locals_ = _run_go("""
 package main
@@ -161,6 +172,7 @@ func main() {
         assert locals_[VarName("b")] == 1
         assert locals_[VarName("c")] == 2
 
+    @covers(GoFeature.IOTA)
     def test_iota_with_expression(self):
         locals_ = _run_go("""
 package main
@@ -178,6 +190,7 @@ func main() {
         assert locals_[VarName("y")] == 10
         assert locals_[VarName("z")] == 20
 
+    @covers(GoFeature.IOTA)
     def test_iota_resets_per_block(self):
         locals_ = _run_go("""
 package main
@@ -202,6 +215,7 @@ func main() {
 
 
 class TestGoMakeExecution:
+    @covers(GoFeature.MAKE)
     def test_make_map_stores_and_reads(self):
         """make(map[string]int) should create a usable map."""
         vars_ = _run_go("""\

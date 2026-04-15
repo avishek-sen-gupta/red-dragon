@@ -8,6 +8,8 @@ from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+from interpreter.frontends.kotlin.features import KotlinFeature
+from tests.covers import covers
 
 
 def _parse_kotlin(source: str) -> list[InstructionBase]:
@@ -34,6 +36,7 @@ def _find_all(
 
 
 class TestKotlinDeclarations:
+    @covers(KotlinFeature.VAL_DECLARATION)
     def test_val_declaration(self):
         instructions = _parse_kotlin("val x = 10")
         opcodes = _opcodes(instructions)
@@ -42,6 +45,7 @@ class TestKotlinDeclarations:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.VAR_DECLARATION)
     def test_var_declaration(self):
         instructions = _parse_kotlin("var y = 5")
         opcodes = _opcodes(instructions)
@@ -50,6 +54,7 @@ class TestKotlinDeclarations:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.VAL_DECLARATION)
     def test_val_without_initializer(self):
         instructions = _parse_kotlin("val x: Int")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -57,6 +62,7 @@ class TestKotlinDeclarations:
 
 
 class TestKotlinFunctions:
+    @covers(KotlinFeature.FUNCTION_DECLARATION)
     def test_function_declaration(self):
         instructions = _parse_kotlin("fun add(a: Int, b: Int): Int { return a + b }")
         opcodes = _opcodes(instructions)
@@ -73,11 +79,13 @@ class TestKotlinFunctions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.FUNCTION_CALL)
     def test_function_call(self):
         instructions = _parse_kotlin("fun main() { add(1, 2) }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("add" in inst.operands for inst in calls)
 
+    @covers(KotlinFeature.RETURN)
     def test_return_via_jump_expression(self):
         instructions = _parse_kotlin("fun main() { return 42 }")
         opcodes = _opcodes(instructions)
@@ -87,6 +95,7 @@ class TestKotlinFunctions:
 
 
 class TestKotlinControlFlow:
+    @covers(KotlinFeature.IF_EXPRESSION)
     def test_if_expression(self):
         instructions = _parse_kotlin("fun main() { val y = if (x > 0) 1 else 0 }")
         opcodes = _opcodes(instructions)
@@ -95,6 +104,7 @@ class TestKotlinControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("if_true") for inst in labels)
 
+    @covers(KotlinFeature.WHILE_LOOP)
     def test_while_loop(self):
         instructions = _parse_kotlin("fun main() { while (x > 0) { x = x - 1 } }")
         opcodes = _opcodes(instructions)
@@ -103,6 +113,7 @@ class TestKotlinControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_when_expression(self):
         instructions = _parse_kotlin(
             "fun main() { val r = when (x) { 1 -> 10\n 2 -> 20\n else -> 0 } }"
@@ -117,6 +128,7 @@ class TestKotlinControlFlow:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.IF_EXPRESSION)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         instructions = _parse_kotlin(
@@ -146,6 +158,7 @@ class TestKotlinControlFlow:
 
 
 class TestKotlinClasses:
+    @covers(KotlinFeature.CLASS)
     def test_class_declaration(self):
         instructions = _parse_kotlin(
             'class Dog { fun bark(): String { return "woof" } }'
@@ -159,6 +172,7 @@ class TestKotlinClasses:
 
 
 class TestKotlinExpressions:
+    @covers(KotlinFeature.NAVIGATION_EXPRESSION)
     def test_navigation_expression_member_access(self):
         instructions = _parse_kotlin("fun main() { val f = obj.name }")
         opcodes = _opcodes(instructions)
@@ -166,26 +180,31 @@ class TestKotlinExpressions:
         fields = _find_all(instructions, Opcode.LOAD_FIELD)
         assert any("name" in str(inst.operands) for inst in fields)
 
+    @covers(KotlinFeature.ARITHMETIC)
     def test_additive_binary_op(self):
         instructions = _parse_kotlin("fun main() { val z = x + y }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(KotlinFeature.ARITHMETIC)
     def test_multiplicative_binary_op(self):
         instructions = _parse_kotlin("fun main() { val z = x * y }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("*" in inst.operands for inst in binops)
 
+    @covers(KotlinFeature.ARITHMETIC)
     def test_comparison_binary_op(self):
         instructions = _parse_kotlin("fun main() { val b = x > y }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any(">" in inst.operands for inst in binops)
 
+    @covers(KotlinFeature.TEMPLATE_STRING)
     def test_string_literal(self):
         instructions = _parse_kotlin('fun main() { val s = "hello" }')
         consts = _find_all(instructions, Opcode.CONST)
         assert any('"hello"' in inst.operands for inst in consts)
 
+    @covers(KotlinFeature.NULL_LITERAL)
     def test_null_literal(self):
         instructions = _parse_kotlin("fun main() { val n = null }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -193,11 +212,13 @@ class TestKotlinExpressions:
 
 
 class TestKotlinSpecial:
+    @covers(KotlinFeature.FUNCTION_DECLARATION)
     def test_empty_program(self):
         instructions = _parse_kotlin("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_no_longer_symbolic(self):
         """anonymous_function should now produce a function ref, not SYMBOLIC."""
         instructions = _parse_kotlin("fun main() { val x = fun(a: Int): Int = a + 1 }")
@@ -206,11 +227,13 @@ class TestKotlinSpecial:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("__anon_fun" in str(inst.operands) for inst in consts)
 
+    @covers(KotlinFeature.METHOD_CALL)
     def test_method_call_via_navigation(self):
         instructions = _parse_kotlin("fun main() { obj.doSomething(1) }")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("doSomething" in str(inst.operands) for inst in calls)
 
+    @covers(KotlinFeature.LAMBDA)
     def test_lambda_literal(self):
         instructions = _parse_kotlin(
             "fun main() { val f = { a: Int, b: Int -> a + b } }"
@@ -224,6 +247,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialKotlin:
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_when_with_multiple_branches(self):
         source = """\
 fun main() {
@@ -245,6 +269,7 @@ fun main() {
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 20
 
+    @covers(KotlinFeature.LAMBDA)
     def test_lambda_in_method_call(self):
         source = """\
 fun main() {
@@ -257,6 +282,7 @@ fun main() {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("doubled" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.CLASS)
     def test_class_with_method_and_property(self):
         source = """\
 class Counter {
@@ -280,6 +306,7 @@ class Counter {
         assert len(returns) >= 1
         assert len(instructions) > 15
 
+    @covers(KotlinFeature.FOR_LOOP)
     def test_for_loop_with_conditional(self):
         source = """\
 fun main() {
@@ -300,6 +327,7 @@ fun main() {
         assert any("total" in inst.operands for inst in stores)
         assert len(instructions) > 15
 
+    @covers(KotlinFeature.IF_EXPRESSION)
     def test_if_expression_as_value(self):
         source = """\
 fun main() {
@@ -317,6 +345,7 @@ fun main() {
         labels = _labels_in_order(instructions)
         assert any("if_true" in lbl for lbl in labels)
 
+    @covers(KotlinFeature.WHILE_LOOP)
     def test_while_with_when_inside(self):
         source = """\
 fun main() {
@@ -340,6 +369,7 @@ fun main() {
         assert any("while" in lbl for lbl in labels)
         assert len(instructions) > 15
 
+    @covers(KotlinFeature.FUNCTION_DECLARATION)
     def test_extension_function(self):
         source = """\
 fun Int.double(): Int {
@@ -352,6 +382,7 @@ fun Int.double(): Int {
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("*" in inst.operands for inst in binops)
 
+    @covers(KotlinFeature.NAVIGATION_EXPRESSION)
     def test_safe_navigation_lowering(self):
         """Kotlin ?. lowered as plain LOAD_FIELD/CALL_METHOD (null-check not in IR)."""
         source = """\
@@ -373,11 +404,13 @@ fun main() {
 
 
 class TestKotlinNotNullAssertion:
+    @covers(KotlinFeature.NOT_NULL_ASSERTION)
     def test_not_null_assertion_produces_unop(self):
         instructions = _parse_kotlin("fun main() { val x = y!! }")
         unops = _find_all(instructions, Opcode.UNOP)
         assert any("!!" in inst.operands for inst in unops)
 
+    @covers(KotlinFeature.NOT_NULL_ASSERTION)
     def test_not_null_assertion_on_member(self):
         instructions = _parse_kotlin("fun main() { val x = obj.value!! }")
         unops = _find_all(instructions, Opcode.UNOP)
@@ -385,17 +418,20 @@ class TestKotlinNotNullAssertion:
 
 
 class TestKotlinCheckExpression:
+    @covers(KotlinFeature.CHECK_EXPRESSION)
     def test_is_check_produces_call_function(self):
         instructions = _parse_kotlin("fun main() { val b = x is String }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("is" in inst.operands for inst in calls)
 
+    @covers(KotlinFeature.CHECK_EXPRESSION)
     def test_is_check_includes_type(self):
         instructions = _parse_kotlin("fun main() { val b = x is Int }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         is_calls = [c for c in calls if "is" in c.operands]
         assert any("Int" in str(inst.operands) for inst in is_calls)
 
+    @covers(KotlinFeature.CHECK_EXPRESSION)
     def test_is_check_in_when(self):
         source = """\
 fun main() {
@@ -419,6 +455,7 @@ fun main() {
 
 
 class TestKotlinDoWhile:
+    @covers(KotlinFeature.DO_WHILE_LOOP)
     def test_do_while_produces_labels_and_branch(self):
         instructions = _parse_kotlin(
             "fun main() { var i = 0; do { i = i + 1 } while (i < 10) }"
@@ -427,6 +464,7 @@ class TestKotlinDoWhile:
         assert any("do_body" in lbl for lbl in labels)
         assert any("do_end" in lbl for lbl in labels)
 
+    @covers(KotlinFeature.DO_WHILE_LOOP)
     def test_do_while_has_branch_if(self):
         instructions = _parse_kotlin(
             "fun main() { var i = 0; do { i = i + 1 } while (i < 10) }"
@@ -434,6 +472,7 @@ class TestKotlinDoWhile:
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 1
 
+    @covers(KotlinFeature.DO_WHILE_LOOP)
     def test_do_while_body_executes_first(self):
         instructions = _parse_kotlin("fun main() { do { x = 1 } while (false) }")
         # Body should produce STORE_VAR before the BRANCH_IF
@@ -449,16 +488,19 @@ class TestKotlinDoWhile:
 
 
 class TestKotlinObjectDeclaration:
+    @covers(KotlinFeature.OBJECT_DECLARATION)
     def test_object_declaration_produces_new_object(self):
         instructions = _parse_kotlin("object Singleton { val x = 10 }")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
         assert any("Singleton" in inst.operands for inst in new_objs)
 
+    @covers(KotlinFeature.OBJECT_DECLARATION)
     def test_object_declaration_stores_var(self):
         instructions = _parse_kotlin("object Config { val debug = true }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Config" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.OBJECT_DECLARATION)
     def test_object_declaration_body_lowered(self):
         instructions = _parse_kotlin("object Logger { fun log() { return } }")
         returns = _find_all(instructions, Opcode.RETURN)
@@ -466,6 +508,7 @@ class TestKotlinObjectDeclaration:
 
 
 class TestKotlinCompanionObject:
+    @covers(KotlinFeature.COMPANION_OBJECT)
     def test_companion_object_body_lowered(self):
         source = """\
 class MyClass {
@@ -480,6 +523,7 @@ class MyClass {
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
 
+    @covers(KotlinFeature.COMPANION_OBJECT)
     def test_companion_with_method(self):
         source = """\
 class Factory {
@@ -498,6 +542,7 @@ class Factory {
 
 
 class TestKotlinEnumClassBody:
+    @covers(KotlinFeature.ENUM_CLASS)
     def test_enum_entries_produce_new_object(self):
         source = """\
 enum class Color {
@@ -513,6 +558,7 @@ enum class Color {
         assert any("enum:GREEN" in name for name in obj_names)
         assert any("enum:BLUE" in name for name in obj_names)
 
+    @covers(KotlinFeature.ENUM_CLASS)
     def test_enum_entries_stored_as_vars(self):
         source = """\
 enum class Direction {
@@ -525,6 +571,7 @@ enum class Direction {
         assert any("NORTH" in inst.operands for inst in stores)
         assert any("SOUTH" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.ENUM_CLASS)
     def test_enum_class_stored(self):
         source = """\
 enum class Status {
@@ -538,6 +585,7 @@ enum class Status {
 
 
 class TestKotlinTypeAlias:
+    @covers(KotlinFeature.TYPE_ALIAS)
     def test_type_alias_is_noop(self):
         instructions = _parse_kotlin("typealias Name = String")
         # Should not produce any meaningful IR beyond entry label
@@ -545,6 +593,7 @@ class TestKotlinTypeAlias:
         assert Opcode.LABEL in opcodes
         # Should not crash
 
+    @covers(KotlinFeature.TYPE_ALIAS)
     def test_type_alias_does_not_produce_store(self):
         instructions = _parse_kotlin("typealias StringList = List<String>")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -552,16 +601,19 @@ class TestKotlinTypeAlias:
 
 
 class TestKotlinConjunctionDisjunction:
+    @covers(KotlinFeature.ARITHMETIC)
     def test_conjunction_expression(self):
         instructions = _parse_kotlin("fun main() { val b = x && y }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("&&" in inst.operands for inst in binops)
 
+    @covers(KotlinFeature.ARITHMETIC)
     def test_disjunction_expression(self):
         instructions = _parse_kotlin("fun main() { val b = x || y }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("||" in inst.operands for inst in binops)
 
+    @covers(KotlinFeature.ARITHMETIC)
     def test_conjunction_not_symbolic(self):
         """conjunction_expression should produce BINOP, not SYMBOLIC."""
         instructions = _parse_kotlin("fun main() { val b = a && b }")
@@ -570,16 +622,19 @@ class TestKotlinConjunctionDisjunction:
 
 
 class TestKotlinHexLiteral:
+    @covers(KotlinFeature.HEX_LITERAL)
     def test_hex_literal_basic(self):
         instructions = _parse_kotlin("fun main() { val x = 0xFF }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("0xFF" in inst.operands for inst in consts)
 
+    @covers(KotlinFeature.HEX_LITERAL)
     def test_hex_literal_not_symbolic(self):
         instructions = _parse_kotlin("fun main() { val x = 0x1A2B }")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("hex_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.HEX_LITERAL)
     def test_hex_literal_in_expression(self):
         instructions = _parse_kotlin("fun main() { val x = 0xFF + 1 }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -589,16 +644,19 @@ class TestKotlinHexLiteral:
 
 
 class TestKotlinElvisExpression:
+    @covers(KotlinFeature.ELVIS_EXPRESSION)
     def test_elvis_basic(self):
         instructions = _parse_kotlin("fun main() { val x = y ?: 0 }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("?:" in inst.operands for inst in binops)
 
+    @covers(KotlinFeature.ELVIS_EXPRESSION)
     def test_elvis_stores_result(self):
         instructions = _parse_kotlin('fun main() { val x = name ?: "default" }')
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.ELVIS_EXPRESSION)
     def test_elvis_not_symbolic(self):
         instructions = _parse_kotlin("fun main() { val x = y ?: z }")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
@@ -606,16 +664,19 @@ class TestKotlinElvisExpression:
 
 
 class TestKotlinInfixExpression:
+    @covers(KotlinFeature.INFIX_EXPRESSION)
     def test_infix_to(self):
         instructions = _parse_kotlin("fun main() { val r = 1 to 10 }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("to" in inst.operands for inst in calls)
 
+    @covers(KotlinFeature.INFIX_EXPRESSION)
     def test_infix_until(self):
         instructions = _parse_kotlin("fun main() { val r = 1 until 10 }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("until" in inst.operands for inst in calls)
 
+    @covers(KotlinFeature.INFIX_EXPRESSION)
     def test_infix_stores_result(self):
         instructions = _parse_kotlin("fun main() { val r = 1 to 10 }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -623,16 +684,19 @@ class TestKotlinInfixExpression:
 
 
 class TestKotlinIndexingExpression:
+    @covers(KotlinFeature.INDEXING)
     def test_indexing_basic(self):
         instructions = _parse_kotlin("fun main() { val x = list[0] }")
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_INDEX in opcodes
 
+    @covers(KotlinFeature.INDEXING)
     def test_indexing_with_variable(self):
         instructions = _parse_kotlin("fun main() { val x = map[key] }")
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_INDEX in opcodes
 
+    @covers(KotlinFeature.INDEXING)
     def test_indexing_stores_result(self):
         instructions = _parse_kotlin("fun main() { val x = arr[0] }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -640,17 +704,20 @@ class TestKotlinIndexingExpression:
 
 
 class TestKotlinAsExpression:
+    @covers(KotlinFeature.AS_EXPRESSION)
     def test_as_basic(self):
         instructions = _parse_kotlin("fun main() { val x = y as Int }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("as" in inst.operands for inst in calls)
         assert any("Int" in str(inst.operands) for inst in calls)
 
+    @covers(KotlinFeature.AS_EXPRESSION)
     def test_as_stores_result(self):
         instructions = _parse_kotlin("fun main() { val x = obj as String }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.AS_EXPRESSION)
     def test_as_not_symbolic(self):
         instructions = _parse_kotlin("fun main() { val x = y as Int }")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
@@ -660,6 +727,7 @@ class TestKotlinAsExpression:
 class TestKotlinOperatorExecution:
     """VM execution tests for Kotlin-specific operators."""
 
+    @covers(KotlinFeature.NOT_NULL_ASSERTION)
     def test_not_null_assertion(self):
         source = """\
 fun identity(x: Int): Int {
@@ -672,6 +740,7 @@ val answer = identity(42)
         assert extract_answer(vm, "kotlin") == 42
         assert stats.llm_calls == 0
 
+    @covers(KotlinFeature.ELVIS_EXPRESSION)
     def test_elvis_with_null(self):
         source = """\
 val x: Int? = null
@@ -681,6 +750,7 @@ val answer = x ?: 99
         assert extract_answer(vm, "kotlin") == 99
         assert stats.llm_calls == 0
 
+    @covers(KotlinFeature.ELVIS_EXPRESSION)
     def test_elvis_with_non_null(self):
         source = """\
 val x: Int? = 42
@@ -692,6 +762,7 @@ val answer = x ?: 99
 
 
 class TestKotlinStringInterpolation:
+    @covers(KotlinFeature.STRING_INTERPOLATION)
     def test_interpolation_basic(self):
         instructions = _parse_kotlin('"Hello $name"')
         opcodes = _opcodes(instructions)
@@ -703,6 +774,7 @@ class TestKotlinStringInterpolation:
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("name" in inst.operands for inst in loads)
 
+    @covers(KotlinFeature.STRING_INTERPOLATION)
     def test_interpolation_expression(self):
         instructions = _parse_kotlin('"${x + 1}"')
         opcodes = _opcodes(instructions)
@@ -710,6 +782,7 @@ class TestKotlinStringInterpolation:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(KotlinFeature.STRING_INTERPOLATION)
     def test_interpolation_multiple(self):
         instructions = _parse_kotlin('"$a and $b"')
         loads = _find_all(instructions, Opcode.LOAD_VAR)
@@ -720,6 +793,7 @@ class TestKotlinStringInterpolation:
         concat_ops = [inst for inst in binops if inst.operands[0] == "+"]
         assert len(concat_ops) >= 2
 
+    @covers(KotlinFeature.STRING_INTERPOLATION)
     def test_no_interpolation_is_const(self):
         instructions = _parse_kotlin('"hello"')
         consts = _find_all(instructions, Opcode.CONST)
@@ -729,6 +803,7 @@ class TestKotlinStringInterpolation:
 
 
 class TestKotlinDestructuring:
+    @covers(KotlinFeature.DESTRUCTURING)
     def test_destructure_two_elements(self):
         instructions = _parse_kotlin("val (a, b) = pair")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -738,6 +813,7 @@ class TestKotlinDestructuring:
         load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(load_indices) >= 2
 
+    @covers(KotlinFeature.DESTRUCTURING)
     def test_destructure_three_elements(self):
         instructions = _parse_kotlin("val (x, y, z) = triple")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -748,6 +824,7 @@ class TestKotlinDestructuring:
         load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(load_indices) >= 3
 
+    @covers(KotlinFeature.DESTRUCTURING)
     def test_destructure_with_usage(self):
         source = "val (first, second) = getPair()\nprintln(first)"
         instructions = _parse_kotlin(source)
@@ -758,6 +835,7 @@ class TestKotlinDestructuring:
 
 
 class TestKotlinRangeExpression:
+    @covers(KotlinFeature.RANGE_EXPRESSION)
     def test_range_expression_basic(self):
         instructions = _parse_kotlin("val r = 1..10")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -765,11 +843,13 @@ class TestKotlinRangeExpression:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("range_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.RANGE_EXPRESSION)
     def test_range_in_for_loop(self):
         instructions = _parse_kotlin("for (i in 1..10) { println(i) }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("range" in inst.operands for inst in calls)
 
+    @covers(KotlinFeature.RANGE_EXPRESSION)
     def test_range_with_variables(self):
         instructions = _parse_kotlin("val r = start..end")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -781,6 +861,7 @@ class TestKotlinRangeExpression:
 
 
 class TestKotlinObjectLiteral:
+    @covers(KotlinFeature.OBJECT_LITERAL)
     def test_object_literal_produces_new_object(self):
         source = "val listener = object : OnClickListener {\n    fun onClick() { }\n}"
         instructions = _parse_kotlin(source)
@@ -790,6 +871,7 @@ class TestKotlinObjectLiteral:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("object_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.OBJECT_LITERAL)
     def test_object_literal_lowers_body(self):
         source = "val x = object : Runnable {\n    fun run() { println(42) }\n}"
         instructions = _parse_kotlin(source)
@@ -799,6 +881,7 @@ class TestKotlinObjectLiteral:
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
         assert any("Runnable" in inst.operands for inst in new_objs)
 
+    @covers(KotlinFeature.OBJECT_LITERAL)
     def test_object_literal_no_supertype(self):
         source = "val obj = object {\n    fun greet() { }\n}"
         instructions = _parse_kotlin(source)
@@ -807,12 +890,14 @@ class TestKotlinObjectLiteral:
 
 
 class TestKotlinCharacterLiteral:
+    @covers(KotlinFeature.CHAR_LITERAL)
     def test_char_literal_no_symbolic(self):
         source = "val c = 'A'"
         instructions = _parse_kotlin(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("character_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.CHAR_LITERAL)
     def test_char_literal_as_const(self):
         source = "val c = 'Z'"
         instructions = _parse_kotlin(source)
@@ -821,12 +906,14 @@ class TestKotlinCharacterLiteral:
 
 
 class TestKotlinTypeTest:
+    @covers(KotlinFeature.TYPE_TEST)
     def test_type_test_no_symbolic(self):
         source = "fun f(x: Any) = when (x) {\n    is String -> x.length\n    is Int -> x\n    else -> 0\n}"
         instructions = _parse_kotlin(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("type_test" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.TYPE_TEST)
     def test_type_test_isinstance_call(self):
         """is String in subject-when compiles to CALL_FUNCTION isinstance with type name."""
         source = "fun f(x: Any) = when (x) {\n    is String -> 1\n    else -> 0\n}"
@@ -838,12 +925,14 @@ class TestKotlinTypeTest:
 
 
 class TestKotlinLineComment:
+    @covers(KotlinFeature.LINE_COMMENT)
     def test_line_comment_not_symbolic(self):
         source = "// this is a comment\nval x = 1"
         instructions = _parse_kotlin(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("line_comment" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.LINE_COMMENT)
     def test_line_comment_filtered(self):
         source = "val x = 1 // inline comment\nval y = 2"
         instructions = _parse_kotlin(source)
@@ -852,6 +941,7 @@ class TestKotlinLineComment:
 
 
 class TestKotlinLabel:
+    @covers(KotlinFeature.LABELED_STATEMENT)
     def test_label_no_unsupported(self):
         """outer@ for (i in 1..10) { break@outer } should not produce unsupported SYMBOLIC."""
         source = """\
@@ -865,6 +955,7 @@ fun main() {
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.LABELED_STATEMENT)
     def test_label_with_continue(self):
         source = """\
 fun main() {
@@ -882,24 +973,28 @@ class TestKotlinGenericTypeSeeding:
     """Verify that Kotlin generic types (List<String>, Map<K,V>) are extracted
     as parameterised bracket-notation strings in the TypeEnvironmentBuilder."""
 
+    @covers(KotlinFeature.GENERIC_TYPES)
     def test_val_list_of_string(self):
         """val items: List<String> = ... should seed var_types['items'] = 'List[String]'."""
         source = 'fun main() { val items: List<String> = listOf("a") }'
         _, builder = _parse_kotlin_with_types(source)
         assert builder.var_types["items"] == "List[String]"
 
+    @covers(KotlinFeature.GENERIC_TYPES)
     def test_val_map_of_string_int(self):
         """val m: Map<String, Int> = ... should seed 'Map[String, Int]'."""
         source = "fun main() { val m: Map<String, Int> = mapOf() }"
         _, builder = _parse_kotlin_with_types(source)
         assert builder.var_types["m"] == "Map[String, Int]"
 
+    @covers(KotlinFeature.GENERIC_TYPES)
     def test_nested_generic_type(self):
         """List<Map<String, Int>> should produce 'List[Map[String, Int]]'."""
         source = "fun main() { val x: List<Map<String, Int>> = listOf() }"
         _, builder = _parse_kotlin_with_types(source)
         assert builder.var_types["x"] == "List[Map[String, Int]]"
 
+    @covers(KotlinFeature.GENERIC_TYPES)
     def test_fun_return_generic_type(self):
         """fun getNames(): List<String> should seed func_return_types with 'List[String]'."""
         source = 'fun getNames(): List<String> { return listOf("a") }'
@@ -907,6 +1002,7 @@ class TestKotlinGenericTypeSeeding:
         return_types = builder.func_return_types
         assert any(v == "List[String]" for v in return_types.values())
 
+    @covers(KotlinFeature.GENERIC_TYPES)
     def test_param_generic_type(self):
         """Parameter items: List<String> should seed param type 'List[String]'."""
         source = "fun process(items: List<String>) { }"
@@ -917,6 +1013,7 @@ class TestKotlinGenericTypeSeeding:
             for params in param_types.values()
         )
 
+    @covers(KotlinFeature.GENERIC_TYPES)
     def test_non_generic_type_unchanged(self):
         """val x: Int = 42 should still seed 'Int' (regression check)."""
         source = "fun main() { val x: Int = 42 }"
@@ -927,24 +1024,28 @@ class TestKotlinGenericTypeSeeding:
 class TestKotlinThrowExpression:
     """P0 gap: throw as expression in elvis and other expression contexts."""
 
+    @covers(KotlinFeature.THROW_EXPRESSION)
     def test_throw_in_elvis_no_symbolic(self):
         """val x = y ?: throw Exception('err') should lower without SYMBOLIC."""
         instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.THROW_EXPRESSION)
     def test_throw_in_elvis_emits_throw(self):
         """throw in elvis RHS should produce a THROW opcode."""
         instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
         throws = _find_all(instructions, Opcode.THROW)
         assert len(throws) >= 1
 
+    @covers(KotlinFeature.THROW_EXPRESSION)
     def test_throw_in_elvis_stores_result(self):
         """The val binding should still produce a STORE_VAR for x."""
         instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.THROW_EXPRESSION)
     def test_throw_in_elvis_calls_exception_constructor(self):
         """The Exception() constructor call should appear."""
         instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
@@ -955,6 +1056,7 @@ class TestKotlinThrowExpression:
 class TestKotlinWhenExpressionAsStatement:
     """P0 gap: when_expression used at statement level should be in stmt dispatch."""
 
+    @covers(KotlinFeature.WHEN_STATEMENT)
     def test_when_stmt_no_symbolic(self):
         """when at statement level should not produce unsupported SYMBOLIC."""
         source = """\
@@ -970,6 +1072,7 @@ fun main() {
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.WHEN_STATEMENT)
     def test_when_stmt_produces_branch_if(self):
         """when at statement level should produce BRANCH_IF for each arm."""
         source = """\
@@ -985,6 +1088,7 @@ fun main() {
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
 
+    @covers(KotlinFeature.WHEN_STATEMENT)
     def test_when_stmt_calls_println(self):
         """when arms should produce CALL_FUNCTION for println."""
         source = """\
@@ -998,6 +1102,7 @@ fun main() {
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("println" in inst.operands for inst in calls)
 
+    @covers(KotlinFeature.WHEN_STATEMENT)
     def test_when_stmt_in_dispatch_table(self):
         """when_expression should be in both expr and stmt dispatch tables."""
         frontend = KotlinFrontend(TreeSitterParserFactory(), "kotlin")
@@ -1011,6 +1116,7 @@ fun main() {
 class TestKotlinAnonymousFunction:
     """P0 gap: anonymous_function (fun(x: Int): Int { ... }) should lower as function def."""
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_no_symbolic(self):
         """fun(x: Int): Int { return x * 2 } should NOT produce unsupported SYMBOLIC."""
         instructions = _parse_kotlin(
@@ -1019,6 +1125,7 @@ class TestKotlinAnonymousFunction:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_produces_func_ref(self):
         """anonymous_function should produce a function reference CONST."""
         instructions = _parse_kotlin(
@@ -1027,6 +1134,7 @@ class TestKotlinAnonymousFunction:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("__anon_fun" in str(inst.operands) for inst in consts)
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_has_params(self):
         """anonymous_function params should produce SYMBOLIC param: entries."""
         instructions = _parse_kotlin(
@@ -1040,6 +1148,7 @@ class TestKotlinAnonymousFunction:
         ]
         assert any("x" in p for p in param_names)
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_has_return(self):
         """anonymous_function body should produce RETURN."""
         instructions = _parse_kotlin(
@@ -1048,6 +1157,7 @@ class TestKotlinAnonymousFunction:
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_stored_in_var(self):
         """val f = fun(...) should store the function ref in f."""
         instructions = _parse_kotlin(
@@ -1056,6 +1166,7 @@ class TestKotlinAnonymousFunction:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_no_params(self):
         """fun(): Unit { println(1) } should lower without errors."""
         instructions = _parse_kotlin(
@@ -1064,6 +1175,7 @@ class TestKotlinAnonymousFunction:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_multiple_params(self):
         """fun(a: Int, b: Int): Int { return a + b } should handle multiple params."""
         instructions = _parse_kotlin(
@@ -1080,18 +1192,21 @@ class TestKotlinAnonymousFunction:
 
 
 class TestKotlinUnsignedLiteral:
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_literal_no_symbolic(self):
         """42u should not produce SYMBOLIC fallthrough."""
         ir = _parse_kotlin("val x = 42u")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsigned_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_literal_emits_const(self):
         """Unsigned literal should emit a CONST instruction."""
         ir = _parse_kotlin("val x = 42u")
         consts = _find_all(ir, Opcode.CONST)
         assert len(consts) >= 1
 
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_literal_stored(self):
         """Unsigned literal should be stored in a variable."""
         ir = _parse_kotlin("val x = 42u")
@@ -1100,6 +1215,7 @@ class TestKotlinUnsignedLiteral:
 
 
 class TestKotlinWildcardImport:
+    @covers(KotlinFeature.WILDCARD_IMPORT)
     def test_wildcard_import_no_symbolic(self):
         """import foo.* should not produce SYMBOLIC fallthrough."""
         ir = _parse_kotlin("import kotlin.math.*\nval x = 1")
@@ -1108,12 +1224,14 @@ class TestKotlinWildcardImport:
 
 
 class TestKotlinCallableReference:
+    @covers(KotlinFeature.CALLABLE_REFERENCE)
     def test_callable_reference_no_symbolic(self):
         """::println should not produce SYMBOLIC fallthrough."""
         ir = _parse_kotlin("val f = ::println")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("callable_reference" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.CALLABLE_REFERENCE)
     def test_callable_reference_emits_load(self):
         """::functionName should emit a LOAD_VAR for the referenced function."""
         ir = _parse_kotlin("val f = ::println")
@@ -1122,6 +1240,7 @@ class TestKotlinCallableReference:
 
 
 class TestKotlinSpreadExpression:
+    @covers(KotlinFeature.SPREAD)
     def test_spread_no_symbolic(self):
         """*array should not produce SYMBOLIC fallthrough."""
         ir = _parse_kotlin("""\
@@ -1133,6 +1252,7 @@ val x = listOf(*arr)
 
 
 class TestKotlinSetter:
+    @covers(KotlinFeature.SETTER)
     def test_setter_no_symbolic(self):
         """Property setter should not produce SYMBOLIC."""
         ir = _parse_kotlin("""\
@@ -1144,6 +1264,7 @@ val y = 42""")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("setter" in str(inst.operands) for inst in symbolics)
 
+    @covers(KotlinFeature.SETTER)
     def test_setter_does_not_block(self):
         """Code after class with setter should be lowered."""
         ir = _parse_kotlin("""\
@@ -1159,6 +1280,7 @@ val y = 42""")
 class TestKotlinBitwiseInfix:
     """Kotlin bitwise infix functions (and, or, xor, shl, shr) emit BINOP."""
 
+    @covers(KotlinFeature.BITWISE)
     def test_and_emits_binop(self):
         ir = _parse_kotlin("""\
 val a = 12
@@ -1170,6 +1292,7 @@ val c = a and b
             "&" in inst.operands for inst in binops
         ), "Expected BINOP with '&' for Kotlin 'and' infix"
 
+    @covers(KotlinFeature.BITWISE)
     def test_xor_emits_binop(self):
         ir = _parse_kotlin("""\
 val a = 8
@@ -1181,6 +1304,7 @@ val c = a xor b
             "^" in inst.operands for inst in binops
         ), "Expected BINOP with '^' for Kotlin 'xor' infix"
 
+    @covers(KotlinFeature.BITWISE)
     def test_or_emits_binop(self):
         ir = _parse_kotlin("""\
 val a = 12
@@ -1192,6 +1316,7 @@ val c = a or b
             "|" in inst.operands for inst in binops
         ), "Expected BINOP with '|' for Kotlin 'or' infix"
 
+    @covers(KotlinFeature.BITWISE)
     def test_shl_emits_binop(self):
         ir = _parse_kotlin("""\
 val a = 1
@@ -1202,6 +1327,7 @@ val c = a shl 3
             "<<" in inst.operands for inst in binops
         ), "Expected BINOP with '<<' for Kotlin 'shl' infix"
 
+    @covers(KotlinFeature.BITWISE)
     def test_shr_emits_binop(self):
         ir = _parse_kotlin("""\
 val a = 16
@@ -1212,6 +1338,7 @@ val c = a shr 2
             ">>" in inst.operands for inst in binops
         ), "Expected BINOP with '>>' for Kotlin 'shr' infix"
 
+    @covers(KotlinFeature.INFIX_EXPRESSION)
     def test_non_bitwise_infix_emits_call(self):
         """Non-bitwise infix like 'to' should still emit CALL_FUNCTION."""
         ir = _parse_kotlin("""\
@@ -1222,6 +1349,7 @@ val p = 1 to 2
             "to" in str(inst.operands) for inst in calls
         ), "Expected CALL_FUNCTION for non-bitwise 'to' infix"
 
+    @covers(KotlinFeature.BITWISE)
     def test_bitwise_execution(self):
         """Kotlin bitwise infix produces correct result through VM."""
         vm, stats = execute_for_language(
@@ -1240,6 +1368,7 @@ val answer = c xor 5
 class TestKotlinInterfaceLowering:
     """Kotlin interface declarations should emit CLASS blocks with method stubs."""
 
+    @covers(KotlinFeature.INTERFACE)
     def test_interface_emits_class_block(self):
         """Interface produces BRANCH-LABEL...LABEL-CONST(<class:>)-STORE_VAR."""
         instructions = _parse_kotlin("interface Drawable { fun draw(): String }")
@@ -1250,6 +1379,7 @@ class TestKotlinInterfaceLowering:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(i.label.contains("class_Drawable") for i in labels)
 
+    @covers(KotlinFeature.INTERFACE)
     def test_interface_methods_emit_function_labels(self):
         """Each interface method should produce a FUNC_DEF label."""
         instructions = _parse_kotlin(
@@ -1261,6 +1391,7 @@ class TestKotlinInterfaceLowering:
         assert any("area" in lbl for lbl in func_label_names)
         assert any("perimeter" in lbl for lbl in func_label_names)
 
+    @covers(KotlinFeature.INTERFACE)
     def test_interface_methods_seed_return_types(self):
         """Interface method return types are seeded in type_env_builder."""
         _instructions, builder = _parse_kotlin_with_types(
@@ -1274,6 +1405,7 @@ class TestKotlinInterfaceLowering:
         ), f"Expected return type for 'compute', got: {rt}"
         assert len(reset_entries) >= 1, f"Expected return type for 'reset', got: {rt}"
 
+    @covers(KotlinFeature.INTERFACE)
     def test_interface_methods_inject_this(self):
         """Interface methods should have 'this' parameter injection."""
         instructions = _parse_kotlin("interface Greeter { fun greet(): String }")
@@ -1285,6 +1417,7 @@ class TestKotlinInterfaceLowering:
 class TestKotlinPrimaryConstructor:
     """Primary constructor val params must generate __init__ with STORE_FIELD."""
 
+    @covers(KotlinFeature.PRIMARY_CONSTRUCTOR)
     def test_primary_constructor_generates_init(self):
         ir = _parse_kotlin("class Node(val value: Int, val nextNode: Node?)")
         func_refs = [
@@ -1294,6 +1427,7 @@ class TestKotlinPrimaryConstructor:
         ]
         assert len(func_refs) == 1, f"Expected one __init__ FUNC_REF, got {func_refs}"
 
+    @covers(KotlinFeature.PRIMARY_CONSTRUCTOR)
     def test_primary_constructor_stores_fields(self):
         ir = _parse_kotlin("class Node(val value: Int, val nextNode: Node?)")
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
@@ -1305,6 +1439,7 @@ class TestKotlinPrimaryConstructor:
             "nextNode" in field_names
         ), f"Expected STORE_FIELD for 'nextNode', got {field_names}"
 
+    @covers(KotlinFeature.PRIMARY_CONSTRUCTOR)
     def test_primary_constructor_declares_params(self):
         ir = _parse_kotlin("class Node(val value: Int, val nextNode: Node?)")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
@@ -1314,6 +1449,7 @@ class TestKotlinPrimaryConstructor:
         assert "param:value" in param_names
         assert "param:nextNode" in param_names
 
+    @covers(KotlinFeature.CLASS)
     def test_class_without_primary_constructor_no_init(self):
         ir = _parse_kotlin("class Empty")
         func_refs = [
@@ -1329,6 +1465,7 @@ class TestKotlinPrimaryConstructor:
 class TestKotlinSecondaryConstructor:
     """Secondary constructors emit __init__ with delegation and body."""
 
+    @covers(KotlinFeature.SECONDARY_CONSTRUCTOR)
     def test_secondary_constructor_generates_init(self):
         """Secondary constructor should produce an __init__ FUNC_REF."""
         ir = _parse_kotlin("""\
@@ -1346,6 +1483,7 @@ class Rect(val w: Int, val h: Int) {
             len(func_ref_instrs) == 2
         ), f"Expected 2 __init__ CONST refs (primary + secondary), got {func_ref_instrs}"
 
+    @covers(KotlinFeature.SECONDARY_CONSTRUCTOR)
     def test_secondary_constructor_has_params(self):
         """Secondary constructor should emit SYMBOLIC param: for its parameters."""
         ir = _parse_kotlin("""\
@@ -1359,6 +1497,7 @@ class Rect(val w: Int, val h: Int) {
         ]
         assert "param:side" in param_names, f"Expected param:side, got {param_names}"
 
+    @covers(KotlinFeature.SECONDARY_CONSTRUCTOR)
     def test_secondary_constructor_delegation_stores_fields(self):
         """this(...) delegation should emit STORE_FIELD for primary params."""
         ir = _parse_kotlin("""\
@@ -1376,6 +1515,7 @@ class Rect(val w: Int, val h: Int) {
             field_names.count("h") == 2
         ), f"Expected 2 STORE_FIELD for 'h', got {field_names}"
 
+    @covers(KotlinFeature.SECONDARY_CONSTRUCTOR)
     def test_secondary_constructor_no_symbolic_unsupported(self):
         """Secondary constructor should not produce SYMBOLIC unsupported."""
         ir = _parse_kotlin("""\
@@ -1396,6 +1536,7 @@ class Rect(val w: Int, val h: Int) {
 class TestKotlinPropertyAccessors:
     """Tests for custom property getter/setter IR emission."""
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_getter_emits_synthetic_method(self):
         """Property getter should emit a __get_x__ method label."""
         ir = _parse_kotlin("""\
@@ -1411,6 +1552,7 @@ class Foo {
         ]
         assert len(getter_labels) >= 1, "Expected a __get_x__ method label"
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_setter_emits_synthetic_method(self):
         """Property setter should emit a __set_x__ method label."""
         ir = _parse_kotlin("""\
@@ -1426,6 +1568,7 @@ class Foo {
         ]
         assert len(setter_labels) >= 1, "Expected a __set_x__ method label"
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_getter_setter_both_emitted(self):
         """Both getter and setter should produce synthetic methods."""
         ir = _parse_kotlin("""\
@@ -1439,6 +1582,7 @@ class Foo {
         assert any("__get_x__" in lbl for lbl in label_names)
         assert any("__set_x__" in lbl for lbl in label_names)
 
+    @covers(KotlinFeature.VAR_DECLARATION)
     def test_property_without_accessors_unchanged(self):
         """Property without custom accessors should not emit synthetic methods."""
         ir = _parse_kotlin("""\
@@ -1450,6 +1594,7 @@ class Foo {
         assert not any("__get_" in lbl for lbl in label_names)
         assert not any("__set_" in lbl for lbl in label_names)
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_field_keyword_in_getter_emits_load_field(self):
         """'field' in getter body should emit LOAD_FIELD this 'x'."""
         ir = _parse_kotlin("""\
@@ -1462,6 +1607,7 @@ class Foo {
             "x" in inst.operands for inst in load_fields
         ), f"Expected LOAD_FIELD with field 'x', got: {[(inst.operands) for inst in load_fields]}"
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_this_dot_x_with_getter_emits_call_method(self):
         """this.x with custom getter should emit CALL_METHOD __get_x__."""
         ir = _parse_kotlin("""\
@@ -1477,6 +1623,7 @@ class Foo {
             "__get_x__" in inst.operands for inst in call_methods
         ), f"Expected CALL_METHOD with __get_x__, got: {[(inst.operands) for inst in call_methods]}"
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_field_keyword_in_setter_emits_store_field(self):
         """'field = value' in setter body should emit STORE_FIELD this 'x'."""
         ir = _parse_kotlin("""\
@@ -1489,6 +1636,7 @@ class Foo {
             "x" in inst.operands for inst in store_fields
         ), f"Expected STORE_FIELD with field 'x', got: {[(inst.operands) for inst in store_fields]}"
 
+    @covers(KotlinFeature.PROPERTY_ACCESSOR)
     def test_this_dot_x_assign_with_setter_emits_call_method(self):
         """this.x = val with custom setter should emit CALL_METHOD __set_x__."""
         ir = _parse_kotlin("""\
@@ -1506,6 +1654,7 @@ class Foo {
 
 
 class TestKotlinUnsignedLiteral:
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_int_suffix_stripped(self):
         """val x = 42u should emit CONST '42', not '42u'."""
         ir = _parse_kotlin("val x = 42u")
@@ -1514,6 +1663,7 @@ class TestKotlinUnsignedLiteral:
         assert "42" in const_values
         assert "42u" not in const_values
 
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_long_suffix_stripped(self):
         """val x = 42UL should emit CONST '42', not '42UL'."""
         ir = _parse_kotlin("val x = 42UL")
@@ -1522,6 +1672,7 @@ class TestKotlinUnsignedLiteral:
         assert "42" in const_values
         assert "42UL" not in const_values
 
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_lowercase_suffix(self):
         """val x = 100uL should strip mixed-case suffix."""
         ir = _parse_kotlin("val x = 100uL")
@@ -1529,6 +1680,7 @@ class TestKotlinUnsignedLiteral:
         const_values = [inst.operands[0] for inst in consts]
         assert "100" in const_values
 
+    @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_hex_literal(self):
         """val x = 0xFFu should emit '0xFF', not '0xFFu'."""
         ir = _parse_kotlin("val x = 0xFFu")
