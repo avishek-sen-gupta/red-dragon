@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""
+Dump entire Beads DB, find issues matching the blocklist, redact in-place.
+
+Blocklist: ~/.config/git/blocklist.txt (one regex per line, # = comment)
+Redaction: matching substrings replaced with [REDACTED]
+Fields checked/updated: title, description
+"""
+
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+BLOCKLIST_PATH = Path.home() / ".config" / "git" / "blocklist.txt"
+REDACTED = "[REDACTED]"
+
+
+def load_patterns() -> list[re.Pattern]:
+    if not BLOCKLIST_PATH.exists():
+        print(f"No blocklist found at {BLOCKLIST_PATH}", file=sys.stderr)
+        return []
+    patterns = []
+    for line in BLOCKLIST_PATH.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            patterns.append(re.compile(line))
+        except re.error as e:
+            print(f"  Skipping bad pattern {line!r}: {e}", file=sys.stderr)
+    return patterns
+
+
+def redact(text: str, patterns: list[re.Pattern]) -> tuple[str, bool]:
+    original = text
+    for p in patterns:
+        text = p.sub(REDACTED, text)
+    return text, text != original
+
+
+def export_all() -> list[dict]:
+    result = subprocess.run(["bd", "export"], capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"bd export failed: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+    issues = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            issues.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            print(f"  Skipping bad line: {e}", file=sys.stderr)
+    return issues
+
+
+def bd_update(issue_id: str, **fields) -> bool:
+    args = ["bd", "update", issue_id]
+    for key, value in fields.items():
+        args += [f"--{key}", value]
+    result = subprocess.run(args, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  ERROR updating {issue_id}: {result.stderr}", file=sys.stderr)
+        return False
+    return True
+
+
+def main():
+    dry_run = "--dry-run" in sys.argv
+
+    patterns = load_patterns()
+    if not patterns:
+        print("No patterns loaded — nothing to do.")
+        sys.exit(0)
+
+    print(f"Loaded {len(patterns)} patterns from {BLOCKLIST_PATH}")
+    print("Exporting all issues from Beads DB...")
+
+    issues = export_all()
+    print(f"Exported {len(issues)} issues. Scanning...")
+
+    flagged = 0
+    redacted_count = 0
+
+    for issue in issues:
+        issue_id = issue.get("id", "?")
+        title = issue.get("title", "") or ""
+        description = issue.get("description", "") or ""
+
+        new_title, title_changed = redact(title, patterns)
+        new_desc, desc_changed = redact(description, patterns)
+
+        if not title_changed and not desc_changed:
+            continue
+
+        flagged += 1
+        fields_matched = []
+        if title_changed:
+            fields_matched.append("title")
+        if desc_changed:
+            fields_matched.append("description")
+
+        print(f"\n  {issue_id}: {title[:72]!r}")
+        print(f"    Matched fields: {', '.join(fields_matched)}")
+        if title_changed:
+            print(f"    title:      {title!r}")
+            print(f"    → redacted: {new_title!r}")
+
+        if dry_run:
+            print("    [dry-run] skipping update")
+            continue
+
+        updates = {}
+        if title_changed:
+            updates["title"] = new_title
+        if desc_changed:
+            updates["description"] = new_desc
+
+        if bd_update(issue_id, **updates):
+            redacted_count += 1
+            print("    Updated.")
+        else:
+            print("    FAILED.")
+
+    print(f"\nDone. Flagged: {flagged}, Redacted: {redacted_count}")
+    if dry_run:
+        print("(dry-run: no changes written)")
+
+
+if __name__ == "__main__":
+    main()

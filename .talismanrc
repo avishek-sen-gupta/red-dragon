@@ -133,4 +133,12 @@ fileignoreconfig:
   checksum: 134fbb293001a116958bff315bbaa907d13176cc9ffd7448876c722fda45720b
 - filename: interpreter/frontends/typescript/frontend.py
   checksum: a5236212aeba0fd199259b8ec6216f6088a64f608908a871e874f82660381342
+- filename: .beads/backup/backup_state.json
+  checksum: 979f62fa04f2f0e8c0e17d53a87c08e23a4dba6a94e991e35a6c5800dec388fe
+- filename: .beads/backup/issues.jsonl
+  checksum: a73f20f3f5725ee819715127929cb5b67fbe0042dd4921a7868d6ed6cc6a9632
+- filename: .beads/backup/config.jsonl
+  checksum: 6272a10b8d746764bbeaf4d2abfe759ac7491508b9c51264a9d4f5480b394c53
+- filename: scripts/redact-beads-issues
+  checksum: fac2e11c1f7dc544947b9d77172295cb3f424fa0d9011a00c938b8060ebd6d68
 version: "1.0"

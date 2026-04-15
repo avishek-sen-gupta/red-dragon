@@ -38,8 +38,8 @@ dolt/
 dolt-server.*
 *.db
 
-# Beads: ignore backup and Dolt database
-.beads/backup/
+# Beads: ignore Dolt database and events audit trail (contains historical content)
+.beads/backup/events.jsonl
 .beads/dolt/
 .serena/
 
