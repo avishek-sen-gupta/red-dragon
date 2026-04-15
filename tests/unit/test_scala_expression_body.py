@@ -7,9 +7,11 @@ emit proper RETURN with the expression value, not default nil return.
 from __future__ import annotations
 
 from interpreter.frontends.scala import ScalaFrontend
+from interpreter.frontends.scala.features import ScalaFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 
 
 def _parse_scala(source: str) -> list[InstructionBase]:
@@ -58,6 +60,7 @@ object M {
 }
 """
 
+    @covers(ScalaFeature.FUNCTION_DECLARATION, ScalaFeature.IMPLICIT_RETURN)
     def test_return_carries_literal_value(self):
         instructions = _parse_scala(self.SOURCE)
         func_body = _instructions_between_labels(instructions, "func_f", "end_f")
@@ -72,6 +75,7 @@ object M {
         assert len(consts) >= 1, "RETURN register should come from a CONST"
         assert "42" in consts[0].operands, "CONST should hold literal 42"
 
+    @covers(ScalaFeature.FUNCTION_DECLARATION, ScalaFeature.IMPLICIT_RETURN)
     def test_no_default_return_value(self):
         instructions = _parse_scala(self.SOURCE)
         func_body = _instructions_between_labels(instructions, "func_f", "end_f")
@@ -99,6 +103,7 @@ class Dog {
 }
 """
 
+    @covers(ScalaFeature.FUNCTION_DECLARATION, ScalaFeature.FIELD_ACCESS)
     def test_load_field_emitted(self):
         instructions = _parse_scala(self.SOURCE)
         func_body = _instructions_between_labels(
@@ -110,6 +115,7 @@ class Dog {
             "age" in i.operands for i in load_fields
         ), "LOAD_FIELD should reference 'age'"
 
+    @covers(ScalaFeature.FUNCTION_DECLARATION, ScalaFeature.FIELD_ACCESS)
     def test_return_carries_load_field_result(self):
         instructions = _parse_scala(self.SOURCE)
         func_body = _instructions_between_labels(

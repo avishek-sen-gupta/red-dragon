@@ -5,10 +5,12 @@ from __future__ import annotations
 import pytest
 
 from interpreter.frontends.scala import ScalaFrontend
+from interpreter.frontends.scala.features import ScalaFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from tests.covers import covers
 
 
 def _parse_scala(source: str) -> list[InstructionBase]:
@@ -35,6 +37,7 @@ def _find_all(
 
 
 class TestScalaDeclarations:
+    @covers(ScalaFeature.VAL_DECLARATION)
     def test_val_definition(self):
         instructions = _parse_scala("object M { val x = 10 }")
         opcodes = _opcodes(instructions)
@@ -43,6 +46,7 @@ class TestScalaDeclarations:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.VAR_DECLARATION)
     def test_var_definition(self):
         instructions = _parse_scala("object M { var y = 5 }")
         opcodes = _opcodes(instructions)
@@ -51,6 +55,7 @@ class TestScalaDeclarations:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.VAR_ASSIGNMENT)
     def test_var_assignment(self):
         instructions = _parse_scala("object M { var y = 5; y = 10 }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -60,6 +65,7 @@ class TestScalaDeclarations:
 
 
 class TestScalaFunctions:
+    @covers(ScalaFeature.FUNCTION_DECLARATION)
     def test_function_definition(self):
         instructions = _parse_scala("object M { def add(a: Int, b: Int): Int = a + b }")
         opcodes = _opcodes(instructions)
@@ -76,6 +82,7 @@ class TestScalaFunctions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.FUNCTION_CALL)
     def test_function_call(self):
         instructions = _parse_scala("object M { val r = add(1, 2) }")
         all_calls = _find_all(instructions, Opcode.CALL_FUNCTION) + _find_all(
@@ -85,6 +92,7 @@ class TestScalaFunctions:
         # Verify the callee is 'add'
         assert any("add" in inst.operands for inst in all_calls)
 
+    @covers(ScalaFeature.IMPLICIT_RETURN)
     def test_return_via_expression(self):
         instructions = _parse_scala("object M { def answer(): Int = { 42 } }")
         opcodes = _opcodes(instructions)
@@ -96,6 +104,7 @@ class TestScalaFunctions:
 
 
 class TestScalaControlFlow:
+    @covers(ScalaFeature.IF_EXPRESSION)
     def test_if_expression_value_producing(self):
         instructions = _parse_scala("object M { val y = if (x > 0) 1 else 0 }")
         opcodes = _opcodes(instructions)
@@ -104,6 +113,7 @@ class TestScalaControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("if_true") for inst in labels)
 
+    @covers(ScalaFeature.WHILE_LOOP)
     def test_while_loop(self):
         instructions = _parse_scala(
             "object M { var x = 10; while (x > 0) { x = x - 1 } }"
@@ -114,6 +124,7 @@ class TestScalaControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
 
+    @covers(ScalaFeature.MATCH_EXPRESSION)
     def test_match_expression(self):
         instructions = _parse_scala(
             "object M { val r = x match { case 1 => 10; case _ => 0 } }"
@@ -127,6 +138,7 @@ class TestScalaControlFlow:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.IF_ELSEIF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         instructions = _parse_scala(
@@ -156,6 +168,7 @@ class TestScalaControlFlow:
 
 
 class TestScalaClasses:
+    @covers(ScalaFeature.CLASS)
     def test_class_definition(self):
         instructions = _parse_scala('class Dog { def bark(): String = "woof" }')
         opcodes = _opcodes(instructions)
@@ -165,6 +178,7 @@ class TestScalaClasses:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(ScalaFeature.OBJECT)
     def test_object_definition_singleton(self):
         instructions = _parse_scala("object Singleton { val x = 42 }")
         opcodes = _opcodes(instructions)
@@ -176,11 +190,13 @@ class TestScalaClasses:
 
 
 class TestScalaExpressions:
+    @covers(ScalaFeature.INFIX_EXPRESSION)
     def test_infix_expression_binary_op(self):
         instructions = _parse_scala("object M { val z = a + b }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(ScalaFeature.BLOCK_EXPRESSION)
     def test_block_as_expression(self):
         instructions = _parse_scala("object M { val v = { val a = 1; a + 2 } }")
         opcodes = _opcodes(instructions)
@@ -188,6 +204,7 @@ class TestScalaExpressions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("v" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.FIELD_ACCESS)
     def test_field_access(self):
         instructions = _parse_scala("object M { val f = obj.field }")
         opcodes = _opcodes(instructions)
@@ -195,11 +212,13 @@ class TestScalaExpressions:
         fields = _find_all(instructions, Opcode.LOAD_FIELD)
         assert any("field" in inst.operands for inst in fields)
 
+    @covers(ScalaFeature.STRING_LITERAL)
     def test_string_literal(self):
         instructions = _parse_scala('object M { val s = "hello" }')
         consts = _find_all(instructions, Opcode.CONST)
         assert any('"hello"' in inst.operands for inst in consts)
 
+    @covers(ScalaFeature.BOOLEAN_LITERAL)
     def test_boolean_literal(self):
         instructions = _parse_scala("object M { val b = true }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -207,11 +226,13 @@ class TestScalaExpressions:
 
 
 class TestScalaSpecial:
+    @covers(ScalaFeature.SOURCE_LOCATION)
     def test_empty_program(self):
         instructions = _parse_scala("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(ScalaFeature.SOURCE_LOCATION)
     def test_fallback_symbolic(self):
         """Unhandled node types (ascription_expression) should produce SYMBOLIC unsupported."""
         instructions = _parse_scala("object M { val x = (y: Int) }")
@@ -220,6 +241,7 @@ class TestScalaSpecial:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(ScalaFeature.IMPLICIT_RETURN)
     def test_return_last_expression_in_block(self):
         instructions = _parse_scala(
             "object M { def compute(): Int = { val a = 1; val b = 2; a + b } }"
@@ -232,6 +254,7 @@ class TestScalaSpecial:
         ret = next(i for i in instructions if i.opcode == Opcode.RETURN)
         assert str(binop.result_reg) in ret.operands
 
+    @covers(ScalaFeature.METHOD_CALL)
     def test_method_call(self):
         instructions = _parse_scala("object M { val r = obj.doSomething(1) }")
         all_calls = (
@@ -243,6 +266,7 @@ class TestScalaSpecial:
         # Verify the method name 'doSomething' appears in the call operands
         assert any("doSomething" in inst.operands for inst in all_calls)
 
+    @covers(ScalaFeature.NULL_LITERAL)
     def test_null_literal(self):
         instructions = _parse_scala("object M { val n = null }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -254,6 +278,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialScala:
+    @covers(ScalaFeature.MATCH_EXPRESSION)
     def test_match_with_cases(self):
         source = """\
 object M {
@@ -279,6 +304,7 @@ object M {
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 15
 
+    @covers(ScalaFeature.OBJECT)
     def test_object_with_method(self):
         source = """\
 object Utils {
@@ -296,6 +322,7 @@ object Utils {
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 2
 
+    @covers(ScalaFeature.PRIMARY_CONSTRUCTOR)
     def test_class_with_constructor_and_method(self):
         source = """\
 class Counter(start: Int) {
@@ -315,6 +342,7 @@ class Counter(start: Int) {
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 15
 
+    @covers(ScalaFeature.WHILE_LOOP)
     def test_while_with_var_mutation(self):
         source = """\
 object M {
@@ -337,6 +365,7 @@ object M {
         assert any("while" in lbl for lbl in labels)
         assert len(instructions) > 15
 
+    @covers(ScalaFeature.IF_ELSEIF_ELSE)
     def test_if_else_as_expression(self):
         source = """\
 object M {
@@ -353,6 +382,7 @@ object M {
         labels = _labels_in_order(instructions)
         assert any("if_true" in lbl for lbl in labels)
 
+    @covers(ScalaFeature.BLOCK_EXPRESSION)
     def test_block_expression_returning_value(self):
         source = """\
 object M {
@@ -371,6 +401,7 @@ object M {
         assert any("a" in inst.operands for inst in stores)
         assert any("b" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.BINARY_OPERATION)
     def test_val_and_var_with_computation(self):
         source = """\
 object M {
@@ -390,6 +421,7 @@ object M {
         assert "+" in operators
         assert "*" in operators
 
+    @covers(ScalaFeature.FUNCTION_CALL)
     def test_function_calling_function(self):
         source = """\
 object M {
@@ -413,6 +445,7 @@ object M {
 
 
 class TestScalaForExpression:
+    @covers(ScalaFeature.FOR_COMPREHENSION)
     def test_for_comprehension_basic(self):
         source = """\
 object M {
@@ -426,6 +459,7 @@ object M {
         labels = _labels_in_order(instructions)
         assert any("for_comp" in lbl for lbl in labels)
 
+    @covers(ScalaFeature.FOR_COMPREHENSION)
     def test_for_comprehension_with_body(self):
         source = """\
 object M {
@@ -439,6 +473,7 @@ object M {
         assert any("iter" in inst.operands for inst in calls)
         assert any("next" in inst.operands for inst in calls)
 
+    @covers(ScalaFeature.FOR_COMPREHENSION)
     def test_for_comprehension_stores_binding(self):
         source = """\
 object M {
@@ -451,6 +486,7 @@ object M {
 
 
 class TestScalaTraitDefinition:
+    @covers(ScalaFeature.TRAIT)
     def test_trait_produces_class_ref(self):
         source = """\
 trait Animal {
@@ -463,6 +499,7 @@ trait Animal {
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(ScalaFeature.TRAIT)
     def test_trait_with_method(self):
         source = """\
 trait Greeter {
@@ -474,6 +511,7 @@ trait Greeter {
         assert any("Greeter" in inst.operands for inst in stores)
         assert any("greet" in inst.operands for inst in stores)
 
+    @covers(ScalaFeature.TRAIT)
     def test_trait_labels(self):
         source = "trait Foo { val x = 1 }"
         instructions = _parse_scala(source)
@@ -483,6 +521,7 @@ trait Greeter {
 
 
 class TestScalaCaseClassDefinition:
+    @covers(ScalaFeature.CASE_CLASS)
     def test_case_class_produces_class_ref(self):
         source = "case class Point(x: Int, y: Int)"
         instructions = _parse_scala(source)
@@ -491,6 +530,7 @@ class TestScalaCaseClassDefinition:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(ScalaFeature.CASE_CLASS)
     def test_case_class_with_body(self):
         source = """\
 case class Person(name: String, age: Int) {
@@ -504,6 +544,7 @@ case class Person(name: String, age: Int) {
 
 
 class TestScalaLazyValDefinition:
+    @covers(ScalaFeature.LAZY_VAL)
     def test_lazy_val_produces_store_var(self):
         source = "object M { lazy val x = 42 }"
         instructions = _parse_scala(source)
@@ -512,6 +553,7 @@ class TestScalaLazyValDefinition:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
 
+    @covers(ScalaFeature.LAZY_VAL)
     def test_lazy_val_with_expression(self):
         source = "object M { lazy val computed = 10 + 20 }"
         instructions = _parse_scala(source)
@@ -522,6 +564,7 @@ class TestScalaLazyValDefinition:
 
 
 class TestScalaDoWhileExpression:
+    @covers(ScalaFeature.DO_WHILE_LOOP)
     def test_do_while_basic(self):
         source = """\
 object M {
@@ -538,6 +581,7 @@ object M {
         assert any("do_body" in lbl for lbl in labels)
         assert any("do_end" in lbl for lbl in labels)
 
+    @covers(ScalaFeature.DO_WHILE_LOOP)
     def test_do_while_stores_var(self):
         source = """\
 object M {
@@ -555,6 +599,7 @@ object M {
 
 
 class TestScalaThrowExpression:
+    @covers(ScalaFeature.THROW_EXPRESSION)
     def test_throw_emits_throw_opcode(self):
         source = 'object M { throw new Exception("error") }'
         instructions = _parse_scala(source)
@@ -563,12 +608,14 @@ class TestScalaThrowExpression:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("throw_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(ScalaFeature.THROW_EXPRESSION)
     def test_throw_with_variable(self):
         source = "object M { val e = new RuntimeException(); throw e }"
         instructions = _parse_scala(source)
         opcodes = _opcodes(instructions)
         assert Opcode.THROW in opcodes
 
+    @covers(ScalaFeature.THROW_EXPRESSION)
     def test_throw_in_if_expression(self):
         source = """\
 object M {
@@ -582,6 +629,7 @@ object M {
 
 
 class TestScalaInstanceExpression:
+    @covers(ScalaFeature.NEW_EXPRESSION)
     def test_new_expression_no_symbolic(self):
         source = 'object M { val x = new Exception("test") }'
         instructions = _parse_scala(source)
@@ -591,12 +639,14 @@ class TestScalaInstanceExpression:
         )
         assert not any("new_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(ScalaFeature.NEW_EXPRESSION)
     def test_new_expression_produces_call(self):
         source = "object M { val dog = new Dog() }"
         instructions = _parse_scala(source)
         calls = _find_all(instructions, Opcode.CALL_CTOR)
         assert len(calls) >= 1
 
+    @covers(ScalaFeature.NEW_EXPRESSION)
     def test_new_expression_stored(self):
         source = 'object M { val msg = new String("hello") }'
         instructions = _parse_scala(source)
@@ -625,6 +675,7 @@ class TestScalaOperatorPrecedenceBug:
         reason="tree-sitter Scala grammar lacks operator precedence — red-dragon-p6ka",
         strict=True,
     )
+    @covers(ScalaFeature.BINARY_OPERATION)
     def test_comparison_lower_precedence_than_subtraction(self):
         """``j < n - 1`` should parse as ``j < (n - 1)``, not ``(j < n) - 1``."""
         instructions = _parse_scala("object M { val r = j < n - 1 }")
@@ -643,6 +694,7 @@ class TestScalaOperatorPrecedenceBug:
         reason="tree-sitter Scala grammar lacks operator precedence — red-dragon-p6ka",
         strict=True,
     )
+    @covers(ScalaFeature.BINARY_OPERATION)
     def test_mixed_arithmetic_and_comparison(self):
         """``a + b > c * d`` should compare the sum against the product."""
         instructions = _parse_scala("object M { val r = a + b > c * d }")
@@ -653,6 +705,7 @@ class TestScalaOperatorPrecedenceBug:
 
 
 class TestScalaTypeDefinition:
+    @covers(ScalaFeature.TYPE_ALIAS)
     def test_type_alias_is_noop(self):
         source = "object M { type Alias = List[Int] }"
         instructions = _parse_scala(source)
@@ -662,6 +715,7 @@ class TestScalaTypeDefinition:
 
 
 class TestScalaStringInterpolation:
+    @covers(ScalaFeature.STRING_INTERPOLATION)
     def test_interpolation_basic(self):
         instructions = _parse_scala('val s = s"Hello $name"')
         opcodes = _opcodes(instructions)
@@ -672,6 +726,7 @@ class TestScalaStringInterpolation:
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("name" in inst.operands for inst in loads)
 
+    @covers(ScalaFeature.STRING_INTERPOLATION)
     def test_interpolation_expression(self):
         instructions = _parse_scala('val s = s"${x + 1}"')
         opcodes = _opcodes(instructions)
@@ -679,6 +734,7 @@ class TestScalaStringInterpolation:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(ScalaFeature.STRING_INTERPOLATION)
     def test_interpolation_multiple(self):
         instructions = _parse_scala('val s = s"$a and $b"')
         loads = _find_all(instructions, Opcode.LOAD_VAR)
@@ -689,6 +745,7 @@ class TestScalaStringInterpolation:
         concat_ops = [inst for inst in binops if inst.operands[0] == "+"]
         assert len(concat_ops) >= 2
 
+    @covers(ScalaFeature.STRING_LITERAL)
     def test_no_interpolation_is_const(self):
         instructions = _parse_scala('val s = "hello"')
         consts = _find_all(instructions, Opcode.CONST)
@@ -699,6 +756,7 @@ class TestScalaStringInterpolation:
 
 
 class TestScalaDestructuring:
+    @covers(ScalaFeature.TUPLE_DESTRUCTURING)
     def test_val_tuple_destructure_two_elements(self):
         instructions = _parse_scala("object M { val (a, b) = getPair() }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -708,6 +766,7 @@ class TestScalaDestructuring:
         load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(load_indices) >= 2
 
+    @covers(ScalaFeature.TUPLE_DESTRUCTURING)
     def test_val_tuple_destructure_three_elements(self):
         instructions = _parse_scala("object M { val (x, y, z) = getTriple() }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -718,6 +777,7 @@ class TestScalaDestructuring:
         load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(load_indices) >= 3
 
+    @covers(ScalaFeature.TUPLE_DESTRUCTURING)
     def test_var_tuple_destructure(self):
         instructions = _parse_scala("object M { var (first, second) = split() }")
         stores = _find_all(instructions, Opcode.DECL_VAR)
@@ -729,12 +789,14 @@ class TestScalaDestructuring:
 
 
 class TestScalaCaseClassPattern:
+    @covers(ScalaFeature.CASE_CLASS_PATTERN)
     def test_case_class_pattern_no_symbolic(self):
         source = "object M { def f(s: Any) = s match { case Circle(r) => r } }"
         instructions = _parse_scala(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("case_class_pattern" in str(inst.operands) for inst in symbolics)
 
+    @covers(ScalaFeature.CASE_CLASS_PATTERN)
     def test_case_class_pattern_isinstance_check(self):
         """Pattern ADT emits isinstance(subject, 'Circle') instead of NEW_OBJECT."""
         source = "object M { def f(s: Any) = s match { case Circle(r) => r } }"
@@ -746,6 +808,7 @@ class TestScalaCaseClassPattern:
 
 
 class TestScalaFunctionDeclaration:
+    @covers(ScalaFeature.FUNCTION_DECLARATION)
     def test_function_declaration_no_symbolic(self):
         source = "trait Shape { def area(): Double }"
         instructions = _parse_scala(source)
