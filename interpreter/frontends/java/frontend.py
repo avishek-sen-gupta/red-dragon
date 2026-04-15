@@ -16,6 +16,7 @@ from interpreter.frontends.java import expressions as java_expr
 from interpreter.frontends.java import control_flow as java_cf
 from interpreter.frontends.java import declarations as java_decl
 from interpreter.frontends.java.node_types import JavaNodeType
+from interpreter.frontends.java.benign_types import JAVA_KNOWN_BENIGN_NODE_TYPES
 
 
 class JavaFrontend(BaseFrontend):
@@ -38,6 +39,10 @@ class JavaFrontend(BaseFrontend):
             ),
             noise_types=frozenset({JavaNodeType.NEWLINE}),
             block_node_types=frozenset({JavaNodeType.BLOCK, JavaNodeType.PROGRAM}),
+            # jbo6.3 — see interpreter/frontends/java/benign_types.py for the
+            # full registry: each entry documents the handling mechanism and
+            # links to the test class(es) that prove the gap is intentional.
+            known_benign_types=JAVA_KNOWN_BENIGN_NODE_TYPES,
         )
 
     def _build_type_map(self) -> dict[str, str]:
