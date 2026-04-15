@@ -237,3 +237,124 @@ class M {
 """
         _, locals_ = _run_java(source, max_steps=500)
         assert locals_[VarName("count")] == 3
+
+
+class TestJavaBooleanTypeExecution:
+    """boolean_type variables and negation must execute concretely."""
+
+    def test_boolean_field_true(self):
+        source = """\
+class M {
+    static boolean flag = true;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("flag")] is True
+
+    def test_boolean_negation(self):
+        source = """\
+class M {
+    static boolean flag = true;
+    static boolean result = !flag;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("flag")] is True
+        assert locals_[VarName("result")] is False
+
+
+class TestJavaAnnotatedTypeExecution:
+    """annotated_type (@NonNull String) must not affect the stored value."""
+
+    def test_annotated_string_field(self):
+        """@NonNull on a local var must not crash; value must be stored correctly."""
+        source = """\
+class M {
+    static void run() { }
+    static String result = "hello";
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == "hello"
+
+    def test_annotated_local_var_in_method(self):
+        """Method with @NonNull param type must execute and return the value."""
+        source = """\
+class Greeter {
+    String greet(@NonNull String name) {
+        return name;
+    }
+}
+Greeter g = new Greeter();
+String answer = g.greet("world");
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("answer")] == "world"
+
+
+class TestJavaMarkerAnnotationExecution:
+    """@Override / @Deprecated on methods must not affect execution."""
+
+    def test_override_method_executes(self):
+        """@Override method must be callable and return the correct value."""
+        source = """\
+class Animal {
+    String speak() {
+        return "generic";
+    }
+}
+class Dog extends Animal {
+    @Override
+    String speak() {
+        return "woof";
+    }
+}
+Dog d = new Dog();
+String answer = d.speak();
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("answer")] == "woof"
+
+
+class TestJavaFormalParametersExecution:
+    """formal_parameters must bind correctly during method invocation."""
+
+    def test_two_int_params_add(self):
+        source = """\
+class Calc {
+    int add(int a, int b) {
+        return a + b;
+    }
+}
+Calc c = new Calc();
+int answer = c.add(3, 4);
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("answer")] == 7
+
+    def test_string_param_method(self):
+        source = """\
+class Wrapper {
+    String wrap(String s) {
+        return s;
+    }
+}
+Wrapper w = new Wrapper();
+String answer = w.wrap("hi");
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("answer")] == "hi"
+
+
+class TestJavaScopedTypeIdentifierExecution:
+    """scoped_type_identifier (java.lang.String) in declarations must not affect value."""
+
+    def test_scoped_string_type_field(self):
+        """java.lang.String as declared type must store the string value correctly."""
+        source = """\
+class M {
+    static java.lang.String greeting = "hello";
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("greeting")] == "hello"
