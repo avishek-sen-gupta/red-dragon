@@ -23,6 +23,8 @@ from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import SymbolicValue
+from interpreter.frontends.java.features import JavaFeature
+from tests.covers import covers
 
 _CONSTANTS_JAVA = """\
 public class Constants {
@@ -45,6 +47,7 @@ def constants_project(tmp_path: Path) -> Path:
 
 
 class TestJavaConstantDeclaration:
+    @covers(JavaFeature.CLASS)
     def test_static_final_constants_are_concrete(self, constants_project: Path):
         """public static final fields should lower to concrete values."""
         linked = compile_directory(constants_project, Language.JAVA)
@@ -104,6 +107,7 @@ def interface_constants_project(tmp_path: Path) -> Path:
 
 
 class TestJavaInterfaceConstantDeclaration:
+    @covers(JavaFeature.INTERFACE)
     def test_interface_constants_are_concrete(self, interface_constants_project: Path):
         """Interface fields (constant_declaration) should lower to concrete values."""
         linked = compile_directory(interface_constants_project, Language.JAVA)

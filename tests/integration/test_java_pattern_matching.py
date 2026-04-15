@@ -9,6 +9,8 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from interpreter.frontends.java.features import JavaFeature
+from tests.covers import covers
 
 
 def _run_java(source: str, max_steps: int = 1000) -> dict:
@@ -22,6 +24,7 @@ def _run_java(source: str, max_steps: int = 1000) -> dict:
 
 
 class TestJavaInstanceofTypePattern:
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_instanceof_binds_variable(self):
         local_vars = _run_java(
             """\
@@ -38,6 +41,7 @@ M.test("hello");
         )
         assert local_vars[VarName("result")] == "hello"
 
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_instanceof_no_match(self):
         local_vars = _run_java(
             """\
@@ -56,6 +60,7 @@ M.test(42);
 
 
 class TestJavaSwitchTypePattern:
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_switch_type_pattern_matches(self):
         local_vars = _run_java(
             """\
@@ -72,6 +77,7 @@ class M {
         )
         assert local_vars[VarName("result")] == "string:hi"
 
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_switch_type_pattern_default(self):
         local_vars = _run_java(
             """\
@@ -90,6 +96,7 @@ class M {
 
 
 class TestJavaSwitchWildcard:
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_wildcard_matches_type_without_binding(self):
         local_vars = _run_java(
             """\
@@ -108,6 +115,7 @@ class M {
 
 
 class TestJavaSwitchGuard:
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_guard_filters_match(self):
         local_vars = _run_java(
             """\
@@ -125,6 +133,7 @@ class M {
         )
         assert local_vars[VarName("result")] == "short"
 
+    @covers(JavaFeature.TYPE_PATTERN)
     def test_guard_passes(self):
         local_vars = _run_java(
             """\
