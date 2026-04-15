@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from interpreter.frontends.ruby import RubyFrontend
+from interpreter.frontends.ruby.features import RubyFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
@@ -25,11 +27,13 @@ def _find_all(
 
 
 class TestRubySmoke:
+    @covers(RubyFeature.VARIABLE_ASSIGNMENT)
     def test_empty_program(self):
         instructions = _parse_ruby("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(RubyFeature.INTEGER_LITERAL)
     def test_integer_literal(self):
         instructions = _parse_ruby("42")
         consts = _find_all(instructions, Opcode.CONST)
@@ -37,6 +41,7 @@ class TestRubySmoke:
 
 
 class TestRubyVariables:
+    @covers(RubyFeature.VARIABLE_ASSIGNMENT)
     def test_variable_assignment(self):
         instructions = _parse_ruby("x = 10")
         opcodes = _opcodes(instructions)
@@ -45,11 +50,13 @@ class TestRubyVariables:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.INSTANCE_VARIABLE)
     def test_instance_variable_assignment(self):
         instructions = _parse_ruby("@name = 'hello'")
         stores = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("name" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.AUGMENTED_ASSIGNMENT)
     def test_augmented_assignment(self):
         instructions = _parse_ruby("x += 1")
         opcodes = _opcodes(instructions)
@@ -60,6 +67,7 @@ class TestRubyVariables:
 
 
 class TestRubyExpressions:
+    @covers(RubyFeature.ARITHMETIC)
     def test_arithmetic(self):
         instructions = _parse_ruby("y = x + 5")
         opcodes = _opcodes(instructions)
@@ -69,6 +77,7 @@ class TestRubyExpressions:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(RubyFeature.STRING_LITERAL)
     def test_string_literal(self):
         instructions = _parse_ruby('s = "hello world"')
         consts = _find_all(instructions, Opcode.CONST)
@@ -76,6 +85,7 @@ class TestRubyExpressions:
 
 
 class TestRubyControlFlow:
+    @covers(RubyFeature.IF_ELSIF_ELSE)
     def test_if_elsif_else(self):
         source = """
 if x > 10
@@ -94,6 +104,7 @@ end
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
 
+    @covers(RubyFeature.UNLESS)
     def test_unless(self):
         source = """
 unless x > 0
@@ -107,6 +118,7 @@ end
         unops = _find_all(instructions, Opcode.UNOP)
         assert any("!" in inst.operands for inst in unops)
 
+    @covers(RubyFeature.WHILE_LOOP)
     def test_while_loop(self):
         source = """
 while x > 0
@@ -120,6 +132,7 @@ end
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
 
+    @covers(RubyFeature.UNTIL_LOOP)
     def test_until_loop(self):
         source = """
 until x <= 0
@@ -135,6 +148,7 @@ end
 
 
 class TestRubyMethods:
+    @covers(RubyFeature.METHOD_DEFINITION)
     def test_method_definition(self):
         source = """
 def add(a, b)
@@ -155,24 +169,28 @@ end
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
 
+    @covers(RubyFeature.METHOD_CALL)
     def test_method_call_standalone(self):
         instructions = _parse_ruby("add(1, 2)")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) >= 1
         assert "add" in calls[0].operands
 
+    @covers(RubyFeature.METHOD_CALL)
     def test_method_call_with_receiver(self):
         instructions = _parse_ruby("obj.bark")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert len(calls) >= 1
         assert "bark" in calls[0].operands
 
+    @covers(RubyFeature.METHOD_CALL)
     def test_method_call_with_receiver_and_args(self):
         instructions = _parse_ruby("obj.send(1, 2)")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert len(calls) >= 1
         assert "send" in calls[0].operands
 
+    @covers(RubyFeature.RETURN_STATEMENT)
     def test_return_statement(self):
         source = """
 def foo
@@ -185,6 +203,7 @@ end
 
 
 class TestRubyClasses:
+    @covers(RubyFeature.CLASS_DEFINITION)
     def test_class_definition(self):
         source = """
 class Dog
@@ -199,6 +218,7 @@ end
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(RubyFeature.CLASS_CONSTRUCTOR)
     def test_class_with_constructor(self):
         source = """
 class Dog
@@ -215,6 +235,7 @@ end
 
 
 class TestRubyClassObjectSemantics:
+    @covers(RubyFeature.CLASS_DEFINITION)
     def test_new_emits_new_object_and_call_init(self):
         instructions = _parse_ruby("c = Counter.new()")
         opcodes = _opcodes(instructions)
@@ -225,6 +246,7 @@ class TestRubyClassObjectSemantics:
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("__init__" in inst.operands for inst in calls)
 
+    @covers(RubyFeature.CLASS_CONSTRUCTOR)
     def test_initialize_mapped_to_init(self):
         source = """\
 class Foo
@@ -238,6 +260,7 @@ end
         assert any("__init__" in str(inst.operands) for inst in consts)
         assert not any("initialize" in str(inst.operands) for inst in consts)
 
+    @covers(RubyFeature.SELF_KEYWORD)
     def test_instance_method_gets_self_param(self):
         source = """\
 class Foo
@@ -255,16 +278,19 @@ end
         ]
         assert any("self" in p for p in param_names)
 
+    @covers(RubyFeature.INSTANCE_VARIABLE)
     def test_instance_variable_read_emits_load_field(self):
         instructions = _parse_ruby("x = @count")
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
         assert any("count" in inst.operands for inst in loads)
 
+    @covers(RubyFeature.INSTANCE_VARIABLE)
     def test_instance_variable_write_emits_store_field(self):
         instructions = _parse_ruby("@count = 5")
         stores = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("count" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.CLASS_EXECUTION)
     def test_class_execution_counter(self):
         source = """\
 class Counter
@@ -291,18 +317,21 @@ answer = c.get_value()
 
 
 class TestRubySpecial:
+    @covers(RubyFeature.ARRAY_LITERAL)
     def test_array_literal(self):
         instructions = _parse_ruby("arr = [1, 2, 3]")
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_ARRAY in opcodes
         assert Opcode.STORE_INDEX in opcodes
 
+    @covers(RubyFeature.HASH_LITERAL)
     def test_hash_literal(self):
         instructions = _parse_ruby("h = {a: 1, b: 2}")
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_OBJECT in opcodes
         assert Opcode.STORE_INDEX in opcodes
 
+    @covers(RubyFeature.VARIABLE_ASSIGNMENT)
     def test_fallback_symbolic_for_unsupported(self):
         # Use __END__ data section which is not handled by the frontend
         instructions = _parse_ruby("x = 1\n__END__\nsome data")
@@ -319,6 +348,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialRuby:
+    @covers(RubyFeature.UNLESS)
     def test_unless_with_early_return(self):
         source = """\
 def validate(x)
@@ -336,6 +366,7 @@ end
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("validate" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.UNTIL_LOOP)
     def test_until_loop_with_mutation(self):
         source = """\
 x = 100
@@ -357,6 +388,7 @@ end
         assert any("-" in inst.operands for inst in binops)
         assert len(instructions) > 15
 
+    @covers(RubyFeature.IF_ELSIF_ELSE)
     def test_elsif_chain(self):
         source = """\
 if score > 90
@@ -377,6 +409,7 @@ end
         labels = _labels_in_order(instructions)
         assert len(labels) >= 4
 
+    @covers(RubyFeature.CLASS_DEFINITION)
     def test_class_with_initialize_and_method(self):
         source = """\
 class Counter
@@ -402,6 +435,7 @@ end
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 20
 
+    @covers(RubyFeature.HASH_WITH_SYMBOL_KEYS)
     def test_hash_with_symbol_keys(self):
         source = """\
 config = {name: 'app', version: 2, debug: true}
@@ -415,6 +449,7 @@ val = config[:name]
         assert any("config" in inst.operands for inst in stores)
         assert any("val" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.WHILE_LOOP)
     def test_while_with_nested_if_else(self):
         source = """\
 count = 0
@@ -438,6 +473,7 @@ end
         assert any("count" in inst.operands for inst in stores)
         assert len(instructions) > 20
 
+    @covers(RubyFeature.METHOD_CHAINING)
     def test_method_chaining_on_array(self):
         source = """\
 result = items.select { |x| x > 0 }.map { |x| x * 2 }.first
@@ -451,6 +487,7 @@ result = items.select { |x| x > 0 }.map { |x| x * 2 }.first
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.BLOCK_DO_END)
     def test_block_call_with_do_end(self):
         source = """\
 items.each do |item|
@@ -467,6 +504,7 @@ end
         consts = _find_all(instructions, Opcode.CONST)
         assert any("func:" in str(inst.operands) for inst in consts)
 
+    @covers(RubyFeature.BLOCK_CURLY)
     def test_block_curly_brace(self):
         source = "items.map { |x| x * 2 }"
         instructions = _parse_ruby(source)
@@ -480,6 +518,7 @@ end
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("*" in inst.operands for inst in binops)
 
+    @covers(RubyFeature.BLOCK_DO_END)
     def test_do_block(self):
         source = """\
 numbers.select do |n|
@@ -492,6 +531,7 @@ end
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
 
+    @covers(RubyFeature.BLOCK_DO_END)
     def test_block_no_params(self):
         source = "3.times { puts 'hello' }"
         instructions = _parse_ruby(source)
@@ -500,6 +540,7 @@ end
         consts = _find_all(instructions, Opcode.CONST)
         assert any("func:" in str(inst.operands) for inst in consts)
 
+    @covers(RubyFeature.BLOCK_DO_END)
     def test_block_body_lowered(self):
         source = """\
 items.each do |item|
@@ -514,16 +555,19 @@ end
 
 
 class TestRubySimpleSymbol:
+    @covers(RubyFeature.SYMBOL)
     def test_simple_symbol(self):
         instructions = _parse_ruby("x = :hello")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(":hello" in inst.operands for inst in consts)
 
+    @covers(RubyFeature.SYMBOL)
     def test_simple_symbol_in_call(self):
         instructions = _parse_ruby("foo(:bar)")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(":bar" in inst.operands for inst in consts)
 
+    @covers(RubyFeature.SYMBOL)
     def test_simple_symbol_stores(self):
         instructions = _parse_ruby("sym = :world")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -531,16 +575,19 @@ class TestRubySimpleSymbol:
 
 
 class TestRubyRange:
+    @covers(RubyFeature.RANGE)
     def test_range_inclusive(self):
         instructions = _parse_ruby("r = 1..10")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("range" in inst.operands for inst in calls)
 
+    @covers(RubyFeature.RANGE)
     def test_range_exclusive(self):
         instructions = _parse_ruby("r = 1...10")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("range" in inst.operands for inst in calls)
 
+    @covers(RubyFeature.RANGE)
     def test_range_stores_result(self):
         instructions = _parse_ruby("rng = 0..5")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -548,11 +595,13 @@ class TestRubyRange:
 
 
 class TestRubyRegex:
+    @covers(RubyFeature.REGEX)
     def test_regex_literal(self):
         instructions = _parse_ruby("pat = /hello/")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("/hello/" in inst.operands for inst in consts)
 
+    @covers(RubyFeature.REGEX)
     def test_regex_stores(self):
         instructions = _parse_ruby("re = /[0-9]+/")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -560,6 +609,7 @@ class TestRubyRegex:
 
 
 class TestRubyLambda:
+    @covers(RubyFeature.LAMBDA)
     def test_lambda_basic(self):
         instructions = _parse_ruby("f = -> { 42 }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -571,6 +621,7 @@ class TestRubyLambda:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("f" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.LAMBDA)
     def test_lambda_with_params(self):
         instructions = _parse_ruby("f = ->(x, y) { x + y }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -582,6 +633,7 @@ class TestRubyLambda:
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
 
+    @covers(RubyFeature.LAMBDA)
     def test_lambda_has_return(self):
         instructions = _parse_ruby("f = -> { 1 }")
         opcodes = _opcodes(instructions)
@@ -589,18 +641,21 @@ class TestRubyLambda:
 
 
 class TestRubyStringArray:
+    @covers(RubyFeature.STRING_ARRAY)
     def test_string_array(self):
         instructions = _parse_ruby("arr = %w[foo bar baz]")
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_ARRAY in opcodes
         assert Opcode.STORE_INDEX in opcodes
 
+    @covers(RubyFeature.STRING_ARRAY)
     def test_symbol_array(self):
         instructions = _parse_ruby("syms = %i[a b c]")
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_ARRAY in opcodes
         assert Opcode.STORE_INDEX in opcodes
 
+    @covers(RubyFeature.STRING_ARRAY)
     def test_string_array_stores(self):
         instructions = _parse_ruby("words = %w[hello world]")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -608,6 +663,7 @@ class TestRubyStringArray:
 
 
 class TestRubyCase:
+    @covers(RubyFeature.CASE_WHEN)
     def test_case_with_when(self):
         source = """\
 case x
@@ -625,6 +681,7 @@ end
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("y" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.CASE_WHEN)
     def test_case_produces_binop_eq(self):
         source = """\
 case val
@@ -638,6 +695,7 @@ end
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("==" in inst.operands for inst in binops)
 
+    @covers(RubyFeature.CASE_WHEN)
     def test_case_labels(self):
         source = """\
 case x
@@ -654,6 +712,7 @@ end
 
 
 class TestRubyModule:
+    @covers(RubyFeature.MODULE_DEFINITION)
     def test_module_definition(self):
         source = """\
 module Greeter
@@ -668,6 +727,7 @@ end
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(RubyFeature.MODULE_DEFINITION)
     def test_module_labels(self):
         source = """\
 module Utils
@@ -680,6 +740,7 @@ end
         labels = _labels_in_order(instructions)
         assert any("class_Utils" in lbl for lbl in labels)
 
+    @covers(RubyFeature.MODULE_DEFINITION)
     def test_module_with_method(self):
         source = """\
 module Math
@@ -697,16 +758,19 @@ end
 
 
 class TestRubyGlobalVariable:
+    @covers(RubyFeature.GLOBAL_VARIABLE)
     def test_global_variable_load(self):
         instructions = _parse_ruby("x = $count")
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("$count" in inst.operands for inst in loads)
 
+    @covers(RubyFeature.GLOBAL_VARIABLE)
     def test_global_variable_store(self):
         instructions = _parse_ruby("$count = 10")
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("$count" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.GLOBAL_VARIABLE)
     def test_global_variable_in_expression(self):
         instructions = _parse_ruby("y = $x + 1")
         loads = _find_all(instructions, Opcode.LOAD_VAR)
@@ -714,16 +778,19 @@ class TestRubyGlobalVariable:
 
 
 class TestRubyClassVariable:
+    @covers(RubyFeature.CLASS_VARIABLE)
     def test_class_variable_load(self):
         instructions = _parse_ruby("x = @@count")
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("@@count" in inst.operands for inst in loads)
 
+    @covers(RubyFeature.CLASS_VARIABLE)
     def test_class_variable_store(self):
         instructions = _parse_ruby("@@count = 0")
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("@@count" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.CLASS_VARIABLE)
     def test_class_variable_in_class(self):
         source = """\
 class Foo
@@ -736,12 +803,14 @@ end
 
 
 class TestRubyHeredoc:
+    @covers(RubyFeature.HEREDOC)
     def test_heredoc_body(self):
         source = "x = <<~HEREDOC\nhello world\nHEREDOC"
         instructions = _parse_ruby(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.HEREDOC)
     def test_heredoc_const(self):
         source = "msg = <<~TEXT\nsome text\nTEXT"
         instructions = _parse_ruby(source)
@@ -751,6 +820,7 @@ class TestRubyHeredoc:
 
 
 class TestRubyIfModifier:
+    @covers(RubyFeature.IF_MODIFIER)
     def test_if_modifier_basic(self):
         instructions = _parse_ruby("x = 1 if condition")
         opcodes = _opcodes(instructions)
@@ -758,11 +828,13 @@ class TestRubyIfModifier:
         labels = _labels_in_order(instructions)
         assert any("ifmod" in lbl for lbl in labels)
 
+    @covers(RubyFeature.IF_MODIFIER)
     def test_if_modifier_produces_store(self):
         instructions = _parse_ruby("x = 1 if true")
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.IF_MODIFIER)
     def test_if_modifier_with_method_call(self):
         instructions = _parse_ruby("puts x if x > 0")
         opcodes = _opcodes(instructions)
@@ -772,6 +844,7 @@ class TestRubyIfModifier:
 
 
 class TestRubyUnlessModifier:
+    @covers(RubyFeature.UNLESS_MODIFIER)
     def test_unless_modifier_basic(self):
         instructions = _parse_ruby("x = 1 unless condition")
         opcodes = _opcodes(instructions)
@@ -780,11 +853,13 @@ class TestRubyUnlessModifier:
         labels = _labels_in_order(instructions)
         assert any("unlessmod" in lbl for lbl in labels)
 
+    @covers(RubyFeature.UNLESS_MODIFIER)
     def test_unless_modifier_negates_condition(self):
         instructions = _parse_ruby("y = 0 unless flag")
         unops = _find_all(instructions, Opcode.UNOP)
         assert any("!" in inst.operands for inst in unops)
 
+    @covers(RubyFeature.UNLESS_MODIFIER)
     def test_unless_modifier_produces_store(self):
         instructions = _parse_ruby("result = 42 unless done")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -792,6 +867,7 @@ class TestRubyUnlessModifier:
 
 
 class TestRubyWhileModifier:
+    @covers(RubyFeature.WHILE_MODIFIER)
     def test_while_modifier_basic(self):
         instructions = _parse_ruby("x += 1 while x < 10")
         opcodes = _opcodes(instructions)
@@ -799,6 +875,7 @@ class TestRubyWhileModifier:
         labels = _labels_in_order(instructions)
         assert any("whilemod" in lbl for lbl in labels)
 
+    @covers(RubyFeature.WHILE_MODIFIER)
     def test_while_modifier_has_loop_back(self):
         instructions = _parse_ruby("x += 1 while x < 10")
         branches = _find_all(instructions, Opcode.BRANCH)
@@ -806,6 +883,7 @@ class TestRubyWhileModifier:
         cond_labels = [lbl for lbl in labels if "whilemod_cond" in lbl]
         assert any(b.label in cond_labels for b in branches)
 
+    @covers(RubyFeature.WHILE_MODIFIER)
     def test_while_modifier_produces_binop(self):
         instructions = _parse_ruby("x += 1 while x < 10")
         binops = _find_all(instructions, Opcode.BINOP)
@@ -813,6 +891,7 @@ class TestRubyWhileModifier:
 
 
 class TestRubyUntilModifier:
+    @covers(RubyFeature.UNTIL_MODIFIER)
     def test_until_modifier_basic(self):
         instructions = _parse_ruby("x -= 1 until x <= 0")
         opcodes = _opcodes(instructions)
@@ -821,11 +900,13 @@ class TestRubyUntilModifier:
         labels = _labels_in_order(instructions)
         assert any("untilmod" in lbl for lbl in labels)
 
+    @covers(RubyFeature.UNTIL_MODIFIER)
     def test_until_modifier_negates_condition(self):
         instructions = _parse_ruby("x -= 1 until x <= 0")
         unops = _find_all(instructions, Opcode.UNOP)
         assert any("!" in inst.operands for inst in unops)
 
+    @covers(RubyFeature.UNTIL_MODIFIER)
     def test_until_modifier_has_loop_back(self):
         instructions = _parse_ruby("x -= 1 until x <= 0")
         branches = _find_all(instructions, Opcode.BRANCH)
@@ -835,6 +916,7 @@ class TestRubyUntilModifier:
 
 
 class TestRubyConditional:
+    @covers(RubyFeature.CONDITIONAL_TERNARY)
     def test_conditional_ternary(self):
         instructions = _parse_ruby('x = a > 0 ? "pos" : "neg"')
         opcodes = _opcodes(instructions)
@@ -842,11 +924,13 @@ class TestRubyConditional:
         labels = _labels_in_order(instructions)
         assert any("ternary" in lbl for lbl in labels)
 
+    @covers(RubyFeature.CONDITIONAL_TERNARY)
     def test_conditional_stores_result(self):
         instructions = _parse_ruby('x = a > 0 ? "pos" : "neg"')
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.CONDITIONAL_TERNARY)
     def test_conditional_has_both_branches(self):
         instructions = _parse_ruby("y = cond ? 1 : 2")
         consts = _find_all(instructions, Opcode.CONST)
@@ -855,6 +939,7 @@ class TestRubyConditional:
 
 
 class TestRubyUnary:
+    @covers(RubyFeature.UNARY_OPERATOR)
     def test_unary_negation(self):
         instructions = _parse_ruby("y = -x")
         opcodes = _opcodes(instructions)
@@ -862,11 +947,13 @@ class TestRubyUnary:
         unops = _find_all(instructions, Opcode.UNOP)
         assert any("-" in inst.operands for inst in unops)
 
+    @covers(RubyFeature.UNARY_OPERATOR)
     def test_unary_not(self):
         instructions = _parse_ruby("y = !x")
         unops = _find_all(instructions, Opcode.UNOP)
         assert any("!" in inst.operands for inst in unops)
 
+    @covers(RubyFeature.UNARY_OPERATOR)
     def test_unary_stores_result(self):
         instructions = _parse_ruby("y = -x")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -874,16 +961,19 @@ class TestRubyUnary:
 
 
 class TestRubySelf:
+    @covers(RubyFeature.SELF_KEYWORD)
     def test_self_keyword(self):
         instructions = _parse_ruby("x = self")
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("self" in inst.operands for inst in loads)
 
+    @covers(RubyFeature.SELF_KEYWORD)
     def test_self_in_method_call(self):
         instructions = _parse_ruby("self.foo")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("foo" in inst.operands for inst in calls)
 
+    @covers(RubyFeature.SELF_KEYWORD)
     def test_self_stores(self):
         instructions = _parse_ruby("x = self")
         stores = _find_all(instructions, Opcode.STORE_VAR)
@@ -891,6 +981,7 @@ class TestRubySelf:
 
 
 class TestRubySingletonClass:
+    @covers(RubyFeature.SINGLETON_CLASS)
     def test_singleton_class_basic(self):
         source = """\
 class << self
@@ -903,6 +994,7 @@ end
         labels = _labels_in_order(instructions)
         assert any("singleton_class" in lbl for lbl in labels)
 
+    @covers(RubyFeature.SINGLETON_CLASS)
     def test_singleton_class_contains_method(self):
         source = """\
 class << self
@@ -917,6 +1009,7 @@ end
 
 
 class TestRubySingletonMethod:
+    @covers(RubyFeature.SINGLETON_METHOD)
     def test_singleton_method_basic(self):
         """def self.class_method should register the function under just the method name."""
         source = """\
@@ -930,6 +1023,7 @@ end
         # so that class_methods registry lookup via CALL_METHOD resolves it correctly.
         assert any("class_method" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.SINGLETON_METHOD)
     def test_singleton_method_with_params(self):
         source = """\
 def self.create(name)
@@ -945,6 +1039,7 @@ end
         ]
         assert any("name" in p for p in param_names)
 
+    @covers(RubyFeature.SINGLETON_METHOD)
     def test_singleton_method_has_return(self):
         source = """\
 def self.greet
@@ -959,6 +1054,7 @@ end
 class TestRubyOperatorExecution:
     """VM execution tests for Ruby-specific operators."""
 
+    @covers(RubyFeature.LOGICAL_OPERATOR)
     def test_logical_not_operator(self):
         source = """\
 def negate(x)
@@ -971,6 +1067,7 @@ answer = negate(false)
         assert extract_answer(vm, "ruby") is True
         assert stats.llm_calls == 0
 
+    @covers(RubyFeature.LOGICAL_OPERATOR)
     def test_logical_not_truthy(self):
         source = """\
 def negate(x)
@@ -985,6 +1082,7 @@ answer = negate(true)
 
 
 class TestRubyStringInterpolation:
+    @covers(RubyFeature.STRING_INTERPOLATION)
     def test_interpolation_basic(self):
         instructions = _parse_ruby('"Hello #{name}"')
         opcodes = _opcodes(instructions)
@@ -996,6 +1094,7 @@ class TestRubyStringInterpolation:
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("name" in inst.operands for inst in loads)
 
+    @covers(RubyFeature.STRING_INTERPOLATION)
     def test_interpolation_expression(self):
         instructions = _parse_ruby('"#{x + 1}"')
         opcodes = _opcodes(instructions)
@@ -1004,6 +1103,7 @@ class TestRubyStringInterpolation:
         # Inner arithmetic BINOP and concatenation BINOP
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(RubyFeature.STRING_INTERPOLATION)
     def test_interpolation_multiple(self):
         instructions = _parse_ruby('"#{a} and #{b}"')
         loads = _find_all(instructions, Opcode.LOAD_VAR)
@@ -1014,6 +1114,7 @@ class TestRubyStringInterpolation:
         concat_ops = [inst for inst in binops if inst.operands[0] == "+"]
         assert len(concat_ops) >= 2
 
+    @covers(RubyFeature.STRING_LITERAL)
     def test_no_interpolation_is_const(self):
         instructions = _parse_ruby('"hello"')
         consts = _find_all(instructions, Opcode.CONST)
@@ -1023,6 +1124,7 @@ class TestRubyStringInterpolation:
 
 
 class TestRubyHeredocInterpolation:
+    @covers(RubyFeature.HEREDOC_INTERPOLATION)
     def test_heredoc_interpolation_basic(self):
         source = "x = <<~HEREDOC\nHello #{name}\nHEREDOC"
         instructions = _parse_ruby(source)
@@ -1031,6 +1133,7 @@ class TestRubyHeredocInterpolation:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(RubyFeature.HEREDOC_INTERPOLATION)
     def test_heredoc_interpolation_expression(self):
         source = "x = <<~HEREDOC\nValue: #{arr[0]}\nHEREDOC"
         instructions = _parse_ruby(source)
@@ -1039,6 +1142,7 @@ class TestRubyHeredocInterpolation:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(RubyFeature.HEREDOC_INTERPOLATION)
     def test_heredoc_interpolation_multiple_vars(self):
         source = "x = <<~HEREDOC\n#{a} and #{b}\nHEREDOC"
         instructions = _parse_ruby(source)
@@ -1050,6 +1154,7 @@ class TestRubyHeredocInterpolation:
         concat_ops = [inst for inst in binops if inst.operands[0] == "+"]
         assert len(concat_ops) >= 2
 
+    @covers(RubyFeature.HEREDOC)
     def test_heredoc_no_interpolation_fallback(self):
         source = "x = <<~HEREDOC\nplain text\nHEREDOC"
         instructions = _parse_ruby(source)
@@ -1062,12 +1167,14 @@ class TestRubyHeredocInterpolation:
 
 
 class TestRubyHashKeySymbol:
+    @covers(RubyFeature.SYMBOL)
     def test_hash_key_symbol_no_symbolic(self):
         source = "h = { name: 'Alice' }"
         instructions = _parse_ruby(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("hash_key_symbol" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.SYMBOL)
     def test_hash_key_symbol_lowered_as_const(self):
         source = "h = { age: 30 }"
         instructions = _parse_ruby(source)
@@ -1076,6 +1183,7 @@ class TestRubyHashKeySymbol:
 
 
 class TestRubySuper:
+    @covers(RubyFeature.SUPER)
     def test_super_no_args(self):
         source = "def greet\n  super\nend"
         instructions = _parse_ruby(source)
@@ -1084,6 +1192,7 @@ class TestRubySuper:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("super" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.SUPER)
     def test_super_with_args(self):
         source = "def init(x)\n  super(x, 1)\nend"
         instructions = _parse_ruby(source)
@@ -1093,6 +1202,7 @@ class TestRubySuper:
 
 
 class TestRubyYield:
+    @covers(RubyFeature.YIELD)
     def test_yield_no_args(self):
         source = "def each\n  yield\nend"
         instructions = _parse_ruby(source)
@@ -1101,6 +1211,7 @@ class TestRubyYield:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("yield" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.YIELD)
     def test_yield_with_args(self):
         source = "def each\n  yield(item)\nend"
         instructions = _parse_ruby(source)
@@ -1110,6 +1221,7 @@ class TestRubyYield:
 
 
 class TestRubyHeredocBeginning:
+    @covers(RubyFeature.HEREDOC)
     def test_heredoc_beginning_no_symbolic(self):
         source = "x = <<~HEREDOC\nhello\nHEREDOC"
         instructions = _parse_ruby(source)
@@ -1118,6 +1230,7 @@ class TestRubyHeredocBeginning:
 
 
 class TestRubyPattern:
+    @covers(RubyFeature.PATTERN_MATCHING)
     def test_pattern_no_symbolic(self):
         source = "case x\nin 1 then puts 'one'\nin 2 then puts 'two'\nend"
         instructions = _parse_ruby(source)
@@ -1126,6 +1239,7 @@ class TestRubyPattern:
             "unsupported:pattern" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(RubyFeature.PATTERN_MATCHING)
     def test_in_clause_no_symbolic(self):
         source = "case x\nin 1 then puts 'one'\nend"
         instructions = _parse_ruby(source)
@@ -1134,6 +1248,7 @@ class TestRubyPattern:
 
 
 class TestRubyRightAssignmentList:
+    @covers(RubyFeature.VARIABLE_ASSIGNMENT)
     def test_right_assignment_list_no_symbolic(self):
         source = "a, b, c = 1, 2, 3"
         instructions = _parse_ruby(source)
@@ -1144,12 +1259,14 @@ class TestRubyRightAssignmentList:
 
 
 class TestRubyDelimitedSymbol:
+    @covers(RubyFeature.DELIMITED_SYMBOL)
     def test_delimited_symbol_no_unsupported(self):
         """delimited_symbol like :"hello" should not produce unsupported SYMBOLIC."""
         instructions = _parse_ruby('sym = :"hello"')
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.DELIMITED_SYMBOL)
     def test_delimited_symbol_as_const(self):
         instructions = _parse_ruby('sym = :"hello world"')
         consts = _find_all(instructions, Opcode.CONST)
@@ -1159,6 +1276,7 @@ class TestRubyDelimitedSymbol:
 
 
 class TestRubyRetry:
+    @covers(RubyFeature.RETRY)
     def test_retry_no_unsupported(self):
         """retry statement should not produce unsupported SYMBOLIC."""
         source = """\
@@ -1172,6 +1290,7 @@ end
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.RETRY)
     def test_retry_produces_branch(self):
         source = """\
 begin
@@ -1186,6 +1305,7 @@ end
 
 
 class TestRubyScopeResolution:
+    @covers(RubyFeature.SCOPE_RESOLUTION)
     def test_scope_resolution_basic(self):
         """Foo::Bar should produce LOAD_VAR + LOAD_FIELD, not SYMBOLIC."""
         instructions = _parse_ruby("x = Foo::Bar")
@@ -1196,18 +1316,21 @@ class TestRubyScopeResolution:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.SCOPE_RESOLUTION)
     def test_scope_resolution_stores_result(self):
         """Foo::Bar assigned to a variable should produce STORE_VAR."""
         instructions = _parse_ruby("x = Foo::Bar")
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.SCOPE_RESOLUTION)
     def test_scope_resolution_loads_scope(self):
         """Left side (Foo) should be loaded as LOAD_VAR."""
         instructions = _parse_ruby("x = Foo::Bar")
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("Foo" in inst.operands for inst in loads)
 
+    @covers(RubyFeature.SCOPE_RESOLUTION)
     def test_scope_resolution_chained_with_method(self):
         """Module::Class.new should produce NEW_OBJECT + CALL_METHOD."""
         instructions = _parse_ruby("x = Net::HTTP.new()")
@@ -1217,6 +1340,7 @@ class TestRubyScopeResolution:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.SCOPE_RESOLUTION)
     def test_scope_resolution_nested(self):
         """A::B::C should produce two LOAD_FIELD instructions."""
         instructions = _parse_ruby("x = A::B::C")
@@ -1225,6 +1349,7 @@ class TestRubyScopeResolution:
         assert any("B" in inst.operands for inst in loads)
         assert any("C" in inst.operands for inst in loads)
 
+    @covers(RubyFeature.SCOPE_RESOLUTION)
     def test_root_scope_resolution(self):
         """::TopLevel (root scope) should produce LOAD_VAR, not SYMBOLIC."""
         instructions = _parse_ruby("x = ::TopLevel")
@@ -1235,6 +1360,7 @@ class TestRubyScopeResolution:
 
 
 class TestRubySplatArgument:
+    @covers(RubyFeature.SPLAT_ARGUMENT)
     def test_splat_argument_no_symbolic(self):
         """*args in method call should not produce SYMBOLIC."""
         ir = _parse_ruby("arr = [1, 2, 3]\nfoo(*arr)")
@@ -1243,6 +1369,7 @@ class TestRubySplatArgument:
 
 
 class TestRubyHashSplatArgument:
+    @covers(RubyFeature.HASH_SPLAT_ARGUMENT)
     def test_hash_splat_no_symbolic(self):
         """**opts in method call should not produce SYMBOLIC."""
         ir = _parse_ruby("opts = {}\nfoo(**opts)")
@@ -1253,6 +1380,7 @@ class TestRubyHashSplatArgument:
 
 
 class TestRubyBlockArgument:
+    @covers(RubyFeature.BLOCK_ARGUMENT)
     def test_block_argument_no_symbolic(self):
         """&block in method call should not produce SYMBOLIC."""
         ir = _parse_ruby("blk = lambda { 1 }\nfoo(&blk)")
@@ -1261,24 +1389,28 @@ class TestRubyBlockArgument:
 
 
 class TestRubyBeginEndBlock:
+    @covers(RubyFeature.BEGIN_END_BLOCK)
     def test_begin_block_no_symbolic(self):
         """BEGIN { ... } should not produce SYMBOLIC."""
         ir = _parse_ruby("BEGIN { x = 1 }\ny = 42")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("begin_block" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.BEGIN_END_BLOCK)
     def test_end_block_no_symbolic(self):
         """END { ... } should not produce SYMBOLIC."""
         ir = _parse_ruby("END { x = 1 }\ny = 42")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("end_block" in str(inst.operands) for inst in symbolics)
 
+    @covers(RubyFeature.BEGIN_END_BLOCK)
     def test_begin_block_does_not_block(self):
         """Code after BEGIN block should still be lowered."""
         ir = _parse_ruby("BEGIN { x = 1 }\ny = 42")
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("y" in inst.operands for inst in stores)
 
+    @covers(RubyFeature.BEGIN_END_BLOCK)
     def test_end_block_does_not_block(self):
         """Code after END block should still be lowered."""
         ir = _parse_ruby("END { x = 1 }\ny = 42")
@@ -1286,7 +1418,52 @@ class TestRubyBeginEndBlock:
         assert any("y" in inst.operands for inst in stores)
 
 
+class TestRubyBlockWithParams:
+    @covers(RubyFeature.BLOCK_WITH_PARAMS)
+    def test_block_params_in_do_end(self):
+        """Block parameters (|x|, |item|, etc.) should be lowered as closure parameters."""
+        source = """\
+numbers = [1, 2, 3]
+numbers.each do |n|
+  puts n
+end
+"""
+        instructions = _parse_ruby(source)
+        # Block with parameter should produce a closure (func: const)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "func:" in str(inst.operands) for inst in consts
+        ), "Expected closure (func:)"
+        # Should have a CALL_METHOD for 'each'
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any(
+            "each" in inst.operands for inst in calls
+        ), "Expected 'each' method call"
+
+    @covers(RubyFeature.BLOCK_WITH_PARAMS)
+    def test_block_params_in_curly_braces(self):
+        """Block parameters in curly braces { |x| ... } should also be lowered as closures."""
+        source = "result = [1, 2, 3].map { |x| x * 2 }"
+        instructions = _parse_ruby(source)
+        # Block with parameter should produce a closure
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "func:" in str(inst.operands) for inst in consts
+        ), "Expected closure (func:)"
+        # Should have CALL_METHOD for 'map'
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any(
+            "map" in inst.operands for inst in calls
+        ), "Expected 'map' method call"
+        # Block body should be lowered (multiplication)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(
+            "*" in inst.operands for inst in binops
+        ), "Expected multiplication in block body"
+
+
 class TestRubyRangeSlice:
+    @covers(RubyFeature.RANGE_SLICE)
     def test_range_slice_emits_call_function(self):
         """arr[1..3] should emit CALL_FUNCTION('slice', ...) not LOAD_INDEX."""
         ir = _parse_ruby("arr = [10, 20, 30, 40]\nresult = arr[1..3]")
@@ -1296,6 +1473,7 @@ class TestRubyRangeSlice:
             len(slice_calls) == 1
         ), f"expected 1 slice call, got {[c.operands for c in calls]}"
 
+    @covers(RubyFeature.RANGE_SLICE)
     def test_positional_slice_emits_call_function(self):
         """arr[1, 2] (start, length) should emit CALL_FUNCTION('slice')."""
         ir = _parse_ruby("arr = [10, 20, 30, 40]\nresult = arr[1, 2]")
@@ -1305,6 +1483,7 @@ class TestRubyRangeSlice:
             len(slice_calls) == 1
         ), f"expected 1 slice call, got {[c.operands for c in calls]}"
 
+    @covers(RubyFeature.ARRAY_LITERAL)
     def test_simple_index_still_uses_load_index(self):
         """arr[0] should still use LOAD_INDEX."""
         ir = _parse_ruby("arr = [10, 20]\nx = arr[0]")

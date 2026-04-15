@@ -131,4 +131,6 @@ fileignoreconfig:
   checksum: f57395e26834200675312ac1e170e10400beb9c11f88dc6cb904273039a05cba
 - filename: viz/pipeline-showcase.html
   checksum: 134fbb293001a116958bff315bbaa907d13176cc9ffd7448876c722fda45720b
+- filename: interpreter/frontends/typescript/frontend.py
+  checksum: a5236212aeba0fd199259b8ec6216f6088a64f608908a871e874f82660381342
 version: "1.0"

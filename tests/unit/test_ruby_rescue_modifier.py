@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from interpreter.frontends.ruby import RubyFrontend
+from interpreter.frontends.ruby.features import RubyFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 
 
 def _parse_ruby(source: str) -> list[InstructionBase]:
@@ -22,6 +24,7 @@ def _find_all(
 class TestRubyRescueModifier:
     """Ruby rescue modifier: expr rescue fallback."""
 
+    @covers(RubyFeature.RESCUE_MODIFIER)
     def test_rescue_modifier_no_unsupported_symbolic(self):
         """rescue_modifier should not produce unsupported SYMBOLIC fallthrough."""
         source = 'x = Integer("abc") rescue 0'
@@ -31,6 +34,7 @@ class TestRubyRescueModifier:
             "unsupported:" in str(inst.operands) for inst in symbolics
         ), f"Found unsupported: {[s for s in symbolics if 'unsupported:' in str(s.operands)]}"
 
+    @covers(RubyFeature.RESCUE_MODIFIER)
     def test_rescue_modifier_emits_try_push(self):
         """rescue_modifier should emit TRY_PUSH for exception handling."""
         source = 'x = Integer("abc") rescue 0'
@@ -38,6 +42,7 @@ class TestRubyRescueModifier:
         try_pushes = _find_all(instructions, Opcode.TRY_PUSH)
         assert len(try_pushes) >= 1, "rescue_modifier should emit TRY_PUSH"
 
+    @covers(RubyFeature.RESCUE_MODIFIER)
     def test_rescue_modifier_emits_try_pop(self):
         """rescue_modifier should emit TRY_POP after the try body."""
         source = 'x = Integer("abc") rescue 0'
@@ -45,6 +50,7 @@ class TestRubyRescueModifier:
         try_pops = _find_all(instructions, Opcode.TRY_POP)
         assert len(try_pops) >= 1, "rescue_modifier should emit TRY_POP"
 
+    @covers(RubyFeature.RESCUE_MODIFIER)
     def test_rescue_modifier_has_fallback(self):
         """rescue_modifier fallback expression should be lowered (CONST for literal)."""
         source = "x = dangerous_call() rescue 42"
