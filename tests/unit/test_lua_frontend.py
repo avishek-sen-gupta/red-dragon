@@ -7,6 +7,8 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+from interpreter.frontends.lua.features import LuaFeature
+from tests.covers import covers
 
 
 def _parse_lua(source: str) -> list[InstructionBase]:
@@ -25,11 +27,13 @@ def _find_all(
 
 
 class TestLuaSmoke:
+    @covers(LuaFeature.FUNCTION_CALL)
     def test_empty_program(self):
         instructions = _parse_lua("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(LuaFeature.FUNCTION_CALL)
     def test_entry_label_always_present(self):
         instructions = _parse_lua("local x = 1")
         assert instructions[0].opcode == Opcode.LABEL
@@ -37,6 +41,7 @@ class TestLuaSmoke:
 
 
 class TestLuaLocalVariables:
+    @covers(LuaFeature.LOCAL_VARIABLE_DECLARATION)
     def test_local_variable_declaration(self):
         instructions = _parse_lua("local x = 10")
         opcodes = _opcodes(instructions)
@@ -47,6 +52,7 @@ class TestLuaLocalVariables:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("10" in inst.operands for inst in consts)
 
+    @covers(LuaFeature.LOCAL_VARIABLE_DECLARATION)
     def test_local_without_initializer_produces_no_ir(self):
         # tree-sitter Lua wraps the identifier inside variable_list (no
         # assignment_statement child), and the current frontend does not find
@@ -58,6 +64,7 @@ class TestLuaLocalVariables:
         # Only the entry label is emitted
         assert len(instructions) == 1
 
+    @covers(LuaFeature.LOCAL_VARIABLE_DECLARATION)
     def test_local_with_nil_initializer(self):
         # Explicitly assigning nil does produce CONST + STORE_VAR
         instructions = _parse_lua("local x = nil")
@@ -71,6 +78,7 @@ class TestLuaLocalVariables:
 
 
 class TestLuaExpressions:
+    @covers(LuaFeature.ARITHMETIC)
     def test_arithmetic_expression(self):
         instructions = _parse_lua("local y = x + 5")
         opcodes = _opcodes(instructions)
@@ -81,6 +89,7 @@ class TestLuaExpressions:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(LuaFeature.ARITHMETIC)
     def test_assignment(self):
         instructions = _parse_lua("x = x + 1")
         opcodes = _opcodes(instructions)
@@ -90,16 +99,19 @@ class TestLuaExpressions:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.ARITHMETIC)
     def test_nil_literal(self):
         instructions = _parse_lua("local x = nil")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("None" in inst.operands for inst in consts)
 
+    @covers(LuaFeature.ARITHMETIC)
     def test_boolean_true(self):
         instructions = _parse_lua("local x = true")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("True" in inst.operands for inst in consts)
 
+    @covers(LuaFeature.ARITHMETIC)
     def test_boolean_false(self):
         instructions = _parse_lua("local x = false")
         consts = _find_all(instructions, Opcode.CONST)
@@ -107,16 +119,19 @@ class TestLuaExpressions:
 
 
 class TestLuaOperators:
+    @covers(LuaFeature.OPERATORS)
     def test_concatenation_operator(self):
         instructions = _parse_lua('local x = "hello" .. " world"')
         binops = _find_all(instructions, Opcode.BINOP)
         assert any(".." in inst.operands for inst in binops)
 
+    @covers(LuaFeature.OPERATORS)
     def test_not_equal_operator(self):
         instructions = _parse_lua("if x ~= 0 then y = 1 end")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("~=" in inst.operands for inst in binops)
 
+    @covers(LuaFeature.OPERATORS)
     def test_length_operator(self):
         instructions = _parse_lua('local x = #"hello"')
         unops = _find_all(instructions, Opcode.UNOP)
@@ -124,6 +139,7 @@ class TestLuaOperators:
 
 
 class TestLuaFunctions:
+    @covers(LuaFeature.FUNCTION_DECLARATION)
     def test_function_declaration(self):
         instructions = _parse_lua("function add(a, b) return a + b end")
         opcodes = _opcodes(instructions)
@@ -141,6 +157,7 @@ class TestLuaFunctions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.FUNCTION_DECLARATION)
     def test_function_declaration_with_explicit_body(self):
         # A function whose body uses statements (not just return expr)
         instructions = _parse_lua("function inc(x) local r = x + 1 return r end")
@@ -149,18 +166,21 @@ class TestLuaFunctions:
         assert Opcode.BINOP in opcodes
         assert Opcode.RETURN in opcodes
 
+    @covers(LuaFeature.FUNCTION_CALL)
     def test_function_call(self):
         instructions = _parse_lua("add(1, 2)")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) >= 1
         assert "add" in calls[0].operands
 
+    @covers(LuaFeature.METHOD_CALL)
     def test_method_call(self):
         instructions = _parse_lua("obj:method()")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert len(calls) >= 1
         assert "method" in calls[0].operands
 
+    @covers(LuaFeature.FUNCTION_DECLARATION)
     def test_return_statement_with_value(self):
         instructions = _parse_lua("function f() return 42 end")
         returns = _find_all(instructions, Opcode.RETURN)
@@ -170,6 +190,7 @@ class TestLuaFunctions:
             "42" in str(c.operands) for c in consts
         ), f"return 42 should emit CONST 42, got {[c.operands for c in consts]}"
 
+    @covers(LuaFeature.FUNCTION_DECLARATION)
     def test_return_statement_without_value(self):
         instructions = _parse_lua("function f() return end")
         returns = _find_all(instructions, Opcode.RETURN)
@@ -179,17 +200,20 @@ class TestLuaFunctions:
 
 
 class TestLuaTableAccess:
+    @covers(LuaFeature.TABLE_ACCESS)
     def test_dot_access(self):
         instructions = _parse_lua("local x = obj.field")
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
         assert len(loads) >= 1
         assert "field" in loads[0].operands
 
+    @covers(LuaFeature.TABLE_ACCESS)
     def test_bracket_access(self):
         instructions = _parse_lua("local x = obj[key]")
         loads = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(loads) >= 1
 
+    @covers(LuaFeature.TABLE_ACCESS)
     def test_table_constructor(self):
         instructions = _parse_lua("local t = {a = 1, b = 2}")
         opcodes = _opcodes(instructions)
@@ -201,6 +225,7 @@ class TestLuaTableAccess:
 
 
 class TestLuaControlFlow:
+    @covers(LuaFeature.IF_ELSE)
     def test_if_statement(self):
         instructions = _parse_lua("if x > 5 then y = 1 end")
         opcodes = _opcodes(instructions)
@@ -208,6 +233,7 @@ class TestLuaControlFlow:
         assert Opcode.LABEL in opcodes
         assert Opcode.BINOP in opcodes
 
+    @covers(LuaFeature.IF_ELSE)
     def test_if_else_statement(self):
         instructions = _parse_lua("if x > 5 then y = 1 else y = 0 end")
         opcodes = _opcodes(instructions)
@@ -217,6 +243,7 @@ class TestLuaControlFlow:
         assert any("if_true" in (lbl or "") for lbl in label_names)
         assert any("if_false" in (lbl or "") for lbl in label_names)
 
+    @covers(LuaFeature.IF_ELSE)
     def test_if_elseif_else(self):
         instructions = _parse_lua(
             "if x > 5 then y = 1 elseif x > 0 then y = 2 else y = 3 end"
@@ -226,6 +253,7 @@ class TestLuaControlFlow:
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) >= 2
 
+    @covers(LuaFeature.WHILE_LOOP)
     def test_while_loop(self):
         instructions = _parse_lua("while x > 0 do x = x - 1 end")
         opcodes = _opcodes(instructions)
@@ -234,6 +262,7 @@ class TestLuaControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
 
+    @covers(LuaFeature.FOR_LOOP)
     def test_for_numeric(self):
         instructions = _parse_lua("for i = 1, 10 do print(i) end")
         opcodes = _opcodes(instructions)
@@ -245,6 +274,7 @@ class TestLuaControlFlow:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("<=" in inst.operands for inst in binops)
 
+    @covers(LuaFeature.REPEAT_UNTIL)
     def test_repeat_until(self):
         instructions = _parse_lua("repeat x = x - 1 until x == 0")
         opcodes = _opcodes(instructions)
@@ -253,6 +283,7 @@ class TestLuaControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("repeat") for inst in labels)
 
+    @covers(LuaFeature.GENERIC_FOR)
     def test_generic_for_index_based(self):
         """Generic for should produce index-based IR with LOAD_INDEX."""
         instructions = _parse_lua("for k, v in pairs(t) do print(k) end")
@@ -263,6 +294,7 @@ class TestLuaControlFlow:
         assert any("k" in inst.operands for inst in stores)
         assert any("v" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.IF_ELSE)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/elseif/elseif/else must produce IR."""
         instructions = _parse_lua(
@@ -294,6 +326,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialLua:
+    @covers(LuaFeature.TABLE_ACCESS)
     def test_table_with_dot_and_bracket_access(self):
         source = """\
 local config = {name = "app", version = 2}
@@ -311,6 +344,7 @@ local v = config["version"]
         assert any("n" in inst.operands for inst in stores)
         assert any("v" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.REPEAT_UNTIL)
     def test_repeat_until_loop(self):
         source = """\
 local x = 10
@@ -330,6 +364,7 @@ until x == 0
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.GENERIC_FOR)
     def test_generic_for_with_ipairs(self):
         source = """\
 local t = {10, 20, 30}
@@ -347,6 +382,7 @@ end
         # Lua table constructors use NEW_OBJECT
         assert Opcode.NEW_OBJECT in opcodes
 
+    @covers(LuaFeature.FUNCTION_DECLARATION)
     def test_local_function_with_nested_if(self):
         source = """\
 local function classify(x)
@@ -367,6 +403,7 @@ end
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("classify" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.WHILE_LOOP)
     def test_nested_while_with_table_access(self):
         source = """\
 local i = 0
@@ -389,6 +426,7 @@ end
         assert Opcode.LOAD_INDEX in _opcodes(instructions)
         assert len(instructions) > 25
 
+    @covers(LuaFeature.METHOD_CALL)
     def test_method_call_colon_syntax(self):
         source = """\
 local obj = {}
@@ -403,6 +441,7 @@ local result = obj:process()
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.FOR_LOOP)
     def test_numeric_for_with_step(self):
         source = """\
 local total = 0
@@ -420,6 +459,7 @@ end
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(LuaFeature.LOCAL_VARIABLE_DECLARATION)
     def test_multi_assignment(self):
         source = """\
 local a, b = 1, 2
@@ -435,6 +475,7 @@ local c = a + b
 
 
 class TestLuaGenericFor:
+    @covers(LuaFeature.GENERIC_FOR)
     def test_generic_for_ipairs(self):
         source = "for i, v in ipairs(t) do print(v) end"
         instructions = _parse_lua(source)
@@ -445,6 +486,7 @@ class TestLuaGenericFor:
         assert any("i" in inst.operands for inst in stores)
         assert any("v" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.GENERIC_FOR)
     def test_generic_for_pairs(self):
         source = "for k, v in pairs(t) do print(k, v) end"
         instructions = _parse_lua(source)
@@ -453,6 +495,7 @@ class TestLuaGenericFor:
         labels = _labels_in_order(instructions)
         assert any("generic_for" in lbl for lbl in labels)
 
+    @covers(LuaFeature.GENERIC_FOR)
     def test_generic_for_single_var(self):
         source = "for item in items() do print(item) end"
         instructions = _parse_lua(source)
@@ -465,6 +508,7 @@ class TestLuaGenericFor:
 class TestLuaFunctionDefinition:
     """Tests for anonymous function definition (function expression)."""
 
+    @covers(LuaFeature.FUNCTION_DECLARATION)
     def test_anonymous_function_expression(self):
         """Anonymous function produces BRANCH, LABEL, RETURN, and func ref CONST."""
         instructions = _parse_lua("local f = function(x) return x end")
@@ -480,6 +524,7 @@ class TestLuaFunctionDefinition:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("f" in inst.operands for inst in stores)
 
+    @covers(LuaFeature.FUNCTION_DECLARATION)
     def test_anonymous_function_with_params(self):
         """Anonymous function parameters are lowered as SYMBOLIC param:name."""
         instructions = _parse_lua("local cb = function(a, b) return a + b end")
@@ -492,6 +537,7 @@ class TestLuaFunctionDefinition:
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
 
+    @covers(LuaFeature.FUNCTION_DECLARATION)
     def test_anonymous_function_as_call_arg(self):
         """Anonymous function passed as argument to a call."""
         instructions = _parse_lua("map(function(x) return x * 2 end, t)")
@@ -505,12 +551,14 @@ class TestLuaFunctionDefinition:
 class TestLuaVarargExpression:
     """Tests for vararg_expression (...)."""
 
+    @covers(LuaFeature.VARARG)
     def test_vararg_produces_symbolic(self):
         """... produces SYMBOLIC('varargs')."""
         instructions = _parse_lua("function f(...) return ... end")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert any("varargs" in inst.operands for inst in symbolics)
 
+    @covers(LuaFeature.VARARG)
     def test_vararg_in_table_constructor(self):
         """Varargs inside a table constructor."""
         instructions = _parse_lua("function f(...) local t = {...} end")
@@ -522,18 +570,21 @@ class TestLuaVarargExpression:
 class TestLuaGotoLabel:
     """Tests for goto_statement and label_statement."""
 
+    @covers(LuaFeature.GOTO)
     def test_goto_produces_branch(self):
         """goto label produces a BRANCH instruction."""
         instructions = _parse_lua("goto skip\nprint('hello')\n::skip::")
         branches = _find_all(instructions, Opcode.BRANCH)
         assert any(inst.label == "skip" for inst in branches)
 
+    @covers(LuaFeature.GOTO)
     def test_label_produces_label(self):
         """::name:: produces a LABEL instruction."""
         instructions = _parse_lua("::myLabel::\nprint('here')")
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label == "myLabel" for inst in labels)
 
+    @covers(LuaFeature.GOTO)
     def test_goto_and_label_together(self):
         """goto + label produces BRANCH and LABEL that match."""
         instructions = _parse_lua("goto done\nprint('skip')\n::done::\nprint('end')")
@@ -546,6 +597,7 @@ class TestLuaGotoLabel:
 class TestLuaStringContentEscapeSequence:
     """Tests for string_content and escape_sequence safety-net mapping."""
 
+    @covers(LuaFeature.STRING_ESCAPE)
     def test_string_content_does_not_produce_symbolic(self):
         """string_content should produce CONST, not SYMBOLIC unsupported."""
         instructions = _parse_lua('local x = "hello"')
@@ -555,6 +607,7 @@ class TestLuaStringContentEscapeSequence:
         ]
         assert len(unsupported) == 0
 
+    @covers(LuaFeature.STRING_ESCAPE)
     def test_escape_sequence_does_not_produce_symbolic(self):
         """escape_sequence should produce CONST, not SYMBOLIC unsupported."""
         instructions = _parse_lua(r'local x = "hello\nworld"')
@@ -568,6 +621,7 @@ class TestLuaStringContentEscapeSequence:
 class TestLuaMethodIndexExpression:
     """Tests for method_index_expression (obj:method) lowering."""
 
+    @covers(LuaFeature.METHOD_INDEX_EXPRESSION)
     def test_method_call_produces_call_method(self):
         """obj:method() should produce CALL_METHOD with obj and method name."""
         instructions = _parse_lua("obj:method()")
@@ -575,6 +629,7 @@ class TestLuaMethodIndexExpression:
         assert len(calls) >= 1
         assert "method" in calls[0].operands
 
+    @covers(LuaFeature.METHOD_INDEX_EXPRESSION)
     def test_method_call_with_args_produces_call_method(self):
         """obj:method(a, b) should produce CALL_METHOD with args."""
         instructions = _parse_lua("obj:method(1, 2)")
@@ -582,6 +637,7 @@ class TestLuaMethodIndexExpression:
         assert len(calls) >= 1
         assert "method" in calls[0].operands
 
+    @covers(LuaFeature.METHOD_INDEX_EXPRESSION)
     def test_method_call_no_symbolic_fallthrough(self):
         """obj:method() must NOT produce SYMBOLIC unsupported for method_index_expression."""
         instructions = _parse_lua("obj:method()")
@@ -591,6 +647,7 @@ class TestLuaMethodIndexExpression:
         ]
         assert len(unsupported) == 0
 
+    @covers(LuaFeature.METHOD_INDEX_EXPRESSION)
     def test_chained_method_calls(self):
         """obj:foo():bar() should produce two CALL_METHOD instructions."""
         instructions = _parse_lua("obj:foo():bar()")
@@ -600,6 +657,7 @@ class TestLuaMethodIndexExpression:
         assert "foo" in method_names
         assert "bar" in method_names
 
+    @covers(LuaFeature.METHOD_INDEX_EXPRESSION)
     def test_method_call_result_stored(self):
         """local r = obj:method() should store result."""
         instructions = _parse_lua("local r = obj:method()")
@@ -608,6 +666,7 @@ class TestLuaMethodIndexExpression:
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert len(calls) >= 1
 
+    @covers(LuaFeature.METHOD_INDEX_EXPRESSION)
     def test_method_index_in_dispatch_table(self):
         """method_index_expression must be in the expr dispatch table."""
         from interpreter.frontends.lua import LuaFrontend
@@ -622,6 +681,7 @@ class TestLuaMethodIndexExpression:
 class TestLuaOperatorExecution:
     """VM execution tests for Lua-specific operators."""
 
+    @covers(LuaFeature.OPERATORS)
     def test_concatenation_produces_correct_result(self):
         source = """\
 function greet(name)
@@ -634,12 +694,14 @@ answer = greet("world")
         assert extract_answer(vm, "lua") == "hello world"
         assert stats.llm_calls == 0
 
+    @covers(LuaFeature.OPERATORS)
     def test_length_operator_produces_correct_result(self):
         source = 'answer = #"hello"'
         vm, stats = execute_for_language("lua", source)
         assert extract_answer(vm, "lua") == 5
         assert stats.llm_calls == 0
 
+    @covers(LuaFeature.OPERATORS)
     def test_not_equal_in_while_loop(self):
         source = """\
 function countdown(n)
@@ -659,6 +721,7 @@ answer = countdown(7)
 
 
 class TestLuaDottedFunctionDeclaration:
+    @covers(LuaFeature.DOTTED_FUNCTION_DECLARATION)
     def test_dotted_function_emits_store_field(self):
         """function Counter.new() should emit STORE_FIELD on Counter, not DECL_VAR 'Counter.new'."""
         instructions = _parse_lua("""
@@ -680,6 +743,7 @@ end
         dotted = [inst for inst in decl_vars if "Counter.new" in str(inst.operands)]
         assert len(dotted) == 0, f"Should not DECL_VAR 'Counter.new', got {dotted}"
 
+    @covers(LuaFeature.DOTTED_FUNCTION_DECLARATION)
     def test_dotted_function_uses_method_name_only(self):
         """Function label and ref should use 'new', not 'Counter.new'."""
         instructions = _parse_lua("""
@@ -703,6 +767,7 @@ end
             "func_new_"
         ), f"Func ref should use method name 'new': {ref_str}"
 
+    @covers(LuaFeature.DOTTED_FUNCTION_DECLARATION)
     def test_dotted_function_with_params(self):
         """function Counter.increment(self) should have params AND STORE_FIELD."""
         instructions = _parse_lua("""
@@ -730,6 +795,7 @@ end
 
 
 class TestLuaDottedFunctionCall:
+    @covers(LuaFeature.DOTTED_FUNCTION_CALL)
     def test_dotted_call_emits_load_field_and_call_unknown(self):
         """Counter.increment(x) should emit LOAD_FIELD + CALL_UNKNOWN, not CALL_METHOD."""
         instructions = _parse_lua("Counter.increment(x)")
@@ -750,6 +816,7 @@ class TestLuaDottedFunctionCall:
             len(dotted_methods) == 0
         ), f"Should not emit CALL_METHOD for dot call: {dotted_methods}"
 
+    @covers(LuaFeature.DOTTED_FUNCTION_CALL)
     def test_dotted_call_with_multiple_args(self):
         """Counter.add(a, b) should pass both args to CALL_UNKNOWN."""
         instructions = _parse_lua("Counter.add(a, b)")
@@ -757,12 +824,14 @@ class TestLuaDottedFunctionCall:
         assert len(call_unknowns) >= 1
         assert len(call_unknowns[0].operands) >= 3, "Should have func + 2 args"
 
+    @covers(LuaFeature.METHOD_CALL)
     def test_colon_call_still_emits_call_method(self):
         """obj:method() should still use CALL_METHOD (unchanged)."""
         instructions = _parse_lua("obj:method()")
         call_methods = _find_all(instructions, Opcode.CALL_METHOD)
         assert len(call_methods) >= 1, "Colon syntax should still emit CALL_METHOD"
 
+    @covers(LuaFeature.DOTTED_FUNCTION_CALL)
     def test_chained_dotted_calls(self):
         """Multiple consecutive dotted calls each produce LOAD_FIELD + CALL_UNKNOWN."""
         instructions = _parse_lua("Counter.a(x)\nCounter.b(y)")
@@ -781,6 +850,7 @@ class TestLuaDottedFunctionCall:
 class TestLuaBitwiseXor:
     """Lua uses ~ for bitwise XOR; VM BINOP_TABLE must handle it."""
 
+    @covers(LuaFeature.BITWISE_XOR)
     def test_tilde_xor_emits_binop(self):
         ir = _parse_lua("""\
 a = 8
@@ -791,6 +861,7 @@ b = a ~ 5
             "~" in inst.operands for inst in binops
         ), "Expected BINOP with '~' for Lua XOR operator"
 
+    @covers(LuaFeature.BITWISE_XOR)
     def test_tilde_xor_execution(self):
         """Lua ~ XOR produces correct result through VM."""
         vm, stats = execute_for_language(
