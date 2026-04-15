@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RedDragon Pipeline Showcase</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --panel-bg: #111111;
+            --text-main: #e0e0e0;
+            --text-muted: #888888;
+            --neon-blue: #00f0ff;      /* Compiler */
+            --neon-green: #39ff14;     /* Analysis */
+            --neon-purple: #b100ff;    /* VM / Oracle */
+            --neon-orange: #ff9d00;    /* IR / Links */
+            --code-bg: #1e1e1e;
+            --border-color: #333333;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar Styling */
+        #sidebar {
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+            overflow-y: auto;
+        }
+
+        .brand-title {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .section-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        .stage-card {
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            background: rgba(255,255,255,0.01);
+        }
+
+        .stage-card:hover {
+            border-color: var(--text-muted);
+        }
+
+        /* Group Colors */
+        .stage-card.compiler.active {
+            border-color: var(--neon-blue);
+            background: rgba(0, 240, 255, 0.05);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+        }
+        .stage-card.analysis.active {
+            border-color: var(--neon-green);
+            background: rgba(57, 255, 20, 0.05);
+            box-shadow: 0 0 10px rgba(57, 255, 20, 0.2);
+        }
+        .stage-card.vm.active {
+            border-color: var(--neon-purple);
+            background: rgba(177, 0, 255, 0.05);
+            box-shadow: 0 0 10px rgba(177, 0, 255, 0.2);
+        }
+
+        /* Main Viewport */
+        #main-content {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        #header-controls {
+            padding: 20px 40px;
+            display: flex;
+            justify-content: flex-end;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--panel-bg);
+            z-index: 10;
+        }
+
+        .toggle-btn {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+
+        .toggle-btn:first-child { border-radius: 6px 0 0 6px; border-right: none; }
+        .toggle-btn:last-child { border-radius: 0 6px 6px 0; }
+
+        .toggle-btn.active {
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--neon-blue);
+            border-color: var(--neon-blue);
+            box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.2);
+        }
+
+        #viewport-container {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+        }
+
+        /* View Panels */
+        .view-panel {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            padding: 40px;
+            overflow-x: auto;
+            overflow-y: auto;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.5s ease;
+        }
+
+        .view-panel.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* SVG Animation */
+        .pulse-path {
+            stroke-dasharray: 4 8;
+            stroke-dashoffset: 12;
+            animation: dash 0.8s linear infinite;
+        }
+
+        @keyframes dash {
+            from { stroke-dashoffset: 12; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Trace Grid */
+        .trace-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .code-window {
+            background: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+            opacity: 0.3;
+            transition: opacity 0.5s ease, border-color 0.3s ease;
+        }
+        .code-window.active-trace { opacity: 1; }
+        .code-window.compiler-trace.active-trace { border-color: var(--neon-blue); }
+        .code-window.analysis-trace.active-trace { border-color: var(--neon-green); }
+        .code-window.vm-trace.active-trace { border-color: var(--neon-purple); }
+
+        .window-header {
+            background: #151515;
+            padding: 10px 15px;
+            font-size: 11px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .window-body {
+            padding: 20px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #ccc;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        /* Typewriter cursor */
+        .typewriter-text::after {
+            content: '▋';
+            animation: blink 1s step-start infinite;
+            color: var(--neon-purple);
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Syntax */
+        .kw { color: #569cd6; } /* Keyword */
+        .fn { color: #dcdcaa; } /* Function */
+        .str { color: #ce9178; } /* String */
+        .ir-op { color: #c586c0; } /* IR Opcode */
+        .ir-reg { color: #9cdcfe; } /* IR Register */
+        .ir-lbl { color: #d7ba7d; } /* Label */
+        .cmt { color: #6a9955; font-style: italic; }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div class="brand-title">RedDragon</div>
+        
+        <!-- Multi-Pass Compiler -->
+        <div class="section-label" style="color: var(--neon-blue);">I. Multi-Pass Compiler</div>
+        
+        <div class="stage-card compiler active" data-target="comp-1">
+            <strong style="color: #fff;">1. Discovery & Pre-Scan</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Directory scanning, Java namespace trees</div>
+        </div>
+        <div class="stage-card compiler" data-target="comp-2">
+            <strong style="color: #fff;">2. Pass 1: Module Lowering</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">AST to Local IR, Export Table Extraction</div>
+        </div>
+        <div class="stage-card compiler" data-target="comp-3">
+            <strong style="color: #fff;">3. Import Resolution</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Graph generation, Stdlib injection</div>
+        </div>
+        <div class="stage-card compiler" data-target="comp-4">
+            <strong style="color: #fff;">4. Pass 2: IR Patching</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Patch IMPORT_MODULE with PathNames</div>
+        </div>
+        <div class="stage-card compiler" data-target="comp-5">
+            <strong style="color: #fff;">5. Topological Linker</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Scope isolation, Rebase registers</div>
+        </div>
+
+        <!-- Static Analysis -->
+        <div class="section-label" style="color: var(--neon-green);">II. Static Analysis</div>
+        
+        <div class="stage-card analysis" data-target="ana-1">
+            <strong style="color: #fff;">6. Type Inference</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Static Fixpoint (Propagation)</div>
+        </div>
+        <div class="stage-card analysis" data-target="ana-2">
+            <strong style="color: #fff;">7. Interprocedural SCC</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Call Graph, 1-CFA, Transitive Flow</div>
+        </div>
+
+        <!-- VM Oracle -->
+        <div class="section-label" style="color: var(--neon-purple);">III. VM & Oracle</div>
+        
+        <div class="stage-card vm" data-target="vm-1">
+            <strong style="color: #fff;">8. Plausible Execution</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">LLM Resolvers for incomplete paths</div>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <div id="header-controls">
+            <div>
+                <button class="toggle-btn active" id="btn-process">Architecture Flow</button>
+                <button class="toggle-btn" id="btn-example">Pipeline Trace</button>
+            </div>
+        </div>
+        <div id="viewport-container">
+            
+            <!-- Process View -->
+            <div id="view-process" class="view-panel visible">
+                <h2 style="color: var(--neon-blue); font-weight: 300;">Multi-Phase Compiler Architecture</h2>
+                
+                <svg width="1200" height="700" viewBox="0 0 1200 700" style="display: block;">
+                    <defs>
+                        <filter id="glow-blue" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" /></filter>
+                        <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" /></filter>
+                        <filter id="glow-purple" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" /></filter>
+                    </defs>
+
+                    <!-- I. COMPILER PHASES -->
+                    <rect x="10" y="30" width="1160" height="230" rx="10" fill="none" stroke="#222" stroke-width="2" stroke-dasharray="4,4" />
+                    <text x="30" y="60" fill="var(--text-muted)" font-size="14" font-weight="bold" letter-spacing="1">I. MULTI-PASS COMPILER ORCHESTRATOR</text>
+
+                    <!-- Source -->
+                    <rect x="30" y="110" width="80" height="80" rx="6" fill="#111" stroke="#444" />
+                    <text x="70" y="145" text-anchor="middle" fill="#ccc" font-size="12">Source</text>
+                    <text x="70" y="165" text-anchor="middle" fill="#777" font-size="10">Directory</text>
+
+                    <!-- Frontends Split -->
+                    <!-- Deterministic (Tree-sitter) -->
+                    <path class="pulse-path" d="M 110 150 L 140 100 L 160 100" stroke="var(--neon-blue)" stroke-width="2" fill="none" />
+                    <rect x="160" y="80" width="120" height="40" rx="6" fill="#111" stroke="var(--border-color)" />
+                    <text x="220" y="100" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">Deterministic AST</text>
+                    <text x="220" y="115" text-anchor="middle" fill="#aaa" font-size="9">(Tree-sitter, 15+ langs)</text>
+
+                    <!-- Generative (LLM) -->
+                    <path class="pulse-path" d="M 110 150 L 160 150" stroke="var(--neon-purple)" stroke-width="2" fill="none" />
+                    <rect x="160" y="130" width="120" height="40" rx="6" fill="rgba(177,0,255,0.05)" stroke="var(--neon-purple)" />
+                    <text x="220" y="150" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">Generative Parsing</text>
+                    <text x="220" y="165" text-anchor="middle" fill="var(--neon-purple)" font-size="9">(LLM Frontend)</text>
+
+                    <!-- Legacy (ProLeap) -->
+                    <path class="pulse-path" d="M 110 150 L 140 200 L 160 200" stroke="#888" stroke-width="2" fill="none" />
+                    <rect x="160" y="180" width="120" height="40" rx="6" fill="#111" stroke="var(--border-color)" />
+                    <text x="220" y="200" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">Mainframe Bridge</text>
+                    <text x="220" y="215" text-anchor="middle" fill="#aaa" font-size="9">(ProLeap COBOL)</text>
+
+                    <!-- Funnel into Pass 1 -->
+                    <path class="pulse-path" d="M 280 100 L 300 100 L 320 150" stroke="var(--neon-blue)" stroke-width="2" fill="none" />
+                    <path class="pulse-path" d="M 280 150 L 320 150" stroke="var(--neon-purple)" stroke-width="2" fill="none" />
+                    <path class="pulse-path" d="M 280 200 L 300 200 L 320 150" stroke="#888" stroke-width="2" fill="none" />
+
+                    <!-- Phase 1 -->
+                    <rect x="320" y="90" width="140" height="120" rx="8" fill="#151515" stroke="var(--neon-blue)" filter="url(#glow-blue)" />
+                    <text x="390" y="125" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Pass 1: Lowering</text>
+                    <text x="390" y="150" text-anchor="middle" fill="#aaa" font-size="11">AST → Unlinked IR</text>
+                    <text x="390" y="170" text-anchor="middle" fill="#aaa" font-size="11">Extract Export Tables</text>
+
+                    <!-- Resolver -->
+                    <path class="pulse-path" d="M 460 150 L 490 150" stroke="var(--neon-blue)" stroke-width="2" fill="none" />
+                    <rect x="490" y="110" width="130" height="80" rx="6" fill="#111" stroke="var(--neon-blue)" />
+                    <text x="555" y="145" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Import Resolver</text>
+                    <text x="555" y="165" text-anchor="middle" fill="#aaa" font-size="11">Dep Graph Generation</text>
+
+                    <!-- Phase 2 -->
+                    <path class="pulse-path" d="M 620 150 L 650 150" stroke="var(--neon-blue)" stroke-width="2" fill="none" />
+                    <rect x="650" y="110" width="150" height="80" rx="6" fill="#151515" stroke="var(--neon-blue)" filter="url(#glow-blue)" />
+                    <text x="725" y="145" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Pass 2: IR Patching</text>
+                    <text x="725" y="165" text-anchor="middle" fill="#aaa" font-size="11">Resolve IMPORT_MODULE</text>
+
+                    <!-- Topo Sort -->
+                    <path class="pulse-path" d="M 620 150 L 630 150 L 630 230 L 650 230" stroke="var(--neon-blue)" stroke-width="2" fill="none" />
+                    <rect x="650" y="210" width="150" height="40" rx="6" fill="#111" stroke="#444" />
+                    <text x="725" y="235" text-anchor="middle" fill="#aaa" font-size="11">Topological Sort</text>
+
+                    <!-- Linker -->
+                    <path class="pulse-path" d="M 800 150 L 830 150" stroke="var(--neon-blue)" stroke-width="2" fill="none" />
+                    <rect x="830" y="110" width="150" height="80" rx="6" fill="#151515" stroke="var(--neon-blue)" filter="url(#glow-blue)" />
+                    <text x="905" y="135" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">The Linker</text>
+                    <text x="905" y="155" text-anchor="middle" fill="#aaa" font-size="11">Namespace Isolation</text>
+                    <text x="905" y="175" text-anchor="middle" fill="#aaa" font-size="11">Rebase Registers</text>
+
+                    <!-- Linked Program -->
+                    <path class="pulse-path" d="M 980 150 L 1010 150" stroke="var(--neon-blue)" stroke-width="2" fill="none" />
+                    <rect x="1010" y="110" width="130" height="80" rx="6" fill="#1a1a1a" stroke="#fff" />
+                    <text x="1075" y="145" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Linked Program</text>
+                    <text x="1075" y="165" text-anchor="middle" fill="#aaa" font-size="11">Unified CFG Pipeline</text>
+
+                    <!-- Down to Analysis -->
+                    <path class="pulse-path" d="M 1075 190 L 1075 290" stroke="var(--neon-blue)" stroke-width="2" fill="none" />
+                    <!-- Down to VM -->
+                    <path class="pulse-path" d="M 1075 410 L 1075 470" stroke="var(--neon-green)" stroke-width="2" fill="none" />
+
+                    <!-- II. STATIC ANALYSIS -->
+                    <rect x="650" y="280" width="500" height="130" rx="10" fill="none" stroke="#222" stroke-width="2" stroke-dasharray="4,4" />
+                    <text x="670" y="310" fill="var(--text-muted)" font-size="14" font-weight="bold" letter-spacing="1">II. STATIC ANALYSIS ENGINE</text>
+
+                    <rect x="700" y="330" width="140" height="60" rx="6" fill="#111" stroke="var(--neon-green)" />
+                    <text x="770" y="355" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Type System</text>
+                    <text x="770" y="375" text-anchor="middle" fill="#aaa" font-size="10">Extraction & Inference</text>
+                    
+                    <path class="pulse-path" d="M 840 360 L 890 360" stroke="var(--neon-green)" stroke-width="2" fill="none" />
+
+                    <rect x="890" y="320" width="230" height="80" rx="6" fill="#151515" stroke="var(--neon-green)" filter="url(#glow-green)" />
+                    <text x="1005" y="350" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Interprocedural Dataflow</text>
+                    <text x="1005" y="370" text-anchor="middle" fill="#aaa" font-size="11">Call Graph → SCC Fixpoint</text>
+                    <text x="1005" y="385" text-anchor="middle" fill="#aaa" font-size="11">Transitive Graph</text>
+
+                    <!-- III. VM ORACLE -->
+                    <rect x="650" y="430" width="500" height="150" rx="10" fill="none" stroke="#222" stroke-width="2" stroke-dasharray="4,4" />
+                    <text x="670" y="460" fill="var(--text-muted)" font-size="14" font-weight="bold" letter-spacing="1">III. EXECUTION ENVIRONMENT</text>
+
+                    <rect x="890" y="470" width="230" height="90" rx="6" fill="#151515" stroke="var(--neon-purple)" filter="url(#glow-purple)" />
+                    <text x="1005" y="500" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">VM Engine</text>
+                    <text x="1005" y="520" text-anchor="middle" fill="#aaa" font-size="11">Runtime Coercion, Dispatch</text>
+                    <text x="1005" y="540" text-anchor="middle" fill="var(--neon-purple)" font-size="11">LLMPlausibleResolver (Trap)</text>
+
+                    <!-- Oracle interaction -->
+                    <path class="pulse-path" d="M 890 515 L 820 515" stroke="var(--neon-purple)" stroke-width="2" fill="none" />
+                    <path class="pulse-path" d="M 820 525 L 890 525" stroke="var(--neon-purple)" stroke-width="2" fill="none" />
+                    
+                    <rect x="680" y="485" width="140" height="60" rx="6" fill="rgba(177,0,255,0.1)" stroke="var(--neon-purple)" />
+                    <text x="750" y="515" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">LLM API Oracle</text>
+                    <text x="750" y="530" text-anchor="middle" fill="var(--neon-purple)" font-size="10">Hallucinates Returns</text>
+                </svg>
+            </div>
+
+            <!-- Example View -->
+            <div id="view-example" class="view-panel">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px;">
+                    <div>
+                        <h2 style="color: var(--neon-purple); font-weight: 300; margin-bottom: 10px;">Compilation & Analysis Trace</h2>
+                        <p style="color: var(--text-muted); max-width: 800px; line-height: 1.6; margin: 0;">
+                            Trace how multi-module Java code navigates the compiler passes, receives namespace isolation from the linker, is statically analyzed for dataflow, and is executed by the VM Oracle.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="trace-grid">
+                    <!-- Left Column: Compiler Phases -->
+                    <div>
+                        <div class="code-window compiler-trace active-trace" id="trace-comp-12">
+                            <div class="window-header"><span style="color: var(--neon-blue);">Pass 1: Unlinked IR</span> <span>Stage 1 & 2</span></div>
+                            <div class="window-body">
+<span class="cmt">// File: src/api/Main.java</span>
+<span class="kw">import</span> auth.Validator;
+
+<span class="kw">public class</span> <span class="fn">Main</span> {
+  <span class="kw">public void</span> <span class="fn">run</span>(Token t) {
+    <span class="kw">boolean</span> ok = Validator.<span class="fn">check</span>(t);
+  }
+}
+<span class="cmt">---------------------------------------</span>
+<span class="cmt">// Lowered IR (Local Registers, Unresolved Imports)</span>
+<span class="ir-lbl">func_run:</span>
+  <span class="ir-op">import_module</span> "auth.Validator" <span class="ir-reg">%0</span>
+  <span class="ir-reg">%1</span> = <span class="ir-op">load_var</span> t
+  <span class="ir-reg">%2</span> = <span class="ir-op">load_field</span> <span class="ir-reg">%0</span> check
+  <span class="ir-reg">%3</span> = <span class="ir-op">call_function</span> <span class="ir-reg">%2</span> <span class="ir-reg">%1</span>
+</div>
+                        </div>
+
+                        <div class="code-window compiler-trace" id="trace-comp-345">
+                            <div class="window-header"><span style="color: var(--neon-blue);">Pass 2 & Linker</span> <span>Stage 3, 4, 5</span></div>
+                            <div class="window-body">
+<span class="cmt">// Import Resolver builds graph: src/api/Main.java -> src/auth/Validator.java</span>
+<span class="cmt">// Topological Sort: Validator compiles first.</span>
+<span class="cmt">// Linker isolates namespace and rebases registers (+150):</span>
+
+<span class="ir-lbl">src.api.func_run:</span>
+  <span class="cmt">// import_module patched & dropped by Linker</span>
+  <span class="ir-reg">%151</span> = <span class="ir-op">load_var</span> src.api.t
+  <span class="ir-reg">%152</span> = <span class="ir-op">load_var</span> src.auth.Validator
+  <span class="ir-reg">%153</span> = <span class="ir-op">call_method</span> <span class="ir-reg">%152</span> check <span class="ir-reg">%151</span>
+  <span class="ir-op">decl_var</span> src.api.ok <span class="ir-reg">%153</span>
+</div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Analysis and VM -->
+                    <div>
+                        <div class="code-window analysis-trace" id="trace-ana">
+                            <div class="window-header"><span style="color: var(--neon-green);">Type System & SCC Dataflow</span> <span>Stage 6 & 7</span></div>
+                            <div class="window-body">
+<span class="cmt">## Type Inference Fixpoint</span>
+<span class="ir-reg">%151</span> : <span class="kw">Token</span>
+<span class="ir-reg">%152</span> : <span class="kw">ClassRef(src.auth.Validator)</span>
+<span class="ir-reg">%153</span> : <span class="kw">UNKNOWN</span> <span class="cmt">// If check() body is missing</span>
+
+<span class="cmt">## SCC Transitive Flow Graph</span>
+<span class="ir-op">Endpoint(Variable, 'src.api.t')</span>
+   <span style="color: var(--neon-green);">---[ flows to ]---></span>
+<span class="ir-op">Endpoint(Variable, 'src.api.ok')</span>
+</div>
+                        </div>
+                        
+                        <div class="code-window vm-trace" id="trace-vm" style="height: 250px;">
+                            <div class="window-header"><span style="color: var(--neon-purple);">VM & Plausible Oracle</span> <span>Stage 8</span></div>
+                            <div class="window-body" id="vm-console" style="color: #ccc;">
+> VM Dispatch: <span class="ir-op">call_method</span> src.auth.Validator check <span class="ir-reg">%151</span>
+<span style="color: #f44;">[!] Trap: Call Unresolved. Method definition missing.</span>
+> Context encoded for LLM: "Calling check(Token) on Validator"
+> Querying LLM Oracle...
+<br>
+<span id="oracle-output" style="color: var(--neon-purple); font-weight: bold; display: none;">> Oracle: <span class="str typewriter-text" id="typewriter"></span></span>
+<br>
+<span id="vm-resume" style="display: none;">
+> Binding <span class="ir-reg">%153</span> = <span class="kw">true</span>
+> Resuming execution pipeline.
+</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logic -->
+    <script>
+        // View Toggles
+        const btnProcess = document.getElementById('btn-process');
+        const btnExample = document.getElementById('btn-example');
+        const viewProcess = document.getElementById('view-process');
+        const viewExample = document.getElementById('view-example');
+
+        btnProcess.addEventListener('click', () => {
+            btnProcess.classList.add('active');
+            btnExample.classList.remove('active');
+            viewProcess.classList.add('visible');
+            viewExample.classList.remove('visible');
+        });
+
+        btnExample.addEventListener('click', () => {
+            btnExample.classList.add('active');
+            btnProcess.classList.remove('active');
+            viewExample.classList.add('visible');
+            viewProcess.classList.remove('visible');
+        });
+
+        // Sidebar & Trace Highlighting
+        const stageCards = document.querySelectorAll('.stage-card');
+        const tComp12 = document.getElementById('trace-comp-12');
+        const tComp345 = document.getElementById('trace-comp-345');
+        const tAna = document.getElementById('trace-ana');
+        const tVm = document.getElementById('trace-vm');
+        
+        // Typewriter state
+        const typewriterEl = document.getElementById('typewriter');
+        const oracleOutput = document.getElementById('oracle-output');
+        const vmResume = document.getElementById('vm-resume');
+        const oracleText = 'true';
+        let typeTimeout = null;
+
+        function resetTypewriter() {
+            clearTimeout(typeTimeout);
+            typewriterEl.textContent = '';
+            oracleOutput.style.display = 'none';
+            vmResume.style.display = 'none';
+            tVm.classList.remove('active-trace');
+            typewriterEl.classList.add('typewriter-text');
+        }
+
+        function runTypewriter() {
+            oracleOutput.style.display = 'inline';
+            let i = 0;
+            function typeWriter() {
+                if (i < oracleText.length) {
+                    typewriterEl.textContent += oracleText.charAt(i);
+                    i++;
+                    typeTimeout = setTimeout(typeWriter, 100);
+                } else {
+                    setTimeout(() => {
+                        typewriterEl.classList.remove('typewriter-text');
+                        vmResume.style.display = 'block';
+                    }, 400);
+                }
+            }
+            typeWriter();
+        }
+
+        stageCards.forEach(card => {
+            card.addEventListener('click', () => {
+                // Update Sidebar
+                stageCards.forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+
+                // Switch to example view
+                if (!btnExample.classList.contains('active')) btnExample.click();
+
+                // Reset
+                [tComp12, tComp345, tAna, tVm].forEach(t => t.classList.remove('active-trace'));
+                resetTypewriter();
+
+                const target = card.getAttribute('data-target');
+                
+                // Activate traces
+                if (target.startsWith('comp-1') || target.startsWith('comp-2')) {
+                    tComp12.classList.add('active-trace');
+                } 
+                else if (target.startsWith('comp-3') || target.startsWith('comp-4') || target.startsWith('comp-5')) {
+                    tComp12.classList.add('active-trace');
+                    tComp345.classList.add('active-trace');
+                } 
+                else if (target.startsWith('ana')) {
+                    tComp12.classList.add('active-trace');
+                    tComp345.classList.add('active-trace');
+                    tAna.classList.add('active-trace');
+                } 
+                else if (target.startsWith('vm')) {
+                    tComp12.classList.add('active-trace');
+                    tComp345.classList.add('active-trace');
+                    tAna.classList.add('active-trace');
+                    tVm.classList.add('active-trace');
+                    runTypewriter();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
