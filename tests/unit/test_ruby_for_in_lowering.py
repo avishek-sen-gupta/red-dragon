@@ -8,10 +8,13 @@ string constant.
 from __future__ import annotations
 
 from interpreter.ir import Opcode
+from interpreter.frontends.ruby.features import RubyFeature
+from tests.covers import covers
 from tests.unit.rosetta.conftest import parse_for_language
 
 
 class TestRubyForInLoweringProducesCorrectIR:
+    @covers(RubyFeature.FOR_IN_LOOP)
     def test_iterable_is_not_const_string(self):
         """The iterable should be a LOAD_VAR for 'arr', not a CONST 'in arr'."""
         ir = parse_for_language(
@@ -34,6 +37,7 @@ end
             f"as a string constant instead of unwrapping the iterable"
         )
 
+    @covers(RubyFeature.FOR_IN_LOOP)
     def test_iterable_is_loaded_from_variable(self):
         """The loop should LOAD_VAR 'arr' to get the iterable."""
         ir = parse_for_language(
@@ -55,6 +59,7 @@ end
             f"Expected LOAD_VAR 'arr' for the iterable, " f"got: {load_var_operands}"
         )
 
+    @covers(RubyFeature.FOR_IN_LOOP)
     def test_len_receives_array_not_string(self):
         """len() should be called on the array register, not a string constant."""
         ir = parse_for_language(
