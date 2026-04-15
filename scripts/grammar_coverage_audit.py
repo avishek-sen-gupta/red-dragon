@@ -221,6 +221,9 @@ def extract_handled_types(language: Language) -> set[str]:
         handled |= constants.noise_types
         handled |= constants.comment_types
         handled |= constants.block_node_types
+        # known_benign_types: intentionally absent from dispatch but handled
+        # via other mechanisms (text extraction, parent lowerers, type-map, etc.)
+        handled |= constants.known_benign_types
 
     return handled
 
