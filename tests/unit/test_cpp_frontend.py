@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from interpreter.frontends.cpp import CppFrontend
+from interpreter.frontends.cpp.features import CppFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from tests.covers import covers
 
 
 def _parse_cpp(source: str) -> list[InstructionBase]:
@@ -24,6 +26,7 @@ def _find_all(
 
 
 class TestCppDeclarations:
+    @covers(CppFeature.VARIABLE_DECLARATION)
     def test_int_declaration(self):
         instructions = _parse_cpp("int x = 10;")
         opcodes = _opcodes(instructions)
@@ -32,6 +35,7 @@ class TestCppDeclarations:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
+    @covers(CppFeature.DECLARATION_WITHOUT_INITIALIZER)
     def test_declaration_without_initializer(self):
         instructions = _parse_cpp("int x;")
         opcodes = _opcodes(instructions)
@@ -41,6 +45,7 @@ class TestCppDeclarations:
 
 
 class TestCppFunctions:
+    @covers(CppFeature.FUNCTION_DEFINITION)
     def test_function_definition(self):
         instructions = _parse_cpp("int add(int a, int b) { return a + b; }")
         opcodes = _opcodes(instructions)
@@ -58,11 +63,13 @@ class TestCppFunctions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
+    @covers(CppFeature.FUNCTION_CALL)
     def test_function_call(self):
         instructions = _parse_cpp("int main() { add(1, 2); }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("add" in inst.operands for inst in calls)
 
+    @covers(CppFeature.RETURN_STATEMENT)
     def test_return_statement(self):
         instructions = _parse_cpp("int main() { return 42; }")
         opcodes = _opcodes(instructions)
@@ -72,6 +79,7 @@ class TestCppFunctions:
 
 
 class TestCppControlFlow:
+    @covers(CppFeature.IF_ELSE)
     def test_if_else_with_condition_clause(self):
         instructions = _parse_cpp(
             "int main() { if (x > 5) { y = 1; } else { y = 0; } }"
@@ -83,6 +91,7 @@ class TestCppControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("if_true") for inst in labels)
 
+    @covers(CppFeature.WHILE_LOOP)
     def test_while_with_condition_clause(self):
         instructions = _parse_cpp("int main() { while (x > 0) { x--; } }")
         opcodes = _opcodes(instructions)
@@ -91,6 +100,7 @@ class TestCppControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(inst.label.contains("while") for inst in labels)
 
+    @covers(CppFeature.FOR_LOOP)
     def test_c_style_for_loop(self):
         instructions = _parse_cpp(
             "int main() { for (int i = 0; i < 10; i++) { x = x + i; } }"
@@ -102,6 +112,7 @@ class TestCppControlFlow:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
 
+    @covers(CppFeature.IF_ELSEIF_CHAIN)
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
         instructions = _parse_cpp(
@@ -131,6 +142,7 @@ class TestCppControlFlow:
 
 
 class TestCppClasses:
+    @covers(CppFeature.CLASS_WITH_METHODS)
     def test_class_with_methods(self):
         instructions = _parse_cpp("class Dog { public: void bark() { return; } };")
         opcodes = _opcodes(instructions)
@@ -140,6 +152,7 @@ class TestCppClasses:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
+    @covers(CppFeature.NAMESPACE)
     def test_namespace_transparent(self):
         instructions = _parse_cpp("namespace myns { int x = 10; }")
         opcodes = _opcodes(instructions)
@@ -149,16 +162,19 @@ class TestCppClasses:
 
 
 class TestCppExpressions:
+    @covers(CppFeature.NEW_EXPRESSION)
     def test_new_expression(self):
         instructions = _parse_cpp('int main() { Dog* d = new Dog("Rex"); }')
         calls = _find_all(instructions, Opcode.CALL_CTOR)
         assert any("Dog" in inst.operands for inst in calls)
 
+    @covers(CppFeature.DELETE_EXPRESSION)
     def test_delete_expression(self):
         instructions = _parse_cpp("int main() { delete ptr; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("delete" in inst.operands for inst in calls)
 
+    @covers(CppFeature.LAMBDA_EXPRESSION)
     def test_lambda_expression(self):
         instructions = _parse_cpp(
             "int main() { auto f = [](int a, int b) { return a + b; }; }"
@@ -169,6 +185,7 @@ class TestCppExpressions:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("__lambda" in str(inst.operands) for inst in consts)
 
+    @covers(CppFeature.TEMPLATE_DECLARATION)
     def test_template_declaration(self):
         instructions = _parse_cpp(
             "template <typename T> T identity(T val) { return val; }"
@@ -180,21 +197,25 @@ class TestCppExpressions:
 
 
 class TestCppSpecial:
+    @covers(CppFeature.EMPTY_PROGRAM)
     def test_empty_program(self):
         instructions = _parse_cpp("")
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
+    @covers(CppFeature.UNSUPPORTED_FALLBACK)
     def test_fallback_symbolic(self):
         instructions = _parse_cpp('int main() { asm volatile("nop"); }')
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CppFeature.STRING_LITERAL)
     def test_string_literal(self):
         instructions = _parse_cpp('int main() { const char* s = "hello"; }')
         consts = _find_all(instructions, Opcode.CONST)
         assert any('"hello"' in inst.operands for inst in consts)
 
+    @covers(CppFeature.BINARY_EXPRESSION)
     def test_binary_expression(self):
         instructions = _parse_cpp("int main() { int z = x + y; }")
         binops = _find_all(instructions, Opcode.BINOP)
@@ -206,6 +227,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialCpp:
+    @covers(CppFeature.CLASS_WITH_CONSTRUCTOR)
     def test_class_with_constructor_and_method(self):
         source = """\
 class Counter {
@@ -227,6 +249,7 @@ public:
         assert len(returns) >= 1
         assert len(instructions) > 20
 
+    @covers(CppFeature.METHOD_CALL)
     def test_new_delete_with_method(self):
         source = """\
 int main() {
@@ -247,6 +270,7 @@ int main() {
         ]
         assert len(delete_calls) >= 1
 
+    @covers(CppFeature.LAMBDA_CAPTURE)
     def test_lambda_capture_and_call(self):
         source = """\
 int main() {
@@ -266,6 +290,7 @@ int main() {
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("x" in inst.operands for inst in loads)
 
+    @covers(CppFeature.RANGE_FOR)
     def test_range_for_with_method(self):
         source = """\
 int main() {
@@ -284,6 +309,7 @@ int main() {
         assert "push_back" in method_names
         assert len(instructions) > 10
 
+    @covers(CppFeature.STATIC_CAST)
     def test_static_cast(self):
         source = """\
 int main() {
@@ -300,6 +326,7 @@ int main() {
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CppFeature.TRY_CATCH)
     def test_try_catch_with_throw(self):
         source = """\
 int main() {
@@ -324,6 +351,7 @@ int main() {
         assert not any("catch_clause:" in str(s.operands) for s in symbolics)
         assert len(instructions) > 10
 
+    @covers(CppFeature.NAMESPACE)
     def test_namespace_function_with_loop(self):
         source = """\
 namespace math {
@@ -347,6 +375,7 @@ namespace math {
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 15
 
+    @covers(CppFeature.TEMPLATE_FUNCTION)
     def test_template_function(self):
         source = """\
 template <typename T>
@@ -367,6 +396,7 @@ T max_val(T a, T b) {
 
 
 class TestCppFieldInitializerList:
+    @covers(CppFeature.FIELD_INITIALIZER_LIST)
     def test_field_initializer_list(self):
         source = """\
 class Point {
@@ -385,6 +415,7 @@ class Point {
         assert "x" in field_names
         assert "y" in field_names
 
+    @covers(CppFeature.FIELD_INITIALIZER_SINGLE)
     def test_field_initializer_single(self):
         source = """\
 class Counter {
@@ -401,11 +432,13 @@ class Counter {
 
 
 class TestCppDeleteExpression:
+    @covers(CppFeature.DELETE_EXPRESSION)
     def test_delete_calls_function(self):
         instructions = _parse_cpp("int main() { int* p = new int(5); delete p; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("delete" in inst.operands for inst in calls)
 
+    @covers(CppFeature.DELETE_ARRAY)
     def test_delete_array(self):
         instructions = _parse_cpp("int main() { int* arr = new int[10]; delete arr; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -413,6 +446,7 @@ class TestCppDeleteExpression:
 
 
 class TestCppCharLiteral:
+    @covers(CppFeature.CHAR_LITERAL)
     def test_char_literal_produces_const(self):
         instructions = _parse_cpp("int main() { char c = 'A'; }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -420,6 +454,7 @@ class TestCppCharLiteral:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("char_literal" in str(inst.operands) for inst in symbolics)
 
+    @covers(CppFeature.CHAR_LITERAL)
     def test_char_literal_no_symbolic_fallback(self):
         instructions = _parse_cpp("int main() { char c = 'x'; }")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
@@ -428,6 +463,7 @@ class TestCppCharLiteral:
 
 
 class TestCppEnumSpecifier:
+    @covers(CppFeature.C_STYLE_ENUM)
     def test_c_style_enum(self):
         instructions = _parse_cpp("enum Color { Red, Green, Blue };")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
@@ -440,6 +476,7 @@ class TestCppEnumSpecifier:
         assert "Green" in field_names
         assert "Blue" in field_names
 
+    @covers(CppFeature.ENUM_CLASS)
     def test_enum_class_scoped(self):
         instructions = _parse_cpp("enum class Direction { North, South, East, West };")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
@@ -451,6 +488,7 @@ class TestCppEnumSpecifier:
         assert "North" in field_names
         assert "West" in field_names
 
+    @covers(CppFeature.ENUM_CLASS_WITH_VALUES)
     def test_enum_class_with_values(self):
         instructions = _parse_cpp("enum class Flag { A = 1, B = 2, C = 4 };")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
@@ -467,6 +505,7 @@ class TestCppEnumSpecifier:
 
 
 class TestCppConceptDefinition:
+    @covers(CppFeature.CONCEPT_DEFINITION)
     def test_concept_definition_no_unsupported(self):
         """template<typename T> concept Numeric = std::is_arithmetic_v<T>; should not produce unsupported SYMBOLIC."""
         source = "template<typename T> concept Numeric = std::is_arithmetic_v<T>;"
@@ -474,6 +513,7 @@ class TestCppConceptDefinition:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(CppFeature.CONCEPT_DEFINITION)
     def test_concept_definition_with_requires(self):
         source = """\
 template<typename T>
@@ -489,6 +529,7 @@ concept Addable = requires(T a, T b) {
 class TestCppDerefThis:
     """*this should resolve to this, not LOAD_FIELD [this, '*']."""
 
+    @covers(CppFeature.DEREFERENCE_THIS)
     def test_deref_this_no_load_field_star(self):
         """return *this; should NOT produce LOAD_FIELD with field='*'."""
         ir = _parse_cpp("""\
@@ -505,6 +546,7 @@ public:
             len(star_fields) == 0
         ), f"Expected no LOAD_FIELD with '*', got {star_fields}"
 
+    @covers(CppFeature.DEREFERENCE_THIS)
     def test_deref_this_returns_this_via_load_var(self):
         """return *this; should produce LOAD_VAR this + RETURN."""
         ir = _parse_cpp("""\
@@ -522,6 +564,7 @@ public:
         this_loads = [inst for inst in load_vars if "this" in inst.operands]
         assert len(this_loads) >= 1, "Expected at least one LOAD_VAR 'this'"
 
+    @covers(CppFeature.DEREFERENCE_POINTER)
     def test_deref_non_this_uses_load_indirect(self):
         """*ptr (not *this) should produce LOAD_INDIRECT."""
         ir = _parse_cpp("""\
@@ -539,6 +582,7 @@ int main() {
 class TestCppFieldInitB2:
     """B2 field initializer pattern: STORE_FIELD in __init__, not CLASS block."""
 
+    @covers(CppFeature.CLASS_WITH_FIELD_INITIALIZERS)
     def test_synthetic_init_generated(self):
         """Class with field initializer but no constructor gets synthetic __init__."""
         ir = _parse_cpp("""\
@@ -556,6 +600,7 @@ public:
         ]
         assert len(func_consts) == 1, f"Expected synthetic __init__, got {func_consts}"
 
+    @covers(CppFeature.CLASS_WITH_FIELD_INITIALIZERS)
     def test_field_init_in_constructor_not_class_block(self):
         """Field init STORE_FIELD should be inside __init__, not before it."""
         ir = _parse_cpp("""\
@@ -574,6 +619,7 @@ public:
         x_stores = [sf for sf in store_fields if "x" in sf.operands]
         assert len(x_stores) >= 1, "Expected STORE_FIELD for 'x'"
 
+    @covers(CppFeature.CLASS_WITH_FIELD_INITIALIZERS)
     def test_no_store_field_in_class_block(self):
         """Field inits with values should NOT emit STORE_FIELD in the CLASS block."""
         ir = _parse_cpp("""\
@@ -599,6 +645,7 @@ public:
                     i > init_start
                 ), f"STORE_FIELD for 'x' at position {i} is before __init__ at {init_start}"
 
+    @covers(CppFeature.CLASS_WITH_FIELD_INITIALIZERS)
     def test_explicit_constructor_gets_field_inits(self):
         """Explicit constructor should have field inits prepended and be named __init__."""
         ir = _parse_cpp("""\
@@ -622,6 +669,7 @@ public:
         y_stores = [sf for sf in store_fields if "y" in sf.operands]
         assert len(y_stores) >= 1, "Expected STORE_FIELD for 'y' in constructor"
 
+    @covers(CppFeature.CLASS_DEFINITION)
     def test_fields_without_init_still_lowered(self):
         """Fields without initializers should still emit STORE_FIELD (with default 0)."""
         ir = _parse_cpp("""\
@@ -634,6 +682,7 @@ public:
         a_stores = [sf for sf in store_fields if "a" in sf.operands]
         assert len(a_stores) >= 1, "Expected STORE_FIELD for field 'a' with default"
 
+    @covers(CppFeature.CLASS_WITH_CONSTRUCTOR)
     def test_constructor_does_not_emit_this_param(self):
         """Constructor __init__ must NOT emit 'this' as a parameter.
 
