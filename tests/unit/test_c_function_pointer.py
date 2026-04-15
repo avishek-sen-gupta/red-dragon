@@ -15,11 +15,13 @@ from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.frontends.c import CFrontend
+from interpreter.frontends.c.features import CFeature
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from tests.covers import covers
 
 
 def _parse_and_lower(source: str):
@@ -46,6 +48,7 @@ def _run_c(source: str, max_steps: int = 300) -> dict:
 
 
 class TestFunctionPointerDeclaratorName:
+    @covers(CFeature.FUNCTION_POINTER)
     def test_function_pointer_declaration_stores_to_fp(self):
         """int (*fp)(int, int) = &add; should store to 'fp', not '(*fp)'."""
         source = (
@@ -57,6 +60,7 @@ class TestFunctionPointerDeclaratorName:
         assert "fp" in store_names
         assert "(*fp)" not in store_names
 
+    @covers(CFeature.FUNCTION_POINTER)
     def test_function_pointer_emits_address_of(self):
         """int (*fp)(int, int) = &add; should emit ADDRESS_OF for address-of."""
         source = (
@@ -72,6 +76,7 @@ class TestFunctionPointerDeclaratorName:
 
 
 class TestAddressOfFuncRef:
+    @covers(CFeature.FUNCTION_POINTER)
     def test_address_of_function_returns_func_ref(self):
         """&add should resolve to the FUNC_REF, not a symbolic value."""
         source = (
@@ -81,6 +86,7 @@ class TestAddressOfFuncRef:
         assert vars_[VarName("fp")] == vars_[VarName("add")]
         assert isinstance(vars_[VarName("fp")], BoundFuncRef)
 
+    @covers(CFeature.FUNCTION_POINTER)
     def test_assign_function_without_address_of(self):
         """fp = add (without &) should also store the FUNC_REF directly."""
         source = (
@@ -94,6 +100,7 @@ class TestAddressOfFuncRef:
 
 
 class TestDereferenceFuncRef:
+    @covers(CFeature.FUNCTION_POINTER)
     def test_deref_function_pointer_call(self):
         """(*fp)(3, 5) should dispatch to the underlying function."""
         source = (
@@ -104,6 +111,7 @@ class TestDereferenceFuncRef:
         vars_ = _run_c(source)
         assert vars_[VarName("result")] == 8
 
+    @covers(CFeature.FUNCTION_POINTER)
     def test_direct_function_pointer_call(self):
         """fp(3, 5) (without explicit dereference) should also work."""
         source = (
@@ -114,6 +122,7 @@ class TestDereferenceFuncRef:
         vars_ = _run_c(source)
         assert vars_[VarName("result")] == 8
 
+    @covers(CFeature.FUNCTION_POINTER)
     def test_reassign_function_pointer(self):
         """Reassigning a function pointer to a different function should work."""
         source = (
