@@ -58,6 +58,24 @@ def _parse_java_integer(text: str) -> str:
     return text
 
 
+def _parse_java_hex_float(text: str) -> float:
+    """Parse a Java hex floating-point literal to a Python float."""
+    clean = text.rstrip("fFdD")
+    return float.fromhex(clean)
+
+
+def lower_java_hex_float_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Java hex floating-point literal (e.g. 0x1.0p10 → 1024.0)."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Const(result_reg=reg, value=str(_parse_java_hex_float(ctx.node_text(node)))),
+        node=node,
+    )
+    return reg
+
+
 def lower_java_integer_literal(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary

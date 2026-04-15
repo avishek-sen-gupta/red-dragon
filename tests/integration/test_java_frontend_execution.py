@@ -22,7 +22,6 @@ def _run_java(source: str, max_steps: int = 500):
 
 
 class TestJavaHexFloatExecution:
-    @pytest.mark.xfail(reason="red-dragon-ltv: hex float stored as string, not parsed")
     def test_hex_float_value(self):
         """0x1.0p10 should parse to 1024.0."""
         source = """\
@@ -33,7 +32,6 @@ class M {
         _, locals_ = _run_java(source)
         assert locals_[VarName("x")] == 1024.0
 
-    @pytest.mark.xfail(reason="red-dragon-ltv: hex float stored as string, not parsed")
     def test_hex_float_in_arithmetic(self):
         """0x1.0p10 + 1 should produce 1025.0."""
         source = """\
