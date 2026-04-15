@@ -6,6 +6,8 @@ from interpreter.frontends.php import PhpFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.frontends.php.features import PhpFeature
+from tests.covers import covers
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:
@@ -24,12 +26,14 @@ def _find_all(
 
 
 class TestPhpFrontendVariableAssignment:
+    @covers(PhpFeature.VARIABLE_ASSIGNMENT)
     def test_variable_assignment_produces_store(self):
         ir = _parse_and_lower("<?php $x = 10; ?>")
         stores = _find_all(ir, Opcode.STORE_VAR)
         x_stores = [s for s in stores if "$x" in s.operands]
         assert len(x_stores) >= 1
 
+    @covers(PhpFeature.VARIABLE_ASSIGNMENT)
     def test_variable_assignment_produces_const(self):
         ir = _parse_and_lower("<?php $x = 10; ?>")
         consts = _find_all(ir, Opcode.CONST)
@@ -38,12 +42,14 @@ class TestPhpFrontendVariableAssignment:
 
 
 class TestPhpFrontendArithmetic:
+    @covers(PhpFeature.ARITHMETIC)
     def test_arithmetic_produces_binop(self):
         ir = _parse_and_lower("<?php $x = 10; $y = $x + 5; ?>")
         binops = _find_all(ir, Opcode.BINOP)
         assert len(binops) >= 1
         assert "+" in binops[0].operands
 
+    @covers(PhpFeature.ARITHMETIC)
     def test_arithmetic_stores_result(self):
         ir = _parse_and_lower("<?php $x = 10; $y = $x + 5; ?>")
         stores = _find_all(ir, Opcode.STORE_VAR)
@@ -52,12 +58,14 @@ class TestPhpFrontendArithmetic:
 
 
 class TestPhpFrontendFunctionDefinition:
+    @covers(PhpFeature.FUNCTION_DECLARATION)
     def test_function_def_produces_label_and_return(self):
         ir = _parse_and_lower("<?php function add($a, $b) { return $a + $b; } ?>")
         opcodes = _opcodes(ir)
         assert Opcode.LABEL in opcodes
         assert Opcode.RETURN in opcodes
 
+    @covers(PhpFeature.FUNCTION_DECLARATION)
     def test_function_params_lowered_as_symbolic(self):
         ir = _parse_and_lower("<?php function add($a, $b) { return $a + $b; } ?>")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
@@ -66,6 +74,7 @@ class TestPhpFrontendFunctionDefinition:
         ]
         assert len(param_symbolics) >= 2
 
+    @covers(PhpFeature.FUNCTION_DECLARATION)
     def test_function_name_stored(self):
         ir = _parse_and_lower("<?php function add($a, $b) { return $a + $b; } ?>")
         stores = _find_all(ir, Opcode.DECL_VAR)
@@ -74,6 +83,7 @@ class TestPhpFrontendFunctionDefinition:
 
 
 class TestPhpFrontendFunctionCall:
+    @covers(PhpFeature.FUNCTION_CALL)
     def test_function_call_produces_call_function(self):
         ir = _parse_and_lower("<?php add(1, 2); ?>")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
@@ -82,6 +92,7 @@ class TestPhpFrontendFunctionCall:
 
 
 class TestPhpFrontendEcho:
+    @covers(PhpFeature.ECHO)
     def test_echo_produces_call_function(self):
         ir = _parse_and_lower('<?php echo "hello"; ?>')
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
@@ -90,6 +101,7 @@ class TestPhpFrontendEcho:
 
 
 class TestPhpFrontendIfElse:
+    @covers(PhpFeature.IF_ELSE)
     def test_if_else_produces_branch_if(self):
         source = """<?php
 if ($x > 5) {
@@ -102,6 +114,7 @@ if ($x > 5) {
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
 
+    @covers(PhpFeature.IF_ELSE)
     def test_if_else_produces_labels(self):
         source = """<?php
 if ($x > 5) {
@@ -116,6 +129,7 @@ if ($x > 5) {
 
 
 class TestPhpFrontendWhileLoop:
+    @covers(PhpFeature.WHILE_LOOP)
     def test_while_loop_produces_branch_if_and_branch(self):
         source = """<?php
 while ($x > 0) {
@@ -129,6 +143,7 @@ while ($x > 0) {
 
 
 class TestPhpFrontendForLoop:
+    @covers(PhpFeature.FOR_LOOP)
     def test_for_loop_produces_branch_if(self):
         source = """<?php
 for ($i = 0; $i < 10; $i++) {
@@ -145,6 +160,7 @@ for ($i = 0; $i < 10; $i++) {
 
 
 class TestPhpFrontendClassDefinition:
+    @covers(PhpFeature.CLASS)
     def test_class_definition_with_method(self):
         source = """<?php
 class Dog {
@@ -165,6 +181,7 @@ class Dog {
 
 
 class TestPhpFrontendMethodCall:
+    @covers(PhpFeature.METHOD_CALL)
     def test_method_call_produces_call_method(self):
         source = "<?php $obj->method(); ?>"
         ir = _parse_and_lower(source)
@@ -174,6 +191,7 @@ class TestPhpFrontendMethodCall:
 
 
 class TestPhpFrontendMemberAccess:
+    @covers(PhpFeature.MEMBER_ACCESS)
     def test_member_access_produces_load_field(self):
         source = "<?php $x = $obj->field; ?>"
         ir = _parse_and_lower(source)
@@ -183,6 +201,7 @@ class TestPhpFrontendMemberAccess:
 
 
 class TestPhpFrontendAssignmentExpression:
+    @covers(PhpFeature.ASSIGNMENT_EXPRESSION)
     def test_assignment_expression_in_expression_context(self):
         source = "<?php $y = ($x = 10); ?>"
         ir = _parse_and_lower(source)
@@ -194,6 +213,7 @@ class TestPhpFrontendAssignmentExpression:
 
 
 class TestPhpFrontendReturn:
+    @covers(PhpFeature.RETURN)
     def test_return_with_value(self):
         source = "<?php function f() { return 42; } ?>"
         ir = _parse_and_lower(source)
@@ -206,6 +226,7 @@ class TestPhpFrontendReturn:
 
 
 class TestPhpFrontendThrow:
+    @covers(PhpFeature.THROW)
     def test_throw_produces_throw_opcode(self):
         source = '<?php throw new Exception("error"); ?>'
         ir = _parse_and_lower(source)
@@ -214,12 +235,14 @@ class TestPhpFrontendThrow:
 
 
 class TestPhpFrontendFallback:
+    @covers(PhpFeature.FALLBACK)
     def test_entry_label_always_present(self):
         source = "<?php ?>"
         ir = _parse_and_lower(source)
         assert ir[0].opcode == Opcode.LABEL
         assert ir[0].label == "entry"
 
+    @covers(PhpFeature.FALLBACK)
     def test_unsupported_construct_fallback(self):
         source = "<?php $x = `ls -la`; ?>"
         ir = _parse_and_lower(source)
@@ -236,6 +259,7 @@ def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
 
 
 class TestNonTrivialPhp:
+    @covers(PhpFeature.FOREACH)
     def test_foreach_with_method_calls(self):
         source = """\
 <?php
@@ -252,6 +276,7 @@ foreach ($items as $item) {
         calls = _find_all(ir, Opcode.CALL_METHOD)
         assert any("add" in inst.operands for inst in calls)
 
+    @covers(PhpFeature.CLASS)
     def test_class_with_constructor_and_methods(self):
         source = """\
 <?php
@@ -280,6 +305,7 @@ class Counter {
         assert len(returns) >= 1
         assert len(ir) > 20
 
+    @covers(PhpFeature.THROW)
     def test_try_catch_with_throw(self):
         source = """\
 <?php
@@ -304,6 +330,7 @@ try {
         assert not any("catch_clause:" in str(s.operands) for s in symbolics)
         assert len(ir) > 10
 
+    @covers(PhpFeature.IF_ELSE)
     def test_nested_if_elseif_else(self):
         source = """\
 <?php
@@ -326,6 +353,7 @@ if ($x > 100) {
         labels = _labels_in_order(ir)
         assert len(labels) >= 4
 
+    @covers(PhpFeature.WHILE_LOOP)
     def test_while_with_array_push(self):
         source = """\
 <?php
@@ -349,6 +377,7 @@ while ($i < 10) {
         assert any("while" in lbl for lbl in labels)
         assert len(ir) > 15
 
+    @covers(PhpFeature.FUNCTION_DECLARATION)
     def test_function_with_conditional_return(self):
         source = """\
 <?php
@@ -368,6 +397,7 @@ function safe_divide($a, $b) {
         binops = _find_all(ir, Opcode.BINOP)
         assert any("/" in inst.operands for inst in binops)
 
+    @covers(PhpFeature.METHOD_CALL)
     def test_object_creation_and_method_chain(self):
         source = """\
 <?php
@@ -385,6 +415,7 @@ $result = $builder->toString();
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("$result" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.FOR_LOOP)
     def test_for_loop_with_field_access(self):
         source = """\
 <?php
@@ -406,6 +437,7 @@ for ($i = 0; $i < 10; $i++) {
 
 
 class TestPhpForeach:
+    @covers(PhpFeature.FOREACH)
     def test_foreach_simple(self):
         """foreach ($arr as $v) should produce index-based IR."""
         source = "<?php foreach ($arr as $v) { echo $v; } ?>"
@@ -416,6 +448,7 @@ class TestPhpForeach:
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("$v" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.FOREACH)
     def test_foreach_key_value(self):
         """foreach ($arr as $k => $v) should store both key and value."""
         source = "<?php foreach ($arr as $k => $v) { echo $v; } ?>"
@@ -426,6 +459,7 @@ class TestPhpForeach:
         assert any("$k" in inst.operands for inst in stores)
         assert any("$v" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.FOREACH)
     def test_foreach_with_break(self):
         source = """\
 <?php
@@ -445,6 +479,7 @@ foreach ($arr as $v) {
 
 
 class TestPhpArrayCreation:
+    @covers(PhpFeature.ARRAY_CREATION)
     def test_array_indexed(self):
         source = "<?php $a = array(1, 2, 3); ?>"
         ir = _parse_and_lower(source)
@@ -453,6 +488,7 @@ class TestPhpArrayCreation:
         stores = _find_all(ir, Opcode.STORE_INDEX)
         assert len(stores) >= 3
 
+    @covers(PhpFeature.ARRAY_CREATION)
     def test_array_associative(self):
         source = "<?php $m = array('a' => 1, 'b' => 2); ?>"
         ir = _parse_and_lower(source)
@@ -461,6 +497,7 @@ class TestPhpArrayCreation:
         stores = _find_all(ir, Opcode.STORE_INDEX)
         assert len(stores) >= 2
 
+    @covers(PhpFeature.ARRAY_CREATION)
     def test_array_bracket_syntax(self):
         source = "<?php $a = [10, 20, 30]; ?>"
         ir = _parse_and_lower(source)
@@ -471,6 +508,7 @@ class TestPhpArrayCreation:
 
 
 class TestPhpMatchExpression:
+    @covers(PhpFeature.MATCH_EXPRESSION)
     def test_match_produces_branch_if_per_arm(self):
         source = (
             '<?php $r = match($x) { 1 => "one", 2 => "two", default => "other" }; ?>'
@@ -479,12 +517,14 @@ class TestPhpMatchExpression:
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 2
 
+    @covers(PhpFeature.MATCH_EXPRESSION)
     def test_match_compares_with_strict_equality(self):
         source = '<?php $r = match($x) { 1 => "one", default => "other" }; ?>'
         ir = _parse_and_lower(source)
         binops = _find_all(ir, Opcode.BINOP)
         assert any("===" in inst.operands for inst in binops)
 
+    @covers(PhpFeature.MATCH_EXPRESSION)
     def test_match_stores_result(self):
         source = '<?php $r = match($x) { 1 => "one", default => "other" }; ?>'
         ir = _parse_and_lower(source)
@@ -493,6 +533,7 @@ class TestPhpMatchExpression:
 
 
 class TestPhpArrowFunction:
+    @covers(PhpFeature.ARROW_FUNCTION)
     def test_arrow_function_produces_func_ref(self):
         source = "<?php $f = fn($x) => $x * 2; ?>"
         ir = _parse_and_lower(source)
@@ -502,6 +543,7 @@ class TestPhpArrowFunction:
         ]
         assert len(func_refs) >= 1
 
+    @covers(PhpFeature.ARROW_FUNCTION)
     def test_arrow_function_has_param_and_return(self):
         source = "<?php $f = fn($x) => $x * 2; ?>"
         ir = _parse_and_lower(source)
@@ -513,6 +555,7 @@ class TestPhpArrowFunction:
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(PhpFeature.ARROW_FUNCTION)
     def test_arrow_function_body_has_binop(self):
         source = "<?php $f = fn($x) => $x + 1; ?>"
         ir = _parse_and_lower(source)
@@ -521,6 +564,7 @@ class TestPhpArrowFunction:
 
 
 class TestPhpScopedCallExpression:
+    @covers(PhpFeature.SCOPED_CALL)
     def test_scoped_call_produces_call_method(self):
         """ClassName::method() should lower to LOAD_VAR(ClassName) + CALL_METHOD."""
         source = "<?php Math::sqrt(4); ?>"
@@ -531,6 +575,7 @@ class TestPhpScopedCallExpression:
         calls = _find_all(ir, Opcode.CALL_METHOD)
         assert any("sqrt" in inst.operands for inst in calls)
 
+    @covers(PhpFeature.SCOPED_CALL)
     def test_scoped_call_with_multiple_args(self):
         source = "<?php MyClass::create(1, 2, 3); ?>"
         ir = _parse_and_lower(source)
@@ -539,6 +584,7 @@ class TestPhpScopedCallExpression:
         calls = _find_all(ir, Opcode.CALL_METHOD)
         assert any("create" in inst.operands for inst in calls)
 
+    @covers(PhpFeature.SCOPED_CALL)
     def test_scoped_call_result_stored(self):
         source = "<?php $r = Config::get('key'); ?>"
         ir = _parse_and_lower(source)
@@ -551,6 +597,7 @@ class TestPhpScopedCallExpression:
 
 
 class TestPhpSwitchStatement:
+    @covers(PhpFeature.SWITCH_STATEMENT)
     def test_switch_produces_branch_if_per_case(self):
         source = """<?php
 switch ($x) {
@@ -563,6 +610,7 @@ switch ($x) {
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 2
 
+    @covers(PhpFeature.SWITCH_STATEMENT)
     def test_switch_end_label_for_break(self):
         source = """<?php
 switch ($x) {
@@ -574,6 +622,7 @@ switch ($x) {
         labels = _labels_in_order(ir)
         assert any("switch_end" in lbl for lbl in labels)
 
+    @covers(PhpFeature.SWITCH_STATEMENT)
     def test_switch_compares_discriminant(self):
         source = """<?php
 switch ($x) {
@@ -586,6 +635,7 @@ switch ($x) {
 
 
 class TestPhpDoWhileStatement:
+    @covers(PhpFeature.DO_WHILE)
     def test_do_while_body_before_condition(self):
         source = """<?php
 do {
@@ -600,6 +650,7 @@ do {
         cond_idx = next(i for i, l in enumerate(labels) if "do_cond" in l)
         assert body_idx < cond_idx
 
+    @covers(PhpFeature.DO_WHILE)
     def test_do_while_has_branch_if(self):
         source = """<?php
 do {
@@ -610,6 +661,7 @@ do {
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 1
 
+    @covers(PhpFeature.DO_WHILE)
     def test_do_while_break_targets_end(self):
         source = """<?php
 do {
@@ -626,6 +678,7 @@ do {
 
 
 class TestPhpNamespaceDefinition:
+    @covers(PhpFeature.NAMESPACE)
     def test_namespace_lowers_body(self):
         source = """<?php
 namespace App\\Models {
@@ -636,6 +689,7 @@ namespace App\\Models {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("User" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.NAMESPACE)
     def test_namespace_with_function(self):
         source = """<?php
 namespace App\\Helpers {
@@ -648,6 +702,7 @@ namespace App\\Helpers {
 
 
 class TestPhpInterfaceDeclaration:
+    @covers(PhpFeature.INTERFACE)
     def test_interface_produces_class_ref(self):
         source = """<?php
 interface Printable {
@@ -661,6 +716,7 @@ interface Printable {
         ]
         assert len(class_refs) >= 1
 
+    @covers(PhpFeature.INTERFACE)
     def test_interface_stored_by_name(self):
         source = """<?php
 interface Printable {
@@ -671,6 +727,7 @@ interface Printable {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Printable" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.INTERFACE)
     def test_interface_has_labels(self):
         source = """<?php
 interface Printable {
@@ -683,6 +740,7 @@ interface Printable {
 
 
 class TestPhpTraitDeclaration:
+    @covers(PhpFeature.TRAIT)
     def test_trait_produces_class_ref(self):
         source = """<?php
 trait Loggable {
@@ -696,6 +754,7 @@ trait Loggable {
         ]
         assert len(class_refs) >= 1
 
+    @covers(PhpFeature.TRAIT)
     def test_trait_stored_by_name(self):
         source = """<?php
 trait Loggable {
@@ -706,6 +765,7 @@ trait Loggable {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Loggable" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.TRAIT)
     def test_trait_body_methods_lowered(self):
         source = """<?php
 trait Loggable {
@@ -718,6 +778,7 @@ trait Loggable {
 
 
 class TestPhpFunctionStaticDeclaration:
+    @covers(PhpFeature.STATIC_DECLARATION)
     def test_static_var_with_value(self):
         source = """<?php
 function counter() {
@@ -730,6 +791,7 @@ function counter() {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("$count" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.STATIC_DECLARATION)
     def test_static_var_without_value(self):
         source = """<?php
 function f() {
@@ -741,6 +803,7 @@ function f() {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("$x" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.STATIC_DECLARATION)
     def test_static_var_produces_const(self):
         source = """<?php
 function f() {
@@ -753,6 +816,7 @@ function f() {
 
 
 class TestPhpEnumDeclaration:
+    @covers(PhpFeature.ENUM)
     def test_enum_produces_class_ref(self):
         source = """<?php
 enum Color {
@@ -767,6 +831,7 @@ enum Color {
         ]
         assert len(class_refs) >= 1
 
+    @covers(PhpFeature.ENUM)
     def test_enum_stored_by_name(self):
         source = """<?php
 enum Color {
@@ -778,6 +843,7 @@ enum Color {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Color" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.ENUM)
     def test_enum_has_labels(self):
         source = """<?php
 enum Color {
@@ -791,12 +857,14 @@ enum Color {
 
 
 class TestPhpNamedLabelStatement:
+    @covers(PhpFeature.LABELED_STATEMENT)
     def test_named_label_produces_label(self):
         source = "<?php start: echo 1; ?>"
         ir = _parse_and_lower(source)
         labels = _labels_in_order(ir)
         assert any("user_start" in lbl for lbl in labels)
 
+    @covers(PhpFeature.LABELED_STATEMENT)
     def test_named_label_body_lowered(self):
         source = "<?php myLabel: $x = 1; ?>"
         ir = _parse_and_lower(source)
@@ -807,12 +875,14 @@ class TestPhpNamedLabelStatement:
 
 
 class TestPhpGotoStatement:
+    @covers(PhpFeature.GOTO)
     def test_goto_produces_branch(self):
         source = "<?php goto myLabel; ?>"
         ir = _parse_and_lower(source)
         branches = _find_all(ir, Opcode.BRANCH)
         assert any(b.label == "user_myLabel" for b in branches)
 
+    @covers(PhpFeature.GOTO)
     def test_goto_and_label_connected(self):
         source = """<?php
 start:
@@ -827,6 +897,7 @@ goto start;
 
 
 class TestPhpAnonymousFunction:
+    @covers(PhpFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_basic(self):
         source = "<?php $f = function($x) { return $x + 1; }; ?>"
         ir = _parse_and_lower(source)
@@ -837,6 +908,7 @@ class TestPhpAnonymousFunction:
             if inst.operands
         )
 
+    @covers(PhpFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_params(self):
         source = "<?php $f = function($a, $b) { return $a + $b; }; ?>"
         ir = _parse_and_lower(source)
@@ -846,6 +918,7 @@ class TestPhpAnonymousFunction:
         ]
         assert len(param_symbolics) >= 2
 
+    @covers(PhpFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_has_return(self):
         source = "<?php $f = function() { return 42; }; ?>"
         ir = _parse_and_lower(source)
@@ -854,18 +927,21 @@ class TestPhpAnonymousFunction:
 
 
 class TestPhpNullsafeMemberAccess:
+    @covers(PhpFeature.NULLSAFE_MEMBER_ACCESS)
     def test_nullsafe_member_access(self):
         source = "<?php $x = $obj?->field; ?>"
         ir = _parse_and_lower(source)
         load_fields = _find_all(ir, Opcode.LOAD_FIELD)
         assert any("field" in inst.operands for inst in load_fields)
 
+    @covers(PhpFeature.NULLSAFE_MEMBER_ACCESS)
     def test_nullsafe_member_access_stores(self):
         source = "<?php $x = $obj?->name; ?>"
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("$x" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.NULLSAFE_MEMBER_ACCESS)
     def test_nullsafe_member_access_chain(self):
         source = "<?php $x = $obj?->inner?->value; ?>"
         ir = _parse_and_lower(source)
@@ -874,12 +950,14 @@ class TestPhpNullsafeMemberAccess:
 
 
 class TestPhpClassConstantAccess:
+    @covers(PhpFeature.CLASS_CONSTANT_ACCESS)
     def test_class_constant_access(self):
         source = "<?php $x = MyClass::MY_CONST; ?>"
         ir = _parse_and_lower(source)
         load_fields = _find_all(ir, Opcode.LOAD_FIELD)
         assert any("MY_CONST" in inst.operands for inst in load_fields)
 
+    @covers(PhpFeature.CLASS_CONSTANT_ACCESS)
     def test_class_constant_access_stores(self):
         source = "<?php $val = SomeClass::VERSION; ?>"
         ir = _parse_and_lower(source)
@@ -888,12 +966,14 @@ class TestPhpClassConstantAccess:
 
 
 class TestPhpScopedPropertyAccess:
+    @covers(PhpFeature.SCOPED_PROPERTY_ACCESS)
     def test_scoped_property_access(self):
         source = "<?php $x = MyClass::$instance; ?>"
         ir = _parse_and_lower(source)
         load_fields = _find_all(ir, Opcode.LOAD_FIELD)
         assert any("$instance" in inst.operands for inst in load_fields)
 
+    @covers(PhpFeature.SCOPED_PROPERTY_ACCESS)
     def test_scoped_property_access_stores(self):
         source = "<?php $v = Config::$debug; ?>"
         ir = _parse_and_lower(source)
@@ -902,6 +982,7 @@ class TestPhpScopedPropertyAccess:
 
 
 class TestPhpPropertyDeclaration:
+    @covers(PhpFeature.PROPERTY_DECLARATION)
     def test_property_declaration_with_value(self):
         source = """<?php
 class Foo {
@@ -912,6 +993,7 @@ class Foo {
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
         assert any("x" in inst.operands for inst in store_fields)
 
+    @covers(PhpFeature.PROPERTY_DECLARATION)
     def test_property_declaration_without_value(self):
         source = """<?php
 class Bar {
@@ -924,12 +1006,14 @@ class Bar {
 
 
 class TestPhpYieldExpression:
+    @covers(PhpFeature.YIELD)
     def test_yield_basic(self):
         source = "<?php function gen() { yield 42; } ?>"
         ir = _parse_and_lower(source)
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("yield" in inst.operands for inst in calls)
 
+    @covers(PhpFeature.YIELD)
     def test_yield_stores_in_function(self):
         source = "<?php function gen() { yield 1; yield 2; } ?>"
         ir = _parse_and_lower(source)
@@ -941,12 +1025,14 @@ class TestPhpYieldExpression:
 
 
 class TestPhpReferenceAssignment:
+    @covers(PhpFeature.REFERENCE_ASSIGNMENT)
     def test_reference_assignment_basic(self):
         source = "<?php $x = &$y; ?>"
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("$x" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.REFERENCE_ASSIGNMENT)
     def test_reference_assignment_with_expression(self):
         source = "<?php $a = &$arr[0]; ?>"
         ir = _parse_and_lower(source)
@@ -955,6 +1041,7 @@ class TestPhpReferenceAssignment:
 
 
 class TestPhpUseDeclaration:
+    @covers(PhpFeature.USE_DECLARATION)
     def test_use_declaration_in_class(self):
         source = """<?php
 class Foo {
@@ -967,12 +1054,14 @@ class Foo {
 
 
 class TestPhpNamespaceUseDeclaration:
+    @covers(PhpFeature.USE_DECLARATION)
     def test_namespace_use_declaration(self):
         source = r"<?php use App\Models\User; ?>"
         ir = _parse_and_lower(source)
         # Should not crash — no-op
         assert ir[0].opcode == Opcode.LABEL
 
+    @covers(PhpFeature.USE_DECLARATION)
     def test_namespace_use_declaration_multiple(self):
         source = r"""<?php
 use App\Models\User;
@@ -983,6 +1072,7 @@ use App\Models\Post;
 
 
 class TestPhpEnumCase:
+    @covers(PhpFeature.ENUM_CASE)
     def test_enum_case_basic(self):
         source = """<?php
 enum Color {
@@ -1000,6 +1090,7 @@ enum Color {
         assert "Green" in field_names
         assert "Blue" in field_names
 
+    @covers(PhpFeature.ENUM_CASE)
     def test_enum_case_with_value(self):
         source = """<?php
 enum Suit: string {
@@ -1015,6 +1106,7 @@ enum Suit: string {
         assert "Hearts" in field_names
         assert "Diamonds" in field_names
 
+    @covers(PhpFeature.ENUM_CASE)
     def test_enum_case_store_field_uses_register_not_bare_string(self):
         """STORE_FIELD object operand must be a register from LOAD_VAR, not bare 'self'."""
         source = """<?php
@@ -1038,6 +1130,7 @@ enum Color {
 
 
 class TestPhpStringInterpolation:
+    @covers(PhpFeature.STRING_INTERPOLATION)
     def test_interpolation_basic(self):
         """'Hello $name' should decompose into CONST + LOAD_VAR + BINOP '+'."""
         ir = _parse_and_lower('<?php $x = "Hello $name"; ?>')
@@ -1046,6 +1139,7 @@ class TestPhpStringInterpolation:
         binops = _find_all(ir, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(PhpFeature.STRING_INTERPOLATION)
     def test_interpolation_expression(self):
         """'Hello {$arr[0]}' should produce LOAD_INDEX + BINOP '+'."""
         ir = _parse_and_lower('<?php $x = "Hello {$arr[0]}"; ?>')
@@ -1053,6 +1147,7 @@ class TestPhpStringInterpolation:
         binops = _find_all(ir, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(PhpFeature.STRING_INTERPOLATION)
     def test_interpolation_multiple(self):
         """'$a and $b' should produce two LOAD_VAR and multiple BINOP '+'."""
         ir = _parse_and_lower('<?php $x = "$a and $b"; ?>')
@@ -1063,6 +1158,7 @@ class TestPhpStringInterpolation:
         plus_ops = [b for b in binops if "+" in b.operands]
         assert len(plus_ops) >= 2
 
+    @covers(PhpFeature.STRING_INTERPOLATION)
     def test_no_interpolation_is_const(self):
         """Single-quoted 'hello' has no interpolation — remains CONST."""
         ir = _parse_and_lower("<?php $x = 'hello'; ?>")
@@ -1074,12 +1170,14 @@ class TestPhpStringInterpolation:
 
 
 class TestPhpHeredoc:
+    @covers(PhpFeature.HEREDOC)
     def test_heredoc_basic(self):
         source = "<?php $s = <<<EOT\nhello world\nEOT; ?>"
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("$s" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.HEREDOC)
     def test_heredoc_interpolation_basic(self):
         """Heredoc with $var should decompose like encapsed_string."""
         source = "<?php $s = <<<EOT\nHello $name\nEOT; ?>"
@@ -1089,6 +1187,7 @@ class TestPhpHeredoc:
         binops = _find_all(ir, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(PhpFeature.HEREDOC)
     def test_heredoc_interpolation_expression(self):
         """Heredoc with {$arr[0]} should produce LOAD_INDEX + BINOP '+'."""
         source = "<?php $s = <<<EOT\nHello {$arr[0]} world\nEOT; ?>"
@@ -1097,6 +1196,7 @@ class TestPhpHeredoc:
         binops = _find_all(ir, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
+    @covers(PhpFeature.HEREDOC)
     def test_heredoc_interpolation_multiple(self):
         """Heredoc with multiple vars should concatenate all parts."""
         source = "<?php $s = <<<EOT\n$a and $b\nEOT; ?>"
@@ -1108,6 +1208,7 @@ class TestPhpHeredoc:
         plus_ops = [b for b in binops if "+" in b.operands]
         assert len(plus_ops) >= 2
 
+    @covers(PhpFeature.HEREDOC)
     def test_heredoc_no_interpolation_is_const(self):
         """Heredoc without variables should remain a single CONST."""
         source = "<?php $s = <<<EOT\nhello world\nEOT; ?>"
@@ -1117,12 +1218,14 @@ class TestPhpHeredoc:
 
 
 class TestPhpRelativeScope:
+    @covers(PhpFeature.RELATIVE_SCOPE)
     def test_relative_scope_no_symbolic(self):
         source = "<?php class Foo { public function bar() { return self::VALUE; } } ?>"
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("relative_scope" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.RELATIVE_SCOPE)
     def test_static_scope_no_symbolic(self):
         source = (
             "<?php class Foo { public function bar() { return static::create(); } } ?>"
@@ -1133,6 +1236,7 @@ class TestPhpRelativeScope:
 
 
 class TestPhpDynamicVariableName:
+    @covers(PhpFeature.DYNAMIC_VARIABLE)
     def test_dynamic_variable_name_no_unsupported(self):
         """$$var should not produce unsupported SYMBOLIC."""
         source = "<?php $name = 'x'; $$name = 10; ?>"
@@ -1140,6 +1244,7 @@ class TestPhpDynamicVariableName:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.DYNAMIC_VARIABLE)
     def test_dynamic_variable_name_read(self):
         source = "<?php $x = $$name; ?>"
         ir = _parse_and_lower(source)
@@ -1148,6 +1253,7 @@ class TestPhpDynamicVariableName:
 
 
 class TestPhpGlobalDeclaration:
+    @covers(PhpFeature.GLOBAL_DECLARATION)
     def test_global_declaration_no_unsupported(self):
         """global $x, $y; should not produce unsupported SYMBOLIC."""
         source = "<?php function f() { global $x, $y; return $x + $y; } ?>"
@@ -1157,6 +1263,7 @@ class TestPhpGlobalDeclaration:
 
 
 class TestPhpIncludeExpression:
+    @covers(PhpFeature.INCLUDE_REQUIRE)
     def test_include_expression_no_unsupported(self):
         """include 'file.php' should not produce unsupported SYMBOLIC."""
         source = "<?php include 'helpers.php'; ?>"
@@ -1164,6 +1271,7 @@ class TestPhpIncludeExpression:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.INCLUDE_REQUIRE)
     def test_include_produces_call(self):
         source = "<?php include 'config.php'; ?>"
         ir = _parse_and_lower(source)
@@ -1172,6 +1280,7 @@ class TestPhpIncludeExpression:
 
 
 class TestPhpNullsafeMemberCallExpression:
+    @covers(PhpFeature.NULLSAFE_MEMBER_ACCESS)
     def test_nullsafe_member_call_no_unsupported(self):
         """$obj?->method() should not produce unsupported SYMBOLIC."""
         source = "<?php $x = $obj?->getName(); ?>"
@@ -1179,6 +1288,7 @@ class TestPhpNullsafeMemberCallExpression:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.NULLSAFE_MEMBER_ACCESS)
     def test_nullsafe_member_call_produces_call_method(self):
         source = "<?php $result = $user?->getProfile(); ?>"
         ir = _parse_and_lower(source)
@@ -1187,6 +1297,7 @@ class TestPhpNullsafeMemberCallExpression:
 
 
 class TestPhpRequireOnceExpression:
+    @covers(PhpFeature.INCLUDE_REQUIRE)
     def test_require_once_no_unsupported(self):
         """require_once 'file.php' should not produce unsupported SYMBOLIC."""
         source = "<?php require_once 'autoload.php'; ?>"
@@ -1194,6 +1305,7 @@ class TestPhpRequireOnceExpression:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.INCLUDE_REQUIRE)
     def test_require_once_produces_call(self):
         source = "<?php require_once 'bootstrap.php'; ?>"
         ir = _parse_and_lower(source)
@@ -1202,6 +1314,7 @@ class TestPhpRequireOnceExpression:
 
 
 class TestPhpVariadicUnpacking:
+    @covers(PhpFeature.VARIADIC_UNPACKING)
     def test_variadic_unpacking_no_unsupported(self):
         """foo(...$args) should not produce unsupported SYMBOLIC."""
         source = "<?php $result = array_merge(...$arrays); ?>"
@@ -1209,6 +1322,7 @@ class TestPhpVariadicUnpacking:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.VARIADIC_UNPACKING)
     def test_variadic_unpacking_in_call(self):
         source = "<?php foo(...$args); ?>"
         ir = _parse_and_lower(source)
@@ -1217,18 +1331,21 @@ class TestPhpVariadicUnpacking:
 
 
 class TestPhpPrintIntrinsic:
+    @covers(PhpFeature.PRINT)
     def test_print_produces_call_function(self):
         """print $x should lower as CALL_FUNCTION('print', arg)."""
         ir = _parse_and_lower("<?php print $x; ?>")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("print" in inst.operands for inst in calls)
 
+    @covers(PhpFeature.PRINT)
     def test_print_no_unsupported_symbolic(self):
         """print should not produce unsupported SYMBOLIC."""
         ir = _parse_and_lower("<?php print 42; ?>")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.PRINT)
     def test_print_with_string_literal(self):
         """print 'hello' should emit CONST and CALL_FUNCTION."""
         ir = _parse_and_lower("<?php print 'hello'; ?>")
@@ -1238,6 +1355,7 @@ class TestPhpPrintIntrinsic:
         consts = _find_all(ir, Opcode.CONST)
         assert any("'hello'" in inst.operands for inst in consts)
 
+    @covers(PhpFeature.PRINT)
     def test_print_result_is_stored(self):
         """$r = print 'hi' should store the result."""
         ir = _parse_and_lower("<?php $r = print 'hi'; ?>")
@@ -1246,18 +1364,21 @@ class TestPhpPrintIntrinsic:
 
 
 class TestPhpCloneExpression:
+    @covers(PhpFeature.SCOPED_CALL)
     def test_clone_produces_call_function(self):
         """clone $obj should lower as CALL_FUNCTION('clone', arg)."""
         ir = _parse_and_lower("<?php clone $obj; ?>")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("clone" in inst.operands for inst in calls)
 
+    @covers(PhpFeature.SCOPED_CALL)
     def test_clone_no_unsupported_symbolic(self):
         """clone should not produce unsupported SYMBOLIC."""
         ir = _parse_and_lower("<?php clone $obj; ?>")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.SCOPED_CALL)
     def test_clone_result_stored(self):
         """$copy = clone $obj should store the clone result."""
         ir = _parse_and_lower("<?php $copy = clone $obj; ?>")
@@ -1268,18 +1389,21 @@ class TestPhpCloneExpression:
 
 
 class TestPhpConstDeclaration:
+    @covers(PhpFeature.VARIABLE_ASSIGNMENT)
     def test_const_produces_store(self):
         """const FOO = 1; should produce STORE_VAR for FOO."""
         ir = _parse_and_lower("<?php const FOO = 1; ?>")
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("FOO" in inst.operands for inst in stores)
 
+    @covers(PhpFeature.VARIABLE_ASSIGNMENT)
     def test_const_no_unsupported_symbolic(self):
         """const should not produce unsupported SYMBOLIC."""
         ir = _parse_and_lower("<?php const FOO = 1; ?>")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.VARIABLE_ASSIGNMENT)
     def test_const_multiple_in_one_declaration(self):
         """const FOO = 1, BAR = 2; should produce two STOREs."""
         ir = _parse_and_lower("<?php const FOO = 1, BAR = 2; ?>")
@@ -1289,6 +1413,7 @@ class TestPhpConstDeclaration:
         assert len(foo_stores) >= 1
         assert len(bar_stores) >= 1
 
+    @covers(PhpFeature.VARIABLE_ASSIGNMENT)
     def test_const_value_is_lowered(self):
         """const X = 42; should emit CONST 42."""
         ir = _parse_and_lower("<?php const X = 42; ?>")
@@ -1297,6 +1422,7 @@ class TestPhpConstDeclaration:
 
 
 class TestPhpErrorSuppression:
+    @covers(PhpFeature.FALLBACK)
     def test_error_suppression_no_symbolic(self):
         """@expr should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("<?php $x = @strlen('hello'); ?>")
@@ -1305,6 +1431,7 @@ class TestPhpErrorSuppression:
             "error_suppression_expression" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(PhpFeature.FALLBACK)
     def test_error_suppression_lowers_inner_call(self):
         """@strlen('hello') should still emit a CALL_FUNCTION for strlen."""
         ir = _parse_and_lower("<?php $x = @strlen('hello'); ?>")
@@ -1313,6 +1440,7 @@ class TestPhpErrorSuppression:
 
 
 class TestPhpExitStatement:
+    @covers(PhpFeature.FALLBACK)
     def test_exit_no_symbolic(self):
         """exit(0) should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("<?php exit(0); ?>")
@@ -1321,6 +1449,7 @@ class TestPhpExitStatement:
 
 
 class TestPhpDeclareStatement:
+    @covers(PhpFeature.FALLBACK)
     def test_declare_no_symbolic(self):
         """declare(strict_types=1) should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("<?php declare(strict_types=1); ?>")
@@ -1329,6 +1458,7 @@ class TestPhpDeclareStatement:
 
 
 class TestPhpUnsetStatement:
+    @covers(PhpFeature.FALLBACK)
     def test_unset_no_symbolic(self):
         """unset($x) should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("<?php $x = 1; unset($x); ?>")
@@ -1337,6 +1467,7 @@ class TestPhpUnsetStatement:
 
 
 class TestPHPSequenceExpression:
+    @covers(PhpFeature.FALLBACK)
     def test_sequence_no_symbolic(self):
         """$a = 1, $b = 2 in for should not produce SYMBOLIC."""
         ir = _parse_and_lower(
@@ -1349,6 +1480,7 @@ class TestPHPSequenceExpression:
 
 
 class TestPHPIncludeOnceExpression:
+    @covers(PhpFeature.INCLUDE_REQUIRE)
     def test_include_once_no_symbolic(self):
         """include_once should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("<?php include_once 'file.php'; ?>")
@@ -1357,6 +1489,7 @@ class TestPHPIncludeOnceExpression:
             "include_once_expression" in str(inst.operands) for inst in symbolics
         )
 
+    @covers(PhpFeature.INCLUDE_REQUIRE)
     def test_include_once_produces_call(self):
         """include_once should emit a CALL_FUNCTION."""
         ir = _parse_and_lower("<?php include_once 'file.php'; ?>")
@@ -1365,12 +1498,14 @@ class TestPHPIncludeOnceExpression:
 
 
 class TestPHPRequireExpression:
+    @covers(PhpFeature.INCLUDE_REQUIRE)
     def test_require_no_symbolic(self):
         """require should not produce SYMBOLIC fallthrough."""
         ir = _parse_and_lower("<?php require 'file.php'; ?>")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("require_expression" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.INCLUDE_REQUIRE)
     def test_require_produces_call(self):
         """require should emit a CALL_FUNCTION."""
         ir = _parse_and_lower("<?php require 'file.php'; ?>")
@@ -1381,6 +1516,7 @@ class TestPHPRequireExpression:
 class TestPHPPropertyFieldInit:
     """PHP property declarations should use LOAD_VAR $this, not bare 'self'."""
 
+    @covers(PhpFeature.CLASS)
     def test_property_uses_load_var_this(self):
         """public $count = 0 should emit LOAD_VAR '$this' for STORE_FIELD."""
         ir = _parse_and_lower("""\
@@ -1404,6 +1540,7 @@ class Counter {
                     f"got: {sf.operands[0]}"
                 )
 
+    @covers(PhpFeature.CLASS)
     def test_property_no_bare_self_in_store_field(self):
         """No STORE_FIELD should reference bare 'self' string."""
         ir = _parse_and_lower("""\
@@ -1422,18 +1559,21 @@ class Counter {
 
 
 class TestPhpListDestructuring:
+    @covers(PhpFeature.ASSIGNMENT_EXPRESSION)
     def test_list_no_symbolic(self):
         """list($a, $b) = $arr should not produce SYMBOLIC."""
         ir = _parse_and_lower("<?php $arr = [10, 20]; list($a, $b) = $arr; ?>")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("list" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.ASSIGNMENT_EXPRESSION)
     def test_list_emits_load_index_per_element(self):
         """list($a, $b) should emit LOAD_INDEX for indices 0 and 1."""
         ir = _parse_and_lower("<?php $arr = [10, 20]; list($a, $b) = $arr; ?>")
         loads = _find_all(ir, Opcode.LOAD_INDEX)
         assert len(loads) >= 2
 
+    @covers(PhpFeature.ASSIGNMENT_EXPRESSION)
     def test_list_stores_each_variable(self):
         """list($a, $b) should emit STORE_VAR for $a and $b."""
         ir = _parse_and_lower("<?php $arr = [10, 20]; list($a, $b) = $arr; ?>")
@@ -1444,6 +1584,7 @@ class TestPhpListDestructuring:
 
 
 class TestPhpAnonymousClass:
+    @covers(PhpFeature.CLASS)
     def test_anonymous_class_no_symbolic(self):
         """new class { ... } should not produce SYMBOLIC for the class body."""
         ir = _parse_and_lower("""\
@@ -1455,6 +1596,7 @@ $obj = new class {
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("anonymous_class" in str(inst.operands) for inst in symbolics)
 
+    @covers(PhpFeature.CLASS)
     def test_anonymous_class_has_method(self):
         """Anonymous class methods should be lowered as functions."""
         ir = _parse_and_lower("""\
