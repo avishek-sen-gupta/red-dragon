@@ -5,12 +5,15 @@ These tests verify end-to-end execution through the VM.
 
 from __future__ import annotations
 
+from interpreter.frontends.kotlin.features import KotlinFeature
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+from tests.covers import covers
 
 
 class TestKotlinThrowExpressionExecution:
     """Verify throw-as-expression in elvis executes correctly through VM."""
 
+    @covers(KotlinFeature.ELVIS_EXPRESSION)
     def test_elvis_with_non_null_skips_throw(self):
         """When LHS of ?: is non-null, throw should not execute."""
         source = """\
@@ -21,6 +24,7 @@ val answer = y ?: throw Exception("err")
         assert extract_answer(vm, "kotlin") == 42
         assert stats.llm_calls == 0
 
+    @covers(KotlinFeature.ELVIS_EXPRESSION)
     def test_elvis_with_null_uses_fallback(self):
         """When LHS of ?: is null, the fallback value should be used."""
         source = """\
@@ -36,6 +40,7 @@ answer = x ?: 42
 class TestKotlinWhenStatementExecution:
     """Verify when-expression at statement level executes correctly through VM."""
 
+    @covers(KotlinFeature.WHEN_STATEMENT)
     def test_when_stmt_side_effects(self):
         """when at statement level should execute the matching arm."""
         source = """\
@@ -51,6 +56,7 @@ when(x) {
         assert extract_answer(vm, "kotlin") == 20
         assert stats.llm_calls == 0
 
+    @covers(KotlinFeature.WHEN_STATEMENT)
     def test_when_stmt_else_branch(self):
         """when at statement level should fall through to else."""
         source = """\
@@ -70,6 +76,7 @@ when(x) {
 class TestKotlinAnonymousFunctionExecution:
     """Verify anonymous function expressions execute correctly through VM."""
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_called(self):
         """fun(x: Int): Int { return x * 2 } should be callable."""
         source = """\
@@ -80,6 +87,7 @@ val answer = f(21)
         assert extract_answer(vm, "kotlin") == 42
         assert stats.llm_calls == 0
 
+    @covers(KotlinFeature.ANONYMOUS_FUNCTION)
     def test_anonymous_function_multi_params(self):
         """fun(a: Int, b: Int): Int { return a + b } should handle multiple params."""
         source = """\

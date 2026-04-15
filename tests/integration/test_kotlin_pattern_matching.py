@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.frontends.kotlin.features import KotlinFeature
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from tests.covers import covers
 
 
 def _run_kotlin(source: str, max_steps: int = 500):
@@ -25,6 +27,7 @@ def _run_kotlin(source: str, max_steps: int = 500):
 class TestKotlinWhenLiteralMatch:
     """when expression matching on integer literals."""
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_literal_match_hits_first_arm(self):
         """when(x) { 1 -> 10; else -> 0 } should return 10 when x == 1."""
         source = """\
@@ -37,6 +40,7 @@ val r = when(x) {
         local_vars = _run_kotlin(source)
         assert local_vars[VarName("r")] == 10
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_else_fallthrough_when_no_match(self):
         """when(x) { 1 -> 10; else -> 0 } should return 0 when x == 5."""
         source = """\
@@ -49,6 +53,7 @@ val r = when(x) {
         local_vars = _run_kotlin(source)
         assert local_vars[VarName("r")] == 0
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_multiple_literals_selects_correct_arm(self):
         """when(x) { 1 -> 10; 2 -> 20; else -> 0 } should return 20 when x == 2."""
         source = """\
@@ -62,6 +67,7 @@ val r = when(x) {
         local_vars = _run_kotlin(source)
         assert local_vars[VarName("r")] == 20
 
+    @covers(KotlinFeature.WHEN_EXPRESSION)
     def test_three_literal_arms_selects_third(self):
         """when(x) with three arms should return 30 when x == 3."""
         source = """\
@@ -80,6 +86,7 @@ val r = when(x) {
 class TestKotlinWhenIsTypeMatch:
     """when expression using is Type checks."""
 
+    @covers(KotlinFeature.CHECK_EXPRESSION)
     def test_is_int_matches_integer_value(self):
         """when(x) { is Int -> 1; is String -> 2; else -> 0 } should return 1 when x is an Int."""
         source = """\
@@ -93,6 +100,7 @@ val r = when(x) {
         local_vars = _run_kotlin(source)
         assert local_vars[VarName("r")] == 1
 
+    @covers(KotlinFeature.CHECK_EXPRESSION)
     def test_is_int_no_match_falls_to_else(self):
         """when(x) { is Int -> 1; else -> 0 } should return 0 when x is a String."""
         source = """\

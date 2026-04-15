@@ -7,9 +7,12 @@ through the full parse → lower → execute pipeline.
 from __future__ import annotations
 
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+from interpreter.frontends.javascript.features import JavaScriptFeature
+from tests.covers import covers
 
 
 class TestJSForInExecution:
+    @covers(JavaScriptFeature.FOR_IN_LOOP)
     def test_for_in_counts_keys(self):
         """for (var k in obj) should iterate over object keys."""
         vm, stats = execute_for_language(
@@ -25,6 +28,7 @@ for (var k in obj) {
         assert extract_answer(vm, "javascript") == 2
         assert stats.steps < 200
 
+    @covers(JavaScriptFeature.FOR_IN_LOOP)
     def test_for_in_three_keys(self):
         """for-in over a 3-key object should iterate 3 times."""
         vm, stats = execute_for_language(
@@ -40,6 +44,7 @@ for (var k in obj) {
         assert extract_answer(vm, "javascript") == 3
         assert stats.steps < 200
 
+    @covers(JavaScriptFeature.FOR_IN_LOOP)
     def test_for_in_empty_object(self):
         """for-in over empty object should not iterate."""
         vm, stats = execute_for_language(
@@ -54,6 +59,7 @@ for (var k in obj) {
         )
         assert extract_answer(vm, "javascript") == 42
 
+    @covers(JavaScriptFeature.FOR_IN_LOOP)
     def test_for_in_single_key(self):
         """for-in over a 1-key object should iterate once."""
         vm, stats = execute_for_language(

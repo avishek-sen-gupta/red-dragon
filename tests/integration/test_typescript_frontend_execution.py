@@ -7,6 +7,8 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from interpreter.frontends.typescript.features import TypeScriptFeature
+from tests.covers import covers
 
 
 def _run_ts(source: str, max_steps: int = 200):
@@ -20,11 +22,13 @@ def _run_ts(source: str, max_steps: int = 200):
 
 
 class TestTSTypeAssertionExecution:
+    @covers(TypeScriptFeature.TYPE_ASSERTION)
     def test_type_assertion_passes_value_through(self):
         """<number>x should pass the value of x through."""
         locals_ = _run_ts("let x = 42;\nlet y = <number>x;")
         assert locals_[VarName("y")] == 42
 
+    @covers(TypeScriptFeature.TYPE_ASSERTION)
     def test_type_assertion_string(self):
         """<string>val should pass string value through."""
         locals_ = _run_ts('let s = "hello";\nlet t = <string>s;')
@@ -34,6 +38,7 @@ class TestTSTypeAssertionExecution:
 class TestTSFunctionSignatureExecution:
     """Overload signatures should not block execution of the implementation."""
 
+    @covers(TypeScriptFeature.FUNCTION_OVERLOAD)
     def test_overload_implementation_executes(self):
         locals_ = _run_ts("""
             function add(a: number, b: number): number;
@@ -47,6 +52,7 @@ class TestTSFunctionSignatureExecution:
 class TestTSAmbientDeclarationExecution:
     """Ambient declarations should not block subsequent code."""
 
+    @covers(TypeScriptFeature.AMBIENT_DECLARATION)
     def test_declare_const_does_not_block(self):
         locals_ = _run_ts("""
             declare const DEBUG: boolean;
@@ -54,6 +60,7 @@ class TestTSAmbientDeclarationExecution:
             """)
         assert locals_[VarName("x")] == 42
 
+    @covers(TypeScriptFeature.AMBIENT_DECLARATION)
     def test_declare_function_does_not_block(self):
         locals_ = _run_ts("""
             declare function externalLog(msg: string): void;
@@ -65,6 +72,7 @@ class TestTSAmbientDeclarationExecution:
 class TestTSInstantiationExpressionExecution:
     """instantiation_expression should pass through the function reference."""
 
+    @covers(TypeScriptFeature.INSTANTIATION_EXPRESSION)
     def test_instantiated_function_is_callable(self):
         locals_ = _run_ts("""
             function identity(x: any): any { return x; }
@@ -73,6 +81,7 @@ class TestTSInstantiationExpressionExecution:
             """)
         assert locals_[VarName("result")] == "hello"
 
+    @covers(TypeScriptFeature.INSTANTIATION_EXPRESSION)
     def test_instantiated_function_with_number(self):
         locals_ = _run_ts("""
             function double(x: any): any { return x * 2; }
@@ -85,6 +94,7 @@ class TestTSInstantiationExpressionExecution:
 class TestTSInterfacePropertySignatureExecution:
     """Interface property_signature should seed types without blocking execution."""
 
+    @covers(TypeScriptFeature.INTERFACE)
     def test_code_after_interface_with_properties_executes(self):
         locals_ = _run_ts("""
             interface Config {
@@ -100,10 +110,12 @@ class TestTSInterfacePropertySignatureExecution:
 class TestTSOptionalChainExecution:
     """Optional chaining (?.) short-circuits to None on null, accesses on non-null."""
 
+    @covers(TypeScriptFeature.OPTIONAL_CHAIN)
     def test_optional_chain_on_object(self):
         locals_ = _run_ts('let obj = { name: "Alice" }; let result = obj?.name;')
         assert locals_[VarName("result")] == "Alice"
 
+    @covers(TypeScriptFeature.OPTIONAL_CHAIN)
     def test_optional_chain_on_null_returns_none(self):
         locals_ = _run_ts("""
             let obj: any = null;
@@ -111,6 +123,7 @@ class TestTSOptionalChainExecution:
             """)
         assert locals_[VarName("result")] is None
 
+    @covers(TypeScriptFeature.OPTIONAL_CHAIN)
     def test_optional_chain_nested(self):
         locals_ = _run_ts("""
             let outer = { inner: { value: 42 } };
