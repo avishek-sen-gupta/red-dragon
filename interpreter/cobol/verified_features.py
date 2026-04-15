@@ -183,6 +183,7 @@ _CONTROL_FLOW_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_statements", "TestParseStatementDispatch"),
             ("tests.unit.test_cobol_statements", "TestRoundTrip"),
             ("tests.unit.test_cobol_frontend", "TestCallAlterEntryCancelLowering"),
+            ("tests.integration.test_cobol_programs", "TestAlterGoto"),
         ),
     ),
 )
@@ -309,6 +310,7 @@ _INTERPROGRAM_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_statements", "TestParseStatementDispatch"),
             ("tests.unit.test_cobol_statements", "TestRoundTrip"),
             ("tests.unit.test_cobol_frontend", "TestCallAlterEntryCancelLowering"),
+            ("tests.integration.test_cobol_programs", "TestCancelSmoke"),
         ),
     ),
     VerifiedFeature(
@@ -318,6 +320,7 @@ _INTERPROGRAM_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_statements", "TestParseStatementDispatch"),
             ("tests.unit.test_cobol_statements", "TestRoundTrip"),
             ("tests.unit.test_cobol_frontend", "TestCallAlterEntryCancelLowering"),
+            ("tests.integration.test_cobol_programs", "TestEntryPoint"),
         ),
     ),
 )
@@ -337,6 +340,7 @@ _IO_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_io_provider", "TestNullIOProvider"),
             ("tests.unit.test_cobol_io_provider", "TestStubIOProvider"),
             ("tests.unit.test_cobol_io_integration", "TestExecutorIOProviderDispatch"),
+            ("tests.integration.test_cobol_programs", "TestAcceptStatement"),
         ),
     ),
     VerifiedFeature(
@@ -349,6 +353,7 @@ _IO_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_io_provider", "TestNullIOProvider"),
             ("tests.unit.test_cobol_io_provider", "TestStubIOProvider"),
             ("tests.unit.test_cobol_io_integration", "TestExecutorIOProviderDispatch"),
+            ("tests.integration.test_cobol_programs", "TestOpenCloseStatement"),
         ),
     ),
     VerifiedFeature(
@@ -361,6 +366,7 @@ _IO_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_io_provider", "TestNullIOProvider"),
             ("tests.unit.test_cobol_io_provider", "TestStubIOProvider"),
             ("tests.unit.test_cobol_io_integration", "TestExecutorIOProviderDispatch"),
+            ("tests.integration.test_cobol_programs", "TestOpenCloseStatement"),
         ),
     ),
     VerifiedFeature(
@@ -373,6 +379,7 @@ _IO_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_io_provider", "TestNullIOProvider"),
             ("tests.unit.test_cobol_io_provider", "TestStubIOProvider"),
             ("tests.unit.test_cobol_io_integration", "TestExecutorIOProviderDispatch"),
+            ("tests.integration.test_cobol_programs", "TestReadStatement"),
         ),
     ),
     VerifiedFeature(
@@ -385,6 +392,7 @@ _IO_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_io_provider", "TestNullIOProvider"),
             ("tests.unit.test_cobol_io_provider", "TestStubIOProvider"),
             ("tests.unit.test_cobol_io_integration", "TestExecutorIOProviderDispatch"),
+            ("tests.integration.test_cobol_programs", "TestWriteStatement"),
         ),
     ),
     VerifiedFeature(
@@ -396,6 +404,7 @@ _IO_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_frontend", "TestCallAlterEntryCancelLowering"),
             ("tests.unit.test_cobol_io_provider", "TestNullIOProvider"),
             ("tests.unit.test_cobol_io_provider", "TestStubIOProvider"),
+            ("tests.integration.test_cobol_programs", "TestRewriteStatement"),
         ),
     ),
     VerifiedFeature(
@@ -407,6 +416,7 @@ _IO_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_frontend", "TestCallAlterEntryCancelLowering"),
             ("tests.unit.test_cobol_io_provider", "TestNullIOProvider"),
             ("tests.unit.test_cobol_io_provider", "TestStubIOProvider"),
+            ("tests.integration.test_cobol_programs", "TestStartStatement"),
         ),
     ),
     VerifiedFeature(
@@ -418,6 +428,7 @@ _IO_FEATURES: tuple[VerifiedFeature, ...] = (
             ("tests.unit.test_cobol_frontend", "TestCallAlterEntryCancelLowering"),
             ("tests.unit.test_cobol_io_provider", "TestNullIOProvider"),
             ("tests.unit.test_cobol_io_provider", "TestStubIOProvider"),
+            ("tests.integration.test_cobol_programs", "TestDeleteStatement"),
         ),
     ),
 )
@@ -490,6 +501,7 @@ _DATA_DIVISION_FEATURES: tuple[VerifiedFeature, ...] = (
         description="SIGN IS LEADING/TRAILING SEPARATE CHARACTER",
         test_refs=(
             ("tests.unit.test_audit_cobol_frontend", "TestDataDivisionClassify"),
+            ("tests.integration.test_cobol_programs", "TestSignSeparate"),
         ),
     ),
     VerifiedFeature(
@@ -497,6 +509,7 @@ _DATA_DIVISION_FEATURES: tuple[VerifiedFeature, ...] = (
         description="JUSTIFIED RIGHT clause",
         test_refs=(
             ("tests.unit.test_audit_cobol_frontend", "TestDataDivisionClassify"),
+            ("tests.integration.test_cobol_programs", "TestJustifiedRight"),
         ),
     ),
     VerifiedFeature(
@@ -524,6 +537,7 @@ _DATA_DIVISION_FEATURES: tuple[VerifiedFeature, ...] = (
         test_refs=(
             ("tests.unit.test_cobol_types", "TestCobolTypeDescriptor"),
             ("tests.unit.test_audit_cobol_frontend", "TestDataDivisionClassify"),
+            ("tests.integration.test_cobol_programs", "TestUsageComp"),
         ),
     ),
     VerifiedFeature(
@@ -532,17 +546,24 @@ _DATA_DIVISION_FEATURES: tuple[VerifiedFeature, ...] = (
         test_refs=(
             ("tests.unit.test_cobol_types", "TestCobolTypeDescriptor"),
             ("tests.unit.test_audit_cobol_frontend", "TestDataDivisionClassify"),
+            ("tests.integration.test_cobol_programs", "TestUsageComp1"),
         ),
     ),
     VerifiedFeature(
         label="CLAUSE_USAGE_COMP2",
         description="USAGE COMP-2 double-precision float",
-        test_refs=(("tests.unit.test_cobol_types", "TestCobolTypeDescriptor"),),
+        test_refs=(
+            ("tests.unit.test_cobol_types", "TestCobolTypeDescriptor"),
+            ("tests.integration.test_cobol_programs", "TestUsageComp2"),
+        ),
     ),
     VerifiedFeature(
         label="CLAUSE_USAGE_COMP3",
         description="USAGE COMP-3 packed-decimal encoding",
-        test_refs=(("tests.unit.test_cobol_types", "TestCobolTypeDescriptor"),),
+        test_refs=(
+            ("tests.unit.test_cobol_types", "TestCobolTypeDescriptor"),
+            ("tests.integration.test_cobol_programs", "TestUsageComp3"),
+        ),
     ),
     VerifiedFeature(
         label="CLAUSE_USAGE_COMP5",
@@ -552,7 +573,10 @@ _DATA_DIVISION_FEATURES: tuple[VerifiedFeature, ...] = (
     VerifiedFeature(
         label="CLAUSE_USAGE_DISPLAY",
         description="USAGE DISPLAY default zoned-decimal storage",
-        test_refs=(("tests.unit.test_cobol_types", "TestCobolTypeDescriptor"),),
+        test_refs=(
+            ("tests.unit.test_cobol_types", "TestCobolTypeDescriptor"),
+            ("tests.integration.test_cobol_programs", "TestUsageDisplay"),
+        ),
     ),
     VerifiedFeature(
         label="ENTRY_CONDITION_88",
@@ -580,6 +604,7 @@ _DATA_DIVISION_FEATURES: tuple[VerifiedFeature, ...] = (
         description="Level-66 RENAMES clause for field aliasing",
         test_refs=(
             ("tests.unit.test_audit_cobol_frontend", "TestDataDivisionClassify"),
+            ("tests.integration.test_cobol_programs", "TestRenameAlias"),
         ),
     ),
     VerifiedFeature(
