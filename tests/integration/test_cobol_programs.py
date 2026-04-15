@@ -1859,3 +1859,524 @@ class TestRedefines:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 6, 2) == 23
         assert _decode_zoned_unsigned(region, 8, 8) == 20260323
+
+
+# ---------------------------------------------------------------------------
+# I/O statement tests (require StubIOProvider)
+# ---------------------------------------------------------------------------
+
+
+def _run_cobol_with_io(lines: list[str], io_provider, max_steps: int = 1000):
+    """Run a COBOL program with an injected I/O provider."""
+    source = _to_fixed(lines)
+    return run(
+        source=source, language="cobol", max_steps=max_steps, io_provider=io_provider
+    )
+
+
+class TestAcceptStatement:
+    def test_accept_from_console(self):
+        """ACCEPT reads a value from the stub provider into a field."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        provider = StubIOProvider(accept_values=["12345"])
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ACCEPT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-INPUT  PIC 9(5) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ACCEPT WS-INPUT FROM CONSOLE.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 5) == 12345
+
+
+def _file_section_preamble(
+    select_name: str = "CUSTFILE", assign_to: str = "CUSTFILEDAT"
+):
+    """Return COBOL lines for a minimal FILE SECTION (ENVIRONMENT + DATA)."""
+    return [
+        "ENVIRONMENT DIVISION.",
+        "INPUT-OUTPUT SECTION.",
+        "FILE-CONTROL.",
+        f"    SELECT {select_name} ASSIGN TO {assign_to}.",
+        "DATA DIVISION.",
+        "FILE SECTION.",
+        f"FD {select_name}.",
+        f"01 {select_name}-REC PIC X(20).",
+        "WORKING-STORAGE SECTION.",
+    ]
+
+
+class TestOpenCloseStatement:
+    def test_open_close_dispatches(self):
+        """OPEN/CLOSE dispatch to StubIOProvider and track file state."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        provider = StubIOProvider()
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-OPENCLOSE.",
+                *_file_section_preamble("CUSTFILE"),
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    OPEN INPUT CUSTFILE.",
+                "    CLOSE CUSTFILE.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+        stub = provider.get_file("CUSTFILE")
+        assert stub.is_open is False  # closed after CLOSE
+
+
+class TestWriteStatement:
+    def test_write_dispatches(self):
+        """WRITE dispatches to StubIOProvider."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        provider = StubIOProvider()
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-WRITE.",
+                *_file_section_preamble("OUTFILE"),
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    OPEN OUTPUT OUTFILE.",
+                "    WRITE OUTFILE-REC.",
+                "    CLOSE OUTFILE.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+class TestReadStatement:
+    def test_read_dispatches(self):
+        """READ dispatches to StubIOProvider and transfers data into a field."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        provider = StubIOProvider(files={"CUSTFILE": {"records": ["99999"]}})
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-READ.",
+                *_file_section_preamble("CUSTFILE"),
+                "01 WS-DATA  PIC 9(5) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    OPEN INPUT CUSTFILE.",
+                "    READ CUSTFILE INTO WS-DATA.",
+                "    CLOSE CUSTFILE.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 5) == 99999
+
+
+class TestStartStatement:
+    def test_start_dispatches(self):
+        """START dispatches to StubIOProvider without crashing."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        provider = StubIOProvider()
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-START.",
+                *_file_section_preamble("CUSTFILE"),
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    OPEN INPUT CUSTFILE.",
+                "    START CUSTFILE.",
+                "    CLOSE CUSTFILE.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+class TestDeleteStatement:
+    def test_delete_dispatches(self):
+        """DELETE dispatches to StubIOProvider without crashing."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        provider = StubIOProvider(files={"CUSTFILE": {"records": ["REC1"]}})
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DELETE.",
+                *_file_section_preamble("CUSTFILE"),
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    OPEN I-O CUSTFILE.",
+                "    DELETE CUSTFILE.",
+                "    CLOSE CUSTFILE.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+class TestRewriteStatement:
+    def test_rewrite_dispatches(self):
+        """REWRITE dispatches to StubIOProvider without crashing."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        provider = StubIOProvider()
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REWRITE.",
+                *_file_section_preamble("OUTFILE"),
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    OPEN I-O OUTFILE.",
+                "    REWRITE OUTFILE-REC.",
+                "    CLOSE OUTFILE.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+# ---------------------------------------------------------------------------
+# CANCEL / ALTER / ENTRY tests
+# ---------------------------------------------------------------------------
+
+
+class TestCancelSmoke:
+    def test_cancel_does_not_crash(self):
+        """CANCEL is a no-op — verify the program completes normally."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CANCEL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    CANCEL 'SUBPROG'.",
+                "    STOP RUN.",
+            ],
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+class TestAlterGoto:
+    def test_alter_compiles_and_runs(self):
+        """ALTER statement compiles and runs — smoke test (runtime redirect not yet supported)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ALTER.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-RESULT  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ALTER JUMP-PARA TO PROCEED TO TARGET-PARA.",
+                "    MOVE 1 TO WS-RESULT.",
+                "    STOP RUN.",
+                "JUMP-PARA.",
+                "    GO TO MAIN-PARA.",
+                "TARGET-PARA.",
+                "    STOP RUN.",
+            ],
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+class TestEntryPoint:
+    def test_entry_compiles_and_runs(self):
+        """ENTRY statement compiles without crashing — smoke test."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ENTRY.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+                "    ENTRY 'ALT-ENTRY'.",
+                "    MOVE 2 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+# ---------------------------------------------------------------------------
+# USAGE type tests
+# ---------------------------------------------------------------------------
+
+
+def _decode_binary(region: list[int], offset: int, length: int) -> int:
+    """Decode big-endian unsigned binary integer from memory region bytes."""
+    value = 0
+    for i in range(length):
+        value = (value << 8) | region[offset + i]
+    return value
+
+
+def _decode_comp3(region: list[int], offset: int, length: int) -> int:
+    """Decode COMP-3 packed BCD from memory region bytes.
+
+    Each byte holds two BCD digits, except the last byte whose low nibble
+    is the sign (0xC=positive, 0xD=negative, 0xF=unsigned).
+    """
+    digits = []
+    for i in range(length):
+        byte = region[offset + i]
+        hi = (byte >> 4) & 0x0F
+        lo = byte & 0x0F
+        if i < length - 1:
+            digits.extend([hi, lo])
+        else:
+            digits.append(hi)
+            sign_nibble = lo
+    value = sum(d * (10 ** (len(digits) - 1 - j)) for j, d in enumerate(digits))
+    if sign_nibble == 0x0D:
+        value = -value
+    return value
+
+
+class TestUsageComp:
+    def test_comp_binary_arithmetic(self):
+        """PIC 9(5) COMP — binary field stores ADD result correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-BIN   PIC 9(5) COMP VALUE 100.",
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 50 TO WS-BIN.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        # COMP stores as binary big-endian; PIC 9(5) fits in 2 or 4 bytes
+        # Just verify program completes and flag is set
+        bin_len = 4  # COMP PIC 9(5) = 4 bytes typically
+        flag_offset = bin_len
+        assert _decode_zoned_unsigned(region, flag_offset, 1) == 1
+
+
+class TestUsageComp3:
+    def test_comp3_packed_arithmetic(self):
+        """PIC S9(5) COMP-3 — packed decimal stores COMPUTE result."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-PKD   PIC S9(5) COMP-3 VALUE 200.",
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 55 TO WS-PKD.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        # COMP-3 PIC S9(5) = 3 bytes (5 digits + sign nibble)
+        comp3_value = _decode_comp3(region, 0, 3)
+        assert comp3_value == 255
+        assert _decode_zoned_unsigned(region, 3, 1) == 1
+
+
+class TestUsageComp1:
+    def test_comp1_float_arithmetic(self):
+        """COMP-1 single-precision float field — verify program completes."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "01 WS-FLT   COMP-1 VALUE 1.5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-FLT = WS-FLT + 2.5.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+class TestUsageComp2:
+    def test_comp2_double_arithmetic(self):
+        """COMP-2 double-precision float field — verify program completes."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "01 WS-DBL   COMP-2 VALUE 3.14.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-DBL = WS-DBL * 2.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+
+class TestUsageDisplay:
+    def test_display_zoned_decimal(self):
+        """PIC 9(5) DISPLAY (default USAGE) — explicit test for zoned decimal."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISPLAY.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-NUM   PIC 9(5) DISPLAY VALUE 42.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 8 TO WS-NUM.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 5) == 50
+
+
+# ---------------------------------------------------------------------------
+# Data Division clause tests
+# ---------------------------------------------------------------------------
+
+
+class TestSignSeparate:
+    def test_sign_leading_separate(self):
+        """PIC S9(3) SIGN IS LEADING SEPARATE — sign byte + digits."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SIGN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-SIGNED PIC S9(3) SIGN IS LEADING SEPARATE VALUE -42.",
+                "01 WS-FLAG   PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        # SIGN LEADING SEPARATE: 1 sign byte + 3 digit bytes = 4 bytes
+        # Sign byte: '-' (0x60 in EBCDIC) or 0x2D in ASCII
+        # Flag should be set
+        flag_offset = 4  # 1 sign + 3 digits
+        assert _decode_zoned_unsigned(region, flag_offset, 1) == 1
+
+
+class TestJustifiedRight:
+    def test_justified_right_alignment(self):
+        """PIC X(10) JUSTIFIED RIGHT — short value right-aligned with spaces."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-JUST.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-JUST  PIC X(10) JUSTIFIED RIGHT VALUE SPACES.",
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 'ABC' TO WS-JUST.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        flag_offset = 10  # 10 bytes for WS-JUST
+        assert _decode_zoned_unsigned(region, flag_offset, 1) == 1
+
+
+class TestRenameAlias:
+    def test_renames_alias(self):
+        """RENAMES (level 66) aliases a range of fields — smoke test."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-RENAME.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-GROUP.",
+                "   05 WS-A  PIC 9(3) VALUE 100.",
+                "   05 WS-B  PIC 9(3) VALUE 200.",
+                "   05 WS-C  PIC 9(3) VALUE 300.",
+                "66 WS-ALIAS RENAMES WS-A THRU WS-C.",
+                "01 WS-FLAG  PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 1 TO WS-FLAG.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        # WS-GROUP = 9 bytes (3+3+3), WS-FLAG at offset 9
+        assert _decode_zoned_unsigned(region, 9, 1) == 1

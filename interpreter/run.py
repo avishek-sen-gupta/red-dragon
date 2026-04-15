@@ -715,6 +715,7 @@ def run_linked(
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
+    io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
 ) -> VMState:
     """Execute a LinkedProgram with the given entry point.
 
@@ -725,6 +726,7 @@ def run_linked(
         verbose: Print IR, CFG, and step-by-step info.
         backend: LLM backend for interpreter fallback.
         unresolved_call_strategy: Resolution strategy for unknown calls.
+        io_provider: Optional COBOL I/O provider (e.g. StubIOProvider for testing).
     """
     strategies = _build_strategies_from_linked(linked)
 
@@ -734,6 +736,7 @@ def run_linked(
         verbose=verbose,
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
+        io_provider=io_provider,
     )
 
     if entry_point.is_top_level:
@@ -885,6 +888,7 @@ def run(
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     llm_client: Any = None,  # Any: Optional LLM client injection — see red-dragon-c7y2
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
+    io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
 ) -> VMState:
     """End-to-end: parse → lower → build LinkedProgram → run_linked.
 
@@ -997,6 +1001,7 @@ def run(
         verbose=verbose,
         backend=backend,
         unresolved_call_strategy=unresolved_call_strategy,
+        io_provider=io_provider,
     )
     stats.execution_time = time.perf_counter() - exec_start
     stats.total_time = time.perf_counter() - pipeline_start
