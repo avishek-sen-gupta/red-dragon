@@ -9,9 +9,11 @@ Usage:
     poetry run python scripts/feature_coverage_audit.py
     poetry run python scripts/feature_coverage_audit.py --output results.json
     poetry run python scripts/feature_coverage_audit.py --language java
+    poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md
 
 With no --output flag: JSON to stdout, summary to stderr.
 With --output FILE: JSON to file, summary to stdout.
+With --gaps-doc FILE: write a Markdown gap report to FILE (in addition to normal output).
 """
 
 from __future__ import annotations
@@ -173,6 +175,65 @@ def audit_language(
 # ---------------------------------------------------------------------------
 
 
+def generate_gaps_doc(results: Sequence[LanguageCoverageResult]) -> str:
+    """Generate a Markdown frontend-lowering-gaps document from coverage results."""
+    total_features = sum(r.total_features for r in results)
+    total_covered = sum(r.covered_count for r in results)
+    total_uncovered = sum(r.uncovered_count for r in results)
+
+    lines: list[str] = []
+    lines.append("# Frontend Feature Coverage Gaps")
+    lines.append("")
+    lines.append(f"**Generated**: {date.today()}")
+    lines.append(
+        "**Method**: Scans `interpreter/frontends/*/features.py` and "
+        "`interpreter/cobol/features.py` for `XxxFeature` enum members, then "
+        "cross-references with `@covers(XxxFeature.X)` decorators in "
+        "`tests/unit/` and `tests/integration/`. "
+        "Uncovered members = features the frontend handles but no test annotates."
+    )
+    lines.append(
+        f"**Regenerate**: `poetry run python scripts/feature_coverage_audit.py "
+        f"--gaps-doc docs/frontend-lowering-gaps.md`"
+    )
+    lines.append("")
+    lines.append(
+        f"**Totals**: {total_features} features across {len(results)} languages — "
+        f"{total_covered} covered, {total_uncovered} uncovered"
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("## Summary Table")
+    lines.append("")
+    lines.append("| Language | Total | Covered | Uncovered | % Covered |")
+    lines.append("|----------|-------|---------|-----------|-----------|")
+    for r in results:
+        pct = int(100 * r.covered_count / r.total_features) if r.total_features else 100
+        gap_marker = " ⚠" if r.uncovered_count > 0 else ""
+        lines.append(
+            f"| {r.language} | {r.total_features} | {r.covered_count} "
+            f"| {r.uncovered_count}{gap_marker} | {pct}% |"
+        )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("## Uncovered Features by Language")
+    lines.append("")
+    for r in results:
+        if not r.uncovered:
+            continue
+        lines.append(f"### {r.language}")
+        lines.append("")
+        for feature in r.uncovered:
+            lines.append(f"- `{feature}`")
+        lines.append("")
+    if all(r.uncovered_count == 0 for r in results):
+        lines.append("_All features covered — no gaps._")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def build_json(results: Sequence[LanguageCoverageResult]) -> dict[str, object]:
     """Build the full JSON output structure."""
     languages_json = {
@@ -249,6 +310,11 @@ def main() -> None:
         metavar="LANG",
         help="Audit only this language (e.g. java, go).",
     )
+    parser.add_argument(
+        "--gaps-doc",
+        metavar="FILE",
+        help="Write a Markdown gap report to FILE (e.g. docs/frontend-lowering-gaps.md).",
+    )
     args = parser.parse_args()
 
     project_root = Path(__file__).parent.parent
@@ -282,6 +348,12 @@ def main() -> None:
         sys.stdout.write(json_text + "\n")
 
     print_summary(results, summary_stream)
+
+    if args.gaps_doc:
+        doc_text = generate_gaps_doc(results)
+        with open(args.gaps_doc, "w") as f:
+            f.write(doc_text + "\n")
+        sys.stderr.write(f"Wrote gap report to {args.gaps_doc}\n")
 
 
 if __name__ == "__main__":
