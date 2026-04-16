@@ -153,4 +153,7 @@ fileignoreconfig:
   checksum: c08079a771b00a7ffdb25a2bcce8df9e8d53c3ce2dd0028b580d3e7f4375b507
 - filename: docs/frontend-lowering-gaps.md
   checksum: 1ee3429dbf4334f8898aea01d96154ee425ab6e7eaa6aa29613a75a50a162183
+- filename: uv.lock
+  ignore_detectors:
+    - filecontent
 version: "1.0"
