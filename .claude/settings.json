@@ -37,6 +37,24 @@
             "command": "~/.claude/plugins/context-injector/hooks/bd-terminology-guard.sh"
           }
         ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/plugins/python-fp-lint/hooks/lint-check.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/plugins/python-fp-lint/hooks/lint-check.sh"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -109,6 +127,7 @@
       "Bash(make lint)",
       "Bash(make test)",
       "Bash(mkdir:/tmp/ctx-governor)",
+      "Bash(mkdir:/tmp/ctx-lint)",
       "Bash(mkdir:/tmp/ctx-locks)",
       "Bash(npm:*)",
       "Bash(npx:*)",
@@ -119,6 +138,7 @@
       "Bash(python:*)",
       "Bash(realpath:*)",
       "Bash(rm:/tmp/ctx-governor/)",
+      "Bash(rm:/tmp/ctx-lint/)",
       "Bash(rm:/tmp/ctx-locks/)",
       "Bash(rtk proxy:*)",
       "Bash(sed:*)",
@@ -127,6 +147,7 @@
       "Bash(tail:*)",
       "Bash(test:*)",
       "Bash(touch:/tmp/ctx-governor/*)",
+      "Bash(touch:/tmp/ctx-lint/*)",
       "Bash(touch:/tmp/ctx-locks/*)",
       "Bash(tr:*)",
       "Bash(tree:*)",
