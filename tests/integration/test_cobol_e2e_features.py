@@ -10,7 +10,9 @@ import os
 import pytest
 
 from interpreter.address import Address
+from interpreter.cobol.features import CobolFeature
 from interpreter.run import run
+from tests.covers import covers
 
 _JAR_PATH = os.environ.get(
     "PROLEAP_BRIDGE_JAR",
@@ -124,6 +126,15 @@ class TestAllArithmeticForms:
     """Combines in-place ADD/SUBTRACT, all four GIVING forms, and COMPUTE
     in a single program with cross-paragraph PERFORM."""
 
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.SUBTRACT,
+        CobolFeature.MULTIPLY,
+        CobolFeature.DIVIDE,
+        CobolFeature.COMPUTE,
+        CobolFeature.GIVING_CLAUSE,
+        CobolFeature.PERFORM,
+    )
     def test_arithmetic_all_forms(self):
         vm = _run_cobol(
             [
@@ -189,6 +200,16 @@ class TestAllArithmeticForms:
 class TestControlFlowComposition:
     """IF/ELSE, EVALUATE/WHEN, three PERFORM forms, all in one program."""
 
+    @covers(
+        CobolFeature.IF_ELSE,
+        CobolFeature.EVALUATE,
+        CobolFeature.EVALUATE_WHEN_OTHER,
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.PERFORM_UNTIL,
+        CobolFeature.PERFORM_VARYING,
+        CobolFeature.ADD,
+    )
     def test_control_flow_all_forms(self):
         vm = _run_cobol(
             [
@@ -252,6 +273,14 @@ class TestControlFlowComposition:
 class TestStringOperations:
     """STRING, UNSTRING, INSPECT TALLYING, and INSPECT REPLACING together."""
 
+    @covers(
+        CobolFeature.STRING_VERB,
+        CobolFeature.STRING_DELIMITED_BY,
+        CobolFeature.UNSTRING_VERB,
+        CobolFeature.UNSTRING_DELIMITED_BY,
+        CobolFeature.INSPECT_TALLYING,
+        CobolFeature.INSPECT_REPLACING,
+    )
     def test_string_ops_combined(self):
         vm = _run_cobol(
             [
@@ -304,6 +333,11 @@ class TestStringOperations:
 class TestLevel88ConditionNames:
     """Single-value, THRU range, and multi-value level-88 conditions in one program."""
 
+    @covers(
+        CobolFeature.LEVEL_88_CONDITION,
+        CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.IF_ELSE,
+    )
     def test_level88_all_forms(self):
         vm = _run_cobol(
             [
@@ -359,6 +393,7 @@ class TestLevel88ConditionNames:
 class TestPerformAndParagraphs:
     """Multi-paragraph PERFORM calls with VARYING using field-based limit."""
 
+    @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_VARYING, CobolFeature.ADD)
     def test_perform_paragraph_composition(self):
         vm = _run_cobol(
             [
@@ -405,6 +440,14 @@ class TestPerformAndParagraphs:
 class TestOccursWithSubscripts:
     """OCCURS table filled by PERFORM VARYING, read back with literal and field subscripts."""
 
+    @covers(
+        CobolFeature.OCCURS_FIXED,
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_VARYING,
+        CobolFeature.SUBSCRIPT_ACCESS,
+        CobolFeature.MULTIPLY,
+        CobolFeature.ADD,
+    )
     def test_occurs_fill_and_read(self):
         vm = _run_cobol(
             [
@@ -448,6 +491,7 @@ class TestOccursWithSubscripts:
 class TestBlankWhenZeroComposition:
     """BLANK WHEN ZERO with VALUE clauses and runtime MOVE 0."""
 
+    @covers(CobolFeature.BLANK_WHEN_ZERO, CobolFeature.MOVE)
     def test_blank_when_zero_mixed(self):
         vm = _run_cobol(
             [

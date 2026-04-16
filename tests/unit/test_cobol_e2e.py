@@ -25,6 +25,8 @@ from interpreter.vm.executor import (
     HandlerContext,
     _default_handler_context,
 )
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "cobol"
 
@@ -80,6 +82,13 @@ def _execute_straight_line(
 
 
 class TestHelloWorldFixture:
+    @covers(
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.SECTION_WORKING_STORAGE,
+        CobolFeature.FRONTEND_IDEMPOTENCY,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_produces_ir(self):
         asg = _load_fixture("hello_world.json")
         frontend = CobolFrontend(_FakeParser(asg))
@@ -89,6 +98,11 @@ class TestHelloWorldFixture:
         labels = [i for i in instructions if i.opcode == Opcode.LABEL]
         assert any(l.label == "entry" for l in labels)
 
+    @covers(
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_data_division_allocs_11_bytes(self):
         asg = _load_fixture("hello_world.json")
         frontend = CobolFrontend(_FakeParser(asg))
@@ -105,6 +119,12 @@ class TestHelloWorldFixture:
         assert len(size_const) == 1
         assert size_const[0].value == 11  # X(11)
 
+    @covers(
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+        CobolFeature.NUMERIC_EXECUTION,
+    )
     def test_initial_value_written_to_region(self):
         """Verify that the initial VALUE "HELLO WORLD" is written into the region."""
         asg = _load_fixture("hello_world.json")
@@ -128,6 +148,7 @@ class TestHelloWorldFixture:
 
 
 class TestMoveFieldsFixture:
+    @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE, CobolFeature.DATA_LAYOUT_ENGINE)
     def test_produces_load_and_write_region(self):
         asg = _load_fixture("move_fields.json")
         frontend = CobolFrontend(_FakeParser(asg))
@@ -138,6 +159,7 @@ class TestMoveFieldsFixture:
         assert len(loads) >= 1
         assert len(writes) >= 1
 
+    @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE, CobolFeature.DATA_LAYOUT_ENGINE)
     def test_data_division_allocs_6_bytes(self):
         asg = _load_fixture("move_fields.json")
         frontend = CobolFrontend(_FakeParser(asg))
@@ -153,6 +175,12 @@ class TestMoveFieldsFixture:
 
 
 class TestArithmeticFixture:
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.SUBTRACT,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.NUMERIC_EXECUTION,
+    )
     def test_produces_binops(self):
         asg = _load_fixture("arithmetic.json")
         frontend = CobolFrontend(_FakeParser(asg))
@@ -163,6 +191,14 @@ class TestArithmeticFixture:
         assert "+" in ops  # ADD 50
         assert "-" in ops  # SUBTRACT 25
 
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.SUBTRACT,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_initial_value_100_in_region(self):
         """Verify initial VALUE "100" is correctly encoded as zoned decimal."""
         asg = _load_fixture("arithmetic.json")
@@ -178,6 +214,13 @@ class TestArithmeticFixture:
             _decode_zoned_unsigned(region, 0, 5) == 100
         ), f"expected initial zoned decimal 100, got {_decode_zoned_unsigned(region, 0, 5)}"
 
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.SUBTRACT,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_arithmetic_produces_correct_result(self):
         """Full execution: 100 + 50 - 25 = 125 in zoned decimal region."""
         asg = _load_fixture("arithmetic.json")
@@ -195,6 +238,13 @@ class TestArithmeticFixture:
 
 
 class TestPerformReturnFixture:
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.MOVE,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_perform_returns_to_caller(self):
         """MAIN PERFORMs WORK, WORK does MOVE, execution returns to MAIN and hits STOP RUN."""
         asg = _load_fixture("perform_return.json")
@@ -214,6 +264,13 @@ class TestPerformReturnFixture:
             _decode_zoned_unsigned(region, 0, 3) == 42
         ), "PERFORM should return to caller — WS-RESULT must be 42"
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.MOVE,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_nested_perform(self):
         """MAIN PERFORMs PARA-A, PARA-A PERFORMs PARA-B, both return correctly."""
         asg = CobolASG.from_dict(
@@ -267,6 +324,12 @@ class TestPerformReturnFixture:
         # Final WS-VAL == 42 proves PARA-B returned to PARA-A and PARA-A continued
         assert _decode_zoned_unsigned(region, 0, 3) == 42
 
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_fall_through_without_perform(self):
         """Two paragraphs, no PERFORM — verify sequential execution."""
         asg = CobolASG.from_dict(
@@ -314,6 +377,11 @@ class TestPerformReturnFixture:
 
 
 class TestCobolFrontendIdempotency:
+    @covers(
+        CobolFeature.FRONTEND_IDEMPOTENCY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+    )
     def test_lower_twice_produces_same_ir(self):
         """Calling lower() twice should reset state and produce identical IR."""
         asg = _load_fixture("hello_world.json")
@@ -330,6 +398,14 @@ class TestCobolFrontendIdempotency:
 
 
 class TestMultipleStatementTypes:
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.DISPLAY,
+        CobolFeature.STOP_RUN,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_mixed_statements(self):
         """Test a program with MOVE, DISPLAY, and STOP RUN."""
         asg = CobolASG.from_dict(
@@ -375,6 +451,14 @@ class TestMultipleStatementTypes:
 class TestIfElseExecution:
     """IF ... ELSE execution tests."""
 
+    @covers(
+        CobolFeature.IF_ELSE,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.MOVE,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_if_true_branch_taken(self):
         """IF WS-A > 0 should take the THEN branch when WS-A = 5."""
         asg = CobolASG.from_dict(
@@ -429,6 +513,14 @@ class TestIfElseExecution:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 3, 3) == 1
 
+    @covers(
+        CobolFeature.IF_ELSE,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.MOVE,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_if_false_branch_taken(self):
         """IF WS-A > 10 should take the ELSE branch when WS-A = 5."""
         asg = CobolASG.from_dict(
@@ -487,6 +579,13 @@ class TestIfElseExecution:
 class TestPerformTimesExecution:
     """PERFORM ... TIMES loop execution tests."""
 
+    @covers(
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.PERFORM_INLINE,
+        CobolFeature.ADD,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_perform_times_inline_executes_body_n_times(self):
         """Inline PERFORM 3 TIMES with ADD 1 TO WS-CTR should result in WS-CTR = 3."""
         asg = CobolASG.from_dict(
@@ -537,6 +636,14 @@ class TestPerformTimesExecution:
 class TestPerformUntilExecution:
     """PERFORM ... UNTIL loop execution tests."""
 
+    @covers(
+        CobolFeature.PERFORM_UNTIL,
+        CobolFeature.PERFORM_TEST_BEFORE,
+        CobolFeature.ADD,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_perform_until_test_before(self):
         """PERFORM UNTIL WS-A > 2 with ADD 1 should loop until WS-A reaches 3."""
         asg = CobolASG.from_dict(
@@ -587,6 +694,14 @@ class TestPerformUntilExecution:
 class TestPerformVaryingExecution:
     """PERFORM ... VARYING loop execution tests."""
 
+    @covers(
+        CobolFeature.PERFORM_VARYING,
+        CobolFeature.PERFORM_INLINE,
+        CobolFeature.ADD,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_perform_varying_inline(self):
         """PERFORM VARYING WS-IDX FROM 1 BY 1 UNTIL WS-IDX > 3."""
         asg = CobolASG.from_dict(
@@ -662,6 +777,12 @@ def _decode_zoned_unsigned(region: list[int], offset: int, length: int) -> int:
 class TestNumericValueVerification:
     """Verify that e2e execution produces correct numeric values in memory regions."""
 
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_move_literal_value(self):
         """MOVE 42 TO WS-A → WS-A should decode to 42."""
         asg = CobolASG.from_dict(
@@ -697,6 +818,12 @@ class TestNumericValueVerification:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 3) == 42
 
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_add_two_values(self):
         """WS-A=10, WS-B=5, ADD WS-A WS-B → WS-B should be 15."""
         asg = CobolASG.from_dict(
@@ -741,6 +868,12 @@ class TestNumericValueVerification:
         assert _decode_zoned_unsigned(region, 0, 4) == 10  # WS-A unchanged
         assert _decode_zoned_unsigned(region, 4, 4) == 15  # WS-B = 10 + 5
 
+    @covers(
+        CobolFeature.SUBTRACT,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_subtract_values(self):
         """WS-A=10, WS-B=3, SUBTRACT WS-B FROM WS-A → WS-A should be 7."""
         asg = CobolASG.from_dict(
@@ -784,6 +917,12 @@ class TestNumericValueVerification:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 7  # WS-A = 10 - 3
 
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_add_literal_to_field(self):
         """WS-A=0, ADD 25 TO WS-A → WS-A should be 25."""
         asg = CobolASG.from_dict(
@@ -819,6 +958,14 @@ class TestNumericValueVerification:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 25
 
+    @covers(
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.PERFORM_INLINE,
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_perform_times_accumulation(self):
         """PERFORM 3 TIMES with ADD 1 TO WS-CTR → WS-CTR should be 3."""
         asg = CobolASG.from_dict(
@@ -861,6 +1008,13 @@ class TestNumericValueVerification:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 3
 
+    @covers(
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_initial_value_encoding(self):
         """Initial VALUE 123 should encode correctly in the region."""
         asg = CobolASG.from_dict(
@@ -895,6 +1049,12 @@ class TestNumericValueVerification:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 123
 
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_multiple_adds_accumulate(self):
         """WS-R=0, ADD 10 TO WS-R, ADD 5 TO WS-R → WS-R should be 15."""
         asg = CobolASG.from_dict(
@@ -931,6 +1091,14 @@ class TestNumericValueVerification:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 15
 
+    @covers(
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.PERFORM,
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_paragraph_perform_times_accumulation(self):
         """PERFORM ADD-PARA 3 TIMES with ADD 10 TO WS-SUM → WS-SUM should be 30.
 
@@ -981,6 +1149,15 @@ class TestNumericValueVerification:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 30
 
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.PERFORM,
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_move_then_perform_times_accumulation(self):
         """MOVE 100 TO WS-SUM, then PERFORM ADD-PARA 3 TIMES adding 10 → WS-SUM should be 130.
 
@@ -1036,6 +1213,13 @@ class TestNumericValueVerification:
 class TestSectionFallThrough:
     """Test that paragraphs within a section execute sequentially."""
 
+    @covers(
+        CobolFeature.SECTION_WORKING_STORAGE,
+        CobolFeature.MOVE,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_section_paragraphs_fall_through(self):
         """Two paragraphs in a section, no PERFORM — verify sequential execution."""
         asg = CobolASG.from_dict(
@@ -1089,6 +1273,13 @@ class TestSectionFallThrough:
 class TestNestedPerformNumericValues:
     """Nested PERFORM with numeric value verification."""
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_nested_perform_accumulation(self):
         """MAIN performs OUTER, OUTER performs INNER, both add to WS-SUM.
 
@@ -1143,6 +1334,14 @@ class TestNestedPerformNumericValues:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 111
 
+    @covers(
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.PERFORM,
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_nested_perform_times(self):
         """PERFORM OUTER 2 TIMES, OUTER performs INNER 3 TIMES.
 
@@ -1209,6 +1408,13 @@ class TestNestedPerformNumericValues:
 class TestGotoInsidePerform:
     """Tests for GO TO within and outside PERFORM ranges."""
 
+    @covers(
+        CobolFeature.GO_TO,
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_goto_within_perform_range(self):
         """GO TO jumps forward within the PERFORM paragraph range.
 
@@ -1257,6 +1463,13 @@ class TestGotoInsidePerform:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 11
 
+    @covers(
+        CobolFeature.GO_TO,
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_goto_skips_code_in_paragraph(self):
         """GO TO from PARA-A to PARA-C, skipping PARA-B entirely.
 
@@ -1311,6 +1524,14 @@ class TestGotoInsidePerform:
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 11
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.GO_TO,
+        CobolFeature.ADD,
+        CobolFeature.STOP_RUN,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_goto_exits_performed_paragraph(self):
         """PERFORM WORK-PARA, where WORK-PARA does GO TO EXIT-PARA.
 

@@ -9,11 +9,14 @@ from interpreter.cobol.io_provider import (
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
 
 class TestNullIOProvider:
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_accept_returns_uncomputable(self):
         provider = NullIOProvider()
         assert (
@@ -23,6 +26,7 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.OPEN)
     def test_open_returns_uncomputable(self):
         provider = NullIOProvider()
         assert (
@@ -33,6 +37,7 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.CLOSE)
     def test_close_returns_uncomputable(self):
         provider = NullIOProvider()
         assert (
@@ -42,6 +47,7 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.READ)
     def test_read_returns_uncomputable(self):
         provider = NullIOProvider()
         assert (
@@ -51,6 +57,7 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.WRITE)
     def test_write_returns_uncomputable(self):
         provider = NullIOProvider()
         assert (
@@ -61,6 +68,7 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.REWRITE)
     def test_rewrite_returns_uncomputable(self):
         provider = NullIOProvider()
         assert (
@@ -71,6 +79,7 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.START)
     def test_start_returns_uncomputable(self):
         provider = NullIOProvider()
         assert (
@@ -81,6 +90,7 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.DELETE_RECORD)
     def test_delete_returns_uncomputable(self):
         provider = NullIOProvider()
         assert (
@@ -90,12 +100,14 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER)
     def test_unknown_func_returns_uncomputable(self):
         provider = NullIOProvider()
         assert provider.handle_call(FuncName("__cobol_bogus"), []) is _UNCOMPUTABLE
 
 
 class TestStubIOProvider:
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_accept_returns_queued_values(self):
         provider = StubIOProvider(accept_values=["Y", "JOHN DOE"])
         assert (
@@ -111,6 +123,7 @@ class TestStubIOProvider:
             == "JOHN DOE"
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_accept_returns_uncomputable_when_empty(self):
         provider = StubIOProvider(accept_values=["ONLY"])
         assert (
@@ -126,6 +139,7 @@ class TestStubIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.READ)
     def test_read_returns_queued_records(self):
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["REC1", "REC2"]}})
         assert (
@@ -141,6 +155,7 @@ class TestStubIOProvider:
             == "REC2"
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.READ)
     def test_read_returns_uncomputable_when_exhausted(self):
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["ONLY"]}})
         assert (
@@ -156,6 +171,7 @@ class TestStubIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.READ)
     def test_read_unknown_file_returns_uncomputable(self):
         provider = StubIOProvider()
         assert (
@@ -165,6 +181,7 @@ class TestStubIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.WRITE)
     def test_write_captures_data(self):
         provider = StubIOProvider()
         result = provider.handle_call(
@@ -179,6 +196,7 @@ class TestStubIOProvider:
         assert result == "DATA2"
         assert provider.get_file("OUT-FILE").written == ["DATA1", "DATA2"]
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.OPEN)
     def test_open_sets_is_open(self):
         provider = StubIOProvider()
         result = provider.handle_call(
@@ -188,6 +206,7 @@ class TestStubIOProvider:
         assert result == 0
         assert provider.get_file("F1").is_open is True
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.OPEN, CobolFeature.CLOSE)
     def test_close_clears_is_open(self):
         provider = StubIOProvider(files={"F1": {"records": []}})
         provider.handle_call(
@@ -198,6 +217,7 @@ class TestStubIOProvider:
         provider.handle_call(FuncName("__cobol_close_file"), [typed_from_runtime("F1")])
         assert provider.get_file("F1").is_open is False
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.CLOSE)
     def test_close_nonexistent_file_is_noop(self):
         provider = StubIOProvider()
         result = provider.handle_call(
@@ -205,10 +225,12 @@ class TestStubIOProvider:
         )
         assert result == 0
 
+    @covers(CobolFeature.IO_PROVIDER)
     def test_unknown_func_returns_uncomputable(self):
         provider = StubIOProvider()
         assert provider.handle_call(FuncName("__cobol_bogus"), []) is _UNCOMPUTABLE
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.WRITE, CobolFeature.REWRITE)
     def test_rewrite_replaces_last_written(self):
         provider = StubIOProvider()
         provider.handle_call(
@@ -222,6 +244,7 @@ class TestStubIOProvider:
         assert result == "NEW"
         assert provider.get_file("F1").written == ["NEW"]
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.REWRITE)
     def test_rewrite_appends_when_no_prior_writes(self):
         provider = StubIOProvider()
         result = provider.handle_call(
@@ -231,6 +254,7 @@ class TestStubIOProvider:
         assert result == "DATA"
         assert provider.get_file("F1").written == ["DATA"]
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.START)
     def test_start_returns_zero(self):
         provider = StubIOProvider()
         result = provider.handle_call(
@@ -239,6 +263,7 @@ class TestStubIOProvider:
         )
         assert result == 0
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.DELETE_RECORD)
     def test_delete_removes_first_record(self):
         provider = StubIOProvider(files={"F1": {"records": ["REC1", "REC2"]}})
         result = provider.handle_call(
@@ -247,6 +272,7 @@ class TestStubIOProvider:
         assert result == "REC1"
         assert provider.get_file("F1").records == ["REC2"]
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.DELETE_RECORD)
     def test_delete_returns_uncomputable_when_no_records(self):
         provider = StubIOProvider(files={"F1": {"records": []}})
         assert (
@@ -256,6 +282,7 @@ class TestStubIOProvider:
             is _UNCOMPUTABLE
         )
 
+    @covers(CobolFeature.IO_PROVIDER)
     def test_get_file_creates_stub(self):
         provider = StubIOProvider()
         stub = provider.get_file("NEW-FILE")
@@ -266,12 +293,14 @@ class TestStubIOProvider:
 
 
 class TestStubFile:
+    @covers(CobolFeature.IO_PROVIDER)
     def test_default_values(self):
         stub = StubFile()
         assert stub.records == []
         assert stub.written == []
         assert stub.is_open is False
 
+    @covers(CobolFeature.IO_PROVIDER)
     def test_with_records(self):
         stub = StubFile(records=["A", "B"], is_open=True)
         assert stub.records == ["A", "B"]

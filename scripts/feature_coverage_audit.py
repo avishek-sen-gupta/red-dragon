@@ -75,10 +75,9 @@ def _enum_classes_in_module(module: object, module_path: str) -> list[type[Enum]
     ]
 
 
-def _load_feature_module(path: Path) -> FeatureModule:
-    """Load a FeatureModule from an interpreter/frontends/<lang>/features.py file."""
+def _load_feature_module(path: Path, module_path: str) -> FeatureModule:
+    """Load a FeatureModule from a features.py file."""
     language = path.parent.name
-    module_path = f"interpreter.frontends.{language}.features"
     module = importlib.import_module(module_path)
     enum_classes = _enum_classes_in_module(module, module_path)
     if not enum_classes:
@@ -92,9 +91,22 @@ def _load_feature_module(path: Path) -> FeatureModule:
 
 
 def discover_feature_modules(project_root: Path) -> tuple[FeatureModule, ...]:
-    """Return all FeatureModules found under interpreter/frontends/*/features.py."""
+    """Return all FeatureModules found under interpreter/frontends/*/features.py and interpreter/cobol/features.py."""
+    modules = []
+
+    # Load from interpreter/frontends/*/features.py
     feature_paths = sorted(project_root.glob("interpreter/frontends/*/features.py"))
-    return tuple(_load_feature_module(path) for path in feature_paths)
+    for path in feature_paths:
+        language = path.parent.name
+        module_path = f"interpreter.frontends.{language}.features"
+        modules.append(_load_feature_module(path, module_path))
+
+    # Load from interpreter/cobol/features.py
+    cobol_path = project_root / "interpreter" / "cobol" / "features.py"
+    if cobol_path.exists():
+        modules.append(_load_feature_module(cobol_path, "interpreter.cobol.features"))
+
+    return tuple(sorted(modules, key=lambda m: m.language))
 
 
 # ---------------------------------------------------------------------------

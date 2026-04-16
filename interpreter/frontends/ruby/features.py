@@ -39,6 +39,8 @@ class RubyFeature(Enum):
     UNTIL_MODIFIER = auto()
     CONDITIONAL_TERNARY = auto()
     CASE_WHEN = auto()
+    BREAK_STATEMENT = auto()
+    NEXT_STATEMENT = auto()
 
     # Methods and functions
     METHOD_DEFINITION = auto()
@@ -69,6 +71,9 @@ class RubyFeature(Enum):
 
     # Exception handling
     RESCUE_MODIFIER = auto()
+    RESCUE_CLAUSE = auto()
+    ENSURE_CLAUSE = auto()
+    RAISE = auto()
     RETRY = auto()
 
     # String interpolation

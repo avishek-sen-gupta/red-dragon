@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
+
 from scripts.audit_cobol_frontend import (
     BRIDGE_SERIALIZED_TYPES,
     DD_BRIDGE_EXTRACTED,
@@ -30,12 +33,15 @@ from interpreter.cobol.cobol_statements import _DISPATCH_TABLE
 class TestProLeapConstants:
     """Verify the hard-coded ProLeap type set is consistent."""
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_proleap_has_51_types(self):
         assert len(PROLEAP_STATEMENT_TYPES) == 51
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_bridge_serialized_subset_of_proleap(self):
         assert BRIDGE_SERIALIZED_TYPES.issubset(PROLEAP_STATEMENT_TYPES)
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_bridge_to_dispatch_covers_all_serialized(self):
         assert set(_BRIDGE_TO_DISPATCH.keys()) == set(BRIDGE_SERIALIZED_TYPES)
 
@@ -43,15 +49,28 @@ class TestProLeapConstants:
 class TestClassifyType:
     """Test the per-type classification logic."""
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_handled_type(self):
         assert _classify_type("MOVE") == StatusCategory.HANDLED
         assert _classify_type("ADD") == StatusCategory.HANDLED
         assert _classify_type("IF") == StatusCategory.HANDLED
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_bridge_unknown_type(self):
         assert _classify_type("SORT") == StatusCategory.BRIDGE_UNKNOWN
         assert _classify_type("MERGE") == StatusCategory.BRIDGE_UNKNOWN
 
+    @covers(
+        CobolFeature.PROLEAP_BRIDGE,
+        CobolFeature.ACCEPT,
+        CobolFeature.READ,
+        CobolFeature.WRITE,
+        CobolFeature.OPEN,
+        CobolFeature.CLOSE,
+        CobolFeature.REWRITE,
+        CobolFeature.START,
+        CobolFeature.DELETE_RECORD,
+    )
     def test_io_types_handled_stub(self):
         assert _classify_type("ACCEPT") == StatusCategory.HANDLED_STUB
         assert _classify_type("READ") == StatusCategory.HANDLED_STUB
@@ -62,12 +81,15 @@ class TestClassifyType:
         assert _classify_type("START") == StatusCategory.HANDLED_STUB
         assert _classify_type("DELETE") == StatusCategory.HANDLED_STUB
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_call_is_handled(self):
         assert _classify_type("CALL") == StatusCategory.HANDLED
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_compute_is_handled(self):
         assert _classify_type("COMPUTE") == StatusCategory.HANDLED
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_all_proleap_types_classifiable(self):
         valid_statuses = {
             StatusCategory.HANDLED,
@@ -84,12 +106,14 @@ class TestClassifyType:
 class TestPass1Bridge:
     """Test bridge serialisation pass."""
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_pass1_partitions_all_types(self):
         sorted_types = sorted(PROLEAP_STATEMENT_TYPES)
         serialized, unknown = _run_pass1_bridge(sorted_types)
         assert set(serialized) | set(unknown) == PROLEAP_STATEMENT_TYPES
         assert set(serialized) & set(unknown) == set()
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_pass1_serialized_count(self):
         sorted_types = sorted(PROLEAP_STATEMENT_TYPES)
         serialized, unknown = _run_pass1_bridge(sorted_types)
@@ -102,12 +126,14 @@ class TestPass1Bridge:
 class TestPass2Dispatch:
     """Test Python dispatch table pass."""
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_pass2_compute_is_handled(self):
         bridge_serialized = sorted(BRIDGE_SERIALIZED_TYPES)
         handled, missing = _run_pass2_dispatch(bridge_serialized)
         assert "COMPUTE" in handled
         assert "COMPUTE" not in missing
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_pass2_handled_types_exist_in_dispatch_table(self):
         bridge_serialized = sorted(BRIDGE_SERIALIZED_TYPES)
         handled, _ = _run_pass2_dispatch(bridge_serialized)
@@ -115,6 +141,7 @@ class TestPass2Dispatch:
         for t in handled:
             assert t in dispatch_keys, f"{t} not in dispatch table"
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_pass2_handled_plus_missing_equals_bridge_serialized(self):
         bridge_serialized = sorted(BRIDGE_SERIALIZED_TYPES)
         handled, missing = _run_pass2_dispatch(bridge_serialized)
@@ -125,10 +152,12 @@ class TestPass2Dispatch:
 class TestLoweredTypes:
     """Test lowered type consistency."""
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_lowered_types_subset_of_dispatch(self):
         dispatch_keys = set(_DISPATCH_TABLE.keys())
         assert _LOWERED_TYPES.issubset(dispatch_keys)
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_when_types_not_in_lowered(self):
         # WHEN/WHEN_OTHER are lowered inside _lower_evaluate, not _lower_statement
         assert "WHEN" not in _LOWERED_TYPES
@@ -138,6 +167,7 @@ class TestLoweredTypes:
 class TestRunAudit:
     """Integration-level test of the full audit (Pass 1+2, no JAR)."""
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_run_audit_returns_result(self):
         result = run_audit()
         assert isinstance(result, CobolAuditResult)
@@ -147,10 +177,12 @@ class TestRunAudit:
             BRIDGE_SERIALIZED_TYPES
         )
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_run_audit_no_dispatch_missing(self):
         result = run_audit()
         assert len(result.dispatch_missing) == 0
 
+    @covers(CobolFeature.PROLEAP_BRIDGE, CobolFeature.DATA_LAYOUT_ENGINE)
     def test_run_audit_includes_data_division(self):
         result = run_audit()
         assert result.data_division is not None
@@ -163,6 +195,7 @@ class TestRunAudit:
 class TestDataDivisionConstants:
     """Verify DATA DIVISION static sets are consistent with the enum."""
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_all_enum_members_accounted_for(self):
         all_features = frozenset(f.value for f in DataDivisionFeature)
         classified = (
@@ -173,16 +206,20 @@ class TestDataDivisionConstants:
         )
         assert classified == all_features
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_bridge_extracted_subset_of_all(self):
         all_features = frozenset(f.value for f in DataDivisionFeature)
         assert DD_BRIDGE_EXTRACTED.issubset(all_features)
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_python_modelled_subset_of_bridge_extracted(self):
         assert DD_PYTHON_MODELLED.issubset(DD_BRIDGE_EXTRACTED)
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_frontend_handled_subset_of_python_modelled(self):
         assert DD_FRONTEND_HANDLED.issubset(DD_PYTHON_MODELLED)
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_no_empty_sets(self):
         assert len(DD_BRIDGE_EXTRACTED) > 0
         assert len(DD_PYTHON_MODELLED) > 0
@@ -192,90 +229,105 @@ class TestDataDivisionConstants:
 class TestDataDivisionClassify:
     """Spot-check classification of specific DATA DIVISION features."""
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.PIC_CLAUSE)
     def test_pic_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_PIC.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.OCCURS_FIXED)
     def test_occurs_fixed_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_OCCURS_FIXED.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.SECTION_WORKING_STORAGE)
     def test_working_storage_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.SECTION_WORKING_STORAGE.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.USAGE_COMP)
     def test_comp_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_USAGE_COMP.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.USAGE_COMP_1)
     def test_comp1_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_USAGE_COMP1.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.SIGN_CLAUSE)
     def test_sign_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_SIGN.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.JUSTIFIED_CLAUSE)
     def test_justified_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_JUSTIFIED.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.SYNCHRONIZED_CLAUSE)
     def test_synchronized_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_SYNCHRONIZED.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.OCCURS_DEPENDING_ON)
     def test_occurs_depending_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_OCCURS_DEPENDING.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.RENAMES_CLAUSE)
     def test_rename_66_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.ENTRY_RENAME_66.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.BLANK_WHEN_ZERO)
     def test_blank_when_zero_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_BLANK_WHEN_ZERO.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_linkage_is_not_extracted(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.SECTION_LINKAGE.value)
             == DataDivisionStatus.NOT_EXTRACTED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.LEVEL_88_CONDITION)
     def test_condition_88_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.ENTRY_CONDITION_88.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.FILLER_FIELD)
     def test_filler_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_FILLER.value)
             == DataDivisionStatus.HANDLED
         )
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE, CobolFeature.VALUE_CLAUSE)
     def test_value_multi_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_VALUE_MULTI.value)
@@ -286,21 +338,25 @@ class TestDataDivisionClassify:
 class TestDataDivisionAudit:
     """Test run_data_division_audit returns correct structure and counts."""
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_returns_audit_result(self):
         result = run_data_division_audit()
         assert isinstance(result, DataDivisionAuditResult)
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_all_features_classified(self):
         result = run_data_division_audit()
         all_features = frozenset(f.value for f in DataDivisionFeature)
         assert frozenset(result.classified.keys()) == all_features
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_counts_match_sets(self):
         result = run_data_division_audit()
         assert result.bridge_extracted == DD_BRIDGE_EXTRACTED
         assert result.python_modelled == DD_PYTHON_MODELLED
         assert result.frontend_handled == DD_FRONTEND_HANDLED
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_every_feature_has_valid_status(self):
         result = run_data_division_audit()
         valid_statuses = {
@@ -312,6 +368,7 @@ class TestDataDivisionAudit:
         for feature, status in result.classified.items():
             assert status in valid_statuses, f"Invalid status for {feature}: {status}"
 
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_handled_count(self):
         result = run_data_division_audit()
         handled_count = sum(
