@@ -662,7 +662,7 @@ poetry run pytest tests/ -n 0 -v     # disable parallel execution
 
 Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls).
 
-Current suite size: **13,436 collected tests** (`poetry run python -m pytest tests/ --co -q`).
+Current suite size: **13,560 collected tests** (`poetry run python -m pytest tests/ --co -q`).
 
 **Coverage areas:**
 
