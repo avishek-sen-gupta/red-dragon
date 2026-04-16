@@ -145,4 +145,12 @@ fileignoreconfig:
   checksum: a06f61ca7bdd0e20d1976b5535da86478a59345209191d09366ffcce7734e0cd
 - filename: tests/unit/test_cobol_statements.py
   checksum: f95fb3d02f92a14cbbe0ff4d66256f34a382a44bec3a3890fa8768c378e75178
+- filename: interpreter/frontends/javascript/features.py
+  checksum: 662c2df0830d62ce56400986d1928f95ba4499f9239a591f6cd825897acd7149
+- filename: interpreter/frontends/ruby/features.py
+  checksum: 2ea74bdfd02b3e76458ed17ba91cb3b30d2154fac2baea6856035f4f20a7bb01
+- filename: interpreter/frontends/python/features.py
+  checksum: c08079a771b00a7ffdb25a2bcce8df9e8d53c3ce2dd0028b580d3e7f4375b507
+- filename: docs/frontend-lowering-gaps.md
+  checksum: 1ee3429dbf4334f8898aea01d96154ee425ab6e7eaa6aa29613a75a50a162183
 version: "1.0"
