@@ -167,4 +167,9 @@ class TestOperandsProperty:
     def test_write_region(self):
         assert WriteRegion(
             region_reg="%0", offset_reg="%1", length=4, value_reg="%2"
-        ).operands == ["%0", "%1", 4, "%2"]
+        ).operands == [
+            "%0",
+            "%1",
+            4,
+            "%2",
+        ]

@@ -32,6 +32,10 @@ class PythonFeature(Enum):
     F_STRING = auto()
     SPREAD = auto()
     ELLIPSIS = auto()
+    ATTRIBUTE_ACCESS = auto()
+    SUBSCRIPT_ACCESS = auto()
+    CONDITIONAL_EXPRESSION = auto()
+    PARENTHESIZED_EXPRESSION = auto()
 
     # Control flow
     IF_ELSE = auto()
@@ -44,12 +48,15 @@ class PythonFeature(Enum):
     ASSERT_STATEMENT = auto()
     DELETE_STATEMENT = auto()
     GLOBAL_NONLOCAL = auto()
+    RAISE_STATEMENT = auto()
 
     # Functions and async
     YIELD = auto()
     ASYNC_AWAIT = auto()
     GENERATOR_EXPRESSION = auto()
     DECORATOR = auto()
+    DEFAULT_PARAMETERS = auto()
+    TYPE_HINTS = auto()
 
     # Comprehensions
     LIST_COMPREHENSION = auto()
@@ -57,8 +64,25 @@ class PythonFeature(Enum):
     SET_COMPREHENSION = auto()
     SET_LITERAL = auto()
 
+    # Assignments
+    AUGMENTED_ASSIGNMENT = auto()
+    TUPLE_UNPACKING = auto()
+
     # Imports
     IMPORT = auto()
+    IMPORT_FROM = auto()
+
+    # Pattern Matching (match/case)
+    PATTERN_MATCHING = auto()
+    CAPTURE_PATTERN = auto()
+    LITERAL_PATTERN = auto()
+    VALUE_PATTERN = auto()
+    SEQUENCE_PATTERN = auto()
+    MAPPING_PATTERN = auto()
+    CLASS_PATTERN = auto()
+    OR_PATTERN = auto()
+    AS_PATTERN = auto()
+    STAR_PATTERN = auto()
 
     # Infrastructure
     SOURCE_LOCATION = auto()

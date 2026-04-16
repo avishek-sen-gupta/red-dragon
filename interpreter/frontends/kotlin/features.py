@@ -26,6 +26,10 @@ class KotlinFeature(Enum):
     SECONDARY_CONSTRUCTOR = auto()
     PROPERTY_ACCESSOR = auto()
     SETTER = auto()
+    GETTER = auto()
+
+    # Parameters and defaults
+    DEFAULT_PARAMETERS = auto()
 
     # Expressions
     ARITHMETIC = auto()
@@ -57,15 +61,27 @@ class KotlinFeature(Enum):
     IF_EXPRESSION = auto()
     WHEN_EXPRESSION = auto()
     WHEN_STATEMENT = auto()
+    WHEN_SUBJECT_BINDING = auto()  # when(val x = expr) { }
     WHILE_LOOP = auto()
     DO_WHILE_LOOP = auto()
     FOR_LOOP = auto()
+    FOR_LOOP_DESTRUCTURING = auto()  # for ((a, b) in list)
     RETURN = auto()
+    BREAK_CONTINUE = auto()
     LABELED_STATEMENT = auto()
 
     # Type system
     GENERIC_TYPES = auto()
     DESTRUCTURING = auto()
+
+    # Assignment
+    ASSIGNMENT = auto()
+
+    # Exception handling
+    EXCEPTION_HANDLING = auto()  # try/catch/finally
+
+    # Implicit features
+    IMPLICIT_THIS = auto()  # implicit this in member access and method calls
 
     # Misc
     WILDCARD_IMPORT = auto()

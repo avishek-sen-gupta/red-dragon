@@ -18,6 +18,10 @@ class PascalFeature(Enum):
     FUNCTION_DECLARATION = auto()
     CLASS_DECLARATION = auto()
     ENUM_DECLARATION = auto()
+    FIELD_DECLARATION = auto()
+    ARRAY_DECLARATION = auto()
+    DEFAULT_PARAMETER_VALUES = auto()
+    MODULE_NAME = auto()
 
     # Expressions
     ARITHMETIC = auto()
@@ -27,11 +31,13 @@ class PascalFeature(Enum):
     PARENTHESIZED_EXPRESSION = auto()
     RANGE_EXPRESSION = auto()
     BITWISE_OPERATORS = auto()
+    SET_LITERAL = auto()
 
     # Statements
     ASSIGNMENT = auto()
     PROCEDURE_CALL = auto()
     FUNCTION_CALL = auto()
+    LABEL_DECLARATION = auto()
 
     # Control flow
     IF_ELSE = auto()
@@ -46,8 +52,11 @@ class PascalFeature(Enum):
     # OOP
     CLASS_BODY = auto()
     PROPERTY_ACCESSORS = auto()
+    FIELD_ACCESSORS = auto()
     INHERITED = auto()
     QUALIFIED_PROCEDURE = auto()
+    METHOD_DECLARATION = auto()
+    VISIBILITY_MODIFIERS = auto()
 
     # Exception handling
     TRY_EXCEPT = auto()

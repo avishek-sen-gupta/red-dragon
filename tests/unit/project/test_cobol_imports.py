@@ -8,11 +8,14 @@ from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import NO_PATH
 from interpreter.project.types import ImportKind, ImportRef
 from interpreter.constants import Language
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 
 class TestCobolCopyExtraction:
     """Test COBOL COPY statement extraction."""
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_simple_copy(self):
         source = b"       COPY CUSTOMER-RECORD.\n"
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
@@ -20,12 +23,14 @@ class TestCobolCopyExtraction:
         assert refs[0].module_path == "CUSTOMER-RECORD"
         assert refs[0].kind == ImportKind.INCLUDE
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_copy_with_library(self):
         source = b"       COPY DATFMT OF COPYLIB.\n"
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
         assert len(refs) == 1
         assert refs[0].module_path == "DATFMT"
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_multiple_copies(self):
         source = b"       COPY REC1.\n       COPY REC2.\n"
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
@@ -34,6 +39,7 @@ class TestCobolCopyExtraction:
         assert "REC1" in modules
         assert "REC2" in modules
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_copy_lowercase(self):
         source = b"       copy customer-record.\n"
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
@@ -44,6 +50,7 @@ class TestCobolCopyExtraction:
 class TestCobolCallExtraction:
     """Test COBOL CALL statement extraction."""
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_call_literal(self):
         source = b'       CALL "SUBPROG1" USING WS-DATA.\n'
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
@@ -51,6 +58,7 @@ class TestCobolCallExtraction:
         assert len(call_refs) == 1
         assert call_refs[0].module_path == "SUBPROG1"
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_call_with_single_quotes(self):
         source = b"       CALL 'SUBPROG2'.\n"
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
@@ -58,6 +66,7 @@ class TestCobolCallExtraction:
         assert len(call_refs) == 1
         assert call_refs[0].module_path == "SUBPROG2"
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_call_dynamic_variable_skipped(self):
         """CALL WS-PROG (dynamic) should be skipped — we can't resolve it."""
         source = b"       CALL WS-PROGRAM-NAME USING WS-DATA.\n"
@@ -65,6 +74,7 @@ class TestCobolCallExtraction:
         call_refs = [r for r in refs if r.kind == ImportKind.REQUIRE]
         assert len(call_refs) == 0
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_mixed_copy_and_call(self):
         source = b"       COPY CUSTOMER-RECORD.\n       CALL 'VALIDATE'.\n"
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
@@ -77,6 +87,7 @@ class TestCobolCallExtraction:
 class TestCobolResolver:
     """Test COBOL import resolution with real tmp directories."""
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     @pytest.fixture
     def cobol_project(self, tmp_path):
         (tmp_path / "MAIN.cbl").write_text(
@@ -88,6 +99,7 @@ class TestCobolResolver:
         (tmp_path / "VALIDATE.cbl").write_text("       DISPLAY 'VALID'.\n")
         return tmp_path
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_resolves_copybook(self, cobol_project):
         from interpreter.project.resolver import CobolImportResolver
 
@@ -100,6 +112,7 @@ class TestCobolResolver:
         [result] = resolver.resolve(ref, cobol_project)
         assert result.resolved_path == cobol_project / "CUSTOMER-REC.cpy"
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_resolves_called_program(self, cobol_project):
         from interpreter.project.resolver import CobolImportResolver
 
@@ -112,6 +125,7 @@ class TestCobolResolver:
         [result] = resolver.resolve(ref, cobol_project)
         assert result.resolved_path == cobol_project / "VALIDATE.cbl"
 
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
     def test_nonexistent_copybook(self, cobol_project):
         from interpreter.project.resolver import CobolImportResolver
 

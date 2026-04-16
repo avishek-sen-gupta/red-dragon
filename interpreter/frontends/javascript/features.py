@@ -20,6 +20,9 @@ class JavaScriptFeature(Enum):
     METHOD_CALL = auto()
     OBJECT_LITERAL = auto()
     ARRAY_LITERAL = auto()
+    INCREMENT_DECREMENT = auto()
+    SEQUENCE_EXPRESSION = auto()
+    METADATA_PROPERTY = auto()
 
     # Control flow
     IF_ELSE = auto()
@@ -31,6 +34,7 @@ class JavaScriptFeature(Enum):
     SWITCH_STATEMENT = auto()
     TRY_CATCH = auto()
     THROW = auto()
+    WITH_STATEMENT = auto()
 
     # Functions
     FUNCTION_DECLARATION = auto()
@@ -47,6 +51,7 @@ class JavaScriptFeature(Enum):
     # Misc
     IMPORT = auto()
     EXPORT = auto()
+    EXPORT_NAMED = auto()
     SPREAD = auto()
     DESTRUCTURING = auto()
     OPTIONAL_CHAIN = auto()

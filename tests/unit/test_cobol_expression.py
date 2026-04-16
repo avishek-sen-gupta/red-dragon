@@ -7,12 +7,16 @@ from interpreter.cobol.cobol_expression import (
     parse_expression,
     tokenize_expression,
 )
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 
 class TestTokenizer:
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_simple_addition(self):
         assert tokenize_expression("WS-A + WS-B") == ["WS-A", "+", "WS-B"]
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_mixed_operators(self):
         assert tokenize_expression("WS-A + WS-B * 2") == [
             "WS-A",
@@ -22,6 +26,7 @@ class TestTokenizer:
             "2",
         ]
 
+    @covers(CobolFeature.PARENTHESIZED_EXPRESSION, CobolFeature.COMPUTE)
     def test_parenthesized_expression(self):
         assert tokenize_expression("(WS-A + WS-B) * 3") == [
             "(",
@@ -33,18 +38,23 @@ class TestTokenizer:
             "3",
         ]
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_division(self):
         assert tokenize_expression("WS-A / WS-B") == ["WS-A", "/", "WS-B"]
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_literal_only(self):
         assert tokenize_expression("100") == ["100"]
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_subtraction(self):
         assert tokenize_expression("100 - WS-A") == ["100", "-", "WS-A"]
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_decimal_literal(self):
         assert tokenize_expression("WS-A * 1.5") == ["WS-A", "*", "1.5"]
 
+    @covers(CobolFeature.PARENTHESIZED_EXPRESSION, CobolFeature.COMPUTE)
     def test_nested_parens(self):
         assert tokenize_expression("((WS-A + 1) * (WS-B - 2))") == [
             "(",
@@ -64,16 +74,19 @@ class TestTokenizer:
 
 
 class TestParserAtoms:
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_literal_integer(self):
         tree = parse_expression("42")
         assert isinstance(tree, LiteralNode)
         assert tree.value == "42"
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_literal_decimal(self):
         tree = parse_expression("3.14")
         assert isinstance(tree, LiteralNode)
         assert tree.value == "3.14"
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_field_reference(self):
         tree = parse_expression("WS-AMOUNT")
         assert isinstance(tree, FieldRefNode)
@@ -81,6 +94,7 @@ class TestParserAtoms:
 
 
 class TestParserPrecedence:
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_addition(self):
         tree = parse_expression("WS-A + WS-B")
         assert isinstance(tree, BinOpNode)
@@ -90,6 +104,7 @@ class TestParserPrecedence:
         assert tree.left.name == "WS-A"
         assert tree.right.name == "WS-B"
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_multiplication_before_addition(self):
         # WS-A + WS-B * 2  →  WS-A + (WS-B * 2)
         tree = parse_expression("WS-A + WS-B * 2")
@@ -100,6 +115,11 @@ class TestParserPrecedence:
         assert isinstance(tree.right, BinOpNode)
         assert tree.right.op == "*"
 
+    @covers(
+        CobolFeature.PARENTHESIZED_EXPRESSION,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.COMPUTE,
+    )
     def test_parentheses_override_precedence(self):
         # (WS-A + WS-B) * 3  →  (WS-A + WS-B) * 3
         tree = parse_expression("(WS-A + WS-B) * 3")
@@ -110,6 +130,7 @@ class TestParserPrecedence:
         assert isinstance(tree.right, LiteralNode)
         assert tree.right.value == "3"
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_left_associativity(self):
         # WS-A - WS-B - WS-C  →  (WS-A - WS-B) - WS-C
         tree = parse_expression("WS-A - WS-B - WS-C")
@@ -120,6 +141,7 @@ class TestParserPrecedence:
         assert isinstance(tree.right, FieldRefNode)
         assert tree.right.name == "WS-C"
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_division_same_precedence_as_multiplication(self):
         # WS-A * WS-B / WS-C  →  (WS-A * WS-B) / WS-C
         tree = parse_expression("WS-A * WS-B / WS-C")
@@ -128,6 +150,11 @@ class TestParserPrecedence:
         assert isinstance(tree.left, BinOpNode)
         assert tree.left.op == "*"
 
+    @covers(
+        CobolFeature.PARENTHESIZED_EXPRESSION,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.COMPUTE,
+    )
     def test_complex_expression(self):
         # (WS-A + WS-B) * 100 / WS-C - 5
         tree = parse_expression("(WS-A + WS-B) * 100 / WS-C - 5")
@@ -137,6 +164,7 @@ class TestParserPrecedence:
         assert isinstance(tree.right, LiteralNode)
         assert tree.right.value == "5"
 
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION, CobolFeature.COMPUTE)
     def test_subtraction_with_literal(self):
         tree = parse_expression("100 - WS-A")
         assert isinstance(tree, BinOpNode)

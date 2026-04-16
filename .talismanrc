@@ -141,4 +141,8 @@ fileignoreconfig:
   checksum: 6272a10b8d746764bbeaf4d2abfe759ac7491508b9c51264a9d4f5480b394c53
 - filename: scripts/redact-beads-issues
   checksum: fac2e11c1f7dc544947b9d77172295cb3f424fa0d9011a00c938b8060ebd6d68
+- filename: scripts/feature_coverage_audit.py
+  checksum: a06f61ca7bdd0e20d1976b5535da86478a59345209191d09366ffcce7734e0cd
+- filename: tests/unit/test_cobol_statements.py
+  checksum: f95fb3d02f92a14cbbe0ff4d66256f34a382a44bec3a3890fa8768c378e75178
 version: "1.0"

@@ -13,7 +13,9 @@ import os
 import pytest
 
 from interpreter.address import Address
+from interpreter.cobol.features import CobolFeature
 from interpreter.run import run
+from tests.covers import covers
 
 _JAR_PATH = os.environ.get(
     "PROLEAP_BRIDGE_JAR",
@@ -77,6 +79,11 @@ def _first_region(vm):
 
 
 class TestInitialValues:
+    @covers(
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.SECTION_WORKING_STORAGE,
+        CobolFeature.PIC_CLAUSE,
+    )
     def test_initial_values(self):
         """DATA DIVISION VALUE clauses initialise fields correctly."""
         vm = _run_cobol(
@@ -98,6 +105,7 @@ class TestInitialValues:
 
 
 class TestAddSubtract:
+    @covers(CobolFeature.ADD, CobolFeature.SUBTRACT, CobolFeature.ARITHMETIC_EXPRESSION)
     def test_add_subtract(self):
         """ADD and SUBTRACT produce correct results."""
         vm = _run_cobol(
@@ -126,6 +134,7 @@ class TestAddSubtract:
 
 
 class TestArithmeticGiving:
+    @covers(CobolFeature.ADD, CobolFeature.GIVING_CLAUSE)
     def test_add_giving(self):
         """ADD WS-A TO WS-B GIVING WS-R stores A + B in R."""
         vm = _run_cobol(
@@ -149,6 +158,7 @@ class TestArithmeticGiving:
         assert _decode_zoned_unsigned(region, 4, 4) == 25
         assert _decode_zoned_unsigned(region, 8, 4) == 35
 
+    @covers(CobolFeature.SUBTRACT, CobolFeature.GIVING_CLAUSE)
     def test_subtract_giving(self):
         """SUBTRACT WS-A FROM WS-B GIVING WS-R stores B - A in R."""
         vm = _run_cobol(
@@ -172,6 +182,7 @@ class TestArithmeticGiving:
         assert _decode_zoned_unsigned(region, 4, 4) == 25
         assert _decode_zoned_unsigned(region, 8, 4) == 15
 
+    @covers(CobolFeature.ADD, CobolFeature.GIVING_CLAUSE)
     def test_add_giving_literal(self):
         """ADD 10 TO WS-A GIVING WS-R stores 10 + A in R."""
         vm = _run_cobol(
@@ -193,6 +204,7 @@ class TestArithmeticGiving:
         assert _decode_zoned_unsigned(region, 0, 4) == 7
         assert _decode_zoned_unsigned(region, 4, 4) == 17
 
+    @covers(CobolFeature.SUBTRACT, CobolFeature.GIVING_CLAUSE)
     def test_subtract_giving_literal(self):
         """SUBTRACT 3 FROM WS-A GIVING WS-R stores A - 3 in R."""
         vm = _run_cobol(
@@ -216,6 +228,7 @@ class TestArithmeticGiving:
 
 
 class TestMultiplyDivide:
+    @covers(CobolFeature.MULTIPLY, CobolFeature.DIVIDE, CobolFeature.GIVING_CLAUSE)
     def test_multiply_divide(self):
         """MULTIPLY ... GIVING and DIVIDE ... GIVING produce correct results."""
         vm = _run_cobol(
@@ -246,6 +259,7 @@ class TestMultiplyDivide:
 
 
 class TestComputeExpression:
+    @covers(CobolFeature.COMPUTE, CobolFeature.ARITHMETIC_EXPRESSION)
     def test_compute_expression(self):
         """COMPUTE WS-R = WS-A + WS-B * 2 should evaluate as 10 + (5*2) = 20."""
         vm = _run_cobol(
@@ -272,6 +286,7 @@ class TestComputeExpression:
 
 
 class TestMoveLiteral:
+    @covers(CobolFeature.MOVE)
     def test_move_literal(self):
         """MOVE literal to numeric field."""
         vm = _run_cobol(
@@ -292,6 +307,7 @@ class TestMoveLiteral:
 
 
 class TestIfElseBranch:
+    @covers(CobolFeature.IF_ELSE, CobolFeature.COMPARISON_OPERATORS)
     def test_if_else_branch(self):
         """IF/ELSE comparison sets correct field."""
         vm = _run_cobol(
@@ -318,6 +334,7 @@ class TestIfElseBranch:
 
 
 class TestPerformTimes:
+    @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_TIMES, CobolFeature.ADD)
     def test_perform_times(self):
         """PERFORM paragraph N TIMES increments counter correctly."""
         vm = _run_cobol(
@@ -341,6 +358,7 @@ class TestPerformTimes:
 
 
 class TestPerformUntil:
+    @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_UNTIL, CobolFeature.ADD)
     def test_perform_until(self):
         """PERFORM UNTIL condition loops correctly."""
         vm = _run_cobol(
@@ -364,6 +382,7 @@ class TestPerformUntil:
 
 
 class TestNestedPerform:
+    @covers(CobolFeature.PERFORM, CobolFeature.ADD)
     def test_nested_perform(self):
         """PERFORM paragraph calling another PERFORM accumulates correctly."""
         vm = _run_cobol(
@@ -391,6 +410,7 @@ class TestNestedPerform:
 
 
 class TestGotoSkipsParagraph:
+    @covers(CobolFeature.GO_TO, CobolFeature.ADD)
     def test_goto_skips_paragraph(self):
         """GO TO jumps over a paragraph, skipping its code."""
         vm = _run_cobol(
@@ -416,6 +436,7 @@ class TestGotoSkipsParagraph:
 
 
 class TestGotoExitsPerform:
+    @covers(CobolFeature.GO_TO, CobolFeature.PERFORM, CobolFeature.ADD)
     def test_goto_exits_perform(self):
         """GO TO from inside a PERFORMed paragraph exits the PERFORM."""
         vm = _run_cobol(
@@ -444,6 +465,7 @@ class TestGotoExitsPerform:
 
 
 class TestEvaluateWhen:
+    @covers(CobolFeature.EVALUATE, CobolFeature.COMPARISON_OPERATORS)
     def test_evaluate_when(self):
         """EVALUATE/WHEN (COBOL switch-case) selects correct branch."""
         vm = _run_cobol(
@@ -472,6 +494,7 @@ class TestEvaluateWhen:
 
 
 class TestPerformVarying:
+    @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_VARYING, CobolFeature.ADD)
     def test_perform_varying(self):
         """PERFORM VARYING accumulates a sum of 1+2+3 = 6."""
         vm = _run_cobol(
@@ -498,6 +521,7 @@ class TestPerformVarying:
 
 
 class TestStringMove:
+    @covers(CobolFeature.MOVE)
     def test_string_move(self):
         """MOVE alphanumeric literal to PIC X field stores EBCDIC bytes."""
         vm = _run_cobol(
@@ -520,6 +544,14 @@ class TestStringMove:
 
 
 class TestCombinedProgram:
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.SUBTRACT,
+        CobolFeature.IF_ELSE,
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.GO_TO,
+    )
     def test_combined_program(self):
         """Combined program with arithmetic, IF, PERFORM TIMES, and GO TO."""
         vm = _run_cobol(
@@ -569,6 +601,7 @@ class TestCombinedProgram:
 
 
 class TestInitialize:
+    @covers(CobolFeature.INITIALIZE, CobolFeature.PIC_CLAUSE)
     def test_initialize_resets_numeric_to_zero(self):
         """INITIALIZE resets a numeric PIC 9 field to zero."""
         vm = _run_cobol(
@@ -587,6 +620,7 @@ class TestInitialize:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 4) == 0
 
+    @covers(CobolFeature.INITIALIZE, CobolFeature.PIC_CLAUSE)
     def test_initialize_resets_alphanumeric_to_spaces(self):
         """INITIALIZE resets a PIC X field to EBCDIC spaces (0x40)."""
         vm = _run_cobol(
@@ -606,6 +640,7 @@ class TestInitialize:
         # All 5 bytes should be EBCDIC space (0x40)
         assert list(region[:5]) == [0x40] * 5
 
+    @covers(CobolFeature.INITIALIZE, CobolFeature.PIC_CLAUSE)
     def test_initialize_multiple_fields(self):
         """INITIALIZE resets multiple fields in one statement."""
         vm = _run_cobol(
@@ -628,6 +663,7 @@ class TestInitialize:
 
 
 class TestSetStatement:
+    @covers(CobolFeature.SET_TO)
     def test_set_to(self):
         """SET field TO literal assigns the value."""
         vm = _run_cobol(
@@ -646,6 +682,7 @@ class TestSetStatement:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 4) == 5
 
+    @covers(CobolFeature.SET_UP_BY)
     def test_set_up_by(self):
         """SET field UP BY increments the value."""
         vm = _run_cobol(
@@ -664,6 +701,7 @@ class TestSetStatement:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 4) == 13
 
+    @covers(CobolFeature.SET_DOWN_BY)
     def test_set_down_by(self):
         """SET field DOWN BY decrements the value."""
         vm = _run_cobol(
@@ -682,6 +720,7 @@ class TestSetStatement:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 4) == 6
 
+    @covers(CobolFeature.SET_TO, CobolFeature.SET_UP_BY)
     def test_set_to_then_up_by(self):
         """SET TO followed by SET UP BY accumulates correctly."""
         vm = _run_cobol(
@@ -703,6 +742,7 @@ class TestSetStatement:
 
 
 class TestSearchStatement:
+    @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_WHEN_CONDITIONS)
     def test_search_finds_match(self):
         """SEARCH WHEN condition finds the matching index."""
         vm = _run_cobol(
@@ -729,6 +769,7 @@ class TestSearchStatement:
         # WS-FOUND should be 1 (WHEN branch executed)
         assert _decode_zoned_unsigned(region, 4, 4) == 1
 
+    @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_AT_END)
     def test_search_at_end(self):
         """SEARCH AT END fires when no WHEN matches within bound."""
         vm = _run_cobol(
@@ -759,6 +800,7 @@ class TestSearchStatement:
 
 
 class TestInspectTallying:
+    @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying_all(self):
         """INSPECT TALLYING FOR ALL counts all occurrences of a character."""
         vm = _run_cobol(
@@ -782,6 +824,7 @@ class TestInspectTallying:
 
 
 class TestInspectReplacing:
+    @covers(CobolFeature.INSPECT_REPLACING)
     def test_inspect_replacing_all(self):
         """INSPECT REPLACING ALL substitutes all occurrences."""
         vm = _run_cobol(
@@ -804,6 +847,7 @@ class TestInspectReplacing:
 
 
 class TestCallStatement:
+    @covers(CobolFeature.CALL, CobolFeature.CALL_USING)
     def test_call_does_not_crash(self):
         """CALL to external program is symbolic — verify pipeline doesn't crash."""
         vm = _run_cobol(
@@ -829,6 +873,7 @@ class TestCallStatement:
 
 
 class TestStringStatement:
+    @covers(CobolFeature.STRING_VERB, CobolFeature.STRING_DELIMITED_BY)
     def test_string_concatenation(self):
         """STRING concatenates fields into target."""
         vm = _run_cobol(
@@ -855,6 +900,7 @@ class TestStringStatement:
 
 
 class TestUnstringStatement:
+    @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_DELIMITED_BY)
     def test_unstring_splits_by_space(self):
         """UNSTRING splits a string into parts by delimiter."""
         vm = _run_cobol(
@@ -883,6 +929,7 @@ class TestUnstringStatement:
 
 
 class TestElementaryOccursMove:
+    @covers(CobolFeature.MOVE, CobolFeature.OCCURS_FIXED, CobolFeature.SUBSCRIPT_ACCESS)
     def test_move_to_occurs_element(self):
         """MOVE 42 TO WS-TBL(2) — stores 42 in the second element."""
         vm = _run_cobol(
@@ -909,6 +956,7 @@ class TestElementaryOccursMove:
 
 
 class TestOccursFieldSubscript:
+    @covers(CobolFeature.MOVE, CobolFeature.OCCURS_FIXED, CobolFeature.SUBSCRIPT_ACCESS)
     def test_move_with_field_subscript(self):
         """MOVE 99 TO WS-TBL(WS-IDX) — field-based subscript."""
         vm = _run_cobol(
@@ -935,6 +983,13 @@ class TestOccursFieldSubscript:
 
 
 class TestOccursLoop:
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_VARYING,
+        CobolFeature.MOVE,
+        CobolFeature.OCCURS_FIXED,
+        CobolFeature.SUBSCRIPT_ACCESS,
+    )
     def test_perform_varying_with_occurs(self):
         """PERFORM VARYING I FROM 1 BY 1 UNTIL I > 3, MOVE I TO WS-TBL(I)."""
         vm = _run_cobol(
@@ -968,6 +1023,7 @@ class TestOccursLoop:
 
 
 class TestLevel88ConditionName:
+    @covers(CobolFeature.LEVEL_88_CONDITION, CobolFeature.IF_ELSE)
     def test_if_condition_name_single_value(self):
         """IF STATUS-ACTIVE expands to IF WS-STATUS = 'A' and takes the true branch."""
         vm = _run_cobol(
@@ -994,6 +1050,7 @@ class TestLevel88ConditionName:
         # WS-STATUS is 'A' which matches STATUS-ACTIVE, so WS-R = 1
         assert _decode_zoned_unsigned(region, 1, 4) == 1
 
+    @covers(CobolFeature.LEVEL_88_CONDITION, CobolFeature.IF_ELSE)
     def test_if_condition_name_false_branch(self):
         """IF STATUS-ACTIVE with WS-STATUS='I' takes the false branch."""
         vm = _run_cobol(
@@ -1019,6 +1076,7 @@ class TestLevel88ConditionName:
         # WS-STATUS is 'I' which does NOT match STATUS-ACTIVE, so WS-R = 2
         assert _decode_zoned_unsigned(region, 1, 4) == 2
 
+    @covers(CobolFeature.LEVEL_88_CONDITION, CobolFeature.IF_ELSE)
     def test_condition_name_multi_value_or(self):
         """IF VALID-CODE with VALUE 'A' 'B' 'C' matches when field is 'B'."""
         vm = _run_cobol(
@@ -1044,6 +1102,7 @@ class TestLevel88ConditionName:
         # WS-CODE is 'B' which matches one of 'A','B','C' → true → WS-R = 1
         assert _decode_zoned_unsigned(region, 1, 4) == 1
 
+    @covers(CobolFeature.LEVEL_88_CONDITION, CobolFeature.IF_ELSE)
     def test_condition_name_multi_value_no_match(self):
         """IF VALID-CODE with VALUE 'A' 'B' 'C' fails when field is 'X'."""
         vm = _run_cobol(
@@ -1071,6 +1130,7 @@ class TestLevel88ConditionName:
 
 
 class TestFillerDisambiguation:
+    @covers(CobolFeature.FILLER_FIELD, CobolFeature.GROUP_ITEM)
     def test_filler_fields_do_not_collide(self):
         """Multiple FILLER fields are disambiguated and don't crash layout building."""
         vm = _run_cobol(
@@ -1101,6 +1161,7 @@ class TestFillerDisambiguation:
             len(region) >= 15
         ), f"region must be >= 15 bytes for all fields + FILLERs, got {len(region)}"
 
+    @covers(CobolFeature.FILLER_FIELD, CobolFeature.GROUP_ITEM, CobolFeature.ADD)
     def test_filler_between_computed_fields(self):
         """FILLER padding doesn't affect arithmetic on surrounding fields."""
         vm = _run_cobol(
@@ -1129,6 +1190,11 @@ class TestFillerDisambiguation:
 
 
 class TestLevel88ThruRange:
+    @covers(
+        CobolFeature.LEVEL_88_CONDITION,
+        CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.IF_ELSE,
+    )
     def test_thru_range_match(self):
         """88 IN-RANGE VALUE 10 THRU 50 matches when field is 25."""
         vm = _run_cobol(
@@ -1154,6 +1220,11 @@ class TestLevel88ThruRange:
         # 25 is in [10, 50] → true → WS-R = 1
         assert _decode_zoned_unsigned(region, 4, 4) == 1
 
+    @covers(
+        CobolFeature.LEVEL_88_CONDITION,
+        CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.IF_ELSE,
+    )
     def test_thru_range_no_match(self):
         """88 IN-RANGE VALUE 10 THRU 50 fails when field is 75."""
         vm = _run_cobol(
@@ -1179,6 +1250,11 @@ class TestLevel88ThruRange:
         # 75 is NOT in [10, 50] → false → WS-R = 2
         assert _decode_zoned_unsigned(region, 4, 4) == 2
 
+    @covers(
+        CobolFeature.LEVEL_88_CONDITION,
+        CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.IF_ELSE,
+    )
     def test_thru_range_boundary_low(self):
         """88 IN-RANGE VALUE 10 THRU 50 matches at exact lower bound."""
         vm = _run_cobol(
@@ -1206,6 +1282,11 @@ class TestLevel88ThruRange:
 
 
 class TestLevel88MixedValues:
+    @covers(
+        CobolFeature.LEVEL_88_CONDITION,
+        CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.IF_ELSE,
+    )
     def test_mixed_discrete_and_thru(self):
         """88 SPECIAL VALUE 5 10 THRU 20 99 matches when field is 15."""
         vm = _run_cobol(
@@ -1231,6 +1312,11 @@ class TestLevel88MixedValues:
         # 15 is in [10, 20] range → true → WS-R = 1
         assert _decode_zoned_unsigned(region, 4, 4) == 1
 
+    @covers(
+        CobolFeature.LEVEL_88_CONDITION,
+        CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.IF_ELSE,
+    )
     def test_mixed_discrete_match(self):
         """88 SPECIAL VALUE 5 10 THRU 20 99 matches discrete value 99."""
         vm = _run_cobol(
@@ -1256,6 +1342,11 @@ class TestLevel88MixedValues:
         # 99 matches discrete value → true → WS-R = 1
         assert _decode_zoned_unsigned(region, 4, 4) == 1
 
+    @covers(
+        CobolFeature.LEVEL_88_CONDITION,
+        CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.IF_ELSE,
+    )
     def test_mixed_no_match(self):
         """88 SPECIAL VALUE 5 10 THRU 20 99 fails when field is 30."""
         vm = _run_cobol(
@@ -1283,6 +1374,11 @@ class TestLevel88MixedValues:
 
 
 class TestLevel88InEvaluate:
+    @covers(
+        CobolFeature.EVALUATE,
+        CobolFeature.EVALUATE_WHEN_OTHER,
+        CobolFeature.LEVEL_88_CONDITION,
+    )
     def test_evaluate_true_with_condition_name(self):
         """EVALUATE TRUE WHEN STATUS-ACTIVE selects the condition-name branch."""
         vm = _run_cobol(
@@ -1310,6 +1406,11 @@ class TestLevel88InEvaluate:
         # WS-STATUS is 'A' → STATUS-ACTIVE is true → WS-R = 1
         assert _decode_zoned_unsigned(region, 1, 4) == 1
 
+    @covers(
+        CobolFeature.EVALUATE,
+        CobolFeature.EVALUATE_WHEN_OTHER,
+        CobolFeature.LEVEL_88_CONDITION,
+    )
     def test_evaluate_true_second_branch(self):
         """EVALUATE TRUE WHEN ... selects the second condition-name branch."""
         vm = _run_cobol(
@@ -1339,6 +1440,12 @@ class TestLevel88InEvaluate:
 
 
 class TestLevel88InPerformUntil:
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_UNTIL,
+        CobolFeature.LEVEL_88_CONDITION,
+        CobolFeature.ADD,
+    )
     def test_perform_until_condition_name(self):
         """PERFORM ... UNTIL DONE-FLAG loops until the condition name is true."""
         vm = _run_cobol(
@@ -1365,6 +1472,11 @@ class TestLevel88InPerformUntil:
         assert _decode_zoned_unsigned(region, 0, 4) == 5
         assert _decode_zoned_unsigned(region, 4, 4) == 15
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_UNTIL,
+        CobolFeature.LEVEL_88_CONDITION,
+    )
     def test_perform_until_condition_name_already_true(self):
         """PERFORM ... UNTIL DONE-FLAG does not execute when already true."""
         vm = _run_cobol(
@@ -1393,6 +1505,7 @@ class TestLevel88InPerformUntil:
 
 
 class TestBlankWhenZero:
+    @covers(CobolFeature.BLANK_WHEN_ZERO)
     def test_blank_when_zero_with_zero_value(self):
         """BLANK WHEN ZERO field with VALUE 0 should be all EBCDIC spaces (0x40)."""
         vm = _run_cobol(
@@ -1414,6 +1527,7 @@ class TestBlankWhenZero:
         # WS-QTY has no BLANK WHEN ZERO → normal zoned decimal zeros (0xF0)
         assert _decode_zoned_unsigned(region, 4, 4) == 0
 
+    @covers(CobolFeature.BLANK_WHEN_ZERO)
     def test_blank_when_zero_with_nonzero_value(self):
         """BLANK WHEN ZERO field with non-zero VALUE encodes normally."""
         vm = _run_cobol(
@@ -1432,6 +1546,7 @@ class TestBlankWhenZero:
         # Non-zero → normal zoned encoding, decodes to 42
         assert _decode_zoned_unsigned(region, 0, 4) == 42
 
+    @covers(CobolFeature.BLANK_WHEN_ZERO, CobolFeature.MOVE)
     def test_blank_when_zero_after_move_to_zero(self):
         """BLANK WHEN ZERO field becomes spaces after MOVE 0 at runtime."""
         vm = _run_cobol(
@@ -1455,6 +1570,7 @@ class TestBlankWhenZero:
 class TestBareStatements:
     """Bare statements (no enclosing paragraph) at division and section level."""
 
+    @covers(CobolFeature.COMPUTE, CobolFeature.BARE_STATEMENTS)
     def test_division_level_bare_compute(self):
         """COMPUTE directly under PROCEDURE DIVISION (no paragraph) executes correctly."""
         vm = _run_cobol(
@@ -1472,6 +1588,7 @@ class TestBareStatements:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 3) == 150
 
+    @covers(CobolFeature.COMPUTE, CobolFeature.BARE_STATEMENTS)
     def test_section_level_bare_compute(self):
         """COMPUTE directly under a SECTION (no paragraph) executes correctly."""
         vm = _run_cobol(
@@ -1490,6 +1607,7 @@ class TestBareStatements:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 3) == 150
 
+    @covers(CobolFeature.COMPUTE, CobolFeature.PERFORM, CobolFeature.BARE_STATEMENTS)
     def test_mixed_bare_and_paragraph(self):
         """Division-level bare statement followed by a paragraph both execute."""
         vm = _run_cobol(
@@ -1514,6 +1632,7 @@ class TestBareStatements:
 
 
 class TestDataLayout:
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_data_layout_present_after_execution(self):
         """run() attaches data_layout with correct field entries to VMState."""
         vm = _run_cobol(
@@ -1544,6 +1663,7 @@ class TestDataLayout:
 class TestRedefines:
     """COBOL REDEFINES: multiple fields sharing the same byte range."""
 
+    @covers(CobolFeature.REDEFINES_CLAUSE)
     def test_simple_redefines_numeric_value_shared_bytes(self):
         """Numeric VALUE init bytes are accessible at the REDEFINES overlay offset."""
         vm = _run_cobol(
@@ -1566,6 +1686,7 @@ class TestRedefines:
         expected_zoned = [0xF1, 0xF2, 0xF3, 0xF4]
         assert list(region[0:4]) == expected_zoned
 
+    @covers(CobolFeature.REDEFINES_CLAUSE)
     def test_simple_redefines_data_layout_offset(self):
         """REDEFINES field should share the same offset as the original in data_layout."""
         vm = _run_cobol(
@@ -1587,6 +1708,7 @@ class TestRedefines:
         region = _first_region(vm)
         assert len(region) == 4
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.GROUP_ITEM)
     def test_group_redefines_children_initialised(self):
         """Group item children VALUE clauses populate shared byte range."""
         vm = _run_cobol(
@@ -1614,6 +1736,7 @@ class TestRedefines:
         # WS-DATE-NUM redefines the same 8 bytes — reading as one number.
         assert _decode_zoned_unsigned(region, 0, 8) == 20260322
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.GROUP_ITEM, CobolFeature.MOVE)
     def test_group_redefines_move_composite(self):
         """MOVE group REDEFINES composite to a separate result field."""
         vm = _run_cobol(
@@ -1638,6 +1761,7 @@ class TestRedefines:
         # WS-RESULT at offset 8 should hold 20260322 after MOVE.
         assert _decode_zoned_unsigned(region, 8, 8) == 20260322
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.GROUP_ITEM, CobolFeature.MOVE)
     def test_multiple_redefines_move_through_children(self):
         """Multiple REDEFINES: MOVE through group REDEFINES children."""
         vm = _run_cobol(
@@ -1668,6 +1792,7 @@ class TestRedefines:
         assert list(region[8:12]) == expected_part1
         assert list(region[12:16]) == expected_part2
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.GROUP_ITEM)
     def test_multiple_redefines_original_bytes_intact(self):
         """Multiple REDEFINES: original field VALUE bytes are stored correctly."""
         vm = _run_cobol(
@@ -1691,6 +1816,7 @@ class TestRedefines:
         expected = [0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8]
         assert list(region[0:8]) == expected
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.GROUP_ITEM)
     def test_multiple_redefines_data_layout_offsets(self):
         """Multiple REDEFINES fields should all share offset 0 in data_layout."""
         vm = _run_cobol(
@@ -1717,6 +1843,7 @@ class TestRedefines:
         region = _first_region(vm)
         assert len(region) == 8
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.MOVE)
     def test_redefines_numeric_as_alphanumeric_move(self):
         """Numeric VALUE init, MOVE through alphanumeric REDEFINES to output."""
         vm = _run_cobol(
@@ -1739,6 +1866,7 @@ class TestRedefines:
         expected_zoned = [0xF1, 0xF2, 0xF3, 0xF4]
         assert list(region[4:8]) == expected_zoned
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.ADD)
     def test_redefines_with_arithmetic(self):
         """Arithmetic through original field, verify bytes are updated in overlay."""
         vm = _run_cobol(
@@ -1763,6 +1891,7 @@ class TestRedefines:
         expected = [0xF0, 0xF0, 0xF4, 0xF2]
         assert list(region[0:4]) == expected
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.OCCURS_FIXED, CobolFeature.MOVE)
     def test_redefines_with_occurs(self):
         """OCCURS array redefined as flat field — MOVE flat reads all elements."""
         vm = _run_cobol(
@@ -1789,6 +1918,7 @@ class TestRedefines:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 8, 8) == 10203040
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.GROUP_ITEM, CobolFeature.MOVE)
     def test_chained_redefines(self):
         """Third field REDEFINES the original — group children read correct bytes."""
         vm = _run_cobol(
@@ -1813,6 +1943,7 @@ class TestRedefines:
         # WS-OUT at offset 4: EBCDIC "AB" = 0xC1 0xC2
         assert list(region[4:6]) == [0xC1, 0xC2]
 
+    @covers(CobolFeature.REDEFINES_CLAUSE, CobolFeature.MOVE)
     def test_redefines_size_mismatch(self):
         """REDEFINES field smaller than original — reads partial overlay."""
         vm = _run_cobol(
@@ -1834,6 +1965,12 @@ class TestRedefines:
         # WS-OUT at offset 8: first 4 bytes "ABCD" = C1 C2 C3 C4
         assert list(region[8:12]) == [0xC1, 0xC2, 0xC3, 0xC4]
 
+    @covers(
+        CobolFeature.REDEFINES_CLAUSE,
+        CobolFeature.GROUP_ITEM,
+        CobolFeature.MOVE,
+        CobolFeature.ADD,
+    )
     def test_redefines_arithmetic_then_move_composite(self):
         """Modify group child, then MOVE composite REDEFINES to result."""
         vm = _run_cobol(
@@ -1875,6 +2012,7 @@ def _run_cobol_with_io(lines: list[str], io_provider, max_steps: int = 1000):
 
 
 class TestAcceptStatement:
+    @covers(CobolFeature.ACCEPT, CobolFeature.IO_PROVIDER)
     def test_accept_from_console(self):
         """ACCEPT reads a value from the stub provider into a field."""
         from interpreter.cobol.io_provider import StubIOProvider
@@ -1916,6 +2054,7 @@ def _file_section_preamble(
 
 
 class TestOpenCloseStatement:
+    @covers(CobolFeature.OPEN, CobolFeature.CLOSE, CobolFeature.IO_PROVIDER)
     def test_open_close_dispatches(self):
         """OPEN/CLOSE dispatch to StubIOProvider and track file state."""
         from interpreter.cobol.io_provider import StubIOProvider
@@ -1943,6 +2082,13 @@ class TestOpenCloseStatement:
 
 
 class TestWriteStatement:
+    @covers(
+        CobolFeature.WRITE,
+        CobolFeature.WRITE_FROM,
+        CobolFeature.OPEN,
+        CobolFeature.CLOSE,
+        CobolFeature.IO_PROVIDER,
+    )
     def test_write_dispatches(self):
         """WRITE dispatches to StubIOProvider."""
         from interpreter.cobol.io_provider import StubIOProvider
@@ -1969,6 +2115,13 @@ class TestWriteStatement:
 
 
 class TestReadStatement:
+    @covers(
+        CobolFeature.READ,
+        CobolFeature.READ_INTO,
+        CobolFeature.OPEN,
+        CobolFeature.CLOSE,
+        CobolFeature.IO_PROVIDER,
+    )
     def test_read_dispatches(self):
         """READ dispatches to StubIOProvider and transfers data into a field."""
         from interpreter.cobol.io_provider import StubIOProvider
@@ -1994,6 +2147,12 @@ class TestReadStatement:
 
 
 class TestStartStatement:
+    @covers(
+        CobolFeature.START,
+        CobolFeature.OPEN,
+        CobolFeature.CLOSE,
+        CobolFeature.IO_PROVIDER,
+    )
     def test_start_dispatches(self):
         """START dispatches to StubIOProvider without crashing."""
         from interpreter.cobol.io_provider import StubIOProvider
@@ -2020,6 +2179,12 @@ class TestStartStatement:
 
 
 class TestDeleteStatement:
+    @covers(
+        CobolFeature.DELETE_RECORD,
+        CobolFeature.OPEN,
+        CobolFeature.CLOSE,
+        CobolFeature.IO_PROVIDER,
+    )
     def test_delete_dispatches(self):
         """DELETE dispatches to StubIOProvider without crashing."""
         from interpreter.cobol.io_provider import StubIOProvider
@@ -2046,6 +2211,12 @@ class TestDeleteStatement:
 
 
 class TestRewriteStatement:
+    @covers(
+        CobolFeature.REWRITE,
+        CobolFeature.OPEN,
+        CobolFeature.CLOSE,
+        CobolFeature.IO_PROVIDER,
+    )
     def test_rewrite_dispatches(self):
         """REWRITE dispatches to StubIOProvider without crashing."""
         from interpreter.cobol.io_provider import StubIOProvider
@@ -2077,6 +2248,7 @@ class TestRewriteStatement:
 
 
 class TestCancelSmoke:
+    @covers(CobolFeature.CANCEL)
     def test_cancel_does_not_crash(self):
         """CANCEL is a no-op — verify the program completes normally."""
         vm = _run_cobol(
@@ -2098,6 +2270,7 @@ class TestCancelSmoke:
 
 
 class TestAlterGoto:
+    @covers(CobolFeature.ALTER, CobolFeature.GO_TO)
     def test_alter_compiles_and_runs(self):
         """ALTER statement compiles and runs — smoke test (runtime redirect not yet supported)."""
         vm = _run_cobol(
@@ -2123,6 +2296,7 @@ class TestAlterGoto:
 
 
 class TestEntryPoint:
+    @covers(CobolFeature.ENTRY)
     def test_entry_compiles_and_runs(self):
         """ENTRY statement compiles without crashing — smoke test."""
         vm = _run_cobol(
@@ -2181,6 +2355,7 @@ def _decode_comp3(region: list[int], offset: int, length: int) -> int:
 
 
 class TestUsageComp:
+    @covers(CobolFeature.USAGE_COMP, CobolFeature.ADD)
     def test_comp_binary_arithmetic(self):
         """PIC 9(5) COMP — binary field stores ADD result correctly."""
         vm = _run_cobol(
@@ -2208,6 +2383,7 @@ class TestUsageComp:
 
 
 class TestUsageComp3:
+    @covers(CobolFeature.USAGE_COMP_3, CobolFeature.ADD)
     def test_comp3_packed_arithmetic(self):
         """PIC S9(5) COMP-3 — packed decimal stores COMPUTE result."""
         vm = _run_cobol(
@@ -2234,6 +2410,7 @@ class TestUsageComp3:
 
 
 class TestUsageComp1:
+    @covers(CobolFeature.USAGE_COMP_1, CobolFeature.COMPUTE)
     def test_comp1_float_arithmetic(self):
         """COMP-1 single-precision float field — verify program completes."""
         vm = _run_cobol(
@@ -2257,6 +2434,7 @@ class TestUsageComp1:
 
 
 class TestUsageComp2:
+    @covers(CobolFeature.USAGE_COMP_2, CobolFeature.COMPUTE)
     def test_comp2_double_arithmetic(self):
         """COMP-2 double-precision float field — verify program completes."""
         vm = _run_cobol(
@@ -2280,6 +2458,7 @@ class TestUsageComp2:
 
 
 class TestUsageDisplay:
+    @covers(CobolFeature.USAGE_DISPLAY, CobolFeature.ADD)
     def test_display_zoned_decimal(self):
         """PIC 9(5) DISPLAY (default USAGE) — explicit test for zoned decimal."""
         vm = _run_cobol(
@@ -2306,6 +2485,7 @@ class TestUsageDisplay:
 
 
 class TestSignSeparate:
+    @covers(CobolFeature.SIGN_CLAUSE)
     def test_sign_leading_separate(self):
         """PIC S9(3) SIGN IS LEADING SEPARATE — sign byte + digits."""
         vm = _run_cobol(
@@ -2332,6 +2512,7 @@ class TestSignSeparate:
 
 
 class TestJustifiedRight:
+    @covers(CobolFeature.JUSTIFIED_CLAUSE, CobolFeature.MOVE)
     def test_justified_right_alignment(self):
         """PIC X(10) JUSTIFIED RIGHT — short value right-aligned with spaces."""
         vm = _run_cobol(
@@ -2356,6 +2537,7 @@ class TestJustifiedRight:
 
 
 class TestRenameAlias:
+    @covers(CobolFeature.RENAMES_CLAUSE)
     def test_renames_alias(self):
         """RENAMES (level 66) aliases a range of fields — smoke test."""
         vm = _run_cobol(
