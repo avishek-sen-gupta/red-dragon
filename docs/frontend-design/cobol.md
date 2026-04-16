@@ -43,6 +43,7 @@ The pipeline has three layers, each independently testable:
 |------|---------|
 | `cobol_frontend.py` | Main frontend: DATA DIVISION allocation, PROCEDURE DIVISION lowering |
 | `cobol_statements.py` | Typed statement hierarchy — 25 frozen dataclasses + union type |
+| `features.py` | `CobolFeature` enum — 95 semantic features; used with `@covers(CobolFeature.X)` test decorators |
 | `io_provider.py` | Injectable I/O provider: `CobolIOProvider` ABC, `NullIOProvider`, `StubIOProvider` |
 | `cobol_expression.py` | Recursive-descent expression parser for COMPUTE |
 | `cobol_parser.py` | Subprocess bridge to ProLeap JAR |
