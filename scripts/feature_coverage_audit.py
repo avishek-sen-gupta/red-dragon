@@ -49,6 +49,7 @@ class FeatureModule:
     language: str
     enum_class_name: str
     all_members: frozenset[str]
+    descriptions: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,7 @@ class LanguageCoverageResult:
     uncovered_count: int
     covered: list[str]
     uncovered: list[str]
+    descriptions: dict[str, str]
 
 
 # ---------------------------------------------------------------------------
@@ -85,10 +87,14 @@ def _load_feature_module(path: Path, module_path: str) -> FeatureModule:
     if not enum_classes:
         raise ValueError(f"No Enum subclass found in {module_path}")
     enum_class = enum_classes[0]
+    descriptions = {
+        m.name: m.value if isinstance(m.value, str) else "" for m in enum_class
+    }
     return FeatureModule(
         language=language,
         enum_class_name=enum_class.__name__,
         all_members=frozenset(m.name for m in enum_class),
+        descriptions=descriptions,
     )
 
 
@@ -167,6 +173,7 @@ def audit_language(
         uncovered_count=len(uncovered),
         covered=covered,
         uncovered=uncovered,
+        descriptions=module.descriptions,
     )
 
 
@@ -226,7 +233,11 @@ def generate_gaps_doc(results: Sequence[LanguageCoverageResult]) -> str:
         lines.append(f"### {r.language}")
         lines.append("")
         for feature in r.uncovered:
-            lines.append(f"- `{feature}`")
+            desc = r.descriptions.get(feature, "")
+            if desc:
+                lines.append(f"- `{feature}` — {desc}")
+            else:
+                lines.append(f"- `{feature}`")
         lines.append("")
     if all(r.uncovered_count == 0 for r in results):
         lines.append("_All features covered — no gaps._")
