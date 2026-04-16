@@ -18,8 +18,10 @@ class CSharpFeature(Enum):
     VARIABLE_DECLARATION = auto()
     FUNCTION_DECLARATION = auto()
     CLASS = auto()
+    STRUCT = auto()
     INTERFACE = auto()
     RECORD = auto()
+    RECORD_STRUCT = auto()
     ENUM = auto()
     DELEGATE = auto()
     LOCAL_FUNCTION = auto()
@@ -27,12 +29,15 @@ class CSharpFeature(Enum):
     # Fields and Properties
     FIELD = auto()
     PROPERTY = auto()
+    PROPERTY_ACCESSOR = auto()
     EVENT_FIELD = auto()
     EVENT = auto()
 
     # Expressions
     ARITHMETIC = auto()
     COMPARISON = auto()
+    PREFIX_UNARY = auto()
+    POSTFIX_UNARY = auto()
     FUNCTION_CALL = auto()
     METHOD_CALL = auto()
     MEMBER_ACCESS = auto()
@@ -42,16 +47,22 @@ class CSharpFeature(Enum):
     TUPLE = auto()
     STRING_INTERPOLATION = auto()
     ARRAY_CREATION = auto()
+    IMPLICIT_ARRAY_CREATION = auto()
+    INITIALIZER = auto()
+    CAST = auto()
+    TERNARY = auto()
     CONDITIONAL_ACCESS = auto()
     TYPEOF = auto()
     IS_CHECK = auto()
     IS_PATTERN = auto()
+    AS_CAST = auto()
     SIZEOF = auto()
     DEFAULT = auto()
     RANGE = auto()
     AWAIT = auto()
     ANONYMOUS_OBJECT = auto()
     WITH_EXPRESSION = auto()
+    ELEMENT_ACCESS = auto()
 
     # Control flow
     IF_ELSE = auto()
@@ -64,6 +75,7 @@ class CSharpFeature(Enum):
     BREAK_CONTINUE = auto()
     RETURN = auto()
     THROW = auto()
+    THROW_EXPRESSION = auto()
     TRY_CATCH = auto()
     GOTO = auto()
     LABELED_STATEMENT = auto()
@@ -72,9 +84,11 @@ class CSharpFeature(Enum):
     LOCK = auto()
     USING = auto()
     CHECKED = auto()
+    UNCHECKED = auto()
     FIXED = auto()
     YIELD = auto()
     ASSIGNMENT = auto()
+    GLOBAL_STATEMENT = auto()
 
     # Patterns
     DECLARATION_PATTERN = auto()
@@ -85,13 +99,22 @@ class CSharpFeature(Enum):
     NOT_PATTERN = auto()
     LIST_PATTERN = auto()
     RELATIONAL_PATTERN = auto()
+    RECURSIVE_PATTERN = auto()
 
     # Namespaces and Imports
+    NAMESPACE = auto()
     FILE_SCOPED_NAMESPACE = auto()
+
+    # LINQ
+    LINQ_QUERY = auto()
+    LINQ_FROM_CLAUSE = auto()
+    LINQ_SELECT_CLAUSE = auto()
+    LINQ_WHERE_CLAUSE = auto()
 
     # Special features
     OUT_VAR_DECLARATION = auto()
     REF_PARAM = auto()
+    REF_EXPRESSION = auto()
     IN_PARAM = auto()
     OUT_PARAM = auto()
     REF_LOCAL = auto()
@@ -99,4 +122,6 @@ class CSharpFeature(Enum):
     GENERIC_TYPE = auto()
     EMPTY_STATEMENT = auto()
     VERBATIM_STRING = auto()
-    THROW_EXPRESSION = auto()
+    CONSTRUCTOR = auto()
+    CONSTRUCTOR_CHAINING = auto()
+    CHECKED_EXPRESSION = auto()

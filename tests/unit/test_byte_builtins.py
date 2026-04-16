@@ -326,7 +326,13 @@ class TestMakeList:
     def test_make_list(self):
         assert _builtin_make_list(
             [typed_from_runtime(5), typed_from_runtime(0)], None
-        ).value == [0, 0, 0, 0, 0]
+        ).value == [
+            0,
+            0,
+            0,
+            0,
+            0,
+        ]
 
     def test_make_list_with_fill(self):
         assert _builtin_make_list(

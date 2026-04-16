@@ -52,6 +52,8 @@ from interpreter.cobol.cobol_statements import (
     DeleteStatement,
 )
 from interpreter.ir import Opcode
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 
 class _FakeParser:
@@ -71,6 +73,11 @@ def _find_opcodes(
 
 
 class TestDataDivisionLowering:
+    @covers(
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_alloc_region_size(self):
         asg = CobolASG(
             data_fields=[
@@ -91,6 +98,12 @@ class TestDataDivisionLowering:
         ]
         assert size_const[0].value == 5  # 5 bytes for 9(5)
 
+    @covers(
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_initial_value_encoding(self):
         asg = CobolASG(
             data_fields=[
@@ -115,6 +128,11 @@ class TestDataDivisionLowering:
             isinstance(ops, list) and len(ops) >= 2 for ops in write_bytes
         ), f"WRITE_REGION should have region + data operands, got {write_bytes}"
 
+    @covers(
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.FRONTEND_IDEMPOTENCY,
+    )
     def test_entry_label_emitted(self):
         asg = CobolASG(
             data_fields=[
@@ -130,6 +148,12 @@ class TestDataDivisionLowering:
         label_names = [str(inst.label) for inst in labels]
         assert "entry" in label_names
 
+    @covers(
+        CobolFeature.GROUP_ITEM,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
     def test_group_field_total_bytes(self):
         asg = CobolASG(
             data_fields=[
@@ -161,6 +185,9 @@ class TestDataDivisionLowering:
         ]
         assert size_const[0].value == 8  # 5 + 3
 
+    @covers(
+        CobolFeature.PIC_CLAUSE, CobolFeature.VALUE_CLAUSE, CobolFeature.USAGE_DISPLAY
+    )
     def test_multiple_fields_with_values(self):
         asg = CobolASG(
             data_fields=[
@@ -202,6 +229,7 @@ class TestProcedureDivisionLowering:
         frontend = CobolFrontend(_FakeParser(asg))
         return frontend.lower(b"")
 
+    @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_move_literal_to_field(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -213,6 +241,12 @@ class TestProcedureDivisionLowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 1
 
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_move_field_to_field(self):
         fields = [
             CobolField(
@@ -234,6 +268,13 @@ class TestProcedureDivisionLowering:
         assert len(loads) >= 1
         assert len(writes) >= 1
 
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_add_produces_binop(self):
         """ADD statement produces BINOP + and stores result to target field."""
         fields = [
@@ -252,6 +293,13 @@ class TestProcedureDivisionLowering:
         stores = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(stores) >= 1, "Expected WRITE_REGION to store ADD result"
 
+    @covers(
+        CobolFeature.SUBTRACT,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_subtract_produces_binop(self):
         """SUBTRACT statement produces BINOP - and stores result to target field."""
         fields = [
@@ -270,6 +318,14 @@ class TestProcedureDivisionLowering:
         stores = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(stores) >= 1, "Expected WRITE_REGION to store SUBTRACT result"
 
+    @covers(
+        CobolFeature.IF_ELSE,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_if_produces_branch_if(self):
         fields = [
             CobolField(
@@ -289,6 +345,14 @@ class TestProcedureDivisionLowering:
         branches = _find_opcodes(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 1
 
+    @covers(
+        CobolFeature.IF_ELSE,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_if_else_produces_two_branches(self):
         fields = [
             CobolField(
@@ -320,6 +384,14 @@ class TestProcedureDivisionLowering:
         assert any("if_false" in l for l in label_names)
         assert any("if_end" in l for l in label_names)
 
+    @covers(
+        CobolFeature.IF_ELSE,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_if_without_else_has_empty_false_branch(self):
         fields = [
             CobolField(
@@ -339,6 +411,7 @@ class TestProcedureDivisionLowering:
         print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
         assert len(print_calls) == 1
 
+    @covers(CobolFeature.DISPLAY, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_display_literal(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -350,6 +423,12 @@ class TestProcedureDivisionLowering:
         print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
         assert len(print_calls) >= 1
 
+    @covers(
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_display_field(self):
         fields = [
             CobolField(
@@ -366,6 +445,7 @@ class TestProcedureDivisionLowering:
         print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
         assert len(print_calls) >= 1
 
+    @covers(CobolFeature.STOP_RUN, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_stop_run_produces_return(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -376,6 +456,7 @@ class TestProcedureDivisionLowering:
         returns = _find_opcodes(instructions, Opcode.RETURN)
         assert len(returns) >= 1
 
+    @covers(CobolFeature.GO_TO, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_goto_produces_branch(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -391,6 +472,7 @@ class TestProcedureDivisionLowering:
         ]
         assert len(goto_branches) >= 1
 
+    @covers(CobolFeature.PERFORM, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_perform_produces_set_continuation_and_branch(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -411,6 +493,7 @@ class TestProcedureDivisionLowering:
         ]
         assert len(perform_branches) >= 1
 
+    @covers(CobolFeature.STOP_RUN, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_paragraph_boundary_emits_resume_continuation(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -429,6 +512,12 @@ class TestProcedureDivisionLowering:
         resume_names = [inst.operands[0] for inst in resume_conts]
         assert ContinuationName("para_MAIN_end") in resume_names
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_THRU,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_perform_thru_sets_continuation_at_thru_endpoint(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -449,6 +538,7 @@ class TestProcedureDivisionLowering:
         ]
         assert len(perform_branches) >= 1
 
+    @covers(CobolFeature.STOP_RUN, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_paragraph_label_emitted(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -482,6 +572,14 @@ class TestComputeLowering:
         frontend = CobolFrontend(_FakeParser(asg))
         return frontend.lower(b"")
 
+    @covers(
+        CobolFeature.COMPUTE,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.GIVING_CLAUSE,
+    )
     def test_compute_simple_addition(self):
         fields = [
             CobolField(
@@ -514,6 +612,14 @@ class TestComputeLowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 1
 
+    @covers(
+        CobolFeature.COMPUTE,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.GIVING_CLAUSE,
+    )
     def test_compute_with_precedence(self):
         """COMPUTE WS-RESULT = WS-A + WS-B * 2 → WS-A + (WS-B * 2)."""
         fields = [
@@ -545,6 +651,15 @@ class TestComputeLowering:
         # Last two arithmetic BINOPs are from the expression: * (higher prec) then +
         assert arith_ops[-2:] == ["*", "+"]
 
+    @covers(
+        CobolFeature.COMPUTE,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PARENTHESIZED_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.GIVING_CLAUSE,
+    )
     def test_compute_with_parentheses(self):
         """COMPUTE WS-RESULT = (WS-A + WS-B) * 3 → + before *."""
         fields = [
@@ -576,6 +691,14 @@ class TestComputeLowering:
         # Last two arithmetic BINOPs: + (inside parens, evaluated first) then *
         assert arith_ops[-2:] == ["+", "*"]
 
+    @covers(
+        CobolFeature.COMPUTE,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.GIVING_CLAUSE,
+    )
     def test_compute_multiple_targets(self):
         """COMPUTE writes result to all target fields."""
         fields = [
@@ -609,6 +732,14 @@ class TestComputeLowering:
             6 in write_offsets
         ), f"Expected write at offset 6 (WS-D), got offsets: {write_offsets}"
 
+    @covers(
+        CobolFeature.COMPUTE,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+        CobolFeature.GIVING_CLAUSE,
+    )
     def test_compute_literal_expression(self):
         """COMPUTE with only literals (no field references)."""
         fields = [
@@ -645,6 +776,14 @@ class TestPerformLoopLowering:
         frontend = CobolFrontend(_FakeParser(asg))
         return frontend.lower(b"")
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.PERFORM_INLINE,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_perform_times_inline_emits_counter_loop(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -671,6 +810,13 @@ class TestPerformLoopLowering:
         branch_ifs = _find_opcodes(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) >= 1
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_TIMES,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_perform_times_procedure_emits_set_continuation_in_loop(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -697,6 +843,17 @@ class TestPerformLoopLowering:
         store_vars = _find_opcodes(instructions, Opcode.STORE_VAR)
         assert len(store_vars) >= 1
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_UNTIL,
+        CobolFeature.PERFORM_TEST_BEFORE,
+        CobolFeature.PERFORM_INLINE,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_perform_until_test_before_condition_first(self):
         fields = [
             CobolField(
@@ -739,6 +896,17 @@ class TestPerformLoopLowering:
             f"must precede first body (idx {print_indices[0]})"
         )
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_UNTIL,
+        CobolFeature.PERFORM_TEST_AFTER,
+        CobolFeature.PERFORM_INLINE,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_perform_until_test_after_body_first(self):
         fields = [
             CobolField(
@@ -775,6 +943,17 @@ class TestPerformLoopLowering:
             f"must precede first condition (idx {branch_if_indices[0]})"
         )
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_VARYING,
+        CobolFeature.PERFORM_INLINE,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_perform_varying_inline_emits_init_and_increment(self):
         fields = [
             CobolField(
@@ -814,6 +993,13 @@ class TestPerformLoopLowering:
 class TestSectionPerform:
     """Tests for section-level PERFORM."""
 
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.DISPLAY,
+        CobolFeature.STOP_RUN,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_perform_section_branches_to_section_label(self):
         from interpreter.cobol.asg_types import CobolSection
 
@@ -862,6 +1048,7 @@ class TestSectionPerform:
         ]
         assert len(section_conts) >= 1
 
+    @covers(CobolFeature.STOP_RUN, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_section_emits_end_resume_continuation(self):
         from interpreter.cobol.asg_types import CobolSection
 
@@ -905,6 +1092,7 @@ class TestTier1Lowering:
         frontend = CobolFrontend(_FakeParser(asg))
         return frontend.lower(b"")
 
+    @covers(CobolFeature.CONTINUE, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_continue_emits_nothing(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -917,6 +1105,7 @@ class TestTier1Lowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) == 0
 
+    @covers(CobolFeature.EXIT, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_exit_emits_nothing(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -927,6 +1116,12 @@ class TestTier1Lowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) == 0
 
+    @covers(
+        CobolFeature.INITIALIZE,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_initialize_numeric_field(self):
         fields = [
             CobolField(
@@ -945,6 +1140,12 @@ class TestTier1Lowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 2  # initial VALUE + INITIALIZE
 
+    @covers(
+        CobolFeature.INITIALIZE,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_initialize_alphanumeric_field(self):
         fields = [
             CobolField(
@@ -962,6 +1163,12 @@ class TestTier1Lowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 2  # initial VALUE + INITIALIZE
 
+    @covers(
+        CobolFeature.INITIALIZE,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_initialize_multiple_fields(self):
         fields = [
             CobolField(
@@ -982,6 +1189,12 @@ class TestTier1Lowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 4  # 2 initial values + 2 INITIALIZE resets
 
+    @covers(
+        CobolFeature.SET_TO,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_set_to_produces_write(self):
         fields = [
             CobolField(
@@ -999,6 +1212,13 @@ class TestTier1Lowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 2  # initial VALUE + SET TO
 
+    @covers(
+        CobolFeature.SET_UP_BY,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_set_by_up_produces_binop_plus(self):
         fields = [
             CobolField(
@@ -1019,6 +1239,13 @@ class TestTier1Lowering:
         plus_ops = [b for b in binops if b.operands[0] == "+"]
         assert len(plus_ops) >= 1
 
+    @covers(
+        CobolFeature.SET_DOWN_BY,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_set_by_down_produces_binop_minus(self):
         fields = [
             CobolField(
@@ -1057,6 +1284,13 @@ class TestTier2Lowering:
         frontend = CobolFrontend(_FakeParser(asg))
         return frontend.lower(b"")
 
+    @covers(
+        CobolFeature.STRING_VERB,
+        CobolFeature.STRING_DELIMITED_BY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_string_produces_write_to_target(self):
         fields = [
             CobolField(
@@ -1101,6 +1335,13 @@ class TestTier2Lowering:
             len(writes) >= 3
         ), f"expected >= 3 WRITE_REGION (2 init + STRING), got {len(writes)}"
 
+    @covers(
+        CobolFeature.STRING_VERB,
+        CobolFeature.STRING_DELIMITED_BY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_string_with_delimiter_calls_split(self):
         fields = [
             CobolField(
@@ -1136,6 +1377,13 @@ class TestTier2Lowering:
         ]
         assert len(split_calls) >= 1
 
+    @covers(
+        CobolFeature.UNSTRING_VERB,
+        CobolFeature.UNSTRING_DELIMITED_BY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_unstring_produces_split_and_writes(self):
         fields = [
             CobolField(
@@ -1181,6 +1429,12 @@ class TestTier2Lowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 2  # initial + 2 UNSTRING targets (initial has no value)
 
+    @covers(
+        CobolFeature.INSPECT_TALLYING,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_inspect_tallying_produces_count_and_write(self):
         fields = [
             CobolField(
@@ -1221,6 +1475,12 @@ class TestTier2Lowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 1
 
+    @covers(
+        CobolFeature.INSPECT_REPLACING,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_inspect_replacing_produces_replace_and_write(self):
         fields = [
             CobolField(
@@ -1268,6 +1528,15 @@ class TestSearchLowering:
         frontend = CobolFrontend(_FakeParser(asg))
         return frontend.lower(b"")
 
+    @covers(
+        CobolFeature.SEARCH_LINEAR,
+        CobolFeature.SEARCH_WHEN_CONDITIONS,
+        CobolFeature.SEARCH_VARYING,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_search_emits_loop_structure(self):
         """SEARCH should emit BRANCH_IF for bound check and WHEN conditions."""
         fields = [
@@ -1316,6 +1585,14 @@ class TestSearchLowering:
         assert any("search_loop" in name for name in label_names)
         assert any("search_end" in name for name in label_names)
 
+    @covers(
+        CobolFeature.SEARCH_LINEAR,
+        CobolFeature.SEARCH_WHEN_CONDITIONS,
+        CobolFeature.SEARCH_VARYING,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_search_with_varying_increments_index(self):
         """SEARCH VARYING should emit decode/increment/encode for the index."""
         fields = [
@@ -1341,6 +1618,15 @@ class TestSearchLowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 2  # initial VALUE + index increment write
 
+    @covers(
+        CobolFeature.SEARCH_LINEAR,
+        CobolFeature.SEARCH_WHEN_CONDITIONS,
+        CobolFeature.SEARCH_AT_END,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_search_at_end_emits_statements(self):
         """AT END clause should emit its child statements."""
         fields = [
@@ -1367,6 +1653,14 @@ class TestSearchLowering:
         print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
         assert len(print_calls) >= 1
 
+    @covers(
+        CobolFeature.SEARCH_LINEAR,
+        CobolFeature.SEARCH_WHEN_CONDITIONS,
+        CobolFeature.SEARCH_VARYING,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_search_multiple_whens(self):
         """Multiple WHEN clauses should each get a BRANCH_IF."""
         fields = [
@@ -1411,6 +1705,14 @@ class TestCallAlterEntryCancelLowering:
         frontend = CobolFrontend(_FakeParser(asg))
         return frontend.lower(b"")
 
+    @covers(
+        CobolFeature.CALL,
+        CobolFeature.CALL_USING,
+        CobolFeature.USING_BY_REFERENCE,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_call_emits_call_function(self):
         """CALL should emit CALL_FUNCTION with program name."""
         fields = [
@@ -1435,6 +1737,15 @@ class TestCallAlterEntryCancelLowering:
         subprog_calls = [c for c in calls if c.operands and c.operands[0] == "SUBPROG"]
         assert len(subprog_calls) >= 1
 
+    @covers(
+        CobolFeature.CALL,
+        CobolFeature.CALL_USING,
+        CobolFeature.CALL_GIVING,
+        CobolFeature.USING_BY_REFERENCE,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_call_with_giving_writes_result(self):
         """CALL with GIVING should write result to the giving field."""
         fields = [
@@ -1468,6 +1779,7 @@ class TestCallAlterEntryCancelLowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 3  # 2 initial VALUES + GIVING write-back
 
+    @covers(CobolFeature.ALTER, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_alter_emits_store_var(self):
         """ALTER should emit STORE_VAR for the altered paragraph target."""
         fields = [
@@ -1486,6 +1798,7 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(alter_stores) >= 1
 
+    @covers(CobolFeature.ENTRY, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_entry_emits_label(self):
         """ENTRY should emit a LABEL for the alternate entry point."""
         fields = [
@@ -1502,6 +1815,7 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(entry_labels) >= 1
 
+    @covers(CobolFeature.CANCEL, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_cancel_emits_nothing(self):
         """CANCEL should not emit any data-affecting instructions."""
         fields = [
@@ -1518,6 +1832,12 @@ class TestCallAlterEntryCancelLowering:
 
     # ── I/O Statement Tests ──────────────────────────────────────────
 
+    @covers(
+        CobolFeature.ACCEPT,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_accept_emits_cobol_accept_call(self):
         """ACCEPT should emit CALL_FUNCTION __cobol_accept."""
         fields = [
@@ -1534,6 +1854,12 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(accept_calls) == 1
 
+    @covers(
+        CobolFeature.ACCEPT,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_accept_writes_to_target_field(self):
         """ACCEPT with a target field should emit WRITE_REGION."""
         fields = [
@@ -1547,6 +1873,12 @@ class TestCallAlterEntryCancelLowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 1
 
+    @covers(
+        CobolFeature.OPEN,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_open_emits_cobol_open_for_each_file(self):
         """OPEN should emit CALL_FUNCTION __cobol_open_file for each file."""
         fields = [
@@ -1561,6 +1893,12 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(open_calls) == 2
 
+    @covers(
+        CobolFeature.CLOSE,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_close_emits_cobol_close_for_each_file(self):
         """CLOSE should emit CALL_FUNCTION __cobol_close_file for each file."""
         fields = [
@@ -1575,6 +1913,12 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(close_calls) == 2
 
+    @covers(
+        CobolFeature.READ,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_read_emits_cobol_read_record(self):
         """READ should emit CALL_FUNCTION __cobol_read_record."""
         fields = [
@@ -1589,6 +1933,13 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(read_calls) == 1
 
+    @covers(
+        CobolFeature.READ,
+        CobolFeature.READ_INTO,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_read_with_into_writes_to_field(self):
         """READ INTO should write result to target field."""
         fields = [
@@ -1602,6 +1953,12 @@ class TestCallAlterEntryCancelLowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 1
 
+    @covers(
+        CobolFeature.WRITE,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_write_emits_cobol_write_record(self):
         """WRITE should emit CALL_FUNCTION __cobol_write_record."""
         fields = [
@@ -1616,6 +1973,13 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(write_calls) == 1
 
+    @covers(
+        CobolFeature.WRITE,
+        CobolFeature.WRITE_FROM,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_write_from_field_decodes_source(self):
         """WRITE FROM field should decode the source field."""
         fields = [
@@ -1636,6 +2000,12 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(write_calls) == 1
 
+    @covers(
+        CobolFeature.REWRITE,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_rewrite_emits_cobol_rewrite_record(self):
         """REWRITE should emit CALL_FUNCTION __cobol_rewrite_record."""
         fields = [
@@ -1650,6 +2020,12 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(rewrite_calls) == 1
 
+    @covers(
+        CobolFeature.START,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_start_emits_cobol_start_file(self):
         """START should emit CALL_FUNCTION __cobol_start_file."""
         fields = [
@@ -1664,6 +2040,12 @@ class TestCallAlterEntryCancelLowering:
         ]
         assert len(start_calls) == 1
 
+    @covers(
+        CobolFeature.DELETE_RECORD,
+        CobolFeature.IO_PROVIDER,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_delete_emits_cobol_delete_record(self):
         """DELETE should emit CALL_FUNCTION __cobol_delete_record."""
         fields = [
@@ -1682,6 +2064,14 @@ class TestCallAlterEntryCancelLowering:
 class TestBareStatements:
     """Tests for bare statements at division and section level."""
 
+    @covers(
+        CobolFeature.BARE_STATEMENTS,
+        CobolFeature.COMPUTE,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_bare_division_statements_lower_to_ir(self):
         """Division-level bare statements (no paragraph) should produce IR."""
         fields = [
@@ -1706,6 +2096,12 @@ class TestBareStatements:
         print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
         assert len(print_calls) >= 1, "DISPLAY should emit a print CALL_FUNCTION"
 
+    @covers(
+        CobolFeature.BARE_STATEMENTS,
+        CobolFeature.DISPLAY,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_bare_section_statements_lower_to_ir(self):
         """Section-level bare statements should produce IR with section LABEL."""
         fields = [
@@ -1735,6 +2131,13 @@ class TestBareStatements:
         print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
         assert len(print_calls) >= 1, "DISPLAY should emit a print CALL_FUNCTION"
 
+    @covers(
+        CobolFeature.BARE_STATEMENTS,
+        CobolFeature.DISPLAY,
+        CobolFeature.STOP_RUN,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_mixed_bare_and_paragraph_ordering(self):
         """Division-level bare statements should come before paragraph statements in IR."""
         fields = [
@@ -1780,12 +2183,18 @@ class TestBareStatements:
 
 
 class TestDataLayout:
+    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_data_layout_empty_before_lower(self):
         """data_layout returns empty dict before lower() is called."""
         asg = CobolASG(data_fields=[])
         frontend = CobolFrontend(_FakeParser(asg))
         assert frontend.data_layout == {}
 
+    @covers(
+        CobolFeature.DATA_LAYOUT_ENGINE,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
     def test_data_layout_after_lower(self):
         """data_layout exposes correct field metadata after lower()."""
         asg = CobolASG(
