@@ -1,9 +1,11 @@
 # Frontend Lowering Gap Analysis
 
-**Date**: 2026-04-07 (updated from 2026-03-31)
+**Date**: 2026-04-16 (updated from 2026-04-07)
 **Method**: Cross-referenced each frontend's `_build_stmt_dispatch()` / `_build_expr_dispatch()` tables against tree-sitter `node-types.json` grammar definitions. Unhandled named node types (excluding punctuation, structural/internal nodes consumed by parent handlers, and comment/noise types) are classified as gaps.
 
 **Totals: 25 P0 (ALL DONE), ~40+ P1 DONE, ~326 P2 across 15 frontends**
+
+**Note (COBOL):** The COBOL frontend uses ProLeap (not tree-sitter) and is tracked separately via `CobolFeature` enum in `interpreter/cobol/features.py` (95 features, 76 covered by tests as of 2026-04-16). See `scripts/feature_coverage_audit.py`.
 
 **Note (LLM frontend path):** The LLM frontend prompt/parser now supports `DECL_VAR`, `CALL_CTOR`, `TRY_PUSH`, and `TRY_POP` in addition to its prior opcode subset. This gap tracker remains focused on deterministic tree-sitter frontends.
 
