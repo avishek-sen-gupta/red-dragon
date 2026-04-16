@@ -94,13 +94,10 @@ poetry -C "$REPO_ROOT" run python -m black .
 git -C "$REPO_ROOT" add -u
 
 # ---------------------------------------------------------------------------
-# Programming patterns lint (non-blocking — warnings only)
+# Python FP lint (non-blocking — warnings only)
 # ---------------------------------------------------------------------------
-if command -v ast-grep >/dev/null 2>&1; then
-  echo_success "Running programming patterns lint (interpreter/ only)..."
-  ast-grep scan --config "$REPO_ROOT/scripts/lint/sgconfig.yml" "$REPO_ROOT/interpreter/" --json=stream 2>/dev/null \
-    | poetry -C "$REPO_ROOT" run python "$REPO_ROOT/scripts/lint/patterns_report.py" || true
-fi
+echo_success "Running Python FP lint (interpreter/ only)..."
+poetry -C "$REPO_ROOT" run python -m python_fp_lint check "$REPO_ROOT/interpreter/" || true
 
 echo_success "Running import-linter architectural contracts..."
 poetry -C "$REPO_ROOT" run lint-imports
