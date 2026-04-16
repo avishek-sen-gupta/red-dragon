@@ -10,6 +10,8 @@ from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import unwrap
 from interpreter.register import Register
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 
 def _build_call_function_ir(func_name: str, *arg_literals) -> list[InstructionBase]:
@@ -51,6 +53,7 @@ def _execute_with_provider(instructions, provider):
 
 
 class TestExecutorIOProviderDispatch:
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_stub_accept_returns_concrete_value(self):
         ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
         provider = StubIOProvider(accept_values=["HELLO"])
@@ -59,6 +62,7 @@ class TestExecutorIOProviderDispatch:
         result = unwrap(vm.current_frame.registers.get(Register("%result")))
         assert result == "HELLO"
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_stub_accept_empty_returns_symbolic(self):
         ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
         provider = StubIOProvider(accept_values=[])
@@ -69,6 +73,7 @@ class TestExecutorIOProviderDispatch:
             result, SymbolicValue
         ), f"expected SymbolicValue, got {type(result).__name__}: {result}"
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_null_provider_returns_symbolic(self):
         ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
         provider = NullIOProvider()
@@ -79,6 +84,7 @@ class TestExecutorIOProviderDispatch:
             result, SymbolicValue
         ), f"expected SymbolicValue, got {type(result).__name__}: {result}"
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.READ)
     def test_stub_read_returns_record(self):
         ir = _build_call_function_ir("__cobol_read_record", "CUST-FILE")
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["RECORD-DATA"]}})
@@ -87,6 +93,7 @@ class TestExecutorIOProviderDispatch:
         result = unwrap(vm.current_frame.registers.get(Register("%result")))
         assert result == "RECORD-DATA"
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.WRITE)
     def test_stub_write_captures_data(self):
         ir = _build_call_function_ir("__cobol_write_record", "OUT-FILE", "DATA1")
         provider = StubIOProvider()
@@ -94,6 +101,7 @@ class TestExecutorIOProviderDispatch:
 
         assert provider.get_file("OUT-FILE").written == ["DATA1"]
 
+    @covers(CobolFeature.IO_PROVIDER, CobolFeature.OPEN, CobolFeature.CLOSE)
     def test_stub_open_close_lifecycle(self):
         # Build IR: OPEN, then CLOSE
         instructions = [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))]
@@ -133,6 +141,7 @@ class TestExecutorIOProviderDispatch:
 
         assert provider.get_file("MY-FILE").is_open is False
 
+    @covers(CobolFeature.IO_PROVIDER)
     def test_no_provider_falls_through_to_builtins(self):
         """Without io_provider, __cobol_* builtins (prepare_digits etc.) still work."""
         ir = _build_call_function_ir("__cobol_prepare_digits", "123", 5, 2, True)
@@ -144,6 +153,7 @@ class TestExecutorIOProviderDispatch:
             result, list
         ), f"Expected concrete list, got {type(result)}: {result}"
 
+    @covers(CobolFeature.IO_PROVIDER)
     def test_non_cobol_call_handled_by_builtin(self):
         """Non __cobol_* calls are handled by builtins, not the IO provider."""
         ir = _build_call_function_ir("print", "hello")

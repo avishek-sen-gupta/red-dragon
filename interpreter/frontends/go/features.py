@@ -15,9 +15,11 @@ class GoFeature(Enum):
     CONST_DECLARATION = auto()
     STRUCT = auto()
     INTERFACE = auto()
+    TYPE_ALIAS = auto()
 
     # Functions
     FUNCTION_DECLARATION = auto()
+    METHOD_DECLARATION = auto()
     MULTIPLE_RETURN = auto()
     VARIADIC = auto()
 
@@ -28,6 +30,7 @@ class GoFeature(Enum):
     FUNCTION_CALL = auto()
     METHOD_CALL = auto()
     FIELD_ACCESS = auto()
+    INDEXING = auto()
     COMPOSITE_LITERAL = auto()
     TYPE_ASSERTION = auto()
     TYPE_CONVERSION = auto()
@@ -51,6 +54,7 @@ class GoFeature(Enum):
     LABELED_STATEMENT = auto()
     GOTO = auto()
     FALLTHROUGH = auto()
+    BREAK_CONTINUE = auto()
     RETURN = auto()
 
     # Concurrency

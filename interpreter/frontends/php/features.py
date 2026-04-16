@@ -39,6 +39,12 @@ class PhpFeature(Enum):
     DYNAMIC_VARIABLE = auto()
     REFERENCE_ASSIGNMENT = auto()
     RELATIVE_SCOPE = auto()
+    TYPE_CAST = auto()
+    TERNARY = auto()
+    OBJECT_CREATION = auto()
+    CLONE = auto()
+    ERROR_SUPPRESSION = auto()
+    SEQUENCE_EXPRESSION = auto()
 
     # Control flow
     IF_ELSE = auto()
@@ -52,6 +58,7 @@ class PhpFeature(Enum):
     THROW = auto()
     GOTO = auto()
     LABELED_STATEMENT = auto()
+    TRY_CATCH_FINALLY = auto()
 
     # OOP
     PROPERTY_DECLARATION = auto()
@@ -64,3 +71,5 @@ class PhpFeature(Enum):
     ENUM_CASE = auto()
     PRINT = auto()
     FALLBACK = auto()
+    CONST_DECLARATION = auto()
+    NAMESPACE_USE = auto()

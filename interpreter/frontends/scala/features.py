@@ -25,6 +25,9 @@ class ScalaFeature(Enum):
     TRAIT = auto()
     CASE_CLASS = auto()
     TYPE_ALIAS = auto()
+    ENUM = auto()
+    AUXILIARY_CONSTRUCTOR = auto()
+    DEFAULT_PARAMETERS = auto()
 
     # Expressions
     BINARY_OPERATION = auto()
@@ -41,6 +44,7 @@ class ScalaFeature(Enum):
     POSTFIX_EXPRESSION = auto()
     NEW_EXPRESSION = auto()
     IMPLICIT_RETURN = auto()
+    LAMBDA_EXPRESSION = auto()
 
     # Control flow
     IF_EXPRESSION = auto()
@@ -50,6 +54,9 @@ class ScalaFeature(Enum):
     FOR_COMPREHENSION = auto()
     MATCH_EXPRESSION = auto()
     THROW_EXPRESSION = auto()
+    TRY_CATCH = auto()
+    BREAK = auto()
+    CONTINUE = auto()
 
     # Patterns and destructuring
     LITERAL_PATTERN = auto()
@@ -61,10 +68,13 @@ class ScalaFeature(Enum):
     TYPED_PATTERN = auto()
     VALUE_PATTERN = auto()
     TUPLE_DESTRUCTURING = auto()
+    INFIX_PATTERN = auto()
 
     # Generics and advanced features
     STABLE_TYPE_IDENTIFIER = auto()
     PRIMARY_CONSTRUCTOR = auto()
+    CONSTRUCTOR_DELEGATION = auto()
+    GUARD = auto()
 
     # Infrastructure
     SOURCE_LOCATION = auto()

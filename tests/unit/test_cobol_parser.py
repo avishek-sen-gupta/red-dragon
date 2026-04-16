@@ -6,6 +6,8 @@ from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.cobol_statements import DisplayStatement
 from interpreter.cobol.subprocess_runner import CobolParseError, SubprocessRunner
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 import pytest
 
@@ -24,6 +26,7 @@ class FakeSubprocessRunner(SubprocessRunner):
 
 
 class TestProLeapCobolParser:
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_parse_minimal_asg(self):
         asg_dict = {
             "data_fields": [
@@ -45,6 +48,7 @@ class TestProLeapCobolParser:
         assert len(asg.paragraphs) == 1
         assert asg.paragraphs[0].name == "MAIN"
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_parse_with_sections(self):
         asg_dict = {
             "data_fields": [],
@@ -69,6 +73,7 @@ class TestProLeapCobolParser:
         assert len(asg.sections) == 1
         assert isinstance(asg.sections[0].paragraphs[0].statements[0], DisplayStatement)
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_parse_error_raises(self):
         runner = FakeSubprocessRunner("", should_fail=True)
         parser = ProLeapCobolParser(runner, "proleap-bridge.jar")
@@ -76,6 +81,7 @@ class TestProLeapCobolParser:
         with pytest.raises(CobolParseError):
             parser.parse(b"BAD SOURCE")
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_command_includes_jar_path(self):
         class CapturingRunner(SubprocessRunner):
             def __init__(self):
@@ -91,6 +97,7 @@ class TestProLeapCobolParser:
 
         assert runner.captured_command == ["java", "-jar", "/path/to/bridge.jar"]
 
+    @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_source_passed_as_stdin(self):
         class CapturingRunner(SubprocessRunner):
             def __init__(self):
