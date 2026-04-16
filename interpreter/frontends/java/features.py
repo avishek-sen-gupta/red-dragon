@@ -2,106 +2,106 @@
 
 from __future__ import annotations
 
-from enum import Enum, auto
+from enum import Enum
 
 
 class JavaFeature(Enum):
     """Java language features covered by tests."""
 
     # Literals
-    INTEGER_LITERALS = auto()
-    HEX_INTEGER_LITERAL = auto()
-    OCTAL_INTEGER_LITERAL = auto()
-    BINARY_INTEGER_LITERAL = auto()
-    HEX_FLOAT_LITERAL = auto()
-    CHARACTER_LITERAL = auto()
-    CLASS_LITERAL = auto()
-    TEXT_BLOCK = auto()
+    INTEGER_LITERALS = "int and long integer literals"
+    HEX_INTEGER_LITERAL = "0x-prefixed hexadecimal integer literals"
+    OCTAL_INTEGER_LITERAL = "0-prefixed octal integer literals"
+    BINARY_INTEGER_LITERAL = "0b-prefixed binary integer literals"
+    HEX_FLOAT_LITERAL = "0x-prefixed hexadecimal floating-point literals"
+    CHARACTER_LITERAL = "single-character literals enclosed in single quotes"
+    CLASS_LITERAL = "Foo.class expressions"
+    TEXT_BLOCK = "multi-line string literals (Java 15+)"
 
     # Variables and fields
-    LOCAL_VARIABLE = auto()
-    FIELD_ACCESS = auto()
-    FIELD_INITIALIZATION = auto()
-    CONSTANT_DECLARATION = auto()
+    LOCAL_VARIABLE = "local variable declarations inside method bodies"
+    FIELD_ACCESS = "instance and static field reads via dot notation"
+    FIELD_INITIALIZATION = "field declarations with inline initializer expressions"
+    CONSTANT_DECLARATION = "static final field declarations"
 
     # Operators and expressions
-    ASSIGNMENT = auto()
-    ARITHMETIC = auto()
-    UNARY = auto()
-    TERNARY = auto()
-    INSTANCEOF = auto()
-    CAST = auto()
-    PARENTHESIZED_EXPRESSION = auto()
+    ASSIGNMENT = "simple and compound assignment operators"
+    ARITHMETIC = "+, -, *, /, % arithmetic expressions"
+    UNARY = "unary !, ~, +, - and prefix/postfix ++/-- operators"
+    TERNARY = "conditional (a ? b : c) expressions"
+    INSTANCEOF = "instanceof type-check expression"
+    CAST = "explicit type cast expressions"
+    PARENTHESIZED_EXPRESSION = "expressions wrapped in parentheses"
 
     # Collections
-    ARRAY_CREATION = auto()
-    ARRAY_ACCESS = auto()
-    ARRAY_LENGTH = auto()
+    ARRAY_CREATION = "new T[n] and new T[]{...} array creation"
+    ARRAY_ACCESS = "array element access via subscript operator"
+    ARRAY_LENGTH = ".length field access on array types"
 
     # Method and function calls
-    METHOD_CALL = auto()
-    FUNCTION_CALL = auto()
-    METHOD_REFERENCE = auto()
+    METHOD_CALL = "instance method invocations"
+    FUNCTION_CALL = "static method / free function calls"
+    METHOD_REFERENCE = "Foo::bar and obj::method references"
 
     # Control flow
-    IF_ELSE = auto()
-    WHILE_LOOP = auto()
-    DO_WHILE_LOOP = auto()
-    FOR_LOOP = auto()
-    ENHANCED_FOR_LOOP = auto()
-    BREAK_CONTINUE = auto()
-    LABELED_STATEMENT = auto()
-    SWITCH_STATEMENT = auto()
-    SWITCH_EXPRESSION = auto()
-    SWITCH_RULE = auto()
-    YIELD = auto()
-    RETURN = auto()
+    IF_ELSE = "if / else if / else branching"
+    WHILE_LOOP = "while (cond) { } loops"
+    DO_WHILE_LOOP = "do { } while (cond) loops"
+    FOR_LOOP = "traditional for (init; cond; update) loops"
+    ENHANCED_FOR_LOOP = "for (T x : collection) loops"
+    BREAK_CONTINUE = "break and continue statements"
+    LABELED_STATEMENT = "labeled statements for targeted break/continue"
+    SWITCH_STATEMENT = "traditional switch (expr) { case: } statements"
+    SWITCH_EXPRESSION = "switch expressions yielding a value (Java 14+)"
+    SWITCH_RULE = "arrow-form case labels in switch expressions"
+    YIELD = "yield statement inside switch expressions"
+    RETURN = "return statements from methods"
 
     # Exception handling
-    TRY_CATCH = auto()
-    TRY_WITH_RESOURCES = auto()
-    THROW = auto()
-    FINALLY = auto()
+    TRY_CATCH = "try / catch exception handling blocks"
+    TRY_WITH_RESOURCES = "try-with-resources automatic resource management"
+    THROW = "throw statement to raise exceptions"
+    FINALLY = "finally block in try/catch/finally"
 
     # Classes and objects
-    CLASS = auto()
-    CONSTRUCTOR = auto()
-    COMPACT_CONSTRUCTOR = auto()
-    OBJECT_CREATION = auto()
-    METHOD_DECLARATION = auto()
-    FIELD_DECLARATION = auto()
+    CLASS = "class declarations including inner classes"
+    CONSTRUCTOR = "constructor declarations"
+    COMPACT_CONSTRUCTOR = "compact constructors in records (Java 16+)"
+    OBJECT_CREATION = "new Foo() object instantiation expressions"
+    METHOD_DECLARATION = "method declarations in classes and interfaces"
+    FIELD_DECLARATION = "field declarations in class bodies"
 
     # Advanced features
-    LAMBDA = auto()
-    GENERIC_TYPES = auto()
-    INTERFACE = auto()
-    ENUM = auto()
-    ANNOTATION_TYPE = auto()
-    ANNOTATIONS = auto()
-    MODIFIERS = auto()
-    STATIC_INITIALIZER = auto()
-    SYNCHRONIZED = auto()
-    SUPER = auto()
-    EXPLICIT_CONSTRUCTOR_INVOCATION = auto()
-    FORMAL_PARAMETERS = auto()
-    INFERRED_PARAMETERS = auto()
-    SPREAD_PARAMETER = auto()
+    LAMBDA = "lambda expressions (x) -> expr"
+    GENERIC_TYPES = "generic type parameters and arguments"
+    INTERFACE = "interface declarations"
+    ENUM = "enum type declarations"
+    ANNOTATION_TYPE = "@interface annotation type declarations"
+    ANNOTATIONS = "annotation usages on declarations and expressions"
+    MODIFIERS = "access and non-access modifiers (public, static, final, etc.)"
+    STATIC_INITIALIZER = "static { } initializer blocks"
+    SYNCHRONIZED = "synchronized blocks and method modifiers"
+    SUPER = "super keyword for parent class access"
+    EXPLICIT_CONSTRUCTOR_INVOCATION = "this(...) and super(...) constructor calls"
+    FORMAL_PARAMETERS = "formal parameter lists in method declarations"
+    INFERRED_PARAMETERS = "type-inferred parameters in lambda expressions"
+    SPREAD_PARAMETER = "varargs T... parameters"
 
     # Pattern matching (Java 16+)
-    RECORD = auto()
-    RECORD_PATTERN = auto()
-    TYPE_PATTERN = auto()
-    PATTERN_GUARD = auto()
+    RECORD = "record class declarations"
+    RECORD_PATTERN = "record deconstruction patterns in instanceof and switch"
+    TYPE_PATTERN = "instanceof T t pattern bindings"
+    PATTERN_GUARD = "when guards in switch pattern cases (Java 21+)"
 
     # Scoping and resolution
-    SCOPED_IDENTIFIER = auto()
-    NAMESPACE_RESOLUTION = auto()
+    SCOPED_IDENTIFIER = "package-qualified and nested type identifiers"
+    NAMESPACE_RESOLUTION = "qualified name resolution across packages"
 
     # Module system (Java 9+)
-    MODULE_DECLARATION = auto()
-    IMPORT_DECLARATION = auto()
-    PACKAGE_DECLARATION = auto()
+    MODULE_DECLARATION = "module-info.java module declarations"
+    IMPORT_DECLARATION = "import statements"
+    PACKAGE_DECLARATION = "package declarations"
 
     # Statements and assertions
-    ASSERT = auto()
-    COMMENT_HANDLING = auto()
+    ASSERT = "assert expression and assert expression : message"
+    COMMENT_HANDLING = "comment preservation or annotation in the IR"
