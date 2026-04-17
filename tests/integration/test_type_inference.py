@@ -2,6 +2,10 @@
 
 import pytest
 from interpreter.type_name import TypeName
+from tests.covers import covers
+from interpreter.frontends.go.features import GoFeature
+from interpreter.frontends.rust.features import RustFeature
+from interpreter.frontends.typescript.features import TypeScriptFeature
 
 from interpreter.constants import Language, FoundationTypeName
 from interpreter.types.coercion.default_conversion_rules import (
@@ -2711,6 +2715,7 @@ IntPtr p;
 class TestTypeScriptTypeAliasIntegration:
     """Integration: TypeScript type alias declaration seeds and resolves aliases."""
 
+    @covers(TypeScriptFeature.TYPE_ALIAS)
     def test_typescript_type_alias_seeds_alias(self):
         """TS: type UserId = number; → UserId alias is Float."""
         source = "type UserId = number;"
@@ -2718,6 +2723,7 @@ class TestTypeScriptTypeAliasIntegration:
         assert TypeName("UserId") in env.type_aliases
         assert env.type_aliases[TypeName("UserId")] == scalar(TypeName("Float"))
 
+    @covers(TypeScriptFeature.TYPE_ALIAS)
     def test_typescript_type_alias_string(self):
         """TS: type Label = string; → Label alias is String."""
         source = "type Label = string;"
@@ -2729,6 +2735,7 @@ class TestTypeScriptTypeAliasIntegration:
 class TestRustTypeAliasIntegration:
     """Integration: Rust type alias declaration seeds and resolves aliases."""
 
+    @covers(RustFeature.TYPE_ITEM)
     def test_rust_type_alias_seeds_alias(self):
         """Rust: type UserId = i32; → UserId alias is Int."""
         source = """\
@@ -2741,6 +2748,7 @@ fn main() {
         assert TypeName("UserId") in env.type_aliases
         assert env.type_aliases[TypeName("UserId")] == scalar(TypeName("Int"))
 
+    @covers(RustFeature.TYPE_ITEM)
     def test_rust_type_alias_float(self):
         """Rust: type Score = f64; → Score alias is Float."""
         source = """\
@@ -2757,6 +2765,7 @@ fn main() {
 class TestGoTypeAliasIntegration:
     """Integration: Go type alias declaration seeds and resolves aliases."""
 
+    @covers(GoFeature.TYPE_ALIAS)
     def test_go_type_alias_seeds_alias(self):
         """Go: type UserId int; var x UserId = 42 → x is Int."""
         source = """\
@@ -2768,6 +2777,7 @@ var x UserId = 42
         assert TypeName("UserId") in env.type_aliases
         assert env.type_aliases[TypeName("UserId")] == scalar(TypeName("Int"))
 
+    @covers(GoFeature.TYPE_ALIAS)
     def test_go_type_alias_resolves_var_type(self):
         """Go: type Score float64; var s Score = 9.5 → var type is Float."""
         source = """\
