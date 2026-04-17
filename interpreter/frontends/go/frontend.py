@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from interpreter.frontends._base import BaseFrontend
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.register import Register
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
@@ -16,12 +17,24 @@ from interpreter.frontends.go import expressions as go_expr
 from interpreter.frontends.go import control_flow as go_cf
 from interpreter.frontends.go import declarations as go_decl
 from interpreter.frontends.go.node_types import GoNodeType
+from interpreter.frontends.go.type_alias_extractor import GoTypeAliasExtractor
+from interpreter.constants import Language
+from interpreter.parser import ParserFactory
 
 
 class GoFrontend(BaseFrontend):
     """Lowers a Go tree-sitter AST into flattened TAC IR."""
 
     BLOCK_SCOPED = True
+
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: Language,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ) -> None:
+        super().__init__(parser_factory, language, observer)
+        self._type_alias_extractor = GoTypeAliasExtractor()
 
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
