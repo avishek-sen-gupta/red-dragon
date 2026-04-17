@@ -8,7 +8,7 @@ from collections import deque
 from functools import reduce
 
 from interpreter.types.type_node import TypeNode
-from interpreter.constants import TypeName, Variance
+from interpreter.constants import FoundationTypeName, Variance
 from interpreter.types.type_expr import (
     TypeExpr,
     ScalarType,
@@ -25,18 +25,18 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_TYPE_NODES: tuple[TypeNode, ...] = (
-    TypeNode(name=TypeName.ANY, parents=()),
-    TypeNode(name=TypeName.NUMBER, parents=(TypeName.ANY,)),
-    TypeNode(name=TypeName.STRING, parents=(TypeName.ANY,)),
-    TypeNode(name=TypeName.BOOL, parents=(TypeName.ANY,)),
-    TypeNode(name=TypeName.OBJECT, parents=(TypeName.ANY,)),
-    TypeNode(name=TypeName.ARRAY, parents=(TypeName.ANY,)),
-    TypeNode(name=TypeName.INT, parents=(TypeName.NUMBER,)),
-    TypeNode(name=TypeName.FLOAT, parents=(TypeName.NUMBER,)),
-    TypeNode(name=TypeName.POINTER, parents=(TypeName.ANY,)),
-    TypeNode(name=TypeName.MAP, parents=(TypeName.ANY,)),
-    TypeNode(name=TypeName.TUPLE, parents=(TypeName.ANY,)),
-    TypeNode(name=TypeName.REGION, parents=(TypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.ANY, parents=()),
+    TypeNode(name=FoundationTypeName.NUMBER, parents=(FoundationTypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.STRING, parents=(FoundationTypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.BOOL, parents=(FoundationTypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.OBJECT, parents=(FoundationTypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.ARRAY, parents=(FoundationTypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.INT, parents=(FoundationTypeName.NUMBER,)),
+    TypeNode(name=FoundationTypeName.FLOAT, parents=(FoundationTypeName.NUMBER,)),
+    TypeNode(name=FoundationTypeName.POINTER, parents=(FoundationTypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.MAP, parents=(FoundationTypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.TUPLE, parents=(FoundationTypeName.ANY,)),
+    TypeNode(name=FoundationTypeName.REGION, parents=(FoundationTypeName.ANY,)),
 )
 
 
@@ -103,16 +103,16 @@ class TypeGraph:
     def common_supertype(self, type_a: str, type_b: str) -> str:
         """Return the least upper bound (closest common ancestor) of two types.
 
-        Returns TypeName.ANY for unknown types.
+        Returns FoundationTypeName.ANY for unknown types.
         """
         if type_a == type_b:
             return type_a
         if type_a not in self._nodes or type_b not in self._nodes:
-            return TypeName.ANY
+            return FoundationTypeName.ANY
         ancestors_a = self._ancestors(type_a)
         ancestors_b_set = set(self._ancestors(type_b))
         common = [a for a in ancestors_a if a in ancestors_b_set]
-        return common[0] if common else TypeName.ANY
+        return common[0] if common else FoundationTypeName.ANY
 
     # -------------------------------------------------------------------
     # TypeExpr-aware methods (parameterized type support)
@@ -139,11 +139,11 @@ class TypeGraph:
             return any(self.is_subtype_expr(child, m) for m in parent.members)
         # TypeVar child: subtype if bound is subtype of parent
         if isinstance(child, TypeVar):
-            bound = child.bound if child.bound else scalar(TypeName.ANY)
+            bound = child.bound if child.bound else scalar(FoundationTypeName.ANY)
             return self.is_subtype_expr(bound, parent)
         # TypeVar parent: child satisfies it if child is subtype of the bound
         if isinstance(parent, TypeVar):
-            bound = parent.bound if parent.bound else scalar(TypeName.ANY)
+            bound = parent.bound if parent.bound else scalar(FoundationTypeName.ANY)
             return self.is_subtype_expr(child, bound)
         match (child, parent):
             case (ScalarType(name=cn), ScalarType(name=pn)):
@@ -186,7 +186,7 @@ class TypeGraph:
         """Compute LUB for a single type argument according to its variance."""
         if variance == Variance.INVARIANT:
             # Invariant: must be exactly equal
-            return a if a == b else scalar(TypeName.ANY)
+            return a if a == b else scalar(FoundationTypeName.ANY)
         # Covariant and contravariant both use the standard LUB
         return self.common_supertype_expr(a, b)
 
@@ -230,7 +230,7 @@ class TypeGraph:
                 ParameterizedType(constructor=cb, arguments=ab),
             ):
                 if ca != cb or len(aa) != len(ab):
-                    return scalar(TypeName.ANY)
+                    return scalar(FoundationTypeName.ANY)
                 variances = self._variance_registry.get(ca, ())
                 merged_args = tuple(
                     self._lub_with_variance(
@@ -241,7 +241,7 @@ class TypeGraph:
                     for i, (aa_i, ab_i) in enumerate(zip(aa, ab))
                 )
                 # If any invariant argument couldn't match, fall back to Any
-                if any(a == scalar(TypeName.ANY) for a in merged_args):
+                if any(a == scalar(FoundationTypeName.ANY) for a in merged_args):
                     inv_positions = [
                         i
                         for i in range(len(merged_args))
@@ -250,21 +250,21 @@ class TypeGraph:
                         and aa[i] != ab[i]
                     ]
                     if inv_positions:
-                        return scalar(TypeName.ANY)
+                        return scalar(FoundationTypeName.ANY)
                 return ParameterizedType(ca, merged_args)
             case (
                 FunctionType(params=pa, return_type=ra),
                 FunctionType(params=pb, return_type=rb),
             ):
                 if len(pa) != len(pb):
-                    return scalar(TypeName.ANY)
+                    return scalar(FoundationTypeName.ANY)
                 merged_params = tuple(
                     self.common_supertype_expr(pa_i, pb_i) for pa_i, pb_i in zip(pa, pb)
                 )
                 merged_return = self.common_supertype_expr(ra, rb)
                 return FunctionType(params=merged_params, return_type=merged_return)
             case _:
-                return scalar(TypeName.ANY)
+                return scalar(FoundationTypeName.ANY)
 
     def extend(self, additional: tuple[TypeNode, ...]) -> "TypeGraph":
         """Return a new TypeGraph with the additional nodes merged in."""
@@ -287,7 +287,7 @@ class TypeGraph:
             for iface in interfaces:
                 if iface not in merged:
                     merged[iface] = TypeNode(
-                        name=iface, parents=(TypeName.ANY,), kind="interface"
+                        name=iface, parents=(FoundationTypeName.ANY,), kind="interface"
                     )
             existing = merged.get(class_name)
             existing_parents = existing.parents if existing else ()

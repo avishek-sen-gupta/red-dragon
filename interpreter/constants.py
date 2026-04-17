@@ -101,7 +101,7 @@ class Variance(StrEnum):
     INVARIANT = "invariant"
 
 
-class TypeName(StrEnum):
+class FoundationTypeName(StrEnum):
     """Canonical type names for the type ontology DAG."""
 
     ANY = "Any"

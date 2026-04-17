@@ -6,21 +6,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 
 _PYTHON_TYPE_TO_TYPE_NAME: dict[type, str] = {
-    bool: TypeName.BOOL,
-    int: TypeName.INT,
-    float: TypeName.FLOAT,
-    str: TypeName.STRING,
+    bool: FoundationTypeName.BOOL,
+    int: FoundationTypeName.INT,
+    float: FoundationTypeName.FLOAT,
+    str: FoundationTypeName.STRING,
 }
 
 
 def runtime_type_name(
     val: Any,
 ) -> str:  # Any: display boundary — raw VM value of unknown Python type
-    """Map a Python runtime value to its canonical TypeName.
+    """Map a Python runtime value to its canonical FoundationTypeName.
 
     bool must be checked before int because ``isinstance(True, int)`` is True.
     Exact type lookup avoids isinstance chains and the bool/int subclass trap.

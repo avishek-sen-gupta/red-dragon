@@ -12,7 +12,7 @@ from interpreter.vm.vm import Operators
 from interpreter.vm.vm_types import BuiltinResult, HeapObject, VMState
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.types.type_expr import scalar
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.vm.vm_types import Pointer
 
 
@@ -83,11 +83,17 @@ class TestBuiltinSliceResult:
             HeapObject(
                 type_hint="array",
                 fields={
-                    FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
-                    FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
-                    FieldName("2", FieldKind.INDEX): typed(30, scalar(TypeName.INT)),
+                    FieldName("0", FieldKind.INDEX): typed(
+                        10, scalar(FoundationTypeName.INT)
+                    ),
+                    FieldName("1", FieldKind.INDEX): typed(
+                        20, scalar(FoundationTypeName.INT)
+                    ),
+                    FieldName("2", FieldKind.INDEX): typed(
+                        30, scalar(FoundationTypeName.INT)
+                    ),
                     FieldName("length", FieldKind.SPECIAL): typed(
-                        3, scalar(TypeName.INT)
+                        3, scalar(FoundationTypeName.INT)
                     ),
                 },
             ),
@@ -107,9 +113,15 @@ class TestSliceHeapArrayResult:
         heap_obj = HeapObject(
             type_hint="array",
             fields={
-                FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
-                FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
-                FieldName("length", FieldKind.SPECIAL): typed(2, scalar(TypeName.INT)),
+                FieldName("0", FieldKind.INDEX): typed(
+                    10, scalar(FoundationTypeName.INT)
+                ),
+                FieldName("1", FieldKind.INDEX): typed(
+                    20, scalar(FoundationTypeName.INT)
+                ),
+                FieldName("length", FieldKind.SPECIAL): typed(
+                    2, scalar(FoundationTypeName.INT)
+                ),
             },
         )
         vm = VMState()
@@ -124,7 +136,7 @@ class TestSliceHeapArrayResult:
             type_hint="array",
             fields={
                 FieldName("length", FieldKind.SPECIAL): typed(
-                    "unknown", scalar(TypeName.STRING)
+                    "unknown", scalar(FoundationTypeName.STRING)
                 )
             },
         )

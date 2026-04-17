@@ -1,6 +1,6 @@
 """Tests for TypeResolver and NullTypeResolver."""
 
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.conversion_result import IDENTITY_CONVERSION
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
@@ -16,17 +16,23 @@ def _resolver() -> TypeResolver:
 
 class TestTypeResolverWithHints:
     def test_int_plus_float_delegates_to_rules(self):
-        result = _resolver().resolve_binop("+", TypeName.INT, TypeName.FLOAT)
-        assert result.result_type == TypeName.FLOAT
+        result = _resolver().resolve_binop(
+            "+", FoundationTypeName.INT, FoundationTypeName.FLOAT
+        )
+        assert result.result_type == FoundationTypeName.FLOAT
 
     def test_int_div_int_returns_floor_div_override(self):
-        result = _resolver().resolve_binop("/", TypeName.INT, TypeName.INT)
+        result = _resolver().resolve_binop(
+            "/", FoundationTypeName.INT, FoundationTypeName.INT
+        )
         assert result.operator_override == "//"
-        assert result.result_type == TypeName.INT
+        assert result.result_type == FoundationTypeName.INT
 
     def test_comparison_returns_bool_type(self):
-        result = _resolver().resolve_binop("==", TypeName.INT, TypeName.FLOAT)
-        assert result.result_type == TypeName.BOOL
+        result = _resolver().resolve_binop(
+            "==", FoundationTypeName.INT, FoundationTypeName.FLOAT
+        )
+        assert result.result_type == FoundationTypeName.BOOL
 
 
 class TestTypeResolverWithoutHints:
@@ -46,14 +52,14 @@ class TestTypeResolverWithoutHints:
 
 class TestTypeResolverPartialHints:
     def test_left_hint_only_assumes_symmetric(self):
-        result = _resolver().resolve_binop("/", TypeName.INT, "")
+        result = _resolver().resolve_binop("/", FoundationTypeName.INT, "")
         assert result.operator_override == "//"
-        assert result.result_type == TypeName.INT
+        assert result.result_type == FoundationTypeName.INT
 
     def test_right_hint_only_assumes_symmetric(self):
-        result = _resolver().resolve_binop("/", "", TypeName.INT)
+        result = _resolver().resolve_binop("/", "", FoundationTypeName.INT)
         assert result.operator_override == "//"
-        assert result.result_type == TypeName.INT
+        assert result.result_type == FoundationTypeName.INT
 
 
 class TestTypeResolverWithIdentityRules:
@@ -63,24 +69,32 @@ class TestTypeResolverWithIdentityRules:
         )
 
         resolver = TypeResolver(IdentityConversionRules())
-        result = resolver.resolve_binop("/", TypeName.INT, TypeName.INT)
+        result = resolver.resolve_binop(
+            "/", FoundationTypeName.INT, FoundationTypeName.INT
+        )
         assert result is IDENTITY_CONVERSION
 
 
 class TestNullTypeResolver:
     def test_always_returns_identity_conversion(self):
         resolver = NullTypeResolver()
-        result = resolver.resolve_binop("+", TypeName.INT, TypeName.FLOAT)
+        result = resolver.resolve_binop(
+            "+", FoundationTypeName.INT, FoundationTypeName.FLOAT
+        )
         assert result is IDENTITY_CONVERSION
 
     def test_ignores_type_hints_entirely(self):
         resolver = NullTypeResolver()
-        result = resolver.resolve_binop("/", TypeName.INT, TypeName.INT)
+        result = resolver.resolve_binop(
+            "/", FoundationTypeName.INT, FoundationTypeName.INT
+        )
         assert result.operator_override == ""
 
     def test_no_operator_override(self):
         resolver = NullTypeResolver()
-        result = resolver.resolve_binop("/", TypeName.FLOAT, TypeName.INT)
+        result = resolver.resolve_binop(
+            "/", FoundationTypeName.FLOAT, FoundationTypeName.INT
+        )
         assert result.operator_override == ""
 
 
@@ -89,27 +103,27 @@ class TestTypeResolverTypeExpr:
 
     def test_resolve_binop_accepts_type_expr(self):
         result = _resolver().resolve_binop(
-            "+", scalar(TypeName.INT), scalar(TypeName.FLOAT)
+            "+", scalar(FoundationTypeName.INT), scalar(FoundationTypeName.FLOAT)
         )
         assert isinstance(result.result_type, ScalarType)
-        assert result.result_type == TypeName.FLOAT
+        assert result.result_type == FoundationTypeName.FLOAT
 
     def test_resolve_binop_with_unknown_returns_identity(self):
         result = _resolver().resolve_binop("+", UNKNOWN, UNKNOWN)
         assert result is IDENTITY_CONVERSION
 
     def test_resolve_binop_partial_hint_left_only(self):
-        result = _resolver().resolve_binop("/", scalar(TypeName.INT), UNKNOWN)
-        assert result.result_type == TypeName.INT
+        result = _resolver().resolve_binop("/", scalar(FoundationTypeName.INT), UNKNOWN)
+        assert result.result_type == FoundationTypeName.INT
         assert result.operator_override == "//"
 
     def test_resolve_binop_partial_hint_right_only(self):
-        result = _resolver().resolve_binop("/", UNKNOWN, scalar(TypeName.INT))
-        assert result.result_type == TypeName.INT
+        result = _resolver().resolve_binop("/", UNKNOWN, scalar(FoundationTypeName.INT))
+        assert result.result_type == FoundationTypeName.INT
 
     def test_resolve_assignment_accepts_type_expr(self):
         coercer = _resolver().resolve_assignment(
-            scalar(TypeName.FLOAT), scalar(TypeName.INT)
+            scalar(FoundationTypeName.FLOAT), scalar(FoundationTypeName.INT)
         )
         assert coercer(3.7) == 3
 

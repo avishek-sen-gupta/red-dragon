@@ -18,7 +18,7 @@ from interpreter.vm.vm import VMState, Operators
 from interpreter.vm.vm_types import BuiltinResult, HeapObject
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import scalar
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 
 
 class TestPureBuiltinsReturnBuiltinResult:
@@ -29,9 +29,11 @@ class TestPureBuiltinsReturnBuiltinResult:
             HeapObject(
                 type_hint="array",
                 fields={
-                    FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
+                    FieldName("0", FieldKind.INDEX): typed(
+                        10, scalar(FoundationTypeName.INT)
+                    ),
                     FieldName("length", FieldKind.SPECIAL): typed(
-                        1, scalar(TypeName.INT)
+                        1, scalar(FoundationTypeName.INT)
                     ),
                 },
             ),

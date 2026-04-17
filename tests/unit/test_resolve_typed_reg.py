@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
@@ -40,16 +40,16 @@ _IDENTITY_RULES = IdentityConversionRules()
 
 class TestRuntimeTypeName:
     def test_int(self):
-        assert runtime_type_name(42) == TypeName.INT
+        assert runtime_type_name(42) == FoundationTypeName.INT
 
     def test_float(self):
-        assert runtime_type_name(3.14) == TypeName.FLOAT
+        assert runtime_type_name(3.14) == FoundationTypeName.FLOAT
 
     def test_bool(self):
-        assert runtime_type_name(True) == TypeName.BOOL
+        assert runtime_type_name(True) == FoundationTypeName.BOOL
 
     def test_str(self):
-        assert runtime_type_name("hello") == TypeName.STRING
+        assert runtime_type_name("hello") == FoundationTypeName.STRING
 
     def test_unknown_returns_empty(self):
         assert runtime_type_name([1, 2, 3]) == ""
@@ -62,7 +62,7 @@ class TestResolveTypedReg:
     def test_float_coerced_to_int_when_type_env_says_int(self):
         vm = _make_vm()
         vm.current_frame.registers[Register("%0")] = 2.0
-        type_env = _type_env_with({"%0": TypeName.INT})
+        type_env = _type_env_with({"%0": FoundationTypeName.INT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _DEFAULT_RULES)
 
@@ -72,7 +72,7 @@ class TestResolveTypedReg:
     def test_int_coerced_to_float_when_type_env_says_float(self):
         vm = _make_vm()
         vm.current_frame.registers[Register("%0")] = 2
-        type_env = _type_env_with({"%0": TypeName.FLOAT})
+        type_env = _type_env_with({"%0": FoundationTypeName.FLOAT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _DEFAULT_RULES)
 
@@ -91,7 +91,7 @@ class TestResolveTypedReg:
     def test_no_coercion_when_runtime_matches_target(self):
         vm = _make_vm()
         vm.current_frame.registers[Register("%0")] = 42
-        type_env = _type_env_with({"%0": TypeName.INT})
+        type_env = _type_env_with({"%0": FoundationTypeName.INT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _DEFAULT_RULES)
 
@@ -100,7 +100,7 @@ class TestResolveTypedReg:
 
     def test_non_register_operand_passes_through(self):
         vm = _make_vm()
-        type_env = _type_env_with({"%0": TypeName.INT})
+        type_env = _type_env_with({"%0": FoundationTypeName.INT})
 
         result = _resolve_typed_reg(vm, "hello", type_env, _DEFAULT_RULES)
 
@@ -109,7 +109,7 @@ class TestResolveTypedReg:
     def test_identity_rules_do_not_coerce(self):
         vm = _make_vm()
         vm.current_frame.registers[Register("%0")] = 2.0
-        type_env = _type_env_with({"%0": TypeName.INT})
+        type_env = _type_env_with({"%0": FoundationTypeName.INT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _IDENTITY_RULES)
 
@@ -119,7 +119,7 @@ class TestResolveTypedReg:
     def test_bool_coerced_to_int(self):
         vm = _make_vm()
         vm.current_frame.registers[Register("%0")] = True
-        type_env = _type_env_with({"%0": TypeName.INT})
+        type_env = _type_env_with({"%0": FoundationTypeName.INT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _DEFAULT_RULES)
 
@@ -130,7 +130,7 @@ class TestResolveTypedReg:
     def test_unregistered_register_passes_through(self):
         """Register not in VM returns the register name as-is."""
         vm = _make_vm()
-        type_env = _type_env_with({"%unknown": TypeName.INT})
+        type_env = _type_env_with({"%unknown": FoundationTypeName.INT})
 
         result = _resolve_typed_reg(vm, "%unknown", type_env, _DEFAULT_RULES)
 

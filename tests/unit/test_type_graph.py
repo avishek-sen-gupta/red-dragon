@@ -2,7 +2,7 @@
 
 from interpreter.types.type_node import TypeNode
 from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-from interpreter.constants import TypeName, Variance
+from interpreter.constants import FoundationTypeName, Variance
 from interpreter.types.type_expr import (
     ScalarType,
     ParameterizedType,
@@ -28,84 +28,102 @@ def _default_graph() -> TypeGraph:
 class TestTypeGraphSubtype:
     def test_int_is_subtype_of_number(self):
         g = _default_graph()
-        assert g.is_subtype(TypeName.INT, TypeName.NUMBER)
+        assert g.is_subtype(FoundationTypeName.INT, FoundationTypeName.NUMBER)
 
     def test_int_is_subtype_of_any(self):
         g = _default_graph()
-        assert g.is_subtype(TypeName.INT, TypeName.ANY)
+        assert g.is_subtype(FoundationTypeName.INT, FoundationTypeName.ANY)
 
     def test_number_is_not_subtype_of_int(self):
         g = _default_graph()
-        assert not g.is_subtype(TypeName.NUMBER, TypeName.INT)
+        assert not g.is_subtype(FoundationTypeName.NUMBER, FoundationTypeName.INT)
 
     def test_type_is_subtype_of_itself(self):
         g = _default_graph()
-        assert g.is_subtype(TypeName.INT, TypeName.INT)
+        assert g.is_subtype(FoundationTypeName.INT, FoundationTypeName.INT)
 
     def test_unknown_type_is_not_subtype(self):
         g = _default_graph()
-        assert not g.is_subtype("PackedDecimal", TypeName.NUMBER)
+        assert not g.is_subtype("PackedDecimal", FoundationTypeName.NUMBER)
 
     def test_string_is_not_subtype_of_number(self):
         g = _default_graph()
-        assert not g.is_subtype(TypeName.STRING, TypeName.NUMBER)
+        assert not g.is_subtype(FoundationTypeName.STRING, FoundationTypeName.NUMBER)
 
     def test_bool_is_not_subtype_of_number(self):
         g = _default_graph()
-        assert not g.is_subtype(TypeName.BOOL, TypeName.NUMBER)
+        assert not g.is_subtype(FoundationTypeName.BOOL, FoundationTypeName.NUMBER)
 
     def test_float_is_subtype_of_number(self):
         g = _default_graph()
-        assert g.is_subtype(TypeName.FLOAT, TypeName.NUMBER)
+        assert g.is_subtype(FoundationTypeName.FLOAT, FoundationTypeName.NUMBER)
 
 
 class TestTypeGraphCommonSupertype:
     def test_int_and_float_yields_number(self):
         g = _default_graph()
-        assert g.common_supertype(TypeName.INT, TypeName.FLOAT) == TypeName.NUMBER
+        assert (
+            g.common_supertype(FoundationTypeName.INT, FoundationTypeName.FLOAT)
+            == FoundationTypeName.NUMBER
+        )
 
     def test_int_and_string_yields_any(self):
         g = _default_graph()
-        assert g.common_supertype(TypeName.INT, TypeName.STRING) == TypeName.ANY
+        assert (
+            g.common_supertype(FoundationTypeName.INT, FoundationTypeName.STRING)
+            == FoundationTypeName.ANY
+        )
 
     def test_int_and_int_yields_int(self):
         g = _default_graph()
-        assert g.common_supertype(TypeName.INT, TypeName.INT) == TypeName.INT
+        assert (
+            g.common_supertype(FoundationTypeName.INT, FoundationTypeName.INT)
+            == FoundationTypeName.INT
+        )
 
     def test_number_and_float_yields_number(self):
         g = _default_graph()
-        assert g.common_supertype(TypeName.NUMBER, TypeName.FLOAT) == TypeName.NUMBER
+        assert (
+            g.common_supertype(FoundationTypeName.NUMBER, FoundationTypeName.FLOAT)
+            == FoundationTypeName.NUMBER
+        )
 
     def test_string_and_bool_yields_any(self):
         g = _default_graph()
-        assert g.common_supertype(TypeName.STRING, TypeName.BOOL) == TypeName.ANY
+        assert (
+            g.common_supertype(FoundationTypeName.STRING, FoundationTypeName.BOOL)
+            == FoundationTypeName.ANY
+        )
 
     def test_unknown_type_yields_any(self):
         g = _default_graph()
-        assert g.common_supertype("PackedDecimal", TypeName.INT) == TypeName.ANY
+        assert (
+            g.common_supertype("PackedDecimal", FoundationTypeName.INT)
+            == FoundationTypeName.ANY
+        )
 
 
 class TestTypeGraphExtend:
     def test_extend_adds_new_node(self):
         g = _default_graph()
         extended = g.extend(
-            (TypeNode(name="PackedDecimal", parents=(TypeName.NUMBER,)),)
+            (TypeNode(name="PackedDecimal", parents=(FoundationTypeName.NUMBER,)),)
         )
         assert extended.contains("PackedDecimal")
-        assert extended.is_subtype("PackedDecimal", TypeName.NUMBER)
+        assert extended.is_subtype("PackedDecimal", FoundationTypeName.NUMBER)
 
     def test_extend_preserves_existing_relationships(self):
         g = _default_graph()
         extended = g.extend(
-            (TypeNode(name="PackedDecimal", parents=(TypeName.NUMBER,)),)
+            (TypeNode(name="PackedDecimal", parents=(FoundationTypeName.NUMBER,)),)
         )
-        assert extended.is_subtype(TypeName.INT, TypeName.NUMBER)
-        assert extended.is_subtype(TypeName.FLOAT, TypeName.ANY)
+        assert extended.is_subtype(FoundationTypeName.INT, FoundationTypeName.NUMBER)
+        assert extended.is_subtype(FoundationTypeName.FLOAT, FoundationTypeName.ANY)
 
     def test_extend_returns_new_graph_not_mutating_original(self):
         g = _default_graph()
         extended = g.extend(
-            (TypeNode(name="PackedDecimal", parents=(TypeName.NUMBER,)),)
+            (TypeNode(name="PackedDecimal", parents=(FoundationTypeName.NUMBER,)),)
         )
         assert not g.contains("PackedDecimal")
         assert extended.contains("PackedDecimal")
@@ -113,17 +131,17 @@ class TestTypeGraphExtend:
     def test_extend_with_custom_subtype(self):
         g = _default_graph()
         extended = g.extend(
-            (TypeNode(name="PackedDecimal", parents=(TypeName.NUMBER,)),)
+            (TypeNode(name="PackedDecimal", parents=(FoundationTypeName.NUMBER,)),)
         )
-        assert extended.is_subtype("PackedDecimal", TypeName.ANY)
-        assert not extended.is_subtype("PackedDecimal", TypeName.INT)
+        assert extended.is_subtype("PackedDecimal", FoundationTypeName.ANY)
+        assert not extended.is_subtype("PackedDecimal", FoundationTypeName.INT)
 
 
 class TestTypeGraphContains:
     def test_contains_known_type(self):
         g = _default_graph()
-        assert g.contains(TypeName.INT)
-        assert g.contains(TypeName.ANY)
+        assert g.contains(FoundationTypeName.INT)
+        assert g.contains(FoundationTypeName.ANY)
 
     def test_does_not_contain_unknown_type(self):
         g = _default_graph()

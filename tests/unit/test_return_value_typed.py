@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm.executor import _handle_return, _default_handler_context
@@ -27,7 +27,9 @@ class TestHandleReturnTypedValue:
     def test_return_with_int_operand(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        vm.current_frame.registers[Register("%0")] = typed(42, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%0")] = typed(
+            42, scalar(FoundationTypeName.INT)
+        )
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
         result = _handle_return(inst, vm, _default_handler_context())
         rv = result.update.return_value
@@ -45,7 +47,7 @@ class TestHandleReturnTypedValue:
         assert isinstance(rv, TypedValue)
         assert rv.value is None
         assert rv.type == UNKNOWN
-        assert rv.type != scalar(TypeName.VOID)
+        assert rv.type != scalar(FoundationTypeName.VOID)
 
     def test_return_without_operands_is_void(self):
         """RETURN with no operands -> typed(None, scalar('Void'))."""
@@ -56,7 +58,7 @@ class TestHandleReturnTypedValue:
         rv = result.update.return_value
         assert isinstance(rv, TypedValue)
         assert rv.value is None
-        assert rv.type == scalar(TypeName.VOID)
+        assert rv.type == scalar(FoundationTypeName.VOID)
 
     def test_void_and_none_are_distinguishable(self):
         """Void and None return values have different types."""
@@ -74,8 +76,8 @@ class TestHandleReturnTypedValue:
         none_result = _handle_return(none_inst, vm, _default_handler_context())
         none_rv = none_result.update.return_value
 
-        assert void_rv.type == scalar(TypeName.VOID)
-        assert none_rv.type != scalar(TypeName.VOID)
+        assert void_rv.type == scalar(FoundationTypeName.VOID)
+        assert none_rv.type != scalar(FoundationTypeName.VOID)
         assert void_rv.type != none_rv.type
 
 
@@ -90,7 +92,7 @@ class TestMaterializeReturnValue:
         rv = result.return_value
         assert isinstance(rv, TypedValue)
         assert rv.value == 42
-        assert rv.type == scalar(TypeName.INT)
+        assert rv.type == scalar(FoundationTypeName.INT)
 
     def test_default_return_value_is_void(self):
         """StateUpdate without explicit return_value defaults to Void."""
@@ -99,7 +101,7 @@ class TestMaterializeReturnValue:
         raw = StateUpdate(reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         assert isinstance(result.return_value, TypedValue)
-        assert result.return_value.type == scalar(TypeName.VOID)
+        assert result.return_value.type == scalar(FoundationTypeName.VOID)
 
     def test_symbolic_dict_return_value_materialized(self):
         vm = VMState()
@@ -115,7 +117,7 @@ class TestMaterializeReturnValue:
     def test_already_typed_return_value_passes_through(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        tv = typed(42, scalar(TypeName.INT))
+        tv = typed(42, scalar(FoundationTypeName.INT))
         raw = StateUpdate(return_value=tv, call_pop=True, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         assert result.return_value is tv

@@ -85,11 +85,11 @@ def _handle_return(
     t = inst
     assert isinstance(t, Return_)
     if vm.current_frame.is_ctor:
-        tv = typed(None, scalar(constants.TypeName.VOID))
+        tv = typed(None, scalar(constants.FoundationTypeName.VOID))
     elif t.value_reg is not None:
         tv = _resolve_reg(vm, t.value_reg)
     else:
-        tv = typed(None, scalar(constants.TypeName.VOID))
+        tv = typed(None, scalar(constants.FoundationTypeName.VOID))
     return ExecutionResult.success(
         StateUpdate(
             return_value=tv,

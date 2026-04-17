@@ -9,7 +9,7 @@ from dataclasses import dataclass, field as dataclass_field, replace
 from types import MappingProxyType
 from typing import Any
 
-from interpreter.constants import Language, TypeName
+from interpreter.constants import Language, FoundationTypeName
 from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
@@ -293,7 +293,7 @@ def _handle_return_flow(
     caller_frame = vm.current_frame
     if return_frame.result_reg.is_present() and not (
         isinstance(update.return_value, TypedValue)
-        and update.return_value.type == scalar(TypeName.VOID)
+        and update.return_value.type == scalar(FoundationTypeName.VOID)
     ):
         caller_frame.registers[return_frame.result_reg] = update.return_value
 

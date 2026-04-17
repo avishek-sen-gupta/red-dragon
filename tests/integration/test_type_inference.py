@@ -2,7 +2,7 @@
 
 import pytest
 
-from interpreter.constants import Language, TypeName
+from interpreter.constants import Language, FoundationTypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
@@ -55,7 +55,7 @@ class TestJavaTypeInference:
         binops = [i for i in instructions if i.opcode == Opcode.BINOP]
         assert len(binops) == 1
         binop_reg = binops[0].result_reg
-        assert env.register_types[binop_reg] == TypeName.INT
+        assert env.register_types[binop_reg] == FoundationTypeName.INT
         assert env.var_types[VarName("x")] == "Int"
 
     def test_typed_params(self):
@@ -95,7 +95,7 @@ class M {
         binops = [i for i in instructions if i.opcode == Opcode.BINOP and i.result_reg]
         # At least one BINOP should produce Float (Int + Float → Float)
         binop_types = [env.register_types.get(b.result_reg, "") for b in binops]
-        assert TypeName.FLOAT in binop_types
+        assert FoundationTypeName.FLOAT in binop_types
 
     def test_new_object_constructor_typed(self):
         """Java `new Dog(...)` → CALL_FUNCTION result register typed as Dog."""
@@ -264,8 +264,8 @@ function add(a: number, b: number): number {
             "typescript",
         )
         # Inferred from CONST literal, not from TS type annotation
-        assert env.var_types[VarName("x")] == TypeName.INT
-        assert env.var_types[VarName("name")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.INT
+        assert env.var_types[VarName("name")] == FoundationTypeName.STRING
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +374,7 @@ class TestCrossLanguageConsistency:
             VarName("x") in env.var_types
         ), f"[{lang}] expected 'x' in var_types, got: {dict(env.var_types)}"
         assert (
-            env.var_types[VarName("x")] == TypeName.INT
+            env.var_types[VarName("x")] == FoundationTypeName.INT
         ), f"[{lang}] expected x typed as Int, got {env.var_types[VarName('x')]!r}"
 
 
@@ -956,7 +956,10 @@ class TestPythonReturnBackfill:
             "python",
         )
         assert FuncName("double") in env.method_signatures.get(UNBOUND, {})
-        assert env.get_func_signature(FuncName("double")).return_type == TypeName.INT
+        assert (
+            env.get_func_signature(FuncName("double")).return_type
+            == FoundationTypeName.INT
+        )
 
     def test_unannotated_function_returning_string_literal(self):
         """Python `def greet(): return "hi"` → return_type == String."""
@@ -965,7 +968,10 @@ class TestPythonReturnBackfill:
             "python",
         )
         assert FuncName("greet") in env.method_signatures.get(UNBOUND, {})
-        assert env.get_func_signature(FuncName("greet")).return_type == TypeName.STRING
+        assert (
+            env.get_func_signature(FuncName("greet")).return_type
+            == FoundationTypeName.STRING
+        )
 
 
 class TestJavaScriptReturnBackfill:
@@ -976,7 +982,9 @@ class TestJavaScriptReturnBackfill:
             "javascript",
         )
         assert FuncName("f") in env.method_signatures.get(UNBOUND, {})
-        assert env.get_func_signature(FuncName("f")).return_type == TypeName.INT
+        assert (
+            env.get_func_signature(FuncName("f")).return_type == FoundationTypeName.INT
+        )
 
 
 class TestRubyReturnBackfill:
@@ -987,7 +995,9 @@ class TestRubyReturnBackfill:
             "ruby",
         )
         assert FuncName("f") in env.method_signatures.get(UNBOUND, {})
-        assert env.get_func_signature(FuncName("f")).return_type == TypeName.INT
+        assert (
+            env.get_func_signature(FuncName("f")).return_type == FoundationTypeName.INT
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1053,7 +1063,7 @@ class Dog:
         assert len(store_fields) >= 1, "Expected at least one STORE_FIELD"
         assert len(load_fields) >= 1, "Expected at least one LOAD_FIELD for 'age'"
         assert (
-            env.register_types[load_fields[0].result_reg] == TypeName.INT
+            env.register_types[load_fields[0].result_reg] == FoundationTypeName.INT
         ), f"Expected LOAD_FIELD result typed as Int, got {env.register_types.get(load_fields[0].result_reg)!r}"
 
 
@@ -1082,7 +1092,7 @@ class Dog {
         assert len(store_fields) >= 1, "Expected at least one STORE_FIELD"
         assert len(load_fields) >= 1, "Expected at least one LOAD_FIELD for 'age'"
         assert (
-            env.register_types[load_fields[0].result_reg] == TypeName.INT
+            env.register_types[load_fields[0].result_reg] == FoundationTypeName.INT
         ), f"Expected LOAD_FIELD result typed as Int, got {env.register_types.get(load_fields[0].result_reg)!r}"
 
 
@@ -1093,7 +1103,7 @@ class TestPythonBuiltinReturnTypes:
             'x = len("hello")',
             "python",
         )
-        assert env.var_types[VarName("x")] == TypeName.INT
+        assert env.var_types[VarName("x")] == FoundationTypeName.INT
 
     def test_range_returns_array(self):
         """Python `r = range(10)` → var_types["r"] == Array."""
@@ -1101,7 +1111,7 @@ class TestPythonBuiltinReturnTypes:
             "r = range(10)",
             "python",
         )
-        assert env.var_types[VarName("r")] == TypeName.ARRAY
+        assert env.var_types[VarName("r")] == FoundationTypeName.ARRAY
 
     def test_abs_returns_number(self):
         """Python `y = abs(-5)` → var_types["y"] == Number."""
@@ -1109,7 +1119,7 @@ class TestPythonBuiltinReturnTypes:
             "y = abs(-5)",
             "python",
         )
-        assert env.var_types[VarName("y")] == TypeName.NUMBER
+        assert env.var_types[VarName("y")] == FoundationTypeName.NUMBER
 
 
 # ---------------------------------------------------------------------------
@@ -1152,7 +1162,7 @@ class Dog:
             and str(i.operands[1]) == "age"
         ]
         assert len(load_fields) >= 1
-        assert env.register_types[load_fields[0].result_reg] == TypeName.INT
+        assert env.register_types[load_fields[0].result_reg] == FoundationTypeName.INT
 
 
 class TestJavaSelfFieldTracking:
@@ -1215,7 +1225,7 @@ class Dog {
             and str(i.operands[1]) == "age"
         ]
         assert len(load_fields) >= 1
-        assert env.register_types[load_fields[0].result_reg] == TypeName.INT
+        assert env.register_types[load_fields[0].result_reg] == FoundationTypeName.INT
 
 
 class TestThisParamInFuncSignatures:
@@ -1358,7 +1368,7 @@ class TestBinopIntPlusInt:
         assert len(binops) >= 1, f"[{lang}] expected at least one BINOP"
         result_type = env.register_types.get(binops[0].result_reg)
         assert (
-            result_type == TypeName.INT
+            result_type == FoundationTypeName.INT
         ), f"[{lang}] expected Int, got {result_type!r}"
 
 
@@ -1400,7 +1410,7 @@ class TestBinopIntPlusFloat:
         assert len(binops) >= 1, f"[{lang}] expected at least one BINOP"
         result_type = env.register_types.get(binops[0].result_reg)
         assert (
-            result_type == TypeName.FLOAT
+            result_type == FoundationTypeName.FLOAT
         ), f"[{lang}] expected Float, got {result_type!r}"
 
 
@@ -1442,7 +1452,7 @@ class TestBinopComparisonYieldsBool:
         assert len(binops) >= 1, f"[{lang}] expected at least one BINOP"
         result_type = env.register_types.get(binops[0].result_reg)
         assert (
-            result_type == TypeName.BOOL
+            result_type == FoundationTypeName.BOOL
         ), f"[{lang}] expected Bool, got {result_type!r}"
 
 
@@ -1483,7 +1493,7 @@ class TestUnopNotBangYieldsBool:
         assert len(unops) >= 1, f"[{lang}] expected at least one UNOP"
         result_type = env.register_types.get(unops[0].result_reg)
         assert (
-            result_type == TypeName.BOOL
+            result_type == FoundationTypeName.BOOL
         ), f"[{lang}] expected Bool, got {result_type!r}"
 
 
@@ -1503,7 +1513,9 @@ class TestUnopLuaHashYieldsInt:
         unops = [i for i in instructions if i.opcode == Opcode.UNOP and i.result_reg]
         assert len(unops) >= 1, "expected at least one UNOP for # operator"
         result_type = env.register_types.get(unops[0].result_reg)
-        assert result_type == TypeName.INT, f"expected Int, got {result_type!r}"
+        assert (
+            result_type == FoundationTypeName.INT
+        ), f"expected Int, got {result_type!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1542,7 +1554,7 @@ class TestReturnBackfillAllLanguages:
             ), f"[{lang}] expected 'f' in func_signatures"
             sig = env.get_func_signature(FuncName("f"))
         assert (
-            sig.return_type == TypeName.INT
+            sig.return_type == FoundationTypeName.INT
         ), f"[{lang}] expected return_type Int, got {sig.return_type!r}"
 
 
@@ -1681,7 +1693,7 @@ end
         assert len(load_fields) >= 1, f"[{lang}] expected LOAD_FIELD for 'age'"
         result_type = env.register_types.get(load_fields[0].result_reg)
         assert (
-            result_type == TypeName.INT
+            result_type == FoundationTypeName.INT
         ), f"[{lang}] expected LOAD_FIELD result Int, got {result_type!r}"
 
 
@@ -1870,35 +1882,35 @@ class TestNewObjectTypingOOP:
 class TestBuiltinMethodReturnTypesPython:
     def test_upper_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.upper()", "python")
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
     def test_split_returns_array(self):
         _instructions, env = _lower_and_infer("x = 'a,b'.split(',')", "python")
-        assert env.var_types[VarName("x")] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == FoundationTypeName.ARRAY
 
     def test_find_returns_int(self):
         _instructions, env = _lower_and_infer("x = 'hello'.find('l')", "python")
-        assert env.var_types[VarName("x")] == TypeName.INT
+        assert env.var_types[VarName("x")] == FoundationTypeName.INT
 
     def test_startswith_returns_bool(self):
         _instructions, env = _lower_and_infer("x = 'hello'.startswith('h')", "python")
-        assert env.var_types[VarName("x")] == TypeName.BOOL
+        assert env.var_types[VarName("x")] == FoundationTypeName.BOOL
 
     def test_keys_returns_array(self):
         _instructions, env = _lower_and_infer("d = {}; x = d.keys()", "python")
-        assert env.var_types[VarName("x")] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == FoundationTypeName.ARRAY
 
     def test_values_returns_array(self):
         _instructions, env = _lower_and_infer("d = {}; x = d.values()", "python")
-        assert env.var_types[VarName("x")] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == FoundationTypeName.ARRAY
 
     def test_replace_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.replace('l','r')", "python")
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
     def test_count_returns_int(self):
         _instructions, env = _lower_and_infer("x = [1,2,1].count(1)", "python")
-        assert env.var_types[VarName("x")] == TypeName.INT
+        assert env.var_types[VarName("x")] == FoundationTypeName.INT
 
 
 class TestBuiltinMethodReturnTypesJavaScript:
@@ -1906,27 +1918,27 @@ class TestBuiltinMethodReturnTypesJavaScript:
         _instructions, env = _lower_and_infer(
             "let x = 'hello'.toUpperCase();", "javascript"
         )
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
     def test_split_returns_array(self):
         _instructions, env = _lower_and_infer("let x = 'a,b'.split(',');", "javascript")
-        assert env.var_types[VarName("x")] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == FoundationTypeName.ARRAY
 
     def test_indexOf_returns_int(self):
         _instructions, env = _lower_and_infer(
             "let x = 'hello'.indexOf('l');", "javascript"
         )
-        assert env.var_types[VarName("x")] == TypeName.INT
+        assert env.var_types[VarName("x")] == FoundationTypeName.INT
 
     def test_includes_returns_bool(self):
         _instructions, env = _lower_and_infer(
             "let x = 'hello'.includes('l');", "javascript"
         )
-        assert env.var_types[VarName("x")] == TypeName.BOOL
+        assert env.var_types[VarName("x")] == FoundationTypeName.BOOL
 
     def test_trim_returns_string(self):
         _instructions, env = _lower_and_infer("let x = ' hello '.trim();", "javascript")
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
 
 class TestBuiltinMethodReturnTypesJava:
@@ -1934,37 +1946,37 @@ class TestBuiltinMethodReturnTypesJava:
         _instructions, env = _lower_and_infer(
             'class M { static String x = "hello".toUpperCase(); }', "java"
         )
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
     def test_indexOf_returns_int(self):
         _instructions, env = _lower_and_infer(
             'class M { static int x = "hello".indexOf("l"); }', "java"
         )
-        assert env.var_types[VarName("x")] == TypeName.INT
+        assert env.var_types[VarName("x")] == FoundationTypeName.INT
 
     def test_contains_returns_bool(self):
         _instructions, env = _lower_and_infer(
             'class M { static boolean x = "hello".contains("l"); }', "java"
         )
-        assert env.var_types[VarName("x")] == TypeName.BOOL
+        assert env.var_types[VarName("x")] == FoundationTypeName.BOOL
 
 
 class TestBuiltinMethodReturnTypesRuby:
     def test_upcase_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.upcase", "ruby")
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
     def test_downcase_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.downcase", "ruby")
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
     def test_split_returns_array(self):
         _instructions, env = _lower_and_infer("x = 'a,b'.split(',')", "ruby")
-        assert env.var_types[VarName("x")] == TypeName.ARRAY
+        assert env.var_types[VarName("x")] == FoundationTypeName.ARRAY
 
     def test_gsub_returns_string(self):
         _instructions, env = _lower_and_infer("x = 'hello'.gsub('l','r')", "ruby")
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
 
 class TestBuiltinMethodReturnTypesKotlin:
@@ -1972,19 +1984,19 @@ class TestBuiltinMethodReturnTypesKotlin:
         _instructions, env = _lower_and_infer(
             'fun main() { val x = "hello".toUpperCase() }', "kotlin"
         )
-        assert env.var_types[VarName("x")] == TypeName.STRING
+        assert env.var_types[VarName("x")] == FoundationTypeName.STRING
 
     def test_indexOf_returns_int(self):
         _instructions, env = _lower_and_infer(
             'fun main() { val x = "hello".indexOf("l") }', "kotlin"
         )
-        assert env.var_types[VarName("x")] == TypeName.INT
+        assert env.var_types[VarName("x")] == FoundationTypeName.INT
 
     def test_contains_returns_bool(self):
         _instructions, env = _lower_and_infer(
             'fun main() { val x = "hello".contains("l") }', "kotlin"
         )
-        assert env.var_types[VarName("x")] == TypeName.BOOL
+        assert env.var_types[VarName("x")] == FoundationTypeName.BOOL
 
 
 # ---------------------------------------------------------------------------
@@ -2003,8 +2015,14 @@ def helper():
     return 42
 """
         _instructions, env = _lower_and_infer(source, "python")
-        assert env.get_func_signature(FuncName("helper")).return_type == TypeName.INT
-        assert env.get_func_signature(FuncName("main")).return_type == TypeName.INT
+        assert (
+            env.get_func_signature(FuncName("helper")).return_type
+            == FoundationTypeName.INT
+        )
+        assert (
+            env.get_func_signature(FuncName("main")).return_type
+            == FoundationTypeName.INT
+        )
 
     def test_forward_ref_var_assignment(self):
         """Python: x = helper() where helper is defined later → x typed."""
@@ -2018,7 +2036,8 @@ def make_value():
 """
         _instructions, env = _lower_and_infer(source, "python")
         assert (
-            env.get_func_signature(FuncName("make_value")).return_type == TypeName.FLOAT
+            env.get_func_signature(FuncName("make_value")).return_type
+            == FoundationTypeName.FLOAT
         )
 
 
@@ -2035,8 +2054,14 @@ function helper() {
 }
 """
         _instructions, env = _lower_and_infer(source, "javascript")
-        assert env.get_func_signature(FuncName("helper")).return_type == TypeName.INT
-        assert env.get_func_signature(FuncName("main")).return_type == TypeName.INT
+        assert (
+            env.get_func_signature(FuncName("helper")).return_type
+            == FoundationTypeName.INT
+        )
+        assert (
+            env.get_func_signature(FuncName("main")).return_type
+            == FoundationTypeName.INT
+        )
 
 
 class TestForwardReferenceRuby:
@@ -2052,8 +2077,14 @@ def helper()
 end
 """
         _instructions, env = _lower_and_infer(source, "ruby")
-        assert env.get_func_signature(FuncName("helper")).return_type == TypeName.INT
-        assert env.get_func_signature(FuncName("main")).return_type == TypeName.INT
+        assert (
+            env.get_func_signature(FuncName("helper")).return_type
+            == FoundationTypeName.INT
+        )
+        assert (
+            env.get_func_signature(FuncName("main")).return_type
+            == FoundationTypeName.INT
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2243,10 +2274,10 @@ def scoping_lang(request):
 
 # Per-language canonical type for "integer 42" and "string hello"
 _EXPECTED_INT_TYPE: dict[str, str] = {
-    "typescript": TypeName.FLOAT,  # TS `number` → Float
+    "typescript": FoundationTypeName.FLOAT,  # TS `number` → Float
 }
 _EXPECTED_STR_TYPE: dict[str, str] = {
-    "c": TypeName.FLOAT,  # C has no string type; use float to test scoping
+    "c": FoundationTypeName.FLOAT,  # C has no string type; use float to test scoping
 }
 
 
@@ -2258,8 +2289,8 @@ class TestVarTypeScopingCrossLanguage:
         """Variable 'x' in make_int is Int, 'x' in make_str is String — no collision."""
         source = _SCOPING_SOURCES[scoping_lang]
         instructions, env = _lower_and_infer(source, scoping_lang)
-        expected_int = _EXPECTED_INT_TYPE.get(scoping_lang, TypeName.INT)
-        expected_str = _EXPECTED_STR_TYPE.get(scoping_lang, TypeName.STRING)
+        expected_int = _EXPECTED_INT_TYPE.get(scoping_lang, FoundationTypeName.INT)
+        expected_str = _EXPECTED_STR_TYPE.get(scoping_lang, FoundationTypeName.STRING)
         cls = self._CLASS_WRAPPED.get(scoping_lang)
         class_kw = {"class_name": scalar(cls)} if cls else {}
         # Both functions should have their return types correctly inferred
@@ -2763,7 +2794,7 @@ class TestBoundedTypeVarIntegration:
         """Java int var inferred as Int satisfies TypeVar bounded by Number."""
         from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.types.type_expr import typevar, scalar
-        from interpreter.constants import TypeName
+        from interpreter.constants import FoundationTypeName
 
         _, env = _lower_and_infer(
             "class M { static int x_tv1 = 42; }",
@@ -2773,7 +2804,7 @@ class TestBoundedTypeVarIntegration:
         assert inferred == "Int"
 
         graph = TypeGraph(DEFAULT_TYPE_NODES)
-        t_num = typevar("T", bound=scalar(TypeName.NUMBER))
+        t_num = typevar("T", bound=scalar(FoundationTypeName.NUMBER))
         # Inferred Int satisfies T: Number
         assert graph.is_subtype_expr(inferred, t_num)
 
@@ -2781,7 +2812,7 @@ class TestBoundedTypeVarIntegration:
         """Java String var does NOT satisfy TypeVar bounded by Number."""
         from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.types.type_expr import typevar, scalar
-        from interpreter.constants import TypeName
+        from interpreter.constants import FoundationTypeName
 
         _, env = _lower_and_infer(
             'class M { void m() { String s_tv1 = "hello"; } }',
@@ -2791,7 +2822,7 @@ class TestBoundedTypeVarIntegration:
         assert inferred == "String"
 
         graph = TypeGraph(DEFAULT_TYPE_NODES)
-        t_num = typevar("T", bound=scalar(TypeName.NUMBER))
+        t_num = typevar("T", bound=scalar(FoundationTypeName.NUMBER))
         # String does NOT satisfy T: Number
         assert not graph.is_subtype_expr(inferred, t_num)
 
@@ -2799,7 +2830,7 @@ class TestBoundedTypeVarIntegration:
         """Java List[Int] checked against List[T: Number] with TypeVar argument."""
         from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.types.type_expr import typevar, scalar, array_of
-        from interpreter.constants import TypeName
+        from interpreter.constants import FoundationTypeName
 
         _, env = _lower_and_infer(
             "class M { void m() { List<Integer> nums_tv1 = new ArrayList<>(); } }",
@@ -2809,7 +2840,7 @@ class TestBoundedTypeVarIntegration:
         assert inferred == "List[Int]"
 
         graph = TypeGraph(DEFAULT_TYPE_NODES)
-        t_num = typevar("T", bound=scalar(TypeName.NUMBER))
+        t_num = typevar("T", bound=scalar(FoundationTypeName.NUMBER))
         list_t = ParameterizedType("List", (t_num,))
         # List[Int] <: List[T: Number] because Int <: T: Number (bound=Number)
         assert graph.is_subtype_expr(inferred, list_t)

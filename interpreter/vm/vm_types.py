@@ -10,7 +10,7 @@ from collections.abc import ItemsView, KeysView, ValuesView
 from pydantic import BaseModel, ConfigDict
 
 from interpreter.address import Address
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
@@ -287,7 +287,7 @@ class StackFramePush(BaseModel):
     is_ctor: bool = False
 
 
-VOID_RETURN: TypedValue = typed(None, scalar(TypeName.VOID))
+VOID_RETURN: TypedValue = typed(None, scalar(FoundationTypeName.VOID))
 
 
 class StateUpdate(BaseModel):
