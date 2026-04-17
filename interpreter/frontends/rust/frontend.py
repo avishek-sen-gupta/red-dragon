@@ -16,12 +16,25 @@ from interpreter.frontends.rust import expressions as rust_expr
 from interpreter.frontends.rust import control_flow as rust_cf
 from interpreter.frontends.rust import declarations as rust_decl
 from interpreter.frontends.rust.node_types import RustNodeType
+from interpreter.frontends.rust.type_alias_extractor import RustTypeAliasExtractor
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.constants import Language
+from interpreter.parser import ParserFactory
 
 
 class RustFrontend(BaseFrontend):
     """Lowers a Rust tree-sitter AST into flattened TAC IR."""
 
     BLOCK_SCOPED = True
+
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: Language,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ) -> None:
+        super().__init__(parser_factory, language, observer)
+        self._type_alias_extractor = RustTypeAliasExtractor()
 
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(

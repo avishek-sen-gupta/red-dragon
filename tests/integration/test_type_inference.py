@@ -2708,6 +2708,34 @@ IntPtr p;
         assert TypeName("IntPtr") in env.type_aliases
 
 
+class TestRustTypeAliasIntegration:
+    """Integration: Rust type alias declaration seeds and resolves aliases."""
+
+    def test_rust_type_alias_seeds_alias(self):
+        """Rust: type UserId = i32; → UserId alias is Int."""
+        source = """\
+type UserId = i32;
+fn main() {
+    let x: UserId = 42;
+}
+"""
+        _, env = _lower_and_infer(source, "rust")
+        assert TypeName("UserId") in env.type_aliases
+        assert env.type_aliases[TypeName("UserId")] == scalar(TypeName("Int"))
+
+    def test_rust_type_alias_float(self):
+        """Rust: type Score = f64; → Score alias is Float."""
+        source = """\
+type Score = f64;
+fn main() {
+    let s: Score = 9.5;
+}
+"""
+        _, env = _lower_and_infer(source, "rust")
+        assert TypeName("Score") in env.type_aliases
+        assert env.type_aliases[TypeName("Score")] == scalar(TypeName("Float"))
+
+
 class TestGoTypeAliasIntegration:
     """Integration: Go type alias declaration seeds and resolves aliases."""
 
