@@ -1,5 +1,5 @@
 # pyright: standard
-"""@covers decorator for annotating test methods with the language features they verify.
+"""@covers and @no_covers decorators for annotating test methods.
 
 Usage::
 
@@ -11,8 +11,15 @@ Usage::
         def test_interface_method_lowering(self):
             ...
 
-The decorator is a no-op at runtime — it attaches metadata to the function for
-the feature coverage audit script (scripts/feature_coverage_audit.py).
+    # For tests that verify infrastructure rather than a language feature:
+    class TestTypeGraph:
+        @no_covers("tests TypeGraph internal structure, not a language feature")
+        def test_type_graph_lookup(self):
+            ...
+
+Both decorators are no-ops at runtime. @covers attaches feature metadata for the
+coverage audit script (scripts/feature_coverage_audit.py). @no_covers signals an
+intentional exemption from the @covers requirement.
 """
 
 from __future__ import annotations
@@ -33,6 +40,23 @@ def covers(*features: Enum) -> Callable[[_F], _F]:
 
     def _decorator(func: _F) -> _F:
         func._covers = frozenset(features)  # type: ignore[attr-defined]
+        return func
+
+    return _decorator
+
+
+def no_covers(reason: str) -> Callable[[_F], _F]:
+    """Explicitly exempt a test method from the @covers requirement.
+
+    Use only for tests that verify infrastructure, utilities, or cross-cutting
+    concerns that don't map to a specific language feature enum member.
+
+    The reason string is mandatory — it documents why the exemption is justified
+    and makes intentional exemptions easy to audit (grep for no_covers).
+    """
+
+    def _decorator(func: _F) -> _F:
+        func._no_covers = reason  # type: ignore[attr-defined]
         return func
 
     return _decorator
