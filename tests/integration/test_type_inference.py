@@ -2708,6 +2708,24 @@ IntPtr p;
         assert TypeName("IntPtr") in env.type_aliases
 
 
+class TestTypeScriptTypeAliasIntegration:
+    """Integration: TypeScript type alias declaration seeds and resolves aliases."""
+
+    def test_typescript_type_alias_seeds_alias(self):
+        """TS: type UserId = number; → UserId alias is Float."""
+        source = "type UserId = number;"
+        _, env = _lower_and_infer(source, "typescript")
+        assert TypeName("UserId") in env.type_aliases
+        assert env.type_aliases[TypeName("UserId")] == scalar(TypeName("Float"))
+
+    def test_typescript_type_alias_string(self):
+        """TS: type Label = string; → Label alias is String."""
+        source = "type Label = string;"
+        _, env = _lower_and_infer(source, "typescript")
+        assert TypeName("Label") in env.type_aliases
+        assert env.type_aliases[TypeName("Label")] == scalar(TypeName("String"))
+
+
 class TestRustTypeAliasIntegration:
     """Integration: Rust type alias declaration seeds and resolves aliases."""
 
