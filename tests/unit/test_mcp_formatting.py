@@ -15,7 +15,7 @@ from interpreter.interprocedural.types import (
 )
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.types.typed_value import TypedValue
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.type_expr import ScalarType
 from interpreter.register import Register
 
@@ -30,17 +30,19 @@ from mcp_server.formatting import (
 
 class TestFormatTypedValue:
     def test_int_value(self):
-        tv = TypedValue(value=42, type=ScalarType(name=TypeName.INT))
+        tv = TypedValue(value=42, type=ScalarType(name=FoundationTypeName.INT))
         result = format_typed_value(tv)
         assert result == 42
 
     def test_string_value(self):
-        tv = TypedValue(value="hello", type=ScalarType(name=TypeName.STRING))
+        tv = TypedValue(value="hello", type=ScalarType(name=FoundationTypeName.STRING))
         result = format_typed_value(tv)
         assert result == "hello"
 
     def test_complex_value_returns_dict(self):
-        tv = TypedValue(value={"key": "val"}, type=ScalarType(name=TypeName.ANY))
+        tv = TypedValue(
+            value={"key": "val"}, type=ScalarType(name=FoundationTypeName.ANY)
+        )
         result = format_typed_value(tv)
         assert isinstance(result, dict)
 

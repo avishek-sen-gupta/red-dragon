@@ -10,7 +10,7 @@ from __future__ import annotations
 from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import _builtin_len, _builtin_array_of
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.vm.vm import VMState, apply_update
@@ -64,8 +64,8 @@ class TestBuiltinLenRespectsLengthField:
             HeapObject(
                 type_hint="object",
                 fields={
-                    FieldName("a"): typed(1, scalar(TypeName.INT)),
-                    FieldName("b"): typed(2, scalar(TypeName.INT)),
+                    FieldName("a"): typed(1, scalar(FoundationTypeName.INT)),
+                    FieldName("b"): typed(2, scalar(FoundationTypeName.INT)),
                 },
             ),
         )
@@ -80,11 +80,17 @@ class TestBuiltinLenRespectsLengthField:
             HeapObject(
                 type_hint="array",
                 fields={
-                    FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT)),
-                    FieldName("1", FieldKind.INDEX): typed(20, scalar(TypeName.INT)),
-                    FieldName("2", FieldKind.INDEX): typed(30, scalar(TypeName.INT)),
+                    FieldName("0", FieldKind.INDEX): typed(
+                        10, scalar(FoundationTypeName.INT)
+                    ),
+                    FieldName("1", FieldKind.INDEX): typed(
+                        20, scalar(FoundationTypeName.INT)
+                    ),
+                    FieldName("2", FieldKind.INDEX): typed(
+                        30, scalar(FoundationTypeName.INT)
+                    ),
                     FieldName("length", FieldKind.SPECIAL): typed(
-                        3, scalar(TypeName.INT)
+                        3, scalar(FoundationTypeName.INT)
                     ),
                 },
             ),

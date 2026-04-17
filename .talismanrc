@@ -70,7 +70,7 @@ fileignoreconfig:
 - filename: interpreter/types/type_environment_builder.py
   checksum: 56fd368b7d8105239a22eca2018891ab949f86fc8fec9b0258b2b6f1de15efbf
 - filename: interpreter/types/type_inference.py
-  checksum: 255ef5191b23cf3bee09425778ce0b4991131b469978fe5e6005a6e2e6c9c6c5
+  checksum: 3802e9e06a787bd3f936893d299d576755923b09b76f7ccfd5ae5655a47396b3
 - filename: interpreter/frontends/common/exceptions.py
   checksum: 553efc4a65dd05221edec9b897a8bda685e1a24b14adf20010733fd5b2ddf9b6
 - filename: interpreter/frontends/_base.py
@@ -109,6 +109,8 @@ fileignoreconfig:
   checksum: 957a53fd69e05b7ceb86b79ae3700184fa98225c03e348d2ac07b29d2bb28bac
 - filename: tests/unit/viz/test_panel_rendering.py
   checksum: 4479448a812174d943a526154562faa59db53a02eeceb223e278ba6bcc44c7da
+- filename: tests/unit/test_mcp_formatting.py
+  checksum: ccd6789eb7adc3a81ed186d4e90b83a212fb2c4f1e470e85aca3ea1737f49e77
 - filename: docs/superpowers/specs/2026-04-05-tui-mvvm-design.md
   checksum: b53c35744657dc6e1c89f0d2b69f3aca639bdeaed3ca44b8b7dc2d93d592fe6c
 - filename: docs/superpowers/plans/2026-04-05-tui-mvvm.md

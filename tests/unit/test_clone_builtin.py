@@ -10,7 +10,7 @@ from interpreter.address import Address
 from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import TypeExpr, scalar
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 
 
 class TestCloneBuiltin:
@@ -28,7 +28,7 @@ class TestCloneBuiltin:
         """clone should return a new Pointer, not the original."""
         vm, ptr = self._make_vm_with_object(
             scalar("MyClass"),
-            {FieldName("x"): typed(42, scalar(TypeName.INT))},
+            {FieldName("x"): typed(42, scalar(FoundationTypeName.INT))},
         )
         result = Builtins.TABLE[FuncName("clone")]([typed_from_runtime(ptr)], vm)
         assert isinstance(result, BuiltinResult)
@@ -40,8 +40,8 @@ class TestCloneBuiltin:
         vm, ptr = self._make_vm_with_object(
             scalar("MyClass"),
             {
-                FieldName("x"): typed(42, scalar(TypeName.INT)),
-                FieldName("name"): typed("hello", scalar(TypeName.STRING)),
+                FieldName("x"): typed(42, scalar(FoundationTypeName.INT)),
+                FieldName("name"): typed("hello", scalar(FoundationTypeName.STRING)),
             },
         )
         result = Builtins.TABLE[FuncName("clone")]([typed_from_runtime(ptr)], vm)
@@ -53,7 +53,7 @@ class TestCloneBuiltin:
         """clone should create a new object with the same type_hint."""
         vm, ptr = self._make_vm_with_object(
             scalar("Dog"),
-            {FieldName("breed"): typed("labrador", scalar(TypeName.STRING))},
+            {FieldName("breed"): typed("labrador", scalar(FoundationTypeName.STRING))},
         )
         result = Builtins.TABLE[FuncName("clone")]([typed_from_runtime(ptr)], vm)
         assert len(result.new_objects) == 1

@@ -9,7 +9,7 @@ from types import MappingProxyType
 
 from interpreter.var_name import VarName
 from interpreter.cfg import build_cfg
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
@@ -84,7 +84,7 @@ class TestTypeCoecionEndToEnd:
         type_env = infer_types(instructions, type_resolver)
 
         # Verify type inference assigned Int to %idx (Int / Int → Int via floor division)
-        assert type_env.register_types.get(Register("%idx")) == TypeName.INT
+        assert type_env.register_types.get(Register("%idx")) == FoundationTypeName.INT
 
         vm, stats = execute_cfg(
             cfg,

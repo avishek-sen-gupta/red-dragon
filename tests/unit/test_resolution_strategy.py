@@ -1,6 +1,6 @@
 """Unit tests for ResolutionStrategy — candidate ranking by arity then type."""
 
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
@@ -13,7 +13,7 @@ from interpreter.types.typed_value import typed
 def _sig(
     *param_types: str, kind: FunctionKind = FunctionKind.UNBOUND
 ) -> FunctionSignature:
-    """Helper: create FunctionSignature from TypeName strings."""
+    """Helper: create FunctionSignature from FoundationTypeName strings."""
     return FunctionSignature(
         params=tuple(
             (f"p{i}", scalar(t) if t else UNKNOWN) for i, t in enumerate(param_types)
@@ -43,85 +43,116 @@ class TestArityThenTypeStrategy:
     # -- Arity-based resolution --
 
     def test_single_candidate_returns_it(self):
-        candidates = [_sig(TypeName.INT)]
-        assert self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))]) == [0]
+        candidates = [_sig(FoundationTypeName.INT)]
+        assert self.strategy.rank(
+            candidates, [typed(42, scalar(FoundationTypeName.INT))]
+        ) == [0]
 
     def test_empty_candidates_returns_empty(self):
-        assert self.strategy.rank([], [typed(42, scalar(TypeName.INT))]) == []
+        assert self.strategy.rank([], [typed(42, scalar(FoundationTypeName.INT))]) == []
 
     def test_arity_match_preferred(self):
-        candidates = [_sig(TypeName.INT, TypeName.INT), _sig(TypeName.INT)]
-        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
+        candidates = [
+            _sig(FoundationTypeName.INT, FoundationTypeName.INT),
+            _sig(FoundationTypeName.INT),
+        ]
+        ranked = self.strategy.rank(
+            candidates, [typed(42, scalar(FoundationTypeName.INT))]
+        )
         assert ranked[0] == 1
 
     def test_two_args_picks_two_param_overload(self):
-        candidates = [_sig(TypeName.INT), _sig(TypeName.INT, TypeName.STRING)]
+        candidates = [
+            _sig(FoundationTypeName.INT),
+            _sig(FoundationTypeName.INT, FoundationTypeName.STRING),
+        ]
         ranked = self.strategy.rank(
             candidates,
-            [typed(42, scalar(TypeName.INT)), typed("hello", scalar(TypeName.STRING))],
+            [
+                typed(42, scalar(FoundationTypeName.INT)),
+                typed("hello", scalar(FoundationTypeName.STRING)),
+            ],
         )
         assert ranked[0] == 1
 
     def test_zero_args_picks_nullary(self):
-        candidates = [_sig(TypeName.INT), _sig()]
+        candidates = [_sig(FoundationTypeName.INT), _sig()]
         ranked = self.strategy.rank(candidates, [])
         assert ranked[0] == 1
 
     def test_fewer_args_than_params_scores_by_available(self):
         """2 args against a 3-param candidate — only first 2 positions scored."""
         candidates = [
-            _sig(TypeName.INT, TypeName.STRING, TypeName.FLOAT),
-            _sig(TypeName.INT, TypeName.STRING),
+            _sig(
+                FoundationTypeName.INT,
+                FoundationTypeName.STRING,
+                FoundationTypeName.FLOAT,
+            ),
+            _sig(FoundationTypeName.INT, FoundationTypeName.STRING),
         ]
         ranked = self.strategy.rank(
             candidates,
-            [typed(42, scalar(TypeName.INT)), typed("hello", scalar(TypeName.STRING))],
+            [
+                typed(42, scalar(FoundationTypeName.INT)),
+                typed("hello", scalar(FoundationTypeName.STRING)),
+            ],
         )
         assert ranked[0] == 1  # exact arity match wins
 
     # -- Type-based tiebreaking --
 
     def test_same_arity_exact_type_wins(self):
-        candidates = [_sig(TypeName.STRING), _sig(TypeName.INT)]
-        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
+        candidates = [_sig(FoundationTypeName.STRING), _sig(FoundationTypeName.INT)]
+        ranked = self.strategy.rank(
+            candidates, [typed(42, scalar(FoundationTypeName.INT))]
+        )
         assert ranked[0] == 1
 
     def test_same_arity_compatible_vs_mismatch(self):
-        candidates = [_sig(TypeName.STRING), _sig(TypeName.FLOAT)]
-        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
+        candidates = [_sig(FoundationTypeName.STRING), _sig(FoundationTypeName.FLOAT)]
+        ranked = self.strategy.rank(
+            candidates, [typed(42, scalar(FoundationTypeName.INT))]
+        )
         assert ranked[0] == 1
 
     def test_same_arity_both_exact_preserves_order(self):
-        candidates = [_sig(TypeName.INT), _sig(TypeName.INT)]
-        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
+        candidates = [_sig(FoundationTypeName.INT), _sig(FoundationTypeName.INT)]
+        ranked = self.strategy.rank(
+            candidates, [typed(42, scalar(FoundationTypeName.INT))]
+        )
         assert ranked[0] == 0
 
     # -- Instance methods use callable_params (excludes this) --
 
     def test_instance_method_arity_excludes_this(self):
         candidates = [
-            _instance_sig(TypeName.INT, TypeName.INT),
-            _instance_sig(TypeName.INT),
+            _instance_sig(FoundationTypeName.INT, FoundationTypeName.INT),
+            _instance_sig(FoundationTypeName.INT),
         ]
-        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
+        ranked = self.strategy.rank(
+            candidates, [typed(42, scalar(FoundationTypeName.INT))]
+        )
         assert ranked[0] == 1
 
     # -- Multi-argument type scoring --
 
     def test_multi_arg_type_score_sum(self):
         candidates = [
-            _sig(TypeName.STRING, TypeName.INT),
-            _sig(TypeName.INT, TypeName.STRING),
+            _sig(FoundationTypeName.STRING, FoundationTypeName.INT),
+            _sig(FoundationTypeName.INT, FoundationTypeName.STRING),
         ]
         ranked = self.strategy.rank(
             candidates,
-            [typed(42, scalar(TypeName.INT)), typed("hello", scalar(TypeName.STRING))],
+            [
+                typed(42, scalar(FoundationTypeName.INT)),
+                typed("hello", scalar(FoundationTypeName.STRING)),
+            ],
         )
         assert ranked[0] == 1
 
     # -- Unknown types are neutral --
 
     def test_unknown_args_dont_penalize(self):
-        candidates = [_sig(TypeName.INT), _sig(TypeName.STRING)]
+        candidates = [_sig(FoundationTypeName.INT), _sig(FoundationTypeName.STRING)]
         ranked = self.strategy.rank(candidates, [typed("obj_Dog_0", UNKNOWN)])
         assert ranked[0] == 0

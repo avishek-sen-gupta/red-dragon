@@ -20,7 +20,7 @@ from typing import Callable
 
 from interpreter import constants
 from interpreter.register import Register
-from interpreter.constants import CanonicalLiteral, TypeName
+from interpreter.constants import CanonicalLiteral, FoundationTypeName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.types.function_kind import FunctionKind
@@ -90,83 +90,83 @@ def _try_parse_int(s: str) -> int:
 
 
 _BUILTIN_RETURN_TYPES: dict[str, TypeExpr] = {
-    "len": scalar(TypeName.INT),
-    "int": scalar(TypeName.INT),
-    "float": scalar(TypeName.FLOAT),
-    "str": scalar(TypeName.STRING),
-    "bool": scalar(TypeName.BOOL),
-    "range": scalar(TypeName.ARRAY),
-    "abs": scalar(TypeName.NUMBER),
-    "max": scalar(TypeName.NUMBER),
-    "min": scalar(TypeName.NUMBER),
-    "arrayOf": scalar(TypeName.ARRAY),
-    "intArrayOf": scalar(TypeName.ARRAY),
-    "Array": scalar(TypeName.ARRAY),
+    "len": scalar(FoundationTypeName.INT),
+    "int": scalar(FoundationTypeName.INT),
+    "float": scalar(FoundationTypeName.FLOAT),
+    "str": scalar(FoundationTypeName.STRING),
+    "bool": scalar(FoundationTypeName.BOOL),
+    "range": scalar(FoundationTypeName.ARRAY),
+    "abs": scalar(FoundationTypeName.NUMBER),
+    "max": scalar(FoundationTypeName.NUMBER),
+    "min": scalar(FoundationTypeName.NUMBER),
+    "arrayOf": scalar(FoundationTypeName.ARRAY),
+    "intArrayOf": scalar(FoundationTypeName.ARRAY),
+    "Array": scalar(FoundationTypeName.ARRAY),
 }
 
 _BUILTIN_METHOD_RETURN_TYPES: dict[str, TypeExpr] = {
     # String → String
-    "upper": scalar(TypeName.STRING),
-    "lower": scalar(TypeName.STRING),
-    "strip": scalar(TypeName.STRING),
-    "lstrip": scalar(TypeName.STRING),
-    "rstrip": scalar(TypeName.STRING),
-    "replace": scalar(TypeName.STRING),
-    "format": scalar(TypeName.STRING),
-    "join": scalar(TypeName.STRING),
-    "capitalize": scalar(TypeName.STRING),
-    "title": scalar(TypeName.STRING),
-    "swapcase": scalar(TypeName.STRING),
-    "trim": scalar(TypeName.STRING),
-    "toLowerCase": scalar(TypeName.STRING),
-    "toUpperCase": scalar(TypeName.STRING),
-    "substring": scalar(TypeName.STRING),
-    "charAt": scalar(TypeName.STRING),
-    "toString": scalar(TypeName.STRING),
-    "concat": scalar(TypeName.STRING),
-    "downcase": scalar(TypeName.STRING),
-    "upcase": scalar(TypeName.STRING),
-    "chomp": scalar(TypeName.STRING),
-    "chop": scalar(TypeName.STRING),
-    "gsub": scalar(TypeName.STRING),
-    "sub": scalar(TypeName.STRING),
-    "encode": scalar(TypeName.STRING),
-    "decode": scalar(TypeName.STRING),
+    "upper": scalar(FoundationTypeName.STRING),
+    "lower": scalar(FoundationTypeName.STRING),
+    "strip": scalar(FoundationTypeName.STRING),
+    "lstrip": scalar(FoundationTypeName.STRING),
+    "rstrip": scalar(FoundationTypeName.STRING),
+    "replace": scalar(FoundationTypeName.STRING),
+    "format": scalar(FoundationTypeName.STRING),
+    "join": scalar(FoundationTypeName.STRING),
+    "capitalize": scalar(FoundationTypeName.STRING),
+    "title": scalar(FoundationTypeName.STRING),
+    "swapcase": scalar(FoundationTypeName.STRING),
+    "trim": scalar(FoundationTypeName.STRING),
+    "toLowerCase": scalar(FoundationTypeName.STRING),
+    "toUpperCase": scalar(FoundationTypeName.STRING),
+    "substring": scalar(FoundationTypeName.STRING),
+    "charAt": scalar(FoundationTypeName.STRING),
+    "toString": scalar(FoundationTypeName.STRING),
+    "concat": scalar(FoundationTypeName.STRING),
+    "downcase": scalar(FoundationTypeName.STRING),
+    "upcase": scalar(FoundationTypeName.STRING),
+    "chomp": scalar(FoundationTypeName.STRING),
+    "chop": scalar(FoundationTypeName.STRING),
+    "gsub": scalar(FoundationTypeName.STRING),
+    "sub": scalar(FoundationTypeName.STRING),
+    "encode": scalar(FoundationTypeName.STRING),
+    "decode": scalar(FoundationTypeName.STRING),
     # → Int
-    "find": scalar(TypeName.INT),
-    "index": scalar(TypeName.INT),
-    "rfind": scalar(TypeName.INT),
-    "rindex": scalar(TypeName.INT),
-    "count": scalar(TypeName.INT),
-    "indexOf": scalar(TypeName.INT),
-    "lastIndexOf": scalar(TypeName.INT),
-    "size": scalar(TypeName.INT),
-    "length": scalar(TypeName.INT),
+    "find": scalar(FoundationTypeName.INT),
+    "index": scalar(FoundationTypeName.INT),
+    "rfind": scalar(FoundationTypeName.INT),
+    "rindex": scalar(FoundationTypeName.INT),
+    "count": scalar(FoundationTypeName.INT),
+    "indexOf": scalar(FoundationTypeName.INT),
+    "lastIndexOf": scalar(FoundationTypeName.INT),
+    "size": scalar(FoundationTypeName.INT),
+    "length": scalar(FoundationTypeName.INT),
     # → Bool
-    "startswith": scalar(TypeName.BOOL),
-    "endswith": scalar(TypeName.BOOL),
-    "isdigit": scalar(TypeName.BOOL),
-    "isalpha": scalar(TypeName.BOOL),
-    "isalnum": scalar(TypeName.BOOL),
-    "isupper": scalar(TypeName.BOOL),
-    "islower": scalar(TypeName.BOOL),
-    "isspace": scalar(TypeName.BOOL),
-    "startsWith": scalar(TypeName.BOOL),
-    "endsWith": scalar(TypeName.BOOL),
-    "includes": scalar(TypeName.BOOL),
-    "contains": scalar(TypeName.BOOL),
-    "isEmpty": scalar(TypeName.BOOL),
-    "has": scalar(TypeName.BOOL),
+    "startswith": scalar(FoundationTypeName.BOOL),
+    "endswith": scalar(FoundationTypeName.BOOL),
+    "isdigit": scalar(FoundationTypeName.BOOL),
+    "isalpha": scalar(FoundationTypeName.BOOL),
+    "isalnum": scalar(FoundationTypeName.BOOL),
+    "isupper": scalar(FoundationTypeName.BOOL),
+    "islower": scalar(FoundationTypeName.BOOL),
+    "isspace": scalar(FoundationTypeName.BOOL),
+    "startsWith": scalar(FoundationTypeName.BOOL),
+    "endsWith": scalar(FoundationTypeName.BOOL),
+    "includes": scalar(FoundationTypeName.BOOL),
+    "contains": scalar(FoundationTypeName.BOOL),
+    "isEmpty": scalar(FoundationTypeName.BOOL),
+    "has": scalar(FoundationTypeName.BOOL),
     # → Array
-    "split": scalar(TypeName.ARRAY),
-    "splitlines": scalar(TypeName.ARRAY),
-    "rsplit": scalar(TypeName.ARRAY),
-    "keys": scalar(TypeName.ARRAY),
-    "values": scalar(TypeName.ARRAY),
-    "items": scalar(TypeName.ARRAY),
-    "entries": scalar(TypeName.ARRAY),
-    "toArray": scalar(TypeName.ARRAY),
-    "toList": scalar(TypeName.ARRAY),
+    "split": scalar(FoundationTypeName.ARRAY),
+    "splitlines": scalar(FoundationTypeName.ARRAY),
+    "rsplit": scalar(FoundationTypeName.ARRAY),
+    "keys": scalar(FoundationTypeName.ARRAY),
+    "values": scalar(FoundationTypeName.ARRAY),
+    "items": scalar(FoundationTypeName.ARRAY),
+    "entries": scalar(FoundationTypeName.ARRAY),
+    "toArray": scalar(FoundationTypeName.ARRAY),
+    "toList": scalar(FoundationTypeName.ARRAY),
 }
 
 _SELF_PARAM_NAMES = constants.SELF_PARAM_NAMES
@@ -270,13 +270,13 @@ def _promote_array_element_types(ctx: _InferenceContext) -> None:
         for scope_dict in ctx.scoped_var_types.values():
             if var_name in scope_dict:
                 current = scope_dict[var_name]
-                if current == TypeName.ARRAY:
+                if current == FoundationTypeName.ARRAY:
                     scope_dict[var_name] = array_of(elem_type)
                     logger.debug("Promoted %s: Array → Array[%s]", var_name, elem_type)
 
     for reg, elem_type in ctx.array_element_types.items():
         reg_key = Register(reg) if isinstance(reg, str) else reg
-        if ctx.register_types.get(reg_key, UNKNOWN) == TypeName.ARRAY:
+        if ctx.register_types.get(reg_key, UNKNOWN) == FoundationTypeName.ARRAY:
             ctx.register_types[reg_key] = array_of(elem_type)
 
 
@@ -289,14 +289,17 @@ def _promote_tuple_element_types(ctx: _InferenceContext) -> None:
     """
     for var_name, idx_types in ctx.var_tuple_element_types.items():
         for scope_dict in ctx.scoped_var_types.values():
-            if var_name in scope_dict and scope_dict[var_name] == TypeName.TUPLE:
+            if (
+                var_name in scope_dict
+                and scope_dict[var_name] == FoundationTypeName.TUPLE
+            ):
                 ordered = tuple(idx_types[i] for i in sorted(idx_types.keys()))
                 scope_dict[var_name] = tuple_of(*ordered)
                 logger.debug("Promoted %s: Tuple → Tuple[%s]", var_name, ordered)
 
     for reg, idx_types in ctx.tuple_element_types.items():
         reg_key = Register(reg) if isinstance(reg, str) else reg
-        if ctx.register_types.get(reg_key, UNKNOWN) == TypeName.TUPLE:
+        if ctx.register_types.get(reg_key, UNKNOWN) == FoundationTypeName.TUPLE:
             ordered = tuple(idx_types[i] for i in sorted(idx_types.keys()))
             ctx.register_types[reg_key] = tuple_of(*ordered)
 
@@ -660,10 +663,10 @@ def _infer_binop(
 
 
 _UNOP_FIXED_TYPES: dict[str, TypeExpr] = {
-    "not": scalar(TypeName.BOOL),
-    "!": scalar(TypeName.BOOL),
-    "#": scalar(TypeName.INT),
-    "~": scalar(TypeName.INT),
+    "not": scalar(FoundationTypeName.BOOL),
+    "!": scalar(FoundationTypeName.BOOL),
+    "#": scalar(FoundationTypeName.INT),
+    "~": scalar(FoundationTypeName.INT),
 }
 
 
@@ -702,10 +705,10 @@ def _infer_new_array(
         return
     is_tuple = str(inst.type_hint) == "tuple"
     if is_tuple:
-        ctx.register_types[inst.result_reg] = scalar(TypeName.TUPLE)
+        ctx.register_types[inst.result_reg] = scalar(FoundationTypeName.TUPLE)
         ctx.tuple_registers.add(str(inst.result_reg))
     else:
-        ctx.register_types[inst.result_reg] = scalar(TypeName.ARRAY)
+        ctx.register_types[inst.result_reg] = scalar(FoundationTypeName.ARRAY)
 
 
 def _infer_call_function(
@@ -761,7 +764,7 @@ def _infer_load_region(
     type_resolver: TypeResolver,
 ) -> None:
     if inst.result_reg.is_present():
-        ctx.register_types[inst.result_reg] = scalar(TypeName.ARRAY)
+        ctx.register_types[inst.result_reg] = scalar(FoundationTypeName.ARRAY)
 
 
 def _infer_store_field(
@@ -970,7 +973,7 @@ def _infer_const_type(
 ) -> TypeExpr:
     """Infer a canonical type from a CONST literal string."""
     if raw in (CanonicalLiteral.TRUE, CanonicalLiteral.FALSE):
-        return scalar(TypeName.BOOL)
+        return scalar(FoundationTypeName.BOOL)
     if raw == CanonicalLiteral.NONE:
         return UNKNOWN
     if str(raw) in func_symbol_table:
@@ -979,14 +982,14 @@ def _infer_const_type(
         return UNKNOWN
     try:
         int(raw)
-        return scalar(TypeName.INT)
+        return scalar(FoundationTypeName.INT)
     except (ValueError, TypeError):
         pass
     try:
         float(raw)
-        return scalar(TypeName.FLOAT)
+        return scalar(FoundationTypeName.FLOAT)
     except (ValueError, TypeError):
         pass
     if len(str(raw)) >= 2 and str(raw)[0] in ('"', "'") and str(raw)[-1] == str(raw)[0]:
-        return scalar(TypeName.STRING)
+        return scalar(FoundationTypeName.STRING)
     return UNKNOWN

@@ -23,7 +23,7 @@ from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.types.typed_value import typed, typed_from_runtime, unwrap
 from interpreter.types.type_expr import scalar, UNKNOWN
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.register import Register
 
 

@@ -7,7 +7,7 @@ from interpreter.overload.ambiguity_handler import (
     FallbackFirstWithWarning,
     StrictAmbiguityHandler,
 )
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.overload.overload_resolver import (
     NullOverloadResolver,
@@ -43,12 +43,15 @@ class TestOverloadResolver:
 
     def test_empty_candidates_returns_zero(self):
         resolver = _make_resolver()
-        assert resolver.resolve([], [typed(42, scalar(TypeName.INT))]) == 0
+        assert resolver.resolve([], [typed(42, scalar(FoundationTypeName.INT))]) == 0
 
     def test_single_candidate_returns_zero(self):
         resolver = _make_resolver()
         assert (
-            resolver.resolve([_sig(TypeName.INT)], [typed(42, scalar(TypeName.INT))])
+            resolver.resolve(
+                [_sig(FoundationTypeName.INT)],
+                [typed(42, scalar(FoundationTypeName.INT))],
+            )
             == 0
         )
 
@@ -56,30 +59,41 @@ class TestOverloadResolver:
 
     def test_picks_matching_arity(self):
         resolver = _make_resolver()
-        candidates = [_sig(TypeName.INT, TypeName.INT), _sig(TypeName.INT)]
-        assert resolver.resolve(candidates, [typed(42, scalar(TypeName.INT))]) == 1
+        candidates = [
+            _sig(FoundationTypeName.INT, FoundationTypeName.INT),
+            _sig(FoundationTypeName.INT),
+        ]
+        assert (
+            resolver.resolve(candidates, [typed(42, scalar(FoundationTypeName.INT))])
+            == 1
+        )
 
     # -- Type resolution --
 
     def test_picks_matching_type(self):
         resolver = _make_resolver()
-        candidates = [_sig(TypeName.STRING), _sig(TypeName.INT)]
-        assert resolver.resolve(candidates, [typed(42, scalar(TypeName.INT))]) == 1
+        candidates = [_sig(FoundationTypeName.STRING), _sig(FoundationTypeName.INT)]
+        assert (
+            resolver.resolve(candidates, [typed(42, scalar(FoundationTypeName.INT))])
+            == 1
+        )
 
     # -- Strict handler raises on genuine ambiguity --
 
     def test_strict_raises_on_identical_signatures(self):
         resolver = _make_resolver(strict=True)
-        candidates = [_sig(TypeName.INT), _sig(TypeName.INT)]
+        candidates = [_sig(FoundationTypeName.INT), _sig(FoundationTypeName.INT)]
         with pytest.raises(AmbiguousOverloadError):
-            resolver.resolve(candidates, [typed(42, scalar(TypeName.INT))])
+            resolver.resolve(candidates, [typed(42, scalar(FoundationTypeName.INT))])
 
     # -- Fallback handler resolves ambiguity silently --
 
     def test_fallback_resolves_identical_signatures(self):
         resolver = _make_resolver(strict=False)
-        candidates = [_sig(TypeName.INT), _sig(TypeName.INT)]
-        result = resolver.resolve(candidates, [typed(42, scalar(TypeName.INT))])
+        candidates = [_sig(FoundationTypeName.INT), _sig(FoundationTypeName.INT)]
+        result = resolver.resolve(
+            candidates, [typed(42, scalar(FoundationTypeName.INT))]
+        )
         assert result in (0, 1)
 
     # -- End-to-end: multi-arg disambiguation --
@@ -87,15 +101,15 @@ class TestOverloadResolver:
     def test_multi_arg_picks_best_type_match(self):
         resolver = _make_resolver()
         candidates = [
-            _sig(TypeName.STRING, TypeName.INT),
-            _sig(TypeName.INT, TypeName.STRING),
+            _sig(FoundationTypeName.STRING, FoundationTypeName.INT),
+            _sig(FoundationTypeName.INT, FoundationTypeName.STRING),
         ]
         assert (
             resolver.resolve(
                 candidates,
                 [
-                    typed(42, scalar(TypeName.INT)),
-                    typed("hello", scalar(TypeName.STRING)),
+                    typed(42, scalar(FoundationTypeName.INT)),
+                    typed("hello", scalar(FoundationTypeName.STRING)),
                 ],
             )
             == 1
@@ -107,8 +121,8 @@ class TestNullOverloadResolver:
         resolver = NullOverloadResolver()
         assert (
             resolver.resolve(
-                [_sig(TypeName.INT), _sig(TypeName.STRING)],
-                [typed(42, scalar(TypeName.INT))],
+                [_sig(FoundationTypeName.INT), _sig(FoundationTypeName.STRING)],
+                [typed(42, scalar(FoundationTypeName.INT))],
             )
             == 0
         )
@@ -141,7 +155,7 @@ class TestSubtypeOverloadResolution:
     def test_picks_parent_when_no_exact(self):
         """foo(Animal) should match when passing a Dog and no foo(Dog) exists."""
         resolver = _make_resolver_with_classes()
-        candidates = [_sig(TypeName.STRING), _sig("Animal")]
+        candidates = [_sig(FoundationTypeName.STRING), _sig("Animal")]
         assert resolver.resolve(candidates, [typed("obj_0", scalar("Dog"))]) == 1
 
     def test_sibling_class_exact_match_beats_mismatch(self):
