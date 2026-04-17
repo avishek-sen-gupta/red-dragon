@@ -3176,7 +3176,7 @@ class TestTypeAliasInference:
         ]
         builder = TypeEnvironmentBuilder(
             var_types={"x": scalar(TypeName("UserId"))},
-            type_aliases={"UserId": scalar(TypeName("Int"))},
+            type_aliases={TypeName("UserId"): scalar(TypeName("Int"))},
         )
         env = infer_types(
             instructions,
@@ -3196,8 +3196,8 @@ class TestTypeAliasInference:
         builder = TypeEnvironmentBuilder(
             var_types={"d": scalar(TypeName("Km"))},
             type_aliases={
-                "Km": scalar(TypeName("Distance")),
-                "Distance": scalar(TypeName("Int")),
+                TypeName("Km"): scalar(TypeName("Distance")),
+                TypeName("Distance"): scalar(TypeName("Int")),
             },
         )
         env = infer_types(
@@ -3220,7 +3220,7 @@ class TestTypeAliasInference:
         builder = TypeEnvironmentBuilder(
             var_types={"m": scalar(TypeName("StringMap"))},
             type_aliases={
-                "StringMap": map_of(
+                TypeName("StringMap"): map_of(
                     scalar(TypeName("String")), scalar(TypeName("String"))
                 )
             },
@@ -3241,7 +3241,7 @@ class TestTypeAliasInference:
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
         ]
         builder = TypeEnvironmentBuilder(
-            type_aliases={"UserId": scalar(TypeName("Int"))},
+            type_aliases={TypeName("UserId"): scalar(TypeName("Int"))},
         )
         env = infer_types(
             instructions,
@@ -3249,8 +3249,8 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "UserId" in env.type_aliases
-        assert env.type_aliases["UserId"] == scalar(TypeName("Int"))
+        assert TypeName("UserId") in env.type_aliases
+        assert env.type_aliases[TypeName("UserId")] == scalar(TypeName("Int"))
 
     def test_func_return_alias_resolves(self):
         """Function return type seeded as alias resolves to concrete type."""
@@ -3273,7 +3273,7 @@ class TestTypeAliasInference:
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={"func_f_0": scalar(TypeName("UserId"))},
-            type_aliases={"UserId": scalar(TypeName("Int"))},
+            type_aliases={TypeName("UserId"): scalar(TypeName("Int"))},
         )
         env = infer_types(
             instructions,

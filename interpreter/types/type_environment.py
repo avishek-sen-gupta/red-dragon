@@ -8,6 +8,7 @@ from types import MappingProxyType
 
 from interpreter.func_name import FuncName
 from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
 from interpreter.types.var_scope_info import VarScopeInfo
@@ -39,7 +40,7 @@ class TypeEnvironment:
     method_signatures: MappingProxyType[
         TypeExpr, MappingProxyType[FuncName, list[FunctionSignature]]
     ] = MappingProxyType({})
-    type_aliases: MappingProxyType[str, TypeExpr] = MappingProxyType({})
+    type_aliases: MappingProxyType[TypeName, TypeExpr] = MappingProxyType({})
     interface_implementations: MappingProxyType[str, tuple[str, ...]] = (
         MappingProxyType({})
     )

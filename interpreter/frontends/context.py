@@ -35,6 +35,7 @@ from interpreter.register import Register, NO_REGISTER
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.var_scope_info import VarScopeInfo
 from interpreter.types.type_expr import TypeExpr
@@ -317,7 +318,7 @@ class TreeSitterEmitContext:
                 class_name, []
             ).append(interface_name)
 
-    def seed_type_alias(self, alias_name: str, target_type: TypeExpr) -> None:
+    def seed_type_alias(self, alias_name: TypeName, target_type: TypeExpr) -> None:
         """Seed a type alias (e.g., typedef int UserId → alias UserId = Int)."""
         if alias_name and target_type:
             self.type_env_builder.type_aliases[alias_name] = target_type
