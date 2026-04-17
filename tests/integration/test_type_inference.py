@@ -2692,8 +2692,8 @@ UserId x = 42;
 """
         _, env = _lower_and_infer(source, "c")
         assert env.var_types[VarName("x")] == scalar(TypeName("Int"))
-        assert "UserId" in env.type_aliases
-        assert env.type_aliases["UserId"] == scalar(TypeName("Int"))
+        assert TypeName("UserId") in env.type_aliases
+        assert env.type_aliases[TypeName("UserId")] == scalar(TypeName("Int"))
 
     def test_c_typedef_pointer_alias(self):
         """C: typedef int* IntPtr; IntPtr p; → p is Pointer[Int]."""
@@ -2705,7 +2705,7 @@ IntPtr p;
         from interpreter.types.type_expr import pointer
 
         assert env.var_types[VarName("p")] == pointer(scalar(TypeName("Int")))
-        assert "IntPtr" in env.type_aliases
+        assert TypeName("IntPtr") in env.type_aliases
 
 
 # ---------------------------------------------------------------------------

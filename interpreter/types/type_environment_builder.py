@@ -14,6 +14,7 @@ from types import MappingProxyType
 
 from interpreter.func_name import FuncName
 from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
@@ -38,7 +39,7 @@ class TypeEnvironmentBuilder:
     func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(
         default_factory=dict
     )
-    type_aliases: dict[str, TypeExpr] = field(default_factory=dict)
+    type_aliases: dict[TypeName, TypeExpr] = field(default_factory=dict)
     interface_implementations: dict[str, list[str]] = field(default_factory=dict)
     var_scope_metadata: dict[str, VarScopeInfo] = field(default_factory=dict)
 
@@ -56,6 +57,7 @@ class TypeEnvironmentBuilder:
                 {VarName(k): v for k, v in self.var_types.items()}
             ),
             method_signatures=MappingProxyType(unified),
+            type_aliases=MappingProxyType(dict(self.type_aliases)),
         )
 
 
