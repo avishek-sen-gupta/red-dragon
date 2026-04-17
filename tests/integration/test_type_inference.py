@@ -2708,6 +2708,32 @@ IntPtr p;
         assert TypeName("IntPtr") in env.type_aliases
 
 
+class TestGoTypeAliasIntegration:
+    """Integration: Go type alias declaration seeds and resolves aliases."""
+
+    def test_go_type_alias_seeds_alias(self):
+        """Go: type UserId int; var x UserId = 42 → x is Int."""
+        source = """\
+package main
+type UserId int
+var x UserId = 42
+"""
+        _, env = _lower_and_infer(source, "go")
+        assert TypeName("UserId") in env.type_aliases
+        assert env.type_aliases[TypeName("UserId")] == scalar(TypeName("Int"))
+
+    def test_go_type_alias_resolves_var_type(self):
+        """Go: type Score float64; var s Score = 9.5 → var type is Float."""
+        source = """\
+package main
+type Score float64
+var s Score = 9.5
+"""
+        _, env = _lower_and_infer(source, "go")
+        assert TypeName("Score") in env.type_aliases
+        assert env.type_aliases[TypeName("Score")] == scalar(TypeName("Float"))
+
+
 # ---------------------------------------------------------------------------
 # Interface/Trait Typing
 # ---------------------------------------------------------------------------
