@@ -14,7 +14,7 @@ from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
 from interpreter.types.typed_value import TypedValue
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.type_expr import ScalarType
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import HeapObject, StackFrame
@@ -23,11 +23,11 @@ from viz.panels.vm_state_panel import _format_value
 
 
 def _int_val(n: int) -> TypedValue:
-    return TypedValue(value=n, type=ScalarType(TypeName.INT))
+    return TypedValue(value=n, type=ScalarType(FoundationTypeName.INT))
 
 
 def _str_val(s: str) -> TypedValue:
-    return TypedValue(value=s, type=ScalarType(TypeName.STRING))
+    return TypedValue(value=s, type=ScalarType(FoundationTypeName.STRING))
 
 
 class TestVMStatePanelSorting:

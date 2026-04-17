@@ -7,7 +7,7 @@ import logging
 import math
 from typing import Any, Callable
 
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
 from interpreter.types.coercion.conversion_result import (
     ConversionResult,
@@ -52,7 +52,7 @@ class DefaultTypeConversionRules(TypeConversionRules):
         self, operator: str, left_type: TypeExpr, right_type: TypeExpr
     ) -> ConversionResult:
         if operator in _COMPARISON_OPS:
-            return ConversionResult(result_type=scalar(TypeName.BOOL))
+            return ConversionResult(result_type=scalar(FoundationTypeName.BOOL))
 
         if operator in _ARITHMETIC_OPS:
             return self._resolve_arithmetic(operator, left_type, right_type)
@@ -70,31 +70,31 @@ class DefaultTypeConversionRules(TypeConversionRules):
     ) -> ConversionResult:
         pair = (left_type, right_type)
 
-        if pair == (TypeName.INT, TypeName.INT):
-            return ConversionResult(result_type=scalar(TypeName.INT))
+        if pair == (FoundationTypeName.INT, FoundationTypeName.INT):
+            return ConversionResult(result_type=scalar(FoundationTypeName.INT))
 
-        if pair == (TypeName.INT, TypeName.FLOAT):
+        if pair == (FoundationTypeName.INT, FoundationTypeName.FLOAT):
             return ConversionResult(
-                result_type=scalar(TypeName.FLOAT), left_coercer=_to_float
+                result_type=scalar(FoundationTypeName.FLOAT), left_coercer=_to_float
             )
 
-        if pair == (TypeName.FLOAT, TypeName.INT):
+        if pair == (FoundationTypeName.FLOAT, FoundationTypeName.INT):
             return ConversionResult(
-                result_type=scalar(TypeName.FLOAT), right_coercer=_to_float
+                result_type=scalar(FoundationTypeName.FLOAT), right_coercer=_to_float
             )
 
-        if pair == (TypeName.FLOAT, TypeName.FLOAT):
-            return ConversionResult(result_type=scalar(TypeName.FLOAT))
+        if pair == (FoundationTypeName.FLOAT, FoundationTypeName.FLOAT):
+            return ConversionResult(result_type=scalar(FoundationTypeName.FLOAT))
 
         # Bool promotion
-        if pair == (TypeName.BOOL, TypeName.INT):
+        if pair == (FoundationTypeName.BOOL, FoundationTypeName.INT):
             return ConversionResult(
-                result_type=scalar(TypeName.INT), left_coercer=_to_int
+                result_type=scalar(FoundationTypeName.INT), left_coercer=_to_int
             )
 
-        if pair == (TypeName.INT, TypeName.BOOL):
+        if pair == (FoundationTypeName.INT, FoundationTypeName.BOOL):
             return ConversionResult(
-                result_type=scalar(TypeName.INT), right_coercer=_to_int
+                result_type=scalar(FoundationTypeName.INT), right_coercer=_to_int
             )
 
         return IDENTITY_CONVERSION
@@ -104,23 +104,23 @@ class DefaultTypeConversionRules(TypeConversionRules):
     ) -> ConversionResult:
         pair = (left_type, right_type)
 
-        if pair == (TypeName.INT, TypeName.INT):
+        if pair == (FoundationTypeName.INT, FoundationTypeName.INT):
             return ConversionResult(
-                result_type=scalar(TypeName.INT), operator_override="//"
+                result_type=scalar(FoundationTypeName.INT), operator_override="//"
             )
 
-        if pair == (TypeName.INT, TypeName.FLOAT):
+        if pair == (FoundationTypeName.INT, FoundationTypeName.FLOAT):
             return ConversionResult(
-                result_type=scalar(TypeName.FLOAT), left_coercer=_to_float
+                result_type=scalar(FoundationTypeName.FLOAT), left_coercer=_to_float
             )
 
-        if pair == (TypeName.FLOAT, TypeName.INT):
+        if pair == (FoundationTypeName.FLOAT, FoundationTypeName.INT):
             return ConversionResult(
-                result_type=scalar(TypeName.FLOAT), right_coercer=_to_float
+                result_type=scalar(FoundationTypeName.FLOAT), right_coercer=_to_float
             )
 
-        if pair == (TypeName.FLOAT, TypeName.FLOAT):
-            return ConversionResult(result_type=scalar(TypeName.FLOAT))
+        if pair == (FoundationTypeName.FLOAT, FoundationTypeName.FLOAT):
+            return ConversionResult(result_type=scalar(FoundationTypeName.FLOAT))
 
         return IDENTITY_CONVERSION
 
@@ -129,8 +129,8 @@ class DefaultTypeConversionRules(TypeConversionRules):
     ) -> ConversionResult:
         pair = (left_type, right_type)
 
-        if pair == (TypeName.INT, TypeName.INT):
-            return ConversionResult(result_type=scalar(TypeName.INT))
+        if pair == (FoundationTypeName.INT, FoundationTypeName.INT):
+            return ConversionResult(result_type=scalar(FoundationTypeName.INT))
 
         return IDENTITY_CONVERSION
 
@@ -143,15 +143,15 @@ class DefaultTypeConversionRules(TypeConversionRules):
         pair = (value_type, target_type)
 
         # Narrowing: Float → Int (truncate toward zero)
-        if pair == (TypeName.FLOAT, TypeName.INT):
+        if pair == (FoundationTypeName.FLOAT, FoundationTypeName.INT):
             return _truncate_to_int
 
         # Widening: Int → Float
-        if pair == (TypeName.INT, TypeName.FLOAT):
+        if pair == (FoundationTypeName.INT, FoundationTypeName.FLOAT):
             return _to_float
 
         # Bool → Int promotion
-        if pair == (TypeName.BOOL, TypeName.INT):
+        if pair == (FoundationTypeName.BOOL, FoundationTypeName.INT):
             return _to_int
 
         return _identity

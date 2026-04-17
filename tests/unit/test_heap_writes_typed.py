@@ -4,7 +4,7 @@ from types import MappingProxyType
 
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm.executor import (
@@ -50,7 +50,9 @@ class TestStoreFieldTypedValue:
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("Point")))
         vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
-        vm.current_frame.registers[Register("%1")] = typed(42, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%1")] = typed(
+            42, scalar(FoundationTypeName.INT)
+        )
         inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "x", "%1"])
         result = _handle_store_field(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
@@ -66,7 +68,9 @@ class TestStoreFieldTypedValue:
         vm.current_frame.registers[Register("%0")] = typed(
             Pointer(base=Address("mem_0"), offset=0), UNKNOWN
         )
-        vm.current_frame.registers[Register("%1")] = typed(99, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%1")] = typed(
+            99, scalar(FoundationTypeName.INT)
+        )
         inst = IRInstruction(opcode=Opcode.STORE_INDIRECT, operands=["%0", "%1"])
         result = _handle_store_indirect(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
@@ -79,7 +83,7 @@ class TestStoreFieldTypedValue:
         vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("Person")))
         vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         vm.current_frame.registers[Register("%1")] = typed(
-            "Alice", scalar(TypeName.STRING)
+            "Alice", scalar(FoundationTypeName.STRING)
         )
         inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "name", "%1"])
         result = _handle_store_field(inst, vm, _CTX)
@@ -102,8 +106,12 @@ class TestStoreIndexTypedValue:
             ),
         )
         vm.current_frame.registers[Register("%0")] = typed("arr_0", UNKNOWN)
-        vm.current_frame.registers[Register("%1")] = typed(0, scalar(TypeName.INT))
-        vm.current_frame.registers[Register("%2")] = typed(100, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%1")] = typed(
+            0, scalar(FoundationTypeName.INT)
+        )
+        vm.current_frame.registers[Register("%2")] = typed(
+            100, scalar(FoundationTypeName.INT)
+        )
         inst = IRInstruction(
             opcode=Opcode.STORE_INDEX,
             operands=["%0", "%1", "%2"],
@@ -131,7 +139,7 @@ class TestMaterializeHeapWrites:
         hw = result.heap_writes[0]
         assert isinstance(hw.value, TypedValue)
         assert hw.value.value == 42
-        assert hw.value.type == scalar(TypeName.INT)
+        assert hw.value.type == scalar(FoundationTypeName.INT)
 
     def test_symbolic_dict_heap_write_materialized(self):
 
@@ -155,7 +163,7 @@ class TestMaterializeHeapWrites:
     def test_already_typed_heap_write_passes_through(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        tv = typed(42, scalar(TypeName.INT))
+        tv = typed(42, scalar(FoundationTypeName.INT))
         raw = StateUpdate(
             heap_writes=[
                 HeapWrite(obj_addr=Address("obj_0"), field=FieldName("x"), value=tv)
@@ -181,7 +189,7 @@ class TestApplyUpdateStoresTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
         vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("Point")))
-        tv = typed(42, scalar(TypeName.INT))
+        tv = typed(42, scalar(FoundationTypeName.INT))
         update = StateUpdate(
             heap_writes=[
                 HeapWrite(obj_addr=Address("obj_0"), field=FieldName("x"), value=tv)
@@ -192,7 +200,7 @@ class TestApplyUpdateStoresTypedValue:
         field_val = vm.heap_get(Address("obj_0")).fields[FieldName("x")]
         assert isinstance(field_val, TypedValue)
         assert field_val.value == 42
-        assert field_val.type == scalar(TypeName.INT)
+        assert field_val.type == scalar(FoundationTypeName.INT)
 
     def test_alias_var_write_stores_typed_value_in_heap(self):
         """Alias var_write should store TypedValue in HeapObject.fields."""
@@ -207,7 +215,7 @@ class TestApplyUpdateStoresTypedValue:
         )
         ptr = Pointer(base=Address("mem_0"), offset=0)
         vm.current_frame.var_heap_aliases[VarName("x")] = ptr
-        tv = typed(99, scalar(TypeName.INT))
+        tv = typed(99, scalar(FoundationTypeName.INT))
         update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(vm, update, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         field_val = vm.heap_get(Address("mem_0")).fields[
@@ -237,7 +245,9 @@ class TestHeapFieldsStoreTypedValue:
         """_handle_address_of stores TypedValue in promoted heap object."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        vm.current_frame.local_vars[VarName("x")] = typed(42, scalar(TypeName.INT))
+        vm.current_frame.local_vars[VarName("x")] = typed(
+            42, scalar(FoundationTypeName.INT)
+        )
         inst = IRInstruction(
             opcode=Opcode.ADDRESS_OF, operands=["x"], result_reg=Register("%0")
         )
@@ -256,7 +266,7 @@ class TestHeapFieldsStoreTypedValue:
         """_handle_load_field passes through TypedValue from heap without re-wrapping."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        original_tv = typed(42, scalar(TypeName.INT))
+        original_tv = typed(42, scalar(FoundationTypeName.INT))
         vm.heap_set(
             Address("obj_0"),
             HeapObject(type_hint=scalar("Point"), fields={FieldName("x"): original_tv}),
@@ -273,7 +283,7 @@ class TestHeapFieldsStoreTypedValue:
         """_handle_load_index passes through TypedValue from heap."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        original_tv = typed(99, scalar(TypeName.INT))
+        original_tv = typed(99, scalar(FoundationTypeName.INT))
         vm.heap_set(
             Address("arr_0"),
             HeapObject(
@@ -281,13 +291,15 @@ class TestHeapFieldsStoreTypedValue:
                 fields={
                     FieldName("0", FieldKind.INDEX): original_tv,
                     FieldName("length", FieldKind.SPECIAL): typed(
-                        1, scalar(TypeName.INT)
+                        1, scalar(FoundationTypeName.INT)
                     ),
                 },
             ),
         )
         vm.current_frame.registers[Register("%0")] = typed("arr_0", UNKNOWN)
-        vm.current_frame.registers[Register("%1")] = typed(0, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%1")] = typed(
+            0, scalar(FoundationTypeName.INT)
+        )
         inst = IRInstruction(
             opcode=Opcode.LOAD_INDEX, operands=["%0", "%1"], result_reg=Register("%2")
         )
@@ -299,7 +311,7 @@ class TestHeapFieldsStoreTypedValue:
         """_handle_load_var alias path passes through TypedValue from heap."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        original_tv = typed(77, scalar(TypeName.INT))
+        original_tv = typed(77, scalar(FoundationTypeName.INT))
         vm.heap_set(
             Address("mem_0"),
             HeapObject(fields={FieldName("0", FieldKind.INDEX): original_tv}),

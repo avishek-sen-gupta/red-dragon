@@ -48,7 +48,9 @@ def _handle_binop(
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
-                        t.result_reg: typed(diff, scalar(constants.TypeName.INT))
+                        t.result_reg: typed(
+                            diff, scalar(constants.FoundationTypeName.INT)
+                        )
                     },
                     reasoning=f"pointer diff {lhs!r} - {rhs!r} = {diff}",
                 )
@@ -58,7 +60,9 @@ def _handle_binop(
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
-                        t.result_reg: typed(result, scalar(constants.TypeName.BOOL))
+                        t.result_reg: typed(
+                            result, scalar(constants.FoundationTypeName.BOOL)
+                        )
                     },
                     reasoning=f"pointer cmp {lhs!r} {oper} {rhs!r} = {result!r}",
                 )
@@ -77,7 +81,7 @@ def _handle_binop(
                 StateUpdate(
                     register_writes={
                         t.result_reg: typed(
-                            result_ptr, scalar(constants.TypeName.POINTER)
+                            result_ptr, scalar(constants.FoundationTypeName.POINTER)
                         )
                     },
                     reasoning=f"pointer arith {lhs!r} {oper} {rhs!r} = {result_ptr!r}",
@@ -92,7 +96,9 @@ def _handle_binop(
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
-                        t.result_reg: typed(result, scalar(constants.TypeName.BOOL))
+                        t.result_reg: typed(
+                            result, scalar(constants.FoundationTypeName.BOOL)
+                        )
                     },
                     reasoning=f"binop symbolic {oper} null → {result}",
                 )

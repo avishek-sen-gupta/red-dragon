@@ -12,7 +12,7 @@ from interpreter.vm.executor import _handle_address_of, _default_handler_context
 _CTX = _default_handler_context()
 from interpreter.types.typed_value import typed
 from interpreter.types.type_expr import pointer, scalar
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.func_name import FuncName
 
 
@@ -49,7 +49,7 @@ class TestAddressOfPointerGuard:
         frame = StackFrame(
             function_name=FuncName("main"),
             local_vars={
-                VarName("ptr"): typed(existing_ptr, scalar(TypeName.POINTER)),
+                VarName("ptr"): typed(existing_ptr, scalar(FoundationTypeName.POINTER)),
             },
         )
         vm = VMState(
@@ -58,7 +58,9 @@ class TestAddressOfPointerGuard:
                 Address("mem_0"): HeapObject(
                     type_hint=None,
                     fields={
-                        FieldName("0", FieldKind.INDEX): typed(42, scalar(TypeName.INT))
+                        FieldName("0", FieldKind.INDEX): typed(
+                            42, scalar(FoundationTypeName.INT)
+                        )
                     },
                 ),
             },
@@ -104,7 +106,9 @@ class TestAddressOfPointerGuard:
                 Address("arr_0"): HeapObject(
                     type_hint="Array",
                     fields={
-                        FieldName("0", FieldKind.INDEX): typed(10, scalar(TypeName.INT))
+                        FieldName("0", FieldKind.INDEX): typed(
+                            10, scalar(FoundationTypeName.INT)
+                        )
                     },
                 ),
             },
@@ -139,7 +143,7 @@ class TestAddressOfPointerGuard:
             _heap={
                 Address("obj_0"): HeapObject(
                     type_hint="Point",
-                    fields={FieldName("x"): typed(42, scalar(TypeName.INT))},
+                    fields={FieldName("x"): typed(42, scalar(FoundationTypeName.INT))},
                 ),
             },
         )

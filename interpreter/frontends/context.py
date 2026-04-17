@@ -132,7 +132,7 @@ class TreeSitterEmitContext:
     break_target_stack: list[str] = field(default_factory=list)
     switch_result_stack: list[str] = field(default_factory=list)
 
-    # Per-language type map: raw type string -> canonical TypeName
+    # Per-language type map: raw type string -> canonical FoundationTypeName
     type_map: dict[str, str] = field(default_factory=dict)
 
     # Dispatch tables: node_type -> Callable[[TreeSitterEmitContext, node], ...]

@@ -1,6 +1,6 @@
 """Integration tests: parameterized types survive through _resolve_reg pipeline."""
 
-from interpreter.constants import Language, TypeName
+from interpreter.constants import Language, FoundationTypeName
 from interpreter.run import run
 from interpreter.types.typed_value import TypedValue
 from interpreter.types.type_expr import ParameterizedType, pointer, scalar
@@ -67,7 +67,7 @@ class TestTypePreservationThroughResolveReg:
         assert isinstance(tv.value, Pointer)
         assert isinstance(tv.type, ParameterizedType)
         assert tv.type.constructor == "Array"
-        assert tv.type.arguments == (scalar(TypeName.INT),)
+        assert tv.type.arguments == (scalar(FoundationTypeName.INT),)
 
     def test_return_value_preserves_type(self):
         """Return value through RETURN should preserve TypedValue type."""

@@ -142,7 +142,9 @@ def _handle_address_of(
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={
-                    t.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+                    t.result_reg: typed(
+                        ptr, scalar(constants.FoundationTypeName.POINTER)
+                    )
                 },
                 reasoning=f"address_of {name} → {ptr} (already aliased)",
             )
@@ -183,7 +185,9 @@ def _handle_address_of(
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={
-                    t.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+                    t.result_reg: typed(
+                        ptr, scalar(constants.FoundationTypeName.POINTER)
+                    )
                 },
                 reasoning=f"address_of {name} → {ptr} (existing heap object)",
             )
@@ -205,7 +209,7 @@ def _handle_address_of(
     return ExecutionResult.success(
         StateUpdate(
             register_writes={
-                t.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+                t.result_reg: typed(ptr, scalar(constants.FoundationTypeName.POINTER))
             },
             reasoning=f"address_of {name} → {ptr} (promoted to heap {mem_addr})",
         )
@@ -234,7 +238,7 @@ def _handle_load_indirect(
             if base_str.startswith(constants.OBJ_ADDR_PREFIX) or base_str.startswith(
                 constants.ARR_ADDR_PREFIX
             ):
-                tv = typed(obj_val, scalar(constants.TypeName.POINTER))
+                tv = typed(obj_val, scalar(constants.FoundationTypeName.POINTER))
             else:
                 sym = vm.fresh_symbolic(hint=f"*{obj_val}")
                 tv = typed(sym, UNKNOWN)
