@@ -44,6 +44,10 @@
           {
             "type": "command",
             "command": "~/.claude/plugins/python-fp-lint/hooks/lint-check.sh"
+          },
+          {
+            "type": "command",
+            "command": "python3 /Users/asgupta/code/red-dragon/.claude/hooks/covers-guard.py"
           }
         ]
       },
@@ -53,6 +57,10 @@
           {
             "type": "command",
             "command": "~/.claude/plugins/python-fp-lint/hooks/lint-check.sh"
+          },
+          {
+            "type": "command",
+            "command": "python3 /Users/asgupta/code/red-dragon/.claude/hooks/covers-guard.py"
           }
         ]
       }
