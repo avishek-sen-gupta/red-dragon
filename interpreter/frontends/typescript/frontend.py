@@ -13,6 +13,12 @@ from typing import Any, Callable
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.context import GrammarConstants
 from interpreter.frontends.common import expressions as common_expr
+from interpreter.frontends.typescript.type_alias_extractor import (
+    TypeScriptTypeAliasExtractor,
+)
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.constants import Language
+from interpreter.parser import ParserFactory
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.field_name import FieldName
@@ -59,6 +65,15 @@ class TypeScriptFrontend(JavaScriptFrontend):
     """Lowers TypeScript AST to IR. Extends JavaScriptFrontend, skipping type annotations."""
 
     BLOCK_SCOPED = True
+
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: Language,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ) -> None:
+        super().__init__(parser_factory, language, observer)
+        self._type_alias_extractor = TypeScriptTypeAliasExtractor()
 
     def _build_constants(self) -> GrammarConstants:
         js_constants = super()._build_constants()
