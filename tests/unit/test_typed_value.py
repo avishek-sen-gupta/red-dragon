@@ -1,6 +1,7 @@
 """Unit tests for TypedValue dataclass and factory helpers."""
 
 from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
+from interpreter.type_name import TypeName
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.address import Address
 from interpreter.vm.vm_types import Pointer, SymbolicValue
@@ -8,12 +9,12 @@ from interpreter.vm.vm_types import Pointer, SymbolicValue
 
 class TestTypedValue:
     def test_creation_with_int(self):
-        tv = TypedValue(value=42, type=scalar("Int"))
+        tv = TypedValue(value=42, type=scalar(TypeName("Int")))
         assert tv.value == 42
-        assert tv.type == scalar("Int")
+        assert tv.type == scalar(TypeName("Int"))
 
     def test_frozen(self):
-        tv = TypedValue(value=42, type=scalar("Int"))
+        tv = TypedValue(value=42, type=scalar(TypeName("Int")))
         try:
             tv.value = 99
             assert False, "Should have raised"
@@ -21,13 +22,13 @@ class TestTypedValue:
             pass
 
     def test_equality(self):
-        a = TypedValue(value=42, type=scalar("Int"))
-        b = TypedValue(value=42, type=scalar("Int"))
+        a = TypedValue(value=42, type=scalar(TypeName("Int")))
+        b = TypedValue(value=42, type=scalar(TypeName("Int")))
         assert a == b
 
     def test_inequality_different_type(self):
-        a = TypedValue(value=42, type=scalar("Int"))
-        b = TypedValue(value=42, type=scalar("Float"))
+        a = TypedValue(value=42, type=scalar(TypeName("Int")))
+        b = TypedValue(value=42, type=scalar(TypeName("Float")))
         assert a != b
 
     def test_wraps_symbolic_value(self):
@@ -49,9 +50,9 @@ class TestTypedValue:
 
 class TestTypedFactory:
     def test_typed_with_explicit_type(self):
-        tv = typed(42, scalar("Int"))
+        tv = typed(42, scalar(TypeName("Int")))
         assert tv.value == 42
-        assert tv.type == scalar("Int")
+        assert tv.type == scalar(TypeName("Int"))
 
     def test_typed_default_unknown(self):
         tv = typed("hello")
@@ -61,22 +62,22 @@ class TestTypedFactory:
     def test_typed_from_runtime_int(self):
         tv = typed_from_runtime(42)
         assert tv.value == 42
-        assert tv.type == scalar("Int")
+        assert tv.type == scalar(TypeName("Int"))
 
     def test_typed_from_runtime_float(self):
         tv = typed_from_runtime(3.14)
         assert tv.value == 3.14
-        assert tv.type == scalar("Float")
+        assert tv.type == scalar(TypeName("Float"))
 
     def test_typed_from_runtime_string(self):
         tv = typed_from_runtime("hello")
         assert tv.value == "hello"
-        assert tv.type == scalar("String")
+        assert tv.type == scalar(TypeName("String"))
 
     def test_typed_from_runtime_bool(self):
         tv = typed_from_runtime(True)
         assert tv.value is True
-        assert tv.type == scalar("Bool")
+        assert tv.type == scalar(TypeName("Bool"))
 
     def test_typed_from_runtime_unknown_type(self):
         tv = typed_from_runtime([1, 2, 3])

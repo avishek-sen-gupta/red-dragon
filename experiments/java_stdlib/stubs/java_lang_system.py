@@ -1,4 +1,5 @@
 from pathlib import Path
+from interpreter.type_name import TypeName
 
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
@@ -41,11 +42,11 @@ SYSTEM_IR = (
     CallCtorFunction(
         result_reg=Register("%0"),
         func_name=FuncName("PrintStream"),
-        type_hint=scalar("PrintStream"),
+        type_hint=scalar(TypeName("PrintStream")),
         args=(),
     ),
     # Allocate the System singleton heap object.
-    NewObject(result_reg=Register("%1"), type_hint=scalar("System")),
+    NewObject(result_reg=Register("%1"), type_hint=scalar(TypeName("System"))),
     # Store the PrintStream instance as System.out.
     StoreField(obj_reg=Register("%1"), field_name=_OUT, value_reg=Register("%0")),
     # Expose the System singleton as the variable "System" in scope.

@@ -1,6 +1,7 @@
 """Python-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -196,7 +197,9 @@ def lower_tuple_literal(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("tuple"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("tuple")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):
@@ -263,7 +266,9 @@ def lower_list_comprehension(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value="0"))
     ctx.emit_inst(
-        NewArray(result_reg=result_arr, type_hint=scalar("list"), size_reg=size_reg),
+        NewArray(
+            result_reg=result_arr, type_hint=scalar(TypeName("list")), size_reg=size_reg
+        ),
         node=node,
     )
 
@@ -419,7 +424,9 @@ def lower_dict_comprehension(
 
     # Create result object
     result_obj = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=result_obj, type_hint=scalar("dict")), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=result_obj, type_hint=scalar(TypeName("dict"))), node=node
+    )
 
     # Extract loop var and iterable from for_in_clause
     clause_named = [c for c in for_clause.children if c.is_named]
@@ -646,7 +653,9 @@ def lower_generator_expression(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value="0"))
     ctx.emit_inst(
-        NewArray(result_reg=result_arr, type_hint=scalar("list"), size_reg=size_reg),
+        NewArray(
+            result_reg=result_arr, type_hint=scalar(TypeName("list")), size_reg=size_reg
+        ),
         node=node,
     )
 
@@ -692,7 +701,9 @@ def lower_set_comprehension(
     if_clauses = [c for c in children if c.type == PythonNodeType.IF_CLAUSE]
 
     result_obj = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=result_obj, type_hint=scalar("set")), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=result_obj, type_hint=scalar(TypeName("set"))), node=node
+    )
 
     result_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=result_idx, value="0"))
@@ -732,7 +743,9 @@ def lower_set_literal(
         )
     ]
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("set")), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName("set"))), node=node
+    )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
@@ -930,7 +943,9 @@ def lower_list_pattern(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("list")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):
@@ -950,7 +965,8 @@ def lower_dict_pattern(
     """Lower {"key": pattern, ...} in match/case as NEW_OBJECT with key/value pairs."""
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar("dict_pattern")), node=node
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName("dict_pattern"))),
+        node=node,
     )
     pairs = [
         c

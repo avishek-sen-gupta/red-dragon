@@ -5,6 +5,7 @@ when the concrete class's class_method_types lacks the method.
 """
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from interpreter.func_name import FuncName
 from interpreter.instructions import CallMethod
@@ -38,51 +39,59 @@ class TestInterfaceChainWalk:
     def test_method_resolved_via_interface(self):
         """Class 'Dog' implements 'Animal'; Dog has no 'speak', but Animal does."""
         ctx = _InferenceContext(
-            register_types={Register("%0"): scalar("Dog")},
+            register_types={Register("%0"): scalar(TypeName("Dog"))},
             class_method_types={
-                scalar("Animal"): {FuncName("speak"): scalar("String")},
-                scalar("Dog"): {},  # Dog has no methods of its own
+                scalar(TypeName("Animal")): {
+                    FuncName("speak"): scalar(TypeName("String"))
+                },
+                scalar(TypeName("Dog")): {},  # Dog has no methods of its own
             },
             interface_implementations={"Dog": ("Animal",)},
         )
         inst = _make_call_method_inst("%1", "%0", "speak")
         _infer_call_method(inst, ctx, _resolver())
-        assert ctx.register_types[Register("%1")] == scalar("String")
+        assert ctx.register_types[Register("%1")] == scalar(TypeName("String"))
 
     def test_method_on_class_takes_priority(self):
         """Direct class method should be preferred over interface fallback."""
         ctx = _InferenceContext(
-            register_types={Register("%0"): scalar("Dog")},
+            register_types={Register("%0"): scalar(TypeName("Dog"))},
             class_method_types={
-                scalar("Animal"): {FuncName("speak"): scalar("String")},
-                scalar("Dog"): {FuncName("speak"): scalar("Int")},
+                scalar(TypeName("Animal")): {
+                    FuncName("speak"): scalar(TypeName("String"))
+                },
+                scalar(TypeName("Dog")): {FuncName("speak"): scalar(TypeName("Int"))},
             },
             interface_implementations={"Dog": ("Animal",)},
         )
         inst = _make_call_method_inst("%1", "%0", "speak")
         _infer_call_method(inst, ctx, _resolver())
-        assert ctx.register_types[Register("%1")] == scalar("Int")
+        assert ctx.register_types[Register("%1")] == scalar(TypeName("Int"))
 
     def test_multiple_interfaces_first_match_wins(self):
         """Walk interfaces in order; first one with the method wins."""
         ctx = _InferenceContext(
-            register_types={Register("%0"): scalar("Widget")},
+            register_types={Register("%0"): scalar(TypeName("Widget"))},
             class_method_types={
-                scalar("Drawable"): {FuncName("draw"): scalar("Void")},
-                scalar("Clickable"): {FuncName("draw"): scalar("Bool")},
-                scalar("Widget"): {},
+                scalar(TypeName("Drawable")): {
+                    FuncName("draw"): scalar(TypeName("Void"))
+                },
+                scalar(TypeName("Clickable")): {
+                    FuncName("draw"): scalar(TypeName("Bool"))
+                },
+                scalar(TypeName("Widget")): {},
             },
             interface_implementations={"Widget": ("Drawable", "Clickable")},
         )
         inst = _make_call_method_inst("%1", "%0", "draw")
         _infer_call_method(inst, ctx, _resolver())
-        assert ctx.register_types[Register("%1")] == scalar("Void")
+        assert ctx.register_types[Register("%1")] == scalar(TypeName("Void"))
 
     def test_no_interface_no_crash(self):
         """Class not in interface_implementations — no crash, no type."""
         ctx = _InferenceContext(
-            register_types={Register("%0"): scalar("Foo")},
-            class_method_types={scalar("Foo"): {}},
+            register_types={Register("%0"): scalar(TypeName("Foo"))},
+            class_method_types={scalar(TypeName("Foo")): {}},
             interface_implementations={},
         )
         inst = _make_call_method_inst("%1", "%0", "bar")

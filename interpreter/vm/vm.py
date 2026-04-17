@@ -119,7 +119,7 @@ def _coerce_typed_register(
         return tv
     rt_type_name = runtime_type_name(tv.value)
     if not rt_type_name or rt_type_name == (
-        target_type.name if isinstance(target_type, ScalarType) else ""
+        target_type.name.value if isinstance(target_type, ScalarType) else ""
     ):
         return tv
     coercer = conversion_rules.coerce_assignment(scalar(rt_type_name), target_type)

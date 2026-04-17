@@ -33,6 +33,7 @@ from interpreter.ir import (
 )
 from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolve_unop
 from interpreter.register import NO_REGISTER, Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.field_name import FieldName, FieldKind, NO_FIELD_NAME
 from interpreter.func_name import FuncName, NO_FUNC_NAME
@@ -1114,7 +1115,7 @@ def _call_ctor(inst: Any) -> CallCtorFunction:
     return CallCtorFunction(
         result_reg=inst.result_reg,
         func_name=FuncName(raw_hint) if raw_hint else NO_FUNC_NAME,
-        type_hint=scalar(raw_hint) if raw_hint else UNKNOWN,
+        type_hint=scalar(TypeName(raw_hint)) if raw_hint else UNKNOWN,
         args=args,
         source_location=inst.source_location,
     )
@@ -1204,7 +1205,7 @@ def _new_object(inst: Any) -> NewObject:
     raw = str(inst.operands[0]) if inst.operands else ""
     return NewObject(
         result_reg=inst.result_reg,
-        type_hint=scalar(raw) if raw else UNKNOWN,
+        type_hint=scalar(TypeName(raw)) if raw else UNKNOWN,
         source_location=inst.source_location,
     )
 
@@ -1214,7 +1215,7 @@ def _new_array(inst: Any) -> NewArray:
     raw = str(ops[0]) if len(ops) >= 1 else ""
     return NewArray(
         result_reg=inst.result_reg,
-        type_hint=scalar(raw) if raw else UNKNOWN,
+        type_hint=scalar(TypeName(raw)) if raw else UNKNOWN,
         size_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         source_location=inst.source_location,
     )

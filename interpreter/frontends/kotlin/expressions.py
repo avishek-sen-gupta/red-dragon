@@ -1,6 +1,8 @@
 """Kotlin-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from interpreter.type_name import TypeName
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -785,7 +787,7 @@ def lower_object_literal(
 
     inst_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=inst_reg, type_hint=scalar(type_name)), node=node
+        NewObject(result_reg=inst_reg, type_hint=scalar(TypeName(type_name))), node=node
     )
     return inst_reg
 

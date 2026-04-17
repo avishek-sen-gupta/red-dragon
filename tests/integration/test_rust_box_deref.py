@@ -1,6 +1,7 @@
 """Integration tests for Rust Box auto-deref: Box::new → __method_missing__ → field delegation."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from interpreter.address import Address
 from interpreter.var_name import VarName
@@ -40,7 +41,7 @@ let answer = b.x;
             max_steps=500,
         )
         assert local_vars[VarName("answer")] == 10
-        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert _typed_locals(vm)[VarName("answer")].type == scalar(TypeName("Int"))
         assert vm.heap_get(local_vars[VarName("b")].base).type_hint == "Box"
         assert vm.heap_get(local_vars[VarName("p")].base).type_hint == "Point"
 
@@ -57,7 +58,7 @@ let answer = inner.x;
             max_steps=500,
         )
         assert local_vars[VarName("answer")] == 10
-        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert _typed_locals(vm)[VarName("answer")].type == scalar(TypeName("Int"))
         # *b dereferences to the inner Point heap address
         assert vm.heap_get(local_vars[VarName("inner")].base).type_hint == "Point"
 
@@ -76,7 +77,7 @@ let answer = b2.x;
             max_steps=600,
         )
         assert local_vars[VarName("answer")] == 42
-        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert _typed_locals(vm)[VarName("answer")].type == scalar(TypeName("Int"))
         assert vm.heap_get(local_vars[VarName("b1")].base).type_hint == "Box"
         assert vm.heap_get(local_vars[VarName("b2")].base).type_hint == "Box"
 
@@ -101,7 +102,7 @@ let answer = b.get_count();
             max_steps=600,
         )
         assert local_vars[VarName("answer")] == 42
-        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert _typed_locals(vm)[VarName("answer")].type == scalar(TypeName("Int"))
         assert vm.heap_get(local_vars[VarName("b")].base).type_hint == "Box"
         assert vm.heap_get(local_vars[VarName("c")].base).type_hint == "Counter"
 
@@ -127,7 +128,7 @@ let answer = b2.get_count();
             max_steps=800,
         )
         assert local_vars[VarName("answer")] == 77
-        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert _typed_locals(vm)[VarName("answer")].type == scalar(TypeName("Int"))
         assert vm.heap_get(local_vars[VarName("b2")].base).type_hint == "Box"
 
 
@@ -144,7 +145,7 @@ let answer = b.x + b.y;
             max_steps=600,
         )
         assert local_vars[VarName("answer")] == 10
-        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert _typed_locals(vm)[VarName("answer")].type == scalar(TypeName("Int"))
 
     def test_nested_struct_field_through_box(self):
         """tree.left.value — Box in a struct field, then access inner field."""
@@ -160,7 +161,7 @@ let answer = boxed_node.value;
             max_steps=600,
         )
         assert local_vars[VarName("answer")] == 55
-        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert _typed_locals(vm)[VarName("answer")].type == scalar(TypeName("Int"))
         assert vm.heap_get(local_vars[VarName("t")].base).type_hint == "Tree"
 
 
@@ -206,4 +207,4 @@ let answer = inner.value;
             max_steps=600,
         )
         assert local_vars[VarName("answer")] == 99
-        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert _typed_locals(vm)[VarName("answer")].type == scalar(TypeName("Int"))

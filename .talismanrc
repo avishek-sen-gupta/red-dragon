@@ -58,7 +58,7 @@ fileignoreconfig:
 - filename: interpreter/type_environment_builder.py
   checksum: 9f9ad9ce8ba943e18533c85fcbaf942f31e3b2f91b0d825f81da09444c561e77
 - filename: tests/unit/test_type_environment_builder.py
-  checksum: f8825cf5be5ca386e1788ddd86fdde6206b3fa22443ff14dcecbdd65c3e06daf
+  checksum: 1ab4b13a5790e8b08c86a87046ec8ed222b65ad9f1d36f7f38f314f3eb321ad1
 - filename: scripts/paper-results-code/05_execution_equivalence.py
   checksum: 9afc1f1c5d20daf4d8d088b6093472339584ca4ca3c4a444f1400d107185513d
 - filename: docs/superpowers/specs/2026-03-31-type-hints-design.md
@@ -158,4 +158,6 @@ fileignoreconfig:
 - filename: uv.lock
   ignore_detectors:
     - filecontent
+- filename: interpreter/types/type_graph.py
+  checksum: 43023e24600dcf4126f576beaa94a48f5d88c2a64980759db1bc79ecaf487d09
 version: "1.0"

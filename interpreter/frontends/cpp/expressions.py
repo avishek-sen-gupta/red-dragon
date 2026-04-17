@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from interpreter.type_name import TypeName
+
 from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -50,12 +52,12 @@ def lower_new_expr(
         CallCtorFunction(
             result_reg=reg,
             func_name=FuncName(type_name),
-            type_hint=scalar(type_name),
+            type_hint=scalar(TypeName(type_name)),
             args=tuple(arg_regs),
         ),
         node=node,
     )
-    ctx.seed_register_type(reg, ScalarType(type_name))
+    ctx.seed_register_type(reg, ScalarType(TypeName(type_name)))
     return reg
 
 

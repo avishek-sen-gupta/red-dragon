@@ -1,5 +1,6 @@
 """Tests for parameterized CALL_FUNCTION operand handling."""
 
+from interpreter.type_name import TypeName
 from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
@@ -33,7 +34,7 @@ let b = Box::new(n);
         b_ptr = locals_[VarName("b")]
         assert vm.heap_contains(b_ptr.base)
         box_obj = vm.heap_get(b_ptr.base)
-        assert box_obj.type_hint == ScalarType("Box")
+        assert box_obj.type_hint == ScalarType(TypeName("Box"))
         # The Box stores the inner Node via field "0" (PROPERTY kind)
         assert FieldName("0") in box_obj.fields
         inner_addr = box_obj.fields[FieldName("0")]
@@ -58,5 +59,5 @@ let b = Box::new(n);
         opt_ptr = locals_.get(VarName("opt"))
         assert vm.heap_contains(opt_ptr.base)
         opt_obj = vm.heap_get(opt_ptr.base)
-        assert opt_obj.type_hint == ScalarType("Option")
+        assert opt_obj.type_hint == ScalarType(TypeName("Option"))
         assert FieldName("value") in opt_obj.fields

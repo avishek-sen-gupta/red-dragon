@@ -1,6 +1,7 @@
 """Tests for the composable API functions in interpreter.api."""
 
 import pytest
+from interpreter.type_name import TypeName
 
 from interpreter.api import (
     lower_source,
@@ -248,13 +249,13 @@ class TestLowerAndInfer:
         instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
         assert (
             env.get_func_signature(
-                FuncName("getName"), class_name=scalar("Dog")
+                FuncName("getName"), class_name=scalar(TypeName("Dog"))
             ).return_type
             == "String"
         )
         assert (
             env.get_func_signature(
-                FuncName("getAge"), class_name=scalar("Dog")
+                FuncName("getAge"), class_name=scalar(TypeName("Dog"))
             ).return_type
             == "Int"
         )
@@ -262,7 +263,7 @@ class TestLowerAndInfer:
     def test_java_this_param_in_func_signatures(self):
         instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
         get_age_sig = env.get_func_signature(
-            FuncName("getAge"), class_name=scalar("Dog")
+            FuncName("getAge"), class_name=scalar(TypeName("Dog"))
         )
         this_params = [p for p in get_age_sig.params if p[0] == "this"]
         assert len(this_params) == 1

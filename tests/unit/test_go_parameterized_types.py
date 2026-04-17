@@ -1,6 +1,7 @@
 """Tests for Go frontend emitting parameterized types for slices and maps."""
 
 from interpreter.frontends.go.frontend import GoFrontend
+from interpreter.type_name import TypeName
 from interpreter.frontends.go.features import GoFeature
 from interpreter.instructions import NewArray, NewObject
 from interpreter.types.type_expr import ParameterizedType, ScalarType, scalar
@@ -24,7 +25,7 @@ class TestGoSliceParameterizedType:
         arr = new_arrays[0]
         assert isinstance(arr.type_hint, ParameterizedType)
         assert arr.type_hint.constructor == "Array"
-        assert arr.type_hint.arguments == (scalar("int"),)
+        assert arr.type_hint.arguments == (scalar(TypeName("int")),)
 
     @covers(GoFeature.MAKE)
     def test_make_slice_string(self):
@@ -32,7 +33,7 @@ class TestGoSliceParameterizedType:
         new_arrays = [i for i in instructions if isinstance(i, NewArray)]
         assert len(new_arrays) >= 1
         assert new_arrays[0].type_hint == ParameterizedType(
-            "Array", (scalar("string"),)
+            "Array", (scalar(TypeName("string")),)
         )
 
 
@@ -47,4 +48,7 @@ class TestGoMapParameterizedType:
         obj = new_objs[0]
         assert isinstance(obj.type_hint, ParameterizedType)
         assert obj.type_hint.constructor == "Map"
-        assert obj.type_hint.arguments == (scalar("string"), scalar("bool"))
+        assert obj.type_hint.arguments == (
+            scalar(TypeName("string")),
+            scalar(TypeName("bool")),
+        )
