@@ -71,6 +71,11 @@ from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, DEFAULT_EXCEPTION_TYPE, Language
 from interpreter.types.type_expr import scalar
+from interpreter.frontends.type_alias_prepass import (
+    NullTypeAliasExtractor,
+    TypeAliasExtractor,
+    collect_type_aliases,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +160,8 @@ class BaseFrontend(Frontend):
         self._source: bytes = b""
         self._loop_stack: list[dict[str, str]] = []
         self._break_target_stack: list[str] = []
+        # Type alias prepass: injected per-frontend, defaults to no-op
+        self._type_alias_extractor: TypeAliasExtractor = NullTypeAliasExtractor()
         # Legacy dispatch: bound methods, called as handler(node)
         self._STMT_DISPATCH: dict[str, Callable[[Any], None]] = {}
         self._EXPR_DISPATCH: dict[str, Callable[[Any], Register]] = {}
@@ -366,6 +373,7 @@ class BaseFrontend(Frontend):
         )
         ctx.emit_inst(Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL)))
         self._emit_prelude(ctx)
+        self._run_type_alias_prepass(root, ctx)
         ctx.lower_block(root)
         self._type_env_builder = ctx.type_env_builder
         self._type_env_builder.var_scope_metadata = dict(ctx.var_scope_metadata)
@@ -382,6 +390,11 @@ class BaseFrontend(Frontend):
 
     def _emit_prelude(self, ctx: TreeSitterEmitContext) -> None:
         """Override in subclasses to emit prelude type definitions."""
+
+    def _run_type_alias_prepass(self, root: Any, ctx: TreeSitterEmitContext) -> None:
+        """Walk *root* and seed all type aliases into the type environment builder."""
+        aliases = collect_type_aliases(root, self._type_alias_extractor, ctx.type_map)
+        ctx.type_env_builder.type_aliases.update(aliases)
 
     # ── dispatchers ──────────────────────────────────────────────
 

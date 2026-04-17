@@ -338,7 +338,7 @@ def _build_func_signatures(
 
 
 def _resolve_alias(
-    t: TypeExpr, aliases: dict[str, TypeExpr], depth: int = 0
+    t: TypeExpr, aliases: dict[TypeName, TypeExpr], depth: int = 0
 ) -> TypeExpr:
     """Resolve a TypeExpr through the alias registry, expanding transitively.
 
@@ -348,8 +348,8 @@ def _resolve_alias(
     """
     if depth > 20:
         return t
-    if isinstance(t, ScalarType) and t.name.value in aliases:
-        return _resolve_alias(aliases[t.name.value], aliases, depth + 1)
+    if isinstance(t, ScalarType) and t.name in aliases:
+        return _resolve_alias(aliases[t.name], aliases, depth + 1)
     if isinstance(t, ParameterizedType):
         resolved_args = tuple(
             _resolve_alias(a, aliases, depth + 1) for a in t.arguments
@@ -358,7 +358,7 @@ def _resolve_alias(
     return t
 
 
-def _resolve_aliases_in_dict(d: dict, aliases: dict[str, TypeExpr]) -> dict:
+def _resolve_aliases_in_dict(d: dict, aliases: dict[TypeName, TypeExpr]) -> dict:
     """Resolve all values in a dict through the alias registry."""
     return {k: _resolve_alias(v, aliases) for k, v in d.items()}
 

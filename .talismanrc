@@ -66,15 +66,15 @@ fileignoreconfig:
 - filename: docs/superpowers/plans/2026-03-31-type-hints.md
   checksum: 1ac8660340d4f618e26698eb8f57b59daa1880913c499c8137169b54ea6d1ad3
 - filename: interpreter/types/type_environment.py
-  checksum: 0ad78c061eb1ba3af6d84c45631f89e781f6d6f328e7f49d1479f94ee70e98d1
+  checksum: 0d2a0e7c1b9917d2e75d24018b936b2f5c1dbba4c64b3be2a8e22b44f7fdc0fe
 - filename: interpreter/types/type_environment_builder.py
-  checksum: 56fd368b7d8105239a22eca2018891ab949f86fc8fec9b0258b2b6f1de15efbf
+  checksum: e7bb1d135981899c5ebf3715386bb14d4fa12761280613f71635c03dfaaedecd
 - filename: interpreter/types/type_inference.py
   checksum: 3802e9e06a787bd3f936893d299d576755923b09b76f7ccfd5ae5655a47396b3
 - filename: interpreter/frontends/common/exceptions.py
   checksum: 553efc4a65dd05221edec9b897a8bda685e1a24b14adf20010733fd5b2ddf9b6
 - filename: interpreter/frontends/_base.py
-  checksum: a33aef9105ae8593ee023ae4bbb4924ba184ab268e9e8c58795bd15ac99762ba
+  checksum: 1a1c48730c38afc3bce95ee0a60c1652766c1aea304faac1c3816742cdda1a88
 - filename: .beads/interactions.jsonl
   checksum: ec8ec070d72e54bb9f833d4ff236a51b65307281a43913c2fad6f35f6efe1415
 - filename: docs/superpowers/plans/2026-03-31-leaky-function-scoping.md
@@ -160,4 +160,8 @@ fileignoreconfig:
     - filecontent
 - filename: interpreter/types/type_graph.py
   checksum: 43023e24600dcf4126f576beaa94a48f5d88c2a64980759db1bc79ecaf487d09
+- filename: interpreter/frontends/type_alias_prepass.py
+  checksum: 9185b6f63864c058a2d1cc5b19ea3c3fd727104f1d3a096ab712f36d84190f79
+- filename: tests/unit/test_type_alias_prepass.py
+  checksum: 1c403116e68875cd2a0fbaf08a51ff6829a49b56237bfa81381033a183d9c377
 version: "1.0"

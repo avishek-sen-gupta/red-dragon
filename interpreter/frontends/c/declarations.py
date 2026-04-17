@@ -601,7 +601,7 @@ def lower_typedef(
     effective_type = (
         _wrap_pointer_type(base_type, ptr_depth) if ptr_depth else base_type
     )
-    ctx.seed_type_alias(alias_name, effective_type)
+    ctx.seed_type_alias(TypeName(alias_name), effective_type)
     logger.debug("Typedef alias: %s → %s", alias_name, effective_type)
 
 

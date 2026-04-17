@@ -7,6 +7,7 @@ from interpreter.frontends.c.features import CFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from tests.covers import covers
 
@@ -651,8 +652,8 @@ class TestCFrontendTypedef:
         """typedef int myint; seeds alias myint → Int."""
         source = "typedef int myint;"
         _, builder = _parse_and_lower_with_types(source)
-        assert "myint" in builder.type_aliases
-        assert str(builder.type_aliases["myint"]) == "Int"
+        assert TypeName("myint") in builder.type_aliases
+        assert str(builder.type_aliases[TypeName("myint")]) == "Int"
 
     @covers(CFeature.TYPEDEF)
     def test_typedef_struct(self):
@@ -660,14 +661,14 @@ class TestCFrontendTypedef:
         source = "typedef struct Point { int x; int y; } Point;"
         ir, builder = _parse_and_lower_with_types(source)
         # Point should be seeded as alias (the struct body is still lowered)
-        assert "Point" in builder.type_aliases
+        assert TypeName("Point") in builder.type_aliases
 
     @covers(CFeature.TYPEDEF)
     def test_typedef_unsigned(self):
         """typedef unsigned long ulong; seeds alias ulong → Int."""
         source = "typedef unsigned long ulong;"
         _, builder = _parse_and_lower_with_types(source)
-        assert "ulong" in builder.type_aliases
+        assert TypeName("ulong") in builder.type_aliases
 
 
 class TestCFrontendEnumSpecifier:
