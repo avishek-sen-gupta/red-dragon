@@ -1,6 +1,7 @@
 """Unit tests for _builtin_array_of returning BuiltinResult with heap side effects."""
 
 from interpreter.address import Address
+from interpreter.type_name import TypeName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.vm.builtins import _builtin_array_of
 from interpreter.vm.vm import VMState
@@ -29,7 +30,7 @@ class TestArrayOfBuiltinResult:
         result = _builtin_array_of([typed_from_runtime(10)], vm)
         assert len(result.new_objects) == 1
         assert result.new_objects[0].addr == result.value.value.base
-        assert result.new_objects[0].type_hint == scalar("Array")
+        assert result.new_objects[0].type_hint == scalar(TypeName("Array"))
 
     def test_heap_writes_contain_elements_and_length(self):
         vm = VMState()

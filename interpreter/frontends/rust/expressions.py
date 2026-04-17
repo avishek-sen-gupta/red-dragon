@@ -1,6 +1,7 @@
 """Rust-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Any
 
@@ -559,7 +560,8 @@ def lower_struct_instantiation(
 
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar(struct_name)), node=node
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName(struct_name))),
+        node=node,
     )
 
     if body_node:
@@ -617,7 +619,9 @@ def _lower_vec_macro(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("list")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):
@@ -716,7 +720,9 @@ def lower_tuple_expr(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("tuple"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("tuple")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):

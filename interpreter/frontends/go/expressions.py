@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.type_name import TypeName
 from typing import Any
 
 import logging
@@ -63,15 +64,15 @@ def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> "TypeExpr":
         if named:
             elem = _parse_go_type(ctx, named[0])
             return array_of(elem)
-        return array_of(scalar(ctx.node_text(type_node)))
+        return array_of(scalar(TypeName(ctx.node_text(type_node))))
 
     if type_node.type == "map_type":
         named = [c for c in type_node.children if c.is_named]
         if len(named) >= 2:
             return map_of(_parse_go_type(ctx, named[0]), _parse_go_type(ctx, named[1]))
-        return scalar(ctx.node_text(type_node))
+        return scalar(TypeName(ctx.node_text(type_node)))
 
-    return scalar(ctx.node_text(type_node))
+    return scalar(TypeName(ctx.node_text(type_node)))
 
 
 # -- Go: call expression ---------------------------------------------------
@@ -209,7 +210,9 @@ def lower_composite_literal(
 
     type_name = ctx.node_text(type_node) if type_node else "Object"
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar(type_name)), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName(type_name))), node=node
+    )
 
     if not body_node:
         return obj_reg
@@ -285,7 +288,7 @@ def lower_type_conversion(
         CallCtorFunction(
             result_reg=reg,
             func_name=FuncName(type_name),
-            type_hint=scalar(type_name),
+            type_hint=scalar(TypeName(type_name)),
             args=(operand_reg,),
         ),
         node=node,

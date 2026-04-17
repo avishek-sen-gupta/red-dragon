@@ -1,6 +1,7 @@
 """Lua-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Any
 
@@ -180,7 +181,9 @@ def lower_table_constructor(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower table_constructor ({key=val, ...})."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("table")), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName("table"))), node=node
+    )
     positional_idx = 1
     for child in node.children:
         if child.type == LuaNodeType.FIELD:

@@ -1,5 +1,6 @@
 """Tests for HeapObject.type_hint migration from str to TypeExpr."""
 
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
     ScalarType,
     ParameterizedType,
@@ -17,28 +18,28 @@ class TestHeapObjectTypeHint:
         assert not obj.type_hint  # UNKNOWN is falsy
 
     def test_scalar_type_hint(self):
-        obj = HeapObject(type_hint=scalar("Node"))
+        obj = HeapObject(type_hint=scalar(TypeName("Node")))
         assert obj.type_hint == "Node"  # string compatibility
         assert isinstance(obj.type_hint, ScalarType)
 
     def test_parameterized_type_hint(self):
-        box_node = ParameterizedType("Box", (ScalarType("Node"),))
+        box_node = ParameterizedType("Box", (ScalarType(TypeName("Node")),))
         obj = HeapObject(type_hint=box_node)
         assert obj.type_hint == "Box[Node]"  # string compatibility
         assert isinstance(obj.type_hint, ParameterizedType)
         assert obj.type_hint.constructor == "Box"
-        assert obj.type_hint.arguments == (ScalarType("Node"),)
+        assert obj.type_hint.arguments == (ScalarType(TypeName("Node")),)
 
     def test_nested_parameterized_type_hint(self):
         opt_box_node = ParameterizedType(
             "Option",
-            (ParameterizedType("Box", (ScalarType("Node"),)),),
+            (ParameterizedType("Box", (ScalarType(TypeName("Node")),)),),
         )
         obj = HeapObject(type_hint=opt_box_node)
         assert obj.type_hint == "Option[Box[Node]]"
 
     def test_to_dict_with_type_expr(self):
-        obj = HeapObject(type_hint=scalar("Node"))
+        obj = HeapObject(type_hint=scalar(TypeName("Node")))
         d = obj.to_dict()
         assert d["type_hint"] == "Node"
 
@@ -48,6 +49,8 @@ class TestHeapObjectTypeHint:
         assert d["type_hint"] is None  # preserve JSON shape
 
     def test_to_dict_with_parameterized(self):
-        obj = HeapObject(type_hint=ParameterizedType("Box", (ScalarType("Node"),)))
+        obj = HeapObject(
+            type_hint=ParameterizedType("Box", (ScalarType(TypeName("Node")),))
+        )
         d = obj.to_dict()
         assert d["type_hint"] == "Box[Node]"

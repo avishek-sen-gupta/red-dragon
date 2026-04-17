@@ -1,6 +1,7 @@
 """Unit tests for the static type inference pass."""
 
 import pytest
+from interpreter.type_name import TypeName
 
 from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.conversion_result import IDENTITY_CONVERSION
@@ -143,7 +144,9 @@ class TestSymbolicInference:
                 Opcode.SYMBOLIC, result_reg=Register("%0"), operands=["param:x"]
             ),
         ]
-        builder = TypeEnvironmentBuilder(register_types={Register("%0"): scalar("Int")})
+        builder = TypeEnvironmentBuilder(
+            register_types={Register("%0"): scalar(TypeName("Int"))}
+        )
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -260,7 +263,7 @@ class TestStoreVarInference:
             _make_inst(Opcode.CONST, result_reg=Register("%0"), operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
-        builder = TypeEnvironmentBuilder(var_types={"x": scalar("Int")})
+        builder = TypeEnvironmentBuilder(var_types={"x": scalar(TypeName("Int"))})
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -289,7 +292,7 @@ class TestStoreVarInference:
             _make_inst(Opcode.CONST, result_reg=Register("%0"), operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
-        builder = TypeEnvironmentBuilder(var_types={"x": scalar("Float")})
+        builder = TypeEnvironmentBuilder(var_types={"x": scalar(TypeName("Float"))})
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -312,7 +315,7 @@ class TestLoadVarInference:
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg=Register("%1"), operands=["x"]),
         ]
-        builder = TypeEnvironmentBuilder(var_types={"x": scalar("Int")})
+        builder = TypeEnvironmentBuilder(var_types={"x": scalar(TypeName("Int"))})
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -597,7 +600,11 @@ class TestFullChain:
             _make_inst(Opcode.STORE_VAR, operands=["z", "%4"]),
         ]
         builder = TypeEnvironmentBuilder(
-            var_types={"x": scalar("Int"), "y": scalar("Int"), "z": scalar("Int")}
+            var_types={
+                "x": scalar(TypeName("Int")),
+                "y": scalar(TypeName("Int")),
+                "z": scalar(TypeName("Int")),
+            }
         )
         env = infer_types(
             instructions,
@@ -633,8 +640,8 @@ class TestNullTypeResolver:
             _make_inst(Opcode.CONST, result_reg=Register("%1"), operands=["3.14"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={Register("%0"): scalar("Int")},
-            var_types={"x": scalar("Int")},
+            register_types={Register("%0"): scalar(TypeName("Int"))},
+            var_types={"x": scalar(TypeName("Int"))},
         )
         env = infer_types(
             instructions,
@@ -689,7 +696,9 @@ class TestCallFunctionInference:
                 operands=["Dog", "%1", "%2"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(register_types={Register("%0"): scalar("Dog")})
+        builder = TypeEnvironmentBuilder(
+            register_types={Register("%0"): scalar(TypeName("Dog"))}
+        )
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -924,7 +933,7 @@ class TestReturnTypeInference:
             _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_add_0": scalar("Int")}
+            func_return_types={"func_add_0": scalar(TypeName("Int"))}
         )
         env = infer_types(
             instructions,
@@ -961,7 +970,7 @@ class TestReturnTypeInference:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_add_0": scalar("Int")}
+            func_return_types={"func_add_0": scalar(TypeName("Int"))}
         )
         env = infer_types(
             instructions,
@@ -991,8 +1000,8 @@ class TestReturnTypeInference:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_Dog_0": scalar("void")},
-            register_types={Register("%2"): scalar("Dog")},
+            func_return_types={"func_Dog_0": scalar(TypeName("void"))},
+            register_types={Register("%2"): scalar(TypeName("Dog"))},
         )
         env = infer_types(
             instructions,
@@ -1164,7 +1173,7 @@ class TestBuiltinReturnTypes:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={Register("%0"): scalar("CustomType")}
+            register_types={Register("%0"): scalar(TypeName("CustomType"))}
         )
         env = infer_types(
             instructions,
@@ -1191,7 +1200,7 @@ class TestBuiltinReturnTypes:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_len_0": scalar("String")}
+            func_return_types={"func_len_0": scalar(TypeName("String"))}
         )
         env = infer_types(
             instructions,
@@ -1280,7 +1289,7 @@ class TestReturnBackfill:
             _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_add_0": scalar("Float")}
+            func_return_types={"func_add_0": scalar(TypeName("Float"))}
         )
         env = infer_types(
             instructions,
@@ -1346,7 +1355,7 @@ class TestCallMethodReturnTypes:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_getAge_0": scalar("Int")}
+            func_return_types={"func_getAge_0": scalar(TypeName("Int"))}
         )
         env = infer_types(
             instructions,
@@ -1396,7 +1405,7 @@ class TestCallMethodReturnTypes:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_getAge_0": scalar("Int")}
+            func_return_types={"func_getAge_0": scalar(TypeName("Int"))}
         )
         env = infer_types(
             instructions,
@@ -1520,7 +1529,7 @@ class TestCallMethodReturnTypes:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_split_0": scalar("Int")}
+            func_return_types={"func_split_0": scalar(TypeName("Int"))}
         )
         env = infer_types(
             instructions,
@@ -1572,8 +1581,8 @@ class TestCallMethodReturnTypes:
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={
-                "func_speak_0": scalar("String"),
-                "func_bark_0": scalar("Int"),
+                "func_speak_0": scalar(TypeName("String")),
+                "func_bark_0": scalar(TypeName("Int")),
             }
         )
         env = infer_types(
@@ -1753,12 +1762,15 @@ class TestFunctionSignatures:
         ]
         builder = TypeEnvironmentBuilder(
             register_types={
-                Register("%0"): scalar("Int"),
-                Register("%1"): scalar("Int"),
+                Register("%0"): scalar(TypeName("Int")),
+                Register("%1"): scalar(TypeName("Int")),
             },
-            func_return_types={"func_add_0": scalar("Int")},
+            func_return_types={"func_add_0": scalar(TypeName("Int"))},
             func_param_types={
-                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
+                "func_add_0": [
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
+                ]
             },
         )
         env = infer_types(
@@ -1819,9 +1831,9 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={Register("%0"): scalar("Int")},
-            func_return_types={"func_add_0": scalar("Int")},
-            func_param_types={"func_add_0": [("a", scalar("Int"))]},
+            register_types={Register("%0"): scalar(TypeName("Int"))},
+            func_return_types={"func_add_0": scalar(TypeName("Int"))},
+            func_param_types={"func_add_0": [("a", scalar(TypeName("Int")))]},
         )
         env = infer_types(
             instructions,
@@ -1848,7 +1860,7 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["main", "%1"]),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_main_0": scalar("void")}
+            func_return_types={"func_main_0": scalar(TypeName("void"))}
         )
         env = infer_types(
             instructions,
@@ -1898,17 +1910,20 @@ class TestFunctionSignatures:
         ]
         builder = TypeEnvironmentBuilder(
             register_types={
-                Register("%0"): scalar("Int"),
-                Register("%1"): scalar("Int"),
-                Register("%4"): scalar("String"),
+                Register("%0"): scalar(TypeName("Int")),
+                Register("%1"): scalar(TypeName("Int")),
+                Register("%4"): scalar(TypeName("String")),
             },
             func_return_types={
-                "func_add_0": scalar("Int"),
-                "func_greet_0": scalar("String"),
+                "func_add_0": scalar(TypeName("Int")),
+                "func_greet_0": scalar(TypeName("String")),
             },
             func_param_types={
-                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))],
-                "func_greet_0": [("name", scalar("String"))],
+                "func_add_0": [
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
+                ],
+                "func_greet_0": [("name", scalar(TypeName("String")))],
             },
         )
         env = infer_types(
@@ -1939,7 +1954,9 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_f_0": scalar("Int")})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_f_0": scalar(TypeName("Int"))}
+        )
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -2129,7 +2146,7 @@ class TestSelfThisTyping:
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={Register("%0"): scalar("SpecialDog")}
+            register_types={Register("%0"): scalar(TypeName("SpecialDog"))}
         )
         env = infer_types(
             instructions,
@@ -2171,7 +2188,7 @@ class TestCallUnknown:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_add_0": scalar("Int")}
+            func_return_types={"func_add_0": scalar(TypeName("Int"))}
         )
         env = infer_types(
             instructions,
@@ -2526,7 +2543,7 @@ class TestInferenceInternalTypeExpr:
         arr_type = env.register_types[Register("%arr")]
         assert isinstance(arr_type, ParameterizedType)
         assert arr_type.constructor == "Array"
-        assert arr_type.arguments == (ScalarType("Int"),)
+        assert arr_type.arguments == (ScalarType(TypeName("Int")),)
 
     def test_binop_result_is_type_expr(self):
         """BINOP result type from TypeResolver should be stored as TypeExpr."""
@@ -2576,7 +2593,7 @@ class TestInferenceInternalTypeExpr:
         reg_type = env.register_types[Register("%0")]
         assert isinstance(reg_type, ParameterizedType)
         assert reg_type.constructor == "List"
-        assert reg_type.arguments == (ScalarType("String"),)
+        assert reg_type.arguments == (ScalarType(TypeName("String")),)
 
     def test_seeded_var_type_becomes_type_expr(self):
         """Seeded var types from builder should be parsed to TypeExpr."""
@@ -2756,7 +2773,7 @@ class TestFieldTypeTableUsesTypeExprKeys:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_get_lives_0": scalar("Int")}
+            func_return_types={"func_get_lives_0": scalar(TypeName("Int"))}
         )
         env = infer_types(
             instructions,
@@ -2881,12 +2898,15 @@ class TestFunctionTypeInference:
         ]
         builder = TypeEnvironmentBuilder(
             register_types={
-                Register("%0"): scalar("Int"),
-                Register("%1"): scalar("Int"),
+                Register("%0"): scalar(TypeName("Int")),
+                Register("%1"): scalar(TypeName("Int")),
             },
-            func_return_types={"func_add_0": scalar("Int")},
+            func_return_types={"func_add_0": scalar(TypeName("Int"))},
             func_param_types={
-                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
+                "func_add_0": [
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
+                ]
             },
         )
         env = infer_types(
@@ -2896,7 +2916,9 @@ class TestFunctionTypeInference:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         assert Register("%3") in env.register_types
-        expected = fn_type([scalar("Int"), scalar("Int")], scalar("Int"))
+        expected = fn_type(
+            [scalar(TypeName("Int")), scalar(TypeName("Int"))], scalar(TypeName("Int"))
+        )
         assert env.register_types[Register("%3")] == expected
 
     def test_const_func_ref_no_params_known(self):
@@ -2936,7 +2958,9 @@ class TestFunctionTypeInference:
                 operands=["func_g_0"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_g_0": scalar("Int")})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_g_0": scalar(TypeName("Int"))}
+        )
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -2945,7 +2969,7 @@ class TestFunctionTypeInference:
         )
         # With return type known, FunctionType should be inferred
         assert Register("%1") in env.register_types
-        expected = fn_type([], scalar("Int"))
+        expected = fn_type([], scalar(TypeName("Int")))
         assert env.register_types[Register("%1")] == expected
 
     def test_call_unknown_with_function_type_uses_return_type(self):
@@ -2982,12 +3006,15 @@ class TestFunctionTypeInference:
         ]
         builder = TypeEnvironmentBuilder(
             register_types={
-                Register("%0"): scalar("Int"),
-                Register("%1"): scalar("Int"),
+                Register("%0"): scalar(TypeName("Int")),
+                Register("%1"): scalar(TypeName("Int")),
             },
-            func_return_types={"func_add_0": scalar("Int")},
+            func_return_types={"func_add_0": scalar(TypeName("Int"))},
             func_param_types={
-                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
+                "func_add_0": [
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
+                ]
             },
         )
         env = infer_types(
@@ -3019,7 +3046,9 @@ class TestFunctionTypeInference:
                 operands=["%1"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_f_0": scalar("Bool")})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_f_0": scalar(TypeName("Bool"))}
+        )
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -3069,7 +3098,9 @@ class TestTupleTypeInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types[VarName("x")] == tuple_of(scalar("Int"), scalar("String"))
+        assert env.var_types[VarName("x")] == tuple_of(
+            scalar(TypeName("Int")), scalar(TypeName("String"))
+        )
 
     def test_tuple_load_index_resolves_per_element(self):
         """LOAD_INDEX on a tuple at known index resolves to that element type."""
@@ -3097,7 +3128,7 @@ class TestTupleTypeInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types[VarName("y")] == scalar("Int")
+        assert env.var_types[VarName("y")] == scalar(TypeName("Int"))
 
     def test_tuple_var_propagation(self):
         """Tuple element types propagate through STORE_VAR → LOAD_VAR."""
@@ -3127,8 +3158,10 @@ class TestTupleTypeInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types[VarName("t")] == tuple_of(scalar("Int"), scalar("String"))
-        assert env.var_types[VarName("val")] == scalar("String")
+        assert env.var_types[VarName("t")] == tuple_of(
+            scalar(TypeName("Int")), scalar(TypeName("String"))
+        )
+        assert env.var_types[VarName("val")] == scalar(TypeName("String"))
 
 
 class TestTypeAliasInference:
@@ -3142,8 +3175,8 @@ class TestTypeAliasInference:
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
         builder = TypeEnvironmentBuilder(
-            var_types={"x": scalar("UserId")},
-            type_aliases={"UserId": scalar("Int")},
+            var_types={"x": scalar(TypeName("UserId"))},
+            type_aliases={"UserId": scalar(TypeName("Int"))},
         )
         env = infer_types(
             instructions,
@@ -3151,7 +3184,7 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types[VarName("x")] == scalar("Int")
+        assert env.var_types[VarName("x")] == scalar(TypeName("Int"))
 
     def test_alias_resolves_transitively(self):
         """Chained aliases resolve fully: Km → Distance → Int."""
@@ -3161,10 +3194,10 @@ class TestTypeAliasInference:
             _make_inst(Opcode.STORE_VAR, operands=["d", "%0"]),
         ]
         builder = TypeEnvironmentBuilder(
-            var_types={"d": scalar("Km")},
+            var_types={"d": scalar(TypeName("Km"))},
             type_aliases={
-                "Km": scalar("Distance"),
-                "Distance": scalar("Int"),
+                "Km": scalar(TypeName("Distance")),
+                "Distance": scalar(TypeName("Int")),
             },
         )
         env = infer_types(
@@ -3173,7 +3206,7 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types[VarName("d")] == scalar("Int")
+        assert env.var_types[VarName("d")] == scalar(TypeName("Int"))
 
     def test_alias_resolves_parameterized(self):
         """Alias to parameterized type: StringMap → Map[String, String]."""
@@ -3185,8 +3218,12 @@ class TestTypeAliasInference:
             _make_inst(Opcode.STORE_VAR, operands=["m", "%0"]),
         ]
         builder = TypeEnvironmentBuilder(
-            var_types={"m": scalar("StringMap")},
-            type_aliases={"StringMap": map_of(scalar("String"), scalar("String"))},
+            var_types={"m": scalar(TypeName("StringMap"))},
+            type_aliases={
+                "StringMap": map_of(
+                    scalar(TypeName("String")), scalar(TypeName("String"))
+                )
+            },
         )
         env = infer_types(
             instructions,
@@ -3194,7 +3231,9 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.var_types[VarName("m")] == map_of(scalar("String"), scalar("String"))
+        assert env.var_types[VarName("m")] == map_of(
+            scalar(TypeName("String")), scalar(TypeName("String"))
+        )
 
     def test_aliases_exposed_in_environment(self):
         """TypeEnvironment includes alias registry."""
@@ -3202,7 +3241,7 @@ class TestTypeAliasInference:
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
         ]
         builder = TypeEnvironmentBuilder(
-            type_aliases={"UserId": scalar("Int")},
+            type_aliases={"UserId": scalar(TypeName("Int"))},
         )
         env = infer_types(
             instructions,
@@ -3211,7 +3250,7 @@ class TestTypeAliasInference:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         assert "UserId" in env.type_aliases
-        assert env.type_aliases["UserId"] == scalar("Int")
+        assert env.type_aliases["UserId"] == scalar(TypeName("Int"))
 
     def test_func_return_alias_resolves(self):
         """Function return type seeded as alias resolves to concrete type."""
@@ -3233,8 +3272,8 @@ class TestTypeAliasInference:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_f_0": scalar("UserId")},
-            type_aliases={"UserId": scalar("Int")},
+            func_return_types={"func_f_0": scalar(TypeName("UserId"))},
+            type_aliases={"UserId": scalar(TypeName("Int"))},
         )
         env = infer_types(
             instructions,
@@ -3242,7 +3281,7 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types[Register("%2")] == scalar("Int")
+        assert env.register_types[Register("%2")] == scalar(TypeName("Int"))
 
 
 # ---------------------------------------------------------------------------
@@ -3269,12 +3308,12 @@ class TestMethodSignatures:
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Calc_0")),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_add_0": scalar("Int")},
+            func_return_types={"func_add_0": scalar(TypeName("Int"))},
             func_param_types={
                 "func_add_0": [
-                    ("this", scalar("Calc")),
-                    ("a", scalar("Int")),
-                    ("b", scalar("Int")),
+                    ("this", scalar(TypeName("Calc"))),
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
                 ],
             },
         )
@@ -3284,7 +3323,7 @@ class TestMethodSignatures:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        calc_type = scalar("Calc")
+        calc_type = scalar(TypeName("Calc"))
         assert calc_type in env.method_signatures
         sig = env.get_func_signature(FuncName("add"), class_name=calc_type)
         assert sig.return_type == "Int"
@@ -3319,20 +3358,20 @@ class TestMethodSignatures:
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={
-                "func_add_0": scalar("Int"),
-                "func_add_1": scalar("Int"),
+                "func_add_0": scalar(TypeName("Int")),
+                "func_add_1": scalar(TypeName("Int")),
             },
             func_param_types={
                 "func_add_0": [
-                    ("this", scalar("Calc")),
-                    ("a", scalar("Int")),
-                    ("b", scalar("Int")),
+                    ("this", scalar(TypeName("Calc"))),
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
                 ],
                 "func_add_1": [
-                    ("this", scalar("Calc")),
-                    ("a", scalar("Int")),
-                    ("b", scalar("Int")),
-                    ("c", scalar("Int")),
+                    ("this", scalar(TypeName("Calc"))),
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
+                    ("c", scalar(TypeName("Int"))),
                 ],
             },
         )
@@ -3342,7 +3381,7 @@ class TestMethodSignatures:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        calc_type = scalar("Calc")
+        calc_type = scalar(TypeName("Calc"))
         sigs = env.method_signatures.get(calc_type, {}).get(FuncName("add"), [])
         assert len(sigs) == 2
         assert len(sigs[0].params) == 3  # this, a, b
@@ -3375,14 +3414,14 @@ class TestMethodSignatures:
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={
-                "func_greet_0": scalar("String"),
-                "func_greet_1": scalar("String"),
+                "func_greet_0": scalar(TypeName("String")),
+                "func_greet_1": scalar(TypeName("String")),
             },
             func_param_types={
-                "func_greet_0": [("this", scalar("Foo"))],
+                "func_greet_0": [("this", scalar(TypeName("Foo")))],
                 "func_greet_1": [
-                    ("this", scalar("Bar")),
-                    ("name", scalar("String")),
+                    ("this", scalar(TypeName("Bar"))),
+                    ("name", scalar(TypeName("String"))),
                 ],
             },
         )
@@ -3392,8 +3431,12 @@ class TestMethodSignatures:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        foo_sig = env.get_func_signature(FuncName("greet"), class_name=scalar("Foo"))
-        bar_sig = env.get_func_signature(FuncName("greet"), class_name=scalar("Bar"))
+        foo_sig = env.get_func_signature(
+            FuncName("greet"), class_name=scalar(TypeName("Foo"))
+        )
+        bar_sig = env.get_func_signature(
+            FuncName("greet"), class_name=scalar(TypeName("Bar"))
+        )
         assert len(foo_sig.params) == 1  # just this
         assert len(bar_sig.params) == 2  # this, name
 
@@ -3407,8 +3450,8 @@ class TestMethodSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_f_0": scalar("Int")},
-            func_param_types={"func_f_0": [("x", scalar("Int"))]},
+            func_return_types={"func_f_0": scalar(TypeName("Int"))},
+            func_param_types={"func_f_0": [("x", scalar(TypeName("Int")))]},
         )
         env = infer_types(
             instructions,
@@ -3439,9 +3482,12 @@ class TestFunctionKindInference:
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_M_0")),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_add_0": scalar("Int")},
+            func_return_types={"func_add_0": scalar(TypeName("Int"))},
             func_param_types={
-                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))],
+                "func_add_0": [
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
+                ],
             },
         )
         env = infer_types(
@@ -3450,7 +3496,7 @@ class TestFunctionKindInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        sig = env.get_func_signature(FuncName("add"), class_name=scalar("M"))
+        sig = env.get_func_signature(FuncName("add"), class_name=scalar(TypeName("M")))
         assert sig.kind is FunctionKind.STATIC
         assert sig.callable_params == sig.params  # no this to exclude
 
@@ -3468,9 +3514,9 @@ class TestFunctionKindInference:
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_bark_0": scalar("String")},
+            func_return_types={"func_bark_0": scalar(TypeName("String"))},
             func_param_types={
-                "func_bark_0": [("this", scalar("Dog"))],
+                "func_bark_0": [("this", scalar(TypeName("Dog")))],
             },
         )
         env = infer_types(
@@ -3479,7 +3525,9 @@ class TestFunctionKindInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        sig = env.get_func_signature(FuncName("bark"), class_name=scalar("Dog"))
+        sig = env.get_func_signature(
+            FuncName("bark"), class_name=scalar(TypeName("Dog"))
+        )
         assert sig.kind is FunctionKind.INSTANCE
         assert sig.callable_params == ()  # this excluded, no other params
 
@@ -3498,11 +3546,11 @@ class TestFunctionKindInference:
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_User_0")),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_greet_0": scalar("String")},
+            func_return_types={"func_greet_0": scalar(TypeName("String"))},
             func_param_types={
                 "func_greet_0": [
-                    ("$this", scalar("User")),
-                    ("msg", scalar("String")),
+                    ("$this", scalar(TypeName("User"))),
+                    ("msg", scalar(TypeName("String"))),
                 ],
             },
         )
@@ -3512,6 +3560,8 @@ class TestFunctionKindInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        sig = env.get_func_signature(FuncName("greet"), class_name=scalar("User"))
+        sig = env.get_func_signature(
+            FuncName("greet"), class_name=scalar(TypeName("User"))
+        )
         assert sig.kind is FunctionKind.INSTANCE
-        assert sig.callable_params == (("msg", scalar("String")),)
+        assert sig.callable_params == (("msg", scalar(TypeName("String"))),)
