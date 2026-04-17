@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from interpreter.type_name import TypeName
+
 import pytest
 
 from interpreter.address import Address
@@ -151,7 +153,7 @@ let b = Box::new(n);
         box_obj = vm.heap_get(b_ptr.base)
         from interpreter.types.type_expr import ScalarType
 
-        assert box_obj.type_hint == ScalarType("Box")
+        assert box_obj.type_hint == ScalarType(TypeName("Box"))
         assert FieldName("0") in box_obj.fields
         from interpreter.types.typed_value import TypedValue
 
@@ -211,7 +213,7 @@ let inner = opt.unwrap();
         assert vm.heap_contains(inner_ptr.base)
         from interpreter.types.type_expr import ScalarType
 
-        assert vm.heap_get(inner_ptr.base).type_hint == ScalarType("Box")
+        assert vm.heap_get(inner_ptr.base).type_hint == ScalarType(TypeName("Box"))
 
     def test_as_ref_unwrap_chain(self):
         """opt.as_ref().unwrap() — the actual Rosetta pattern."""

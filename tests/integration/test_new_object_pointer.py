@@ -1,6 +1,7 @@
 """Integration tests for NEW_OBJECT producing Pointer with correct type."""
 
 from interpreter.address import Address
+from interpreter.type_name import TypeName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.var_name import VarName
@@ -46,7 +47,7 @@ class TestNewObjectProducesPointer:
         assert isinstance(tv.value, Pointer)
         assert tv.value.base.startswith("obj_")
 
-    # NOTE: Parameterized pointer type (pointer(scalar("Dog"))) is not yet preserved
+    # NOTE: Parameterized pointer type (pointer(scalar(TypeName("Dog")))) is not yet preserved
     # end-to-end. Registers hold ScalarType("Dog") and local vars show UnknownType()
     # because _resolve_reg unwraps TypedValue. Type assertions on tv.type are skipped
     # until the type propagation pipeline is fixed upstream.

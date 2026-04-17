@@ -1,6 +1,7 @@
 """Tests for UnresolvedCallResolver — SymbolicResolver and LLMPlausibleResolver."""
 
 import json
+from interpreter.type_name import TypeName
 
 import pytest
 
@@ -359,7 +360,7 @@ class TestLLMPlausibleResolver:
 
         resolver = LLMPlausibleResolver(llm_client=CapturingClient())
         vm = _make_vm()
-        vm.heap_set(Address("obj_1"), HeapObject(type_hint=scalar("MyClass")))
+        vm.heap_set(Address("obj_1"), HeapObject(type_hint=scalar(TypeName("MyClass"))))
         vm.heap_get(Address("obj_1")).fields[FieldName("x")] = 10
         inst = _make_call_inst()
 

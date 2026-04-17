@@ -47,6 +47,7 @@ from interpreter.overload.overload_resolver import (
     OverloadResolver,
 )
 from interpreter.types.type_environment import TypeEnvironment
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter import constants
@@ -139,9 +140,9 @@ def _try_class_constructor_call(
 
     init_labels = registry.lookup_methods(class_name, FuncName("__init__"))
     if init_labels:
-        init_sigs = type_env.method_signatures.get(scalar(str(class_name)), {}).get(
-            FuncName("__init__"), []
-        )
+        init_sigs = type_env.method_signatures.get(
+            scalar(TypeName(str(class_name))), {}
+        ).get(FuncName("__init__"), [])
         if len(init_sigs) != len(init_labels):
             logger.warning("sig/label count mismatch for %s.__init__", class_name)
             init_label = init_labels[0]
@@ -154,7 +155,7 @@ def _try_class_constructor_call(
     # Allocate heap object
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    resolved_type = type_hint if type_hint else scalar(str(class_name))
+    resolved_type = type_hint if type_hint else scalar(TypeName(str(class_name)))
     vm.heap_set(Address(addr), HeapObject(type_hint=resolved_type))
     ptr_tv = typed(Pointer(base=Address(addr), offset=0), pointer(resolved_type))
 
@@ -525,9 +526,9 @@ def _handle_call_method(
 
     func_labels = ctx.registry.lookup_methods(class_key, method_name)
     if func_labels:
-        sigs = ctx.type_env.method_signatures.get(scalar(str(type_hint)), {}).get(
-            method_name, []
-        )
+        sigs = ctx.type_env.method_signatures.get(
+            scalar(TypeName(str(type_hint))), {}
+        ).get(method_name, [])
         if len(sigs) != len(func_labels):
             logger.warning("sig/label count mismatch for %s.%s", type_hint, method_name)
             func_label = func_labels[0]
@@ -543,7 +544,7 @@ def _handle_call_method(
             if not parent_labels:
                 continue
             parent_sigs = ctx.type_env.method_signatures.get(
-                scalar(str(parent)), {}
+                scalar(TypeName(str(parent))), {}
             ).get(method_name, [])
             if len(parent_sigs) != len(parent_labels):
                 logger.warning(
@@ -569,7 +570,7 @@ def _handle_call_method(
                     ClassName(inner_type), method_name
                 )
                 inner_sigs = ctx.type_env.method_signatures.get(
-                    scalar(inner_type), {}
+                    scalar(TypeName(inner_type)), {}
                 ).get(method_name, [])
                 if len(inner_sigs) != len(inner_labels):
                     logger.warning(

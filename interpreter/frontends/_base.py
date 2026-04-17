@@ -11,6 +11,7 @@ is non-empty.  Once all frontends are converted, legacy code will be removed.
 """
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 import logging
 import time
@@ -1184,7 +1185,11 @@ class BaseFrontend(Frontend):
         size_reg = self._fresh_reg()
         self._emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
         self._emit_inst(
-            NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
+            NewArray(
+                result_reg=arr_reg,
+                type_hint=scalar(TypeName("list")),
+                size_reg=size_reg,
+            ),
             node=node,
         )
         for i, elem in enumerate(elems):
@@ -1201,7 +1206,7 @@ class BaseFrontend(Frontend):
     ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
         obj_reg = self._fresh_reg()
         self._emit_inst(
-            NewObject(result_reg=obj_reg, type_hint=scalar("dict")),
+            NewObject(result_reg=obj_reg, type_hint=scalar(TypeName("dict"))),
             node=node,
         )
         for child in node.children:

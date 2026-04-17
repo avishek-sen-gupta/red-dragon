@@ -6,6 +6,7 @@ a symbolic value.
 """
 
 from interpreter.address import Address
+from interpreter.type_name import TypeName
 from interpreter.class_name import ClassName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.func_name import FuncName
@@ -86,13 +87,13 @@ def _make_vm_with_method_missing(
         HeapObject(
             type_hint="Outer",
             fields={
-                FieldName(BOXED_FIELD): typed(inner_addr, scalar("Object")),
+                FieldName(BOXED_FIELD): typed(inner_addr, scalar(TypeName("Object"))),
                 FieldName(METHOD_MISSING): typed(mm_func_ref, UNKNOWN),
             },
         ),
     )
     vm.call_stack[-1].registers[Register("%outer")] = typed(
-        outer_addr, scalar("Object")
+        outer_addr, scalar(TypeName("Object"))
     )
 
     registry = FunctionRegistry()
@@ -159,7 +160,9 @@ class TestMethodMissingLoadField:
                 fields={FieldName("x"): typed_from_runtime(10)},
             ),
         )
-        vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
+        vm.call_stack[-1].registers[Register("%obj")] = typed(
+            addr, scalar(TypeName("Object"))
+        )
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD,
@@ -193,10 +196,14 @@ class TestFindMethodMissingRegistryPath:
             addr,
             HeapObject(
                 type_hint="BoxType",
-                fields={FieldName(BOXED_FIELD): typed("inner_0", scalar("Object"))},
+                fields={
+                    FieldName(BOXED_FIELD): typed("inner_0", scalar(TypeName("Object")))
+                },
             ),
         )
-        vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
+        vm.call_stack[-1].registers[Register("%obj")] = typed(
+            addr, scalar(TypeName("Object"))
+        )
 
         mm_label = CodeLabel("func_box_mm_0")
         cfg = CFG()
@@ -258,7 +265,9 @@ class TestFindMethodMissingRegistryPath:
                 fields={FieldName(METHOD_MISSING): typed(instance_mm_ref, UNKNOWN)},
             ),
         )
-        vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
+        vm.call_stack[-1].registers[Register("%obj")] = typed(
+            addr, scalar(TypeName("Object"))
+        )
 
         registry = FunctionRegistry()
         registry.class_methods[ClassName("DualBox")] = {

@@ -1,6 +1,7 @@
 """Unit tests for heap_writes TypedValue migration (red-dragon-gny + red-dragon-x2t)."""
 
 from types import MappingProxyType
+from interpreter.type_name import TypeName
 
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
@@ -48,7 +49,7 @@ class TestStoreFieldTypedValue:
     def test_store_field_produces_typed_value(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("Point")))
+        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar(TypeName("Point"))))
         vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         vm.current_frame.registers[Register("%1")] = typed(
             42, scalar(FoundationTypeName.INT)
@@ -80,7 +81,7 @@ class TestStoreFieldTypedValue:
     def test_store_field_string_value(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("Person")))
+        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar(TypeName("Person"))))
         vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         vm.current_frame.registers[Register("%1")] = typed(
             "Alice", scalar(FoundationTypeName.STRING)
@@ -101,7 +102,7 @@ class TestStoreIndexTypedValue:
         vm.heap_set(
             Address("arr_0"),
             HeapObject(
-                type_hint=scalar("array"),
+                type_hint=scalar(TypeName("array")),
                 fields={FieldName("length", FieldKind.SPECIAL): 3},
             ),
         )
@@ -188,7 +189,7 @@ class TestApplyUpdateStoresTypedValue:
         """apply_update should store TypedValue directly in HeapObject.fields."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("Point")))
+        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar(TypeName("Point"))))
         tv = typed(42, scalar(FoundationTypeName.INT))
         update = StateUpdate(
             heap_writes=[
@@ -232,7 +233,7 @@ class TestHeapFieldsStoreTypedValue:
         """_handle_load_field symbolic cache stores typed(sym, UNKNOWN) in fields."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("Foo")))
+        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar(TypeName("Foo"))))
         vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD, operands=["%0", "bar"], result_reg=Register("%1")
@@ -269,7 +270,10 @@ class TestHeapFieldsStoreTypedValue:
         original_tv = typed(42, scalar(FoundationTypeName.INT))
         vm.heap_set(
             Address("obj_0"),
-            HeapObject(type_hint=scalar("Point"), fields={FieldName("x"): original_tv}),
+            HeapObject(
+                type_hint=scalar(TypeName("Point")),
+                fields={FieldName("x"): original_tv},
+            ),
         )
         vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         inst = IRInstruction(

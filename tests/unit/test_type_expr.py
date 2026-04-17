@@ -1,6 +1,7 @@
 """Unit tests for the TypeExpr algebraic data type."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 import pytest
 
@@ -31,91 +32,101 @@ from interpreter.types.type_expr import (
 
 class TestScalarType:
     def test_str_returns_name(self):
-        assert str(ScalarType("Int")) == "Int"
+        assert str(ScalarType(TypeName("Int"))) == "Int"
 
     def test_equality(self):
-        assert ScalarType("Int") == ScalarType("Int")
-        assert ScalarType("Int") != ScalarType("Float")
+        assert ScalarType(TypeName("Int")) == ScalarType(TypeName("Int"))
+        assert ScalarType(TypeName("Int")) != ScalarType(TypeName("Float"))
 
     def test_hashable(self):
-        s = {ScalarType("Int"), ScalarType("Int"), ScalarType("Float")}
+        s = {
+            ScalarType(TypeName("Int")),
+            ScalarType(TypeName("Int")),
+            ScalarType(TypeName("Float")),
+        }
         assert len(s) == 2
 
     def test_frozen(self):
-        t = ScalarType("Int")
+        t = ScalarType(TypeName("Int"))
         with pytest.raises(AttributeError):
             t.name = "Float"  # type: ignore[misc]
 
     def test_is_type_expr(self):
-        assert isinstance(ScalarType("Int"), TypeExpr)
+        assert isinstance(ScalarType(TypeName("Int")), TypeExpr)
 
 
 class TestParameterizedType:
     def test_str_single_param(self):
-        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        t = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert str(t) == "Pointer[Int]"
 
     def test_str_two_params(self):
-        t = ParameterizedType("Map", (ScalarType("String"), ScalarType("Int")))
+        t = ParameterizedType(
+            "Map", (ScalarType(TypeName("String")), ScalarType(TypeName("Int")))
+        )
         assert str(t) == "Map[String, Int]"
 
     def test_str_nested(self):
-        inner = ParameterizedType("Array", (ScalarType("Int"),))
+        inner = ParameterizedType("Array", (ScalarType(TypeName("Int")),))
         outer = ParameterizedType("Pointer", (inner,))
         assert str(outer) == "Pointer[Array[Int]]"
 
     def test_equality(self):
-        a = ParameterizedType("Pointer", (ScalarType("Int"),))
-        b = ParameterizedType("Pointer", (ScalarType("Int"),))
+        a = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
+        b = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert a == b
 
     def test_inequality_different_constructor(self):
-        a = ParameterizedType("Pointer", (ScalarType("Int"),))
-        b = ParameterizedType("Array", (ScalarType("Int"),))
+        a = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
+        b = ParameterizedType("Array", (ScalarType(TypeName("Int")),))
         assert a != b
 
     def test_inequality_different_args(self):
-        a = ParameterizedType("Pointer", (ScalarType("Int"),))
-        b = ParameterizedType("Pointer", (ScalarType("Float"),))
+        a = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
+        b = ParameterizedType("Pointer", (ScalarType(TypeName("Float")),))
         assert a != b
 
     def test_hashable(self):
-        a = ParameterizedType("Pointer", (ScalarType("Int"),))
-        b = ParameterizedType("Pointer", (ScalarType("Int"),))
+        a = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
+        b = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert hash(a) == hash(b)
         s = {a, b}
         assert len(s) == 1
 
     def test_frozen(self):
-        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        t = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         with pytest.raises(AttributeError):
             t.constructor = "Array"  # type: ignore[misc]
 
     def test_is_type_expr(self):
-        assert isinstance(ParameterizedType("Pointer", (ScalarType("Int"),)), TypeExpr)
+        assert isinstance(
+            ParameterizedType("Pointer", (ScalarType(TypeName("Int")),)), TypeExpr
+        )
 
 
 class TestParseType:
     def test_parse_scalar(self):
-        assert parse_type("Int") == ScalarType("Int")
+        assert parse_type("Int") == ScalarType(TypeName("Int"))
 
     def test_parse_scalar_string(self):
-        assert parse_type("String") == ScalarType("String")
+        assert parse_type("String") == ScalarType(TypeName("String"))
 
     def test_parse_single_param(self):
         result = parse_type("Pointer[Int]")
-        expected = ParameterizedType("Pointer", (ScalarType("Int"),))
+        expected = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert result == expected
 
     def test_parse_two_params(self):
         result = parse_type("Map[String, Int]")
-        expected = ParameterizedType("Map", (ScalarType("String"), ScalarType("Int")))
+        expected = ParameterizedType(
+            "Map", (ScalarType(TypeName("String")), ScalarType(TypeName("Int")))
+        )
         assert result == expected
 
     def test_parse_nested(self):
         result = parse_type("Pointer[Array[Int]]")
         expected = ParameterizedType(
-            "Pointer", (ParameterizedType("Array", (ScalarType("Int"),)),)
+            "Pointer", (ParameterizedType("Array", (ScalarType(TypeName("Int")),)),)
         )
         assert result == expected
 
@@ -124,10 +135,10 @@ class TestParseType:
         expected = ParameterizedType(
             "Map",
             (
-                ScalarType("String"),
+                ScalarType(TypeName("String")),
                 ParameterizedType(
                     "Array",
-                    (ParameterizedType("Pointer", (ScalarType("Int"),)),),
+                    (ParameterizedType("Pointer", (ScalarType(TypeName("Int")),)),),
                 ),
             ),
         )
@@ -138,8 +149,10 @@ class TestParseType:
         expected = ParameterizedType(
             "Map",
             (
-                ScalarType("String"),
-                ParameterizedType("Map", (ScalarType("Int"), ScalarType("String"))),
+                ScalarType(TypeName("String")),
+                ParameterizedType(
+                    "Map", (ScalarType(TypeName("Int")), ScalarType(TypeName("String")))
+                ),
             ),
         )
         assert result == expected
@@ -149,8 +162,12 @@ class TestParseType:
         expected = ParameterizedType(
             "Map",
             (
-                ParameterizedType("Map", (ScalarType("Int"), ScalarType("String"))),
-                ParameterizedType("Map", (ScalarType("Bool"), ScalarType("Float"))),
+                ParameterizedType(
+                    "Map", (ScalarType(TypeName("Int")), ScalarType(TypeName("String")))
+                ),
+                ParameterizedType(
+                    "Map", (ScalarType(TypeName("Bool")), ScalarType(TypeName("Float")))
+                ),
             ),
         )
         assert result == expected
@@ -159,7 +176,11 @@ class TestParseType:
         result = parse_type("Triple[Int, String, Bool]")
         expected = ParameterizedType(
             "Triple",
-            (ScalarType("Int"), ScalarType("String"), ScalarType("Bool")),
+            (
+                ScalarType(TypeName("Int")),
+                ScalarType(TypeName("String")),
+                ScalarType(TypeName("Bool")),
+            ),
         )
         assert result == expected
 
@@ -188,32 +209,32 @@ class TestParseType:
 
     def test_parse_unknown_type(self):
         """Unknown type names are valid scalars — frontends pass through raw names."""
-        assert parse_type("MyClass") == ScalarType("MyClass")
+        assert parse_type("MyClass") == ScalarType(TypeName("MyClass"))
 
 
 class TestConvenienceConstructors:
     def test_scalar(self):
-        assert scalar("Int") == ScalarType("Int")
+        assert scalar(TypeName("Int")) == ScalarType(TypeName("Int"))
 
     def test_pointer(self):
-        result = pointer(scalar("Int"))
-        assert result == ParameterizedType("Pointer", (ScalarType("Int"),))
+        result = pointer(scalar(TypeName("Int")))
+        assert result == ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert str(result) == "Pointer[Int]"
 
     def test_array_of(self):
-        result = array_of(scalar("String"))
-        assert result == ParameterizedType("Array", (ScalarType("String"),))
+        result = array_of(scalar(TypeName("String")))
+        assert result == ParameterizedType("Array", (ScalarType(TypeName("String")),))
         assert str(result) == "Array[String]"
 
     def test_map_of(self):
-        result = map_of(scalar("String"), scalar("Int"))
+        result = map_of(scalar(TypeName("String")), scalar(TypeName("Int")))
         assert result == ParameterizedType(
-            "Map", (ScalarType("String"), ScalarType("Int"))
+            "Map", (ScalarType(TypeName("String")), ScalarType(TypeName("Int")))
         )
         assert str(result) == "Map[String, Int]"
 
     def test_nested_convenience(self):
-        result = pointer(array_of(scalar("Int")))
+        result = pointer(array_of(scalar(TypeName("Int"))))
         assert str(result) == "Pointer[Array[Int]]"
 
 
@@ -225,69 +246,69 @@ class TestTypeExprStringCompatibility:
     """
 
     def test_scalar_equals_string(self):
-        assert ScalarType("Int") == "Int"
+        assert ScalarType(TypeName("Int")) == "Int"
 
     def test_scalar_equals_string_reverse(self):
-        assert "Int" == ScalarType("Int")
+        assert "Int" == ScalarType(TypeName("Int"))
 
     def test_scalar_not_equals_different_string(self):
-        assert ScalarType("Int") != "Float"
+        assert ScalarType(TypeName("Int")) != "Float"
 
     def test_parameterized_equals_string(self):
-        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        t = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert t == "Pointer[Int]"
 
     def test_parameterized_equals_string_reverse(self):
-        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        t = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert "Pointer[Int]" == t
 
     def test_nested_parameterized_equals_string(self):
         t = ParameterizedType(
-            "Pointer", (ParameterizedType("Array", (ScalarType("Int"),)),)
+            "Pointer", (ParameterizedType("Array", (ScalarType(TypeName("Int")),)),)
         )
         assert t == "Pointer[Array[Int]]"
 
     def test_scalar_hash_matches_string_hash(self):
         """Required for correct dict/set behavior when mixing str and TypeExpr."""
-        assert hash(ScalarType("Int")) == hash("Int")
+        assert hash(ScalarType(TypeName("Int"))) == hash("Int")
 
     def test_parameterized_hash_matches_string_hash(self):
-        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        t = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert hash(t) == hash("Pointer[Int]")
 
     def test_scalar_in_set_with_string(self):
         """A set containing ScalarType('Int') should recognize 'Int' as duplicate."""
-        s = {ScalarType("Int")}
+        s = {ScalarType(TypeName("Int"))}
         assert "Int" in s
 
     def test_string_in_set_with_scalar(self):
         s = {"Int"}
-        assert ScalarType("Int") in s
+        assert ScalarType(TypeName("Int")) in s
 
     def test_empty_scalar_equals_empty_string(self):
-        assert ScalarType("") == ""
+        assert ScalarType(TypeName("")) == ""
 
     def test_scalar_not_equals_none(self):
-        assert ScalarType("Int") != None  # noqa: E711
+        assert ScalarType(TypeName("Int")) != None  # noqa: E711
 
     def test_scalar_not_equals_int(self):
-        assert ScalarType("Int") != 42
+        assert ScalarType(TypeName("Int")) != 42
 
 
 class TestTypeExprProperties:
     def test_scalar_constructor_name(self):
         """ScalarType has no constructor — it IS the base type."""
-        t = ScalarType("Int")
-        assert t.name == "Int"
+        t = ScalarType(TypeName("Int"))
+        assert t.name == TypeName("Int")
 
     def test_parameterized_constructor_and_args(self):
-        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        t = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
         assert t.constructor == "Pointer"
-        assert t.arguments == (ScalarType("Int"),)
+        assert t.arguments == (ScalarType(TypeName("Int")),)
 
     def test_parameterized_base_name(self):
         """The constructor name is the 'base' for TypeGraph lookups."""
-        t = ParameterizedType("Array", (ScalarType("Int"),))
+        t = ParameterizedType("Array", (ScalarType(TypeName("Int")),))
         assert t.constructor == "Array"
 
 
@@ -317,13 +338,13 @@ class TestUnknownType:
         assert UNKNOWN == UnknownType()
 
     def test_not_equals_scalar(self):
-        assert UNKNOWN != ScalarType("Int")
+        assert UNKNOWN != ScalarType(TypeName("Int"))
 
     def test_not_equals_empty_scalar(self):
         """UnknownType is distinct from ScalarType('') — they represent different concepts."""
-        # UnknownType means "type not known"; ScalarType("") would be a type named ""
-        # After migration, ScalarType("") should not appear — parse_type("") returns UNKNOWN
-        assert UNKNOWN != ScalarType("")
+        # UnknownType means "type not known"; ScalarType(TypeName("")) would be a type named ""
+        # After migration, ScalarType(TypeName("")) should not appear — parse_type("") returns UNKNOWN
+        assert UNKNOWN != ScalarType(TypeName(""))
 
     def test_hash_matches_empty_string(self):
         assert hash(UNKNOWN) == hash("")
@@ -345,7 +366,7 @@ class TestUnknownType:
 
     def test_known_type_in_if_check(self):
         """Contrast: ScalarType('Int') should be truthy."""
-        result = scalar("Int")
+        result = scalar(TypeName("Int"))
         assert result
 
 
@@ -357,61 +378,67 @@ class TestUnknownType:
 class TestUnionType:
     def test_str_canonical_sorted(self):
         """Union members are sorted alphabetically in str output."""
-        u = union_of(scalar("String"), scalar("Int"))
+        u = union_of(scalar(TypeName("String")), scalar(TypeName("Int")))
         assert str(u) == "Union[Int, String]"
 
     def test_str_three_members(self):
-        u = union_of(scalar("Bool"), scalar("String"), scalar("Int"))
+        u = union_of(
+            scalar(TypeName("Bool")),
+            scalar(TypeName("String")),
+            scalar(TypeName("Int")),
+        )
         assert str(u) == "Union[Bool, Int, String]"
 
     def test_eq_with_string(self):
-        u = union_of(scalar("Int"), scalar("String"))
+        u = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
         assert u == "Union[Int, String]"
 
     def test_eq_with_same_union(self):
-        a = union_of(scalar("Int"), scalar("String"))
-        b = union_of(scalar("String"), scalar("Int"))
+        a = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
+        b = union_of(scalar(TypeName("String")), scalar(TypeName("Int")))
         assert a == b
 
     def test_hash_consistent_with_str(self):
-        u = union_of(scalar("Int"), scalar("String"))
+        u = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
         assert hash(u) == hash("Union[Int, String]")
 
     def test_hash_order_independent(self):
-        a = union_of(scalar("Int"), scalar("String"))
-        b = union_of(scalar("String"), scalar("Int"))
+        a = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
+        b = union_of(scalar(TypeName("String")), scalar(TypeName("Int")))
         assert hash(a) == hash(b)
 
     def test_truthy(self):
-        u = union_of(scalar("Int"), scalar("String"))
+        u = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
         assert u
 
     def test_is_type_expr(self):
-        u = union_of(scalar("Int"), scalar("String"))
+        u = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
         assert isinstance(u, TypeExpr)
         assert isinstance(u, UnionType)
 
     def test_members_frozenset(self):
-        u = union_of(scalar("Int"), scalar("String"))
+        u = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
         assert isinstance(u, UnionType)
-        assert u.members == frozenset({scalar("Int"), scalar("String")})
+        assert u.members == frozenset(
+            {scalar(TypeName("Int")), scalar(TypeName("String"))}
+        )
 
     def test_singleton_elimination(self):
         """Union of a single type collapses to that type."""
-        result = union_of(scalar("Int"))
+        result = union_of(scalar(TypeName("Int")))
         assert isinstance(result, ScalarType)
         assert result == "Int"
 
     def test_dedup(self):
         """Duplicate members are removed, may collapse to singleton."""
-        result = union_of(scalar("Int"), scalar("Int"))
+        result = union_of(scalar(TypeName("Int")), scalar(TypeName("Int")))
         assert isinstance(result, ScalarType)
         assert result == "Int"
 
     def test_flatten_nested_unions(self):
         """Nested unions are flattened into a single union."""
-        inner = union_of(scalar("Int"), scalar("String"))
-        outer = union_of(inner, scalar("Bool"))
+        inner = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
+        outer = union_of(inner, scalar(TypeName("Bool")))
         assert isinstance(outer, UnionType)
         assert str(outer) == "Union[Bool, Int, String]"
 
@@ -422,22 +449,22 @@ class TestUnionType:
 
     def test_unknown_members_ignored(self):
         """UNKNOWN members are filtered out."""
-        result = union_of(scalar("Int"), UNKNOWN)
+        result = union_of(scalar(TypeName("Int")), UNKNOWN)
         assert isinstance(result, ScalarType)
         assert result == "Int"
 
     def test_eq_different_members(self):
-        a = union_of(scalar("Int"), scalar("String"))
-        b = union_of(scalar("Int"), scalar("Bool"))
+        a = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
+        b = union_of(scalar(TypeName("Int")), scalar(TypeName("Bool")))
         assert a != b
 
     def test_eq_with_scalar_is_false(self):
-        u = union_of(scalar("Int"), scalar("String"))
-        assert u != scalar("Int")
+        u = union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
+        assert u != scalar(TypeName("Int"))
 
     def test_parameterized_members(self):
         """Union can contain parameterized types."""
-        u = union_of(array_of(scalar("Int")), scalar("String"))
+        u = union_of(array_of(scalar(TypeName("Int"))), scalar(TypeName("String")))
         assert str(u) == "Union[Array[Int], String]"
 
 
@@ -445,7 +472,9 @@ class TestUnionTypeParsing:
     def test_parse_union(self):
         result = parse_type("Union[Int, String]")
         assert isinstance(result, UnionType)
-        assert result.members == frozenset({scalar("Int"), scalar("String")})
+        assert result.members == frozenset(
+            {scalar(TypeName("Int")), scalar(TypeName("String"))}
+        )
 
     def test_parse_union_three_members(self):
         result = parse_type("Union[Bool, Int, String]")
@@ -455,7 +484,7 @@ class TestUnionTypeParsing:
     def test_parse_union_with_parameterized(self):
         result = parse_type("Union[Array[Int], String]")
         assert isinstance(result, UnionType)
-        assert array_of(scalar("Int")) in result.members
+        assert array_of(scalar(TypeName("Int"))) in result.members
 
     def test_roundtrip(self):
         original = "Union[Array[Int], String]"
@@ -465,8 +494,8 @@ class TestUnionTypeParsing:
         """Optional[Int] parses as Union[Int, Null]."""
         result = parse_type("Optional[Int]")
         assert isinstance(result, UnionType)
-        assert scalar("Int") in result.members
-        assert scalar("Null") in result.members
+        assert scalar(TypeName("Int")) in result.members
+        assert scalar(TypeName("Null")) in result.members
 
     def test_roundtrip_optional_becomes_union(self):
         """Optional[Int] round-trips as Union[Int, Null] (canonical form)."""
@@ -476,36 +505,42 @@ class TestUnionTypeParsing:
 
 class TestOptionalConvenience:
     def test_optional_creates_union_with_null(self):
-        result = optional(scalar("Int"))
+        result = optional(scalar(TypeName("Int")))
         assert isinstance(result, UnionType)
-        assert scalar("Int") in result.members
-        assert scalar("Null") in result.members
+        assert scalar(TypeName("Int")) in result.members
+        assert scalar(TypeName("Null")) in result.members
 
     def test_is_optional_true(self):
-        assert is_optional(optional(scalar("Int")))
+        assert is_optional(optional(scalar(TypeName("Int"))))
 
     def test_is_optional_false_for_scalar(self):
-        assert not is_optional(scalar("Int"))
+        assert not is_optional(scalar(TypeName("Int")))
 
     def test_is_optional_false_for_union_without_null(self):
-        assert not is_optional(union_of(scalar("Int"), scalar("String")))
+        assert not is_optional(
+            union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
+        )
 
     def test_unwrap_optional(self):
-        result = unwrap_optional(optional(scalar("Int")))
-        assert result == scalar("Int")
+        result = unwrap_optional(optional(scalar(TypeName("Int"))))
+        assert result == scalar(TypeName("Int"))
 
     def test_unwrap_optional_multi_member(self):
         """Optional of a union: unwrap removes Null, keeps rest as union."""
-        t = union_of(scalar("Int"), scalar("String"), scalar("Null"))
+        t = union_of(
+            scalar(TypeName("Int")),
+            scalar(TypeName("String")),
+            scalar(TypeName("Null")),
+        )
         result = unwrap_optional(t)
         assert isinstance(result, UnionType)
-        assert scalar("Null") not in result.members
-        assert scalar("Int") in result.members
-        assert scalar("String") in result.members
+        assert scalar(TypeName("Null")) not in result.members
+        assert scalar(TypeName("Int")) in result.members
+        assert scalar(TypeName("String")) in result.members
 
     def test_unwrap_non_optional_returns_as_is(self):
-        result = unwrap_optional(scalar("Int"))
-        assert result == scalar("Int")
+        result = unwrap_optional(scalar(TypeName("Int")))
+        assert result == scalar(TypeName("Int"))
 
 
 # ---------------------------------------------------------------------------
@@ -516,105 +551,149 @@ class TestOptionalConvenience:
 class TestFunctionType:
     def test_str_with_params(self):
         t = FunctionType(
-            params=(scalar("Int"), scalar("String")), return_type=scalar("Bool")
+            params=(scalar(TypeName("Int")), scalar(TypeName("String"))),
+            return_type=scalar(TypeName("Bool")),
         )
         assert str(t) == "Fn(Int, String) -> Bool"
 
     def test_str_no_params(self):
-        t = FunctionType(params=(), return_type=scalar("Int"))
+        t = FunctionType(params=(), return_type=scalar(TypeName("Int")))
         assert str(t) == "Fn() -> Int"
 
     def test_str_single_param(self):
-        t = FunctionType(params=(scalar("Int"),), return_type=scalar("String"))
+        t = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("String"))
+        )
         assert str(t) == "Fn(Int) -> String"
 
     def test_equality(self):
-        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
-        b = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        a = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
+        b = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
         assert a == b
 
     def test_inequality_different_params(self):
-        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
-        b = FunctionType(params=(scalar("String"),), return_type=scalar("Bool"))
+        a = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
+        b = FunctionType(
+            params=(scalar(TypeName("String")),), return_type=scalar(TypeName("Bool"))
+        )
         assert a != b
 
     def test_inequality_different_return(self):
-        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
-        b = FunctionType(params=(scalar("Int"),), return_type=scalar("String"))
+        a = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
+        b = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("String"))
+        )
         assert a != b
 
     def test_inequality_different_arity(self):
-        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        a = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
         b = FunctionType(
-            params=(scalar("Int"), scalar("Int")), return_type=scalar("Bool")
+            params=(scalar(TypeName("Int")), scalar(TypeName("Int"))),
+            return_type=scalar(TypeName("Bool")),
         )
         assert a != b
 
     def test_hashable(self):
-        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
-        b = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        a = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
+        b = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
         assert hash(a) == hash(b)
         s = {a, b}
         assert len(s) == 1
 
     def test_frozen(self):
-        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        t = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
         with pytest.raises(AttributeError):
             t.params = ()  # type: ignore[misc]
 
     def test_is_type_expr(self):
-        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        t = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
         assert isinstance(t, TypeExpr)
 
     def test_string_compatibility(self):
         t = FunctionType(
-            params=(scalar("Int"), scalar("String")), return_type=scalar("Bool")
+            params=(scalar(TypeName("Int")), scalar(TypeName("String"))),
+            return_type=scalar(TypeName("Bool")),
         )
         assert t == "Fn(Int, String) -> Bool"
 
     def test_string_compatibility_reverse(self):
-        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        t = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
         assert "Fn(Int) -> Bool" == t
 
     def test_hash_matches_string(self):
-        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        t = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
         assert hash(t) == hash("Fn(Int) -> Bool")
 
     def test_in_set_with_string(self):
-        s = {FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))}
+        s = {
+            FunctionType(
+                params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+            )
+        }
         assert "Fn(Int) -> Bool" in s
 
     def test_nested_function_type(self):
         """FunctionType with a FunctionType parameter."""
-        inner = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
-        outer = FunctionType(params=(inner,), return_type=scalar("String"))
+        inner = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
+        outer = FunctionType(params=(inner,), return_type=scalar(TypeName("String")))
         assert str(outer) == "Fn(Fn(Int) -> Bool) -> String"
 
     def test_not_equals_scalar(self):
-        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
-        assert t != scalar("Int")
+        t = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
+        assert t != scalar(TypeName("Int"))
 
     def test_not_equals_parameterized(self):
-        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
-        assert t != pointer(scalar("Int"))
+        t = FunctionType(
+            params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
+        )
+        assert t != pointer(scalar(TypeName("Int")))
 
     def test_truthy(self):
-        t = FunctionType(params=(), return_type=scalar("Int"))
+        t = FunctionType(params=(), return_type=scalar(TypeName("Int")))
         assert t
 
 
 class TestFnTypeConstructor:
     def test_fn_type_with_params(self):
-        result = fn_type([scalar("Int"), scalar("String")], scalar("Bool"))
+        result = fn_type(
+            [scalar(TypeName("Int")), scalar(TypeName("String"))],
+            scalar(TypeName("Bool")),
+        )
         assert isinstance(result, FunctionType)
-        assert result.params == (scalar("Int"), scalar("String"))
-        assert result.return_type == scalar("Bool")
+        assert result.params == (scalar(TypeName("Int")), scalar(TypeName("String")))
+        assert result.return_type == scalar(TypeName("Bool"))
 
     def test_fn_type_no_params(self):
-        result = fn_type([], scalar("Int"))
+        result = fn_type([], scalar(TypeName("Int")))
         assert isinstance(result, FunctionType)
         assert result.params == ()
-        assert result.return_type == scalar("Int")
+        assert result.return_type == scalar(TypeName("Int"))
 
 
 class TestFunctionTypeParsing:
@@ -622,29 +701,29 @@ class TestFunctionTypeParsing:
         result = parse_type("Fn() -> Int")
         assert isinstance(result, FunctionType)
         assert result.params == ()
-        assert result.return_type == scalar("Int")
+        assert result.return_type == scalar(TypeName("Int"))
 
     def test_parse_single_param(self):
         result = parse_type("Fn(Int) -> Bool")
         assert isinstance(result, FunctionType)
-        assert result.params == (scalar("Int"),)
-        assert result.return_type == scalar("Bool")
+        assert result.params == (scalar(TypeName("Int")),)
+        assert result.return_type == scalar(TypeName("Bool"))
 
     def test_parse_two_params(self):
         result = parse_type("Fn(Int, String) -> Bool")
         assert isinstance(result, FunctionType)
-        assert result.params == (scalar("Int"), scalar("String"))
-        assert result.return_type == scalar("Bool")
+        assert result.params == (scalar(TypeName("Int")), scalar(TypeName("String")))
+        assert result.return_type == scalar(TypeName("Bool"))
 
     def test_parse_parameterized_return(self):
         result = parse_type("Fn(Int) -> Array[String]")
         assert isinstance(result, FunctionType)
-        assert result.return_type == array_of(scalar("String"))
+        assert result.return_type == array_of(scalar(TypeName("String")))
 
     def test_parse_parameterized_param(self):
         result = parse_type("Fn(Array[Int]) -> Bool")
         assert isinstance(result, FunctionType)
-        assert result.params == (array_of(scalar("Int")),)
+        assert result.params == (array_of(scalar(TypeName("Int"))),)
 
     def test_parse_nested_function_type(self):
         """Fn(Fn(Int) -> Bool) -> String"""
@@ -652,9 +731,9 @@ class TestFunctionTypeParsing:
         assert isinstance(result, FunctionType)
         inner = result.params[0]
         assert isinstance(inner, FunctionType)
-        assert inner.params == (scalar("Int"),)
-        assert inner.return_type == scalar("Bool")
-        assert result.return_type == scalar("String")
+        assert inner.params == (scalar(TypeName("Int")),)
+        assert inner.return_type == scalar(TypeName("Bool"))
+        assert result.return_type == scalar(TypeName("String"))
 
     def test_roundtrip_no_params(self):
         original = "Fn() -> Int"
@@ -676,39 +755,43 @@ class TestFunctionTypeParsing:
         """Bare 'Fn' without parens should parse as a scalar type."""
         result = parse_type("Fn")
         assert isinstance(result, ScalarType)
-        assert result.name == "Fn"
+        assert result.name == TypeName("Fn")
 
 
 class TestTupleOfConstructor:
     """Tests for the tuple_of() convenience constructor."""
 
     def test_single_element_tuple(self):
-        t = tuple_of(scalar("Int"))
+        t = tuple_of(scalar(TypeName("Int")))
         assert isinstance(t, ParameterizedType)
         assert t.constructor == "Tuple"
-        assert t.arguments == (scalar("Int"),)
+        assert t.arguments == (scalar(TypeName("Int")),)
         assert str(t) == "Tuple[Int]"
 
     def test_two_element_tuple(self):
-        t = tuple_of(scalar("Int"), scalar("String"))
+        t = tuple_of(scalar(TypeName("Int")), scalar(TypeName("String")))
         assert str(t) == "Tuple[Int, String]"
-        assert t.arguments == (scalar("Int"), scalar("String"))
+        assert t.arguments == (scalar(TypeName("Int")), scalar(TypeName("String")))
 
     def test_three_element_tuple(self):
-        t = tuple_of(scalar("Int"), scalar("String"), scalar("Bool"))
+        t = tuple_of(
+            scalar(TypeName("Int")),
+            scalar(TypeName("String")),
+            scalar(TypeName("Bool")),
+        )
         assert str(t) == "Tuple[Int, String, Bool]"
 
     def test_nested_tuple(self):
-        inner = tuple_of(scalar("Int"), scalar("String"))
-        outer = tuple_of(inner, scalar("Bool"))
+        inner = tuple_of(scalar(TypeName("Int")), scalar(TypeName("String")))
+        outer = tuple_of(inner, scalar(TypeName("Bool")))
         assert str(outer) == "Tuple[Tuple[Int, String], Bool]"
 
     def test_tuple_with_parameterized_element(self):
-        t = tuple_of(array_of(scalar("Int")), scalar("String"))
+        t = tuple_of(array_of(scalar(TypeName("Int"))), scalar(TypeName("String")))
         assert str(t) == "Tuple[Array[Int], String]"
 
     def test_tuple_equality_with_string(self):
-        t = tuple_of(scalar("Int"), scalar("String"))
+        t = tuple_of(scalar(TypeName("Int")), scalar(TypeName("String")))
         assert t == "Tuple[Int, String]"
 
     def test_tuple_roundtrip_through_parser(self):
@@ -720,7 +803,7 @@ class TestTupleOfConstructor:
         assert str(parse_type(original)) == original
 
     def test_tuple_hash_consistency(self):
-        t1 = tuple_of(scalar("Int"), scalar("String"))
+        t1 = tuple_of(scalar(TypeName("Int")), scalar(TypeName("String")))
         t2 = parse_type("Tuple[Int, String]")
         assert hash(t1) == hash(t2)
         assert t1 == t2
@@ -734,42 +817,42 @@ class TestTypeVar:
         assert str(t) == "T"
 
     def test_bounded_typevar_str(self):
-        t = typevar("T", scalar("Number"))
+        t = typevar("T", scalar(TypeName("Number")))
         assert str(t) == "T: Number"
 
     def test_typevar_equality(self):
-        a = typevar("T", scalar("Number"))
-        b = typevar("T", scalar("Number"))
+        a = typevar("T", scalar(TypeName("Number")))
+        b = typevar("T", scalar(TypeName("Number")))
         assert a == b
 
     def test_typevar_inequality_name(self):
-        a = typevar("T", scalar("Number"))
-        b = typevar("U", scalar("Number"))
+        a = typevar("T", scalar(TypeName("Number")))
+        b = typevar("U", scalar(TypeName("Number")))
         assert a != b
 
     def test_typevar_inequality_bound(self):
-        a = typevar("T", scalar("Number"))
-        b = typevar("T", scalar("String"))
+        a = typevar("T", scalar(TypeName("Number")))
+        b = typevar("T", scalar(TypeName("String")))
         assert a != b
 
     def test_typevar_not_equal_to_scalar(self):
         t = typevar("T")
-        assert t != scalar("T")
+        assert t != scalar(TypeName("T"))
 
     def test_typevar_hash_consistency(self):
-        a = typevar("T", scalar("Number"))
-        b = typevar("T", scalar("Number"))
+        a = typevar("T", scalar(TypeName("Number")))
+        b = typevar("T", scalar(TypeName("Number")))
         assert hash(a) == hash(b)
 
     def test_typevar_string_comparison(self):
-        t = typevar("T", scalar("Number"))
+        t = typevar("T", scalar(TypeName("Number")))
         assert t == "T: Number"
 
     def test_typevar_is_truthy(self):
         assert bool(typevar("T"))
 
     def test_typevar_constructor(self):
-        t = typevar("T", scalar("Int"))
+        t = typevar("T", scalar(TypeName("Int")))
         assert isinstance(t, TypeVar)
         assert t.name == "T"
-        assert t.bound == scalar("Int")
+        assert t.bound == scalar(TypeName("Int"))

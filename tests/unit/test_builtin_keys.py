@@ -6,6 +6,7 @@ len() and index-based iteration work correctly.
 """
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
@@ -76,7 +77,10 @@ class TestBuiltinKeysProducesConcreteArray:
     def test_keys_of_empty_object(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("test")))
-        vm.heap_set(Address("obj_0"), HeapObject(type_hint=scalar("object"), fields={}))
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(type_hint=scalar(TypeName("object")), fields={}),
+        )
         result = Builtins.TABLE[FuncName("keys")]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert vm.heap_contains(_result_addr(result))

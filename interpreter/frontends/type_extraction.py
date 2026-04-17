@@ -17,6 +17,7 @@ import logging
 from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import UNKNOWN, ParameterizedType, ScalarType, TypeExpr
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ def normalize_type_hint(raw: str, type_map: dict[str, str]) -> TypeExpr:
     """
     if not raw:
         return UNKNOWN
-    return ScalarType(type_map.get(raw, raw))
+    return ScalarType(TypeName(type_map.get(raw, raw)))
 
 
 def extract_type_from_field(
@@ -171,5 +172,5 @@ def _decompose_generic(
         elif child.is_named:
             constructor_expr = normalize_type_hint(ctx.node_text(child), type_map)
     if args and isinstance(constructor_expr, ScalarType):
-        return ParameterizedType(constructor_expr.name, tuple(args))
+        return ParameterizedType(constructor_expr.name.value, tuple(args))
     return constructor_expr

@@ -2,6 +2,7 @@
 """BinopCoercionStrategy — injectable language-specific pre-operation type coercion."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Protocol
 
@@ -35,7 +36,7 @@ class BinopCoercionStrategy(Protocol):
 
 def _scalar_name(t: TypeExpr) -> str:
     """Extract scalar name from TypeExpr, or empty string."""
-    return t.name if isinstance(t, ScalarType) else ""
+    return t.name.value if isinstance(t, ScalarType) else ""
 
 
 def _arithmetic_result(lhs_name: str, rhs_name: str) -> TypeExpr:
@@ -43,9 +44,9 @@ def _arithmetic_result(lhs_name: str, rhs_name: str) -> TypeExpr:
     if not lhs_name or not rhs_name:
         return UNKNOWN
     if lhs_name == "Float" or rhs_name == "Float":
-        return scalar("Float")
+        return scalar(TypeName("Float"))
     if lhs_name == "Int" and rhs_name == "Int":
-        return scalar("Int")
+        return scalar(TypeName("Int"))
     return UNKNOWN
 
 
@@ -59,11 +60,11 @@ class DefaultBinopCoercion:
 
     def result_type(self, op: str, lhs: TypedValue, rhs: TypedValue) -> TypeExpr:
         if op in _COMPARISON_OPS:
-            return scalar("Bool")
+            return scalar(TypeName("Bool"))
         if op in _C_FAMILY_LOGICAL_OPS:
-            return scalar("Bool")
+            return scalar(TypeName("Bool"))
         if op in _CONCAT_OPS:
-            return scalar("String")
+            return scalar(TypeName("String"))
 
         lhs_name = _scalar_name(lhs.type)
         rhs_name = _scalar_name(rhs.type)
@@ -71,7 +72,7 @@ class DefaultBinopCoercion:
         if op in _ARITHMETIC_OPS:
             # String + String -> String
             if lhs_name == "String" and rhs_name == "String" and op == "+":
-                return scalar("String")
+                return scalar(TypeName("String"))
             return _arithmetic_result(lhs_name, rhs_name)
         if op in _BITWISE_OPS:
             return _arithmetic_result(lhs_name, rhs_name)
@@ -100,7 +101,7 @@ class JavaBinopCoercion:
         self, op: str, lhs: TypedValue, rhs: TypedValue
     ) -> tuple[TypedValue, TypedValue]:
         if op == "+":
-            string_type = scalar("String")
+            string_type = scalar(TypeName("String"))
             lhs_str = _scalar_name(lhs.type) == "String"
             rhs_str = _scalar_name(rhs.type) == "String"
             if lhs_str and not rhs_str:
@@ -114,5 +115,5 @@ class JavaBinopCoercion:
             lhs_name = _scalar_name(lhs.type)
             rhs_name = _scalar_name(rhs.type)
             if lhs_name == "String" or rhs_name == "String":
-                return scalar("String")
+                return scalar(TypeName("String"))
         return self._default.result_type(op, lhs, rhs)

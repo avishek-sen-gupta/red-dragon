@@ -2,6 +2,7 @@
 LOAD_INDIRECT, STORE_INDIRECT, ADDRESS_OF, LOAD_FIELD_INDIRECT."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 import logging
 from typing import TYPE_CHECKING
@@ -309,7 +310,7 @@ def _handle_load_field_indirect(
     mm_ref = _find_method_missing(heap_obj, ctx.registry, ctx.cfg)
     if mm_ref is not None:
         self_tv = typed(obj_val, heap_obj.type_hint)
-        name_tv = typed(field_name, scalar("String"))
+        name_tv = typed(field_name, scalar(TypeName("String")))
         return _try_user_function_call(
             mm_ref,
             [self_tv, name_tv],
@@ -471,7 +472,7 @@ def _handle_load_field(
     mm_ref = _find_method_missing(heap_obj, ctx.registry, ctx.cfg)
     if mm_ref is not None:
         self_tv = typed(obj_val, heap_obj.type_hint)
-        name_tv = typed(str(field_name), scalar("String"))
+        name_tv = typed(str(field_name), scalar(TypeName("String")))
         return _try_user_function_call(
             mm_ref,
             [self_tv, name_tv],

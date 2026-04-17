@@ -1,6 +1,7 @@
 """Integration tests: source → frontend → IR → type inference pass."""
 
 import pytest
+from interpreter.type_name import TypeName
 
 from interpreter.constants import Language, FoundationTypeName
 from interpreter.types.coercion.default_conversion_rules import (
@@ -411,7 +412,7 @@ class M {
 """,
             "java",
         )
-        sig = env.get_func_signature(FuncName("add"), class_name=scalar("M"))
+        sig = env.get_func_signature(FuncName("add"), class_name=scalar(TypeName("M")))
         assert sig.return_type == "Int"
 
     def test_call_function_result_typed(self):
@@ -440,7 +441,7 @@ class M {
 """,
             "csharp",
         )
-        sig = env.get_func_signature(FuncName("Add"), class_name=scalar("M"))
+        sig = env.get_func_signature(FuncName("Add"), class_name=scalar(TypeName("M")))
         assert sig.return_type == "Int"
 
     def test_call_function_result_typed(self):
@@ -768,7 +769,7 @@ class M {
 """,
             "java",
         )
-        sig = env.get_func_signature(FuncName("add"), class_name=scalar("M"))
+        sig = env.get_func_signature(FuncName("add"), class_name=scalar(TypeName("M")))
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -784,7 +785,7 @@ class M {
 """,
             "csharp",
         )
-        sig = env.get_func_signature(FuncName("Add"), class_name=scalar("M"))
+        sig = env.get_func_signature(FuncName("Add"), class_name=scalar(TypeName("M")))
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -1241,7 +1242,9 @@ class Dog {
 """,
             "java",
         )
-        sig = env.get_func_signature(FuncName("getAge"), class_name=scalar("Dog"))
+        sig = env.get_func_signature(
+            FuncName("getAge"), class_name=scalar(TypeName("Dog"))
+        )
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
@@ -1251,7 +1254,9 @@ class Dog {
             "class Vec3 { double length() { return 0; } };",
             "cpp",
         )
-        sig = env.get_func_signature(FuncName("length"), class_name=scalar("Vec3"))
+        sig = env.get_func_signature(
+            FuncName("length"), class_name=scalar(TypeName("Vec3"))
+        )
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Vec3"
@@ -1261,7 +1266,9 @@ class Dog {
             "class Cat { int GetLives() { return 9; } }",
             "csharp",
         )
-        sig = env.get_func_signature(FuncName("GetLives"), class_name=scalar("Cat"))
+        sig = env.get_func_signature(
+            FuncName("GetLives"), class_name=scalar(TypeName("Cat"))
+        )
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Cat"
@@ -1271,7 +1278,9 @@ class Dog {
             "class Box { getSize() { return 1; } }",
             "javascript",
         )
-        sig = env.get_func_signature(FuncName("getSize"), class_name=scalar("Box"))
+        sig = env.get_func_signature(
+            FuncName("getSize"), class_name=scalar(TypeName("Box"))
+        )
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Box"
@@ -1281,7 +1290,9 @@ class Dog {
             "class Box { getSize(): number { return 1; } }",
             "typescript",
         )
-        sig = env.get_func_signature(FuncName("getSize"), class_name=scalar("Box"))
+        sig = env.get_func_signature(
+            FuncName("getSize"), class_name=scalar(TypeName("Box"))
+        )
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Box"
@@ -1291,7 +1302,9 @@ class Dog {
             "class Circle { fun area(): Double { return 3.14 } }",
             "kotlin",
         )
-        sig = env.get_func_signature(FuncName("area"), class_name=scalar("Circle"))
+        sig = env.get_func_signature(
+            FuncName("area"), class_name=scalar(TypeName("Circle"))
+        )
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Circle"
@@ -1301,7 +1314,9 @@ class Dog {
             "class Circle { def area(): Double = 3.14 }",
             "scala",
         )
-        sig = env.get_func_signature(FuncName("area"), class_name=scalar("Circle"))
+        sig = env.get_func_signature(
+            FuncName("area"), class_name=scalar(TypeName("Circle"))
+        )
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Circle"
@@ -1311,7 +1326,9 @@ class Dog {
             '<?php class User { function greet(): string { return "hi"; } }',
             "php",
         )
-        sig = env.get_func_signature(FuncName("greet"), class_name=scalar("User"))
+        sig = env.get_func_signature(
+            FuncName("greet"), class_name=scalar(TypeName("User"))
+        )
         this_params = [p for p in sig.params if p[0] == "$this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "User"
@@ -1547,7 +1564,9 @@ class TestReturnBackfillAllLanguages:
         lang, env = lang_env
         class_name = self.CLASS_NAMES.get(lang)
         if class_name:
-            sig = env.get_func_signature(FuncName("f"), class_name=scalar(class_name))
+            sig = env.get_func_signature(
+                FuncName("f"), class_name=scalar(TypeName(class_name))
+            )
         else:
             assert FuncName("f") in env.method_signatures.get(
                 UNBOUND, {}
@@ -2292,7 +2311,7 @@ class TestVarTypeScopingCrossLanguage:
         expected_int = _EXPECTED_INT_TYPE.get(scoping_lang, FoundationTypeName.INT)
         expected_str = _EXPECTED_STR_TYPE.get(scoping_lang, FoundationTypeName.STRING)
         cls = self._CLASS_WRAPPED.get(scoping_lang)
-        class_kw = {"class_name": scalar(cls)} if cls else {}
+        class_kw = {"class_name": scalar(TypeName(cls))} if cls else {}
         # Both functions should have their return types correctly inferred
         assert (
             env.get_func_signature(FuncName("make_int"), **class_kw).return_type
@@ -2336,7 +2355,9 @@ class TestJavaGenericTypeInference:
             "class M { List<String> getNames() { return null; } }",
             "java",
         )
-        sig = env.get_func_signature(FuncName("getNames"), class_name=scalar("M"))
+        sig = env.get_func_signature(
+            FuncName("getNames"), class_name=scalar(TypeName("M"))
+        )
         assert sig.return_type == "List[String]"
 
 
@@ -2497,17 +2518,17 @@ def add(a, b):
             ]
             func_label = str(labels[0]) if labels else "func_add_0"
             builder.func_param_types[func_label] = [
-                ("a", scalar("Int")),
-                ("b", scalar("Int")),
+                ("a", scalar(TypeName("Int"))),
+                ("b", scalar(TypeName("Int"))),
             ]
-            builder.func_return_types[func_label] = scalar("Int")
+            builder.func_return_types[func_label] = scalar(TypeName("Int"))
         else:
             func_label = func_labels[0]
             builder.func_param_types[func_label] = [
-                ("a", scalar("Int")),
-                ("b", scalar("Int")),
+                ("a", scalar(TypeName("Int"))),
+                ("b", scalar(TypeName("Int"))),
             ]
-            builder.func_return_types[func_label] = scalar("Int")
+            builder.func_return_types[func_label] = scalar(TypeName("Int"))
 
         env = infer_types(
             instructions,
@@ -2529,7 +2550,7 @@ def add(a, b):
         assert func_reg in env.register_types
         func_type = env.register_types[func_reg]
         assert isinstance(func_type, FunctionType)
-        assert func_type.return_type == scalar("Int")
+        assert func_type.return_type == scalar(TypeName("Int"))
 
     def test_java_typed_function_produces_function_type(self):
         """Java static int add(int a, int b) → FunctionType register."""
@@ -2555,7 +2576,7 @@ class M {
         assert func_reg in env.register_types
         func_type = env.register_types[func_reg]
         assert isinstance(func_type, FunctionType)
-        assert func_type.return_type == scalar("Int")
+        assert func_type.return_type == scalar(TypeName("Int"))
         assert len(func_type.params) >= 2
 
     def test_python_function_ref_stored_in_variable(self):
@@ -2580,10 +2601,10 @@ f = add
         ]
         func_label = str(labels[0]) if labels else "func_add_0"
         builder.func_param_types[func_label] = [
-            ("a", scalar("Int")),
-            ("b", scalar("Int")),
+            ("a", scalar(TypeName("Int"))),
+            ("b", scalar(TypeName("Int"))),
         ]
-        builder.func_return_types[func_label] = scalar("Int")
+        builder.func_return_types[func_label] = scalar(TypeName("Int"))
 
         env = infer_types(
             instructions,
@@ -2620,14 +2641,16 @@ class TestTupleTypeInferenceIntegration:
         source = "x = (1, 2, 3)\n"
         _, env = _lower_and_infer(source, "python")
         assert env.var_types[VarName("x")] == tuple_of(
-            scalar("Int"), scalar("Int"), scalar("Int")
+            scalar(TypeName("Int")), scalar(TypeName("Int")), scalar(TypeName("Int"))
         )
 
     def test_python_heterogeneous_tuple(self):
         """Python (1, 'hello') → Tuple[Int, String]."""
         source = 'x = (1, "hello")\n'
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types[VarName("x")] == tuple_of(scalar("Int"), scalar("String"))
+        assert env.var_types[VarName("x")] == tuple_of(
+            scalar(TypeName("Int")), scalar(TypeName("String"))
+        )
 
     def test_python_tuple_element_access(self):
         """Python y = t[0] where t = (1, 'hi') → y is Int."""
@@ -2636,8 +2659,10 @@ t = (1, "hi")
 y = t[0]
 """
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types[VarName("t")] == tuple_of(scalar("Int"), scalar("String"))
-        assert env.var_types[VarName("y")] == scalar("Int")
+        assert env.var_types[VarName("t")] == tuple_of(
+            scalar(TypeName("Int")), scalar(TypeName("String"))
+        )
+        assert env.var_types[VarName("y")] == scalar(TypeName("Int"))
 
     def test_python_nested_tuple(self):
         """Python ((1, 2), 'a') → Tuple[Tuple[Int, Int], String]."""
@@ -2646,7 +2671,9 @@ inner = (1, 2)
 outer = (inner, "a")
 """
         _, env = _lower_and_infer(source, "python")
-        assert env.var_types[VarName("inner")] == tuple_of(scalar("Int"), scalar("Int"))
+        assert env.var_types[VarName("inner")] == tuple_of(
+            scalar(TypeName("Int")), scalar(TypeName("Int"))
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2664,9 +2691,9 @@ typedef int UserId;
 UserId x = 42;
 """
         _, env = _lower_and_infer(source, "c")
-        assert env.var_types[VarName("x")] == scalar("Int")
+        assert env.var_types[VarName("x")] == scalar(TypeName("Int"))
         assert "UserId" in env.type_aliases
-        assert env.type_aliases["UserId"] == scalar("Int")
+        assert env.type_aliases["UserId"] == scalar(TypeName("Int"))
 
     def test_c_typedef_pointer_alias(self):
         """C: typedef int* IntPtr; IntPtr p; → p is Pointer[Int]."""
@@ -2677,7 +2704,7 @@ IntPtr p;
         _, env = _lower_and_infer(source, "c")
         from interpreter.types.type_expr import pointer
 
-        assert env.var_types[VarName("p")] == pointer(scalar("Int"))
+        assert env.var_types[VarName("p")] == pointer(scalar(TypeName("Int")))
         assert "IntPtr" in env.type_aliases
 
 
@@ -2737,7 +2764,7 @@ class TestVarianceIntegration:
             variance_registry={"List": (Variance.INVARIANT,)},
         )
         assert not graph.is_subtype_expr(
-            inferred_type, ParameterizedType("List", (scalar("Any"),))
+            inferred_type, ParameterizedType("List", (scalar(TypeName("Any")),))
         )
         # But IS subtype of itself
         assert graph.is_subtype_expr(inferred_type, inferred_type)
@@ -2761,12 +2788,16 @@ class TestVarianceIntegration:
         # Same key, wider value: Map[String, Int] <: Map[String, Number] (covariant value)
         assert graph.is_subtype_expr(
             inferred_type,
-            ParameterizedType("Map", (scalar("String"), scalar("Number"))),
+            ParameterizedType(
+                "Map", (scalar(TypeName("String")), scalar(TypeName("Number")))
+            ),
         )
         # Different key: NOT subtype (invariant key)
         assert not graph.is_subtype_expr(
             inferred_type,
-            ParameterizedType("Map", (scalar("Any"), scalar("Int"))),
+            ParameterizedType(
+                "Map", (scalar(TypeName("Any")), scalar(TypeName("Int")))
+            ),
         )
 
     def test_kotlin_list_inferred_type_covariant_default(self):
@@ -2783,7 +2814,7 @@ class TestVarianceIntegration:
         # Default covariant: List[String] IS subtype of List[Any]
         graph = TypeGraph(DEFAULT_TYPE_NODES)
         assert graph.is_subtype_expr(
-            inferred_type, ParameterizedType("List", (scalar("Any"),))
+            inferred_type, ParameterizedType("List", (scalar(TypeName("Any")),))
         )
 
 
@@ -2860,7 +2891,7 @@ interface Calculator {
             "java",
         )
         sig = env.get_func_signature(
-            FuncName("compute"), class_name=scalar("Calculator")
+            FuncName("compute"), class_name=scalar(TypeName("Calculator"))
         )
         assert (
             sig.return_type == "Int"
@@ -2890,7 +2921,7 @@ class Main {
             "java",
         )
         assert env.var_types.get(VarName("msg")) == scalar(
-            "String"
+            TypeName("String")
         ), f"Expected 'msg' typed as String, got: {env.var_types.get(VarName('msg'))}"
         assert env.interface_implementations.get("HelloGreeter") == (
             "Greeter",
@@ -2912,7 +2943,9 @@ type Shape interface {
 """,
             "go",
         )
-        sig = env.get_func_signature(FuncName("Area"), class_name=scalar("Shape"))
+        sig = env.get_func_signature(
+            FuncName("Area"), class_name=scalar(TypeName("Shape"))
+        )
         assert (
             sig.return_type == "Float"
         ), f"Expected 'Area' in method_signatures[Shape], got: {env.method_signatures}"
@@ -2978,7 +3011,7 @@ interface Calculator {
             "kotlin",
         )
         sig = env.get_func_signature(
-            FuncName("compute"), class_name=scalar("Calculator")
+            FuncName("compute"), class_name=scalar(TypeName("Calculator"))
         )
         assert (
             sig.return_type == "Int"
@@ -3025,7 +3058,7 @@ class Calc {
 """,
             "java",
         )
-        calc_type = scalar("Calc")
+        calc_type = scalar(TypeName("Calc"))
         assert calc_type in env.method_signatures
         sigs = env.method_signatures[calc_type].get(FuncName("add"), [])
         assert len(sigs) == 2
@@ -3051,10 +3084,14 @@ class Dog extends Animal {
             "java",
         )
         animal_speak = env.get_func_signature(
-            FuncName("speak"), class_name=scalar("Animal")
+            FuncName("speak"), class_name=scalar(TypeName("Animal"))
         )
-        dog_speak = env.get_func_signature(FuncName("speak"), class_name=scalar("Dog"))
-        dog_fetch = env.get_func_signature(FuncName("fetch"), class_name=scalar("Dog"))
+        dog_speak = env.get_func_signature(
+            FuncName("speak"), class_name=scalar(TypeName("Dog"))
+        )
+        dog_fetch = env.get_func_signature(
+            FuncName("fetch"), class_name=scalar(TypeName("Dog"))
+        )
         # Animal.speak has 1 param (this)
         assert len(animal_speak.params) == 1
         # Dog.speak has 1 param (this)
@@ -3065,6 +3102,8 @@ class Dog extends Animal {
         from interpreter.types.type_environment import _NULL_SIGNATURE
 
         assert (
-            env.get_func_signature(FuncName("fetch"), class_name=scalar("Animal"))
+            env.get_func_signature(
+                FuncName("fetch"), class_name=scalar(TypeName("Animal"))
+            )
             is _NULL_SIGNATURE
         )

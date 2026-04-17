@@ -1,6 +1,7 @@
 """Java-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Any
 
@@ -134,12 +135,12 @@ def lower_object_creation(
         CallCtorFunction(
             result_reg=reg,
             func_name=FuncName(type_name),
-            type_hint=scalar(type_name),
+            type_hint=scalar(TypeName(type_name)),
             args=tuple(arg_regs),
         ),
         node=node,
     )
-    ctx.seed_register_type(reg, ScalarType(type_name))
+    ctx.seed_register_type(reg, ScalarType(TypeName(type_name)))
     return reg
 
 
@@ -304,7 +305,11 @@ def lower_array_creation(
         ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+            NewArray(
+                result_reg=arr_reg,
+                type_hint=scalar(TypeName("array")),
+                size_reg=size_reg,
+            ),
             node=node,
         )
         _emit_array_length(ctx, arr_reg, size_reg)
@@ -328,7 +333,11 @@ def lower_array_creation(
         ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+            NewArray(
+                result_reg=arr_reg,
+                type_hint=scalar(TypeName("array")),
+                size_reg=size_reg,
+            ),
             node=node,
         )
         _emit_array_length(ctx, arr_reg, size_reg)
@@ -354,7 +363,9 @@ def lower_array_creation(
         ctx.emit_inst(Const(result_reg=size_reg, value="0"))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("array")), size_reg=size_reg
+        ),
         node=node,
     )
     _emit_array_length(ctx, arr_reg, size_reg)

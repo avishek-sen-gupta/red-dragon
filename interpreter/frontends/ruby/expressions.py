@@ -1,6 +1,7 @@
 """Ruby-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Any
 
@@ -164,7 +165,9 @@ def lower_ruby_call(
         if method_name == "new" and receiver_text[0:1].isupper():
             obj_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                NewObject(result_reg=obj_reg, type_hint=scalar(receiver_text)),
+                NewObject(
+                    result_reg=obj_reg, type_hint=scalar(TypeName(receiver_text))
+                ),
                 node=node,
             )
             ctor_reg = ctx.fresh_reg()
@@ -238,7 +241,9 @@ def lower_ruby_hash(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby hash literal as NEW_OBJECT + STORE_INDEX per pair."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("hash")), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName("hash"))), node=node
+    )
     for child in node.children:
         if child.type == RubyNodeType.PAIR:
             key_node = child.child_by_field_name("key")
@@ -356,7 +361,9 @@ def lower_ruby_word_array(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("list")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):

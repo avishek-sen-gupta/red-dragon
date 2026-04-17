@@ -16,7 +16,9 @@ from interpreter.types.coercion.default_conversion_rules import (
 )
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.constants import FoundationTypeName
 from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_expr import scalar
 from interpreter.vm.vm import VMState, apply_update, _heap_addr
 from interpreter.vm.vm_types import StackFrame, StateUpdate
 from interpreter.func_name import FuncName
@@ -100,7 +102,7 @@ class TestFloatIndexHeapKeyMismatch:
     def test_float_store_int_load_reads_back_stored_value(self):
         """STORE_INDEX with float 2.0, then LOAD_INDEX with int 2 — value should round-trip."""
         vm = _setup_array(_make_vm())
-        type_env = _type_env_with({"%idx_f": "Int"})
+        type_env = _type_env_with({"%idx_f": scalar(FoundationTypeName.INT)})
         rules = DefaultTypeConversionRules()
 
         # Store value 42 at float index 2.0 (coerced to int 2 at write time)
@@ -134,7 +136,12 @@ class TestFloatIndexHeapKeyMismatch:
     def test_int_store_float_load_reads_back_stored_value(self):
         """STORE_INDEX with int 2, then LOAD_INDEX with float 2.0 — value should round-trip."""
         vm = _setup_array(_make_vm())
-        type_env = _type_env_with({"%idx_i": "Int", Register("%idx_f"): "Int"})
+        type_env = _type_env_with(
+            {
+                "%idx_i": scalar(FoundationTypeName.INT),
+                Register("%idx_f"): scalar(FoundationTypeName.INT),
+            }
+        )
         rules = DefaultTypeConversionRules()
 
         # Store value 99 at int index 2
@@ -168,7 +175,7 @@ class TestFloatIndexHeapKeyMismatch:
     def test_heap_key_written_by_float_index_with_type_coercion(self):
         """After STORE_INDEX with float 2.0 and type env saying Int, heap key is '2' not '2.0'."""
         vm = _setup_array(_make_vm())
-        type_env = _type_env_with({"%idx_f": "Int"})
+        type_env = _type_env_with({"%idx_f": scalar(FoundationTypeName.INT)})
         rules = DefaultTypeConversionRules()
 
         _set_reg(vm, "%idx_f", 2.0, type_env=type_env, conversion_rules=rules)

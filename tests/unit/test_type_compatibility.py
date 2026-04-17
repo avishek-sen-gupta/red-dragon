@@ -1,6 +1,7 @@
 """Unit tests for TypeCompatibility — runtime arg vs declared type scoring."""
 
 from interpreter.constants import FoundationTypeName
+from interpreter.type_name import TypeName
 from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
 from interpreter.types.type_expr import scalar, UNKNOWN
 from interpreter.types.typed_value import typed
@@ -14,9 +15,9 @@ def _default_graph() -> TypeGraph:
 
 def _graph_with_classes() -> TypeGraph:
     class_nodes = (
-        TypeNode(name="Animal", parents=("Any",)),
-        TypeNode(name="Dog", parents=("Animal",)),
-        TypeNode(name="Cat", parents=("Animal",)),
+        TypeNode(name=TypeName("Animal"), parents=(TypeName("Any"),)),
+        TypeNode(name=TypeName("Dog"), parents=(TypeName("Animal"),)),
+        TypeNode(name=TypeName("Cat"), parents=(TypeName("Animal"),)),
     )
     return TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
 
@@ -157,25 +158,51 @@ class TestSubtypeScoring:
         self.compat = DefaultTypeCompatibility(_graph_with_classes())
 
     def test_exact_class_match(self):
-        assert self.compat.score(typed("obj_0", scalar("Dog")), scalar("Dog")) == 2
+        assert (
+            self.compat.score(
+                typed("obj_0", scalar(TypeName("Dog"))), scalar(TypeName("Dog"))
+            )
+            == 2
+        )
 
     def test_subtype_match(self):
-        assert self.compat.score(typed("obj_0", scalar("Dog")), scalar("Animal")) == 1
+        assert (
+            self.compat.score(
+                typed("obj_0", scalar(TypeName("Dog"))), scalar(TypeName("Animal"))
+            )
+            == 1
+        )
 
     def test_transitive_subtype(self):
-        assert self.compat.score(typed("obj_0", scalar("Dog")), scalar("Any")) == 1
+        assert (
+            self.compat.score(
+                typed("obj_0", scalar(TypeName("Dog"))), scalar(TypeName("Any"))
+            )
+            == 1
+        )
 
     def test_unrelated_class_mismatch(self):
-        assert self.compat.score(typed("obj_0", scalar("Dog")), scalar("Cat")) == -1
+        assert (
+            self.compat.score(
+                typed("obj_0", scalar(TypeName("Dog"))), scalar(TypeName("Cat"))
+            )
+            == -1
+        )
 
     def test_sibling_classes_mismatch(self):
-        assert self.compat.score(typed("obj_0", scalar("Cat")), scalar("Dog")) == -1
+        assert (
+            self.compat.score(
+                typed("obj_0", scalar(TypeName("Cat"))), scalar(TypeName("Dog"))
+            )
+            == -1
+        )
 
     def test_heap_address_with_class_type_not_confused_with_string(self):
         """obj_0 is a heap address string, but typed as Dog — should not match String."""
         assert (
             self.compat.score(
-                typed("obj_0", scalar("Dog")), scalar(FoundationTypeName.STRING)
+                typed("obj_0", scalar(TypeName("Dog"))),
+                scalar(FoundationTypeName.STRING),
             )
             == -1
         )

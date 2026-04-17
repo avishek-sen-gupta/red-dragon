@@ -1,5 +1,6 @@
 # tests/unit/test_function_scoping_strategy.py
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from dataclasses import dataclass, field
 
@@ -23,7 +24,7 @@ from interpreter.vm.executor import HandlerContext, _default_handler_context
 
 def _make_func_ref_value() -> TypedValue:
     ref = FuncRef(name=FuncName("inner"), label=CodeLabel("func_inner"))
-    return typed(ref, scalar("function"))
+    return typed(ref, scalar(TypeName("function")))
 
 
 def _make_vm_with_depth(depth: int) -> tuple[VMState, StackFrame]:
@@ -112,7 +113,7 @@ class TestWriteVarToFrameDelegation:
     def test_non_funcref_not_delegated_to_strategy(self):
         """Plain values bypass the strategy entirely."""
         vm, frame = _make_vm_with_depth(2)
-        plain = typed(42, scalar("int"))
+        plain = typed(42, scalar(TypeName("int")))
         ctx = _default_handler_context()
         _write_var_to_frame(vm, frame, NAME, plain, ctx)
         assert frame.local_vars[NAME] == plain

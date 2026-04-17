@@ -1,6 +1,7 @@
 """Integration tests: Python pattern matching through VM execution."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 import pytest
 
@@ -366,8 +367,8 @@ match points:
         r1_addr = _heap_addr(
             vm.heap_get(rest_addr).fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap_get(r0_addr).type_hint == scalar("Point")
-        assert vm.heap_get(r1_addr).type_hint == scalar("Point")
+        assert vm.heap_get(r0_addr).type_hint == scalar(TypeName("Point"))
+        assert vm.heap_get(r1_addr).type_hint == scalar(TypeName("Point"))
 
     def test_nested_positional_line_of_points(self):
         """Line(Point(x1,y1), Point(x2,y2)) — nested positional resolution."""
@@ -524,8 +525,8 @@ match items:
         r1_addr = _heap_addr(
             vm.heap_get(rest_addr).fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap_get(r0_addr).type_hint == scalar("Point")
-        assert vm.heap_get(r1_addr).type_hint == scalar("Point")
+        assert vm.heap_get(r0_addr).type_hint == scalar(TypeName("Point"))
+        assert vm.heap_get(r1_addr).type_hint == scalar(TypeName("Point"))
 
     def test_three_level_deep_tree_positional(self):
         """Node(Node(Leaf(a), Leaf(b)), Leaf(c)) — 3 levels deep."""
@@ -554,7 +555,7 @@ match tree:
             and local_vars[VarName("result")] == 6
         )
         tree_addr = _heap_addr(local_vars[VarName("tree")])
-        assert vm.heap_get(tree_addr).type_hint == scalar("Node")
+        assert vm.heap_get(tree_addr).type_hint == scalar(TypeName("Node"))
 
 
 class TestComplexLiteralPattern:
@@ -923,8 +924,8 @@ match commands:
         t1_addr = _heap_addr(
             vm.heap_get(rest_addr).fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap_get(t0_addr).type_hint == scalar("Target")
-        assert vm.heap_get(t1_addr).type_hint == scalar("Target")
+        assert vm.heap_get(t0_addr).type_hint == scalar(TypeName("Target"))
+        assert vm.heap_get(t1_addr).type_hint == scalar(TypeName("Target"))
 
 
 class TestOutOfScopePatterns:
@@ -1192,8 +1193,8 @@ match points:
         r1_addr = _heap_addr(
             vm.heap_get(rest_addr).fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap_get(r0_addr).type_hint == scalar("Point")
-        assert vm.heap_get(r1_addr).type_hint == scalar("Point")
+        assert vm.heap_get(r0_addr).type_hint == scalar(TypeName("Point"))
+        assert vm.heap_get(r1_addr).type_hint == scalar(TypeName("Point"))
 
     def test_dict_inside_sequence_with_star(self):
         """Dict pattern inside list with star — verify extracted fields + rest element fields."""
@@ -1297,7 +1298,7 @@ match r:
         )
         # Verify r is a Rect via heap type_hint
         r_addr = _heap_addr(local_vars[VarName("r")])
-        assert vm.heap_get(r_addr).type_hint == scalar("Rect")
+        assert vm.heap_get(r_addr).type_hint == scalar(TypeName("Rect"))
 
     def test_mixed_pattern_types_across_cases(self):
         """Dict matches before list — verify each captured field individually."""
@@ -1392,8 +1393,8 @@ match cart:
         o1_addr = _heap_addr(
             vm.heap_get(others_addr).fields[FieldName("1", FieldKind.INDEX)].value
         )
-        assert vm.heap_get(o0_addr).type_hint == scalar("Item")
-        assert vm.heap_get(o1_addr).type_hint == scalar("Item")
+        assert vm.heap_get(o0_addr).type_hint == scalar(TypeName("Item"))
+        assert vm.heap_get(o1_addr).type_hint == scalar(TypeName("Item"))
 
     def test_guard_rejects_then_next_case_matches(self):
         """First case guard fails, second case (same pattern, different guard) matches."""
@@ -1460,7 +1461,7 @@ match resp:
             and local_vars[VarName("r1")] == 30
         )
         r_addr = _heap_addr(local_vars[VarName("resp")])
-        assert vm.heap_get(r_addr).type_hint == scalar("Response")
+        assert vm.heap_get(r_addr).type_hint == scalar(TypeName("Response"))
 
     def test_multi_case_dispatch_with_guards(self):
         """Multiple cases with different pattern shapes + guards + fall-through."""
@@ -1497,7 +1498,7 @@ match cmd:
             and local_vars[VarName("detail")] == 6
         )
         cmd_addr = _heap_addr(local_vars[VarName("cmd")])
-        assert vm.heap_get(cmd_addr).type_hint == scalar("Cmd")
+        assert vm.heap_get(cmd_addr).type_hint == scalar(TypeName("Cmd"))
 
     def test_as_pattern_wrapping_sequence(self):
         """As-pattern captures the whole subject after structural match succeeds."""
@@ -1574,11 +1575,11 @@ match tree:
             and local_vars[VarName("llv")] == 4
         )
         tree_addr = _heap_addr(local_vars[VarName("tree")])
-        assert vm.heap_get(tree_addr).type_hint == scalar("Node")
+        assert vm.heap_get(tree_addr).type_hint == scalar(TypeName("Node"))
         left_addr = _heap_addr(vm.heap_get(tree_addr).fields[FieldName("left")].value)
-        assert vm.heap_get(left_addr).type_hint == scalar("Node")
+        assert vm.heap_get(left_addr).type_hint == scalar(TypeName("Node"))
         ll_addr = _heap_addr(vm.heap_get(left_addr).fields[FieldName("left")].value)
-        assert vm.heap_get(ll_addr).type_hint == scalar("Node")
+        assert vm.heap_get(ll_addr).type_hint == scalar(TypeName("Node"))
 
     def test_guard_with_pythagorean_computation(self):
         """Guard uses x*x + y*y == 25 on destructured class fields."""

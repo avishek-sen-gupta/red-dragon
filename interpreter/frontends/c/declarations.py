@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.type_name import TypeName
 from typing import Any
 
 import logging
@@ -119,7 +120,9 @@ def lower_declaration(
             if struct_type:
                 val_reg = ctx.fresh_reg()
                 ctx.emit_inst(
-                    NewObject(result_reg=val_reg, type_hint=scalar(struct_type)),
+                    NewObject(
+                        result_reg=val_reg, type_hint=scalar(TypeName(struct_type))
+                    ),
                     node=node,
                 )
             else:
@@ -183,7 +186,8 @@ def _lower_init_declarator(
     elif struct_type:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewObject(result_reg=val_reg, type_hint=scalar(struct_type)), node=node
+            NewObject(result_reg=val_reg, type_hint=scalar(TypeName(struct_type))),
+            node=node,
         )
     else:
         val_reg = ctx.fresh_reg()

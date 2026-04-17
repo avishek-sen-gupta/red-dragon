@@ -1,6 +1,7 @@
 """Unit tests for the clone builtin (PHP object cloning)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from interpreter.vm.builtins import Builtins
 from interpreter.vm.vm import VMState
@@ -27,7 +28,7 @@ class TestCloneBuiltin:
     def test_clone_creates_new_object(self):
         """clone should return a new Pointer, not the original."""
         vm, ptr = self._make_vm_with_object(
-            scalar("MyClass"),
+            scalar(TypeName("MyClass")),
             {FieldName("x"): typed(42, scalar(FoundationTypeName.INT))},
         )
         result = Builtins.TABLE[FuncName("clone")]([typed_from_runtime(ptr)], vm)
@@ -38,7 +39,7 @@ class TestCloneBuiltin:
     def test_clone_copies_all_fields(self):
         """clone should copy all fields from the original object."""
         vm, ptr = self._make_vm_with_object(
-            scalar("MyClass"),
+            scalar(TypeName("MyClass")),
             {
                 FieldName("x"): typed(42, scalar(FoundationTypeName.INT)),
                 FieldName("name"): typed("hello", scalar(FoundationTypeName.STRING)),
@@ -52,9 +53,9 @@ class TestCloneBuiltin:
     def test_clone_preserves_type_hint(self):
         """clone should create a new object with the same type_hint."""
         vm, ptr = self._make_vm_with_object(
-            scalar("Dog"),
+            scalar(TypeName("Dog")),
             {FieldName("breed"): typed("labrador", scalar(FoundationTypeName.STRING))},
         )
         result = Builtins.TABLE[FuncName("clone")]([typed_from_runtime(ptr)], vm)
         assert len(result.new_objects) == 1
-        assert result.new_objects[0].type_hint == scalar("Dog")
+        assert result.new_objects[0].type_hint == scalar(TypeName("Dog"))

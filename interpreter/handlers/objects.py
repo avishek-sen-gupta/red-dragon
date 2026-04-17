@@ -3,6 +3,7 @@
 # pyright: standard
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import TYPE_CHECKING
 
@@ -34,7 +35,11 @@ def _handle_new_object(
     obj_type = (
         t.type_hint
         if isinstance(t.type_hint, TypeExpr) and t.type_hint
-        else scalar(str(t.type_hint)) if t.type_hint else scalar("Object")
+        else (
+            scalar(TypeName(str(t.type_hint)))
+            if t.type_hint
+            else scalar(TypeName("Object"))
+        )
     )
     # Dereference: if type_hint names a variable holding a ClassRef,
     # extract the canonical class name.
@@ -43,12 +48,12 @@ def _handle_new_object(
         if VarName(hint_name) in frame.local_vars:
             raw = frame.local_vars[VarName(hint_name)].value
             if isinstance(raw, ClassRef):
-                obj_type = scalar(str(raw.name))
+                obj_type = scalar(TypeName(str(raw.name)))
             break
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
     if not obj_type:
-        obj_type = scalar("Object")
+        obj_type = scalar(TypeName("Object"))
     return ExecutionResult.success(
         StateUpdate(
             new_objects=[NewObject(addr=Address(addr), type_hint=obj_type)],
@@ -73,7 +78,7 @@ def _handle_new_array(
     arr_type = (
         t.type_hint
         if isinstance(t.type_hint, TypeExpr) and t.type_hint
-        else scalar(str(t.type_hint)) if t.type_hint else scalar("Array")
+        else scalar(str(t.type_hint)) if t.type_hint else scalar(TypeName("Array"))
     )
     return ExecutionResult.success(
         StateUpdate(

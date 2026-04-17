@@ -1,6 +1,7 @@
 """C#-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Any
 
@@ -148,12 +149,12 @@ def lower_object_creation(
         CallCtorFunction(
             result_reg=reg,
             func_name=FuncName(type_name),
-            type_hint=scalar(type_name),
+            type_hint=scalar(TypeName(type_name)),
             args=tuple(arg_regs),
         ),
         node=node,
     )
-    ctx.seed_register_type(reg, ScalarType(type_name))
+    ctx.seed_register_type(reg, ScalarType(TypeName(type_name)))
     return reg
 
 
@@ -237,7 +238,9 @@ def lower_initializer_expr(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("list")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):
@@ -506,7 +509,11 @@ def lower_array_creation(
         ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+            NewArray(
+                result_reg=arr_reg,
+                type_hint=scalar(TypeName("array")),
+                size_reg=size_reg,
+            ),
             node=node,
         )
         for i, elem in enumerate(elements):
@@ -533,7 +540,9 @@ def lower_array_creation(
         ctx.emit_inst(Const(result_reg=size_reg, value="0"))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("array")), size_reg=size_reg
+        ),
         node=node,
     )
     return arr_reg
@@ -646,7 +655,9 @@ def lower_tuple_expr(
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elem_regs))))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("tuple"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("tuple")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem_reg in enumerate(elem_regs):
@@ -704,7 +715,8 @@ def lower_implicit_object_creation(
     )
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar("__implicit")), node=node
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName("__implicit"))),
+        node=node,
     )
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -760,7 +772,8 @@ def lower_anonymous_object_creation(
     """Lower `new { Name = expr, Age = expr }` as NEW_OBJECT + STORE_FIELD per property."""
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar("__anon_object")), node=node
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName("__anon_object"))),
+        node=node,
     )
     named = [c for c in node.children if c.is_named]
     # Children alternate: identifier, value, identifier, value, ...

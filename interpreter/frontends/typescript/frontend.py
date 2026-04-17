@@ -6,6 +6,8 @@ skipping type annotations.
 
 from __future__ import annotations
 
+from interpreter.type_name import TypeName
+
 from typing import Any, Callable
 
 from interpreter.frontends.javascript import JavaScriptFrontend
@@ -237,7 +239,7 @@ def lower_interface_decl(
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
-    ctx.seed_var_type(iface_name, metatype(ScalarType(iface_name)))
+    ctx.seed_var_type(iface_name, metatype(ScalarType(TypeName(iface_name))))
     ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
 
@@ -424,7 +426,7 @@ def lower_ts_class_def(
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
+    ctx.seed_var_type(class_name, metatype(ScalarType(TypeName(class_name))))
     ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 

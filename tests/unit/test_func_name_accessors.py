@@ -1,6 +1,7 @@
 """Tests for FuncName accessor methods on registries and tables."""
 
 from interpreter.class_name import ClassName
+from interpreter.type_name import TypeName
 from interpreter.func_name import FuncName
 from interpreter.registry import FunctionRegistry
 from interpreter.refs.func_ref import FuncRef
@@ -107,8 +108,8 @@ class TestInferenceContextAccessors:
         from interpreter.types.type_expr import scalar, UNKNOWN
 
         ctx = _InferenceContext()
-        ctx.store_func_return_type(FuncName("add"), scalar("Int"))
-        assert ctx.lookup_func_return_type(FuncName("add")) == scalar("Int")
+        ctx.store_func_return_type(FuncName("add"), scalar(TypeName("Int")))
+        assert ctx.lookup_func_return_type(FuncName("add")) == scalar(TypeName("Int"))
         assert ctx.lookup_func_return_type(FuncName("missing")) == UNKNOWN
 
     def test_lookup_method_type(self):
@@ -116,11 +117,18 @@ class TestInferenceContextAccessors:
         from interpreter.types.type_expr import scalar, UNKNOWN
 
         ctx = _InferenceContext()
-        class_type = scalar("MyClass")
-        ctx.class_method_types[class_type] = {FuncName("get"): scalar("String")}
-        assert ctx.lookup_method_type(class_type, FuncName("get")) == scalar("String")
+        class_type = scalar(TypeName("MyClass"))
+        ctx.class_method_types[class_type] = {
+            FuncName("get"): scalar(TypeName("String"))
+        }
+        assert ctx.lookup_method_type(class_type, FuncName("get")) == scalar(
+            TypeName("String")
+        )
         assert ctx.lookup_method_type(class_type, FuncName("missing")) == UNKNOWN
-        assert ctx.lookup_method_type(scalar("Other"), FuncName("get")) == UNKNOWN
+        assert (
+            ctx.lookup_method_type(scalar(TypeName("Other")), FuncName("get"))
+            == UNKNOWN
+        )
 
 
 class TestCobolIOProviderDispatch:

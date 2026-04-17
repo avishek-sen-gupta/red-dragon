@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from interpreter.type_name import TypeName
+
 
 class Language(StrEnum):
     """Bounded set of supported source languages.
@@ -101,19 +103,19 @@ class Variance(StrEnum):
     INVARIANT = "invariant"
 
 
-class FoundationTypeName(StrEnum):
-    """Canonical type names for the type ontology DAG."""
+class FoundationTypeName:
+    """Predefined TypeName constants for the canonical type ontology DAG."""
 
-    ANY = "Any"
-    NUMBER = "Number"
-    INT = "Int"
-    FLOAT = "Float"
-    STRING = "String"
-    BOOL = "Bool"
-    OBJECT = "Object"
-    ARRAY = "Array"
-    POINTER = "Pointer"
-    MAP = "Map"
-    TUPLE = "Tuple"
-    REGION = "Region"
-    VOID = "Void"
+    ANY = TypeName("Any")
+    NUMBER = TypeName("Number")
+    INT = TypeName("Int")
+    FLOAT = TypeName("Float")
+    STRING = TypeName("String")
+    BOOL = TypeName("Bool")
+    OBJECT = TypeName("Object")
+    ARRAY = TypeName("Array")
+    POINTER = TypeName("Pointer")
+    MAP = TypeName("Map")
+    TUPLE = TypeName("Tuple")
+    REGION = TypeName("Region")
+    VOID = TypeName("Void")

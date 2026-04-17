@@ -1,5 +1,6 @@
 """Unit tests for BinopCoercionStrategy implementations."""
 
+from interpreter.type_name import TypeName
 from interpreter.types.coercion.binop_coercion import (
     DefaultBinopCoercion,
     JavaBinopCoercion,
@@ -18,19 +19,19 @@ class TestDefaultBinopCoercion:
     # --- coerce: no-op ---
 
     def test_coerce_returns_typed_values(self):
-        lhs = typed(42, scalar("Int"))
-        rhs = typed(3, scalar("Int"))
+        lhs = typed(42, scalar(TypeName("Int")))
+        rhs = typed(3, scalar(TypeName("Int")))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert isinstance(a, TypedValue)
         assert isinstance(b, TypedValue)
         assert a.value == 42
         assert b.value == 3
-        assert a.type == scalar("Int")
-        assert b.type == scalar("Int")
+        assert a.type == scalar(TypeName("Int"))
+        assert b.type == scalar(TypeName("Int"))
 
     def test_coerce_string_plus_int_no_coercion(self):
-        lhs = typed("hello", scalar("String"))
-        rhs = typed(42, scalar("Int"))
+        lhs = typed("hello", scalar(TypeName("String")))
+        rhs = typed(42, scalar(TypeName("Int")))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert a.value == "hello"
         assert b.value == 42
@@ -38,63 +39,63 @@ class TestDefaultBinopCoercion:
     # --- result_type ---
 
     def test_result_type_int_plus_int(self):
-        lhs = typed(1, scalar("Int"))
-        rhs = typed(2, scalar("Int"))
-        assert self.coercion.result_type("+", lhs, rhs) == scalar("Int")
+        lhs = typed(1, scalar(TypeName("Int")))
+        rhs = typed(2, scalar(TypeName("Int")))
+        assert self.coercion.result_type("+", lhs, rhs) == scalar(TypeName("Int"))
 
     def test_result_type_float_plus_float(self):
-        lhs = typed(1.0, scalar("Float"))
-        rhs = typed(2.0, scalar("Float"))
-        assert self.coercion.result_type("+", lhs, rhs) == scalar("Float")
+        lhs = typed(1.0, scalar(TypeName("Float")))
+        rhs = typed(2.0, scalar(TypeName("Float")))
+        assert self.coercion.result_type("+", lhs, rhs) == scalar(TypeName("Float"))
 
     def test_result_type_int_plus_float(self):
-        lhs = typed(1, scalar("Int"))
-        rhs = typed(2.0, scalar("Float"))
-        assert self.coercion.result_type("+", lhs, rhs) == scalar("Float")
+        lhs = typed(1, scalar(TypeName("Int")))
+        rhs = typed(2.0, scalar(TypeName("Float")))
+        assert self.coercion.result_type("+", lhs, rhs) == scalar(TypeName("Float"))
 
     def test_result_type_string_plus_string(self):
-        lhs = typed("a", scalar("String"))
-        rhs = typed("b", scalar("String"))
-        assert self.coercion.result_type("+", lhs, rhs) == scalar("String")
+        lhs = typed("a", scalar(TypeName("String")))
+        rhs = typed("b", scalar(TypeName("String")))
+        assert self.coercion.result_type("+", lhs, rhs) == scalar(TypeName("String"))
 
     def test_result_type_comparison_returns_bool(self):
-        lhs = typed(1, scalar("Int"))
-        rhs = typed(2, scalar("Int"))
+        lhs = typed(1, scalar(TypeName("Int")))
+        rhs = typed(2, scalar(TypeName("Int")))
         for op in ("==", "!=", "<", ">", "<=", ">="):
-            assert self.coercion.result_type(op, lhs, rhs) == scalar("Bool")
+            assert self.coercion.result_type(op, lhs, rhs) == scalar(TypeName("Bool"))
 
     def test_result_type_c_family_logical_returns_bool(self):
-        lhs = typed(True, scalar("Bool"))
-        rhs = typed(False, scalar("Bool"))
-        assert self.coercion.result_type("&&", lhs, rhs) == scalar("Bool")
-        assert self.coercion.result_type("||", lhs, rhs) == scalar("Bool")
+        lhs = typed(True, scalar(TypeName("Bool")))
+        rhs = typed(False, scalar(TypeName("Bool")))
+        assert self.coercion.result_type("&&", lhs, rhs) == scalar(TypeName("Bool"))
+        assert self.coercion.result_type("||", lhs, rhs) == scalar(TypeName("Bool"))
 
     def test_result_type_python_and_or_returns_unknown(self):
-        lhs = typed(3, scalar("Int"))
-        rhs = typed(5, scalar("Int"))
+        lhs = typed(3, scalar(TypeName("Int")))
+        rhs = typed(5, scalar(TypeName("Int")))
         assert self.coercion.result_type("and", lhs, rhs) == UNKNOWN
         assert self.coercion.result_type("or", lhs, rhs) == UNKNOWN
 
     def test_result_type_concat_returns_string(self):
-        lhs = typed("a", scalar("String"))
-        rhs = typed("b", scalar("String"))
-        assert self.coercion.result_type("..", lhs, rhs) == scalar("String")
-        assert self.coercion.result_type(".", lhs, rhs) == scalar("String")
+        lhs = typed("a", scalar(TypeName("String")))
+        rhs = typed("b", scalar(TypeName("String")))
+        assert self.coercion.result_type("..", lhs, rhs) == scalar(TypeName("String"))
+        assert self.coercion.result_type(".", lhs, rhs) == scalar(TypeName("String"))
 
     def test_result_type_unknown_op(self):
-        lhs = typed(1, scalar("Int"))
-        rhs = typed(2, scalar("Int"))
+        lhs = typed(1, scalar(TypeName("Int")))
+        rhs = typed(2, scalar(TypeName("Int")))
         assert self.coercion.result_type("???", lhs, rhs) == UNKNOWN
 
     def test_result_type_int_minus_int(self):
-        lhs = typed(5, scalar("Int"))
-        rhs = typed(3, scalar("Int"))
-        assert self.coercion.result_type("-", lhs, rhs) == scalar("Int")
+        lhs = typed(5, scalar(TypeName("Int")))
+        rhs = typed(3, scalar(TypeName("Int")))
+        assert self.coercion.result_type("-", lhs, rhs) == scalar(TypeName("Int"))
 
     def test_result_type_int_times_float(self):
-        lhs = typed(2, scalar("Int"))
-        rhs = typed(3.0, scalar("Float"))
-        assert self.coercion.result_type("*", lhs, rhs) == scalar("Float")
+        lhs = typed(2, scalar(TypeName("Int")))
+        rhs = typed(3.0, scalar(TypeName("Float")))
+        assert self.coercion.result_type("*", lhs, rhs) == scalar(TypeName("Float"))
 
     def test_result_type_unknown_operand_types(self):
         lhs = typed(42, UNKNOWN)
@@ -111,54 +112,54 @@ class TestJavaBinopCoercion:
     # --- coerce: string + non-string ---
 
     def test_coerce_string_plus_int_stringifies_int(self):
-        lhs = typed("int:", scalar("String"))
-        rhs = typed(42, scalar("Int"))
+        lhs = typed("int:", scalar(TypeName("String")))
+        rhs = typed(42, scalar(TypeName("Int")))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert a.value == "int:"
         assert b.value == "42"
-        assert b.type == scalar("String")
+        assert b.type == scalar(TypeName("String"))
 
     def test_coerce_int_plus_string_stringifies_int(self):
-        lhs = typed(42, scalar("Int"))
-        rhs = typed(" items", scalar("String"))
+        lhs = typed(42, scalar(TypeName("Int")))
+        rhs = typed(" items", scalar(TypeName("String")))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert a.value == "42"
-        assert a.type == scalar("String")
+        assert a.type == scalar(TypeName("String"))
         assert b.value == " items"
 
     def test_coerce_string_plus_float_stringifies_float(self):
-        lhs = typed("val:", scalar("String"))
-        rhs = typed(3.14, scalar("Float"))
+        lhs = typed("val:", scalar(TypeName("String")))
+        rhs = typed(3.14, scalar(TypeName("Float")))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert a.value == "val:"
         assert b.value == "3.14"
-        assert b.type == scalar("String")
+        assert b.type == scalar(TypeName("String"))
 
     def test_coerce_string_plus_bool_stringifies_bool(self):
-        lhs = typed("flag:", scalar("String"))
-        rhs = typed(True, scalar("Bool"))
+        lhs = typed("flag:", scalar(TypeName("String")))
+        rhs = typed(True, scalar(TypeName("Bool")))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert a.value == "flag:"
         assert b.value == "true"
-        assert b.type == scalar("String")
+        assert b.type == scalar(TypeName("String"))
 
     def test_coerce_string_plus_string_no_change(self):
-        lhs = typed("hello", scalar("String"))
-        rhs = typed(" world", scalar("String"))
+        lhs = typed("hello", scalar(TypeName("String")))
+        rhs = typed(" world", scalar(TypeName("String")))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert a.value == "hello"
         assert b.value == " world"
 
     def test_coerce_non_plus_op_no_change(self):
-        lhs = typed("hello", scalar("String"))
-        rhs = typed(42, scalar("Int"))
+        lhs = typed("hello", scalar(TypeName("String")))
+        rhs = typed(42, scalar(TypeName("Int")))
         a, b = self.coercion.coerce("-", lhs, rhs)
         assert a.value == "hello"
         assert b.value == 42
 
     def test_coerce_int_plus_int_no_change(self):
-        lhs = typed(1, scalar("Int"))
-        rhs = typed(2, scalar("Int"))
+        lhs = typed(1, scalar(TypeName("Int")))
+        rhs = typed(2, scalar(TypeName("Int")))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert a.value == 1
         assert b.value == 2
@@ -166,24 +167,24 @@ class TestJavaBinopCoercion:
     # --- result_type: string concat ---
 
     def test_result_type_string_plus_int(self):
-        lhs = typed("x", scalar("String"))
-        rhs = typed(42, scalar("Int"))
-        assert self.coercion.result_type("+", lhs, rhs) == scalar("String")
+        lhs = typed("x", scalar(TypeName("String")))
+        rhs = typed(42, scalar(TypeName("Int")))
+        assert self.coercion.result_type("+", lhs, rhs) == scalar(TypeName("String"))
 
     def test_result_type_int_plus_string(self):
-        lhs = typed(42, scalar("Int"))
-        rhs = typed("x", scalar("String"))
-        assert self.coercion.result_type("+", lhs, rhs) == scalar("String")
+        lhs = typed(42, scalar(TypeName("Int")))
+        rhs = typed("x", scalar(TypeName("String")))
+        assert self.coercion.result_type("+", lhs, rhs) == scalar(TypeName("String"))
 
     def test_result_type_int_plus_int_delegates_to_default(self):
-        lhs = typed(1, scalar("Int"))
-        rhs = typed(2, scalar("Int"))
-        assert self.coercion.result_type("+", lhs, rhs) == scalar("Int")
+        lhs = typed(1, scalar(TypeName("Int")))
+        rhs = typed(2, scalar(TypeName("Int")))
+        assert self.coercion.result_type("+", lhs, rhs) == scalar(TypeName("Int"))
 
     def test_result_type_comparison_delegates_to_default(self):
-        lhs = typed(1, scalar("Int"))
-        rhs = typed(2, scalar("Int"))
-        assert self.coercion.result_type("==", lhs, rhs) == scalar("Bool")
+        lhs = typed(1, scalar(TypeName("Int")))
+        rhs = typed(2, scalar(TypeName("Int")))
+        assert self.coercion.result_type("==", lhs, rhs) == scalar(TypeName("Bool"))
 
 
 class TestJavaStringify:

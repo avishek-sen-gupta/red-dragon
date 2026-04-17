@@ -1,6 +1,7 @@
 """Integration tests: C# pattern matching through VM execution."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 import pytest
 
@@ -189,7 +190,10 @@ class TestIsinstancePrimitive:
         from interpreter.vm.vm import VMState
 
         vm = VMState()
-        args = [typed(42, scalar("Int")), typed("int", scalar("String"))]
+        args = [
+            typed(42, scalar(TypeName("Int"))),
+            typed("int", scalar(TypeName("String"))),
+        ]
         result = _builtin_isinstance(args, vm)
         assert result.value.value is True
 
@@ -200,7 +204,10 @@ class TestIsinstancePrimitive:
         from interpreter.vm.vm import VMState
 
         vm = VMState()
-        args = [typed("hello", scalar("String")), typed("string", scalar("String"))]
+        args = [
+            typed("hello", scalar(TypeName("String"))),
+            typed("string", scalar(TypeName("String"))),
+        ]
         result = _builtin_isinstance(args, vm)
         assert result.value.value is True
 
@@ -211,6 +218,9 @@ class TestIsinstancePrimitive:
         from interpreter.vm.vm import VMState
 
         vm = VMState()
-        args = [typed(42, scalar("Int")), typed("string", scalar("String"))]
+        args = [
+            typed(42, scalar(TypeName("Int"))),
+            typed("string", scalar(TypeName("String"))),
+        ]
         result = _builtin_isinstance(args, vm)
         assert result.value.value is False

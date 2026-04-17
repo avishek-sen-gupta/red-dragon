@@ -2,6 +2,7 @@
 """UnopCoercionStrategy — injectable language-specific pre-operation type coercion for unary ops."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Protocol
 
@@ -34,7 +35,7 @@ _IDENTITY_OPS = frozenset({"!!"})
 
 def _scalar_name(t: TypeExpr) -> str:
     """Extract scalar name from TypeExpr, or empty string."""
-    return t.name if isinstance(t, ScalarType) else ""
+    return t.name.value if isinstance(t, ScalarType) else ""
 
 
 class DefaultUnopCoercion:
@@ -45,9 +46,9 @@ class DefaultUnopCoercion:
 
     def result_type(self, op: str, operand: TypedValue) -> TypeExpr:
         if op in _LOGICAL_NOT_OPS:
-            return scalar("Bool")
+            return scalar(TypeName("Bool"))
         if op in _LENGTH_OPS:
-            return scalar("Int")
+            return scalar(TypeName("Int"))
         if op in _IDENTITY_OPS:
             return operand.type
 
@@ -55,5 +56,5 @@ class DefaultUnopCoercion:
         if op in _NEGATION_OPS and operand_name in ("Int", "Float"):
             return operand.type
         if op in _BITWISE_NOT_OPS and operand_name == "Int":
-            return scalar("Int")
+            return scalar(TypeName("Int"))
         return UNKNOWN
