@@ -1,10 +1,10 @@
 # Frontend Feature Coverage Gaps
 
-**Generated**: 2026-04-16
+**Generated**: 2026-04-18
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 948 features across 16 languages — 713 covered, 235 uncovered
+**Totals**: 948 features across 16 languages — 714 covered, 234 uncovered
 
 ---
 
@@ -16,7 +16,7 @@
 | cobol | 106 | 87 | 19 ⚠ | 82% |
 | cpp | 84 | 38 | 46 ⚠ | 45% |
 | csharp | 94 | 71 | 23 ⚠ | 75% |
-| go | 44 | 40 | 4 ⚠ | 90% |
+| go | 44 | 41 | 3 ⚠ | 93% |
 | java | 72 | 50 | 22 ⚠ | 69% |
 | javascript | 38 | 33 | 5 ⚠ | 86% |
 | kotlin | 59 | 51 | 8 ⚠ | 86% |
@@ -153,7 +153,6 @@
 - `BREAK_CONTINUE` — break and continue statements
 - `INDEXING` — a[i] map and slice index access
 - `METHOD_DECLARATION` — func (r Receiver) m(...) method declarations
-- `TYPE_ALIAS` — type Foo = Bar or type Foo Bar type declarations
 
 ### java
 
