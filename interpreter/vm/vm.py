@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import Any
 
 from interpreter.address import Address, NO_ADDRESS
-from interpreter.constants import CanonicalLiteral, TypeName
+from interpreter.constants import CanonicalLiteral, FoundationTypeName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.register import Register
 from interpreter.var_name import VarName

@@ -10,7 +10,7 @@ from interpreter.address import Address
 from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import scalar
-from interpreter.constants import TypeName
+from interpreter.constants import FoundationTypeName
 from interpreter.register import Register
 from interpreter.func_name import FuncName
 
@@ -20,11 +20,11 @@ class TestResolveCallArgs:
         """Create a VM with a heap array and a frame holding a register pointing to it."""
         vm = VMState()
         fields = {
-            FieldName(str(i), FieldKind.INDEX): typed(e, scalar(TypeName.INT))
+            FieldName(str(i), FieldKind.INDEX): typed(e, scalar(FoundationTypeName.INT))
             for i, e in enumerate(elements)
         }
         fields[FieldName("length", FieldKind.SPECIAL)] = typed(
-            len(elements), scalar(TypeName.INT)
+            len(elements), scalar(FoundationTypeName.INT)
         )
         vm.heap_set(Address("arr_0"), HeapObject(type_hint="Array", fields=fields))
         ptr = Pointer(base=Address("arr_0"), offset=0)

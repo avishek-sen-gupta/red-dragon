@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from interpreter.address import Address
-from interpreter.constants import ARR_ADDR_PREFIX, TypeName
+from interpreter.constants import ARR_ADDR_PREFIX, FoundationTypeName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.func_name import FuncName
 from interpreter.vm.vm import VMState, Operators, _is_symbolic, _heap_addr
@@ -162,7 +162,7 @@ def _builtin_array_of(
         for i, val in enumerate(args)
     }
     fields[FieldName("length", FieldKind.SPECIAL)] = typed(
-        len(args), scalar(TypeName.INT)
+        len(args), scalar(FoundationTypeName.INT)
     )
     return BuiltinResult(
         value=typed(Pointer(base=Address(addr), offset=0), pointer(scalar("Array"))),
