@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from interpreter.type_name import TypeName
+
 from interpreter.address import Address
 from interpreter.var_name import VarName
 from interpreter.constants import Language
@@ -86,7 +88,9 @@ class TestClassMetatypeSeeding:
 
     def test_js_class_declaration_seeds_metatype(self):
         _, teb = _parse_js_with_types("class Foo { constructor() {} }")
-        assert teb.var_types["Foo"] == ParameterizedType("Type", (ScalarType("Foo"),))
+        assert teb.var_types["Foo"] == ParameterizedType(
+            "Type", (ScalarType(TypeName("Foo")),)
+        )
 
     def test_js_anon_class_expression_seeds_register_metatype(self):
         _, teb = _parse_js_with_types("const Foo = class { constructor() {} };")
@@ -105,16 +109,16 @@ class TestClassMetatypeSeeding:
             "class Greeter { greet(): string { return 'hi'; } }"
         )
         assert teb.var_types["Greeter"] == ParameterizedType(
-            "Type", (ScalarType("Greeter"),)
+            "Type", (ScalarType(TypeName("Greeter")),)
         )
 
     def test_ts_interface_seeds_metatype(self):
         _, teb = _parse_ts_with_types("interface Shape { area(): number; }")
         assert teb.var_types["Shape"] == ParameterizedType(
-            "Type", (ScalarType("Shape"),)
+            "Type", (ScalarType(TypeName("Shape")),)
         )
 
     def test_metatype_convenience_constructor(self):
-        result = metatype(ScalarType("Foo"))
-        assert result == ParameterizedType("Type", (ScalarType("Foo"),))
+        result = metatype(ScalarType(TypeName("Foo")))
+        assert result == ParameterizedType("Type", (ScalarType(TypeName("Foo")),))
         assert str(result) == "Type[Foo]"

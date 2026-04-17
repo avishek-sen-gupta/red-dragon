@@ -1,6 +1,7 @@
 """JavaScript-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -247,7 +248,9 @@ def lower_js_object_literal(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("object")), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName("object"))), node=node
+    )
     for child in node.children:
         if child.type == JSN.PAIR:
             key_node = child.child_by_field_name("key")
@@ -358,7 +361,7 @@ def lower_new_expression(
 
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar(class_name)), node=node
+        NewObject(result_reg=obj_reg, type_hint=scalar(TypeName(class_name))), node=node
     )
     ctor_reg = ctx.fresh_reg()
     ctx.emit_inst(

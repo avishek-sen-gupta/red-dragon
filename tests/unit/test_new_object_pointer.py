@@ -1,6 +1,7 @@
 """Tests that NEW_OBJECT produces a Pointer with correct parameterized type."""
 
 from interpreter.cfg import CFG
+from interpreter.type_name import TypeName
 from interpreter.vm.executor import (
     LocalExecutor,
     HandlerContext,
@@ -44,7 +45,7 @@ class TestNewObjectPointer:
         assert isinstance(tv.value, Pointer)
         assert tv.value.base.startswith("obj_")
         assert tv.value.offset == 0
-        assert tv.type == pointer(scalar("Point"))
+        assert tv.type == pointer(scalar(TypeName("Point")))
 
     def test_no_type_hint_uses_object(self):
         vm = VMState()
@@ -60,4 +61,4 @@ class TestNewObjectPointer:
         )
         tv = result.update.register_writes[Register("%obj")]
         assert isinstance(tv.value, Pointer)
-        assert tv.type == pointer(scalar("Object"))
+        assert tv.type == pointer(scalar(TypeName("Object")))

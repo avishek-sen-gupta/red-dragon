@@ -5,6 +5,7 @@ at emission time, storing original name + scope metadata separately.
 """
 
 from interpreter.constants import Language
+from interpreter.type_name import TypeName
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.types.var_scope_info import VarScopeInfo
@@ -199,11 +200,13 @@ class TestFlatVarTypesUnionMerge:
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {
-            "func_f_0": {VarName("x"): scalar("Int")},
-            "func_g_1": {VarName("x"): scalar("String")},
+            "func_f_0": {VarName("x"): scalar(TypeName("Int"))},
+            "func_g_1": {VarName("x"): scalar(TypeName("String"))},
         }
         flat = ctx.flat_var_types()
-        assert flat[VarName("x")] == union_of(scalar("Int"), scalar("String"))
+        assert flat[VarName("x")] == union_of(
+            scalar(TypeName("Int")), scalar(TypeName("String"))
+        )
 
     def test_same_type_same_name_no_union(self):
         """x: Int in both scopes → flat x: Int (no union)."""
@@ -212,11 +215,11 @@ class TestFlatVarTypesUnionMerge:
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {
-            "func_f_0": {VarName("x"): scalar("Int")},
-            "func_g_1": {VarName("x"): scalar("Int")},
+            "func_f_0": {VarName("x"): scalar(TypeName("Int"))},
+            "func_g_1": {VarName("x"): scalar(TypeName("Int"))},
         }
         flat = ctx.flat_var_types()
-        assert flat[VarName("x")] == scalar("Int")
+        assert flat[VarName("x")] == scalar(TypeName("Int"))
 
     def test_disjoint_names_both_present(self):
         """x in func_f, y in func_g → flat has both."""
@@ -225,12 +228,12 @@ class TestFlatVarTypesUnionMerge:
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {
-            "func_f_0": {VarName("x"): scalar("Int")},
-            "func_g_1": {VarName("y"): scalar("String")},
+            "func_f_0": {VarName("x"): scalar(TypeName("Int"))},
+            "func_g_1": {VarName("y"): scalar(TypeName("String"))},
         }
         flat = ctx.flat_var_types()
-        assert flat[VarName("x")] == scalar("Int")
-        assert flat[VarName("y")] == scalar("String")
+        assert flat[VarName("x")] == scalar(TypeName("Int"))
+        assert flat[VarName("y")] == scalar(TypeName("String"))
 
 
 # ---------------------------------------------------------------------------
@@ -248,8 +251,10 @@ class TestTypeEnvironmentScopedVarTypes:
 
         scoped = MappingProxyType(
             {
-                "func_f_0": MappingProxyType({VarName("x"): scalar("Int")}),
-                "func_g_1": MappingProxyType({VarName("x"): scalar("String")}),
+                "func_f_0": MappingProxyType({VarName("x"): scalar(TypeName("Int"))}),
+                "func_g_1": MappingProxyType(
+                    {VarName("x"): scalar(TypeName("String"))}
+                ),
             }
         )
         env = TypeEnvironment(

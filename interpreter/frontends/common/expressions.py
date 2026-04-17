@@ -5,6 +5,7 @@ the expression's value.
 """
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Any
 
@@ -499,7 +500,7 @@ def lower_list_literal(
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg,
-            type_hint=scalar("list"),
+            type_hint=scalar(TypeName("list")),
             size_reg=size_reg,
         ),
         node=node,
@@ -527,7 +528,7 @@ def lower_dict_literal(
     ctx.emit_inst(
         NewObject(
             result_reg=obj_reg,
-            type_hint=scalar("dict"),
+            type_hint=scalar(TypeName("dict")),
         ),
         node=node,
     )

@@ -5,6 +5,7 @@ and seed_param_type populate the TypeEnvironmentBuilder correctly, and that
 LABEL emit tracks the current function for param association.
 """
 
+from interpreter.type_name import TypeName
 from interpreter.constants import Language
 from interpreter.func_name import FuncName
 from interpreter.frontend_observer import NullFrontendObserver
@@ -34,8 +35,10 @@ class TestSeedHelpers:
     def test_seed_func_return_type(self):
         ctx = _make_ctx()
         ctx.emit_inst(Label_(label=CodeLabel("func_add_0")))
-        ctx.seed_func_return_type("func_add_0", ScalarType("Int"))
-        assert ctx.type_env_builder.func_return_types["func_add_0"] == ScalarType("Int")
+        ctx.seed_func_return_type("func_add_0", ScalarType(TypeName("Int")))
+        assert ctx.type_env_builder.func_return_types["func_add_0"] == ScalarType(
+            TypeName("Int")
+        )
 
     def test_seed_func_return_type_falsy_does_not_seed(self):
         ctx = _make_ctx()
@@ -51,31 +54,33 @@ class TestSeedHelpers:
     def test_seed_register_type(self):
         ctx = _make_ctx()
         ctx.emit_inst(Symbolic(result_reg=Register("%0"), hint="param:x"))
-        ctx.seed_register_type("%0", ScalarType("Int"))
-        assert ctx.type_env_builder.register_types[Register("%0")] == ScalarType("Int")
+        ctx.seed_register_type("%0", ScalarType(TypeName("Int")))
+        assert ctx.type_env_builder.register_types[Register("%0")] == ScalarType(
+            TypeName("Int")
+        )
 
     def test_seed_param_type_inside_function(self):
         ctx = _make_ctx()
         ctx.emit_inst(Label_(label=CodeLabel("func_add_0")))
         ctx.emit_inst(Symbolic(result_reg=Register("%0"), hint="param:x"))
-        ctx.seed_register_type("%0", ScalarType("Float"))
-        ctx.seed_param_type("x", ScalarType("Float"))
+        ctx.seed_register_type("%0", ScalarType(TypeName("Float")))
+        ctx.seed_param_type("x", ScalarType(TypeName("Float")))
         assert ctx.type_env_builder.func_param_types["func_add_0"] == [
-            ("x", ScalarType("Float"))
+            ("x", ScalarType(TypeName("Float")))
         ]
 
     def test_seed_param_type_outside_function_does_not_seed(self):
         ctx = _make_ctx()
         ctx.emit_inst(Symbolic(result_reg=Register("%0"), hint="param:x"))
-        ctx.seed_register_type("%0", ScalarType("Int"))
-        ctx.seed_param_type("x", ScalarType("Int"))
+        ctx.seed_register_type("%0", ScalarType(TypeName("Int")))
+        ctx.seed_param_type("x", ScalarType(TypeName("Int")))
         assert len(ctx.type_env_builder.func_param_types) == 0
 
     def test_seed_var_type(self):
         ctx = _make_ctx()
         ctx.emit_inst(StoreVar(name="x", value_reg=Register("%0")))
-        ctx.seed_var_type("x", ScalarType("Int"))
-        assert ctx.type_env_builder.var_types["x"] == ScalarType("Int")
+        ctx.seed_var_type("x", ScalarType(TypeName("Int")))
+        assert ctx.type_env_builder.var_types["x"] == ScalarType(TypeName("Int"))
 
     def test_seed_var_type_falsy_does_not_seed(self):
         ctx = _make_ctx()
@@ -88,23 +93,25 @@ class TestSeedHelpers:
         ctx.emit_inst(
             CallFunction(result_reg=Register("%0"), func_name=FuncName("Dog"), args=())
         )
-        ctx.seed_register_type("%0", ScalarType("Dog"))
-        assert ctx.type_env_builder.register_types[Register("%0")] == ScalarType("Dog")
+        ctx.seed_register_type("%0", ScalarType(TypeName("Dog")))
+        assert ctx.type_env_builder.register_types[Register("%0")] == ScalarType(
+            TypeName("Dog")
+        )
 
     def test_class_label_resets_current_func(self):
         ctx = _make_ctx()
         ctx.emit_inst(Label_(label=CodeLabel("func_add_0")))
-        ctx.seed_func_return_type("func_add_0", ScalarType("Int"))
+        ctx.seed_func_return_type("func_add_0", ScalarType(TypeName("Int")))
         ctx.emit_inst(Label_(label=CodeLabel("class_Dog_0")))
         ctx.emit_inst(Symbolic(result_reg=Register("%0"), hint="param:self"))
-        ctx.seed_register_type("%0", ScalarType("Dog"))
-        ctx.seed_param_type("self", ScalarType("Dog"))
+        ctx.seed_register_type("%0", ScalarType(TypeName("Dog")))
+        ctx.seed_param_type("self", ScalarType(TypeName("Dog")))
         assert ctx.type_env_builder.func_param_types["func_add_0"] == []
 
     def test_seed_func_return_type_accepts_parameterized_type_expr(self):
         ctx = _make_ctx()
         ctx.emit_inst(Label_(label=CodeLabel("func_get_0")))
-        ret_type = ParameterizedType("Array", (ScalarType("String"),))
+        ret_type = ParameterizedType("Array", (ScalarType(TypeName("String")),))
         ctx.seed_func_return_type("func_get_0", ret_type)
         assert ctx.type_env_builder.func_return_types["func_get_0"] == ret_type
 

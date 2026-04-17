@@ -7,6 +7,7 @@ import logging
 from collections import deque
 from functools import reduce
 
+from interpreter.type_name import TypeName
 from interpreter.types.type_node import TypeNode
 from interpreter.constants import FoundationTypeName, Variance
 from interpreter.types.type_expr import (
@@ -56,13 +57,13 @@ class TypeGraph:
         nodes: tuple[TypeNode, ...],
         variance_registry: dict[str, tuple[Variance, ...]] = {},
     ) -> None:
-        self._nodes: dict[str, TypeNode] = {node.name: node for node in nodes}
+        self._nodes: dict[TypeName, TypeNode] = {node.name: node for node in nodes}
         self._variance_registry = variance_registry
 
-    def contains(self, type_name: str) -> bool:
+    def contains(self, type_name: TypeName) -> bool:
         return type_name in self._nodes
 
-    def is_subtype(self, child: str, parent: str) -> bool:
+    def is_subtype(self, child: TypeName, parent: TypeName) -> bool:
         """Return True if child is a subtype of parent (transitive, reflexive)."""
         if child == parent:
             return True
@@ -84,11 +85,11 @@ class TypeGraph:
                 queue.extend(node.parents)
         return False
 
-    def _ancestors(self, type_name: str) -> list[str]:
+    def _ancestors(self, type_name: TypeName) -> list[TypeName]:
         """Return all ancestors of type_name in BFS order, including itself."""
-        result: list[str] = []
-        visited: set[str] = set()
-        queue: deque[str] = deque([type_name])
+        result: list[TypeName] = []
+        visited: set[TypeName] = set()
+        queue: deque[TypeName] = deque([type_name])
         while queue:
             current = queue.popleft()
             if current in visited:
@@ -100,7 +101,7 @@ class TypeGraph:
                 queue.extend(node.parents)
         return result
 
-    def common_supertype(self, type_a: str, type_b: str) -> str:
+    def common_supertype(self, type_a: TypeName, type_b: TypeName) -> TypeName:
         """Return the least upper bound (closest common ancestor) of two types.
 
         Returns FoundationTypeName.ANY for unknown types.
@@ -164,7 +165,7 @@ class TypeGraph:
                     for i, (ca_i, pa_i) in enumerate(zip(ca, pa))
                 )
             case (ParameterizedType(constructor=cc), ScalarType(name=pn)):
-                return self.is_subtype(cc, pn)
+                return self.is_subtype(TypeName(cc), pn)
             case (
                 FunctionType(params=cp, return_type=cr),
                 FunctionType(params=pp, return_type=pr),
@@ -284,17 +285,21 @@ class TypeGraph:
         """
         merged = self._nodes.copy()
         for class_name, interfaces in implementations.items():
-            for iface in interfaces:
-                if iface not in merged:
-                    merged[iface] = TypeNode(
-                        name=iface, parents=(FoundationTypeName.ANY,), kind="interface"
+            cls_key = TypeName(class_name)
+            iface_keys = tuple(TypeName(i) for i in interfaces)
+            for iface_key in iface_keys:
+                if iface_key not in merged:
+                    merged[iface_key] = TypeNode(
+                        name=iface_key,
+                        parents=(FoundationTypeName.ANY,),
+                        kind="interface",
                     )
-            existing = merged.get(class_name)
+            existing = merged.get(cls_key)
             existing_parents = existing.parents if existing else ()
             all_parents = tuple(
-                dict.fromkeys(list(existing_parents) + list(interfaces))
+                dict.fromkeys(list(existing_parents) + list(iface_keys))
             )
-            merged[class_name] = TypeNode(name=class_name, parents=all_parents)
+            merged[cls_key] = TypeNode(name=cls_key, parents=all_parents)
         return TypeGraph(tuple(merged.values()), self._variance_registry)
 
     def with_variance(

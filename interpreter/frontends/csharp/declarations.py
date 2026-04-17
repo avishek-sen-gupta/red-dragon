@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from interpreter.type_name import TypeName
+
 from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -102,7 +104,7 @@ def _lower_csharp_declarator(
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
     param_reg = ctx.fresh_reg()
-    class_type = ScalarType(ctx._current_class_name)
+    class_type = ScalarType(TypeName(ctx._current_class_name))
     ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type("this", class_type)

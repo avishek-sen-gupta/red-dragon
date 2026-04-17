@@ -1,6 +1,7 @@
 """Unit tests for materialize_raw_update."""
 
 from types import MappingProxyType
+from interpreter.type_name import TypeName
 
 from interpreter.address import Address
 from interpreter.closure_id import ClosureId
@@ -37,7 +38,7 @@ class TestMaterializeRawUpdate:
         tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert tv.value == 42
-        assert tv.type == scalar("Int")
+        assert tv.type == scalar(TypeName("Int"))
 
     def test_string_register_write(self):
         vm = VMState()
@@ -47,7 +48,7 @@ class TestMaterializeRawUpdate:
         tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert tv.value == "hello"
-        assert tv.type == scalar("String")
+        assert tv.type == scalar(TypeName("String"))
 
     def test_symbolic_dict_deserialized(self):
         vm = VMState()
@@ -85,7 +86,7 @@ class TestMaterializeRawUpdate:
         tv = result.var_writes[VarName("x")]
         assert isinstance(tv, TypedValue)
         assert tv.value == 10
-        assert tv.type == scalar("Int")
+        assert tv.type == scalar(TypeName("Int"))
 
     def test_non_register_var_fields_unchanged(self):
         vm = VMState()
@@ -104,7 +105,7 @@ class TestMaterializeRawUpdate:
     def test_already_typed_value_passes_through(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        tv = typed(42, scalar("Int"))
+        tv = typed(42, scalar(TypeName("Int")))
         raw = StateUpdate(register_writes={Register("%0"): tv}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         assert result.register_writes[Register("%0")] is tv
@@ -116,7 +117,9 @@ class TestMaterializeRawUpdate:
         )
 
         type_env = TypeEnvironment(
-            register_types=MappingProxyType({Register("%0"): scalar("Float")}),
+            register_types=MappingProxyType(
+                {Register("%0"): scalar(TypeName("Float"))}
+            ),
             var_types=MappingProxyType({}),
         )
         rules = DefaultTypeConversionRules()
@@ -127,7 +130,7 @@ class TestMaterializeRawUpdate:
         tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, float)
-        assert tv.type == scalar("Float")
+        assert tv.type == scalar(TypeName("Float"))
 
     def test_var_write_no_coercion(self):
         """Var writes do NOT get register coercion (matching current behavior)."""
@@ -137,14 +140,14 @@ class TestMaterializeRawUpdate:
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         tv = result.var_writes[VarName("x")]
         assert tv.value == 42
-        assert tv.type == scalar("Int")
+        assert tv.type == scalar(TypeName("Int"))
 
 
 class TestApplyUpdateTypedPath:
     def test_stores_typed_value_directly(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        tv = typed(42, scalar("Int"))
+        tv = typed(42, scalar(TypeName("Int")))
         update = StateUpdate(register_writes={Register("%0"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
@@ -154,7 +157,7 @@ class TestApplyUpdateTypedPath:
     def test_stores_typed_var_directly(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        tv = typed(10, scalar("Int"))
+        tv = typed(10, scalar(TypeName("Int")))
         update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
@@ -175,7 +178,7 @@ class TestApplyUpdateTypedPath:
         vm.current_frame.var_heap_aliases[VarName("x")] = Pointer(
             base=Address("mem_0"), offset=0
         )
-        tv = typed(42, scalar("Int"))
+        tv = typed(42, scalar(TypeName("Int")))
         update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
@@ -199,7 +202,7 @@ class TestApplyUpdateTypedPath:
                 captured_var_names=frozenset({VarName("x")}),
             )
         )
-        tv = typed(42, scalar("Int"))
+        tv = typed(42, scalar(TypeName("Int")))
         update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
@@ -213,26 +216,28 @@ class TestApplyUpdateTypedPath:
         )
 
         type_env = TypeEnvironment(
-            register_types=MappingProxyType({Register("%0"): scalar("Float")}),
+            register_types=MappingProxyType(
+                {Register("%0"): scalar(TypeName("Float"))}
+            ),
             var_types=MappingProxyType({}),
         )
         rules = DefaultTypeConversionRules()
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("main")))
-        tv = typed(42, scalar("Int"))
+        tv = typed(42, scalar(TypeName("Int")))
         update = StateUpdate(register_writes={Register("%0"): tv}, reasoning="test")
         apply_update(vm, update, type_env=type_env, conversion_rules=rules)
         result = vm.current_frame.registers[Register("%0")]
         assert isinstance(result, TypedValue)
         assert isinstance(result.value, float)
-        assert result.type == scalar("Float")
+        assert result.type == scalar(TypeName("Float"))
 
 
 class TestFormatVal:
     def test_format_typed_int(self):
         from interpreter.run import _format_val
 
-        assert _format_val(typed(42, scalar("Int"))) == "42"
+        assert _format_val(typed(42, scalar(TypeName("Int")))) == "42"
 
     def test_format_typed_symbolic(self):
         from interpreter.run import _format_val

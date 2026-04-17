@@ -12,6 +12,7 @@ strings as the "type not yet known" marker.  It is falsy, so existing
 """
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 import logging
 from dataclasses import dataclass, field
@@ -347,8 +348,8 @@ def _resolve_alias(
     """
     if depth > 20:
         return t
-    if isinstance(t, ScalarType) and t.name in aliases:
-        return _resolve_alias(aliases[t.name], aliases, depth + 1)
+    if isinstance(t, ScalarType) and t.name.value in aliases:
+        return _resolve_alias(aliases[t.name.value], aliases, depth + 1)
     if isinstance(t, ParameterizedType):
         resolved_args = tuple(
             _resolve_alias(a, aliases, depth + 1) for a in t.arguments
@@ -494,7 +495,7 @@ def _infer_label(
         and not inst.label.is_end_class()
     ):
         ctx.current_class_name = scalar(
-            inst.label.extract_name(constants.CLASS_LABEL_PREFIX)
+            TypeName(inst.label.extract_name(constants.CLASS_LABEL_PREFIX))
         )
         ctx.class_method_types.setdefault(ctx.current_class_name, {})
         ctx.current_func_label = ""
@@ -755,7 +756,7 @@ def _infer_alloc_region(
     type_resolver: TypeResolver,
 ) -> None:
     if inst.result_reg.is_present():
-        ctx.register_types[inst.result_reg] = scalar("Region")
+        ctx.register_types[inst.result_reg] = scalar(TypeName("Region"))
 
 
 def _infer_load_region(
@@ -812,7 +813,7 @@ def _infer_call_method(
     class_name_str = str(class_name) if class_name else ""
     if class_name_str in ctx.interface_implementations:
         for iface in ctx.interface_implementations[class_name_str]:
-            iface_type = scalar(iface)
+            iface_type = scalar(TypeName(iface))
             if iface_type in ctx.class_method_types:
                 ret = ctx.class_method_types[iface_type].get(
                     FuncName(method_name), UNKNOWN

@@ -13,6 +13,7 @@ from interpreter.address import Address
 from interpreter.vm.vm import VMState, SymbolicValue, _heap_addr, _is_symbolic
 from interpreter.vm.vm_types import StackFrame
 from interpreter.field_name import FieldName, FieldKind
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
 from interpreter.ir import SpreadArguments
@@ -58,10 +59,10 @@ def _symbolic_type_hint(
 ) -> TypeExpr:  # Any: display boundary — raw VM value (SymbolicValue or dict)
     """Extract a type hint from a symbolic value (SymbolicValue or dict)."""
     if isinstance(val, SymbolicValue):
-        return scalar(val.type_hint) if val.type_hint else UNKNOWN
+        return scalar(TypeName(val.type_hint)) if val.type_hint else UNKNOWN
     if isinstance(val, dict) and val.get("__symbolic__"):
         hint = val.get("type_hint", "")
-        return scalar(hint) if hint else UNKNOWN
+        return scalar(TypeName(hint)) if hint else UNKNOWN
     return UNKNOWN
 
 

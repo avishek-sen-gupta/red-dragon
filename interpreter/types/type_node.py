@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.type_name import TypeName
+
 
 @dataclass(frozen=True)
 class TypeNode:
@@ -18,6 +20,6 @@ class TypeNode:
     - ``"interface"``: abstract interface/trait type
     """
 
-    name: str
-    parents: tuple[str, ...] = ()
+    name: TypeName
+    parents: tuple[TypeName, ...] = ()
     kind: str = "class"

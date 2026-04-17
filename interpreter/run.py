@@ -34,6 +34,7 @@ from interpreter.overload.overload_resolver import (
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
 from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
 from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.type_name import TypeName
 from interpreter.types.type_node import TypeNode
 from interpreter.overload.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.types.coercion.binop_coercion import (
@@ -654,7 +655,9 @@ def build_execution_strategies(
         class_symbol_table=frontend.class_symbol_table,
     )
     class_nodes = tuple(
-        TypeNode(name=str(cls), parents=tuple(str(p) for p in parents))
+        TypeNode(
+            name=TypeName(str(cls)), parents=tuple(TypeName(str(p)) for p in parents)
+        )
         for cls, parents in registry.class_parents.items()
     )
     type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
@@ -687,7 +690,9 @@ def _build_strategies_from_linked(linked: LinkedProgram) -> ExecutionStrategies:
         class_symbol_table=linked.class_symbol_table,
     )
     class_nodes = tuple(
-        TypeNode(name=str(cls), parents=tuple(str(p) for p in parents))
+        TypeNode(
+            name=TypeName(str(cls)), parents=tuple(TypeName(str(p)) for p in parents)
+        )
         for cls, parents in linked.merged_registry.class_parents.items()
     )
     type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)

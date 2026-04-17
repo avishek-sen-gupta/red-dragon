@@ -1,6 +1,7 @@
 """Scala-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Any
 
@@ -337,7 +338,9 @@ def lower_tuple_expr(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("tuple"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("tuple")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):
@@ -433,12 +436,12 @@ def lower_new_expr(
         CallCtorFunction(
             result_reg=reg,
             func_name=FuncName(type_name),
-            type_hint=scalar(type_name),
+            type_hint=scalar(TypeName(type_name)),
             args=tuple(arg_regs),
         ),
         node=node,
     )
-    ctx.seed_register_type(reg, ScalarType(type_name))
+    ctx.seed_register_type(reg, ScalarType(TypeName(type_name)))
     return reg
 
 

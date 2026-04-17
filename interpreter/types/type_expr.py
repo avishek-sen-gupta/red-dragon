@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.type_name import TypeName
+
 
 @dataclass(frozen=True, eq=False)
 class TypeExpr:
@@ -75,15 +77,17 @@ UNKNOWN = UnknownType()
 class ScalarType(TypeExpr):
     """A simple, non-parameterized type like ``Int`` or ``String``."""
 
-    name: str
+    name: TypeName
 
     def __str__(self) -> str:
-        return self.name
+        return self.name.value
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, ScalarType):
             return self.name == other.name
         if isinstance(other, str):
+            return self.name.value == other
+        if isinstance(other, TypeName):
             return self.name == other
         if isinstance(other, ParameterizedType):
             return False
@@ -93,7 +97,7 @@ class ScalarType(TypeExpr):
         return hash(self.name)
 
 
-UNBOUND = ScalarType("__unbound__")
+UNBOUND = ScalarType(TypeName("__unbound__"))
 """Sentinel key for standalone/top-level function signatures in method_signatures."""
 
 
@@ -277,7 +281,7 @@ def unknown() -> UnknownType:
     return UNKNOWN
 
 
-def scalar(name: str) -> ScalarType:
+def scalar(name: TypeName) -> ScalarType:
     """Create a scalar type."""
     return ScalarType(name)
 
@@ -339,7 +343,7 @@ def union_of(*types: TypeExpr) -> TypeExpr:
     return UnionType(frozenset(members))
 
 
-_NULL = ScalarType("Null")
+_NULL = ScalarType(TypeName("Null"))
 
 
 def optional(inner: TypeExpr) -> TypeExpr:
@@ -394,7 +398,7 @@ def _parse_expr(s: str, pos: int) -> tuple[TypeExpr, int]:
         if name == "Optional":
             return (optional(args[0]), pos) if args else (UNKNOWN, pos)
         return ParameterizedType(name, tuple(args)), pos
-    return ScalarType(name), pos
+    return ScalarType(TypeName(name)), pos
 
 
 def _parse_name(s: str, pos: int) -> tuple[str, int]:

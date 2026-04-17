@@ -1,5 +1,6 @@
 """Unit tests for interpreter.frontends.type_extraction — normalize_type_hint."""
 
+from interpreter.type_name import TypeName
 from interpreter.frontends.type_extraction import normalize_type_hint
 from interpreter.types.type_expr import UNKNOWN, ScalarType
 
@@ -390,12 +391,12 @@ class TestNormalizeTypeHintEdgeCases:
 
     def test_empty_map_returns_raw_as_scalar(self):
         result = normalize_type_hint("int", {})
-        assert result == ScalarType("int")
+        assert result == ScalarType(TypeName("int"))
         assert isinstance(result, ScalarType)
 
     def test_custom_class_passthrough_as_scalar(self):
         result = normalize_type_hint("MyCustomType", GO_TYPE_MAP)
-        assert result == ScalarType("MyCustomType")
+        assert result == ScalarType(TypeName("MyCustomType"))
         assert isinstance(result, ScalarType)
 
 
@@ -405,12 +406,12 @@ class TestNormalizeTypeHintReturnsTypeExpr:
     def test_mapped_type_returns_scalar_type(self):
         result = normalize_type_hint("int", JAVA_TYPE_MAP)
         assert isinstance(result, ScalarType)
-        assert result == ScalarType("Int")
+        assert result == ScalarType(TypeName("Int"))
 
     def test_unmapped_type_returns_scalar_type(self):
         result = normalize_type_hint("Dog", JAVA_TYPE_MAP)
         assert isinstance(result, ScalarType)
-        assert result == ScalarType("Dog")
+        assert result == ScalarType(TypeName("Dog"))
 
     def test_empty_returns_unknown(self):
         result = normalize_type_hint("", JAVA_TYPE_MAP)

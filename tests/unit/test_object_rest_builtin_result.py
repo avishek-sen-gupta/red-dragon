@@ -1,6 +1,7 @@
 """Unit tests for _builtin_object_rest returning BuiltinResult."""
 
 from interpreter.address import Address
+from interpreter.type_name import TypeName
 from interpreter.field_name import FieldName
 from interpreter.vm.builtins import _builtin_object_rest
 from interpreter.vm.vm import VMState, Operators
@@ -47,7 +48,7 @@ class TestObjectRestBuiltinResult:
         assert isinstance(result.value, TypedValue)
         assert isinstance(result.value.value, Pointer)
         assert result.new_objects[0].addr == result.value.value.base
-        assert result.new_objects[0].type_hint == scalar("Object")
+        assert result.new_objects[0].type_hint == scalar(TypeName("Object"))
 
     def test_heap_writes_contain_rest_fields(self):
         vm = VMState()

@@ -1,5 +1,6 @@
 """Tests for TypeExpr-valued type_hint on NewObject and NewArray."""
 
+from interpreter.type_name import TypeName
 from interpreter.instructions import (
     CallCtorFunction,
     NewObject,
@@ -22,10 +23,10 @@ from interpreter.types.type_expr import (
 
 class TestNewObjectTypeHint:
     def test_type_hint_is_type_expr(self):
-        inst = NewObject(result_reg=Register("%r0"), type_hint=scalar("Foo"))
+        inst = NewObject(result_reg=Register("%r0"), type_hint=scalar(TypeName("Foo")))
         assert isinstance(inst.type_hint, TypeExpr)
         assert isinstance(inst.type_hint, ScalarType)
-        assert inst.type_hint == scalar("Foo")
+        assert inst.type_hint == scalar(TypeName("Foo"))
 
     def test_default_is_unknown(self):
         inst = NewObject(result_reg=Register("%r0"))
@@ -33,7 +34,7 @@ class TestNewObjectTypeHint:
         assert not inst.type_hint
 
     def test_operands_renders_as_string(self):
-        inst = NewObject(result_reg=Register("%r0"), type_hint=scalar("dict"))
+        inst = NewObject(result_reg=Register("%r0"), type_hint=scalar(TypeName("dict")))
         assert inst.operands == ["dict"]
         assert isinstance(inst.operands[0], str)
 
@@ -42,7 +43,7 @@ class TestNewObjectTypeHint:
         assert inst.operands == []
 
     def test_str_matches_flat_format(self):
-        inst = NewObject(result_reg=Register("%r0"), type_hint=scalar("Foo"))
+        inst = NewObject(result_reg=Register("%r0"), type_hint=scalar(TypeName("Foo")))
         assert str(inst) == "%r0 = new_object Foo"
 
     def test_factory_wraps_string_as_scalar(self):
@@ -50,7 +51,7 @@ class TestNewObjectTypeHint:
             opcode=Opcode.NEW_OBJECT, result_reg=Register("%r0"), operands=["Foo"]
         )
         assert isinstance(inst.type_hint, ScalarType)
-        assert inst.type_hint == scalar("Foo")
+        assert inst.type_hint == scalar(TypeName("Foo"))
 
     def test_factory_empty_operands_gives_unknown(self):
         inst = IRInstruction(
@@ -63,11 +64,11 @@ class TestNewArrayTypeHint:
     def test_type_hint_is_type_expr(self):
         inst = NewArray(
             result_reg=Register("%r1"),
-            type_hint=scalar("list"),
+            type_hint=scalar(TypeName("list")),
             size_reg=Register("%r0"),
         )
         assert isinstance(inst.type_hint, TypeExpr)
-        assert inst.type_hint == scalar("list")
+        assert inst.type_hint == scalar(TypeName("list"))
 
     def test_default_is_unknown(self):
         inst = NewArray(result_reg=Register("%r1"), size_reg=Register("%r0"))
@@ -76,7 +77,7 @@ class TestNewArrayTypeHint:
     def test_operands_renders_as_string(self):
         inst = NewArray(
             result_reg=Register("%r1"),
-            type_hint=scalar("tuple"),
+            type_hint=scalar(TypeName("tuple")),
             size_reg=Register("%r0"),
         )
         assert inst.operands == ["tuple", "%r0"]
@@ -85,7 +86,7 @@ class TestNewArrayTypeHint:
     def test_str_matches_flat_format(self):
         inst = NewArray(
             result_reg=Register("%r1"),
-            type_hint=scalar("list"),
+            type_hint=scalar(TypeName("list")),
             size_reg=Register("%r0"),
         )
         assert str(inst) == "%r1 = new_array list %r0"
@@ -97,7 +98,7 @@ class TestNewArrayTypeHint:
             operands=["list", "%r0"],
         )
         assert isinstance(inst.type_hint, ScalarType)
-        assert inst.type_hint == scalar("list")
+        assert inst.type_hint == scalar(TypeName("list"))
 
 
 class TestEnumType:
@@ -111,7 +112,7 @@ class TestEnumType:
     def test_equality(self):
         assert EnumType("Color") == EnumType("Color")
         assert EnumType("Color") != EnumType("Shape")
-        assert EnumType("Color") != scalar("Color")
+        assert EnumType("Color") != scalar(TypeName("Color"))
 
     def test_in_new_object(self):
         inst = NewObject(result_reg=Register("%r0"), type_hint=EnumType("Color"))
@@ -157,30 +158,32 @@ class TestCallCtorFunction:
         inst = CallCtorFunction(
             result_reg=Register("%r0"),
             func_name="ArrayList",
-            type_hint=ParameterizedType("ArrayList", (scalar("Integer"),)),
+            type_hint=ParameterizedType("ArrayList", (scalar(TypeName("Integer")),)),
             args=(Register("%r1"),),
         )
         assert isinstance(inst, InstructionBase)
         assert inst.opcode == Opcode.CALL_CTOR
         assert inst.func_name == "ArrayList"
-        assert inst.type_hint == ParameterizedType("ArrayList", (scalar("Integer"),))
+        assert inst.type_hint == ParameterizedType(
+            "ArrayList", (scalar(TypeName("Integer")),)
+        )
         assert inst.args == (Register("%r1"),)
 
     def test_non_generic_constructor(self):
         inst = CallCtorFunction(
             result_reg=Register("%r0"),
             func_name="Foo",
-            type_hint=scalar("Foo"),
+            type_hint=scalar(TypeName("Foo")),
             args=(),
         )
-        assert inst.type_hint == scalar("Foo")
+        assert inst.type_hint == scalar(TypeName("Foo"))
         assert str(inst) == "%r0 = call_ctor Foo"
 
     def test_with_args_str(self):
         inst = CallCtorFunction(
             result_reg=Register("%r0"),
             func_name="Point",
-            type_hint=scalar("Point"),
+            type_hint=scalar(TypeName("Point")),
             args=(Register("%r1"), Register("%r2")),
         )
         assert str(inst) == "%r0 = call_ctor Point %r1 %r2"
@@ -189,7 +192,9 @@ class TestCallCtorFunction:
         inst = CallCtorFunction(
             result_reg=Register("%r0"),
             func_name="HashMap",
-            type_hint=ParameterizedType("HashMap", (scalar("String"), scalar("Int"))),
+            type_hint=ParameterizedType(
+                "HashMap", (scalar(TypeName("String")), scalar(TypeName("Int")))
+            ),
             args=(),
         )
         # operands should render func_name as string for __str__ compat

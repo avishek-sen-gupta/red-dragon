@@ -2,6 +2,7 @@
 """Built-in function implementations for the symbolic interpreter."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 import logging
 from typing import Any
@@ -165,8 +166,12 @@ def _builtin_array_of(
         len(args), scalar(FoundationTypeName.INT)
     )
     return BuiltinResult(
-        value=typed(Pointer(base=Address(addr), offset=0), pointer(scalar("Array"))),
-        new_objects=[NewObject(addr=Address(addr), type_hint=scalar("Array"))],
+        value=typed(
+            Pointer(base=Address(addr), offset=0), pointer(scalar(TypeName("Array")))
+        ),
+        new_objects=[
+            NewObject(addr=Address(addr), type_hint=scalar(TypeName("Array")))
+        ],
         heap_writes=[
             HeapWrite(obj_addr=Address(addr), field=k, value=v)
             for k, v in fields.items()
@@ -244,7 +249,7 @@ def _builtin_clone(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     source = vm.heap_get(addr)
     clone_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    hint = source.type_hint if source.type_hint else scalar("Object")
+    hint = source.type_hint if source.type_hint else scalar(TypeName("Object"))
     return BuiltinResult(
         value=typed(
             Pointer(base=Address(clone_addr), offset=0),
@@ -277,9 +282,12 @@ def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     vm.symbolic_counter += 1
     return BuiltinResult(
         value=typed(
-            Pointer(base=Address(rest_addr), offset=0), pointer(scalar("Object"))
+            Pointer(base=Address(rest_addr), offset=0),
+            pointer(scalar(TypeName("Object"))),
         ),
-        new_objects=[NewObject(addr=Address(rest_addr), type_hint=scalar("Object"))],
+        new_objects=[
+            NewObject(addr=Address(rest_addr), type_hint=scalar(TypeName("Object")))
+        ],
         heap_writes=[
             HeapWrite(obj_addr=Address(rest_addr), field=k, value=v)
             for k, v in rest_fields.items()
@@ -336,7 +344,7 @@ def _builtin_list_append(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         current_len = sum(1 for k in heap_obj.fields if k.kind == FieldKind.INDEX)
     new_idx_field = FieldName(str(current_len), FieldKind.INDEX)
     new_len = current_len + 1
-    new_len_tv = typed(new_len, scalar("int"))
+    new_len_tv = typed(new_len, scalar(TypeName("int")))
     result = BuiltinResult(
         value=None,
         heap_writes=[
@@ -470,14 +478,16 @@ def _builtin_isinstance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         from interpreter.types.type_expr import ScalarType
 
         type_hint = vm.heap_get(addr).type_hint
-        matches = isinstance(type_hint, ScalarType) and type_hint.name == class_name
-        return BuiltinResult(value=typed(matches, scalar("Boolean")))
+        matches = (
+            isinstance(type_hint, ScalarType) and type_hint.name.value == class_name
+        )
+        return BuiltinResult(value=typed(matches, scalar(TypeName("Boolean"))))
     # Fall back to primitive type check
     py_type = _PRIMITIVE_TYPE_MAP.get(class_name)
     if py_type is not None:
         matches = isinstance(obj_val, py_type)
-        return BuiltinResult(value=typed(matches, scalar("Boolean")))
-    return BuiltinResult(value=typed(False, scalar("Boolean")))
+        return BuiltinResult(value=typed(matches, scalar(TypeName("Boolean"))))
+    return BuiltinResult(value=typed(False, scalar(TypeName("Boolean"))))
 
 
 class Builtins:

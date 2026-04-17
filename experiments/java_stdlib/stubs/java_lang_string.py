@@ -1,4 +1,5 @@
 from pathlib import Path
+from interpreter.type_name import TypeName
 
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
@@ -91,7 +92,7 @@ STRING_IR = (
         func_name=FuncName("str_upper"),
         args=(Register("%10"),),
     ),
-    NewObject(result_reg=Register("%12"), type_hint=scalar("String")),
+    NewObject(result_reg=Register("%12"), type_hint=scalar(TypeName("String"))),
     StoreField(obj_reg=Register("%12"), field_name=_VALUE, value_reg=Register("%11")),
     CallFunction(
         result_reg=Register("%13"),
@@ -117,7 +118,7 @@ STRING_IR = (
         func_name=FuncName("str_lower"),
         args=(Register("%17"),),
     ),
-    NewObject(result_reg=Register("%19"), type_hint=scalar("String")),
+    NewObject(result_reg=Register("%19"), type_hint=scalar(TypeName("String"))),
     StoreField(obj_reg=Register("%19"), field_name=_VALUE, value_reg=Register("%18")),
     CallFunction(
         result_reg=Register("%20"),
@@ -159,7 +160,7 @@ STRING_IR = (
         func_name=FuncName("str_strip"),
         args=(Register("%28"),),
     ),
-    NewObject(result_reg=Register("%30"), type_hint=scalar("String")),
+    NewObject(result_reg=Register("%30"), type_hint=scalar(TypeName("String"))),
     StoreField(obj_reg=Register("%30"), field_name=_VALUE, value_reg=Register("%29")),
     CallFunction(
         result_reg=Register("%31"),

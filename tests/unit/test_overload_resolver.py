@@ -1,6 +1,7 @@
 """Unit tests for OverloadResolver -- compositor of strategy + ambiguity handler."""
 
 import pytest
+from interpreter.type_name import TypeName
 
 from interpreter.overload.ambiguity_handler import (
     AmbiguousOverloadError,
@@ -21,10 +22,14 @@ from interpreter.types.type_node import TypeNode
 from interpreter.types.typed_value import typed
 
 
-def _sig(*param_types: str) -> FunctionSignature:
+def _sig(*param_types: TypeName | str) -> FunctionSignature:
     return FunctionSignature(
         params=tuple(
-            (f"p{i}", scalar(t) if t else UNKNOWN) for i, t in enumerate(param_types)
+            (
+                f"p{i}",
+                scalar(t if isinstance(t, TypeName) else TypeName(t)) if t else UNKNOWN,
+            )
+            for i, t in enumerate(param_types)
         ),
         return_type=UNKNOWN,
     )
@@ -134,9 +139,9 @@ class TestNullOverloadResolver:
 
 def _make_resolver_with_classes(strict: bool = False) -> OverloadResolver:
     class_nodes = (
-        TypeNode(name="Animal", parents=("Any",)),
-        TypeNode(name="Dog", parents=("Animal",)),
-        TypeNode(name="Cat", parents=("Animal",)),
+        TypeNode(name=TypeName("Animal"), parents=(TypeName("Any"),)),
+        TypeNode(name=TypeName("Dog"), parents=(TypeName("Animal"),)),
+        TypeNode(name=TypeName("Cat"), parents=(TypeName("Animal"),)),
     )
     type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
     compat = DefaultTypeCompatibility(type_graph)
@@ -150,16 +155,22 @@ class TestSubtypeOverloadResolution:
         """foo(Dog) should beat foo(Animal) when passing a Dog."""
         resolver = _make_resolver_with_classes()
         candidates = [_sig("Animal"), _sig("Dog")]
-        assert resolver.resolve(candidates, [typed("obj_0", scalar("Dog"))]) == 1
+        assert (
+            resolver.resolve(candidates, [typed("obj_0", scalar(TypeName("Dog")))]) == 1
+        )
 
     def test_picks_parent_when_no_exact(self):
         """foo(Animal) should match when passing a Dog and no foo(Dog) exists."""
         resolver = _make_resolver_with_classes()
         candidates = [_sig(FoundationTypeName.STRING), _sig("Animal")]
-        assert resolver.resolve(candidates, [typed("obj_0", scalar("Dog"))]) == 1
+        assert (
+            resolver.resolve(candidates, [typed("obj_0", scalar(TypeName("Dog")))]) == 1
+        )
 
     def test_sibling_class_exact_match_beats_mismatch(self):
         """foo(Dog) and foo(Cat) with a Dog arg — Dog matches exactly, Cat mismatches."""
         resolver = _make_resolver_with_classes()
         candidates = [_sig("Cat"), _sig("Dog")]
-        assert resolver.resolve(candidates, [typed("obj_0", scalar("Dog"))]) == 1
+        assert (
+            resolver.resolve(candidates, [typed("obj_0", scalar(TypeName("Dog")))]) == 1
+        )

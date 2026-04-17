@@ -1,6 +1,7 @@
 """Tests for _resolve_reg returning TypedValue."""
 
 from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.vm.vm import _resolve_reg
 from interpreter.address import Address
 from interpreter.vm.vm_types import Pointer, StackFrame, VMState
@@ -19,7 +20,9 @@ def _make_vm(**registers: object) -> VMState:
 class TestResolveRegReturnsTypedValue:
     def test_returns_typed_value_for_typed_register(self):
         """A register holding a TypedValue should be returned as-is."""
-        tv = typed(Pointer(base=Address("obj_0"), offset=0), pointer(scalar("Dog")))
+        tv = typed(
+            Pointer(base=Address("obj_0"), offset=0), pointer(scalar(TypeName("Dog")))
+        )
         vm = _make_vm(**{"%0": tv})
         result = _resolve_reg(vm, "%0")
         assert isinstance(result, TypedValue)
@@ -27,7 +30,7 @@ class TestResolveRegReturnsTypedValue:
 
     def test_preserves_parameterized_type(self):
         """pointer(scalar('Dog')) must survive the resolve."""
-        expected_type = pointer(scalar("Dog"))
+        expected_type = pointer(scalar(TypeName("Dog")))
         tv = typed(Pointer(base=Address("obj_0"), offset=0), expected_type)
         vm = _make_vm(**{"%0": tv})
         result = _resolve_reg(vm, "%0")

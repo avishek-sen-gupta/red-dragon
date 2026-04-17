@@ -8,6 +8,7 @@ Exercises 3 features:
 """
 
 from interpreter.api import lower_and_infer
+from interpreter.type_name import TypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
@@ -121,13 +122,16 @@ class TestCallUnknownResolution:
         ]
 
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_add_0": scalar("Int")},
+            func_return_types={"func_add_0": scalar(TypeName("Int"))},
             func_param_types={
-                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
+                "func_add_0": [
+                    ("a", scalar(TypeName("Int"))),
+                    ("b", scalar(TypeName("Int"))),
+                ]
             },
             register_types={
-                Register("%0"): scalar("Int"),
-                Register("%1"): scalar("Int"),
+                Register("%0"): scalar(TypeName("Int")),
+                Register("%1"): scalar(TypeName("Int")),
             },
         )
         func_st = {

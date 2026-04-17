@@ -1,6 +1,7 @@
 """Pascal-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from interpreter.type_name import TypeName
 
 from typing import Any
 
@@ -225,7 +226,9 @@ def lower_pascal_brackets(
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint=scalar("set"), size_reg=size_reg),
+        NewArray(
+            result_reg=arr_reg, type_hint=scalar(TypeName("set")), size_reg=size_reg
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):

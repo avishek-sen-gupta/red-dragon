@@ -1,6 +1,7 @@
 """Integration tests: parameterized types survive through _resolve_reg pipeline."""
 
 from interpreter.constants import Language, FoundationTypeName
+from interpreter.type_name import TypeName
 from interpreter.run import run
 from interpreter.types.typed_value import TypedValue
 from interpreter.types.type_expr import ParameterizedType, pointer, scalar
@@ -26,7 +27,7 @@ class TestTypePreservationThroughResolveReg:
         tv = _typed_locals(vm)[VarName("d")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
-        assert tv.type == scalar("Dog")
+        assert tv.type == scalar(TypeName("Dog"))
 
     def test_python_class_preserves_pointer_type(self):
         """Python has no type annotations, so pointer(scalar('Cat')) from handler survives."""
@@ -39,7 +40,7 @@ class TestTypePreservationThroughResolveReg:
         tv = _typed_locals(vm)[VarName("c")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
-        assert tv.type == pointer(scalar("Cat"))
+        assert tv.type == pointer(scalar(TypeName("Cat")))
 
     def test_store_var_preserves_type_through_reassignment(self):
         """Type must survive a STORE_VAR (reassignment), not just DECL_VAR."""
@@ -51,8 +52,8 @@ class TestTypePreservationThroughResolveReg:
         )
         tv_x = _typed_locals(vm)[VarName("x")]
         tv_y = _typed_locals(vm)[VarName("y")]
-        assert tv_x.type == scalar("Foo")
-        assert tv_y.type == scalar("Foo")
+        assert tv_x.type == scalar(TypeName("Foo"))
+        assert tv_y.type == scalar(TypeName("Foo"))
 
     def test_array_preserves_parameterized_type(self):
         """Array type inference produces Array[Int] for integer lists."""
@@ -85,4 +86,4 @@ Box b = make();
         tv = _typed_locals(vm)[VarName("b")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
-        assert tv.type == scalar("Box")
+        assert tv.type == scalar(TypeName("Box"))
