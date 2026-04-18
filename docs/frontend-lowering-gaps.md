@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 950 features across 16 languages — 724 covered, 226 uncovered
+**Totals**: 950 features across 16 languages — 725 covered, 225 uncovered
 
 ---
 
@@ -17,7 +17,7 @@
 | cpp | 84 | 38 | 46 ⚠ | 45% |
 | csharp | 94 | 71 | 23 ⚠ | 75% |
 | go | 44 | 41 | 3 ⚠ | 93% |
-| java | 72 | 55 | 17 ⚠ | 76% |
+| java | 72 | 56 | 16 ⚠ | 77% |
 | javascript | 40 | 38 | 2 ⚠ | 95% |
 | kotlin | 59 | 51 | 8 ⚠ | 86% |
 | lua | 25 | 19 | 6 ⚠ | 76% |
@@ -156,7 +156,6 @@
 
 ### java
 
-- `CHARACTER_LITERAL` — single-character literals enclosed in single quotes
 - `CONSTANT_DECLARATION` — static final field declarations
 - `FIELD_DECLARATION` — field declarations in class bodies
 - `FIELD_INITIALIZATION` — field declarations with inline initializer expressions
