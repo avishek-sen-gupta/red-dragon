@@ -7,6 +7,8 @@ from interpreter.frontends.java.namespace import (
     JavaPreScanResult,
     java_pre_scan,
 )
+from interpreter.frontends.java.features import JavaFeature
+from tests.covers import covers
 
 
 class TestJavaPreScan:
@@ -233,6 +235,7 @@ class TestCollectFieldAccessChain:
 
 
 class TestJavaNamespaceResolver:
+    @covers(JavaFeature.NAMESPACE_RESOLUTION)
     def test_resolve_qualified_type(self):
         """java.util.Arrays → LoadVar('Arrays')."""
         tree = NamespaceTree()
@@ -248,6 +251,7 @@ class TestJavaNamespaceResolver:
         assert len(load_vars) == 1
         assert load_vars[0].name.value == "Arrays"
 
+    @covers(JavaFeature.NAMESPACE_RESOLUTION)
     def test_resolve_with_remaining_field(self):
         """java.sql.Types.VARCHAR → LoadVar('Types') + LoadField('VARCHAR')."""
         tree = NamespaceTree()
@@ -266,6 +270,7 @@ class TestJavaNamespaceResolver:
         assert len(load_fields) == 1
         assert load_fields[0].field_name.value == "VARCHAR"
 
+    @covers(JavaFeature.NAMESPACE_RESOLUTION)
     def test_declared_local_skips_resolution(self):
         """If 'java' is a local variable, skip namespace resolution."""
         tree = NamespaceTree()
@@ -279,6 +284,7 @@ class TestJavaNamespaceResolver:
         result = resolver.try_resolve_field_access(ctx, node)
         assert result is NO_RESOLUTION
 
+    @covers(JavaFeature.NAMESPACE_RESOLUTION)
     def test_no_tree_match_falls_through(self):
         """com.unknown.Foo → NO_RESOLUTION."""
         tree = NamespaceTree()
@@ -292,6 +298,7 @@ class TestJavaNamespaceResolver:
 
 
 class TestFieldAccessWithResolver:
+    @covers(JavaFeature.NAMESPACE_RESOLUTION)
     def test_qualified_reference_emits_load_var(self):
         """Full pipeline: java.util.Arrays resolves to LoadVar('Arrays')."""
         from interpreter.frontends.java.frontend import JavaFrontend
