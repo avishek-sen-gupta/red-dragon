@@ -594,6 +594,7 @@ def lower_throw_as_expr(
 
 
 def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
+    param_index = 0
     for child in params_node.children:
         if child.type == JavaNodeType.FORMAL_PARAMETER:
             name_node = child.child_by_field_name("name")
@@ -616,6 +617,7 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     )
                 )
                 ctx.seed_var_type(pname, type_hint)
+                param_index += 1
         elif child.type == JavaNodeType.SPREAD_PARAMETER:
             var_decl = next(
                 (c for c in child.children if c.type == "variable_declarator"), None
@@ -623,16 +625,17 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
             name_node = var_decl.child_by_field_name("name") if var_decl else None
             if name_node:
                 pname = ctx.node_text(name_node)
+                args_reg = ctx.fresh_reg()
+                ctx.emit_inst(LoadVar(result_reg=args_reg, name=VarName("arguments")))
+                idx_reg = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=idx_reg, value=str(param_index)))
+                rest_reg = ctx.fresh_reg()
                 ctx.emit_inst(
-                    Symbolic(
-                        result_reg=ctx.fresh_reg(),
-                        hint=f"{constants.PARAM_PREFIX}{pname}",
+                    CallFunction(
+                        result_reg=rest_reg,
+                        func_name=FuncName("slice"),
+                        args=(args_reg, idx_reg),
                     ),
                     node=child,
                 )
-                ctx.emit_inst(
-                    DeclVar(
-                        name=VarName(pname),
-                        value_reg=Register(f"%{ctx.reg_counter - 1}"),
-                    )
-                )
+                ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=rest_reg))
