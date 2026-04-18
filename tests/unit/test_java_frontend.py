@@ -637,6 +637,7 @@ class TestJavaIntegerLiterals:
     """Hex, octal, and binary integer literals must be lowered to decimal strings."""
 
     @covers(JavaFeature.INTEGER_LITERALS)
+    @covers(JavaFeature.HEX_INTEGER_LITERAL)
     def test_hex_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0x7f; } }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -646,6 +647,7 @@ class TestJavaIntegerLiterals:
         ), f"Expected CONST '127', got values: {[c.value for c in consts]}"
 
     @covers(JavaFeature.INTEGER_LITERALS)
+    @covers(JavaFeature.HEX_INTEGER_LITERAL)
     def test_hex_literal_with_long_suffix(self):
         instructions = _parse_java("class M { void m() { long x = 0x7fffffffL; } }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -655,6 +657,7 @@ class TestJavaIntegerLiterals:
         ), f"Expected CONST '2147483647', got values: {[c.value for c in consts]}"
 
     @covers(JavaFeature.INTEGER_LITERALS)
+    @covers(JavaFeature.OCTAL_INTEGER_LITERAL)
     def test_octal_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0777; } }")
         consts = _find_all(instructions, Opcode.CONST)
@@ -664,6 +667,7 @@ class TestJavaIntegerLiterals:
         ), f"Expected CONST '511', got values: {[c.value for c in consts]}"
 
     @covers(JavaFeature.INTEGER_LITERALS)
+    @covers(JavaFeature.BINARY_INTEGER_LITERAL)
     def test_binary_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0b1010; } }")
         consts = _find_all(instructions, Opcode.CONST)
