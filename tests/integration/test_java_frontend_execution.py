@@ -686,15 +686,8 @@ class TestJavaSpreadParameterExecution:
     """Varargs methods must be callable and their bodies must execute correctly."""
 
     @covers(JavaFeature.SPREAD_PARAMETER)
-    @pytest.mark.xfail(
-        reason="Varargs args are not array-packed at call site: nums[0] returns SymbolicValue"
-    )
     def test_varargs_first_element_accessible(self):
-        """sum(1, 2, 3) where body returns nums[0] must produce 1.
-
-        Currently fails: the VM does not pack call-site args into an array for
-        varargs parameters, so nums[0] is a SymbolicValue instead of 1.
-        """
+        """first(1, 2, 3) where body returns nums[0] must produce 1."""
         source = """\
 class M {
     static int first(int... nums) {
@@ -705,3 +698,35 @@ class M {
 """
         _, locals_ = _run_java(source, max_steps=500)
         assert locals_[VarName("result")] == 1
+
+    @covers(JavaFeature.SPREAD_PARAMETER)
+    def test_varargs_with_regular_param(self):
+        """Varargs param following a regular param is sliced at the right index."""
+        source = """\
+class M {
+    static int getAt(int idx, int... nums) {
+        return nums[idx];
+    }
+    static int result = getAt(1, 10, 20, 30);
+}
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("result")] == 20
+
+    @covers(JavaFeature.SPREAD_PARAMETER)
+    def test_varargs_sum(self):
+        """Sum all varargs elements via for-each loop."""
+        source = """\
+class M {
+    static int sum(int... nums) {
+        int total = 0;
+        for (int n : nums) {
+            total = total + n;
+        }
+        return total;
+    }
+    static int result = sum(10, 20, 30);
+}
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("result")] == 60
