@@ -233,6 +233,7 @@ class TestJavaArrayLengthExecution:
     """Array .length should return a concrete integer, not a symbolic value."""
 
     @covers(JavaFeature.ARRAY_ACCESS)
+    @covers(JavaFeature.ARRAY_LENGTH)
     def test_array_length_is_concrete(self):
         source = """\
 class M {
@@ -244,6 +245,7 @@ class M {
         assert locals_[VarName("len")] == 5
 
     @covers(JavaFeature.ARRAY_ACCESS)
+    @covers(JavaFeature.ARRAY_LENGTH)
     def test_array_length_in_loop(self):
         source = """\
 class M {
