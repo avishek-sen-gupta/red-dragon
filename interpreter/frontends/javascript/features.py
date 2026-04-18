@@ -22,7 +22,8 @@ class JavaScriptFeature(Enum):
     ARRAY_LITERAL = "[a, b, c] array literal expressions"
     INCREMENT_DECREMENT = "x++, x--, ++x, --x increment/decrement operators"
     SEQUENCE_EXPRESSION = "a, b comma-separated sequential evaluation expressions"
-    METADATA_PROPERTY = "import.meta and new.target meta-property expressions"
+    MODULE_METADATA = "import.meta module metadata property expression"
+    NEW_TARGET = "new.target meta-property expression in constructors"
 
     # Control flow
     IF_ELSE = "if / else if / else conditional branching"
