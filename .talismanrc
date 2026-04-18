@@ -138,7 +138,7 @@ fileignoreconfig:
 - filename: .beads/backup/backup_state.json
   checksum: 979f62fa04f2f0e8c0e17d53a87c08e23a4dba6a94e991e35a6c5800dec388fe
 - filename: .beads/backup/issues.jsonl
-  checksum: a73f20f3f5725ee819715127929cb5b67fbe0042dd4921a7868d6ed6cc6a9632
+  checksum: d244287dc54bd1cb64cee800e697337ac7c6003cac10fc9e7f673e2954ba1d08
 - filename: .beads/backup/config.jsonl
   checksum: 6272a10b8d746764bbeaf4d2abfe759ac7491508b9c51264a9d4f5480b394c53
 - filename: scripts/redact-beads-issues
