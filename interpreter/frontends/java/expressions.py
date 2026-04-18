@@ -59,6 +59,38 @@ def _parse_java_integer(text: str) -> str:
     return text
 
 
+_JAVA_CHAR_ESCAPES: dict[str, str] = {
+    "\\n": "\n",
+    "\\t": "\t",
+    "\\r": "\r",
+    "\\\\": "\\",
+    "\\'": "'",
+    '\\"': '"',
+    "\\b": "\b",
+    "\\f": "\f",
+    "\\0": "\0",
+}
+
+
+def _parse_java_char(text: str) -> int:
+    """Return the ordinal of a Java character literal (e.g. "'c'" -> 99, "'\\n'" -> 10)."""
+    # text is the raw node text, e.g. "'c'" or "'\\n'" or "'\\u0041'"
+    inner = text[1:-1]  # strip surrounding single quotes
+    if inner in _JAVA_CHAR_ESCAPES:
+        return ord(_JAVA_CHAR_ESCAPES[inner])
+    if inner.startswith("\\u") and len(inner) == 6:
+        return int(inner[2:], 16)
+    return ord(inner)
+
+
+def lower_java_char_literal(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower a Java character literal to its integer ordinal value."""
+    reg = ctx.fresh_reg()
+    ordinal = _parse_java_char(ctx.node_text(node))
+    ctx.emit_inst(Const(result_reg=reg, value=str(ordinal)))
+    return reg
+
+
 def _parse_java_hex_float(text: str) -> float:
     """Parse a Java hex floating-point literal to a Python float."""
     clean = text.rstrip("fFdD")

@@ -79,7 +79,7 @@ class JavaFrontend(BaseFrontend):
             JavaNodeType.DECIMAL_FLOATING_POINT_LITERAL: common_expr.lower_const_literal,
             JavaNodeType.HEX_FLOATING_POINT_LITERAL: java_expr.lower_java_hex_float_literal,
             JavaNodeType.STRING_LITERAL: common_expr.lower_const_literal,
-            JavaNodeType.CHARACTER_LITERAL: common_expr.lower_const_literal,
+            JavaNodeType.CHARACTER_LITERAL: java_expr.lower_java_char_literal,
             JavaNodeType.TRUE: common_expr.lower_canonical_true,
             JavaNodeType.FALSE: common_expr.lower_canonical_false,
             JavaNodeType.NULL_LITERAL: common_expr.lower_canonical_none,
