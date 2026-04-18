@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 951 features across 16 languages — 743 covered, 208 uncovered
+**Totals**: 951 features across 16 languages — 748 covered, 203 uncovered
 
 ---
 
@@ -13,7 +13,7 @@
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
 | c | 48 | 33 | 15 ⚠ | 68% |
-| cobol | 107 | 89 | 18 ⚠ | 83% |
+| cobol | 107 | 94 | 13 ⚠ | 87% |
 | cpp | 84 | 38 | 46 ⚠ | 45% |
 | csharp | 94 | 71 | 23 ⚠ | 75% |
 | go | 44 | 41 | 3 ⚠ | 93% |
@@ -53,11 +53,6 @@
 
 ### cobol
 
-- `FIGURATIVE_HIGH_VALUES` — HIGH-VALUES figurative constant for maximum binary value
-- `FIGURATIVE_LOW_VALUES` — LOW-VALUES figurative constant for minimum binary value
-- `FIGURATIVE_QUOTES` — QUOTES figurative constant for quotation characters
-- `FIGURATIVE_SPACES` — SPACES figurative constant for blank characters
-- `FIGURATIVE_ZEROS` — ZEROS / ZEROES figurative constant for numeric zero
 - `INSPECT_CONVERTING` — INSPECT x CONVERTING from TO to character conversion
 - `LOGICAL_AND` — AND logical conjunction in conditions
 - `LOGICAL_NOT` — NOT logical negation in conditions
