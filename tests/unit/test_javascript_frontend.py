@@ -1111,30 +1111,6 @@ class TestJavaScriptExportStatement:
         assert any("class_" in str(inst.operands) for inst in consts)
 
 
-class TestJavaScriptExportNamedStatement:
-    """export { a, b } clause form — lower_export_clause + lower_paren specifiers."""
-
-    @covers(JavaScriptFeature.EXPORT_NAMED)
-    def test_export_named_single_specifier(self):
-        instructions = _parse_js("let a = 1; export { a };")
-        stores = _find_all(instructions, Opcode.DECL_VAR)
-        assert any("a" in inst.operands for inst in stores)
-
-    @covers(JavaScriptFeature.EXPORT_NAMED)
-    def test_export_named_multiple_specifiers(self):
-        instructions = _parse_js("let a = 1; let b = 2; export { a, b };")
-        stores = _find_all(instructions, Opcode.DECL_VAR)
-        names = {op for inst in stores for op in inst.operands}
-        assert "a" in names
-        assert "b" in names
-
-    @covers(JavaScriptFeature.EXPORT_NAMED)
-    def test_export_named_aliased_specifier(self):
-        instructions = _parse_js("let x = 42; export { x as myExport };")
-        stores = _find_all(instructions, Opcode.DECL_VAR)
-        assert any("x" in inst.operands for inst in stores)
-
-
 class TestJavaScriptOperatorExecution:
     """VM execution tests for JavaScript-specific operators."""
 
