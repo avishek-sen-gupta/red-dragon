@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
 from interpreter.frontends.javascript.features import JavaScriptFeature
-from tests.covers import covers
+from tests.covers import covers, FeatureStatus
 
 
 def _run_js(source: str, max_steps: int = 200):
@@ -183,3 +185,19 @@ class TestJSSequenceExpressionExecution:
         )
         assert locals_[VarName("result")] == 3
         assert locals_[VarName("final")] == 3
+
+
+class TestJSWithStatementExecution:
+    """with-statement scope extension: object fields shadow enclosing scope (red-dragon-d74s)."""
+
+    @pytest.mark.xfail(
+        reason="with-statement scope extension not implemented (red-dragon-d74s)"
+    )
+    @covers(JavaScriptFeature.WITH_STATEMENT, status=FeatureStatus.UNSUPPORTED)
+    def test_with_statement_resolves_fields_from_object(self):
+        locals_ = _run_js("""
+            let x = 1;
+            let obj = { x: 42 };
+            with (obj) { let result = x; }
+            """)
+        assert locals_[VarName("result")] == 42
