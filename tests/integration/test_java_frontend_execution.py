@@ -446,3 +446,153 @@ class M {
 """
         _, locals_ = _run_java(source)
         assert locals_[VarName("result")] == 9
+
+
+class TestJavaParenthesizedExpressionExecution:
+    """Parenthesized expressions must evaluate with correct precedence and value."""
+
+    @covers(JavaFeature.PARENTHESIZED_EXPRESSION)
+    def test_simple_parenthesized_addition(self):
+        """(1 + 2) should evaluate to 3."""
+        source = """\
+class M {
+    static int result = (1 + 2);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 3
+
+    @covers(JavaFeature.PARENTHESIZED_EXPRESSION)
+    def test_parentheses_override_precedence(self):
+        """(10 - 3) * 2 should be 14, not 10 - 6."""
+        source = """\
+class M {
+    static int result = (10 - 3) * 2;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 14
+
+    @covers(JavaFeature.PARENTHESIZED_EXPRESSION)
+    def test_parenthesized_boolean_condition(self):
+        """(5 > 3) should evaluate to true."""
+        source = """\
+class M {
+    static boolean result = (5 > 3);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] is True
+
+
+class TestJavaUnaryExpressionExecution:
+    """Unary operators (-, !, ~) must produce correct concrete values."""
+
+    @covers(JavaFeature.UNARY)
+    def test_unary_minus_literal(self):
+        """-5 should store -5, not 5."""
+        source = """\
+class M {
+    static int result = -5;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == -5
+
+    @covers(JavaFeature.UNARY)
+    def test_unary_minus_expression(self):
+        """-(3 + 2) should evaluate to -5."""
+        source = """\
+class M {
+    static int result = -(3 + 2);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == -5
+
+    @covers(JavaFeature.UNARY)
+    def test_logical_not_true(self):
+        """!true should be false."""
+        source = """\
+class M {
+    static boolean result = !true;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] is False
+
+    @covers(JavaFeature.UNARY)
+    def test_logical_not_false(self):
+        """!false should be true."""
+        source = """\
+class M {
+    static boolean result = !false;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] is True
+
+    @covers(JavaFeature.UNARY)
+    def test_bitwise_not(self):
+        """~0 should be -1 (all bits flipped)."""
+        source = """\
+class M {
+    static int result = ~0;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == -1
+
+
+class TestJavaReturnStatementExecution:
+    """return statements must transfer the correct value back to the caller."""
+
+    @covers(JavaFeature.RETURN)
+    def test_return_computed_value(self):
+        """Method returning x * 2 called with 5 should produce 10."""
+        source = """\
+class Calc {
+    int doubled(int x) {
+        return x * 2;
+    }
+}
+Calc c = new Calc();
+int answer = c.doubled(5);
+"""
+        _, locals_ = _run_java(source, max_steps=1000)
+        assert locals_[VarName("answer")] == 10
+
+    @covers(JavaFeature.RETURN)
+    def test_return_string_value(self):
+        """Method returning a string literal should pass it back intact."""
+        source = """\
+class Greeter {
+    String hello() {
+        return "hi";
+    }
+}
+Greeter g = new Greeter();
+String answer = g.hello();
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("answer")] == "hi"
+
+    @covers(JavaFeature.RETURN)
+    def test_early_return_in_conditional(self):
+        """Early return inside an if-branch should short-circuit remaining code."""
+        source = """\
+class Checker {
+    boolean isPositive(int x) {
+        if (x > 0) {
+            return true;
+        }
+        return false;
+    }
+}
+Checker ch = new Checker();
+boolean pos = ch.isPositive(3);
+boolean neg = ch.isPositive(-1);
+"""
+        _, locals_ = _run_java(source, max_steps=1000)
+        assert locals_[VarName("pos")] is True
+        assert locals_[VarName("neg")] is False

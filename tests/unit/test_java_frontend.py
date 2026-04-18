@@ -712,6 +712,98 @@ class TestJavaCharacterLiterals:
         ), "character_literal should not fall back to SYMBOLIC"
 
 
+class TestJavaParenthesizedExpression:
+    """Parenthesized expressions must lower to the same IR as the inner expression."""
+
+    @covers(JavaFeature.PARENTHESIZED_EXPRESSION)
+    def test_parenthesized_literal_emits_const(self):
+        """(42) should produce a CONST with value '42'."""
+        instructions = _parse_java("class M { void m() { int x = (42); } }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            c.value == "42" for c in consts
+        ), f"Expected CONST '42', got: {[c.value for c in consts]}"
+
+    @covers(JavaFeature.PARENTHESIZED_EXPRESSION)
+    def test_parenthesized_binop_emits_binop(self):
+        """(a + b) should produce a BINOP '+' instruction."""
+        instructions = _parse_java("class M { void m() { int x = (1 + 2); } }")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(
+            "+" in str(inst.operands) for inst in binops
+        ), f"Expected BINOP '+', got: {[inst.operands for inst in binops]}"
+
+    @covers(JavaFeature.PARENTHESIZED_EXPRESSION)
+    def test_parenthesized_expression_no_symbolic_fallback(self):
+        """(x) must not degrade to SYMBOLIC."""
+        instructions = _parse_java("class M { void m() { int x = (1 + 2); } }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "parenthesized" in str(inst.operands) for inst in symbolics
+        ), "parenthesized_expression should not fall back to SYMBOLIC"
+
+
+class TestJavaUnaryExpression:
+    """Unary operators must lower to UNOP instructions with the correct operator."""
+
+    @covers(JavaFeature.UNARY)
+    def test_unary_minus_emits_unop(self):
+        """-x must produce a UNOP with operator '-'."""
+        instructions = _parse_java("class M { void m() { int x = 5; int y = -x; } }")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any(
+            "-" in str(inst.operands) for inst in unops
+        ), f"Expected UNOP '-', got: {[inst.operands for inst in unops]}"
+
+    @covers(JavaFeature.UNARY)
+    def test_logical_not_emits_unop(self):
+        """!b must produce a UNOP with operator '!'."""
+        instructions = _parse_java(
+            "class M { void m() { boolean b = true; boolean r = !b; } }"
+        )
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any(
+            "!" in str(inst.operands) for inst in unops
+        ), f"Expected UNOP '!', got: {[inst.operands for inst in unops]}"
+
+    @covers(JavaFeature.UNARY)
+    def test_bitwise_not_emits_unop(self):
+        """~x must produce a UNOP with operator '~'."""
+        instructions = _parse_java("class M { void m() { int x = 0; int y = ~x; } }")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any(
+            "~" in str(inst.operands) for inst in unops
+        ), f"Expected UNOP '~', got: {[inst.operands for inst in unops]}"
+
+
+class TestJavaReturnStatement:
+    """return statements must lower to RETURN_ instructions carrying the result register."""
+
+    @covers(JavaFeature.RETURN)
+    def test_return_emits_return_instruction(self):
+        """A method with return x must emit a RETURN instruction."""
+        instructions = _parse_java("class M { int m(int x) { return x; } }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert returns, "Expected at least one RETURN instruction"
+
+    @covers(JavaFeature.RETURN)
+    def test_return_value_is_register(self):
+        """RETURN must carry a value_reg (not None) for non-void methods."""
+        instructions = _parse_java("class M { int m() { return 42; } }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert returns, "Expected RETURN instruction"
+        assert any(
+            inst.value_reg is not None for inst in returns
+        ), "RETURN must reference a register holding the return value"
+
+    @covers(JavaFeature.RETURN)
+    def test_void_return_emits_return_instruction(self):
+        """A void method with explicit return; must also emit RETURN."""
+        instructions = _parse_java("class M { void m() { int x = 1; return; } }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert returns, "Expected RETURN instruction even for void return"
+
+
 class TestJavaMethodReference:
     @covers(JavaFeature.METHOD_REFERENCE)
     def test_type_method_reference(self):
