@@ -1833,7 +1833,7 @@ class TestJavaFinallyBlock:
 
 
 class TestJavaSpreadParameter:
-    """Varargs (T... name) parameters must be declared and bound as SYMBOLIC + DECL_VAR."""
+    """Varargs (T... name) parameters must be lowered as slice(arguments, idx)."""
 
     @covers(JavaFeature.SPREAD_PARAMETER)
     def test_varargs_param_emits_decl_var(self):
@@ -1845,13 +1845,15 @@ class TestJavaSpreadParameter:
         assert any("nums" in inst.operands for inst in decl_vars)
 
     @covers(JavaFeature.SPREAD_PARAMETER)
-    def test_varargs_param_emits_symbolic_with_param_hint(self):
-        """int... nums must emit a SYMBOLIC instruction with 'param:nums' hint."""
+    def test_varargs_param_slices_arguments(self):
+        """int... nums must load 'arguments' and call slice — no SYMBOLIC for the varargs name."""
         instructions = _parse_java(
             "class M { static int sum(int... nums) { return 0; } }"
         )
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("nums" in str(inst.operands) for inst in symbolics)
+        load_vars = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("arguments" in str(inst.operands) for inst in load_vars)
+        call_funcs = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("slice" in str(inst.operands) for inst in call_funcs)
 
     @covers(JavaFeature.SPREAD_PARAMETER)
     def test_varargs_alongside_regular_params(self):
