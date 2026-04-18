@@ -164,4 +164,6 @@ fileignoreconfig:
   checksum: 9185b6f63864c058a2d1cc5b19ea3c3fd727104f1d3a096ab712f36d84190f79
 - filename: tests/unit/test_type_alias_prepass.py
   checksum: 1c403116e68875cd2a0fbaf08a51ff6829a49b56237bfa81381033a183d9c377
+- filename: tests/covers.py
+  checksum: 8ccf5a42f1ed978e2e9cd093e31601be9e67c860e8350e8899ff658d19874e17
 version: "1.0"
