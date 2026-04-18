@@ -187,6 +187,26 @@ class TestJSSequenceExpressionExecution:
         assert locals_[VarName("final")] == 3
 
 
+class TestJSExportNamedExecution:
+    """export { a, b } clause — execution continues normally, variables remain accessible."""
+
+    @covers(JavaScriptFeature.EXPORT_NAMED)
+    def test_export_named_variable_still_accessible(self):
+        locals_ = _run_js("let a = 1; export { a };")
+        assert locals_[VarName("a")] == 1
+
+    @covers(JavaScriptFeature.EXPORT_NAMED)
+    def test_export_named_multiple_variables(self):
+        locals_ = _run_js("let a = 10; let b = 20; export { a, b };")
+        assert locals_[VarName("a")] == 10
+        assert locals_[VarName("b")] == 20
+
+    @covers(JavaScriptFeature.EXPORT_NAMED)
+    def test_export_named_alias_does_not_crash(self):
+        locals_ = _run_js("let x = 42; export { x as myExport };")
+        assert locals_[VarName("x")] == 42
+
+
 class TestJSWithStatementExecution:
     """with-statement scope extension: object fields shadow enclosing scope (red-dragon-d74s)."""
 
