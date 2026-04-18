@@ -166,4 +166,6 @@ fileignoreconfig:
   checksum: 1c403116e68875cd2a0fbaf08a51ff6829a49b56237bfa81381033a183d9c377
 - filename: tests/covers.py
   checksum: 8ccf5a42f1ed978e2e9cd093e31601be9e67c860e8350e8899ff658d19874e17
+- filename: docs/superpowers/specs/2026-04-18-move-corresponding-recursive-datalayout-design.md
+  checksum: 231afba915ef9a9232177250f997bab0b7714378cffdcf19f305844548520f08
 version: "1.0"
