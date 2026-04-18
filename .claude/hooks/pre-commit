@@ -99,6 +99,12 @@ git -C "$REPO_ROOT" add -u
 echo_success "Running Python FP lint (interpreter/ only)..."
 ~/.claude/plugins/python-fp-lint/venv/bin/python -m python_fp_lint check "$REPO_ROOT/interpreter/" || true
 
+# ---------------------------------------------------------------------------
+# Pyright type check (non-blocking — warnings only)
+# ---------------------------------------------------------------------------
+echo_success "Running Pyright type check..."
+poetry -C "$REPO_ROOT" run pyright || true
+
 echo_success "Running import-linter architectural contracts..."
 poetry -C "$REPO_ROOT" run lint-imports
 if [ $? -ne 0 ]; then
