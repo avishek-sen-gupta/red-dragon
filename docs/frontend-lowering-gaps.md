@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 948 features across 16 languages — 714 covered, 234 uncovered
+**Totals**: 949 features across 16 languages — 719 covered, 230 uncovered
 
 ---
 
@@ -18,7 +18,7 @@
 | csharp | 94 | 71 | 23 ⚠ | 75% |
 | go | 44 | 41 | 3 ⚠ | 93% |
 | java | 72 | 50 | 22 ⚠ | 69% |
-| javascript | 38 | 33 | 5 ⚠ | 86% |
+| javascript | 39 | 38 | 1 ⚠ | 97% |
 | kotlin | 59 | 51 | 8 ⚠ | 86% |
 | lua | 25 | 19 | 6 ⚠ | 76% |
 | pascal | 47 | 38 | 9 ⚠ | 80% |
@@ -182,10 +182,6 @@
 ### javascript
 
 - `EXPORT_NAMED` — named export declarations
-- `INCREMENT_DECREMENT` — x++, x--, ++x, --x increment/decrement operators
-- `METADATA_PROPERTY` — import.meta and new.target meta-property expressions
-- `SEQUENCE_EXPRESSION` — a, b comma-separated sequential evaluation expressions
-- `WITH_STATEMENT` — with (obj) { } scope extension statements
 
 ### kotlin
 
