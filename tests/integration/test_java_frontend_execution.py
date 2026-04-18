@@ -774,6 +774,33 @@ class M {
         _, locals_ = _run_java(source)
         assert locals_[VarName("result")] == 99
 
+    @covers(JavaFeature.TRY_WITH_RESOURCES)
+    @pytest.mark.xfail(
+        reason="close() not automatically called on resource — not yet implemented"
+    )
+    def test_resource_close_called_automatically(self):
+        """close() must be invoked on the resource after the try block exits."""
+        source = """\
+class M {
+    static int closed = 0;
+
+    static class MyResource {
+        void close() {
+            closed = 1;
+        }
+    }
+
+    static void run() {
+        try (MyResource r = new MyResource()) {
+            int x = 1;
+        }
+    }
+    static int dummy = (run(), 0);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("closed")] == 1
+
 
 class TestJavaSwitchRuleExecution:
     """Arrow-form case labels (case X ->) in switch expressions."""
