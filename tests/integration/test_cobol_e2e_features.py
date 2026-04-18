@@ -336,6 +336,7 @@ class TestLevel88ConditionNames:
     @covers(
         CobolFeature.LEVEL_88_CONDITION,
         CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.CONDITION_VALUES_THRU,
         CobolFeature.IF_ELSE,
     )
     def test_level88_all_forms(self):

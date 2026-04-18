@@ -1223,6 +1223,7 @@ class TestLevel88ThruRange:
     @covers(
         CobolFeature.LEVEL_88_CONDITION,
         CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.CONDITION_VALUES_THRU,
         CobolFeature.IF_ELSE,
     )
     def test_thru_range_match(self):
@@ -1253,6 +1254,7 @@ class TestLevel88ThruRange:
     @covers(
         CobolFeature.LEVEL_88_CONDITION,
         CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.CONDITION_VALUES_THRU,
         CobolFeature.IF_ELSE,
     )
     def test_thru_range_no_match(self):
@@ -1283,6 +1285,7 @@ class TestLevel88ThruRange:
     @covers(
         CobolFeature.LEVEL_88_CONDITION,
         CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.CONDITION_VALUES_THRU,
         CobolFeature.IF_ELSE,
     )
     def test_thru_range_boundary_low(self):
@@ -1315,6 +1318,7 @@ class TestLevel88MixedValues:
     @covers(
         CobolFeature.LEVEL_88_CONDITION,
         CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.CONDITION_VALUES_THRU,
         CobolFeature.IF_ELSE,
     )
     def test_mixed_discrete_and_thru(self):
@@ -1345,6 +1349,7 @@ class TestLevel88MixedValues:
     @covers(
         CobolFeature.LEVEL_88_CONDITION,
         CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.CONDITION_VALUES_THRU,
         CobolFeature.IF_ELSE,
     )
     def test_mixed_discrete_match(self):
@@ -1375,6 +1380,7 @@ class TestLevel88MixedValues:
     @covers(
         CobolFeature.LEVEL_88_CONDITION,
         CobolFeature.VALUE_THRU_RANGE,
+        CobolFeature.CONDITION_VALUES_THRU,
         CobolFeature.IF_ELSE,
     )
     def test_mixed_no_match(self):
