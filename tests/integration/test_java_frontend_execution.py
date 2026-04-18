@@ -596,3 +596,39 @@ boolean neg = ch.isPositive(-1);
         _, locals_ = _run_java(source, max_steps=1000)
         assert locals_[VarName("pos")] is True
         assert locals_[VarName("neg")] is False
+
+
+class TestJavaConstantDeclarationExecution:
+    """Interface constants and static final fields must evaluate to their declared values."""
+
+    @covers(JavaFeature.CONSTANT_DECLARATION)
+    def test_interface_int_constant_readable(self):
+        """Interface constant Limits.MAX = 100 must be readable as 100."""
+        source = """\
+interface Limits { int MAX = 100; }
+class M { static int result = Limits.MAX; }
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("result")] == 100
+
+    @covers(JavaFeature.CONSTANT_DECLARATION)
+    def test_interface_string_constant_readable(self):
+        """Interface constant Labels.NAME = "hello" must be readable as "hello"."""
+        source = """\
+interface Labels { String NAME = "hello"; }
+class M { static String result = Labels.NAME; }
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("result")] == "hello"
+
+    @covers(JavaFeature.CONSTANT_DECLARATION)
+    def test_static_final_field_usable_in_expression(self):
+        """static final int MAX = 42 used in an expression must produce the right value."""
+        source = """\
+class M {
+    static final int MAX = 42;
+    static int result = MAX;
+}
+"""
+        _, locals_ = _run_java(source, max_steps=200)
+        assert locals_[VarName("result")] == 42

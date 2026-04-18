@@ -804,6 +804,46 @@ class TestJavaReturnStatement:
         assert returns, "Expected RETURN instruction even for void return"
 
 
+class TestJavaConstantDeclaration:
+    """Interface constants and static final fields must lower to DECL_VAR with the initializer."""
+
+    @covers(JavaFeature.CONSTANT_DECLARATION)
+    def test_interface_int_constant_emits_decl_var(self):
+        """interface Limits { int MAX = 100; } must emit DECL_VAR for MAX."""
+        instructions = _parse_java("interface Limits { int MAX = 100; }")
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any(
+            inst.name == VarName("MAX") for inst in decls
+        ), f"Expected DECL_VAR for 'MAX', got names: {[inst.name for inst in decls]}"
+
+    @covers(JavaFeature.CONSTANT_DECLARATION)
+    def test_interface_constant_initializer_is_loaded(self):
+        """The initializer value (100) must appear as a CONST before the DECL_VAR."""
+        instructions = _parse_java("interface Limits { int MAX = 100; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            c.value == "100" for c in consts
+        ), f"Expected CONST '100', got: {[c.value for c in consts]}"
+
+    @covers(JavaFeature.CONSTANT_DECLARATION)
+    def test_static_final_field_emits_decl_var(self):
+        """class M { static final int LIMIT = 42; } must emit DECL_VAR for LIMIT."""
+        instructions = _parse_java("class M { static final int LIMIT = 42; }")
+        decls = _find_all(instructions, Opcode.DECL_VAR)
+        assert any(
+            inst.name == VarName("LIMIT") for inst in decls
+        ), f"Expected DECL_VAR for 'LIMIT', got names: {[inst.name for inst in decls]}"
+
+    @covers(JavaFeature.CONSTANT_DECLARATION)
+    def test_constant_declaration_no_symbolic_fallback(self):
+        """Constant declarations must not fall back to SYMBOLIC."""
+        instructions = _parse_java("interface Flags { boolean ENABLED = true; }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "constant_declaration" in str(inst.operands) for inst in symbolics
+        ), "constant_declaration should not fall back to SYMBOLIC"
+
+
 class TestJavaMethodReference:
     @covers(JavaFeature.METHOD_REFERENCE)
     def test_type_method_reference(self):
