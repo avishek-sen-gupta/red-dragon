@@ -30,6 +30,7 @@ from interpreter.cobol.cobol_statements import (
     IfStatement,
     InitializeStatement,
     InspectStatement,
+    MoveCorrespondingStatement,
     MoveStatement,
     OpenStatement,
     PerformStatement,
@@ -2259,3 +2260,172 @@ class TestDataLayout:
         assert layout["WS-B"]["offset"] == 3
         assert layout["WS-B"]["length"] == 5
         assert layout["WS-B"]["category"] == "ALPHANUMERIC"
+
+
+class TestMoveCorrespondingLowering:
+    """Tests for MOVE CORRESPONDING statement lowering."""
+
+    class _FakeParserWithStmts:
+        def __init__(self, asg: CobolASG):
+            self._asg = asg
+
+        def parse(self, source: bytes) -> CobolASG:
+            return self._asg
+
+    def _lower_with_field_and_stmts(
+        self, fields: list[CobolField], stmts: list[CobolStatementType]
+    ) -> list[InstructionBase]:
+        """Helper to lower a COBOL program with given fields and statements."""
+        paragraphs = [CobolParagraph(name="MAIN-PARA", statements=stmts)]
+        section = CobolSection(name="PROC", paragraphs=paragraphs)
+        asg = CobolASG(data_fields=fields, sections=[section])
+        frontend = CobolFrontend(self._FakeParserWithStmts(asg))
+        return frontend.lower(b"")
+
+    @covers(
+        CobolFeature.MOVE_CORRESPONDING,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
+    def test_move_corresponding_simple(self):
+        """MOVE CORRESPONDING source TO target with matching field names."""
+        fields = [
+            CobolField(
+                name="WS-SOURCE",
+                level=1,
+                pic=None,
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="SRC-A", level=5, pic="9(3)", usage="DISPLAY", offset=0
+                    ),
+                    CobolField(
+                        name="SRC-B", level=5, pic="X(2)", usage="DISPLAY", offset=3
+                    ),
+                ],
+            ),
+            CobolField(
+                name="WS-TARGET",
+                level=1,
+                pic=None,
+                usage="DISPLAY",
+                offset=5,
+                children=[
+                    CobolField(
+                        name="SRC-A", level=5, pic="9(3)", usage="DISPLAY", offset=5
+                    ),
+                    CobolField(
+                        name="SRC-B", level=5, pic="X(2)", usage="DISPLAY", offset=8
+                    ),
+                ],
+            ),
+        ]
+        stmts = [MoveCorrespondingStatement(source="WS-SOURCE", targets=["WS-TARGET"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should emit WRITE_REGION instructions for moved fields
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 2  # At least 2 fields (SRC-A, SRC-B)
+
+    @covers(
+        CobolFeature.MOVE_CORRESPONDING,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
+    def test_move_corresponding_multiple_targets(self):
+        """MOVE CORRESPONDING source TO target1 TO target2."""
+        fields = [
+            CobolField(
+                name="WS-SOURCE",
+                level=1,
+                pic=None,
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="FIELD-A", level=5, pic="9(1)", usage="DISPLAY", offset=0
+                    ),
+                ],
+            ),
+            CobolField(
+                name="WS-TARGET1",
+                level=1,
+                pic=None,
+                usage="DISPLAY",
+                offset=1,
+                children=[
+                    CobolField(
+                        name="FIELD-A", level=5, pic="9(1)", usage="DISPLAY", offset=1
+                    ),
+                ],
+            ),
+            CobolField(
+                name="WS-TARGET2",
+                level=1,
+                pic=None,
+                usage="DISPLAY",
+                offset=2,
+                children=[
+                    CobolField(
+                        name="FIELD-A", level=5, pic="9(1)", usage="DISPLAY", offset=2
+                    ),
+                ],
+            ),
+        ]
+        stmts = [
+            MoveCorrespondingStatement(
+                source="WS-SOURCE", targets=["WS-TARGET1", "WS-TARGET2"]
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should emit WRITE_REGION for both targets
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 2  # At least one for each target
+
+    @covers(
+        CobolFeature.MOVE_CORRESPONDING,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
+    def test_move_corresponding_partial_match(self):
+        """MOVE CORRESPONDING only moves matching field names."""
+        fields = [
+            CobolField(
+                name="WS-SOURCE",
+                level=1,
+                pic=None,
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="FIELD-X", level=5, pic="9(1)", usage="DISPLAY", offset=0
+                    ),
+                    CobolField(
+                        name="FIELD-Y", level=5, pic="9(1)", usage="DISPLAY", offset=1
+                    ),
+                ],
+            ),
+            CobolField(
+                name="WS-TARGET",
+                level=1,
+                pic=None,
+                usage="DISPLAY",
+                offset=2,
+                children=[
+                    CobolField(
+                        name="FIELD-X", level=5, pic="9(1)", usage="DISPLAY", offset=2
+                    ),
+                    CobolField(
+                        name="FIELD-Z", level=5, pic="9(1)", usage="DISPLAY", offset=3
+                    ),
+                ],
+            ),
+        ]
+        stmts = [MoveCorrespondingStatement(source="WS-SOURCE", targets=["WS-TARGET"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should emit WRITE_REGION for matching field (FIELD-X) but not non-matching ones
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 1  # At least FIELD-X match

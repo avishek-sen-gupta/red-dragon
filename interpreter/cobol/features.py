@@ -45,6 +45,9 @@ class CobolFeature(Enum):
     # Data manipulation
     # ---------------------------------------------------------------------------
     MOVE = "MOVE src TO dest data transfer statements"
+    MOVE_CORRESPONDING = (
+        "MOVE CORRESPONDING source TO target group item matching transfer"
+    )
     INITIALIZE = "INITIALIZE field data initialization statements"
     SET_TO = "SET index TO value index setting statements"
     SET_UP_BY = "SET index UP BY n index increment statements"

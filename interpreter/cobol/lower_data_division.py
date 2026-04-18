@@ -21,7 +21,7 @@ def lower_data_division(ctx: EmitContext, layout: DataLayout) -> str:
         AllocRegion(result_reg=region_reg, size_reg=size_reg),
     )
 
-    fields_with_values = [fl for fl in layout.fields.values() if fl.value]
+    fields_with_values = [fl for fl in layout.all_leaves() if fl.value]
     for fl in fields_with_values:
         ctx.emit_field_encode(region_reg, fl, fl.value)
 

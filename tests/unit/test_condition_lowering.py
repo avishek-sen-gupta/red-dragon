@@ -21,7 +21,7 @@ def _noop_dispatch(ctx, stmt, layout, region_reg):
 def _setup_with_fields(cobol_fields: list[CobolField]):
     """Build layout, emit context, and allocate region for test fields."""
     layout = build_data_layout(cobol_fields)
-    condition_index = build_condition_index(layout.fields)
+    condition_index = build_condition_index(layout)
     ctx = EmitContext(
         dispatch_fn=_noop_dispatch,
         condition_index=condition_index,
