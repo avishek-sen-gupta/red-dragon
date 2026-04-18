@@ -7,6 +7,8 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from interpreter.frontends.javascript.features import JavaScriptFeature
+from tests.covers import covers
 
 
 def _run_js(source: str, max_steps: int = 200):
@@ -113,3 +115,78 @@ class TestJSAnonymousClassExpressionExecution:
             let result = obj.v;
             """)
         assert locals_[VarName("result")] == 99
+
+
+class TestJSIncrementDecrementExecution:
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_postfix_increment_mutates_variable(self):
+        locals_ = _run_js("let x = 5; x++; let result = x;")
+        assert locals_[VarName("result")] == 6
+
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_postfix_decrement_mutates_variable(self):
+        locals_ = _run_js("let x = 5; x--; let result = x;")
+        assert locals_[VarName("result")] == 4
+
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_prefix_increment_mutates_variable(self):
+        locals_ = _run_js("let x = 10; ++x; let result = x;")
+        assert locals_[VarName("result")] == 11
+
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_prefix_decrement_mutates_variable(self):
+        locals_ = _run_js("let x = 10; --x; let result = x;")
+        assert locals_[VarName("result")] == 9
+
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_increment_used_in_expression(self):
+        locals_ = _run_js("let x = 3; let result = x + 1; x++; let after = x;")
+        assert locals_[VarName("result")] == 4
+        assert locals_[VarName("after")] == 4
+
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_postfix_increment_returns_original_value(self):
+        locals_ = _run_js("let x = 5; let result = x++; let after = x;")
+        assert locals_[VarName("result")] == 5
+        assert locals_[VarName("after")] == 6
+
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_postfix_decrement_returns_original_value(self):
+        locals_ = _run_js("let x = 5; let result = x--; let after = x;")
+        assert locals_[VarName("result")] == 5
+        assert locals_[VarName("after")] == 4
+
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_prefix_increment_returns_new_value(self):
+        locals_ = _run_js("let x = 5; let result = ++x;")
+        assert locals_[VarName("result")] == 6
+        assert locals_[VarName("x")] == 6
+
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
+    def test_prefix_decrement_returns_new_value(self):
+        locals_ = _run_js("let x = 5; let result = --x;")
+        assert locals_[VarName("result")] == 4
+        assert locals_[VarName("x")] == 4
+
+
+class TestJSSequenceExpressionExecution:
+    @covers(JavaScriptFeature.SEQUENCE_EXPRESSION)
+    def test_sequence_returns_last_value(self):
+        locals_ = _run_js("let result = (1, 2, 3);")
+        assert locals_[VarName("result")] == 3
+
+    @covers(JavaScriptFeature.SEQUENCE_EXPRESSION)
+    def test_sequence_evaluates_all_side_effects(self):
+        locals_ = _run_js(
+            "let a = 0; let b = 0; (a = 10, b = 20); let ra = a; let rb = b;"
+        )
+        assert locals_[VarName("ra")] == 10
+        assert locals_[VarName("rb")] == 20
+
+    @covers(JavaScriptFeature.SEQUENCE_EXPRESSION)
+    def test_sequence_result_is_last_not_first(self):
+        locals_ = _run_js(
+            "let x = 0; let result = (x = 1, x = 2, x = 3); let final = x;"
+        )
+        assert locals_[VarName("result")] == 3
+        assert locals_[VarName("final")] == 3
