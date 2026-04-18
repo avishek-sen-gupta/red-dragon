@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.cobol_expression import parse_expression
+from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
     ComputeStatement,
@@ -68,7 +69,7 @@ def lower_move(
         )
         value_str_reg = ctx.emit_to_string(decoded_reg)
     else:
-        value_str_reg = ctx.const_to_reg(str(stmt.source))
+        value_str_reg = ctx.const_to_reg(translate_cobol_figurative(str(stmt.source)))
 
     ctx.emit_encode_and_write(
         region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg
