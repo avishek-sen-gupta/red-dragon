@@ -25,7 +25,7 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.condition_lowering import lower_expr_node
-from interpreter.cobol.data_layout import DataLayout
+from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.operator_kind import resolve_binop
 from interpreter.func_name import FuncName
@@ -261,24 +261,66 @@ def lower_exit(
     pass
 
 
+def _leaf_fields_of(target_fl: FieldLayout, layout: DataLayout) -> list[FieldLayout]:
+    """Return leaf FieldLayouts contained within target_fl's byte range.
+
+    A leaf is a field that has no other fields falling strictly inside its range.
+    Returns [target_fl] if target_fl is itself a leaf (not a group item).
+    """
+    target_start = target_fl.offset
+    target_end = target_fl.offset + target_fl.byte_length
+
+    contained = [
+        fl
+        for fl in layout.fields.values()
+        if fl.name != target_fl.name
+        and fl.offset >= target_start
+        and fl.offset + fl.byte_length <= target_end
+    ]
+
+    if not contained:
+        return [target_fl]
+
+    leaves = []
+    for fl in contained:
+        fl_start = fl.offset
+        fl_end = fl.offset + fl.byte_length
+        is_leaf = not any(
+            other.name != fl.name
+            and other.offset >= fl_start
+            and other.offset + other.byte_length <= fl_end
+            for other in contained
+        )
+        if is_leaf:
+            leaves.append(fl)
+
+    return leaves
+
+
 def lower_initialize(
     ctx: EmitContext,
     stmt: InitializeStatement,
     layout: DataLayout,
     region_reg: str,
 ) -> None:
-    """INITIALIZE field1 field2 — reset to type-appropriate defaults."""
+    """INITIALIZE field1 field2 — reset to type-appropriate defaults.
+
+    For group items, each elementary (leaf) child is reset with the
+    type-appropriate default: spaces for ALPHANUMERIC, zeros for numeric.
+    """
     for operand in stmt.operands:
         if not ctx.has_field(operand, layout):
             logger.warning("INITIALIZE target %s not found in layout", operand)
             continue
         ref = ctx.resolve_field_ref(operand, layout, region_reg)
-        td = ref.fl.type_descriptor
-        if td.category == CobolDataCategory.ALPHANUMERIC:
-            default = " " * td.total_digits
-        else:
-            default = "0"
-        ctx.emit_field_encode(region_reg, ref.fl, default, ref.offset_reg)
+        for leaf_fl in _leaf_fields_of(ref.fl, layout):
+            leaf_ref = ctx.resolve_field_ref(leaf_fl.name, layout, region_reg)
+            td = leaf_fl.type_descriptor
+            if td.category == CobolDataCategory.ALPHANUMERIC:
+                default = " " * td.total_digits
+            else:
+                default = "0"
+            ctx.emit_field_encode(region_reg, leaf_fl, default, leaf_ref.offset_reg)
 
 
 def lower_set(
