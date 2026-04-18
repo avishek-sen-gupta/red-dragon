@@ -114,6 +114,13 @@ if [ $? -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Regenerate frontend lowering gaps doc
+# ---------------------------------------------------------------------------
+echo_success "Regenerating frontend lowering gaps doc..."
+poetry -C "$REPO_ROOT" run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md
+git -C "$REPO_ROOT" add -u docs/frontend-lowering-gaps.md
+
+# ---------------------------------------------------------------------------
 # Beads backup + integration
 # ---------------------------------------------------------------------------
 if command -v bd >/dev/null 2>&1; then

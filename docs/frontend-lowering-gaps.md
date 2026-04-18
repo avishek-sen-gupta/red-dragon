@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 949 features across 16 languages — 719 covered, 230 uncovered
+**Totals**: 950 features across 16 languages — 722 covered, 228 uncovered
 
 ---
 
@@ -17,8 +17,8 @@
 | cpp | 84 | 38 | 46 ⚠ | 45% |
 | csharp | 94 | 71 | 23 ⚠ | 75% |
 | go | 44 | 41 | 3 ⚠ | 93% |
-| java | 72 | 50 | 22 ⚠ | 69% |
-| javascript | 39 | 38 | 1 ⚠ | 97% |
+| java | 72 | 53 | 19 ⚠ | 73% |
+| javascript | 40 | 38 | 2 ⚠ | 95% |
 | kotlin | 59 | 51 | 8 ⚠ | 86% |
 | lua | 25 | 19 | 6 ⚠ | 76% |
 | pascal | 47 | 38 | 9 ⚠ | 80% |
@@ -157,18 +157,15 @@
 ### java
 
 - `ARRAY_LENGTH` — .length field access on array types
-- `BINARY_INTEGER_LITERAL` — 0b-prefixed binary integer literals
 - `CHARACTER_LITERAL` — single-character literals enclosed in single quotes
 - `COMPACT_CONSTRUCTOR` — compact constructors in records (Java 16+)
 - `CONSTANT_DECLARATION` — static final field declarations
 - `FIELD_DECLARATION` — field declarations in class bodies
 - `FIELD_INITIALIZATION` — field declarations with inline initializer expressions
 - `FINALLY` — finally block in try/catch/finally
-- `HEX_INTEGER_LITERAL` — 0x-prefixed hexadecimal integer literals
 - `IMPORT_DECLARATION` — import statements
 - `MODULE_DECLARATION` — module-info.java module declarations
 - `NAMESPACE_RESOLUTION` — qualified name resolution across packages
-- `OCTAL_INTEGER_LITERAL` — 0-prefixed octal integer literals
 - `PACKAGE_DECLARATION` — package declarations
 - `PARENTHESIZED_EXPRESSION` — expressions wrapped in parentheses
 - `PATTERN_GUARD` — when guards in switch pattern cases (Java 21+)
@@ -181,7 +178,8 @@
 
 ### javascript
 
-- `EXPORT_NAMED` — named export declarations
+- `EXPORT_NAMED` — export { a, b } clause of locally-declared names
+- `EXPORT_REEXPORT` — export { a } from './module' re-export from another module
 
 ### kotlin
 
