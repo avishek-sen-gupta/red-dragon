@@ -108,7 +108,7 @@ class CobolFrontend(Frontend):
         offset, length, and type category info.
         """
         return {
-            name: {
+            fl.name: {
                 "offset": fl.offset,
                 "length": fl.byte_length,
                 "category": fl.type_descriptor.category.value,
@@ -116,7 +116,7 @@ class CobolFrontend(Frontend):
                 "decimal_digits": fl.type_descriptor.decimal_digits,
                 "signed": fl.type_descriptor.signed,
             }
-            for name, fl in self._layout.fields.items()
+            for fl in self._layout.all_fields()
         }
 
     def lower(
@@ -130,7 +130,7 @@ class CobolFrontend(Frontend):
         layout = build_data_layout(asg.data_fields)
         self._layout = layout
         self._symbol_table = SymbolTable.from_data_layout(layout)
-        condition_index = build_condition_index(layout.fields)
+        condition_index = build_condition_index(layout)
 
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,

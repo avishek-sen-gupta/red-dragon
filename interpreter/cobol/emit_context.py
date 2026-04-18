@@ -180,7 +180,8 @@ class EmitContext:
     ) -> ResolvedFieldRef:
         """Resolve a field reference that may contain subscript notation."""
         base_name, subscript = parse_subscript_notation(name)
-        fl = layout.fields[base_name]
+        fl = layout.lookup_as_storage(base_name)
+        assert fl is not None, f"Field or group not found in layout: {base_name!r}"
 
         if not subscript:
             offset_reg = self.fresh_reg()
@@ -194,8 +195,8 @@ class EmitContext:
         except ValueError:
             # Subscript is a field reference — decode it
             sub_base, _ = parse_subscript_notation(subscript)
-            if sub_base in layout.fields:
-                sub_fl = layout.fields[sub_base]
+            sub_fl = layout.lookup(sub_base)
+            if sub_fl is not None:
                 idx_reg = self.emit_decode_field(region_reg, sub_fl)
             else:
                 idx_reg = self.const_to_reg(1)
@@ -253,7 +254,18 @@ class EmitContext:
     def has_field(self, name: str, layout: DataLayout) -> bool:
         """Check if a name (possibly subscripted) refers to a known field."""
         base_name, _ = parse_subscript_notation(name)
-        return base_name in layout.fields
+        return layout.lookup_as_storage(base_name) is not None
+
+    def resolve_field_ref_from(
+        self, fl: FieldLayout, region_reg: str
+    ) -> ResolvedFieldRef:
+        """Resolve a FieldLayout to a ResolvedFieldRef without a name lookup.
+
+        Used when the FieldLayout is already known (e.g. MOVE CORRESPONDING).
+        """
+        offset_reg = self.fresh_reg()
+        self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+        return ResolvedFieldRef(fl=fl, offset_reg=offset_reg)
 
     # ── Field Encode / Decode ─────────────────────────────────────
 

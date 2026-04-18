@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass, field
 
 from interpreter.cobol.condition_name import ConditionValue
-from interpreter.cobol.data_layout import FieldLayout
+from interpreter.cobol.data_layout import DataLayout, FieldLayout
 
 logger = logging.getLogger(__name__)
 
@@ -54,30 +54,30 @@ class ConditionNameIndex:
         return dict(self._entries)
 
 
-def build_condition_index(fields: dict[str, FieldLayout]) -> ConditionNameIndex:
-    """Build a condition name index from a flat field layout map.
+def build_condition_index(layout: DataLayout) -> ConditionNameIndex:
+    """Build a condition name index from a recursive DataLayout.
 
-    Iterates all fields and collects their level-88 conditions into a
-    lookup keyed by condition name.
+    Iterates all leaf fields depth-first and collects their level-88
+    conditions into a lookup keyed by condition name.
 
     Args:
-        fields: Name-to-FieldLayout mapping (from DataLayout.fields).
+        layout: DataLayout (from build_data_layout).
 
     Returns:
         A ConditionNameIndex for use in condition lowering.
     """
     entries: dict[str, ConditionEntry] = {}
 
-    for field_name, fl in fields.items():
+    for fl in layout.all_leaves():
         for condition in fl.conditions:
             entries[condition.name] = ConditionEntry(
-                parent_field_name=field_name,
+                parent_field_name=fl.name,
                 values=condition.values,
             )
             logger.debug(
                 "Indexed condition %s -> parent %s with %d values",
                 condition.name,
-                field_name,
+                fl.name,
                 len(condition.values),
             )
 
