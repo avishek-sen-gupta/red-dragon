@@ -5,9 +5,11 @@ from __future__ import annotations
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.cpp import CppFrontend
 from interpreter.frontends.java import JavaFrontend
+from interpreter.frontends.java.features import JavaFeature
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
+from tests.covers import covers
 
 
 def _parse_and_lower(source: str, language: str, frontend) -> list[InstructionBase]:
@@ -179,6 +181,7 @@ class TestCppSwitchInheritsC:
 
 
 class TestJavaSwitchLowering:
+    @covers(JavaFeature.SWITCH_STATEMENT)
     def test_java_switch_produces_binop_eq(self):
         ir = _parse_and_lower(
             """
@@ -202,6 +205,7 @@ class TestJavaSwitchLowering:
         eq_ops = [b for b in binops if "==" in b.operands]
         assert len(eq_ops) == 2
 
+    @covers(JavaFeature.SWITCH_STATEMENT)
     def test_java_switch_no_symbolic(self):
         ir = _parse_and_lower(
             """
