@@ -1830,3 +1830,36 @@ class TestJavaFinallyBlock:
         labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
         assert any("catch" in lbl for lbl in labels)
         assert any("try_finally" in lbl for lbl in labels)
+
+
+class TestJavaSpreadParameter:
+    """Varargs (T... name) parameters must be declared and bound as SYMBOLIC + DECL_VAR."""
+
+    @covers(JavaFeature.SPREAD_PARAMETER)
+    def test_varargs_param_emits_decl_var(self):
+        """int... nums must produce a DECL_VAR for 'nums' in the method body."""
+        instructions = _parse_java(
+            "class M { static int sum(int... nums) { return 0; } }"
+        )
+        decl_vars = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("nums" in inst.operands for inst in decl_vars)
+
+    @covers(JavaFeature.SPREAD_PARAMETER)
+    def test_varargs_param_emits_symbolic_with_param_hint(self):
+        """int... nums must emit a SYMBOLIC instruction with 'param:nums' hint."""
+        instructions = _parse_java(
+            "class M { static int sum(int... nums) { return 0; } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("nums" in str(inst.operands) for inst in symbolics)
+
+    @covers(JavaFeature.SPREAD_PARAMETER)
+    def test_varargs_alongside_regular_params(self):
+        """(String prefix, int... vals) must declare both 'prefix' and 'vals'."""
+        instructions = _parse_java(
+            "class M { static void show(String prefix, int... vals) { } }"
+        )
+        decl_vars = _find_all(instructions, Opcode.DECL_VAR)
+        decl_names = [str(inst.operands) for inst in decl_vars]
+        assert any("prefix" in n for n in decl_names)
+        assert any("vals" in n for n in decl_names)
