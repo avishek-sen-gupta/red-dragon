@@ -1213,6 +1213,7 @@ class Bar {
 
 
 class TestJavaScriptWithStatement:
+    @covers(JavaScriptFeature.WITH_STATEMENT)
     def test_with_statement_no_unsupported(self):
         """with (obj) { foo(); } should not produce unsupported SYMBOLIC."""
         source = "with (obj) { foo(); }"
@@ -1222,7 +1223,7 @@ class TestJavaScriptWithStatement:
 
 
 class TestJSMetaProperty:
-    @covers(JavaScriptFeature.CLASS)
+    @covers(JavaScriptFeature.NEW_TARGET)
     def test_meta_property_no_symbolic(self):
         """new.target should not produce SYMBOLIC fallthrough."""
         frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
@@ -1230,13 +1231,29 @@ class TestJSMetaProperty:
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("meta_property" in str(inst.operands) for inst in symbolics)
 
-    @covers(JavaScriptFeature.CLASS)
+    @covers(JavaScriptFeature.NEW_TARGET)
     def test_meta_property_stores_value(self):
         """new.target should be stored as a const."""
         frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
         ir = frontend.lower(b"let x = new.target;")
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
+
+    @covers(JavaScriptFeature.MODULE_METADATA)
+    def test_import_meta_no_symbolic(self):
+        """import.meta should not produce SYMBOLIC fallthrough."""
+        frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
+        ir = frontend.lower(b"let url = import.meta.url;")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("meta_property" in str(inst.operands) for inst in symbolics)
+
+    @covers(JavaScriptFeature.MODULE_METADATA)
+    def test_import_meta_stores_value(self):
+        """import.meta access should produce a stored value."""
+        frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
+        ir = frontend.lower(b"let url = import.meta.url;")
+        stores = _find_all(ir, Opcode.DECL_VAR)
+        assert any("url" in inst.operands for inst in stores)
 
 
 class TestJavaScriptForLoopUpdate:
