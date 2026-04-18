@@ -47,6 +47,7 @@ PerformSpec = Union[PerformTimesSpec, PerformUntilSpec, PerformVaryingSpec]
 # Forward reference for recursive types — resolved after all classes defined.
 CobolStatementType = Union[
     "MoveStatement",
+    "MoveCorrespondingStatement",
     "ArithmeticStatement",
     "ComputeStatement",
     "IfStatement",
@@ -100,6 +101,28 @@ class MoveStatement:
 
     def to_dict(self) -> dict:
         return {"type": "MOVE", "operands": [self.source, self.target]}
+
+
+@dataclass(frozen=True)
+class MoveCorrespondingStatement:
+    """MOVE CORRESPONDING source TO target1 [TO target2 ...]."""
+
+    source: str
+    targets: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> MoveCorrespondingStatement:
+        operands = data.get("operands", [])
+        return cls(
+            source=operands[0] if len(operands) > 0 else "",
+            targets=data.get("targets", operands[1:] if len(operands) > 1 else []),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "MOVE_CORRESPONDING", "operands": [self.source]}
+        if self.targets:
+            result["targets"] = list(self.targets)
+        return result
 
 
 @dataclass(frozen=True)
@@ -902,6 +925,7 @@ _ARITHMETIC_TYPES = frozenset({"ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"})
 
 _DISPATCH_TABLE: dict[str, type] = {
     "MOVE": MoveStatement,
+    "MOVE_CORRESPONDING": MoveCorrespondingStatement,
     "ADD": ArithmeticStatement,
     "SUBTRACT": ArithmeticStatement,
     "MULTIPLY": ArithmeticStatement,

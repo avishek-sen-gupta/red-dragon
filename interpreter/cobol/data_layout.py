@@ -110,6 +110,31 @@ class DataLayout:
         for sub in self.groups.values():
             yield from sub.all_leaves()
 
+    def all_fields(self) -> Iterator[FieldLayout]:
+        """Yield all FieldLayouts (leaf and synthesized group storage) depth-first.
+
+        For groups, synthesizes alphanumeric FieldLayout with group's byte bounds.
+        Used by the data_layout property to maintain backward compatibility.
+        """
+        yield from self.fields.values()
+        for name, grp in self.groups.items():
+            # Synthesize storage layout for the group itself
+            type_desc = CobolTypeDescriptor(
+                category=CobolDataCategory.ALPHANUMERIC,
+                total_digits=grp.total_bytes,
+            )
+            elem_size = grp.element_size if grp.element_size > 0 else grp.total_bytes
+            yield FieldLayout(
+                name=name,
+                type_descriptor=type_desc,
+                offset=grp.offset,
+                byte_length=grp.total_bytes,
+                occurs_count=grp.occurs_count,
+                element_size=elem_size,
+            )
+            # Recurse into group's children
+            yield from grp.all_fields()
+
     def lookup_as_storage(self, name: str) -> FieldLayout | None:
         """Return a FieldLayout for name, synthesizing one for groups.
 
