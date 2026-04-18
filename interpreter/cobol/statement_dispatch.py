@@ -22,6 +22,7 @@ from interpreter.cobol.cobol_statements import (
     IfStatement,
     InitializeStatement,
     InspectStatement,
+    MoveCorrespondingStatement,
     MoveStatement,
     OpenStatement,
     PerformStatement,
@@ -49,6 +50,7 @@ from interpreter.cobol.lower_arithmetic import (
     lower_if,
     lower_initialize,
     lower_move,
+    lower_move_corresponding,
     lower_set,
     lower_stop_run,
 )
@@ -88,6 +90,8 @@ def dispatch_statement(
     """Route a COBOL statement to its lowering function."""
     if isinstance(stmt, MoveStatement):
         lower_move(ctx, stmt, layout, region_reg)
+    elif isinstance(stmt, MoveCorrespondingStatement):
+        lower_move_corresponding(ctx, stmt, layout, region_reg)
     elif isinstance(stmt, ArithmeticStatement):
         lower_arithmetic(ctx, stmt, layout, region_reg)
     elif isinstance(stmt, ComputeStatement):

@@ -82,14 +82,14 @@ class SymbolTable:
     def from_data_layout(cls, layout) -> SymbolTable:
         """Convert COBOL DataLayout to a SymbolTable."""
         fields = {
-            FieldName(name): FieldInfo(
-                name=FieldName(name),
+            FieldName(fl.name): FieldInfo(
+                name=FieldName(fl.name),
                 type_hint=(
                     fl.type_descriptor.pic if hasattr(fl.type_descriptor, "pic") else ""
                 ),
                 has_initializer=bool(fl.value),
             )
-            for name, fl in layout.fields.items()
+            for fl in layout.all_leaves()
         }
         ws_class = ClassInfo(
             name=ClassName("__WORKING_STORAGE__"),

@@ -17,6 +17,7 @@ from interpreter.cobol.cobol_statements import (
     GotoStatement,
     IfStatement,
     InitializeStatement,
+    MoveCorrespondingStatement,
     MoveStatement,
     SetStatement,
     StopRunStatement,
@@ -72,6 +73,61 @@ def lower_move(
     ctx.emit_encode_and_write(
         region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg
     )
+
+
+def lower_move_corresponding(
+    ctx: EmitContext,
+    stmt: MoveCorrespondingStatement,
+    layout: DataLayout,
+    region_reg: str,
+) -> None:
+    """MOVE CORRESPONDING source TO target(s).
+
+    Moves all matching fields from source to each target based on field name matching.
+    For a field in source to be moved to a field in target, they must have the same name.
+    """
+    # Verify source exists
+    source_layout = layout.lookup_group(stmt.source)
+    if source_layout is None:
+        # Source is not a group; attempt to treat it as a field
+        if not ctx.has_field(stmt.source, layout):
+            logger.warning(
+                "MOVE CORRESPONDING source %s not found in layout", stmt.source
+            )
+            return
+        source_layout = layout
+
+    # For each target, iterate through all leaves of the source and move matching names
+    for target_name in stmt.targets:
+        # Verify target exists
+        target_layout = layout.lookup_group(target_name)
+        if target_layout is None:
+            if not ctx.has_field(target_name, layout):
+                logger.warning(
+                    "MOVE CORRESPONDING target %s not found in layout", target_name
+                )
+                continue
+            target_layout = layout
+
+        # Get all leaves in source
+        source_leaves = list(source_layout.all_leaves())
+
+        # Move each source leaf if a matching name exists in target
+        for src_fl in source_leaves:
+            src_name = src_fl.name
+            tgt_fl = target_layout.lookup(src_name)
+
+            if tgt_fl is not None:
+                # Match found; decode source and encode into target
+                src_ref = ctx.resolve_field_ref(src_name, layout, region_reg)
+                tgt_ref = ctx.resolve_field_ref(src_name, layout, region_reg)
+                decoded_reg = ctx.emit_decode_field(
+                    region_reg, src_ref.fl, src_ref.offset_reg
+                )
+                value_str_reg = ctx.emit_to_string(decoded_reg)
+                ctx.emit_encode_and_write(
+                    region_reg, tgt_ref.fl, value_str_reg, tgt_ref.offset_reg
+                )
 
 
 def lower_arithmetic(
@@ -272,7 +328,7 @@ def _leaf_fields_of(target_fl: FieldLayout, layout: DataLayout) -> list[FieldLay
 
     contained = [
         fl
-        for fl in layout.fields.values()
+        for fl in layout.all_leaves()
         if fl.name != target_fl.name
         and fl.offset >= target_start
         and fl.offset + fl.byte_length <= target_end
