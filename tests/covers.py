@@ -1,9 +1,9 @@
 # pyright: standard
-"""@covers and @no_covers decorators for annotating test methods.
+"""@covers decorator for annotating test methods with the language feature they verify.
 
 Usage::
 
-    from tests.covers import covers
+    from tests.covers import covers, FeatureStatus, NotLanguageFeature
     from interpreter.frontends.java.features import JavaFeature
 
     class TestJavaInterface:
@@ -13,13 +13,20 @@ Usage::
 
     # For tests that verify infrastructure rather than a language feature:
     class TestTypeGraph:
-        @no_covers("tests TypeGraph internal structure, not a language feature")
+        @covers(NotLanguageFeature.INFRASTRUCTURE)
         def test_type_graph_lookup(self):
             ...
 
-Both decorators are no-ops at runtime. @covers attaches feature metadata for the
-coverage audit script (scripts/feature_coverage_audit.py). @no_covers signals an
-intentional exemption from the @covers requirement.
+    # For known gaps not yet implemented:
+    class TestJSWith:
+        @pytest.mark.xfail(reason="not implemented (issue-xyz)")
+        @covers(JavaScriptFeature.WITH_STATEMENT, status=FeatureStatus.UNSUPPORTED)
+        def test_with_scope(self):
+            ...
+
+@covers is a no-op at runtime. It attaches feature metadata for the coverage audit
+script (scripts/feature_coverage_audit.py). NotLanguageFeature members are silently
+ignored by the audit — they only satisfy the covers-guard hook.
 """
 
 from __future__ import annotations
@@ -39,13 +46,26 @@ class FeatureStatus(Enum):
     UNSUPPORTED = "unsupported"
 
 
+class NotLanguageFeature(Enum):
+    """Sentinel for tests that verify infrastructure or cross-cutting concerns.
+
+    Use instead of a language-specific feature enum when the test does not
+    exercise a language feature directly (e.g. coverage tooling, type graph
+    internals, audit scripts).
+    """
+
+    INFRASTRUCTURE = (
+        "tests infrastructure or cross-cutting concerns, not a language feature"
+    )
+
+
 def covers(
     *features: Enum, status: FeatureStatus = FeatureStatus.IMPLEMENTED
 ) -> Callable[[_F], _F]:
     """Annotate a test method with the language feature(s) it primarily verifies.
 
-    Each test method should cover exactly one primary feature.  If a test
-    conflates multiple primary features, split it into separate methods.
+    Pass a language-specific ``XxxFeature`` member, or ``NotLanguageFeature.INFRASTRUCTURE``
+    for tests that don't map to a specific language feature.
 
     Use ``status=FeatureStatus.UNSUPPORTED`` (paired with ``@pytest.mark.xfail``)
     to document known gaps where the feature is not yet implemented.
@@ -55,23 +75,6 @@ def covers(
     def _decorator(func: _F) -> _F:
         func._covers = frozenset(features)  # type: ignore[attr-defined]
         func._covers_status = status  # type: ignore[attr-defined]
-        return func
-
-    return _decorator
-
-
-def no_covers(reason: str) -> Callable[[_F], _F]:
-    """Explicitly exempt a test method from the @covers requirement.
-
-    Use only for tests that verify infrastructure, utilities, or cross-cutting
-    concerns that don't map to a specific language feature enum member.
-
-    The reason string is mandatory — it documents why the exemption is justified
-    and makes intentional exemptions easy to audit (grep for no_covers).
-    """
-
-    def _decorator(func: _F) -> _F:
-        func._no_covers = reason  # type: ignore[attr-defined]
         return func
 
     return _decorator
