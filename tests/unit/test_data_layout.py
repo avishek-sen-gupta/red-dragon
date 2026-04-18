@@ -3,9 +3,11 @@
 from interpreter.cobol.asg_types import CobolField
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import build_data_layout
+from tests.covers import covers, NotLanguageFeature
 
 
 class TestBuildDataLayoutSingleField:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_single_elementary_field(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(5)", usage="DISPLAY", offset=0),
@@ -19,6 +21,7 @@ class TestBuildDataLayoutSingleField:
         assert fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
         assert fl.type_descriptor.total_digits == 5
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_comp3_field(self):
         fields = [
             CobolField(name="WS-B", level=77, pic="S9(5)V99", usage="COMP-3", offset=0),
@@ -30,6 +33,7 @@ class TestBuildDataLayoutSingleField:
         assert fl.type_descriptor.decimal_digits == 2
         assert fl.byte_length == 4  # (7 // 2) + 1
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_alphanumeric_field(self):
         fields = [
             CobolField(name="WS-C", level=77, pic="X(10)", usage="DISPLAY", offset=0),
@@ -41,6 +45,7 @@ class TestBuildDataLayoutSingleField:
 
 
 class TestBuildDataLayoutGroup:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_group_with_children(self):
         fields = [
             CobolField(
@@ -74,6 +79,7 @@ class TestBuildDataLayoutGroup:
 
 
 class TestBuildDataLayoutRedefines:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_redefines_shares_offset(self):
         fields = [
             CobolField(
@@ -112,6 +118,7 @@ class TestBuildDataLayoutRedefines:
 
 
 class TestBuildDataLayoutMultipleTopLevel:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_multiple_independent_fields(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(5)", usage="DISPLAY", offset=0),
@@ -123,6 +130,7 @@ class TestBuildDataLayoutMultipleTopLevel:
 
 
 class TestBuildDataLayoutNestedGroups:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_nested_group(self):
         fields = [
             CobolField(
@@ -174,6 +182,7 @@ class TestBuildDataLayoutNestedGroups:
 
 
 class TestBuildDataLayoutCompTypes:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_comp_field(self):
         """COMP field with PIC 9(5) -> 4 bytes (BINARY category)."""
         fields = [
@@ -185,6 +194,7 @@ class TestBuildDataLayoutCompTypes:
         assert fl.type_descriptor.total_digits == 5
         assert fl.byte_length == 4
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_comp1_field_no_pic(self):
         """COMP-1 field has no PIC clause -> 4 bytes (single float)."""
         fields = [
@@ -195,6 +205,7 @@ class TestBuildDataLayoutCompTypes:
         assert fl.type_descriptor.category == CobolDataCategory.COMP1
         assert fl.byte_length == 4
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_comp2_field_no_pic(self):
         """COMP-2 field has no PIC clause -> 8 bytes (double float)."""
         fields = [
@@ -205,6 +216,7 @@ class TestBuildDataLayoutCompTypes:
         assert fl.type_descriptor.category == CobolDataCategory.COMP2
         assert fl.byte_length == 8
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_comp5_field(self):
         """COMP-5 field with PIC 9(4) -> 2 bytes (BINARY category)."""
         fields = [
@@ -217,6 +229,7 @@ class TestBuildDataLayoutCompTypes:
 
 
 class TestBuildDataLayoutOccursDependingOn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_occurs_depending_on_uses_max_storage(self):
         """OCCURS DEPENDING ON allocates max (n) elements in layout."""
         fields = [
@@ -239,6 +252,7 @@ class TestBuildDataLayoutOccursDependingOn:
         assert fl.occurs_depending_on == "WS-COUNT"
         assert fl.occurs_min == 1
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_occurs_depending_on_propagated(self):
         """OCCURS DEPENDING ON fields propagate through layout."""
         fields = [
@@ -278,6 +292,7 @@ class TestBuildDataLayoutOccursDependingOn:
 
 
 class TestBuildDataLayoutSignClause:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_sign_separate_adds_one_byte(self):
         """SIGN IS TRAILING SEPARATE adds 1 byte to zoned decimal storage."""
         fields = [
@@ -298,6 +313,7 @@ class TestBuildDataLayoutSignClause:
         assert fl.byte_length == 6  # 5 digits + 1 sign byte
         assert fl.type_descriptor.byte_length == 6
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_sign_leading_separate_adds_one_byte(self):
         """SIGN IS LEADING SEPARATE adds 1 byte."""
         fields = [
@@ -317,6 +333,7 @@ class TestBuildDataLayoutSignClause:
         assert fl.sign_separate is True
         assert fl.sign_leading is True
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_sign_leading_embedded_same_size(self):
         """SIGN IS LEADING (no SEPARATE) — same byte length as trailing embedded."""
         fields = [
@@ -336,6 +353,7 @@ class TestBuildDataLayoutSignClause:
 
 
 class TestBuildDataLayoutRenames:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_simple_renames(self):
         """Level 66 RENAMES single field — offset and length match the target."""
         fields = [
@@ -380,6 +398,7 @@ class TestBuildDataLayoutRenames:
         # RENAMES does not increase total_bytes
         assert layout.total_bytes == 20
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_renames_thru(self):
         """Level 66 RENAMES A THRU C — offset = A.offset, length spans through C."""
         fields = [
@@ -434,6 +453,7 @@ class TestBuildDataLayoutRenames:
 
 
 class TestBuildDataLayoutBlankWhenZero:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_blank_when_zero_propagated_to_type_descriptor(self):
         """BLANK WHEN ZERO field has blank_when_zero=True on type descriptor."""
         fields = [
@@ -451,6 +471,7 @@ class TestBuildDataLayoutBlankWhenZero:
         assert fl.type_descriptor.blank_when_zero is True
         assert fl.byte_length == 5  # storage unchanged
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_blank_when_zero_false_by_default(self):
         """Fields without BLANK WHEN ZERO have blank_when_zero=False."""
         fields = [
@@ -468,6 +489,7 @@ class TestBuildDataLayoutBlankWhenZero:
 
 
 class TestBuildDataLayoutFieldValue:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_field_with_initial_value(self):
         fields = [
             CobolField(
@@ -481,3 +503,229 @@ class TestBuildDataLayoutFieldValue:
         ]
         layout = build_data_layout(fields)
         assert layout.fields["WS-CTR"].value == "0"
+
+
+class TestBuildDataLayoutMoveCorresponding:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_lookup_group_returns_datalayout(self):
+        """lookup_group('WS-SRC') returns a DataLayout with direct leaf fields."""
+        fields = [
+            CobolField(
+                name="WS-SRC",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-A", level=5, pic="X(5)", usage="DISPLAY", offset=0
+                    ),
+                    CobolField(
+                        name="WS-B", level=5, pic="X(5)", usage="DISPLAY", offset=5
+                    ),
+                ],
+            ),
+            CobolField(
+                name="WS-DST",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-A", level=5, pic="X(5)", usage="DISPLAY", offset=0
+                    ),
+                    CobolField(
+                        name="WS-C", level=5, pic="X(5)", usage="DISPLAY", offset=5
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        src = layout.lookup_group("WS-SRC")
+        dst = layout.lookup_group("WS-DST")
+        assert "WS-A" in src.fields
+        assert "WS-B" in src.fields
+        assert "WS-A" in dst.fields
+        assert "WS-C" in dst.fields
+        matching = src.fields.keys() & dst.fields.keys()
+        assert matching == {"WS-A"}
+        assert "WS-B" not in dst.fields
+        assert "WS-C" not in src.fields
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_no_flat_dict_collision_same_child_name(self):
+        """WS-SRC.WS-A and WS-DST.WS-A do not overwrite each other."""
+        fields = [
+            CobolField(
+                name="WS-SRC",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-A", level=5, pic="X(3)", usage="DISPLAY", offset=0
+                    ),
+                ],
+            ),
+            CobolField(
+                name="WS-DST",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=3,
+                children=[
+                    CobolField(
+                        name="WS-A", level=5, pic="9(4)", usage="DISPLAY", offset=0
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        src_a = layout.lookup_group("WS-SRC").fields["WS-A"]
+        dst_a = layout.lookup_group("WS-DST").fields["WS-A"]
+        assert src_a.byte_length == 3
+        assert dst_a.byte_length == 4
+        assert src_a.offset == 0
+        assert dst_a.offset == 3
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_lookup_returns_leaf_by_name(self):
+        fields = [
+            CobolField(
+                name="WS-REC",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-X", level=5, pic="9(2)", usage="DISPLAY", offset=0
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.lookup("WS-X")
+        assert fl is not None
+        assert fl.name == "WS-X"
+        assert fl.byte_length == 2
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_all_leaves_yields_elementary_fields(self):
+        fields = [
+            CobolField(
+                name="WS-REC",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-X", level=5, pic="9(2)", usage="DISPLAY", offset=0
+                    ),
+                    CobolField(
+                        name="WS-Y", level=5, pic="X(3)", usage="DISPLAY", offset=2
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        leaves = list(layout.all_leaves())
+        names = {fl.name for fl in leaves}
+        assert names == {"WS-X", "WS-Y"}
+
+
+class TestBuildDataLayoutRedefinesComplex:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_multiple_redefines_of_same_field(self):
+        """B REDEFINES A, C REDEFINES A — both at A's offset; total_bytes unchanged."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="X(4)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="WS-B",
+                level=77,
+                pic="9(4)",
+                usage="DISPLAY",
+                offset=0,
+                redefines="WS-A",
+            ),
+            CobolField(
+                name="WS-C",
+                level=77,
+                pic="X(4)",
+                usage="DISPLAY",
+                offset=0,
+                redefines="WS-A",
+            ),
+        ]
+        layout = build_data_layout(fields)
+        assert layout.total_bytes == 4
+        a = layout.lookup("WS-A")
+        b = layout.lookup("WS-B")
+        c = layout.lookup("WS-C")
+        assert a is not None and a.offset == 0
+        assert b is not None and b.offset == 0
+        assert c is not None and c.offset == 0
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_chained_redefines(self):
+        """A, B REDEFINES A, C REDEFINES B — C ends up at A's offset."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="X(4)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="WS-B",
+                level=77,
+                pic="9(4)",
+                usage="DISPLAY",
+                offset=0,
+                redefines="WS-A",
+            ),
+            CobolField(
+                name="WS-C",
+                level=77,
+                pic="X(4)",
+                usage="DISPLAY",
+                offset=0,
+                redefines="WS-B",
+            ),
+        ]
+        layout = build_data_layout(fields)
+        assert layout.total_bytes == 4
+        assert layout.lookup("WS-C").offset == 0  # type: ignore[union-attr]
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_group_redefines_elementary(self):
+        """A group B REDEFINES an elementary A — group gets A's offset."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="X(4)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="WS-B",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                redefines="WS-A",
+                children=[
+                    CobolField(
+                        name="WS-B1",
+                        level=5,
+                        pic="X(2)",
+                        usage="DISPLAY",
+                        offset=0,
+                    ),
+                    CobolField(
+                        name="WS-B2",
+                        level=5,
+                        pic="X(2)",
+                        usage="DISPLAY",
+                        offset=2,
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        assert layout.total_bytes == 4
+        b_layout = layout.lookup_group("WS-B")
+        assert b_layout.offset == 0
