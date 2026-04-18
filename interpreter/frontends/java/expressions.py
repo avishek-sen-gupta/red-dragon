@@ -617,7 +617,10 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 )
                 ctx.seed_var_type(pname, type_hint)
         elif child.type == JavaNodeType.SPREAD_PARAMETER:
-            name_node = child.child_by_field_name("name")
+            var_decl = next(
+                (c for c in child.children if c.type == "variable_declarator"), None
+            )
+            name_node = var_decl.child_by_field_name("name") if var_decl else None
             if name_node:
                 pname = ctx.node_text(name_node)
                 ctx.emit_inst(

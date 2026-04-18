@@ -680,3 +680,35 @@ try {
 """
         _, locals_ = _run_java(source, max_steps=200)
         assert locals_[VarName("x")] == 101
+
+
+class TestJavaSpreadParameterExecution:
+    """Varargs methods must be callable and their bodies must execute correctly."""
+
+    @covers(JavaFeature.SPREAD_PARAMETER)
+    def test_varargs_method_body_executes(self):
+        """A varargs method that returns a constant must return that constant when called."""
+        source = """\
+class M {
+    static int sum(int... nums) {
+        return 42;
+    }
+    static int result = sum(1, 2, 3);
+}
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("result")] == 42
+
+    @covers(JavaFeature.SPREAD_PARAMETER)
+    def test_varargs_zero_args_call(self):
+        """Calling a varargs method with zero arguments must still execute the body."""
+        source = """\
+class M {
+    static int echo(String... args) {
+        return 7;
+    }
+    static int result = echo();
+}
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_[VarName("result")] == 7
