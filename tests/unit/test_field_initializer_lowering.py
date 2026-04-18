@@ -179,6 +179,7 @@ class Counter {
         assert init_idx < body_idx
 
     @covers(JavaFeature.FIELD_INITIALIZATION)
+    @covers(JavaFeature.FIELD_DECLARATION)
     def test_field_without_initializer_not_emitted(self):
         """Field declarations without initializers (e.g., int count;) should not produce STORE_FIELD."""
         ir = _parse(
