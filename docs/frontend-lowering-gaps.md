@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 951 features across 16 languages — 742 covered, 209 uncovered
+**Totals**: 951 features across 16 languages — 743 covered, 208 uncovered
 
 ---
 
@@ -13,7 +13,7 @@
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
 | c | 48 | 33 | 15 ⚠ | 68% |
-| cobol | 107 | 88 | 19 ⚠ | 82% |
+| cobol | 107 | 89 | 18 ⚠ | 83% |
 | cpp | 84 | 38 | 46 ⚠ | 45% |
 | csharp | 94 | 71 | 23 ⚠ | 75% |
 | go | 44 | 41 | 3 ⚠ | 93% |
@@ -53,7 +53,6 @@
 
 ### cobol
 
-- `CONDITION_VALUES_THRU` — 88-level VALUE x THRU y range condition name clauses
 - `FIGURATIVE_HIGH_VALUES` — HIGH-VALUES figurative constant for maximum binary value
 - `FIGURATIVE_LOW_VALUES` — LOW-VALUES figurative constant for minimum binary value
 - `FIGURATIVE_QUOTES` — QUOTES figurative constant for quotation characters
