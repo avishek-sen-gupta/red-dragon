@@ -1748,3 +1748,49 @@ class TestInlineCommentsInExpressions:
         assert "||" in binop_ops, "comment should not prevent || from lowering"
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("comment" in str(s.operands) for s in symbolics)
+
+
+class TestJavaNoOpDeclarations:
+    """IMPORT_DECLARATION, PACKAGE_DECLARATION, and MODULE_DECLARATION are
+    intentional no-ops: they carry no executable semantics.  Imports are
+    compile-time hints; packages and module directives are metadata for the
+    module system.  The multi-file linker resolves cross-unit symbols via the
+    SymbolTable, not by interpreting these nodes at runtime.  These tests
+    assert that the frontend silently discards the nodes without emitting
+    SYMBOLIC fallbacks or raising errors.
+    """
+
+    @covers(JavaFeature.IMPORT_DECLARATION)
+    def test_import_declaration_emits_no_ir(self):
+        """import statements are silently discarded — no-op by design."""
+        ir = _parse_java("import java.util.List;\nimport java.util.Map;\nint x = 1;")
+        assert not any(
+            inst.opcode == Opcode.SYMBOLIC for inst in ir
+        ), "import declarations must not produce SYMBOLIC fallbacks"
+        decl_vars = _find_all(ir, Opcode.DECL_VAR)
+        assert len(decl_vars) == 1, "only the int x declaration should appear"
+
+    @covers(JavaFeature.PACKAGE_DECLARATION)
+    def test_package_declaration_emits_no_ir(self):
+        """package declarations are silently discarded — no-op by design."""
+        ir = _parse_java("package com.example.myapp;\nint x = 1;")
+        assert not any(
+            inst.opcode == Opcode.SYMBOLIC for inst in ir
+        ), "package declarations must not produce SYMBOLIC fallbacks"
+        decl_vars = _find_all(ir, Opcode.DECL_VAR)
+        assert len(decl_vars) == 1, "only the int x declaration should appear"
+
+    @covers(JavaFeature.MODULE_DECLARATION)
+    def test_module_declaration_emits_no_ir(self):
+        """module-info.java module declarations are silently discarded — no-op by design.
+        Module directives (requires, exports) are Java 9+ module system metadata
+        with no runtime execution semantics.
+        """
+        ir = _parse_java("module com.example.myapp { requires java.base; }")
+        assert not any(
+            inst.opcode == Opcode.SYMBOLIC for inst in ir
+        ), "module declarations must not produce SYMBOLIC fallbacks"
+        non_label = [inst for inst in ir if inst.opcode != Opcode.LABEL]
+        assert (
+            non_label == []
+        ), "module-info content should produce no executable IR beyond the entry label"
