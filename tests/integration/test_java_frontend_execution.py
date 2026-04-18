@@ -168,6 +168,7 @@ int b = p.y;
         assert locals_[VarName("b")] == 5
 
     @covers(JavaFeature.RECORD)
+    @covers(JavaFeature.COMPACT_CONSTRUCTOR)
     def test_compact_constructor_with_validation(self):
         """Compact constructor body runs before field assignment."""
         source = """\
