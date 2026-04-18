@@ -1190,6 +1190,38 @@ class TestTier1Lowering:
         assert len(writes) >= 4  # 2 initial values + 2 INITIALIZE resets
 
     @covers(
+        CobolFeature.INITIALIZE,
+        CobolFeature.GROUP_ITEM,
+        CobolFeature.PIC_CLAUSE,
+        CobolFeature.USAGE_DISPLAY,
+    )
+    def test_initialize_group_item_emits_write_per_child(self):
+        """INITIALIZE on a group item emits one WRITE_REGION per leaf child."""
+        fields = [
+            CobolField(
+                name="WS-GROUP",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-A", level=5, pic="9(3)", usage="DISPLAY", offset=0
+                    ),
+                    CobolField(
+                        name="WS-B", level=5, pic="X(3)", usage="DISPLAY", offset=3
+                    ),
+                ],
+            ),
+        ]
+        stmts = [InitializeStatement(operands=["WS-GROUP"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        # One WRITE_REGION per child (no initial VALUE clauses here)
+        assert len(writes) >= 2
+
+    @covers(
         CobolFeature.SET_TO,
         CobolFeature.PIC_CLAUSE,
         CobolFeature.VALUE_CLAUSE,
