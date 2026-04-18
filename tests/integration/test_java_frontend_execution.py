@@ -632,3 +632,51 @@ class M {
 """
         _, locals_ = _run_java(source, max_steps=200)
         assert locals_[VarName("result")] == 42
+
+
+class TestJavaFinallyExecution:
+    """Finally blocks must execute and their side-effects must be visible."""
+
+    @covers(JavaFeature.FINALLY)
+    def test_finally_overwrites_try_value(self):
+        """finally { x = 2; } must overwrite the try body assignment x = 1."""
+        source = """\
+int x = 0;
+try {
+    x = 1;
+} finally {
+    x = 2;
+}
+"""
+        _, locals_ = _run_java(source, max_steps=200)
+        assert locals_[VarName("x")] == 2
+
+    @covers(JavaFeature.FINALLY)
+    def test_finally_increments_try_value(self):
+        """finally { x = x + 1; } must see the try body value and produce x = 11."""
+        source = """\
+int x = 0;
+try {
+    x = 10;
+} finally {
+    x = x + 1;
+}
+"""
+        _, locals_ = _run_java(source, max_steps=200)
+        assert locals_[VarName("x")] == 11
+
+    @covers(JavaFeature.FINALLY)
+    def test_finally_runs_after_catch(self):
+        """finally { x = x + 100; } must run after the catch block sets x = 1."""
+        source = """\
+int x = 0;
+try {
+    x = 1;
+} catch (Exception e) {
+    x = 99;
+} finally {
+    x = x + 100;
+}
+"""
+        _, locals_ = _run_java(source, max_steps=200)
+        assert locals_[VarName("x")] == 101
