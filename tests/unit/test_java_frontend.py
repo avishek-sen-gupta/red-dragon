@@ -685,23 +685,23 @@ class TestJavaIntegerLiterals:
 
 
 class TestJavaCharacterLiterals:
-    """Character literals must be lowered to a CONST with the raw quoted text."""
+    """Character literals must be lowered to a CONST with their integer ordinal value."""
 
     @covers(JavaFeature.CHARACTER_LITERAL)
     def test_plain_char_literal(self):
         instructions = _parse_java("class M { void m() { char c = 'a'; } }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            inst.value == "'a'" for inst in consts
-        ), f"Expected CONST \"'a'\", got: {[i.value for i in consts]}"
+            inst.value == "97" for inst in consts
+        ), f"Expected CONST '97' (ord('a')), got: {[i.value for i in consts]}"
 
     @covers(JavaFeature.CHARACTER_LITERAL)
     def test_escape_char_literal(self):
         instructions = _parse_java(r"class M { void m() { char c = '\n'; } }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "\\n" in inst.value for inst in consts
-        ), f"Expected CONST with escape sequence, got: {[i.value for i in consts]}"
+            inst.value == "10" for inst in consts
+        ), f"Expected CONST '10' (ord('\\n')), got: {[i.value for i in consts]}"
 
     @covers(JavaFeature.CHARACTER_LITERAL)
     def test_char_literal_no_symbolic_fallback(self):
