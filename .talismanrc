@@ -138,7 +138,7 @@ fileignoreconfig:
 - filename: .beads/backup/backup_state.json
   checksum: 979f62fa04f2f0e8c0e17d53a87c08e23a4dba6a94e991e35a6c5800dec388fe
 - filename: .beads/backup/issues.jsonl
-  checksum: d244287dc54bd1cb64cee800e697337ac7c6003cac10fc9e7f673e2954ba1d08
+  checksum: cc9c8ab2bd5bcba49cfa2c8b887d7664eae77b28d22a5d44da4fa082eeb21002
 - filename: .beads/backup/config.jsonl
   checksum: 6272a10b8d746764bbeaf4d2abfe759ac7491508b9c51264a9d4f5480b394c53
 - filename: scripts/redact-beads-issues
@@ -172,6 +172,5 @@ fileignoreconfig:
   checksum: f9f55752132ae079e1f16ddff9d3ff659a8a8c25d74c1f6240ead6c7efc638a4
 - filename: docs/superpowers/plans/2026-04-18-move-corresponding-recursive-datalayout.md
   checksum: cd3cec2b150c17edb08edd4b55f84545d9662a677bc07e293c1a9f318ceab3ad
-- filename: .beads/backup/issues.jsonl
-  checksum: 7d2b82ad06d041d01dde497abe337015712479051decedc63121665b6566d2f4
+
 version: "1.0"
