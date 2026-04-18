@@ -1832,6 +1832,37 @@ class TestJavaFinallyBlock:
         assert any("try_finally" in lbl for lbl in labels)
 
 
+class TestJavaSwitchRule:
+    """Arrow-form case labels (case X ->) in switch expressions."""
+
+    @covers(JavaFeature.SWITCH_RULE)
+    def test_switch_rule_emits_branch_if(self):
+        """Arrow-form cases must emit BRANCH_IF for each case value."""
+        instructions = _parse_java(
+            "class M { static int f(int x) { return switch (x) { case 1 -> 10; default -> 99; }; } }"
+        )
+        branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branch_ifs) >= 1
+
+    @covers(JavaFeature.SWITCH_RULE)
+    def test_switch_rule_emits_switch_end_label(self):
+        """Arrow-form switch must emit a switch_end label."""
+        instructions = _parse_java(
+            "class M { static int f(int x) { return switch (x) { case 1 -> 10; default -> 99; }; } }"
+        )
+        labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
+        assert any("switch_end" in lbl for lbl in labels)
+
+    @covers(JavaFeature.SWITCH_RULE)
+    def test_switch_rule_default_arm_reachable(self):
+        """Arrow-form switch with default must emit a case_arm label for the default."""
+        instructions = _parse_java(
+            "class M { static int f(int x) { return switch (x) { case 1 -> 10; default -> 99; }; } }"
+        )
+        labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
+        assert any("case_arm" in lbl for lbl in labels)
+
+
 class TestJavaSpreadParameter:
     """Varargs (T... name) parameters must be lowered as slice(arguments, idx)."""
 

@@ -730,3 +730,61 @@ class M {
 """
         _, locals_ = _run_java(source, max_steps=500)
         assert locals_[VarName("result")] == 60
+
+
+class TestJavaSwitchRuleExecution:
+    """Arrow-form case labels (case X ->) in switch expressions."""
+
+    @covers(JavaFeature.SWITCH_RULE)
+    def test_switch_rule_matches_case(self):
+        """Arrow-form switch returns the matched arm value."""
+        source = """\
+class M {
+    static int classify(int x) {
+        return switch (x) {
+            case 1 -> 10;
+            case 2 -> 20;
+            default -> 99;
+        };
+    }
+    static int result = classify(2);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 20
+
+    @covers(JavaFeature.SWITCH_RULE)
+    def test_switch_rule_falls_to_default(self):
+        """Arrow-form switch returns default when no case matches."""
+        source = """\
+class M {
+    static int classify(int x) {
+        return switch (x) {
+            case 1 -> 10;
+            case 2 -> 20;
+            default -> 99;
+        };
+    }
+    static int result = classify(42);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 99
+
+    @covers(JavaFeature.SWITCH_RULE)
+    def test_switch_rule_first_case(self):
+        """Arrow-form switch returns correct value for the first case."""
+        source = """\
+class M {
+    static int classify(int x) {
+        return switch (x) {
+            case 1 -> 10;
+            case 2 -> 20;
+            default -> 99;
+        };
+    }
+    static int result = classify(1);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 10
