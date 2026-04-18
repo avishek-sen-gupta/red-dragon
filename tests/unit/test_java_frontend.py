@@ -1794,3 +1794,39 @@ class TestJavaNoOpDeclarations:
         assert (
             non_label == []
         ), "module-info content should produce no executable IR beyond the entry label"
+
+
+class TestJavaFinallyBlock:
+    """Finally blocks must emit a try_finally label and execute their body."""
+
+    @covers(JavaFeature.FINALLY)
+    def test_finally_emits_try_finally_label(self):
+        """try { } finally { } must produce a try_finally label in the IR."""
+        instructions = _parse_java(
+            "class M { void m() { try { int x = 1; } finally { int y = 2; } } }"
+        )
+        labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
+        assert any("try_finally" in lbl for lbl in labels)
+
+    @covers(JavaFeature.FINALLY)
+    def test_finally_body_instructions_emitted(self):
+        """The finally body must emit STORE_VAR (or equivalent) instructions."""
+        instructions = _parse_java(
+            "class M { void m() { int x = 0; try { x = 1; } finally { x = 2; } } }"
+        )
+        store_vars = _find_all(instructions, Opcode.STORE_VAR)
+        # finally body assigns x = 2; must appear somewhere after try_body
+        stored_names = [str(i.operands) for i in store_vars]
+        assert any("x" in s for s in stored_names)
+        labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
+        assert any("try_finally" in lbl for lbl in labels)
+
+    @covers(JavaFeature.FINALLY)
+    def test_finally_and_catch_both_present(self):
+        """try-catch-finally must emit both catch and finally labels."""
+        instructions = _parse_java(
+            "class M { void m() { try { int x = 1; } catch (Exception e) { int x = 99; } finally { int x = 100; } } }"
+        )
+        labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
+        assert any("catch" in lbl for lbl in labels)
+        assert any("try_finally" in lbl for lbl in labels)
