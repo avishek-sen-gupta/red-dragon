@@ -31,15 +31,30 @@ from typing import TypeVar
 _F = TypeVar("_F", bound=Callable[..., object])
 
 
-def covers(*features: Enum) -> Callable[[_F], _F]:
+class FeatureStatus(Enum):
+    """Implementation status of a covered feature."""
+
+    IMPLEMENTED = "implemented"
+    PARTIAL = "partial"
+    UNSUPPORTED = "unsupported"
+
+
+def covers(
+    *features: Enum, status: FeatureStatus = FeatureStatus.IMPLEMENTED
+) -> Callable[[_F], _F]:
     """Annotate a test method with the language feature(s) it primarily verifies.
 
     Each test method should cover exactly one primary feature.  If a test
     conflates multiple primary features, split it into separate methods.
+
+    Use ``status=FeatureStatus.UNSUPPORTED`` (paired with ``@pytest.mark.xfail``)
+    to document known gaps where the feature is not yet implemented.
+    Use ``status=FeatureStatus.PARTIAL`` for features that are partially implemented.
     """
 
     def _decorator(func: _F) -> _F:
         func._covers = frozenset(features)  # type: ignore[attr-defined]
+        func._covers_status = status  # type: ignore[attr-defined]
         return func
 
     return _decorator
