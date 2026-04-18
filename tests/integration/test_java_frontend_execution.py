@@ -385,3 +385,64 @@ class M {
 """
         _, locals_ = _run_java(source)
         assert locals_[VarName("greeting")] == "hello"
+
+
+class TestJavaCharacterLiteralExecution:
+    """Character literals must evaluate to their integer ordinal value."""
+
+    @covers(JavaFeature.CHARACTER_LITERAL)
+    def test_char_literal_ordinal(self):
+        """'a' should evaluate to 97."""
+        source = """\
+class M {
+    static int result = 'a';
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 97
+
+    @covers(JavaFeature.CHARACTER_LITERAL)
+    def test_char_arithmetic(self):
+        """'c' + 10 should evaluate to 109 (99 + 10)."""
+        source = """\
+class M {
+    static int result = 'c' + 10;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 109
+
+    @covers(JavaFeature.CHARACTER_LITERAL)
+    def test_char_subtraction(self):
+        """'z' - 'a' should evaluate to 25."""
+        source = """\
+class M {
+    static int result = 'z' - 'a';
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 25
+
+    @covers(JavaFeature.CHARACTER_LITERAL)
+    def test_char_variable_in_arithmetic(self):
+        """A char field used in a later expression should propagate its ordinal."""
+        source = """\
+class M {
+    static char x = 'A';
+    static int y = x + 1;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("x")] == 65
+        assert locals_[VarName("y")] == 66
+
+    @covers(JavaFeature.CHARACTER_LITERAL)
+    def test_escape_char_ordinal(self):
+        """Escape character '\\t' should evaluate to ordinal 9."""
+        source = """\
+class M {
+    static int result = '\t';
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 9
