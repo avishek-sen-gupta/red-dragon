@@ -48,8 +48,11 @@ import io.proleap.cobol.asg.metamodel.procedure.cancel.CancelStatement;
 import io.proleap.cobol.asg.metamodel.procedure.close.CloseStatement;
 import io.proleap.cobol.asg.metamodel.procedure.entry.EntryStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveStatement;
+import io.proleap.cobol.asg.metamodel.procedure.move.MoveStatement.MoveType;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToSendingArea;
+import io.proleap.cobol.asg.metamodel.procedure.move.MoveCorrespondingToStatetement;
+import io.proleap.cobol.asg.metamodel.procedure.move.MoveCorrespondingToSendingArea;
 import io.proleap.cobol.asg.metamodel.procedure.multiply.ByOperand;
 import io.proleap.cobol.asg.metamodel.procedure.multiply.MultiplyStatement;
 import io.proleap.cobol.asg.metamodel.procedure.perform.PerformStatement;
@@ -165,6 +168,28 @@ public final class StatementSerializer {
     }
 
     private static JsonObject serializeMove(MoveStatement stmt) {
+        // Handle MOVE CORRESPONDING separately
+        if (stmt.getMoveType() == MoveType.MOVE_CORRESPONDING) {
+            JsonObject obj = newStatement("MOVE_CORRESPONDING");
+            MoveCorrespondingToStatetement corr = stmt.getMoveCorrespondingToStatement();
+            if (corr != null) {
+                MoveCorrespondingToSendingArea sendingArea = corr.getMoveToCorrespondingSendingArea();
+                if (sendingArea != null) {
+                    Call sourceCall = sendingArea.getSendingAreaCall();
+                    if (sourceCall != null) {
+                        obj.addProperty("source", extractCallName(sourceCall));
+                    }
+                }
+                JsonArray targets = new JsonArray();
+                for (Call receivingCall : corr.getReceivingAreaCalls()) {
+                    targets.add(extractCallName(receivingCall));
+                }
+                obj.add("targets", targets);
+            }
+            return obj;
+        }
+
+        // Handle MOVE TO (existing logic)
         JsonObject obj = newStatement("MOVE");
         JsonArray operands = new JsonArray();
 
