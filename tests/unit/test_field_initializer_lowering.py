@@ -16,10 +16,12 @@ import pytest
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.frontends.java import JavaFrontend
+from interpreter.frontends.java.features import JavaFeature
 from interpreter.frontends.csharp import CSharpFrontend
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.frontends.scala import ScalaFrontend
 from interpreter.parser import TreeSitterParserFactory
+from tests.covers import covers
 
 
 def _parse(language: str, source: str) -> list[InstructionBase]:
@@ -107,6 +109,7 @@ def _has_store_var_at_top_level_for_field(
 
 
 class TestJavaFieldInitializers:
+    @covers(JavaFeature.FIELD_INITIALIZATION)
     def test_field_init_emitted_as_store_field_in_constructor(self):
         """int count = 0 inside a class should produce STORE_FIELD in __init__."""
         ir = _parse(
@@ -119,6 +122,7 @@ class Counter {
         )
         assert _has_store_field_in_constructor(ir, "count")
 
+    @covers(JavaFeature.FIELD_INITIALIZATION)
     def test_field_init_not_emitted_as_top_level_store_var(self):
         """Field initializers should NOT be top-level STORE_VAR."""
         ir = _parse(
@@ -131,6 +135,7 @@ class Counter {
         )
         assert not _has_store_var_at_top_level_for_field(ir, "count")
 
+    @covers(JavaFeature.FIELD_INITIALIZATION)
     def test_multiple_field_inits_all_in_constructor(self):
         """Multiple field initializers should all appear in __init__."""
         ir = _parse(
@@ -145,6 +150,7 @@ class Point {
         assert _has_store_field_in_constructor(ir, "x")
         assert _has_store_field_in_constructor(ir, "y")
 
+    @covers(JavaFeature.FIELD_INITIALIZATION)
     def test_field_inits_prepended_to_explicit_constructor(self):
         """Field initializers should appear BEFORE the explicit constructor body."""
         ir = _parse(
@@ -172,6 +178,7 @@ class Counter {
         body_idx = store_fields[1][0]
         assert init_idx < body_idx
 
+    @covers(JavaFeature.FIELD_INITIALIZATION)
     def test_field_without_initializer_not_emitted(self):
         """Field declarations without initializers (e.g., int count;) should not produce STORE_FIELD."""
         ir = _parse(

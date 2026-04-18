@@ -116,6 +116,7 @@ class M {
 
 class TestJavaSwitchGuard:
     @covers(JavaFeature.TYPE_PATTERN)
+    @covers(JavaFeature.PATTERN_GUARD)
     def test_guard_filters_match(self):
         local_vars = _run_java(
             """\
@@ -134,6 +135,7 @@ class M {
         assert local_vars[VarName("result")] == "short"
 
     @covers(JavaFeature.TYPE_PATTERN)
+    @covers(JavaFeature.PATTERN_GUARD)
     def test_guard_passes(self):
         local_vars = _run_java(
             """\
