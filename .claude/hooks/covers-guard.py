@@ -13,7 +13,7 @@ import json
 import os
 import sys
 
-_VALID_DECORATOR_NAMES = frozenset({"covers", "no_covers"})
+_VALID_DECORATOR_NAMES = frozenset({"covers"})
 
 
 def has_valid_decorator(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -69,7 +69,7 @@ def main() -> None:
             file=sys.stderr,
         )
         print(
-            '(e.g. GoFeature.TYPE_ALIAS, RustFeature.TYPE_ITEM) — or @no_covers("reason") for non-language-feature tests.',
+            "(e.g. GoFeature.TYPE_ALIAS, RustFeature.TYPE_ITEM) — or @covers(NotLanguageFeature.INFRASTRUCTURE) for non-language-feature tests.",
             file=sys.stderr,
         )
         print(
