@@ -3,9 +3,11 @@
 from interpreter.cobol.asg_types import CobolField
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import build_data_layout
+from tests.covers import covers, NotLanguageFeature
 
 
 class TestElementaryOccurs:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_elementary_occurs_multiplies_length(self):
         """PIC 9(4) OCCURS 5 → byte_length=20, element_size=4, occurs_count=5."""
         fields = [
@@ -21,11 +23,13 @@ class TestElementaryOccurs:
         ]
         layout = build_data_layout(fields)
         assert layout.total_bytes == 20
-        fl = layout.fields["WS-TBL"]
+        fl = layout.lookup("WS-TBL")
+        assert fl is not None
         assert fl.byte_length == 20
         assert fl.occurs_count == 5
         assert fl.element_size == 4
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_non_occurs_field_unaffected(self):
         """Non-OCCURS fields retain normal byte_length."""
         fields = [
@@ -38,10 +42,12 @@ class TestElementaryOccurs:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-PLAIN"]
+        fl = layout.lookup("WS-PLAIN")
+        assert fl is not None
         assert fl.byte_length == 4
         assert fl.occurs_count == 0
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_occurs_with_following_field(self):
         """OCCURS field followed by a non-OCCURS field gets correct offsets."""
         fields = [
@@ -64,11 +70,12 @@ class TestElementaryOccurs:
         ]
         layout = build_data_layout(fields)
         assert layout.total_bytes == 14  # 4*3 + 2
-        assert layout.fields["WS-TBL"].byte_length == 12
-        assert layout.fields["WS-AFTER"].byte_length == 2
+        assert layout.lookup("WS-TBL").byte_length == 12  # type: ignore[union-attr]
+        assert layout.lookup("WS-AFTER").byte_length == 2  # type: ignore[union-attr]
 
 
 class TestGroupOccurs:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_group_occurs_multiplies_total(self):
         """Group item with OCCURS 3 containing 2-byte child → 6 bytes total."""
         fields = [
@@ -93,15 +100,19 @@ class TestGroupOccurs:
         ]
         layout = build_data_layout(fields)
         assert layout.total_bytes == 6
-        assert layout.fields["WS-GROUP"].byte_length == 6
-        assert layout.fields["WS-GROUP"].occurs_count == 3
-        assert layout.fields["WS-GROUP"].element_size == 2
-        # Child field has its own layout (first element)
-        assert layout.fields["WS-ITEM"].byte_length == 2
-        assert layout.fields["WS-ITEM"].offset == 0
+        grp = layout.lookup_group("WS-GROUP")
+        assert grp.total_bytes == 6
+        assert grp.occurs_count == 3
+        assert grp.element_size == 2
+        # Child field
+        item = layout.lookup("WS-ITEM")
+        assert item is not None
+        assert item.byte_length == 2
+        assert item.offset == 0
 
 
 class TestCobolFieldOccursSerialization:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_from_dict_with_occurs(self):
         """CobolField.from_dict correctly parses occurs and element_size."""
         data = {
@@ -117,6 +128,7 @@ class TestCobolFieldOccursSerialization:
         assert field.occurs == 5
         assert field.element_size == 4
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_from_dict_without_occurs(self):
         """CobolField.from_dict defaults occurs to 0."""
         data = {
@@ -130,6 +142,7 @@ class TestCobolFieldOccursSerialization:
         assert field.occurs == 0
         assert field.element_size == 0
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_to_dict_with_occurs(self):
         """CobolField.to_dict includes occurs and element_size when nonzero."""
         field = CobolField(
@@ -145,6 +158,7 @@ class TestCobolFieldOccursSerialization:
         assert d["occurs"] == 5
         assert d["element_size"] == 4
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_to_dict_without_occurs(self):
         """CobolField.to_dict omits occurs and element_size when zero."""
         field = CobolField(

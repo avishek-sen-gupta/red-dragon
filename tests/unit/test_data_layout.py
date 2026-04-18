@@ -14,8 +14,8 @@ class TestBuildDataLayoutSingleField:
         ]
         layout = build_data_layout(fields)
         assert layout.total_bytes == 5
-        assert "WS-A" in layout.fields
-        fl = layout.fields["WS-A"]
+        fl = layout.lookup("WS-A")
+        assert fl is not None
         assert fl.offset == 0
         assert fl.byte_length == 5
         assert fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
@@ -27,7 +27,8 @@ class TestBuildDataLayoutSingleField:
             CobolField(name="WS-B", level=77, pic="S9(5)V99", usage="COMP-3", offset=0),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-B"]
+        fl = layout.lookup("WS-B")
+        assert fl is not None
         assert fl.type_descriptor.category == CobolDataCategory.COMP3
         assert fl.type_descriptor.total_digits == 7
         assert fl.type_descriptor.decimal_digits == 2
@@ -39,7 +40,8 @@ class TestBuildDataLayoutSingleField:
             CobolField(name="WS-C", level=77, pic="X(10)", usage="DISPLAY", offset=0),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-C"]
+        fl = layout.lookup("WS-C")
+        assert fl is not None
         assert fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
         assert fl.byte_length == 10
 
@@ -69,13 +71,16 @@ class TestBuildDataLayoutGroup:
         ]
         layout = build_data_layout(fields)
         assert layout.total_bytes == 8
-        assert layout.fields["WS-DATE"].byte_length == 8
-        assert layout.fields["WS-YEAR"].offset == 0
-        assert layout.fields["WS-YEAR"].byte_length == 4
-        assert layout.fields["WS-MONTH"].offset == 4
-        assert layout.fields["WS-MONTH"].byte_length == 2
-        assert layout.fields["WS-DAY"].offset == 6
-        assert layout.fields["WS-DAY"].byte_length == 2
+        # WS-DATE is a group — use lookup_group for structural check
+        date_grp = layout.lookup_group("WS-DATE")
+        assert date_grp.total_bytes == 8
+        # Children are leaves — use lookup()
+        assert layout.lookup("WS-YEAR").offset == 0  # type: ignore[union-attr]
+        assert layout.lookup("WS-YEAR").byte_length == 4  # type: ignore[union-attr]
+        assert layout.lookup("WS-MONTH").offset == 4  # type: ignore[union-attr]
+        assert layout.lookup("WS-MONTH").byte_length == 2  # type: ignore[union-attr]
+        assert layout.lookup("WS-DAY").offset == 6  # type: ignore[union-attr]
+        assert layout.lookup("WS-DAY").byte_length == 2  # type: ignore[union-attr]
 
 
 class TestBuildDataLayoutRedefines:
@@ -110,11 +115,12 @@ class TestBuildDataLayoutRedefines:
             ),
         ]
         layout = build_data_layout(fields)
-        # REDEFINES does not increase total size
         assert layout.total_bytes == 8
-        assert layout.fields["WS-DATE-NUM"].offset == 0
-        assert layout.fields["WS-DATE-NUM"].byte_length == 8
-        assert layout.fields["WS-DATE-NUM"].redefines == "WS-DATE"
+        fl = layout.lookup("WS-DATE-NUM")
+        assert fl is not None
+        assert fl.offset == 0
+        assert fl.byte_length == 8
+        assert fl.redefines == "WS-DATE"
 
 
 class TestBuildDataLayoutMultipleTopLevel:
@@ -126,7 +132,7 @@ class TestBuildDataLayoutMultipleTopLevel:
         ]
         layout = build_data_layout(fields)
         assert layout.total_bytes == 15
-        assert len(layout.fields) == 2
+        assert sum(1 for _ in layout.all_leaves()) == 2
 
 
 class TestBuildDataLayoutNestedGroups:
@@ -175,10 +181,11 @@ class TestBuildDataLayoutNestedGroups:
         ]
         layout = build_data_layout(fields)
         assert layout.total_bytes == 25
-        assert layout.fields["WS-HEADER"].byte_length == 5
-        assert layout.fields["WS-ID"].offset == 0
-        assert layout.fields["WS-TYPE"].offset == 3
-        assert layout.fields["WS-BODY"].offset == 5
+        header_grp = layout.lookup_group("WS-HEADER")
+        assert header_grp.total_bytes == 5
+        assert layout.lookup("WS-ID").offset == 0  # type: ignore[union-attr]
+        assert layout.lookup("WS-TYPE").offset == 3  # type: ignore[union-attr]
+        assert layout.lookup("WS-BODY").offset == 5  # type: ignore[union-attr]
 
 
 class TestBuildDataLayoutCompTypes:
@@ -189,7 +196,8 @@ class TestBuildDataLayoutCompTypes:
             CobolField(name="WS-D", level=77, pic="9(5)", usage="COMP", offset=0),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-D"]
+        fl = layout.lookup("WS-D")
+        assert fl is not None
         assert fl.type_descriptor.category == CobolDataCategory.BINARY
         assert fl.type_descriptor.total_digits == 5
         assert fl.byte_length == 4
@@ -201,7 +209,8 @@ class TestBuildDataLayoutCompTypes:
             CobolField(name="WS-E", level=77, pic="", usage="COMP-1", offset=0),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-E"]
+        fl = layout.lookup("WS-E")
+        assert fl is not None
         assert fl.type_descriptor.category == CobolDataCategory.COMP1
         assert fl.byte_length == 4
 
@@ -212,7 +221,8 @@ class TestBuildDataLayoutCompTypes:
             CobolField(name="WS-F", level=77, pic="", usage="COMP-2", offset=0),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-F"]
+        fl = layout.lookup("WS-F")
+        assert fl is not None
         assert fl.type_descriptor.category == CobolDataCategory.COMP2
         assert fl.byte_length == 8
 
@@ -223,7 +233,8 @@ class TestBuildDataLayoutCompTypes:
             CobolField(name="WS-G", level=77, pic="9(4)", usage="COMP-5", offset=0),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-G"]
+        fl = layout.lookup("WS-G")
+        assert fl is not None
         assert fl.type_descriptor.category == CobolDataCategory.BINARY
         assert fl.byte_length == 2
 
@@ -246,7 +257,8 @@ class TestBuildDataLayoutOccursDependingOn:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-TABLE"]
+        fl = layout.lookup("WS-TABLE")
+        assert fl is not None
         assert fl.byte_length == 50  # 10 * 5 = max storage
         assert fl.occurs_count == 10
         assert fl.occurs_depending_on == "WS-COUNT"
@@ -285,7 +297,8 @@ class TestBuildDataLayoutOccursDependingOn:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-ITEMS"]
+        fl = layout.lookup("WS-ITEMS")
+        assert fl is not None
         assert fl.occurs_depending_on == "WS-COUNT"
         assert fl.occurs_min == 1
         assert fl.byte_length == 200  # 20 * 10
@@ -307,7 +320,8 @@ class TestBuildDataLayoutSignClause:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-AMT"]
+        fl = layout.lookup("WS-AMT")
+        assert fl is not None
         assert fl.type_descriptor.sign_separate is True
         assert fl.type_descriptor.sign_leading is False
         assert fl.byte_length == 6  # 5 digits + 1 sign byte
@@ -328,7 +342,8 @@ class TestBuildDataLayoutSignClause:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-AMT2"]
+        fl = layout.lookup("WS-AMT2")
+        assert fl is not None
         assert fl.byte_length == 4  # 3 digits + 1 sign byte
         assert fl.sign_separate is True
         assert fl.sign_leading is True
@@ -348,7 +363,8 @@ class TestBuildDataLayoutSignClause:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-AMT3"]
+        fl = layout.lookup("WS-AMT3")
+        assert fl is not None
         assert fl.byte_length == 5  # embedded, no extra byte
 
 
@@ -390,7 +406,8 @@ class TestBuildDataLayoutRenames:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-ALIAS"]
+        fl = layout.lookup("WS-ALIAS")
+        assert fl is not None
         assert fl.offset == 0
         assert fl.byte_length == 10
         assert fl.renames_from == "WS-FIRST"
@@ -443,7 +460,8 @@ class TestBuildDataLayoutRenames:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-SPAN"]
+        fl = layout.lookup("WS-SPAN")
+        assert fl is not None
         assert fl.offset == 0  # WS-A offset
         assert fl.byte_length == 15  # 0 + 5 + 3 + 7 = 15 (through end of WS-C)
         assert fl.renames_from == "WS-A"
@@ -467,7 +485,8 @@ class TestBuildDataLayoutBlankWhenZero:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-BWZ"]
+        fl = layout.lookup("WS-BWZ")
+        assert fl is not None
         assert fl.type_descriptor.blank_when_zero is True
         assert fl.byte_length == 5  # storage unchanged
 
@@ -484,7 +503,8 @@ class TestBuildDataLayoutBlankWhenZero:
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.fields["WS-PLAIN"]
+        fl = layout.lookup("WS-PLAIN")
+        assert fl is not None
         assert fl.type_descriptor.blank_when_zero is False
 
 
@@ -502,7 +522,9 @@ class TestBuildDataLayoutFieldValue:
             ),
         ]
         layout = build_data_layout(fields)
-        assert layout.fields["WS-CTR"].value == "0"
+        fl = layout.lookup("WS-CTR")
+        assert fl is not None
+        assert fl.value == "0"
 
 
 class TestBuildDataLayoutMoveCorresponding:
