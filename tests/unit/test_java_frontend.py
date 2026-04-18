@@ -1832,6 +1832,37 @@ class TestJavaFinallyBlock:
         assert any("try_finally" in lbl for lbl in labels)
 
 
+class TestJavaTryWithResources:
+    """try-with-resources: resource declaration and try body lowering."""
+
+    @covers(JavaFeature.TRY_WITH_RESOURCES)
+    def test_resource_emits_decl_var(self):
+        """Resource variable must be declared before the try body."""
+        instructions = _parse_java(
+            'class M { static void run() { try (java.io.StringReader r = new java.io.StringReader("x")) { int x = 1; } } }'
+        )
+        decl_vars = _find_all(instructions, Opcode.DECL_VAR)
+        assert any("r" in str(inst.operands) for inst in decl_vars)
+
+    @covers(JavaFeature.TRY_WITH_RESOURCES)
+    def test_try_body_label_emitted(self):
+        """try-with-resources must emit a try_body label for the protected block."""
+        instructions = _parse_java(
+            'class M { static void run() { try (java.io.StringReader r = new java.io.StringReader("x")) { int x = 1; } } }'
+        )
+        labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
+        assert any("try_body" in lbl for lbl in labels)
+
+    @covers(JavaFeature.TRY_WITH_RESOURCES)
+    def test_resource_constructor_call_emitted(self):
+        """Resource initialiser must emit a CALL_CTOR instruction."""
+        instructions = _parse_java(
+            'class M { static void run() { try (java.io.StringReader r = new java.io.StringReader("x")) { int x = 1; } } }'
+        )
+        call_ctors = _find_all(instructions, Opcode.CALL_CTOR)
+        assert len(call_ctors) >= 1
+
+
 class TestJavaSwitchRule:
     """Arrow-form case labels (case X ->) in switch expressions."""
 
