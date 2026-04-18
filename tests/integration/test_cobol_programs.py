@@ -661,6 +661,36 @@ class TestInitialize:
         assert _decode_zoned_unsigned(region, 0, 4) == 0
         assert list(region[4:7]) == [0x40] * 3
 
+    @covers(CobolFeature.INITIALIZE, CobolFeature.GROUP_ITEM)
+    def test_initialize_group_item_resets_children_by_type(self):
+        """INITIALIZE on a group item resets each child with its type's default.
+
+        WS-A (PIC 9) should become 0, WS-B (PIC X) should become spaces.
+        Previously the group was treated as ALPHANUMERIC and space-filled entirely,
+        which clobbered the numeric child with EBCDIC spaces instead of zeros.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. INITGRP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-GROUP.",
+                "   05 WS-A PIC 9(3) VALUE 999.",
+                "   05 WS-B PIC X(3) VALUE 'ABC'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INITIALIZE WS-GROUP.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        layout = vm.data_layout
+        wa_offset = layout["WS-A"]["offset"]
+        wb_offset = layout["WS-B"]["offset"]
+        assert _decode_zoned_unsigned(region, wa_offset, 3) == 0
+        assert list(region[wb_offset : wb_offset + 3]) == [0x40] * 3
+
 
 class TestSetStatement:
     @covers(CobolFeature.SET_TO)
