@@ -987,3 +987,17 @@ class TestRoundTrip:
     def test_delete_round_trip(self):
         data = {"type": "DELETE", "file_name": "CUST-FILE"}
         assert self._round_trip(data) == data
+
+    @covers(CobolFeature.MOVE_CORRESPONDING)
+    def test_parse_move_corresponding_statement(self):
+        from interpreter.cobol.cobol_statements import MoveCorrespondingStatement
+
+        data = {
+            "type": "MOVE_CORRESPONDING",
+            "source": "WS-SRC",
+            "targets": ["WS-DST1", "WS-DST2"],
+        }
+        stmt = parse_statement(data)
+        assert isinstance(stmt, MoveCorrespondingStatement)
+        assert stmt.source == "WS-SRC"
+        assert stmt.targets == ["WS-DST1", "WS-DST2"]
