@@ -168,4 +168,6 @@ fileignoreconfig:
   checksum: 8ccf5a42f1ed978e2e9cd093e31601be9e67c860e8350e8899ff658d19874e17
 - filename: docs/superpowers/specs/2026-04-18-move-corresponding-recursive-datalayout-design.md
   checksum: 231afba915ef9a9232177250f997bab0b7714378cffdcf19f305844548520f08
+- filename: interpreter/cobol/data_layout.py
+  checksum: f9f55752132ae079e1f16ddff9d3ff659a8a8c25d74c1f6240ead6c7efc638a4
 version: "1.0"
