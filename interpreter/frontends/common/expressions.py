@@ -464,6 +464,7 @@ def lower_update_expr(
     operand = children[0]
     text = ctx.node_text(node)
     op = "+" if "++" in text else "-"
+    is_prefix = text.startswith("++") or text.startswith("--")
     operand_reg = ctx.lower_expr(operand)
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
@@ -478,7 +479,7 @@ def lower_update_expr(
         node=node,
     )
     lower_store_target(ctx, operand, result_reg, node)
-    return result_reg
+    return result_reg if is_prefix else operand_reg
 
 
 def lower_list_literal(
