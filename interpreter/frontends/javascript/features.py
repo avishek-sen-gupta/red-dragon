@@ -52,7 +52,8 @@ class JavaScriptFeature(Enum):
     # Misc
     IMPORT = "import declarations (ES modules)"
     EXPORT = "default export declarations"
-    EXPORT_NAMED = "named export declarations"
+    EXPORT_NAMED = "export { a, b } clause of locally-declared names"
+    EXPORT_REEXPORT = "export { a } from './module' re-export from another module"
     SPREAD = "...expr spread and rest operators"
     DESTRUCTURING = "{ a, b } = obj and [a, b] = arr destructuring assignments"
     OPTIONAL_CHAIN = "obj?.prop and obj?.method() optional chaining"
