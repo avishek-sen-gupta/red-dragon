@@ -218,7 +218,7 @@ class TestJavaScriptSpecial:
         opcodes = _opcodes(instructions)
         assert Opcode.THROW in opcodes
 
-    @covers(JavaScriptFeature.ARITHMETIC)
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
     def test_update_expression_decrement(self):
         instructions = _parse_js("x--;")
         opcodes = _opcodes(instructions)
@@ -226,7 +226,7 @@ class TestJavaScriptSpecial:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("-" in inst.operands for inst in binops)
 
-    @covers(JavaScriptFeature.ARITHMETIC)
+    @covers(JavaScriptFeature.INCREMENT_DECREMENT)
     def test_update_expression_increment(self):
         instructions = _parse_js("x++;")
         binops = _find_all(instructions, Opcode.BINOP)
@@ -765,7 +765,7 @@ class TestJavaScriptRegex:
 
 
 class TestJavaScriptSequenceExpression:
-    @covers(JavaScriptFeature.ARITHMETIC)
+    @covers(JavaScriptFeature.SEQUENCE_EXPRESSION)
     def test_sequence_basic(self):
         instructions = _parse_js("const x = (1, 2, 3);")
         consts = _find_all(instructions, Opcode.CONST)
@@ -775,7 +775,7 @@ class TestJavaScriptSequenceExpression:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
-    @covers(JavaScriptFeature.ARITHMETIC)
+    @covers(JavaScriptFeature.SEQUENCE_EXPRESSION)
     def test_sequence_with_side_effects(self):
         instructions = _parse_js("const x = (a++, b++, c);")
         binops = _find_all(instructions, Opcode.BINOP)
