@@ -112,10 +112,9 @@ class MoveCorrespondingStatement:
 
     @classmethod
     def from_dict(cls, data: dict) -> MoveCorrespondingStatement:
-        operands = data.get("operands", [])
         return cls(
-            source=operands[0] if len(operands) > 0 else "",
-            targets=data.get("targets", operands[1:] if len(operands) > 1 else []),
+            source=data.get("source", ""),
+            targets=data.get("targets", []),
         )
 
     def to_dict(self) -> dict:
