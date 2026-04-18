@@ -732,6 +732,49 @@ class M {
         assert locals_[VarName("result")] == 60
 
 
+class TestJavaTryWithResourcesExecution:
+    """try-with-resources: body execution and catch arm reachability.
+
+    Note: automatic close() invocation on the resource is not yet implemented.
+    """
+
+    @covers(JavaFeature.TRY_WITH_RESOURCES)
+    def test_try_body_executes(self):
+        """Body of try-with-resources must execute."""
+        source = """\
+class M {
+    static int result = 0;
+    static void run() {
+        try (java.io.StringReader r = new java.io.StringReader("hello")) {
+            result = 42;
+        }
+    }
+    static int dummy = (run(), 0);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 42
+
+    @covers(JavaFeature.TRY_WITH_RESOURCES)
+    def test_try_with_catch_body_executes(self):
+        """try-with-resources with a catch clause must still execute the body."""
+        source = """\
+class M {
+    static int result = 0;
+    static void run() {
+        try (java.io.StringReader r = new java.io.StringReader("hello")) {
+            result = 99;
+        } catch (Exception e) {
+            result = -1;
+        }
+    }
+    static int dummy = (run(), 0);
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 99
+
+
 class TestJavaSwitchRuleExecution:
     """Arrow-form case labels (case X ->) in switch expressions."""
 
