@@ -81,53 +81,23 @@ def lower_move_corresponding(
     layout: DataLayout,
     region_reg: str,
 ) -> None:
-    """MOVE CORRESPONDING source TO target(s).
+    """MOVE CORRESPONDING src TO dst — copy matching direct leaf fields."""
+    src_layout = layout.lookup_group(stmt.source)
 
-    Moves all matching fields from source to each target based on field name matching.
-    For a field in source to be moved to a field in target, they must have the same name.
-    """
-    # Verify source exists
-    source_layout = layout.lookup_group(stmt.source)
-    if source_layout is None:
-        # Source is not a group; attempt to treat it as a field
-        if not ctx.has_field(stmt.source, layout):
-            logger.warning(
-                "MOVE CORRESPONDING source %s not found in layout", stmt.source
-            )
-            return
-        source_layout = layout
-
-    # For each target, iterate through all leaves of the source and move matching names
     for target_name in stmt.targets:
-        # Verify target exists
-        target_layout = layout.lookup_group(target_name)
-        if target_layout is None:
-            if not ctx.has_field(target_name, layout):
-                logger.warning(
-                    "MOVE CORRESPONDING target %s not found in layout", target_name
-                )
-                continue
-            target_layout = layout
+        dst_layout = layout.lookup_group(target_name)
+        matching = src_layout.fields.keys() & dst_layout.fields.keys()
 
-        # Get all leaves in source
-        source_leaves = list(source_layout.all_leaves())
+        for name in matching:
+            src_fl = src_layout.fields[name]
+            dst_fl = dst_layout.fields[name]
 
-        # Move each source leaf if a matching name exists in target
-        for src_fl in source_leaves:
-            src_name = src_fl.name
-            tgt_fl = target_layout.lookup(src_name)
+            src_ref = ctx.resolve_field_ref_from(src_fl, region_reg)
+            decoded = ctx.emit_decode_field(region_reg, src_fl, src_ref.offset_reg)
+            value_str = ctx.emit_to_string(decoded)
 
-            if tgt_fl is not None:
-                # Match found; decode source and encode into target
-                src_ref = ctx.resolve_field_ref(src_name, layout, region_reg)
-                tgt_ref = ctx.resolve_field_ref(src_name, layout, region_reg)
-                decoded_reg = ctx.emit_decode_field(
-                    region_reg, src_ref.fl, src_ref.offset_reg
-                )
-                value_str_reg = ctx.emit_to_string(decoded_reg)
-                ctx.emit_encode_and_write(
-                    region_reg, tgt_ref.fl, value_str_reg, tgt_ref.offset_reg
-                )
+            dst_ref = ctx.resolve_field_ref_from(dst_fl, region_reg)
+            ctx.emit_encode_and_write(region_reg, dst_fl, value_str, dst_ref.offset_reg)
 
 
 def lower_arithmetic(

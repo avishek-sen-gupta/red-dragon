@@ -172,4 +172,6 @@ fileignoreconfig:
   checksum: f9f55752132ae079e1f16ddff9d3ff659a8a8c25d74c1f6240ead6c7efc638a4
 - filename: docs/superpowers/plans/2026-04-18-move-corresponding-recursive-datalayout.md
   checksum: cd3cec2b150c17edb08edd4b55f84545d9662a677bc07e293c1a9f318ceab3ad
+- filename: .beads/backup/issues.jsonl
+  checksum: 7d2b82ad06d041d01dde497abe337015712479051decedc63121665b6566d2f4
 version: "1.0"
