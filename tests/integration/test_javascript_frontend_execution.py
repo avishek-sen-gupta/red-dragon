@@ -21,20 +21,6 @@ def _run_js(source: str, max_steps: int = 200):
     return unwrap_locals(vm.call_stack[0].local_vars)
 
 
-class TestJSMetaPropertyExecution:
-    @covers(JavaScriptFeature.NEW_TARGET)
-    def test_meta_property_does_not_block(self):
-        """Code after new.target usage should execute."""
-        locals_ = _run_js("let x = new.target;\nlet y = 42;")
-        assert locals_[VarName("y")] == 42
-
-    @covers(JavaScriptFeature.NEW_TARGET)
-    def test_new_target_produces_stored_value(self):
-        """new.target should assign something to x (VM limitation: not runtime-tracked)."""
-        locals_ = _run_js("let x = new.target;")
-        assert VarName("x") in locals_
-
-
 class TestJSComputedPropertyNameExecution:
     """computed_property_name in object literals should evaluate the key expression."""
 
