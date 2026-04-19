@@ -98,14 +98,30 @@ class TestAnnotateEndpoint:
 class TestRenderGraphLines:
     def test_renders_edges_grouped_by_source(self):
         f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
-        loc = InstructionLocation(
+        g = FunctionEntry(label=CodeLabel("func_g_0"), params=("y",))
+        loc_f = InstructionLocation(
             block_label=CodeLabel("func_f_0"), instruction_index=5
         )
-        x_ep = VariableEndpoint(name="x", definition=NO_DEFINITION)
-        ret_ep = ReturnEndpoint(function=f, location=loc)
-        graph = {x_ep: frozenset({ret_ep})}
+        loc_g = InstructionLocation(
+            block_label=CodeLabel("func_g_0"), instruction_index=3
+        )
+        a_ep = VariableEndpoint(name="a", definition=NO_DEFINITION)
+        b_ep = VariableEndpoint(name="b", definition=NO_DEFINITION)
+        ret_f = ReturnEndpoint(function=f, location=loc_f)
+        ret_g = ReturnEndpoint(function=g, location=loc_g)
+        # a has two destinations; b shares one destination with a
+        graph = {
+            a_ep: frozenset({ret_f, ret_g}),
+            b_ep: frozenset({ret_f}),
+        }
         lines = render_graph_lines(graph, None)
-        assert any("x" in line and "Return(func_f_0)" in line for line in lines)
+        # Sources are sorted alphabetically; all edges from "a" must appear
+        # before any edge from "b" — that is the grouping guarantee.
+        a_indices = [i for i, line in enumerate(lines) if line.startswith("a ")]
+        b_indices = [i for i, line in enumerate(lines) if line.startswith("b ")]
+        assert len(a_indices) == 2
+        assert len(b_indices) == 1
+        assert max(a_indices) < min(b_indices)
 
     def test_empty_graph(self):
         lines = render_graph_lines({}, None)
