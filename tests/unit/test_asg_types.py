@@ -346,14 +346,14 @@ class TestCobolStatement:
     def test_if_statement_with_children(self):
         data = {
             "type": "IF",
-            "condition": "WS-A > 0",
+            "condition": {"not": False, "text": "WS-A > 0"},
             "children": [
                 {"type": "DISPLAY", "operands": ["POSITIVE"]},
             ],
         }
         stmt = parse_statement(data)
         assert isinstance(stmt, IfStatement)
-        assert stmt.condition == "WS-A > 0"
+        assert stmt.condition == {"not": False, "text": "WS-A > 0"}
         assert len(stmt.children) == 1
         assert isinstance(stmt.children[0], DisplayStatement)
         assert parse_statement(stmt.to_dict()) == stmt

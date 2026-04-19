@@ -26,7 +26,7 @@ class PerformTimesSpec:
 class PerformUntilSpec:
     """PERFORM ... UNTIL loop specification."""
 
-    condition: str  # until condition string
+    condition: dict
     test_before: bool = True  # TEST BEFORE (default) vs TEST AFTER
 
 
@@ -37,7 +37,7 @@ class PerformVaryingSpec:
     varying_var: str  # loop variable name
     varying_from: str  # FROM value
     varying_by: str  # BY step value
-    condition: str  # UNTIL condition
+    condition: dict
     test_before: bool = True
 
 
@@ -179,14 +179,14 @@ class ComputeStatement:
 class IfStatement:
     """IF condition ... [ELSE ...] END-IF."""
 
-    condition: str
+    condition: dict
     children: list[CobolStatementType] = field(default_factory=list)
     else_children: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> IfStatement:
         return cls(
-            condition=data.get("condition", ""),
+            condition=data.get("condition", {}),
             children=[parse_statement(c) for c in data.get("children", [])],
             else_children=[parse_statement(c) for c in data.get("else_children", [])],
         )
@@ -847,7 +847,7 @@ def _parse_perform_spec(
         return PerformTimesSpec(times=data.get("times", ""))
     if perform_type == "UNTIL":
         return PerformUntilSpec(
-            condition=data.get("until", ""),
+            condition=data.get("until", {}),
             test_before=data.get("test_before", True),
         )
     if perform_type == "VARYING":
@@ -855,7 +855,7 @@ def _parse_perform_spec(
             varying_var=data.get("varying_var", ""),
             varying_from=data.get("varying_from", ""),
             varying_by=data.get("varying_by", ""),
-            condition=data.get("until", ""),
+            condition=data.get("until", {}),
             test_before=data.get("test_before", True),
         )
     return None

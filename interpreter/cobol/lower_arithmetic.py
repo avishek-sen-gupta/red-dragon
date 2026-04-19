@@ -26,7 +26,7 @@ from interpreter.cobol.cobol_statements import (
     WhenStatement,
 )
 from interpreter.cobol.cobol_types import CobolDataCategory
-from interpreter.cobol.condition_lowering import lower_expr_node
+from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.operator_kind import resolve_binop
@@ -247,7 +247,9 @@ def lower_evaluate(
                 full_condition = f"{stmt.subject} = {child.condition}"
             else:
                 full_condition = child.condition
-            cond_reg = ctx.lower_condition(full_condition, layout, region_reg)
+            cond_reg = _lower_condition_str(
+                ctx, full_condition, layout, region_reg, ctx._condition_index
+            )
             when_true = ctx.fresh_label("when_true")
             when_false = ctx.fresh_label("when_false")
             ctx.emit_inst(

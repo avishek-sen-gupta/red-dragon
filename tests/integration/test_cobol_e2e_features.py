@@ -523,3 +523,143 @@ class TestBlankWhenZeroComposition:
 
         # WS-NORM: no BWZ + VALUE 0 -> normal zoned zeros (0xF0)
         assert list(region[12:16]) == [0xF0, 0xF0, 0xF0, 0xF0]
+
+
+class TestLogicalOperators:
+    """AND / OR / NOT in IF conditions."""
+
+    @covers(CobolFeature.LOGICAL_AND)
+    def test_logical_and_both_true(self):
+        """IF A > 0 AND B > 0: both true → result field set to 1."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-AND.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A      PIC 9(4) VALUE 5.",
+                "77 WS-B      PIC 9(4) VALUE 3.",
+                "77 WS-RESULT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-A > 0 AND WS-B > 0",
+                "        MOVE 1 TO WS-RESULT",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 8, 4) == 1
+
+    @covers(CobolFeature.LOGICAL_AND)
+    def test_logical_and_one_false(self):
+        """IF A > 0 AND B > 10: B fails → result stays 0."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-AND2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A      PIC 9(4) VALUE 5.",
+                "77 WS-B      PIC 9(4) VALUE 3.",
+                "77 WS-RESULT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-A > 0 AND WS-B > 10",
+                "        MOVE 1 TO WS-RESULT",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 8, 4) == 0
+
+    @covers(CobolFeature.LOGICAL_OR)
+    def test_logical_or_one_true(self):
+        """IF A > 10 OR B > 0: B is true → result set to 1."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-OR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A      PIC 9(4) VALUE 5.",
+                "77 WS-B      PIC 9(4) VALUE 3.",
+                "77 WS-RESULT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-A > 10 OR WS-B > 0",
+                "        MOVE 1 TO WS-RESULT",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 8, 4) == 1
+
+    @covers(CobolFeature.LOGICAL_OR)
+    def test_logical_or_both_false(self):
+        """IF A > 10 OR B > 10: both false → result stays 0."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-OR2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A      PIC 9(4) VALUE 5.",
+                "77 WS-B      PIC 9(4) VALUE 3.",
+                "77 WS-RESULT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-A > 10 OR WS-B > 10",
+                "        MOVE 1 TO WS-RESULT",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 8, 4) == 0
+
+    @covers(CobolFeature.LOGICAL_NOT)
+    def test_logical_not_true_condition(self):
+        """IF NOT WS-A > 10: WS-A=5 so A>10 is false → NOT makes it true → result=1."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-NOT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A      PIC 9(4) VALUE 5.",
+                "77 WS-RESULT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF NOT WS-A > 10",
+                "        MOVE 1 TO WS-RESULT",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 4, 4) == 1
+
+    @covers(CobolFeature.LOGICAL_NOT)
+    def test_logical_not_false_condition(self):
+        """IF NOT WS-A > 0: WS-A=5 so A>0 is true → NOT makes it false → result stays 0."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-NOT2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A      PIC 9(4) VALUE 5.",
+                "77 WS-RESULT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF NOT WS-A > 0",
+                "        MOVE 1 TO WS-RESULT",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 4, 4) == 0
