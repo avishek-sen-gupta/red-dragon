@@ -3070,3 +3070,108 @@ class TestOnSizeError:
         )
         region = _first_region(vm)
         assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"
+
+
+class TestComputeOnSizeError:
+    """Integration tests for ON SIZE ERROR / NOT ON SIZE ERROR in COMPUTE."""
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_compute_overflow_fires_on_size_error(self):
+        """COMPUTE that overflows PIC 9(3) fires ON SIZE ERROR; target bytes unchanged."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-OSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC 9(3) VALUE 1.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-COUNTER = 999 + 1",
+                "        ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-COMPUTE.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"
+        assert list(region[:3]) == [
+            0xF0,
+            0xF0,
+            0xF1,
+        ], f"WS-COUNTER should be unchanged (1), got {[hex(b) for b in region[:3]]}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_compute_no_overflow_fires_not_on_size_error(self):
+        """COMPUTE that fits fires NOT ON SIZE ERROR; flag is set."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-NOSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC 9(3) VALUE 1.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-COUNTER = 1 + 1",
+                "        NOT ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-COMPUTE.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_compute_multi_target_any_overflow_skips_all(self):
+        """COMPUTE with two targets: one would overflow → both unchanged, ON SIZE ERROR fires."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-MULTI.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC 9(3) VALUE 1.",
+                "01 WS-B PIC 9(1) VALUE 2.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-A WS-B = 999 + 1",
+                "        ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-COMPUTE.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        # WS-A: bytes 0-2 (PIC 9(3)), WS-B: byte 3 (PIC 9(1)), WS-FLAG: byte 4
+        assert region[4] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[4])}"
+        assert list(region[:3]) == [
+            0xF0,
+            0xF0,
+            0xF1,
+        ], f"WS-A should be unchanged (1), got {[hex(b) for b in region[:3]]}"
+        assert region[3] == 0xF2, f"WS-B should be unchanged (2), got {hex(region[3])}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_compute_no_clause_overflow_silent(self):
+        """COMPUTE overflow with no clause: no Python exception, vm not None."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-NOCL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC 9(3) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-COUNTER = 999 + 1.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        assert vm is not None
