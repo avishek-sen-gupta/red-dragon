@@ -484,6 +484,15 @@ public final class StatementSerializer {
         if (targets.size() > 0) {
             obj.add("targets", targets);
         }
+
+        if (stmt.getOnSizeErrorPhrase() != null) {
+            obj.add("on_size_error", serializeStatements(
+                stmt.getOnSizeErrorPhrase().getStatements()));
+        }
+        if (stmt.getNotOnSizeErrorPhrase() != null) {
+            obj.add("not_on_size_error", serializeStatements(
+                stmt.getNotOnSizeErrorPhrase().getStatements()));
+        }
         return obj;
     }
 
