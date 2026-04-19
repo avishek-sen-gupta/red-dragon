@@ -141,12 +141,89 @@ def _expand_condition_name(
 
 def lower_condition(
     ctx: EmitContext,
-    condition: str,
+    condition: dict,
     layout: DataLayout,
     region_reg: str,
     condition_index: ConditionNameIndex = ConditionNameIndex({}),
 ) -> str:
-    """Lower a simple condition string to a register holding a boolean.
+    """Lower a structured condition dict to a register holding a boolean."""
+    return _lower_condition_node(ctx, condition, layout, region_reg, condition_index)
+
+
+def _lower_condition_node(
+    ctx: EmitContext,
+    node: dict,
+    layout: DataLayout,
+    region_reg: str,
+    condition_index: ConditionNameIndex,
+) -> str:
+    """Recursively walk a structured condition dict node and emit IR."""
+    if "op" in node:
+        # Compound: {"op": "AND"/"OR", "left": {...}, "right": {...}}
+        op = node["op"]
+        left_reg = _lower_condition_node(
+            ctx, node["left"], layout, region_reg, condition_index
+        )
+        right_reg = _lower_condition_node(
+            ctx, node["right"], layout, region_reg, condition_index
+        )
+        result = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=result,
+                operator=resolve_binop("and" if op == "AND" else "or"),
+                left=Register(str(left_reg)),
+                right=Register(str(right_reg)),
+            )
+        )
+        return result
+
+    not_flag: bool = node.get("not", False)
+
+    if "condition_name" in node:
+        # 88-level condition name reference
+        name = node["condition_name"]
+        if condition_index.has_condition(name):
+            inner = _expand_condition_name(
+                ctx, name, condition_index, layout, region_reg
+            )
+        else:
+            # Fall back to string lowering for unresolved names
+            inner = _lower_condition_str(ctx, name, layout, region_reg, condition_index)
+    elif "condition" in node:
+        # Nested parenthesised condition
+        inner = _lower_condition_node(
+            ctx, node["condition"], layout, region_reg, condition_index
+        )
+    else:
+        # Relation/class condition via flat text
+        inner = _lower_condition_str(
+            ctx, node.get("text", ""), layout, region_reg, condition_index
+        )
+
+    if not not_flag:
+        return inner
+
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator=resolve_binop("=="),
+            left=Register(str(inner)),
+            right=Register(str(ctx.const_to_reg(False))),
+        )
+    )
+    return result
+
+
+def _lower_condition_str(
+    ctx: EmitContext,
+    condition: str,
+    layout: DataLayout,
+    region_reg: str,
+    condition_index: ConditionNameIndex,
+) -> str:
+    """Lower a flat condition string to a boolean register.
 
     Supports:
     - "field OP value" where OP is >, <, >=, <=, =, NOT =

@@ -608,7 +608,7 @@ class EmitContext:
     # ── Condition Lowering ───────────────────────────────────────
 
     def lower_condition(
-        self, condition: str, layout: DataLayout, region_reg: str
+        self, condition: dict, layout: DataLayout, region_reg: str
     ) -> str:
         """Lower a condition — delegates to condition_lowering module."""
         from interpreter.cobol.condition_lowering import (

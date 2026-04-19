@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.cobol_statements import SearchStatement
+from interpreter.cobol.condition_lowering import _lower_condition_str
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.operator_kind import resolve_binop
@@ -68,7 +69,9 @@ def lower_search(
     for when in stmt.whens:
         if not when.condition:
             continue
-        cond_reg = ctx.lower_condition(when.condition, layout, region_reg)
+        cond_reg = _lower_condition_str(
+            ctx, when.condition, layout, region_reg, ctx._condition_index
+        )
         when_true = ctx.fresh_label("search_when_true")
         when_next = ctx.fresh_label("search_when_next")
         ctx.emit_inst(

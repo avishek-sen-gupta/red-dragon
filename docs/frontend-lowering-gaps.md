@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 951 features across 16 languages — 748 covered, 203 uncovered
+**Totals**: 951 features across 16 languages — 751 covered, 200 uncovered
 
 ---
 
@@ -13,7 +13,7 @@
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
 | c | 48 | 33 | 15 ⚠ | 68% |
-| cobol | 107 | 94 | 13 ⚠ | 87% |
+| cobol | 107 | 97 | 10 ⚠ | 90% |
 | cpp | 84 | 38 | 46 ⚠ | 45% |
 | csharp | 94 | 71 | 23 ⚠ | 75% |
 | go | 44 | 41 | 3 ⚠ | 93% |
@@ -54,9 +54,6 @@
 ### cobol
 
 - `INSPECT_CONVERTING` — INSPECT x CONVERTING from TO to character conversion
-- `LOGICAL_AND` — AND logical conjunction in conditions
-- `LOGICAL_NOT` — NOT logical negation in conditions
-- `LOGICAL_OR` — OR logical disjunction in conditions
 - `ON_SIZE_ERROR` — ON SIZE ERROR / NOT ON SIZE ERROR overflow handlers
 - `READ_AT_END` — AT END clause on READ statements
 - `REFERENCE_MODIFICATION` — FIELD(start:length) reference modification substring access
