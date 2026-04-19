@@ -487,7 +487,7 @@ class TestIfElseExecution:
                         "statements": [
                             {
                                 "type": "IF",
-                                "condition": "WS-A > 0",
+                                "condition": {"not": False, "text": "WS-A > 0"},
                                 "children": [
                                     {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
                                 ],
@@ -549,7 +549,7 @@ class TestIfElseExecution:
                         "statements": [
                             {
                                 "type": "IF",
-                                "condition": "WS-A > 10",
+                                "condition": {"not": False, "text": "WS-A > 10"},
                                 "children": [
                                     {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
                                 ],
@@ -665,7 +665,7 @@ class TestPerformUntilExecution:
                             {
                                 "type": "PERFORM",
                                 "perform_type": "UNTIL",
-                                "until": "WS-A > 2",
+                                "until": {"not": False, "text": "WS-A > 2"},
                                 "test_before": True,
                                 "children": [
                                     {"type": "ADD", "operands": ["1", "WS-A"]},
@@ -734,7 +734,7 @@ class TestPerformVaryingExecution:
                                 "varying_var": "WS-IDX",
                                 "varying_from": "1",
                                 "varying_by": "1",
-                                "until": "WS-IDX > 3",
+                                "until": {"not": False, "text": "WS-IDX > 3"},
                                 "test_before": True,
                                 "children": [
                                     {

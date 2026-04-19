@@ -335,7 +335,7 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition="WS-A > 0",
+                condition={"not": False, "text": "WS-A > 0"},
                 children=[
                     DisplayStatement(operand="POSITIVE"),
                 ],
@@ -362,7 +362,7 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition="WS-A > 0",
+                condition={"not": False, "text": "WS-A > 0"},
                 children=[DisplayStatement(operand="POSITIVE")],
                 else_children=[DisplayStatement(operand="NOT-POSITIVE")],
             ),
@@ -401,7 +401,7 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition="WS-A > 0",
+                condition={"not": False, "text": "WS-A > 0"},
                 children=[DisplayStatement(operand="ONLY-THEN")],
             ),
         ]
@@ -864,7 +864,9 @@ class TestPerformLoopLowering:
         stmts = [
             PerformStatement(
                 children=[DisplayStatement(operand="LOOPING")],
-                spec=PerformUntilSpec(condition="WS-A > 10", test_before=True),
+                spec=PerformUntilSpec(
+                    condition={"not": False, "text": "WS-A > 10"}, test_before=True
+                ),
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -917,7 +919,9 @@ class TestPerformLoopLowering:
         stmts = [
             PerformStatement(
                 children=[DisplayStatement(operand="LOOPING")],
-                spec=PerformUntilSpec(condition="WS-A > 10", test_before=False),
+                spec=PerformUntilSpec(
+                    condition={"not": False, "text": "WS-A > 10"}, test_before=False
+                ),
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -973,7 +977,7 @@ class TestPerformLoopLowering:
                     varying_var="WS-IDX",
                     varying_from="1",
                     varying_by="1",
-                    condition="WS-IDX > 5",
+                    condition={"not": False, "text": "WS-IDX > 5"},
                     test_before=True,
                 ),
             ),
