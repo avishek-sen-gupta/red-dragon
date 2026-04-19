@@ -3175,3 +3175,22 @@ class TestComputeOnSizeError:
             max_steps=500,
         )
         assert vm is not None
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_compute_on_size_error_all_targets_invalid_no_crash(self):
+        """COMPUTE with ON SIZE ERROR but all targets invalid: no crash, silent skip."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-INV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-DUMMY PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-NONEXISTENT = 999 + 1 ON SIZE ERROR MOVE 1 TO WS-DUMMY END-COMPUTE.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        assert vm is not None
