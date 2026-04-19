@@ -69,7 +69,14 @@ def lower_move(
         )
         value_str_reg = ctx.emit_to_string(decoded_reg)
     else:
-        value_str_reg = ctx.const_to_reg(translate_cobol_figurative(str(stmt.source)))
+        literal = translate_cobol_figurative(str(stmt.source))
+        # Ensure unquoted literals (e.g. digit-only "12345") are stored as
+        # quoted strings so _parse_const returns str, not int/float.
+        if not (
+            len(literal) >= 2 and literal[0] in ('"', "'") and literal[-1] == literal[0]
+        ):
+            literal = f'"{literal}"'
+        value_str_reg = ctx.const_to_reg(literal)
 
     ctx.emit_encode_and_write(
         region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg

@@ -1625,3 +1625,81 @@ class TestGotoInsidePerform:
         val = _decode_zoned_unsigned(region, 0, 4)
         assert val == 110
         assert val != 111, "ADD 1 after PERFORM should not have executed"
+
+
+class TestPicXDigitOnlyValue:
+    """Regression tests for vt2i: PIC X VALUE with digit-only strings."""
+
+    def _decode_alpha(self, region: list[int], offset: int, length: int) -> str:
+        """Decode EBCDIC bytes to ASCII string."""
+        raw = bytes(region[offset : offset + length])
+        return raw.decode("cp500").rstrip()
+
+    @covers(CobolFeature.VALUE_CLAUSE, CobolFeature.PIC_CLAUSE)
+    def test_pic_x_value_digit_string_stored_as_text(self):
+        """PIC X(5) VALUE '12345' must store EBCDIC '12345', not zeros."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-TEXT",
+                        "level": 77,
+                        "pic": "X(5)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "12345",
+                    }
+                ],
+                "paragraphs": [
+                    {"name": "MAIN-PARA", "statements": [{"type": "STOP_RUN"}]}
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(b"")
+
+        vm = _execute_straight_line(instructions)
+        region = list(vm.region_get(list(vm.region_keys())[0]))
+
+        assert region != [0] * 5, "digit-only VALUE stored as zeros (vt2i regression)"
+        expected = list("12345".encode("cp500"))
+        assert region == expected, f"expected EBCDIC '12345', got {region}"
+
+    @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE)
+    def test_move_digit_literal_to_pic_x(self):
+        """MOVE '67890' TO WS-DEST (PIC X) must write EBCDIC '67890', not zeros."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-DEST",
+                        "level": 77,
+                        "pic": "X(5)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                    }
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "MOVE", "operands": ["67890", "WS-DEST"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    }
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, _ = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        region = list(vm.region_get(list(vm.region_keys())[0]))
+
+        assert (
+            region != [0] * 5
+        ), "digit-only MOVE literal stored as zeros (vt2i regression)"
+        expected = list("67890".encode("cp500"))
+        assert region == expected, f"expected EBCDIC '67890', got {region}"
