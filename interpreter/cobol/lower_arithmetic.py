@@ -25,7 +25,7 @@ from interpreter.cobol.cobol_statements import (
     WhenOtherStatement,
     WhenStatement,
 )
-from interpreter.cobol.cobol_types import CobolDataCategory
+from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext
@@ -51,6 +51,68 @@ ARITHMETIC_OPS = {
     "MULTIPLY": "*",
     "DIVIDE": "/",
 }
+
+
+def _compute_overflow_flag(
+    ctx: EmitContext,
+    result_reg: str,
+    td: CobolTypeDescriptor,
+) -> str:
+    """Emit CONST/BINOP sequence to compute overflow bool register.
+
+    Returns the register holding True iff result_reg overflows td's bounds.
+    Does NOT emit a branch — caller decides what to branch on.
+    """
+    max_val = 10**td.total_digits - 1
+    max_reg = ctx.const_to_reg(max_val)
+    over_max = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=over_max,
+            operator=resolve_binop(">"),
+            left=Register(str(result_reg)),
+            right=Register(str(max_reg)),
+        )
+    )
+    if td.signed:
+        min_reg = ctx.const_to_reg(-max_val)
+        under_min = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=under_min,
+                operator=resolve_binop("<"),
+                left=Register(str(result_reg)),
+                right=Register(str(min_reg)),
+            )
+        )
+        overflow_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=overflow_reg,
+                operator=resolve_binop("or"),
+                left=Register(str(over_max)),
+                right=Register(str(under_min)),
+            )
+        )
+        return overflow_reg
+    return over_max
+
+
+def emit_overflow_check(
+    ctx: EmitContext,
+    result_reg: str,
+    td: CobolTypeDescriptor,
+    on_size_err_label: CodeLabel,
+    not_on_size_err_label: CodeLabel,
+) -> None:
+    """Emit overflow detection and BRANCH_IF to the supplied labels."""
+    overflow_reg = _compute_overflow_flag(ctx, result_reg, td)
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=Register(str(overflow_reg)),
+            branch_targets=(on_size_err_label, not_on_size_err_label),
+        )
+    )
 
 
 def lower_move(
@@ -133,6 +195,51 @@ def lower_arithmetic(
         region_reg, target_ref.fl, target_ref.offset_reg
     )
 
+    has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
+
+    if not has_clause:
+        op = ARITHMETIC_OPS[stmt.op]
+        result_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=result_reg,
+                operator=resolve_binop(op),
+                left=Register(str(tgt_decoded)),
+                right=Register(str(src_decoded)),
+            )
+        )
+        result_str_reg = ctx.emit_to_string(result_reg)
+        ctx.emit_encode_and_write(
+            region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
+        )
+        return
+
+    # ON SIZE ERROR / NOT ON SIZE ERROR path
+    on_size_err_label = ctx.fresh_label("on_size_err")
+    not_on_size_err_label = ctx.fresh_label("not_on_size_err")
+    end_label = ctx.fresh_label("size_err_end")
+
+    # DIVIDE only: pre-Binop division-by-zero guard
+    if stmt.op == "DIVIDE":
+        zero_reg = ctx.const_to_reg(0)
+        divzero_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=divzero_reg,
+                operator=resolve_binop("=="),
+                left=Register(str(src_decoded)),
+                right=Register(str(zero_reg)),
+            )
+        )
+        compute_label = ctx.fresh_label("divide_compute")
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=Register(str(divzero_reg)),
+                branch_targets=(on_size_err_label, compute_label),
+            )
+        )
+        ctx.emit_inst(Label_(label=compute_label))
+
     op = ARITHMETIC_OPS[stmt.op]
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -144,10 +251,29 @@ def lower_arithmetic(
         )
     )
 
+    emit_overflow_check(
+        ctx,
+        result_reg,
+        target_ref.fl.type_descriptor,
+        on_size_err_label,
+        not_on_size_err_label,
+    )
+
+    ctx.emit_inst(Label_(label=on_size_err_label))
+    for child in stmt.on_size_error:
+        ctx.lower_statement(child, layout, region_reg)
+    ctx.emit_inst(Branch(label=end_label))
+
+    ctx.emit_inst(Label_(label=not_on_size_err_label))
     result_str_reg = ctx.emit_to_string(result_reg)
     ctx.emit_encode_and_write(
         region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
     )
+    for child in stmt.not_on_size_error:
+        ctx.lower_statement(child, layout, region_reg)
+    ctx.emit_inst(Branch(label=end_label))
+
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_arithmetic_giving(
@@ -167,6 +293,35 @@ def lower_arithmetic_giving(
     left_reg = _decode_operand(stmt.source)
     right_reg = _decode_operand(stmt.target)
 
+    has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
+
+    if has_clause and stmt.op == "DIVIDE":
+        on_size_err_label = ctx.fresh_label("on_size_err")
+        not_on_size_err_label = ctx.fresh_label("not_on_size_err")
+        end_label = ctx.fresh_label("size_err_end")
+        zero_reg = ctx.const_to_reg(0)
+        divzero_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=divzero_reg,
+                operator=resolve_binop("=="),
+                left=Register(str(right_reg)),
+                right=Register(str(zero_reg)),
+            )
+        )
+        compute_label = ctx.fresh_label("divide_compute")
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=Register(str(divzero_reg)),
+                branch_targets=(on_size_err_label, compute_label),
+            )
+        )
+        ctx.emit_inst(Label_(label=compute_label))
+    elif has_clause:
+        on_size_err_label = ctx.fresh_label("on_size_err")
+        not_on_size_err_label = ctx.fresh_label("not_on_size_err")
+        end_label = ctx.fresh_label("size_err_end")
+
     op = ARITHMETIC_OPS[stmt.op]
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -178,12 +333,55 @@ def lower_arithmetic_giving(
         )
     )
 
-    for giving_name in stmt.giving:
-        giving_ref = ctx.resolve_field_ref(giving_name, layout, region_reg)
-        result_str_reg = ctx.emit_to_string(result_reg)
-        ctx.emit_encode_and_write(
-            region_reg, giving_ref.fl, result_str_reg, giving_ref.offset_reg
+    if not has_clause:
+        for giving_name in stmt.giving:
+            giving_ref = ctx.resolve_field_ref(giving_name, layout, region_reg)
+            result_str_reg = ctx.emit_to_string(result_reg)
+            ctx.emit_encode_and_write(
+                region_reg, giving_ref.fl, result_str_reg, giving_ref.offset_reg
+            )
+        return
+
+    # Compute combined overflow flag across all GIVING fields
+    giving_refs = [ctx.resolve_field_ref(n, layout, region_reg) for n in stmt.giving]
+    overflow_flags = [
+        _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
+        for ref in giving_refs
+    ]
+    combined_flag = overflow_flags[0]
+    for flag in overflow_flags[1:]:
+        new_combined = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_combined,
+                operator=resolve_binop("or"),
+                left=Register(str(combined_flag)),
+                right=Register(str(flag)),
+            )
         )
+        combined_flag = new_combined
+
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=Register(str(combined_flag)),
+            branch_targets=(on_size_err_label, not_on_size_err_label),
+        )
+    )
+
+    ctx.emit_inst(Label_(label=on_size_err_label))
+    for child in stmt.on_size_error:
+        ctx.lower_statement(child, layout, region_reg)
+    ctx.emit_inst(Branch(label=end_label))
+
+    ctx.emit_inst(Label_(label=not_on_size_err_label))
+    for ref in giving_refs:
+        result_str_reg = ctx.emit_to_string(result_reg)
+        ctx.emit_encode_and_write(region_reg, ref.fl, result_str_reg, ref.offset_reg)
+    for child in stmt.not_on_size_error:
+        ctx.lower_statement(child, layout, region_reg)
+    ctx.emit_inst(Branch(label=end_label))
+
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_compute(

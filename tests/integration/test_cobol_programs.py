@@ -2894,3 +2894,179 @@ class TestFigurativeConstants:
         assert (
             region[0] == 0x6F
         ), f"Expected 0x6F (EBCDIC encoding of \\xff), got {hex(region[0])}"
+
+
+class TestOnSizeError:
+    """Integration tests for ON SIZE ERROR / NOT ON SIZE ERROR overflow detection."""
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_add_overflow_fires_on_size_error(self):
+        """ADD that overflows PIC 9(3) fires ON SIZE ERROR; field stays unchanged."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ADD-OSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC 9(3) VALUE 1.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 999 TO WS-COUNTER",
+                "        ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-ADD.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"
+        assert list(region[:3]) == [
+            0xF0,
+            0xF0,
+            0xF1,
+        ], f"WS-COUNTER should be unchanged (1), got {[hex(b) for b in region[:3]]}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_add_no_overflow_fires_not_on_size_error(self):
+        """ADD that does not overflow fires NOT ON SIZE ERROR branch."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ADD-NOSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC 9(3) VALUE 1.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 1 TO WS-COUNTER",
+                "        NOT ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-ADD.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_subtract_signed_underflow_fires_on_size_error(self):
+        """SUBTRACT from signed PIC S9(3) producing result below -max fires ON SIZE ERROR."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SUB-OSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC S9(3) VALUE -999.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SUBTRACT 1 FROM WS-COUNTER",
+                "        ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-SUBTRACT.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_multiply_overflow_fires_on_size_error(self):
+        """MULTIPLY that overflows PIC 9(3) fires ON SIZE ERROR; field stays unchanged."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-MUL-OSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC 9(3) VALUE 10.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MULTIPLY 100 BY WS-COUNTER",
+                "        ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-MULTIPLY.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"
+        assert list(region[:3]) == [
+            0xF0,
+            0xF1,
+            0xF0,
+        ], f"WS-COUNTER should be unchanged (10), got {[hex(b) for b in region[:3]]}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_divide_by_zero_fires_on_size_error(self):
+        """DIVIDE by zero fires ON SIZE ERROR; field stays unchanged."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DIV-OSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC 9(3) VALUE 5.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DIVIDE 0 INTO WS-COUNTER",
+                "        ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-DIVIDE.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"
+        assert list(region[:3]) == [
+            0xF0,
+            0xF0,
+            0xF5,
+        ], f"WS-COUNTER should be unchanged (5), got {[hex(b) for b in region[:3]]}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_no_on_size_error_clause_silent(self):
+        """Overflow without ON SIZE ERROR clause silently truncates; no Python exception."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-NOOSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC 9(3) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 999 TO WS-COUNTER.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        assert vm is not None
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_signed_field_upper_overflow(self):
+        """ADD to signed PIC S9(3) producing result above +max fires ON SIZE ERROR."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SIGN-OSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-COUNTER PIC S9(3) VALUE 999.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 1 TO WS-COUNTER",
+                "        ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-ADD.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[3] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[3])}"

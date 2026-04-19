@@ -175,4 +175,6 @@ fileignoreconfig:
 - filename: .beads/backup/issues.jsonl
   checksum: 7994dcee418bf0084eb0fe78faa77f4cd242d7a0e0aaeefc50e1717316811c32
 
+- filename: .beads/backup/issues.jsonl
+  checksum: ad3c29375235a28b408d12cefb7865785779a52265e23340ee16dbbf6d5d7ed9
 version: "1.0"

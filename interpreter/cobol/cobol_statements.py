@@ -136,6 +136,8 @@ class ArithmeticStatement:
     source: str
     target: str
     giving: list[str] = field(default_factory=list)
+    on_size_error: list[CobolStatementType] = field(default_factory=list)
+    not_on_size_error: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> ArithmeticStatement:
@@ -145,12 +147,20 @@ class ArithmeticStatement:
             source=operands[0] if len(operands) > 0 else "",
             target=operands[1] if len(operands) > 1 else "",
             giving=data.get("giving", []),
+            on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
+            not_on_size_error=[
+                parse_statement(c) for c in data.get("not_on_size_error", [])
+            ],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": self.op, "operands": [self.source, self.target]}
         if self.giving:
             result["giving"] = list(self.giving)
+        if self.on_size_error:
+            result["on_size_error"] = [c.to_dict() for c in self.on_size_error]
+        if self.not_on_size_error:
+            result["not_on_size_error"] = [c.to_dict() for c in self.not_on_size_error]
         return result
 
 
