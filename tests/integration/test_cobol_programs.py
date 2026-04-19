@@ -2691,8 +2691,8 @@ class TestSignSeparate:
 
 class TestJustifiedRight:
     @covers(CobolFeature.JUSTIFIED_CLAUSE, CobolFeature.MOVE)
-    def test_justified_right_alignment(self):
-        """PIC X(10) JUSTIFIED RIGHT — short value right-aligned with spaces."""
+    def test_justified_right_short_value_right_aligns(self):
+        """PIC X(10) JUSTIFIED RIGHT — 'ABC' stores as 7 spaces + ABC."""
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
@@ -2700,18 +2700,60 @@ class TestJustifiedRight:
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
                 "01 WS-JUST  PIC X(10) JUSTIFIED RIGHT VALUE SPACES.",
-                "01 WS-FLAG  PIC 9(1) VALUE 0.",
                 "PROCEDURE DIVISION.",
                 "MAIN-PARA.",
                 "    MOVE 'ABC' TO WS-JUST.",
-                "    MOVE 1 TO WS-FLAG.",
                 "    STOP RUN.",
             ],
             max_steps=1500,
         )
         region = _first_region(vm)
-        flag_offset = 10  # 10 bytes for WS-JUST
-        assert _decode_zoned_unsigned(region, flag_offset, 1) == 1
+        # 7 leading EBCDIC spaces, then A=0xC1, B=0xC2, C=0xC3
+        assert list(region[0:7]) == [0x40] * 7
+        assert list(region[7:10]) == [0xC1, 0xC2, 0xC3]
+
+    @covers(CobolFeature.JUSTIFIED_CLAUSE, CobolFeature.MOVE)
+    def test_justified_right_plain_field_still_left_aligns(self):
+        """Plain PIC X(10) — 'ABC' stores as ABC + 7 trailing spaces."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-PLAIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-PLAIN PIC X(10) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 'ABC' TO WS-PLAIN.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        # A=0xC1, B=0xC2, C=0xC3, then 7 trailing EBCDIC spaces
+        assert list(region[0:3]) == [0xC1, 0xC2, 0xC3]
+        assert list(region[3:10]) == [0x40] * 7
+
+    @covers(CobolFeature.JUSTIFIED_CLAUSE, CobolFeature.MOVE)
+    def test_justified_right_overlong_truncates_from_left(self):
+        """PIC X(3) JUSTIFIED RIGHT — 'ABCDE' keeps last 3 chars: CDE."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-TRUNC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-TRUNC PIC X(3) JUSTIFIED RIGHT VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 'ABCDE' TO WS-TRUNC.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        # C=0xC3, D=0xC4, E=0xC5 (leftmost 2 chars truncated)
+        assert list(region[0:3]) == [0xC3, 0xC4, 0xC5]
 
 
 class TestRenameAlias:
