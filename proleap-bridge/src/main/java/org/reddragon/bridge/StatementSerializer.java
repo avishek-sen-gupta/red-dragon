@@ -260,6 +260,12 @@ public final class StatementSerializer {
         }
 
         obj.add("operands", operands);
+        if (stmt.getOnSizeErrorPhrase() != null) {
+            obj.add("on_size_error", serializeStatements(stmt.getOnSizeErrorPhrase().getStatements()));
+        }
+        if (stmt.getNotOnSizeErrorPhrase() != null) {
+            obj.add("not_on_size_error", serializeStatements(stmt.getNotOnSizeErrorPhrase().getStatements()));
+        }
         return obj;
     }
 
@@ -300,6 +306,12 @@ public final class StatementSerializer {
         }
 
         obj.add("operands", operands);
+        if (stmt.getOnSizeErrorPhrase() != null) {
+            obj.add("on_size_error", serializeStatements(stmt.getOnSizeErrorPhrase().getStatements()));
+        }
+        if (stmt.getNotOnSizeErrorPhrase() != null) {
+            obj.add("not_on_size_error", serializeStatements(stmt.getNotOnSizeErrorPhrase().getStatements()));
+        }
         return obj;
     }
 
@@ -352,6 +364,12 @@ public final class StatementSerializer {
             LOG.fine("Could not extract MULTIPLY operands: " + e.getMessage());
         }
         obj.add("operands", operands);
+        if (stmt.getOnSizeErrorPhrase() != null) {
+            obj.add("on_size_error", serializeStatements(stmt.getOnSizeErrorPhrase().getStatements()));
+        }
+        if (stmt.getNotOnSizeErrorPhrase() != null) {
+            obj.add("not_on_size_error", serializeStatements(stmt.getNotOnSizeErrorPhrase().getStatements()));
+        }
         return obj;
     }
 
@@ -425,6 +443,12 @@ public final class StatementSerializer {
             LOG.fine("Could not extract DIVIDE operands: " + e.getMessage());
         }
         obj.add("operands", operands);
+        if (stmt.getOnSizeErrorPhrase() != null) {
+            obj.add("on_size_error", serializeStatements(stmt.getOnSizeErrorPhrase().getStatements()));
+        }
+        if (stmt.getNotOnSizeErrorPhrase() != null) {
+            obj.add("not_on_size_error", serializeStatements(stmt.getNotOnSizeErrorPhrase().getStatements()));
+        }
         return obj;
     }
 
