@@ -42,7 +42,18 @@ class TestConditionLoweringBasic:
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "text": "WS-A > 10"}, layout, region_reg, idx
+            ctx,
+            {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-A"},
+                    "op": ">",
+                    "right": {"kind": "lit", "value": "10"},
+                },
+            },
+            layout,
+            region_reg,
+            idx,
         )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -272,7 +283,18 @@ class TestConditionNameExpansion:
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "text": "WS-STATUS = A"}, layout, region_reg, idx
+            ctx,
+            {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-STATUS"},
+                    "op": "==",
+                    "right": {"kind": "lit", "value": "A"},
+                },
+            },
+            layout,
+            region_reg,
+            idx,
         )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]

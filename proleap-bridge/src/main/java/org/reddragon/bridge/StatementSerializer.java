@@ -1,7 +1,9 @@
 package org.reddragon.bridge;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.proleap.cobol.asg.metamodel.procedure.Statement;
 import io.proleap.cobol.asg.metamodel.procedure.StatementType;
 import io.proleap.cobol.asg.metamodel.procedure.StatementTypeEnum;
@@ -87,13 +89,23 @@ import io.proleap.cobol.asg.metamodel.procedure.rewrite.RewriteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.start.StartStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.call.TableCall;
+import io.proleap.cobol.asg.metamodel.valuestmt.ArithmeticValueStmt;
+import io.proleap.cobol.asg.metamodel.valuestmt.CallValueStmt;
 import io.proleap.cobol.asg.metamodel.valuestmt.ConditionValueStmt;
+import io.proleap.cobol.asg.metamodel.valuestmt.RelationConditionValueStmt;
 import io.proleap.cobol.asg.metamodel.valuestmt.Subscript;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
+import io.proleap.cobol.asg.metamodel.valuestmt.arithmetic.Basis;
+import io.proleap.cobol.asg.metamodel.valuestmt.arithmetic.MultDiv;
+import io.proleap.cobol.asg.metamodel.valuestmt.arithmetic.MultDivs;
+import io.proleap.cobol.asg.metamodel.valuestmt.arithmetic.PlusMinus;
+import io.proleap.cobol.asg.metamodel.valuestmt.arithmetic.Powers;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.AndOrCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.CombinableCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.ConditionNameReference;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.SimpleCondition;
+import io.proleap.cobol.asg.metamodel.valuestmt.relation.ArithmeticComparison;
+import io.proleap.cobol.asg.metamodel.valuestmt.relation.RelationalOperator;
 
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.Token;
@@ -1330,7 +1342,8 @@ public final class StatementSerializer {
      * <p>Result shapes:
      * <ul>
      *   <li>{@code {"not": bool, "condition_name": "IS-MINOR"}} for 88-level references</li>
-     *   <li>{@code {"not": bool, "text": "WS-A > 0"}} for relation/class conditions</li>
+     *   <li>{@code {"not": bool, "relation": {"left": <expr>, "op": "...", "right": <expr>}}} for relation conditions</li>
+     *   <li>{@code {"not": bool, "text": "..."}} fallback for class/sign/unknown conditions</li>
      *   <li>{@code {"not": bool, "condition": {...}}} for nested parenthesised conditions</li>
      * </ul>
      */
@@ -1360,12 +1373,133 @@ public final class StatementSerializer {
             } else {
                 obj.addProperty("text", "");
             }
+        } else if (scType == SimpleCondition.SimpleConditionType.RELATION_CONDITION) {
+            RelationConditionValueStmt rel = sc.getRelationCondition();
+            if (rel != null) {
+                obj.add("relation", serializeRelationCondition(rel));
+            } else {
+                obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
+            }
         } else {
-            // RELATION_CONDITION or CLASS_CONDITION — use getText() + insertSpaces
+            // CLASS_CONDITION or unknown — fall back to text
             obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
         }
 
         return obj;
+    }
+
+    /**
+     * Serializes a RELATION_CONDITION to {"left": <expr>, "op": "...", "right": <expr>}.
+     * Falls back to {"text": "..."} for SIGN and COMBINED condition types.
+     */
+    private static JsonObject serializeRelationCondition(RelationConditionValueStmt rel) {
+        JsonObject obj = new JsonObject();
+        if (rel.getRelationConditionType() == RelationConditionValueStmt.RelationConditionType.ARITHMETIC) {
+            ArithmeticComparison ac = rel.getArithmeticComparison();
+            if (ac != null) {
+                obj.add("left", ac.getArithmeticExpressionLeft() != null
+                        ? serializeArithmeticExpr(ac.getArithmeticExpressionLeft())
+                        : litNode(""));
+                obj.addProperty("op", relationalOpToString(ac.getOperator()));
+                obj.add("right", ac.getArithmeticExpressionRight() != null
+                        ? serializeArithmeticExpr(ac.getArithmeticExpressionRight())
+                        : litNode(""));
+                return obj;
+            }
+        }
+        // SIGN, COMBINED, or null ArithmeticComparison — fall back to text
+        obj.addProperty("text", rel.getCtx() != null ? insertSpaces(rel.getCtx().getText()) : "");
+        return obj;
+    }
+
+    private static String relationalOpToString(RelationalOperator op) {
+        if (op == null) return "==";
+        switch (op.getRelationalOperatorType()) {
+            case EQUAL: return "==";
+            case GREATER: return ">";
+            case GREATER_OR_EQUAL: return ">=";
+            case LESS: return "<";
+            case LESS_OR_EQUAL: return "<=";
+            case NOT_EQUAL: return "!=";
+            default: return "==";
+        }
+    }
+
+    /**
+     * Serializes an ArithmeticValueStmt as a left-folded expression tree.
+     * Returns one of: {"kind":"ref","name":"..."}, {"kind":"lit","value":"..."},
+     * {"kind":"binop","op":"...","left":<expr>,"right":<expr>},
+     * {"kind":"neg","expr":<expr>}.
+     */
+    private static JsonElement serializeArithmeticExpr(ArithmeticValueStmt avs) {
+        if (avs == null) return litNode("");
+        JsonElement result = serializeMultDivs(avs.getMultDivs());
+        for (PlusMinus pm : avs.getPlusMinus()) {
+            JsonObject binop = new JsonObject();
+            binop.addProperty("kind", "binop");
+            binop.addProperty("op", pm.getPlusMinusType() == PlusMinus.PlusMinusType.PLUS ? "+" : "-");
+            binop.add("left", result);
+            binop.add("right", serializeMultDivs(pm.getMultDivs()));
+            result = binop;
+        }
+        return result;
+    }
+
+    private static JsonElement serializeMultDivs(MultDivs md) {
+        if (md == null) return litNode("");
+        JsonElement result = serializePowers(md.getPowers());
+        for (MultDiv mdo : md.getMultDivs()) {
+            JsonObject binop = new JsonObject();
+            binop.addProperty("kind", "binop");
+            binop.addProperty("op", mdo.getMultDivType() == MultDiv.MultDivType.MULT ? "*" : "/");
+            binop.add("left", result);
+            binop.add("right", serializePowers(mdo.getPowers()));
+            result = binop;
+        }
+        return result;
+    }
+
+    private static JsonElement serializePowers(Powers p) {
+        if (p == null) return litNode("");
+        // Exponentiation (**) is extremely rare in COBOL conditions; fall back to getText
+        if (!p.getPowers().isEmpty()) {
+            return litNode(p.getCtx() != null ? p.getCtx().getText() : "");
+        }
+        JsonElement base = serializeBasis(p.getBasis());
+        if (p.getPowersType() == Powers.PowersType.MINUS) {
+            JsonObject neg = new JsonObject();
+            neg.addProperty("kind", "neg");
+            neg.add("expr", base);
+            return neg;
+        }
+        return base;
+    }
+
+    private static JsonElement serializeBasis(Basis b) {
+        if (b == null) return litNode("");
+        ValueStmt vs = b.getBasisValueStmt();
+        if (vs instanceof CallValueStmt) {
+            Call call = ((CallValueStmt) vs).getCall();
+            JsonObject ref = new JsonObject();
+            ref.addProperty("kind", "ref");
+            ref.addProperty("name", call != null ? extractCallName(call) : b.getCtx().getText());
+            return ref;
+        }
+        if (vs instanceof ArithmeticValueStmt) {
+            // Parenthesised sub-expression
+            return serializeArithmeticExpr((ArithmeticValueStmt) vs);
+        }
+        // Literals (LiteralValueStmt, IntegerLiteralValueStmt, etc.)
+        String text = vs != null && vs.getCtx() != null ? vs.getCtx().getText()
+                    : (b.getCtx() != null ? b.getCtx().getText() : "");
+        return litNode(text);
+    }
+
+    private static JsonObject litNode(String value) {
+        JsonObject lit = new JsonObject();
+        lit.addProperty("kind", "lit");
+        lit.addProperty("value", value);
+        return lit;
     }
 
     /**

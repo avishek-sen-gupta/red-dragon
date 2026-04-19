@@ -195,8 +195,11 @@ def _lower_condition_node(
         inner = _lower_condition_node(
             ctx, node["condition"], layout, region_reg, condition_index
         )
+    elif "relation" in node:
+        # Structured relation: {"left": <expr>, "op": "...", "right": <expr>}
+        inner = _lower_relation_node(ctx, node["relation"], layout, region_reg)
     else:
-        # Relation/class condition via flat text
+        # Fallback: flat text (CLASS/SIGN conditions, EVALUATE/SEARCH callers)
         inner = _lower_condition_str(
             ctx, node.get("text", ""), layout, region_reg, condition_index
         )
@@ -214,6 +217,97 @@ def _lower_condition_node(
         )
     )
     return result
+
+
+_OP_MAP: dict[str, str] = {
+    "==": "==",
+    ">": ">",
+    ">=": ">=",
+    "<": "<",
+    "<=": "<=",
+    "!=": "!=",
+}
+
+
+def _lower_relation_node(
+    ctx: EmitContext,
+    rel: dict,
+    layout: DataLayout,
+    region_reg: str,
+) -> str:
+    """Lower a structured relation dict {"left": <expr>, "op": "...", "right": <expr>}."""
+    left_reg = _lower_expr_dict(ctx, rel["left"], layout, region_reg)
+    right_reg = _lower_expr_dict(ctx, rel["right"], layout, region_reg)
+    op = _OP_MAP.get(rel.get("op", "=="), "==")
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator=resolve_binop(op),
+            left=Register(str(left_reg)),
+            right=Register(str(right_reg)),
+        )
+    )
+    return result
+
+
+def _lower_expr_dict(
+    ctx: EmitContext,
+    expr: dict,
+    layout: DataLayout,
+    region_reg: str,
+) -> str:
+    """Recursively lower an expression dict node to a register.
+
+    Supported kinds:
+    - {"kind": "ref", "name": "WS-A"} — field reference or literal fallback
+    - {"kind": "lit", "value": "10"} — literal constant
+    - {"kind": "binop", "op": "+", "left": <expr>, "right": <expr>} — arithmetic
+    - {"kind": "neg", "expr": <expr>} — unary negation
+    """
+    kind = expr.get("kind", "lit")
+
+    if kind == "ref":
+        name = expr.get("name", "")
+        if ctx.has_field(name, layout):
+            ref = ctx.resolve_field_ref(name, layout, region_reg)
+            return ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+        return ctx.const_to_reg(ctx.parse_literal(name))
+
+    if kind == "lit":
+        return ctx.const_to_reg(ctx.parse_literal(expr.get("value", "")))
+
+    if kind == "binop":
+        left_reg = _lower_expr_dict(ctx, expr["left"], layout, region_reg)
+        right_reg = _lower_expr_dict(ctx, expr["right"], layout, region_reg)
+        op = _OP_MAP.get(expr.get("op", "+"), "+")
+        result = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=result,
+                operator=resolve_binop(op),
+                left=Register(str(left_reg)),
+                right=Register(str(right_reg)),
+            )
+        )
+        return result
+
+    if kind == "neg":
+        inner = _lower_expr_dict(ctx, expr["expr"], layout, region_reg)
+        zero_reg = ctx.const_to_reg(0)
+        result = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=result,
+                operator=resolve_binop("-"),
+                left=Register(str(zero_reg)),
+                right=Register(str(inner)),
+            )
+        )
+        return result
+
+    # Unknown kind — treat as empty literal
+    return ctx.const_to_reg(ctx.parse_literal(""))
 
 
 def _lower_condition_str(

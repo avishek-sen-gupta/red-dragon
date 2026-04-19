@@ -335,7 +335,14 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition={"not": False, "text": "WS-A > 0"},
+                condition={
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "0"},
+                    },
+                },
                 children=[
                     DisplayStatement(operand="POSITIVE"),
                 ],
@@ -362,7 +369,14 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition={"not": False, "text": "WS-A > 0"},
+                condition={
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "0"},
+                    },
+                },
                 children=[DisplayStatement(operand="POSITIVE")],
                 else_children=[DisplayStatement(operand="NOT-POSITIVE")],
             ),
@@ -401,7 +415,14 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition={"not": False, "text": "WS-A > 0"},
+                condition={
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "0"},
+                    },
+                },
                 children=[DisplayStatement(operand="ONLY-THEN")],
             ),
         ]
@@ -865,7 +886,15 @@ class TestPerformLoopLowering:
             PerformStatement(
                 children=[DisplayStatement(operand="LOOPING")],
                 spec=PerformUntilSpec(
-                    condition={"not": False, "text": "WS-A > 10"}, test_before=True
+                    condition={
+                        "not": False,
+                        "relation": {
+                            "left": {"kind": "ref", "name": "WS-A"},
+                            "op": ">",
+                            "right": {"kind": "lit", "value": "10"},
+                        },
+                    },
+                    test_before=True,
                 ),
             ),
         ]
@@ -920,7 +949,15 @@ class TestPerformLoopLowering:
             PerformStatement(
                 children=[DisplayStatement(operand="LOOPING")],
                 spec=PerformUntilSpec(
-                    condition={"not": False, "text": "WS-A > 10"}, test_before=False
+                    condition={
+                        "not": False,
+                        "relation": {
+                            "left": {"kind": "ref", "name": "WS-A"},
+                            "op": ">",
+                            "right": {"kind": "lit", "value": "10"},
+                        },
+                    },
+                    test_before=False,
                 ),
             ),
         ]
@@ -977,7 +1014,14 @@ class TestPerformLoopLowering:
                     varying_var="WS-IDX",
                     varying_from="1",
                     varying_by="1",
-                    condition={"not": False, "text": "WS-IDX > 5"},
+                    condition={
+                        "not": False,
+                        "relation": {
+                            "left": {"kind": "ref", "name": "WS-IDX"},
+                            "op": ">",
+                            "right": {"kind": "lit", "value": "5"},
+                        },
+                    },
                     test_before=True,
                 ),
             ),
