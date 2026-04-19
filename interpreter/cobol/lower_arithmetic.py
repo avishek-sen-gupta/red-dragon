@@ -394,15 +394,71 @@ def lower_compute(
     expr_tree = parse_expression(stmt.expression)
     result_reg = lower_expr_node(ctx, expr_tree, layout, region_reg)
 
-    result_str_reg = ctx.emit_to_string(result_reg)
+    has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
+
+    if not has_clause:
+        result_str_reg = ctx.emit_to_string(result_reg)
+        for target_name in stmt.targets:
+            if not ctx.has_field(target_name, layout):
+                logger.warning("COMPUTE target %s not found in layout", target_name)
+                continue
+            target_ref = ctx.resolve_field_ref(target_name, layout, region_reg)
+            ctx.emit_encode_and_write(
+                region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
+            )
+        return
+
+    on_size_err_label = ctx.fresh_label("on_size_err")
+    not_on_size_err_label = ctx.fresh_label("not_on_size_err")
+    end_label = ctx.fresh_label("size_err_end")
+
+    # Resolve all valid targets up front
+    target_refs = []
     for target_name in stmt.targets:
         if not ctx.has_field(target_name, layout):
             logger.warning("COMPUTE target %s not found in layout", target_name)
             continue
-        target_ref = ctx.resolve_field_ref(target_name, layout, region_reg)
-        ctx.emit_encode_and_write(
-            region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
+        target_refs.append(ctx.resolve_field_ref(target_name, layout, region_reg))
+
+    # OR overflow flags across all targets (all-or-nothing semantics)
+    overflow_flags = [
+        _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
+        for ref in target_refs
+    ]
+    combined_flag = overflow_flags[0]
+    for flag in overflow_flags[1:]:
+        new_combined = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_combined,
+                operator=resolve_binop("or"),
+                left=Register(str(combined_flag)),
+                right=Register(str(flag)),
+            )
         )
+        combined_flag = new_combined
+
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=Register(str(combined_flag)),
+            branch_targets=(on_size_err_label, not_on_size_err_label),
+        )
+    )
+
+    ctx.emit_inst(Label_(label=on_size_err_label))
+    for child in stmt.on_size_error:
+        ctx.lower_statement(child, layout, region_reg)
+    ctx.emit_inst(Branch(label=end_label))
+
+    ctx.emit_inst(Label_(label=not_on_size_err_label))
+    result_str_reg = ctx.emit_to_string(result_reg)
+    for ref in target_refs:
+        ctx.emit_encode_and_write(region_reg, ref.fl, result_str_reg, ref.offset_reg)
+    for child in stmt.not_on_size_error:
+        ctx.lower_statement(child, layout, region_reg)
+    ctx.emit_inst(Branch(label=end_label))
+
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_if(
