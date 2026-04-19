@@ -329,7 +329,7 @@ class EmitContext:
     ) -> str:
         """Emit inline alphanumeric encoding IR. Returns result register."""
         value_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=value_reg, value=value))
+        self.emit_inst(Const(result_reg=value_reg, value=f'"{value}"'))
 
         if justified_right:
             ir = build_encode_alphanumeric_justified_ir(
