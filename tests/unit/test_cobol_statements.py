@@ -134,12 +134,26 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "IF",
-                "condition": {"not": False, "text": "WS-A > 0"},
+                "condition": {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "0"},
+                    },
+                },
                 "children": [{"type": "DISPLAY", "operands": ["POSITIVE"]}],
             }
         )
         assert isinstance(stmt, IfStatement)
-        assert stmt.condition == {"not": False, "text": "WS-A > 0"}
+        assert stmt.condition == {
+            "not": False,
+            "relation": {
+                "left": {"kind": "ref", "name": "WS-A"},
+                "op": ">",
+                "right": {"kind": "lit", "value": "0"},
+            },
+        }
         assert len(stmt.children) == 1
         assert isinstance(stmt.children[0], DisplayStatement)
 
@@ -148,7 +162,14 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "IF",
-                "condition": {"not": False, "text": "WS-A > 0"},
+                "condition": {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "0"},
+                    },
+                },
                 "children": [{"type": "DISPLAY", "operands": ["YES"]}],
                 "else_children": [{"type": "DISPLAY", "operands": ["NO"]}],
             }
@@ -164,7 +185,14 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "IF",
-                "condition": {"not": False, "text": "WS-A > 0"},
+                "condition": {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "0"},
+                    },
+                },
                 "children": [{"type": "DISPLAY", "operands": ["YES"]}],
             }
         )
@@ -580,12 +608,26 @@ class TestPerformSpecs:
                 "type": "PERFORM",
                 "operands": ["WORK-PARA"],
                 "perform_type": "UNTIL",
-                "until": {"not": False, "text": "WS-A > 10"},
+                "until": {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "10"},
+                    },
+                },
                 "test_before": True,
             }
         )
         assert isinstance(stmt.spec, PerformUntilSpec)
-        assert stmt.spec.condition == {"not": False, "text": "WS-A > 10"}
+        assert stmt.spec.condition == {
+            "not": False,
+            "relation": {
+                "left": {"kind": "ref", "name": "WS-A"},
+                "op": ">",
+                "right": {"kind": "lit", "value": "10"},
+            },
+        }
         assert stmt.spec.test_before is True
 
     @covers(
@@ -599,7 +641,14 @@ class TestPerformSpecs:
                 "type": "PERFORM",
                 "operands": ["WORK-PARA"],
                 "perform_type": "UNTIL",
-                "until": {"not": False, "text": "WS-A > 10"},
+                "until": {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "10"},
+                    },
+                },
                 "test_before": False,
             }
         )
@@ -621,7 +670,14 @@ class TestPerformSpecs:
                 "varying_var": "WS-IDX",
                 "varying_from": "1",
                 "varying_by": "1",
-                "until": {"not": False, "text": "WS-IDX > 10"},
+                "until": {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-IDX"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "10"},
+                    },
+                },
                 "test_before": True,
             }
         )
@@ -629,7 +685,14 @@ class TestPerformSpecs:
         assert stmt.spec.varying_var == "WS-IDX"
         assert stmt.spec.varying_from == "1"
         assert stmt.spec.varying_by == "1"
-        assert stmt.spec.condition == {"not": False, "text": "WS-IDX > 10"}
+        assert stmt.spec.condition == {
+            "not": False,
+            "relation": {
+                "left": {"kind": "ref", "name": "WS-IDX"},
+                "op": ">",
+                "right": {"kind": "lit", "value": "10"},
+            },
+        }
 
     @covers(CobolFeature.PERFORM)
     def test_no_perform_type_gives_none_spec(self):
@@ -683,7 +746,14 @@ class TestRoundTrip:
     def test_if_round_trip(self):
         data = {
             "type": "IF",
-            "condition": {"not": False, "text": "WS-A > 0"},
+            "condition": {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-A"},
+                    "op": ">",
+                    "right": {"kind": "lit", "value": "0"},
+                },
+            },
             "children": [{"type": "DISPLAY", "operands": ["YES"]}],
         }
         assert self._round_trip(data) == data
@@ -692,7 +762,14 @@ class TestRoundTrip:
     def test_if_else_round_trip(self):
         data = {
             "type": "IF",
-            "condition": {"not": False, "text": "WS-A > 0"},
+            "condition": {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-A"},
+                    "op": ">",
+                    "right": {"kind": "lit", "value": "0"},
+                },
+            },
             "children": [{"type": "DISPLAY", "operands": ["YES"]}],
             "else_children": [{"type": "DISPLAY", "operands": ["NO"]}],
         }
@@ -746,7 +823,14 @@ class TestRoundTrip:
             "type": "PERFORM",
             "operands": ["WORK"],
             "perform_type": "UNTIL",
-            "until": {"not": False, "text": "WS-A > 10"},
+            "until": {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-A"},
+                    "op": ">",
+                    "right": {"kind": "lit", "value": "10"},
+                },
+            },
             "test_before": True,
         }
         assert self._round_trip(data) == data
@@ -764,7 +848,14 @@ class TestRoundTrip:
             "varying_var": "WS-IDX",
             "varying_from": "1",
             "varying_by": "1",
-            "until": {"not": False, "text": "WS-IDX > 10"},
+            "until": {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-IDX"},
+                    "op": ">",
+                    "right": {"kind": "lit", "value": "10"},
+                },
+            },
             "test_before": True,
         }
         assert self._round_trip(data) == data
