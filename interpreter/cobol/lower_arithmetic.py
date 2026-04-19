@@ -420,6 +420,11 @@ def lower_compute(
             continue
         target_refs.append(ctx.resolve_field_ref(target_name, layout, region_reg))
 
+    # Guard: no valid targets means no writes and no overflow check — execute
+    # not_on_size_error path (same as fast path: silent skip).
+    if not target_refs:
+        return
+
     # OR overflow flags across all targets (all-or-nothing semantics)
     overflow_flags = [
         _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
