@@ -10,8 +10,10 @@ from interpreter.cobol.condition_name_index import (
 )
 from interpreter.cobol.data_layout import build_data_layout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_data_division import lower_data_division
 from interpreter.ir import Opcode
+from tests.covers import covers
 
 
 def _noop_dispatch(ctx, stmt, layout, region_reg):
@@ -33,12 +35,15 @@ def _setup_with_fields(cobol_fields: list[CobolField]):
 class TestConditionLoweringBasic:
     """Existing behavior: field OP value conditions."""
 
+    @covers(CobolFeature.IF_ELSE)
     def test_simple_comparison(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
-        result_reg = lower_condition(ctx, "WS-A > 10", layout, region_reg, idx)
+        result_reg = lower_condition(
+            ctx, {"not": False, "text": "WS-A > 10"}, layout, region_reg, idx
+        )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         assert any(i.operands[0] == ">" for i in binop_insts)
@@ -48,12 +53,15 @@ class TestConditionLoweringBasic:
         ]
         assert 10 in const_vals
 
+    @covers(CobolFeature.IF_ELSE)
     def test_unknown_condition_defaults_to_true(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
-        result_reg = lower_condition(ctx, "UNKNOWN-TOKEN", layout, region_reg, idx)
+        result_reg = lower_condition(
+            ctx, {"not": False, "text": "UNKNOWN-TOKEN"}, layout, region_reg, idx
+        )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
         assert last_const.operands == [True]
@@ -62,6 +70,7 @@ class TestConditionLoweringBasic:
 class TestConditionNameExpansion:
     """Level-88 condition name expansion tests."""
 
+    @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_single_value_condition(self):
         """IF STATUS-ACTIVE expands to WS-STATUS == 'A'."""
         fields = [
@@ -80,7 +89,13 @@ class TestConditionNameExpansion:
             ),
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
-        result_reg = lower_condition(ctx, "STATUS-ACTIVE", layout, region_reg, idx)
+        result_reg = lower_condition(
+            ctx,
+            {"not": False, "condition_name": "STATUS-ACTIVE"},
+            layout,
+            region_reg,
+            idx,
+        )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
@@ -91,6 +106,7 @@ class TestConditionNameExpansion:
         ]
         assert "A" in const_vals
 
+    @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_multi_value_or_expansion(self):
         """IF STATUS-VALID expands to WS-STATUS == 'A' OR WS-STATUS == 'B' OR WS-STATUS == 'C'."""
         fields = [
@@ -113,7 +129,13 @@ class TestConditionNameExpansion:
             ),
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
-        result_reg = lower_condition(ctx, "STATUS-VALID", layout, region_reg, idx)
+        result_reg = lower_condition(
+            ctx,
+            {"not": False, "condition_name": "STATUS-VALID"},
+            layout,
+            region_reg,
+            idx,
+        )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
@@ -121,6 +143,7 @@ class TestConditionNameExpansion:
         assert len(eq_ops) == 3
         assert len(or_ops) == 2
 
+    @covers(CobolFeature.CONDITION_VALUES_THRU)
     def test_thru_range_expansion(self):
         """IF STATUS-ALPHA expands to WS-STATUS >= 'A' AND WS-STATUS <= 'Z'."""
         fields = [
@@ -139,7 +162,13 @@ class TestConditionNameExpansion:
             ),
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
-        result_reg = lower_condition(ctx, "STATUS-ALPHA", layout, region_reg, idx)
+        result_reg = lower_condition(
+            ctx,
+            {"not": False, "condition_name": "STATUS-ALPHA"},
+            layout,
+            region_reg,
+            idx,
+        )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         ge_ops = [i for i in binop_insts if i.operands[0] == ">="]
@@ -155,6 +184,7 @@ class TestConditionNameExpansion:
         assert "A" in const_vals
         assert "Z" in const_vals
 
+    @covers(CobolFeature.CONDITION_VALUES_THRU)
     def test_mixed_discrete_and_range(self):
         """Mixed: VALUE 'A' 'X' THRU 'Z' — produces 1 eq + 1 range, combined with OR."""
         fields = [
@@ -176,7 +206,9 @@ class TestConditionNameExpansion:
             ),
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
-        result_reg = lower_condition(ctx, "VALID-CODE", layout, region_reg, idx)
+        result_reg = lower_condition(
+            ctx, {"not": False, "condition_name": "VALID-CODE"}, layout, region_reg, idx
+        )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
@@ -197,6 +229,7 @@ class TestConditionNameExpansion:
         assert "X" in const_vals
         assert "Z" in const_vals
 
+    @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_unknown_condition_passes_through(self):
         """A single token that is NOT a known condition name defaults to true
         without any condition-name expansion (no or/and/== from expansion)."""
@@ -204,7 +237,9 @@ class TestConditionNameExpansion:
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
-        result_reg = lower_condition(ctx, "NONEXISTENT-COND", layout, region_reg, idx)
+        result_reg = lower_condition(
+            ctx, {"not": False, "text": "NONEXISTENT-COND"}, layout, region_reg, idx
+        )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
         assert last_const.operands == [True]
@@ -213,6 +248,7 @@ class TestConditionNameExpansion:
         expansion_ops = [i for i in binop_insts if i.operands[0] in ("or", "and", "==")]
         assert len(expansion_ops) == 0, "Unknown condition should not expand"
 
+    @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_regular_comparison_still_works_with_index(self):
         """Normal 'field OP value' conditions still work when index is present.
 
@@ -235,7 +271,9 @@ class TestConditionNameExpansion:
             ),
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
-        result_reg = lower_condition(ctx, "WS-STATUS = A", layout, region_reg, idx)
+        result_reg = lower_condition(
+            ctx, {"not": False, "text": "WS-STATUS = A"}, layout, region_reg, idx
+        )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]

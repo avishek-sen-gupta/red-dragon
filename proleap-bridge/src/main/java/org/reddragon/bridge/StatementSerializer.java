@@ -87,8 +87,13 @@ import io.proleap.cobol.asg.metamodel.procedure.rewrite.RewriteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.start.StartStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.call.TableCall;
+import io.proleap.cobol.asg.metamodel.valuestmt.ConditionValueStmt;
 import io.proleap.cobol.asg.metamodel.valuestmt.Subscript;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
+import io.proleap.cobol.asg.metamodel.valuestmt.condition.AndOrCondition;
+import io.proleap.cobol.asg.metamodel.valuestmt.condition.CombinableCondition;
+import io.proleap.cobol.asg.metamodel.valuestmt.condition.ConditionNameReference;
+import io.proleap.cobol.asg.metamodel.valuestmt.condition.SimpleCondition;
 
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.Token;
@@ -449,14 +454,12 @@ public final class StatementSerializer {
     private static JsonObject serializeIf(IfStatement stmt) {
         JsonObject obj = newStatement("IF");
 
-        // Extract condition text
         try {
             if (stmt.getCondition() != null) {
-                String condText = stmt.getCondition().getCtx().getText();
-                obj.addProperty("condition", insertSpaces(condText));
+                obj.add("condition", serializeConditionNode(stmt.getCondition()));
             }
         } catch (Exception e) {
-            LOG.fine("Could not extract IF condition text: " + e.getMessage());
+            LOG.fine("Could not extract IF condition: " + e.getMessage());
         }
 
         JsonArray children = new JsonArray();
@@ -585,8 +588,12 @@ public final class StatementSerializer {
      * Serializes Until condition fields into the JSON object.
      */
     private static void serializeUntilFields(Until until, JsonObject obj) {
-        if (until.getCondition() != null && until.getCondition().getCtx() != null) {
-            obj.addProperty("until", insertSpaces(until.getCondition().getCtx().getText()));
+        if (until.getCondition() != null) {
+            try {
+                obj.add("until", serializeConditionNode(until.getCondition()));
+            } catch (Exception e) {
+                LOG.fine("Could not serialize UNTIL condition: " + e.getMessage());
+            }
         }
     }
 
@@ -1295,6 +1302,70 @@ public final class StatementSerializer {
             // fall through
         }
         return vs.toString();
+    }
+
+    /**
+     * Serializes a ConditionValueStmt into a structured JSON tree.
+     *
+     * <p>Single-atom conditions produce a combinable-condition object directly.
+     * Compound conditions (AND/OR chains) produce a left-folded binary tree:
+     * {@code {"op": "AND", "left": {...}, "right": {...}}}.
+     */
+    private static JsonObject serializeConditionNode(ConditionValueStmt cond) {
+        JsonObject current = serializeCombinableCondition(cond.getCombinableCondition());
+        for (AndOrCondition aoc : cond.getAndOrConditions()) {
+            JsonObject compound = new JsonObject();
+            String op = (aoc.getAndOrConditionType() == AndOrCondition.AndOrConditionType.AND) ? "AND" : "OR";
+            compound.addProperty("op", op);
+            compound.add("left", current);
+            compound.add("right", serializeCombinableCondition(aoc.getCombinableCondition()));
+            current = compound;
+        }
+        return current;
+    }
+
+    /**
+     * Serializes a single CombinableCondition (one atom, possibly negated).
+     *
+     * <p>Result shapes:
+     * <ul>
+     *   <li>{@code {"not": bool, "condition_name": "IS-MINOR"}} for 88-level references</li>
+     *   <li>{@code {"not": bool, "text": "WS-A > 0"}} for relation/class conditions</li>
+     *   <li>{@code {"not": bool, "condition": {...}}} for nested parenthesised conditions</li>
+     * </ul>
+     */
+    private static JsonObject serializeCombinableCondition(CombinableCondition cc) {
+        JsonObject obj = new JsonObject();
+        boolean not = cc.isNot();
+        obj.addProperty("not", not);
+
+        SimpleCondition sc = cc.getSimpleCondition();
+        if (sc == null) {
+            obj.addProperty("text", "");
+            return obj;
+        }
+
+        SimpleCondition.SimpleConditionType scType = sc.getSimpleConditionType();
+        if (scType == SimpleCondition.SimpleConditionType.CONDITION_NAME_REFERENCE) {
+            ConditionNameReference ref = sc.getConditionNameReference();
+            if (ref != null && ref.getConditionCall() != null) {
+                obj.addProperty("condition_name", extractCallName(ref.getConditionCall()));
+            } else {
+                obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
+            }
+        } else if (scType == SimpleCondition.SimpleConditionType.CONDITION) {
+            ConditionValueStmt nested = sc.getCondition();
+            if (nested != null) {
+                obj.add("condition", serializeConditionNode(nested));
+            } else {
+                obj.addProperty("text", "");
+            }
+        } else {
+            // RELATION_CONDITION or CLASS_CONDITION — use getText() + insertSpaces
+            obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
+        }
+
+        return obj;
     }
 
     /**
