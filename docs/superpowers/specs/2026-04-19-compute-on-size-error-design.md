@@ -66,7 +66,7 @@ not_on_size_error: list[CobolStatement] = field(default_factory=list)
 5. `not_on_size_err` branch: `encode_and_write` all targets, lower `not_on_size_error` children; `Branch(end_label)`
 6. `end_label`
 
-The helpers `_compute_overflow_flag` and `emit_overflow_check` from the ON SIZE ERROR implementation are reused directly. No new IR primitives needed.
+The helper `_compute_overflow_flag` from the ON SIZE ERROR implementation is reused directly. No new IR primitives needed.
 
 ### Layer 4 — Integration Tests (`TestComputeOnSizeError`)
 
