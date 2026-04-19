@@ -181,4 +181,6 @@ fileignoreconfig:
   checksum: d71aa1f292cacb3832416e94977fda4fcf1044f90a434db0014c5f7bdc6d32d9
 - filename: .beads/backup/issues.jsonl
   checksum: cd8f93a4af0591f7dc9421cc3d019719c07ae149be4eaaf6ceca500e20cbf5b9
+- filename: docs/superpowers/specs/2026-04-19-compute-on-size-error-design.md
+  checksum: 56a4abe3a3657850c087098249dc2dccdd38f1192f5824c00a71634423a985d9
 version: "1.0"
