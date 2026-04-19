@@ -170,12 +170,18 @@ class ComputeStatement:
 
     expression: str  # e.g. "WS-A + WS-B * 2"
     targets: list[str] = field(default_factory=list)  # target variable names
+    on_size_error: list[CobolStatementType] = field(default_factory=list)
+    not_on_size_error: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> ComputeStatement:
         return cls(
             expression=data.get("expression", ""),
             targets=data.get("targets", []),
+            on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
+            not_on_size_error=[
+                parse_statement(c) for c in data.get("not_on_size_error", [])
+            ],
         )
 
     def to_dict(self) -> dict:
