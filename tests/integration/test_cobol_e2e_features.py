@@ -524,6 +524,50 @@ class TestBlankWhenZeroComposition:
         # WS-NORM: no BWZ + VALUE 0 -> normal zoned zeros (0xF0)
         assert list(region[12:16]) == [0xF0, 0xF0, 0xF0, 0xF0]
 
+    @covers(CobolFeature.BLANK_WHEN_ZERO, CobolFeature.MOVE)
+    def test_blank_when_zero_blanked_field_reads_back_as_zero(self):
+        """AC3: a blanked field (spaces in memory) MOVEd to a non-BWZ field transfers as 0."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-BWZ-AC3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-BLANK PIC 9(4) BLANK WHEN ZERO VALUE 0.",
+                "77 WS-DEST  PIC 9(4) VALUE 99.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-BLANK TO WS-DEST.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-BLANK occupies bytes 0-3: EBCDIC spaces (blanked)
+        assert list(region[0:4]) == [0x40, 0x40, 0x40, 0x40]
+        # WS-DEST occupies bytes 4-7: MOVE from blanked field must transfer 0 as
+        # normal zoned zeros (0xF0), not as spaces — WS-DEST has no BWZ clause
+        assert list(region[4:8]) == [0xF0, 0xF0, 0xF0, 0xF0]
+
+    @covers(CobolFeature.BLANK_WHEN_ZERO, CobolFeature.SUBTRACT)
+    def test_blank_when_zero_arithmetic_result_zero_blanks_field(self):
+        """AC4: a BWZ field whose value reaches zero via arithmetic is stored as spaces."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-BWZ-AC4.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-AMT PIC 9(4) BLANK WHEN ZERO VALUE 42.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SUBTRACT 42 FROM WS-AMT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # After SUBTRACT 42 FROM 42, result is 0 — BWZ must produce EBCDIC spaces
+        assert list(region[0:4]) == [0x40, 0x40, 0x40, 0x40]
+
 
 class TestLogicalOperators:
     """AND / OR / NOT in IF conditions."""
