@@ -73,6 +73,50 @@ def _first_region(vm):
     return vm.region_get(list(vm.region_keys())[0])
 
 
+def _decode_alpha(region: list[int], offset: int, length: int) -> str:
+    """Decode EBCDIC alphanumeric bytes from a memory region to an ASCII string."""
+    ebcdic_to_ascii = {
+        0x40: " ",
+        0xC1: "A",
+        0xC2: "B",
+        0xC3: "C",
+        0xC4: "D",
+        0xC5: "E",
+        0xC6: "F",
+        0xC7: "G",
+        0xC8: "H",
+        0xC9: "I",
+        0xD1: "J",
+        0xD2: "K",
+        0xD3: "L",
+        0xD4: "M",
+        0xD5: "N",
+        0xD6: "O",
+        0xD7: "P",
+        0xD8: "Q",
+        0xD9: "R",
+        0xE2: "S",
+        0xE3: "T",
+        0xE4: "U",
+        0xE5: "V",
+        0xE6: "W",
+        0xE7: "X",
+        0xE8: "Y",
+        0xE9: "Z",
+        0xF0: "0",
+        0xF1: "1",
+        0xF2: "2",
+        0xF3: "3",
+        0xF4: "4",
+        0xF5: "5",
+        0xF6: "6",
+        0xF7: "7",
+        0xF8: "8",
+        0xF9: "9",
+    }
+    return "".join(ebcdic_to_ascii.get(region[offset + i], "?") for i in range(length))
+
+
 # ---------------------------------------------------------------------------
 # Test programs
 # ---------------------------------------------------------------------------
@@ -102,6 +146,104 @@ class TestInitialValues:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 4) == 10
         assert _decode_zoned_unsigned(region, 4, 4) == 5
+
+
+class TestValueClauseAlphanumericInit:
+    """AC2 (4q25.9.1): PIC X field with VALUE literal is initialised at startup."""
+
+    @covers(CobolFeature.VALUE_CLAUSE, CobolFeature.SECTION_WORKING_STORAGE)
+    def test_pic_x_value_literal_initialised(self):
+        """77 WS-TEXT PIC X(5) VALUE 'HELLO' — bytes 0-4 must decode to 'HELLO'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-AX2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-TEXT PIC X(5) VALUE 'HELLO'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 5) == "HELLO"
+
+
+class TestValueClauseDefaultZeroFill:
+    """AC3 (4q25.9.3): PIC 9 field without VALUE is zero-filled at startup."""
+
+    @covers(CobolFeature.VALUE_CLAUSE, CobolFeature.SECTION_WORKING_STORAGE)
+    def test_pic_9_no_value_is_zero(self):
+        """77 WS-N PIC 9(3) (no VALUE) — all 3 zoned bytes must be 0xF0 (digit 0)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-AX3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-N PIC 9(3).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 3) == 0
+
+
+class TestValueClauseRedefinesInit:
+    """AC4 (4q25.9.2): VALUE on a field that a REDEFINES target shares bytes with."""
+
+    @covers(
+        CobolFeature.VALUE_CLAUSE,
+        CobolFeature.REDEFINES_CLAUSE,
+        CobolFeature.SECTION_WORKING_STORAGE,
+    )
+    def test_value_on_base_visible_through_redefines(self):
+        """01 WS-BASE PIC X(4) VALUE 'ABCD' — bytes 0-3 must decode to 'ABCD'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-AX4.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-BASE PIC X(4) VALUE 'ABCD'.",
+                "01 WS-NUM REDEFINES WS-BASE PIC 9(4).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 4) == "ABCD"
+
+
+class TestValueClauseGroupChildInit:
+    """AC5 (4q25.9.4): GROUP item — each elementary child with VALUE is initialised."""
+
+    @covers(CobolFeature.VALUE_CLAUSE, CobolFeature.SECTION_WORKING_STORAGE)
+    def test_group_children_independently_initialised(self):
+        """01 WS-REC group: WS-A(9(3))=42 @ 0, WS-B(X(5))='HI   ' @ 3, WS-C(9(2))=7 @ 8."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-AX5.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-REC.",
+                "    05 WS-A PIC 9(3) VALUE 42.",
+                "    05 WS-B PIC X(5) VALUE 'HI'.",
+                "    05 WS-C PIC 9(2) VALUE 7.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 3) == 42
+        assert _decode_alpha(region, 3, 2) == "HI"
+        assert _decode_zoned_unsigned(region, 8, 2) == 7
 
 
 class TestAddSubtract:
