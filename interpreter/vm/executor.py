@@ -179,8 +179,6 @@ from interpreter.handlers.regions import (  # noqa: E402
     _handle_alloc_region,
     _handle_write_region,
     _handle_load_region,
-    _handle_slice,
-    _handle_splice,
 )
 
 # ── Dispatch table and entry point ──────────────────────────────
@@ -218,8 +216,6 @@ class LocalExecutor:
         Opcode.ALLOC_REGION: _handle_alloc_region,
         Opcode.WRITE_REGION: _handle_write_region,
         Opcode.LOAD_REGION: _handle_load_region,
-        Opcode.SLICE: _handle_slice,
-        Opcode.SPLICE: _handle_splice,
         Opcode.ADDRESS_OF: _handle_address_of,
         Opcode.LOAD_INDIRECT: _handle_load_indirect,
         Opcode.LOAD_FIELD_INDIRECT: _handle_load_field_indirect,
