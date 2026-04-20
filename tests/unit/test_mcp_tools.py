@@ -155,8 +155,8 @@ class TestListOpcodes:
         self.opcodes = self.result["opcodes"]
         self.by_name = {o["name"]: o for o in self.opcodes}
 
-    def test_returns_all_34_opcodes(self):
-        assert len(self.opcodes) == 34
+    def test_returns_all_36_opcodes(self):
+        assert len(self.opcodes) == 36
 
     def test_sorted_alphabetically(self):
         names = [o["name"] for o in self.opcodes]
