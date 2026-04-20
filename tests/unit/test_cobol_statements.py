@@ -62,7 +62,7 @@ class TestParseStatementDispatch:
         stmt = parse_statement({"type": "ADD", "operands": ["5", "WS-A"]})
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "ADD"
-        assert stmt.source == "5"
+        assert stmt.source.name == "5"
         assert stmt.target == "WS-A"
 
     @covers(CobolFeature.ADD, CobolFeature.GIVING_CLAUSE)
@@ -72,7 +72,7 @@ class TestParseStatementDispatch:
         )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "ADD"
-        assert stmt.source == "5"
+        assert stmt.source.name == "5"
         assert stmt.target == "WS-A"
         assert stmt.giving == ["WS-R"]
 
@@ -89,7 +89,7 @@ class TestParseStatementDispatch:
         )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "SUBTRACT"
-        assert stmt.source == "WS-B"
+        assert stmt.source.name == "WS-B"
         assert stmt.target == "WS-A"
         assert stmt.giving == ["WS-R"]
 
@@ -722,17 +722,25 @@ class TestRoundTrip:
 
     @covers(CobolFeature.ADD)
     def test_add_round_trip(self):
-        data = {"type": "ADD", "operands": ["5", "WS-A"]}
+        data = {"type": "ADD", "operands": [{"name": "5"}, {"name": "WS-A"}]}
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.ADD, CobolFeature.GIVING_CLAUSE)
     def test_add_giving_round_trip(self):
-        data = {"type": "ADD", "operands": ["5", "WS-A"], "giving": ["WS-R"]}
+        data = {
+            "type": "ADD",
+            "operands": [{"name": "5"}, {"name": "WS-A"}],
+            "giving": ["WS-R"],
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.SUBTRACT, CobolFeature.GIVING_CLAUSE)
     def test_subtract_giving_round_trip(self):
-        data = {"type": "SUBTRACT", "operands": ["WS-B", "WS-A"], "giving": ["WS-R"]}
+        data = {
+            "type": "SUBTRACT",
+            "operands": [{"name": "WS-B"}, {"name": "WS-A"}],
+            "giving": ["WS-R"],
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.DISPLAY)
