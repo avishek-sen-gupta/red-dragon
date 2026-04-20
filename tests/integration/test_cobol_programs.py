@@ -3475,3 +3475,140 @@ class TestReferenceModification:
         # MOVE 'BB' TO WS-FIELD(4:2) replaces positions 4 and 5 (1-indexed) with "BB"
         # Result: "AAABBAAAAA"
         assert _decode_alpha(region, 0, 10) == "AAABBAAAAA"
+
+
+class TestStringRefMod:
+    @covers(
+        CobolFeature.STRING_VERB,
+        CobolFeature.REFERENCE_MODIFICATION,
+        CobolFeature.STRING_REF_MOD,
+    )
+    def test_string_field_ref_mod_basic(self):
+        """STRING WS-SRC(2:3) DELIMITED BY SIZE INTO WS-DST — extracts substring BCD."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-STR-RM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-SRC PIC X(5) VALUE 'ABCDE'.",
+                "01 WS-DST PIC X(10) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STRING WS-SRC(2:3) DELIMITED BY SIZE",
+                "           INTO WS-DST.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC 5 bytes at offset 0, WS-DST 10 bytes at offset 5
+        # WS-SRC(2:3) = "BCD" (1-indexed start=2, length=3)
+        assert _decode_alpha(region, 5, 3) == "BCD"
+
+    @covers(
+        CobolFeature.STRING_VERB,
+        CobolFeature.REFERENCE_MODIFICATION,
+        CobolFeature.STRING_REF_MOD,
+    )
+    def test_string_multiple_sendings_one_has_ref_mod(self):
+        """Two sendings: first has ref_mod, second does not; concat is correct."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-STR-RM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC X(5) VALUE 'ABCDE'.",
+                "01 WS-B PIC X(3) VALUE 'XYZ'.",
+                "01 WS-DST PIC X(10) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STRING WS-A(2:3) DELIMITED BY SIZE",
+                "           WS-B     DELIMITED BY SIZE",
+                "           INTO WS-DST.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A 5 bytes at 0, WS-B 3 bytes at 5, WS-DST 10 bytes at 8
+        # WS-A(2:3)="BCD", WS-B="XYZ" → concat "BCDXYZ"
+        assert _decode_alpha(region, 8, 6) == "BCDXYZ"
+
+    @covers(CobolFeature.STRING_VERB, CobolFeature.STRING_REF_MOD)
+    def test_string_no_ref_mod_unchanged(self):
+        """STRING without ref_mod still works correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-STR-NORM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC X(3) VALUE 'ABC'.",
+                "01 WS-B PIC X(3) VALUE 'DEF'.",
+                "01 WS-DST PIC X(6) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STRING WS-A DELIMITED BY SIZE",
+                "           WS-B DELIMITED BY SIZE",
+                "           INTO WS-DST.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A 3 bytes at 0, WS-B 3 bytes at 3, WS-DST 6 bytes at 6
+        assert _decode_alpha(region, 6, 6) == "ABCDEF"
+
+
+class TestUnstringRefMod:
+    @covers(
+        CobolFeature.UNSTRING_VERB,
+        CobolFeature.REFERENCE_MODIFICATION,
+        CobolFeature.UNSTRING_REF_MOD,
+    )
+    def test_unstring_source_ref_mod_basic(self):
+        """UNSTRING WS-SRC(3:7) splits the substring, not the full field."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-UNSTR-RM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-SRC  PIC X(11) VALUE 'XXABC DEYYY'.",
+                "01 WS-A    PIC X(5)  VALUE SPACES.",
+                "01 WS-B    PIC X(5)  VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC(3:7) DELIMITED BY SPACES",
+                "        INTO WS-A WS-B.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC 11 bytes at offset 0, WS-A 5 bytes at offset 11, WS-B 5 bytes at offset 16
+        # WS-SRC(3:7) = "ABC DE" (1-indexed start=3, length=7) → split by SPACES → "ABC", "DE"
+        assert _decode_alpha(region, 11, 3) == "ABC"
+        assert _decode_alpha(region, 16, 2) == "DE"
+
+    @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_REF_MOD)
+    def test_unstring_no_ref_mod_unchanged(self):
+        """UNSTRING without ref_mod still works correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-UNSTR-NORM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FULL  PIC X(11) VALUE 'HELLO WORLD'.",
+                "01 WS-FIRST PIC X(5)  VALUE SPACES.",
+                "01 WS-LAST  PIC X(5)  VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-FULL DELIMITED BY SPACES",
+                "        INTO WS-FIRST WS-LAST.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FULL 11 bytes at 0, WS-FIRST 5 at 11, WS-LAST 5 at 16
+        assert _decode_alpha(region, 11, 5) == "HELLO"
+        assert _decode_alpha(region, 16, 5) == "WORLD"

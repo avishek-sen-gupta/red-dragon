@@ -18,6 +18,7 @@ from interpreter.cobol.ir_encoders import (
     build_inspect_tally_ir,
     build_string_split_ir,
 )
+from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.operator_kind import resolve_binop
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction
@@ -35,14 +36,49 @@ def lower_string(
     """STRING ... DELIMITED BY ... INTO target."""
     part_regs: list[str] = []
     for sending in stmt.sendings:
-        if ctx.has_field(sending.value, layout):
-            source_ref = ctx.resolve_field_ref(sending.value, layout, region_reg)
+        operand_name = sending.value.name
+        if ctx.has_field(operand_name, layout):
+            source_ref = ctx.resolve_field_ref(operand_name, layout, region_reg)
             decoded_reg = ctx.emit_decode_field(
                 region_reg, source_ref.fl, source_ref.offset_reg
             )
             src_str_reg = ctx.emit_to_string(decoded_reg)
         else:
-            src_str_reg = ctx.const_to_reg(str(sending.value))
+            src_str_reg = ctx.const_to_reg(str(sending.value.name))
+
+        if sending.value.ref_mod_start is not None:
+            raw_start_reg = eval_ref_mod_expr(
+                ctx, sending.value.ref_mod_start, layout, region_reg
+            )
+            one_reg = ctx.const_to_reg(1)
+            start_0indexed_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=start_0indexed_reg,
+                    operator=resolve_binop("-"),
+                    left=Register(str(raw_start_reg)),
+                    right=Register(str(one_reg)),
+                )
+            )
+            if sending.value.ref_mod_length is not None:
+                length_reg = eval_ref_mod_expr(
+                    ctx, sending.value.ref_mod_length, layout, region_reg
+                )
+            else:
+                length_reg = ctx.const_to_reg(9999)
+            sliced_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=sliced_reg,
+                    func_name=FuncName(BuiltinName.STRING_SLICE),
+                    args=(
+                        Register(str(src_str_reg)),
+                        Register(str(start_0indexed_reg)),
+                        Register(str(length_reg)),
+                    ),
+                )
+            )
+            src_str_reg = sliced_reg
 
         if sending.delimited_by == DelimiterMode.SIZE:
             part_regs.append(src_str_reg)
@@ -109,18 +145,53 @@ def lower_unstring(
     region_reg: str,
 ) -> None:
     """UNSTRING source DELIMITED BY ... INTO targets."""
-    if ctx.has_field(stmt.source, layout):
-        source_ref = ctx.resolve_field_ref(stmt.source, layout, region_reg)
+    source_name = stmt.source.name
+    if ctx.has_field(source_name, layout):
+        source_ref = ctx.resolve_field_ref(source_name, layout, region_reg)
         decoded_reg = ctx.emit_decode_field(
             region_reg, source_ref.fl, source_ref.offset_reg
         )
         src_str_reg = ctx.emit_to_string(decoded_reg)
     else:
-        src_str_reg = ctx.const_to_reg(str(stmt.source))
+        src_str_reg = ctx.const_to_reg(str(stmt.source.name))
+
+    if stmt.source.ref_mod_start is not None:
+        raw_start_reg = eval_ref_mod_expr(
+            ctx, stmt.source.ref_mod_start, layout, region_reg
+        )
+        one_reg = ctx.const_to_reg(1)
+        start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=start_0indexed_reg,
+                operator=resolve_binop("-"),
+                left=Register(str(raw_start_reg)),
+                right=Register(str(one_reg)),
+            )
+        )
+        if stmt.source.ref_mod_length is not None:
+            length_reg = eval_ref_mod_expr(
+                ctx, stmt.source.ref_mod_length, layout, region_reg
+            )
+        else:
+            length_reg = ctx.const_to_reg(9999)
+        sliced_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=sliced_reg,
+                func_name=FuncName(BuiltinName.STRING_SLICE),
+                args=(
+                    Register(str(src_str_reg)),
+                    Register(str(start_0indexed_reg)),
+                    Register(str(length_reg)),
+                ),
+            )
+        )
+        src_str_reg = sliced_reg
 
     delimiter = translate_cobol_figurative(str(stmt.delimited_by))
     delim_reg = ctx.const_to_reg(delimiter)
-    ir = build_string_split_ir(f"unstring_split_{stmt.source}")
+    ir = build_string_split_ir(f"unstring_split_{source_name}")
     parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})
 
     for i, target_name in enumerate(stmt.into):
