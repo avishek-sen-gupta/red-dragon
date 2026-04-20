@@ -469,21 +469,9 @@ public final class StatementSerializer {
     private static JsonObject serializeCompute(ComputeStatement stmt) {
         JsonObject obj = newStatement("COMPUTE");
 
-        // Extract arithmetic expression as original source text (spaces preserved)
-        try {
-            if (stmt.getArithmeticExpression() != null && stmt.getArithmeticExpression().getCtx() != null) {
-                var ctx = stmt.getArithmeticExpression().getCtx();
-                Token start = ctx.getStart();
-                Token stop = ctx.getStop();
-                if (start != null && stop != null) {
-                    CharStream input = start.getInputStream();
-                    String exprText = input.getText(
-                            Interval.of(start.getStartIndex(), stop.getStopIndex()));
-                    obj.addProperty("expression", exprText.trim());
-                }
-            }
-        } catch (Exception e) {
-            LOG.fine("Could not extract COMPUTE expression: " + e.getMessage());
+        // Extract arithmetic expression using structured AST
+        if (stmt.getArithmeticExpression() != null) {
+            obj.add("expression", serializeArithmeticExpr(stmt.getArithmeticExpression()));
         }
 
         // Extract target variables
