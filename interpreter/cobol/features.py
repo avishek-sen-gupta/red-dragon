@@ -20,6 +20,7 @@ class CobolFeature(Enum):
     GIVING_CLAUSE = "GIVING target clause in arithmetic statements"
     ROUNDED_CLAUSE = "ROUNDED modifier on arithmetic result fields"
     ON_SIZE_ERROR = "ON SIZE ERROR / NOT ON SIZE ERROR overflow handlers"
+    ARITHMETIC_REF_MOD = "ADD/SUBTRACT/MULTIPLY/DIVIDE WS-FIELD(start:length) reference modification on source operands"
 
     # ---------------------------------------------------------------------------
     # Control flow

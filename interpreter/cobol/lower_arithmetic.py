@@ -14,6 +14,7 @@ from interpreter.cobol.ref_mod import (
     RefModReference,
     RefModBinOp,
     RefModExpr,
+    RefModOperand,
 )
 from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
@@ -371,13 +372,66 @@ def lower_arithmetic(
 
     target_ref = ctx.resolve_field_ref(stmt.target, layout, region_reg)
 
-    if ctx.has_field(stmt.source, layout):
-        source_ref = ctx.resolve_field_ref(stmt.source, layout, region_reg)
+    # Decode source operand
+    if ctx.has_field(stmt.source.name, layout):
+        source_ref = ctx.resolve_field_ref(stmt.source.name, layout, region_reg)
         src_decoded = ctx.emit_decode_field(
             region_reg, source_ref.fl, source_ref.offset_reg
         )
+
+        # Handle reference modification on source
+        if stmt.source.ref_mod_start is not None:
+            # Convert to string first
+            src_str_reg = ctx.emit_to_string(src_decoded)
+
+            # Evaluate start and length
+            start_reg = eval_ref_mod_expr(
+                ctx, stmt.source.ref_mod_start, layout, region_reg
+            )
+            # Convert 1-indexed to 0-indexed
+            one_reg = ctx.const_to_reg("1")
+            start_0indexed_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    operator=BinopKind.SUB,
+                    left=Register(str(start_reg)),
+                    right=Register(str(one_reg)),
+                    result_reg=Register(str(start_0indexed_reg)),
+                )
+            )
+
+            # Perform slice
+            if stmt.source.ref_mod_length is not None:
+                length_reg = eval_ref_mod_expr(
+                    ctx, stmt.source.ref_mod_length, layout, region_reg
+                )
+            else:
+                length_reg = ctx.const_to_reg("999999")
+
+            sliced_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=sliced_reg,
+                    func_name=FuncName(BuiltinName.STRING_SLICE),
+                    args=(
+                        Register(str(src_str_reg)),
+                        Register(str(start_0indexed_reg)),
+                        Register(str(length_reg)),
+                    ),
+                )
+            )
+
+            # Convert back to float for arithmetic
+            src_decoded = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=src_decoded,
+                    func_name=FuncName("float"),
+                    args=(Register(str(sliced_reg)),),
+                )
+            )
     else:
-        src_decoded = ctx.const_to_reg(float(stmt.source))
+        src_decoded = ctx.const_to_reg(float(stmt.source.name))
 
     tgt_decoded = ctx.emit_decode_field(
         region_reg, target_ref.fl, target_ref.offset_reg
@@ -472,14 +526,72 @@ def lower_arithmetic_giving(
 ) -> None:
     """MULTIPLY/DIVIDE X BY/INTO Y GIVING Z."""
 
-    def _decode_operand(name: str) -> str:
+    def _decode_operand(operand: RefModOperand) -> str:
+        field_name = operand.name
+        if ctx.has_field(field_name, layout):
+            ref = ctx.resolve_field_ref(field_name, layout, region_reg)
+            decoded = ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+
+            # Apply ref_mod if present
+            if operand.ref_mod_start is not None:
+                src_str = ctx.emit_to_string(decoded)
+                start_reg = ctx.eval_ref_mod_expr(
+                    operand.ref_mod_start, layout, region_reg
+                )
+                # Convert 1-indexed to 0-indexed
+                zero_reg = ctx.const_to_reg(0)
+                one_reg = ctx.const_to_reg(1)
+                zero_indexed_start = ctx.fresh_reg()
+                ctx.emit_inst(
+                    Binop(
+                        result_reg=zero_indexed_start,
+                        operator=resolve_binop("-"),
+                        left=Register(str(start_reg)),
+                        right=Register(str(one_reg)),
+                    )
+                )
+
+                length_reg = ctx.eval_ref_mod_expr(
+                    operand.ref_mod_length, layout, region_reg
+                )
+
+                # Emit STRING_SLICE
+                sliced = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=sliced,
+                        func_name=FuncName("STRING_SLICE"),
+                        args=[
+                            Register(str(src_str)),
+                            Register(str(zero_indexed_start)),
+                            Register(str(length_reg)),
+                        ],
+                    )
+                )
+
+                # Convert result back to float
+                result = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=result,
+                        func_name=FuncName("float"),
+                        args=[Register(str(sliced))],
+                    )
+                )
+                return result
+
+            return decoded
+        return ctx.const_to_reg(float(field_name))
+
+    def _decode_field(name: str) -> str:
+        """Decode a plain string field name (for target operand)."""
         if ctx.has_field(name, layout):
             ref = ctx.resolve_field_ref(name, layout, region_reg)
             return ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
         return ctx.const_to_reg(float(name))
 
     left_reg = _decode_operand(stmt.source)
-    right_reg = _decode_operand(stmt.target)
+    right_reg = _decode_field(stmt.target)
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 
