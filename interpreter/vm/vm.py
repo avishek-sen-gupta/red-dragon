@@ -267,6 +267,8 @@ def apply_update(
             StackFrame(
                 function_name=update.call_push.function_name,
                 return_label=update.call_push.return_label,
+                return_ip=update.call_push.return_ip,
+                result_reg=update.call_push.result_reg,
                 closure_env_id=update.call_push.closure_env_id,
                 captured_var_names=frozenset(
                     v if isinstance(v, VarName) else VarName(v)
