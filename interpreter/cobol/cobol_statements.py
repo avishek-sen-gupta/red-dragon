@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
-from interpreter.cobol.ref_mod import MoveOperand
+from interpreter.cobol.ref_mod import RefModOperand
 
 # ── PERFORM specs ────────────────────────────────────────────────
 
@@ -96,8 +96,8 @@ class MoveStatement:
       MOVE WS-FIELD(WS-A + 1:WS-B - 1) TO WS-OUT
     """
 
-    source: MoveOperand
-    target: MoveOperand
+    source: RefModOperand
+    target: RefModOperand
 
     @classmethod
     def from_dict(cls, data: dict) -> MoveStatement:
@@ -105,8 +105,8 @@ class MoveStatement:
         source_data = operands[0] if len(operands) > 0 else {}
         target_data = operands[1] if len(operands) > 1 else {}
 
-        source = MoveOperand.from_dict(source_data)
-        target = MoveOperand.from_dict(target_data)
+        source = RefModOperand.from_dict(source_data)
+        target = RefModOperand.from_dict(target_data)
 
         return cls(source=source, target=target)
 

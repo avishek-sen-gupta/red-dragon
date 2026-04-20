@@ -52,7 +52,7 @@ from interpreter.cobol.cobol_statements import (
     UnstringStatement,
     WriteStatement,
 )
-from interpreter.cobol.ref_mod import MoveOperand
+from interpreter.cobol.ref_mod import RefModOperand
 from interpreter.ir import Opcode
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -238,7 +238,7 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             MoveStatement(
-                source=MoveOperand(name="123"), target=MoveOperand(name="WS-A")
+                source=RefModOperand(name="123"), target=RefModOperand(name="WS-A")
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -267,7 +267,7 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             MoveStatement(
-                source=MoveOperand(name="WS-A"), target=MoveOperand(name="WS-B")
+                source=RefModOperand(name="WS-A"), target=RefModOperand(name="WS-B")
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)

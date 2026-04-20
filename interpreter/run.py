@@ -255,17 +255,26 @@ def _handle_call_dispatch_setup(
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
 ):
-    """Set up the new call frame's return info after call_push + dispatch."""
-    call_result_reg = instruction.result_reg
-    call_return_label = current_label
-    call_return_ip = ip + 1
+    """Augment call_push with call-site context, then apply atomically.
 
-    apply_update(vm, update, type_env=type_env, conversion_rules=conversion_rules)
-
-    new_frame = vm.current_frame
-    new_frame.return_label = call_return_label
-    new_frame.return_ip = call_return_ip
-    new_frame.result_reg = call_result_reg
+    Handlers cannot know the caller's return address or result register —
+    those only exist at the call site. We complete the StackFramePush here,
+    before apply_update, so the frame is fully initialized on creation.
+    """
+    assert update.call_push is not None
+    complete_push = update.call_push.model_copy(
+        update={
+            "return_label": current_label,
+            "return_ip": ip + 1,
+            "result_reg": instruction.result_reg,
+        }
+    )
+    apply_update(
+        vm,
+        update.model_copy(update={"call_push": complete_push}),
+        type_env=type_env,
+        conversion_rules=conversion_rules,
+    )
 
 
 def _handle_return_flow(
