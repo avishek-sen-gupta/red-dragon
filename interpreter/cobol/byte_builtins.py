@@ -496,6 +496,39 @@ def _builtin_cobol_blank_when_zero(
     )
 
 
+def _builtin_string_slice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Extract substring: value[start : start + length].
+
+    Args: [value: str, start: int, length: int]
+    Returns: str
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    start = int(args[1].value)
+    length = int(args[2].value)
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value[start : start + length])
+
+
+def _builtin_string_splice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Replace substring: value[:start] + replacement + value[start + length:].
+
+    Args: [value: str, start: int, length: int, replacement: str]
+    Returns: str
+    """
+    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    start = int(args[1].value)
+    length = int(args[2].value)
+    replacement = args[3].value
+    if not isinstance(value, str) or not isinstance(replacement, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value[:start] + replacement + value[start + length :])
+
+
 from typing import Any
 
 BYTE_BUILTINS: dict[FuncName, Any] = (
@@ -525,5 +558,7 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.FLOAT_TO_BYTES): _builtin_float_to_bytes,
         FuncName(BuiltinName.BYTES_TO_FLOAT): _builtin_bytes_to_float,
         FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,
+        FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
+        FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
     }
 )
