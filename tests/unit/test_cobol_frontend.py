@@ -53,6 +53,12 @@ from interpreter.cobol.cobol_statements import (
     WriteStatement,
 )
 from interpreter.cobol.ref_mod import RefModOperand
+from interpreter.cobol.cobol_expression import (
+    expr_from_dict,
+    FieldRefNode,
+    BinOpNode,
+    LiteralNode,
+)
 from interpreter.ir import Opcode
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -72,6 +78,22 @@ def _find_opcodes(
     instructions: list[InstructionBase], opcode: Opcode
 ) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
+
+
+def _parse_expr_string(expr_str: str):
+    """Parse an expression string like 'WS-A + WS-B' and return an ExprNode.
+
+    For now, handles simple cases:
+    - Literals: "10", "5"
+    - Field refs: "WS-A"
+    - Binary ops: "WS-A + WS-B", "WS-A * 5"
+
+    For complex expressions, wrap dicts directly.
+    """
+    from interpreter.cobol.cobol_expression import parse_expression
+
+    expr_tree = parse_expression(expr_str)
+    return expr_tree
 
 
 class TestDataDivisionLowering:
@@ -636,7 +658,11 @@ class TestComputeLowering:
                 value="0",
             ),
         ]
-        stmts = [ComputeStatement(expression="WS-A + WS-B", targets=["WS-RESULT"])]
+        stmts = [
+            ComputeStatement(
+                expression=_parse_expr_string("WS-A + WS-B"), targets=["WS-RESULT"]
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         binops = _find_opcodes(instructions, Opcode.BINOP)
@@ -677,7 +703,11 @@ class TestComputeLowering:
                 value="0",
             ),
         ]
-        stmts = [ComputeStatement(expression="WS-A + WS-B * 2", targets=["WS-RESULT"])]
+        stmts = [
+            ComputeStatement(
+                expression=_parse_expr_string("WS-A + WS-B * 2"), targets=["WS-RESULT"]
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # The WRITE_REGION for the target comes after expr evaluation.
@@ -718,7 +748,10 @@ class TestComputeLowering:
             ),
         ]
         stmts = [
-            ComputeStatement(expression="(WS-A + WS-B) * 3", targets=["WS-RESULT"])
+            ComputeStatement(
+                expression=_parse_expr_string("(WS-A + WS-B) * 3"),
+                targets=["WS-RESULT"],
+            )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
@@ -751,7 +784,11 @@ class TestComputeLowering:
                 name="WS-D", level=77, pic="9(3)", usage="DISPLAY", offset=6, value="0"
             ),
         ]
-        stmts = [ComputeStatement(expression="WS-A * 5", targets=["WS-C", "WS-D"])]
+        stmts = [
+            ComputeStatement(
+                expression=_parse_expr_string("WS-A * 5"), targets=["WS-C", "WS-D"]
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should have WRITE_REGION for initial values (3 fields) + 2 COMPUTE targets
@@ -791,7 +828,11 @@ class TestComputeLowering:
                 value="0",
             ),
         ]
-        stmts = [ComputeStatement(expression="10 + 5", targets=["WS-RESULT"])]
+        stmts = [
+            ComputeStatement(
+                expression=_parse_expr_string("10 + 5"), targets=["WS-RESULT"]
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         binops = _find_opcodes(instructions, Opcode.BINOP)
@@ -2188,7 +2229,9 @@ class TestBareStatements:
         asg = CobolASG(
             data_fields=fields,
             statements=[
-                ComputeStatement(targets=["WS-A"], expression="WS-A + 50"),
+                ComputeStatement(
+                    targets=["WS-A"], expression=_parse_expr_string("WS-A + 50")
+                ),
                 DisplayStatement(operand=RefModOperand(name="WS-A")),
             ],
         )

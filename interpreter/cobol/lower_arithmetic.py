@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.cobol_expression import parse_expression
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ref_mod import (
     RefModLiteral,
@@ -691,8 +690,7 @@ def lower_compute(
     region_reg: str,
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
-    expr_tree = parse_expression(stmt.expression)
-    result_reg = lower_expr_node(ctx, expr_tree, layout, region_reg)
+    result_reg = lower_expr_node(ctx, stmt.expression, layout, region_reg)
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 
