@@ -461,18 +461,18 @@ class SetStatement:
 class StringSending:
     """A single sending phrase in a STRING statement."""
 
-    value: str
+    value: RefModOperand
     delimited_by: str  # e.g. "SIZE", "SPACES", or a literal
 
     @classmethod
     def from_dict(cls, data: dict) -> StringSending:
         return cls(
-            value=data.get("value", ""),
+            value=RefModOperand.from_dict(data.get("value", {})),
             delimited_by=data.get("delimited_by", "SIZE"),
         )
 
     def to_dict(self) -> dict:
-        return {"value": self.value, "delimited_by": self.delimited_by}
+        return {"value": self.value.to_dict(), "delimited_by": self.delimited_by}
 
 
 @dataclass(frozen=True)
@@ -501,14 +501,14 @@ class StringStatement:
 class UnstringStatement:
     """UNSTRING source DELIMITED BY ... INTO targets."""
 
-    source: str = ""
+    source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     delimited_by: str = ""
     into: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> UnstringStatement:
         return cls(
-            source=data.get("source", ""),
+            source=RefModOperand.from_dict(data.get("source", {})),
             delimited_by=data.get("delimited_by", ""),
             into=data.get("into", []),
         )
@@ -516,7 +516,7 @@ class UnstringStatement:
     def to_dict(self) -> dict:
         return {
             "type": "UNSTRING",
-            "source": self.source,
+            "source": self.source.to_dict(),
             "delimited_by": self.delimited_by,
             "into": list(self.into),
         }
