@@ -26,14 +26,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/plugins/context-injector/hooks/governor-hook.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "~/.claude/plugins/context-injector/hooks/bd-terminology-guard.sh"
           }
         ]
@@ -75,36 +67,9 @@
         ]
       }
     ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/plugins/context-injector/hooks/session-start.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/plugins/context-injector/hooks/post-tool-use.sh"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/plugins/context-injector/hooks/pre-compact.sh"
-          }
-        ]
-      }
-    ]
+    "SessionStart": [],
+    "PostToolUse": [],
+    "PreCompact": []
   },
   "permissions": {
     "allow": [
