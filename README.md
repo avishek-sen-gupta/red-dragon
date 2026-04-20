@@ -12,6 +12,8 @@
 2. **Full LLM frontends for unsupported languages** — for languages without a tree-sitter frontend, an LLM lowers source to IR entirely — supporting any language without new parser code. A chunked variant splits large files into per-function chunks via tree-sitter, lowering each independently. Both produce the same [33-opcode IR](docs/ir-reference.md).
 3. **A VM that integrates LLMs to produce plausible state changes** when execution hits missing dependencies, unresolved imports, or unknown externals — keeping execution moving through incomplete programs instead of halting at the first unknown.
 
+**Scale:** 33-opcode universal IR · 15 tree-sitter frontends + COBOL (103 enumerated features) + LLM · 13,560+ tests
+
 When source is complete and all dependencies are present, the entire pipeline (parse → lower → execute) is **deterministic with 0 LLM calls**. LLMs are only invoked at the boundaries where information is genuinely missing.
 
 **Note that "execution" is a tricky concept, when dealing with these many languages.** It is important to cover the big-ticket features of the supported languages, but this project makes no claims to cover all features of every language exhaustively, because that would imply (potentially) writing full-fledged compiler frontends for every language. I have taken some liberties in terms of how some of the language features are implemented at a global / language level, and I hope that this will not detract from the inherent usefulness of this toolkit.
@@ -147,10 +149,11 @@ The **coverage matrix** mode displays a cross-language grid showing which AST no
 
 RedDragon exposes its compilation pipeline, VM execution, and interprocedural dataflow analysis as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server, allowing LLMs to analyze and execute programs across all 15 supported languages.
 
-**8 tools:**
+**9 analysis tools:**
 - `analyze_program(source, language)` — full pipeline analysis: functions, call graph, flow counts
 - `get_function_summary(source, language, function_name)` — param→return/field flows for one function
 - `get_call_chain(source, language, function_name?)` — nested call-chain tree showing data flow through calls
+- `list_opcodes()` — all 33 IR opcodes with descriptions, categories, typed fields, and semantic notes
 - `load_program(source, language, max_steps?)` — load and execute a program, record step-by-step trace
 - `step(count?)` — advance through execution trace, get instructions and state deltas
 - `run_to_end()` — skip to final state with all variable values
@@ -677,13 +680,18 @@ Current suite size: **13,560 collected tests** (`poetry run python -m pytest tes
 
 ### Rosetta cross-language suite
 
-The **Rosetta suite** (`tests/unit/rosetta/`) implements 25 cross-language test sets and verifies they produce clean, structurally consistent IR:
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 28 cross-language test sets and verifies they produce clean, structurally consistent IR:
 
-- **21 algorithms + closures + classes + exceptions + variable scoping** — all 15 languages
+- **10 algorithms** — all 15 languages: factorial (recursive + iterative), fibonacci, gcd, bubble sort, binary search, ackermann, is_prime, fizzbuzz, interprocedural
+- **10 semantic patterns** — all 15 languages: higher-order, method chaining, string concat, nested loops, linked list, boolean logic, bitwise, unary operators, ternary, array accumulate
+- **closures** — all 15 languages
 - **closures-lambda** — 5 languages with lambda/arrow syntax (Python, JS, TS, Kotlin, Scala)
+- **classes** — all 15 languages
+- **exceptions** — all 15 languages
+- **variable scoping** — all 15 languages
 - **destructuring** — 6 languages (Python, JS, TS, Rust, Scala, Kotlin) in variable declarations; for-loop destructuring in JS/TS (`for (const [k, v] of arr)`), Kotlin (`for ((a, b) in pairs)`), and C++ (`for (auto [a, b] : pairs)`); C++ declaration-level structured bindings (`auto [a, b] = expr;`)
 - **nested functions** — 12 languages (Python, JS, TS, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP, C#, Pascal)
-- **structural pattern matching** (integration, `tests/integration/test_rosetta_structural_pattern_matching.py`) — 6 languages (Python, C#, Rust, Scala, Kotlin, Ruby) all classifying a number through `match`/`switch`/`case/in` and asserting `result == "small"`
+- **pattern matching** — 6 languages (Python, C#, Rust, Scala, Kotlin, Ruby) all classifying a number through `match`/`switch`/`case/in` and asserting `result == "small"`
 
 Each problem tests:
 
@@ -740,27 +748,27 @@ The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [
 <details>
 <summary><strong>Exercism exercise breakdown</strong> (click to expand)</summary>
 
-| Exercise | Constructs tested | Cases | Execution | Total |
-|----------|-------------------|-------|-----------|-------|
-| **leap** | modulo, boolean logic, short-circuit eval | 9 | 270 | **287** |
-| **collatz-conjecture** | while loop, conditional, integer division | 4 | 120 | **137** |
-| **difference-of-squares** | while loop, accumulator, function composition | 9 | 270 | **287** |
-| **two-fer** | string concatenation, string literals | 3 | 90 | **107** |
-| **hamming** | string indexing, character comparison, while loop | 5 | 150 | **167** |
-| **reverse-string** | backward iteration, string building | 5 | 150 | **167** |
-| **rna-transcription** | multi-branch if, char mapping | 6 | 180 | **197** |
-| **perfect-numbers** | divisor loop, three-way return | 9 | 270 | **287** |
-| **triangle** | nested ifs, validity guards, float sides | 21 | 630 | **647** |
-| **space-age** | float division, string-to-number mapping | 8 | 240 | **257** |
-| **grains** | exponentiation, large integers (2^63) | 8 | 240 | **257** |
-| **isogram** | nested while loops, case-insensitive comparison | 14 | 420 | **437** |
-| **nth-prime** | nested loops, trial division, primality testing | 3 | 90 | **107** |
-| **resistor-color** | string-to-integer mapping, string equality | 3 | 90 | **107** |
-| **pangram** | nested loops, letter search, toLowerChar helper | 11 | 330 | **347** |
-| **bob** | string classification, multi-branch return | 22 | 616 | **633** |
-| **luhn** | charToDigit helper, right-to-left traversal, modulo | 22 | 660 | **677** |
-| **acronym** | toUpperChar helper, word boundary detection | 9 | 252 | **269** |
-| **Total** | | **171** | **5068** | **5374** |
+| Exercise | Constructs tested | Cases | Execution |
+|----------|-------------------|-------|-----------|
+| **leap** | modulo, boolean logic, short-circuit eval | 9 | 270 |
+| **collatz-conjecture** | while loop, conditional, integer division | 4 | 120 |
+| **difference-of-squares** | while loop, accumulator, function composition | 9 | 270 |
+| **two-fer** | string concatenation, string literals | 3 | 90 |
+| **hamming** | string indexing, character comparison, while loop | 5 | 150 |
+| **reverse-string** | backward iteration, string building | 5 | 150 |
+| **rna-transcription** | multi-branch if, char mapping | 6 | 180 |
+| **perfect-numbers** | divisor loop, three-way return | 9 | 270 |
+| **triangle** | nested ifs, validity guards, float sides | 21 | 630 |
+| **space-age** | float division, string-to-number mapping | 8 | 240 |
+| **grains** | exponentiation, large integers (2^63) | 8 | 240 |
+| **isogram** | nested while loops, case-insensitive comparison | 14 | 420 |
+| **nth-prime** | nested loops, trial division, primality testing | 3 | 90 |
+| **resistor-color** | string-to-integer mapping, string equality | 3 | 90 |
+| **pangram** | nested loops, letter search, toLowerChar helper | 11 | 330 |
+| **bob** | string classification, multi-branch return | 22 | 616 |
+| **luhn** | charToDigit helper, right-to-left traversal, modulo | 22 | 660 |
+| **acronym** | toUpperChar helper, word boundary detection | 9 | 252 |
+| **Total** | | **171** | **5,068** |
 
 </details>
 
@@ -783,15 +791,23 @@ poetry run pydeps interpreter --no-show -T png  # dependency graph (requires gra
 | [import-linter](https://import-linter.readthedocs.io/) | Architectural boundary contracts (configured in `.importlinter`) |
 | [pydeps](https://github.com/thebjorn/pydeps) | Module dependency visualization |
 
-Import-linter enforces two architectural contracts: the VM/executor/run layer must not import frontends, and the IR module must remain a leaf with no imports from other interpreter modules.
+Import-linter enforces five architectural contracts:
+
+| Contract | Rule |
+|----------|------|
+| `vm-no-frontend` | VM, handlers, and run layer must not import frontends |
+| `ir-is-leaf` | IR module must not import any other interpreter module |
+| `project-no-vm-internals` | Project module must not import VM or handler internals |
+| `frontend-independence` | Language frontends must not import each other |
+| `cobol-isolation` | COBOL module may only be imported by the frontend factory |
 
 ## Documentation
 
-- **[IR Reference](docs/ir-reference.md)** — Complete specification of the 32-opcode instruction set: value producers, consumers, control flow, region operations, continuations, pointer operations, and the SYMBOLIC fallback
+- **[IR Reference](docs/ir-reference.md)** — Complete specification of the 33-opcode instruction set: value producers, consumers, control flow, region operations, continuations, pointer operations, and the SYMBOLIC fallback
 - **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, best-effort execution, closures, LLM fallback, dataflow analysis, and end-to-end worked examples with code references
 - **[Frontend Design Document](docs/notes-on-frontend-design.md)** — Frontend subsystem overview: three frontend strategies (deterministic, LLM, chunked LLM), Frontend ABC contract, tree-sitter parser layer, LLM frontend with prompt engineering, chunked LLM frontend with register renumbering, factory routing, and end-to-end worked example
 - **[Per-Language Frontend Design](docs/frontend-design/)** — Exhaustive per-language documentation of all 15 deterministic frontends and the COBOL frontend: BaseFrontend context-mode architecture, GrammarConstants, TreeSitterEmitContext, common lowerers, dispatch tables, language-specific lowering methods, and worked examples for each language
-- **[COBOL Frontend Design](docs/frontend-design/cobol.md)** — ProLeap bridge architecture, PIC-driven encoding, 20-statement coverage matrix, PERFORM continuation semantics, SEARCH/STRING/INSPECT lowering patterns
+- **[COBOL Frontend Design](docs/frontend-design/cobol.md)** — ProLeap bridge architecture, PIC-driven encoding, 20-statement coverage matrix, PERFORM continuation semantics, SEARCH/STRING/INSPECT lowering patterns; 103-feature enumeration via `CobolFeature` enum (test-gated)
 - **[Linker & Multi-File Design](docs/linker-design.md)** — Multi-file project pipeline: import discovery, resolution, per-module compilation, linking (namespace, rebase, merge), worked example, and per-language import extraction reference
 - **[Type System Design Document](docs/type-system.md)** — Type system architecture: TypeGraph DAG with subtype/LUB queries, frontend type extraction and seeding, fixpoint inference algorithm with per-opcode dispatch, TypeConversionRules for operator coercion and assignment narrowing/widening, write-time coercion in the VM, and end-to-end worked examples with Mermaid diagrams
 - **[Dataflow Design Document](docs/notes-on-dataflow-design.md)** — Dataflow analysis architecture: reaching definitions via GEN/KILL worklist fixpoint, def-use chain extraction, variable dependency graph construction with transitive closure, integration with IR/CFG, worked examples, and complexity analysis
