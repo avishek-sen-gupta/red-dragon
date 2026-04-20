@@ -46,6 +46,7 @@ from interpreter.cobol.cobol_statements import (
     WriteStatement,
     parse_statement,
 )
+from interpreter.cobol.ref_mod import RefModOperand
 
 
 class TestParseStatementDispatch:
@@ -316,15 +317,15 @@ class TestParseStatementDispatch:
             {
                 "type": "STRING",
                 "sendings": [
-                    {"value": "WS-FIRST", "delimited_by": "SPACES"},
-                    {"value": "WS-LAST", "delimited_by": "SIZE"},
+                    {"value": {"name": "WS-FIRST"}, "delimited_by": "SPACES"},
+                    {"value": {"name": "WS-LAST"}, "delimited_by": "SIZE"},
                 ],
                 "into": "WS-RESULT",
             }
         )
         assert isinstance(stmt, StringStatement)
         assert len(stmt.sendings) == 2
-        assert stmt.sendings[0].value == "WS-FIRST"
+        assert stmt.sendings[0].value.name == "WS-FIRST"
         assert stmt.sendings[0].delimited_by == "SPACES"
         assert stmt.into == "WS-RESULT"
 
@@ -333,13 +334,13 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "UNSTRING",
-                "source": "WS-FULL",
+                "source": {"name": "WS-FULL"},
                 "delimited_by": "SPACES",
                 "into": ["WS-FIRST", "WS-LAST"],
             }
         )
         assert isinstance(stmt, UnstringStatement)
-        assert stmt.source == "WS-FULL"
+        assert stmt.source.name == "WS-FULL"
         assert stmt.delimited_by == "SPACES"
         assert stmt.into == ["WS-FIRST", "WS-LAST"]
 
@@ -914,8 +915,8 @@ class TestRoundTrip:
         data = {
             "type": "STRING",
             "sendings": [
-                {"value": "WS-FIRST", "delimited_by": "SPACES"},
-                {"value": "WS-LAST", "delimited_by": "SIZE"},
+                {"value": {"name": "WS-FIRST"}, "delimited_by": "SPACES"},
+                {"value": {"name": "WS-LAST"}, "delimited_by": "SIZE"},
             ],
             "into": "WS-RESULT",
         }
@@ -925,7 +926,7 @@ class TestRoundTrip:
     def test_unstring_round_trip(self):
         data = {
             "type": "UNSTRING",
-            "source": "WS-FULL",
+            "source": {"name": "WS-FULL"},
             "delimited_by": " ",
             "into": ["WS-FIRST", "WS-LAST"],
         }
@@ -1092,3 +1093,44 @@ class TestRoundTrip:
         assert isinstance(stmt, MoveCorrespondingStatement)
         assert stmt.source == "WS-SRC"
         assert stmt.targets == ["WS-DST1", "WS-DST2"]
+
+
+class TestStringRefModAst:
+    def test_string_sending_from_dict_plain_field(self):
+        """StringSending with plain field name produces RefModOperand with no ref_mod."""
+        sending = StringSending.from_dict(
+            {"value": {"name": "WS-SRC"}, "delimited_by": "SIZE"}
+        )
+        assert isinstance(sending.value, RefModOperand)
+        assert sending.value.name == "WS-SRC"
+        assert sending.value.ref_mod_start is None
+
+    def test_string_sending_from_dict_with_ref_mod(self):
+        """StringSending from_dict preserves ref_mod_start and ref_mod_length."""
+        sending = StringSending.from_dict(
+            {
+                "value": {
+                    "name": "WS-SRC",
+                    "ref_mod_start": {"kind": "lit", "value": "2"},
+                    "ref_mod_length": {"kind": "lit", "value": "3"},
+                },
+                "delimited_by": "SIZE",
+            }
+        )
+        assert isinstance(sending.value, RefModOperand)
+        assert sending.value.name == "WS-SRC"
+        assert sending.value.ref_mod_start is not None
+        assert sending.value.ref_mod_length is not None
+
+    def test_unstring_statement_from_dict(self):
+        """UnstringStatement.source is a RefModOperand after from_dict."""
+        stmt = UnstringStatement.from_dict(
+            {
+                "source": {"name": "WS-SRC"},
+                "delimited_by": "SPACE",
+                "into": ["WS-A"],
+            }
+        )
+        assert isinstance(stmt.source, RefModOperand)
+        assert stmt.source.name == "WS-SRC"
+        assert stmt.source.ref_mod_start is None
