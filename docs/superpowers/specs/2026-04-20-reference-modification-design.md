@@ -471,3 +471,42 @@ poetry run python -m pytest tests/integration/test_cobol_programs.py::TestRefere
 poetry run python -m pytest -x -q
 poetry run python -m black .
 ```
+
+---
+
+## Implementation Status
+
+**Completed 2026-04-20**: All MOVE statement reference modification support implemented and tested.
+
+### Commits
+
+1. **`153f23e6`**: Reference modification support for MOVE operands
+   - Java bridge: Added `serializeArithExprCtx`, `serializeMultDivsCtx`, `serializePowersCtx`, `serializeBasisCtx` in `StatementSerializer.java`
+   - Python AST: Added `RefModExpr` ADT (RefModLiteral, RefModReference, RefModBinOp) in `ref_mod.py`
+   - Updated `MoveStatement` and `MoveOperand` to support reference modification
+   - Implemented `eval_ref_mod_expr` in `lower_arithmetic.py` for expression evaluation
+   - Updated `lower_move` to emit SLICE/SPLICE instructions for reference modification
+   - Added 8-test integration suite: `TestReferenceModification`
+
+### Test Results
+
+- **Unit tests**: 9 Java bridge tests pass (RefModSerializerTest.java)
+- **Integration tests**: 8 MOVE operand tests pass
+- **Full suite**: 13,661 tests passing
+
+### Follow-on Issues
+
+Four follow-on issues filed for reference modification support in other statements:
+
+- **Issue 1**: COMPUTE reference modification
+- **Issue 2**: STRING reference modification
+- **Issue 3**: UNSTRING reference modification
+- **Issue 4**: IF condition reference modification
+
+See `2026-04-20-reference-modification-followups.md` for detailed scope and implementation notes.
+
+---
+
+## Closing Notes
+
+Reference modification support for MOVE statements is complete and production-ready. All parsing occurs in the Java bridge; Python receives structured JSON with full arithmetic expression trees. The SLICE and SPLICE IR instructions handle substring extraction and insertion at the VM level, with proper 1-to-0 index conversion for COBOL's 1-indexed semantics.

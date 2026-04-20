@@ -187,4 +187,6 @@ fileignoreconfig:
   checksum: 40e206f04ddbd407f825fff53ef8c8f27fb3e9b5273bad0db48e6d2c45691e13
 - filename: proleap-bridge/src/test/java/org/reddragon/bridge/RefModSerializerTest.java
   checksum: 07f76a5f8ee725299d810d5366e63e2c775da1bae0e412c8cec7c6b72d4c421a
+- filename: docs/superpowers/specs/2026-04-20-reference-modification-followups.md
+  checksum: eacf269499bce8144766aa3068477b64ece681767dce2610275b82464f9b456a
 version: "1.0"
