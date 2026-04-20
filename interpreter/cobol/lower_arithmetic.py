@@ -122,16 +122,16 @@ def lower_move(
     region_reg: str,
 ) -> None:
     """MOVE X TO Y: decode X, encode as Y's type, write to Y's region."""
-    target_ref = ctx.resolve_field_ref(stmt.target, layout, region_reg)
+    target_ref = ctx.resolve_field_ref(stmt.target.name, layout, region_reg)
 
-    if ctx.has_field(stmt.source, layout):
-        source_ref = ctx.resolve_field_ref(stmt.source, layout, region_reg)
+    if ctx.has_field(stmt.source.name, layout):
+        source_ref = ctx.resolve_field_ref(stmt.source.name, layout, region_reg)
         decoded_reg = ctx.emit_decode_field(
             region_reg, source_ref.fl, source_ref.offset_reg
         )
         value_str_reg = ctx.emit_to_string(decoded_reg)
     else:
-        literal = translate_cobol_figurative(str(stmt.source))
+        literal = translate_cobol_figurative(stmt.source.name)
         # Ensure unquoted literals (e.g. digit-only "12345") are stored as
         # quoted strings so _parse_const returns str, not int/float.
         if not (

@@ -1417,7 +1417,7 @@ public final class StatementSerializer {
      */
     private static JsonObject serializeMoveOperand(Call call) {
         JsonObject obj = new JsonObject();
-        obj.addProperty("name", extractCallBaseName(call));
+        obj.addProperty("name", extractCallName(call));
         CobolParser.ReferenceModifierContext refMod = getRefMod(call);
         if (refMod != null) {
             JsonObject rm = serializeRefMod(refMod);

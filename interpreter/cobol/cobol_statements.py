@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
+from interpreter.cobol.ref_mod import MoveOperand
+
 # ── PERFORM specs ────────────────────────────────────────────────
 
 
@@ -86,21 +88,78 @@ CobolStatementType = Union[
 
 @dataclass(frozen=True)
 class MoveStatement:
-    """MOVE source TO target."""
+    """MOVE source TO target.
 
-    source: str
-    target: str
+    Operands can include reference modification (substring operations):
+      MOVE WS-FIELD(2:3) TO WS-OUT
+      MOVE WS-FIELD(WS-A:WS-B) TO WS-OUT
+      MOVE WS-FIELD(WS-A + 1:WS-B - 1) TO WS-OUT
+    """
+
+    source: MoveOperand
+    target: MoveOperand
 
     @classmethod
     def from_dict(cls, data: dict) -> MoveStatement:
         operands = data.get("operands", [])
-        return cls(
-            source=operands[0] if len(operands) > 0 else "",
-            target=operands[1] if len(operands) > 1 else "",
-        )
+        source_data = operands[0] if len(operands) > 0 else {}
+        target_data = operands[1] if len(operands) > 1 else {}
+
+        source = MoveOperand.from_dict(source_data)
+        target = MoveOperand.from_dict(target_data)
+
+        return cls(source=source, target=target)
 
     def to_dict(self) -> dict:
-        return {"type": "MOVE", "operands": [self.source, self.target]}
+        # Reconstruct operand dicts for serialization
+        source_dict = {
+            "name": self.source.name,
+        }
+        if self.source.ref_mod_start is not None:
+            source_dict["ref_mod_start"] = self._serialize_ref_mod_expr(
+                self.source.ref_mod_start
+            )
+        if self.source.ref_mod_length is not None:
+            source_dict["ref_mod_length"] = self._serialize_ref_mod_expr(
+                self.source.ref_mod_length
+            )
+
+        target_dict = {
+            "name": self.target.name,
+        }
+        if self.target.ref_mod_start is not None:
+            target_dict["ref_mod_start"] = self._serialize_ref_mod_expr(
+                self.target.ref_mod_start
+            )
+        if self.target.ref_mod_length is not None:
+            target_dict["ref_mod_length"] = self._serialize_ref_mod_expr(
+                self.target.ref_mod_length
+            )
+
+        return {"type": "MOVE", "operands": [source_dict, target_dict]}
+
+    @staticmethod
+    def _serialize_ref_mod_expr(expr) -> dict:
+        """Serialize RefModExpr back to JSON dict format."""
+        from interpreter.cobol.ref_mod import (
+            RefModLiteral,
+            RefModReference,
+            RefModBinOp,
+        )
+
+        if isinstance(expr, RefModLiteral):
+            return {"kind": "lit", "value": expr.value}
+        elif isinstance(expr, RefModReference):
+            return {"kind": "ref", "name": expr.name}
+        elif isinstance(expr, RefModBinOp):
+            return {
+                "kind": "binop",
+                "op": expr.op,
+                "left": MoveStatement._serialize_ref_mod_expr(expr.left),
+                "right": MoveStatement._serialize_ref_mod_expr(expr.right),
+            }
+        else:
+            return {}
 
 
 @dataclass(frozen=True)
