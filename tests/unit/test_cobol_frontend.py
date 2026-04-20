@@ -23,6 +23,7 @@ from interpreter.cobol.cobol_statements import (
     CobolStatementType,
     ComputeStatement,
     ContinueStatement,
+    DeleteStatement,
     DisplayStatement,
     EntryStatement,
     ExitStatement,
@@ -39,19 +40,19 @@ from interpreter.cobol.cobol_statements import (
     PerformVaryingSpec,
     ReadStatement,
     Replacing,
+    RewriteStatement,
     SearchStatement,
     SearchWhen,
     SetStatement,
+    StartStatement,
     StopRunStatement,
     StringSending,
     StringStatement,
     TallyingFor,
     UnstringStatement,
     WriteStatement,
-    RewriteStatement,
-    StartStatement,
-    DeleteStatement,
 )
+from interpreter.cobol.ref_mod import MoveOperand
 from interpreter.ir import Opcode
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -235,7 +236,11 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [MoveStatement(source="123", target="WS-A")]
+        stmts = [
+            MoveStatement(
+                source=MoveOperand(name="123"), target=MoveOperand(name="WS-A")
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should produce WRITE_REGION for the MOVE
@@ -260,7 +265,11 @@ class TestProcedureDivisionLowering:
             ),
             CobolField(name="WS-B", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [MoveStatement(source="WS-A", target="WS-B")]
+        stmts = [
+            MoveStatement(
+                source=MoveOperand(name="WS-A"), target=MoveOperand(name="WS-B")
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should produce LOAD_REGION (decode WS-A) + WRITE_REGION (encode to WS-B)
