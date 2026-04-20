@@ -860,12 +860,45 @@ def lower_display(
     """DISPLAY field-or-literal."""
     operand = stmt.operand
 
-    if isinstance(operand, str) and ctx.has_field(operand, layout):
-        ref = ctx.resolve_field_ref(operand, layout, region_reg)
+    if ctx.has_field(operand.name, layout):
+        ref = ctx.resolve_field_ref(operand.name, layout, region_reg)
         decoded_reg = ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
         display_reg = ctx.emit_to_string(decoded_reg)
     else:
-        display_reg = ctx.const_to_reg(str(operand))
+        display_reg = ctx.const_to_reg(str(operand.name))
+
+    if operand.ref_mod_start is not None:
+        raw_start_reg = eval_ref_mod_expr(
+            ctx, operand.ref_mod_start, layout, region_reg
+        )
+        one_reg = ctx.const_to_reg(1)
+        start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=start_0indexed_reg,
+                operator=resolve_binop("-"),
+                left=Register(str(raw_start_reg)),
+                right=Register(str(one_reg)),
+            )
+        )
+        length_reg = (
+            eval_ref_mod_expr(ctx, operand.ref_mod_length, layout, region_reg)
+            if operand.ref_mod_length is not None
+            else ctx.const_to_reg(9999)
+        )
+        sliced_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=sliced_reg,
+                func_name=FuncName(BuiltinName.STRING_SLICE),
+                args=(
+                    Register(str(display_reg)),
+                    Register(str(start_0indexed_reg)),
+                    Register(str(length_reg)),
+                ),
+            )
+        )
+        display_reg = sliced_reg
 
     ctx.emit_inst(
         CallFunction(
