@@ -3718,3 +3718,69 @@ class TestUnstringRefMod:
         # WS-FULL 11 bytes at 0, WS-FIRST 5 at 11, WS-LAST 5 at 16
         assert _decode_alpha(region, 11, 5) == "HELLO"
         assert _decode_alpha(region, 16, 5) == "WORLD"
+
+
+class TestDisplayRefMod:
+    @covers(CobolFeature.DISPLAY_REF_MOD, CobolFeature.DISPLAY)
+    def test_display_ref_mod_start_offset(self, capsys):
+        """DISPLAY WS-DATA(3:3) on 'XXAAABBB' outputs 'AAA'.
+
+        Correct 0-indexed[2:5]='AAA'. Wrong (no -1): 0-indexed[3:6]='AAB'.
+        No ref_mod at all: full field 'XXAAABBB'.
+        """
+        _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISP-RM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(8) VALUE "XXAAABBB".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DISPLAY WS-DATA(3:3).",
+                "    STOP RUN.",
+            ]
+        )
+        out = capsys.readouterr().out
+        assert out == "AAA", f"Expected 'AAA', got {out!r}"
+
+    @covers(CobolFeature.DISPLAY_REF_MOD, CobolFeature.DISPLAY)
+    def test_display_ref_mod_excludes_outside(self, capsys):
+        """DISPLAY WS-DATA(4:4) on 'AAXAAAXX' outputs 'AAAX'.
+
+        Correct 0-indexed[3:7]='AAAX'. Wrong (no -1): 0-indexed[4:8]='AAXX'.
+        """
+        _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISP-RM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(8) VALUE "AAXAAAXX".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DISPLAY WS-DATA(4:4).",
+                "    STOP RUN.",
+            ]
+        )
+        out = capsys.readouterr().out
+        assert out == "AAAX", f"Expected 'AAAX', got {out!r}"
+
+    @covers(CobolFeature.DISPLAY)
+    def test_display_no_ref_mod_unchanged(self, capsys):
+        """DISPLAY without ref_mod outputs the full field (regression)."""
+        _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISP-NRM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(5) VALUE "HELLO".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DISPLAY WS-DATA.",
+                "    STOP RUN.",
+            ]
+        )
+        out = capsys.readouterr().out
+        assert out == "HELLO", f"Expected 'HELLO', got {out!r}"

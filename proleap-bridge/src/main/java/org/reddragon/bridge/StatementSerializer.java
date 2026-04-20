@@ -690,7 +690,13 @@ public final class StatementSerializer {
 
         for (Operand operand : stmt.getOperands()) {
             ValueStmt vs = operand.getOperandValueStmt();
-            operands.add(extractValueStmtText(vs));
+            if (vs instanceof CallValueStmt) {
+                operands.add(serializeMoveOperand(((CallValueStmt) vs).getCall()));
+            } else {
+                JsonObject literalObj = new JsonObject();
+                literalObj.addProperty("name", extractValueStmtText(vs));
+                operands.add(literalObj);
+            }
         }
 
         obj.add("operands", operands);

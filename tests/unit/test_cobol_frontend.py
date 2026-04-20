@@ -353,7 +353,7 @@ class TestProcedureDivisionLowering:
                     },
                 },
                 children=[
-                    DisplayStatement(operand="POSITIVE"),
+                    DisplayStatement(operand=RefModOperand(name="POSITIVE")),
                 ],
             ),
         ]
@@ -386,8 +386,10 @@ class TestProcedureDivisionLowering:
                         "right": {"kind": "lit", "value": "0"},
                     },
                 },
-                children=[DisplayStatement(operand="POSITIVE")],
-                else_children=[DisplayStatement(operand="NOT-POSITIVE")],
+                children=[DisplayStatement(operand=RefModOperand(name="POSITIVE"))],
+                else_children=[
+                    DisplayStatement(operand=RefModOperand(name="NOT-POSITIVE"))
+                ],
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -432,7 +434,7 @@ class TestProcedureDivisionLowering:
                         "right": {"kind": "lit", "value": "0"},
                     },
                 },
-                children=[DisplayStatement(operand="ONLY-THEN")],
+                children=[DisplayStatement(operand=RefModOperand(name="ONLY-THEN"))],
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -447,7 +449,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [DisplayStatement(operand="HELLO WORLD")]
+        stmts = [DisplayStatement(operand=RefModOperand(name="HELLO WORLD"))]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
@@ -466,7 +468,7 @@ class TestProcedureDivisionLowering:
                 name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="42"
             ),
         ]
-        stmts = [DisplayStatement(operand="WS-A")]
+        stmts = [DisplayStatement(operand=RefModOperand(name="WS-A"))]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should LOAD_REGION to decode the field, then call print
@@ -821,7 +823,7 @@ class TestPerformLoopLowering:
         ]
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operand="IN-LOOP")],
+                children=[DisplayStatement(operand=RefModOperand(name="IN-LOOP"))],
                 spec=PerformTimesSpec(times="3"),
             ),
         ]
@@ -861,7 +863,7 @@ class TestPerformLoopLowering:
         paragraphs = [
             CobolParagraph(
                 name="WORK-PARA",
-                statements=[DisplayStatement(operand="WORKING")],
+                statements=[DisplayStatement(operand=RefModOperand(name="WORKING"))],
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts, paragraphs)
@@ -893,7 +895,7 @@ class TestPerformLoopLowering:
         ]
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operand="LOOPING")],
+                children=[DisplayStatement(operand=RefModOperand(name="LOOPING"))],
                 spec=PerformUntilSpec(
                     condition={
                         "not": False,
@@ -956,7 +958,7 @@ class TestPerformLoopLowering:
         ]
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operand="LOOPING")],
+                children=[DisplayStatement(operand=RefModOperand(name="LOOPING"))],
                 spec=PerformUntilSpec(
                     condition={
                         "not": False,
@@ -1018,7 +1020,7 @@ class TestPerformLoopLowering:
         ]
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operand="VARYING-LOOP")],
+                children=[DisplayStatement(operand=RefModOperand(name="VARYING-LOOP"))],
                 spec=PerformVaryingSpec(
                     varying_var="WS-IDX",
                     varying_from="1",
@@ -1081,7 +1083,11 @@ class TestSectionPerform:
                     paragraphs=[
                         CobolParagraph(
                             name="WORK-PARA",
-                            statements=[DisplayStatement(operand="IN-SECTION")],
+                            statements=[
+                                DisplayStatement(
+                                    operand=RefModOperand(name="IN-SECTION")
+                                )
+                            ],
                         ),
                     ],
                 ),
@@ -1658,7 +1664,9 @@ class TestSearchLowering:
                 whens=[
                     SearchWhen(
                         condition="WS-IDX = 5",
-                        children=[DisplayStatement(operand="FOUND")],
+                        children=[
+                            DisplayStatement(operand=RefModOperand(name="FOUND"))
+                        ],
                     )
                 ],
             )
@@ -1737,7 +1745,7 @@ class TestSearchLowering:
             SearchStatement(
                 table="WS-TABLE",
                 whens=[SearchWhen(condition="WS-IDX = 5")],
-                at_end=[DisplayStatement(operand="NOT FOUND")],
+                at_end=[DisplayStatement(operand=RefModOperand(name="NOT FOUND"))],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -2175,7 +2183,7 @@ class TestBareStatements:
             data_fields=fields,
             statements=[
                 ComputeStatement(targets=["WS-A"], expression="WS-A + 50"),
-                DisplayStatement(operand="WS-A"),
+                DisplayStatement(operand=RefModOperand(name="WS-A")),
             ],
         )
         frontend = CobolFrontend(_FakeParser(asg))
@@ -2206,7 +2214,7 @@ class TestBareStatements:
             sections=[
                 CobolSection(
                     name="MAIN-SECTION",
-                    statements=[DisplayStatement(operand="WS-A")],
+                    statements=[DisplayStatement(operand=RefModOperand(name="WS-A"))],
                 ),
             ],
         )
@@ -2239,7 +2247,7 @@ class TestBareStatements:
         ]
         asg = CobolASG(
             data_fields=fields,
-            statements=[DisplayStatement(operand="WS-A")],
+            statements=[DisplayStatement(operand=RefModOperand(name="WS-A"))],
             paragraphs=[
                 CobolParagraph(
                     name="MAIN-PARA",
