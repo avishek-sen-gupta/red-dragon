@@ -108,6 +108,13 @@ public class AsgSerializerTest {
         assertTrue("MOVE should have operands", moveStmt.has("operands"));
         JsonArray operands = moveStmt.getAsJsonArray("operands");
         assertEquals("MOVE should have 2 operands (source + target)", 2, operands.size());
+        
+        // New validation: MOVE operands are now objects with "name" property
+        JsonObject sourceOp = operands.get(0).getAsJsonObject();
+        assertEquals("Source operand should have name property", "WS-SRC", sourceOp.get("name").getAsString());
+        
+        JsonObject targetOp = operands.get(1).getAsJsonObject();
+        assertEquals("Target operand should have name property", "WS-DST", targetOp.get("name").getAsString());
     }
 
     // ── Arithmetic ───────────────────────────────────────────────────────
