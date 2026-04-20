@@ -1048,26 +1048,30 @@ class TestInspectRefMod:
 
     @covers(CobolFeature.INSPECT_REF_MOD, CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying_ref_mod_excludes_outside(self):
-        """INSPECT TALLYING counts only within the ref_mod window, not outside."""
+        """INSPECT TALLYING counts only within the ref_mod window, not outside.
+
+        WS-DATA(4:4) on 'AAXAAAXX': correct 0-indexed[3:7]='AAAX'→3 A's.
+        Wrong conversion (no -1) gives 0-indexed[4:8]='AAXX'→2 A's.
+        """
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
                 "PROGRAM-ID. TEST-INSP-RM2.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
-                '77 WS-DATA PIC X(8) VALUE "AAXAAXAA".',
+                '77 WS-DATA PIC X(8) VALUE "AAXAAAXX".',
                 "77 WS-COUNT PIC 9(4) VALUE 0.",
                 "PROCEDURE DIVISION.",
                 "MAIN-PARA.",
-                "    INSPECT WS-DATA(4:3) TALLYING WS-COUNT",
+                "    INSPECT WS-DATA(4:4) TALLYING WS-COUNT",
                 '        FOR ALL "A".',
                 "    STOP RUN.",
             ]
         )
         region = _first_region(vm)
-        # WS-DATA(4:3) 1-indexed = 0-indexed[3:6] = "AAX" → 2 A's
-        # Full field has 6 A's; slice reduces to 2
-        assert _decode_zoned_unsigned(region, 8, 4) == 2
+        # WS-DATA(4:4) 1-indexed = 0-indexed[3:7] = "AAAX" → 3 A's
+        # Wrong (no -1): 0-indexed[4:8] = "AAXX" → 2 A's
+        assert _decode_zoned_unsigned(region, 8, 4) == 3
 
     @covers(CobolFeature.INSPECT_REF_MOD, CobolFeature.INSPECT_REPLACING)
     def test_inspect_replacing_ref_mod_applies_to_slice(self):
