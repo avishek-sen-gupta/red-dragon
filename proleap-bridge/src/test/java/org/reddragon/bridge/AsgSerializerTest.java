@@ -75,7 +75,7 @@ public class AsgSerializerTest {
         assertTrue("DISPLAY should have operands", displayStmt.has("operands"));
         JsonArray operands = displayStmt.getAsJsonArray("operands");
         assertTrue("DISPLAY should reference WS-MSG",
-                operands.get(0).getAsString().contains("WS-MSG"));
+                operands.get(0).getAsJsonObject().get("name").getAsString().contains("WS-MSG"));
     }
 
     // ── Move Fields ──────────────────────────────────────────────────────

@@ -143,7 +143,7 @@ class TestParseStatementDispatch:
                         "right": {"kind": "lit", "value": "0"},
                     },
                 },
-                "children": [{"type": "DISPLAY", "operands": ["POSITIVE"]}],
+                "children": [{"type": "DISPLAY", "operands": [{"name": "POSITIVE"}]}],
             }
         )
         assert isinstance(stmt, IfStatement)
@@ -171,15 +171,15 @@ class TestParseStatementDispatch:
                         "right": {"kind": "lit", "value": "0"},
                     },
                 },
-                "children": [{"type": "DISPLAY", "operands": ["YES"]}],
-                "else_children": [{"type": "DISPLAY", "operands": ["NO"]}],
+                "children": [{"type": "DISPLAY", "operands": [{"name": "YES"}]}],
+                "else_children": [{"type": "DISPLAY", "operands": [{"name": "NO"}]}],
             }
         )
         assert isinstance(stmt, IfStatement)
         assert len(stmt.children) == 1
         assert len(stmt.else_children) == 1
         assert isinstance(stmt.else_children[0], DisplayStatement)
-        assert stmt.else_children[0].operand == "NO"
+        assert stmt.else_children[0].operand.name == "NO"
 
     @covers(CobolFeature.IF_ELSE)
     def test_if_without_else_has_empty_else_children(self):
@@ -194,7 +194,7 @@ class TestParseStatementDispatch:
                         "right": {"kind": "lit", "value": "0"},
                     },
                 },
-                "children": [{"type": "DISPLAY", "operands": ["YES"]}],
+                "children": [{"type": "DISPLAY", "operands": [{"name": "YES"}]}],
             }
         )
         assert isinstance(stmt, IfStatement)
@@ -209,11 +209,15 @@ class TestParseStatementDispatch:
                     {
                         "type": "WHEN",
                         "condition": "WS-A = 1",
-                        "children": [{"type": "DISPLAY", "operands": ["ONE"]}],
+                        "children": [
+                            {"type": "DISPLAY", "operands": [{"name": "ONE"}]}
+                        ],
                     },
                     {
                         "type": "WHEN_OTHER",
-                        "children": [{"type": "DISPLAY", "operands": ["OTHER"]}],
+                        "children": [
+                            {"type": "DISPLAY", "operands": [{"name": "OTHER"}]}
+                        ],
                     },
                 ],
             }
@@ -225,9 +229,10 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.DISPLAY)
     def test_display(self):
-        stmt = parse_statement({"type": "DISPLAY", "operands": ["HELLO"]})
+        stmt = parse_statement({"type": "DISPLAY", "operands": [{"name": "HELLO"}]})
         assert isinstance(stmt, DisplayStatement)
-        assert stmt.operand == "HELLO"
+        assert isinstance(stmt.operand, RefModOperand)
+        assert stmt.operand.name == "HELLO"
 
     @covers(CobolFeature.GO_TO)
     def test_goto(self):
@@ -262,7 +267,7 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "PERFORM",
-                "children": [{"type": "DISPLAY", "operands": ["IN-LOOP"]}],
+                "children": [{"type": "DISPLAY", "operands": [{"name": "IN-LOOP"}]}],
             }
         )
         assert isinstance(stmt, PerformStatement)
@@ -391,7 +396,9 @@ class TestParseStatementDispatch:
                 "whens": [
                     {
                         "condition": "WS-IDX = 5",
-                        "children": [{"type": "DISPLAY", "operands": ["FOUND"]}],
+                        "children": [
+                            {"type": "DISPLAY", "operands": [{"name": "FOUND"}]}
+                        ],
                     }
                 ],
             }
@@ -410,7 +417,7 @@ class TestParseStatementDispatch:
                 "type": "SEARCH",
                 "table": "WS-TABLE",
                 "whens": [{"condition": "WS-A = 1"}],
-                "at_end": [{"type": "DISPLAY", "operands": ["NOT FOUND"]}],
+                "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
             }
         )
         assert isinstance(stmt, SearchStatement)
@@ -666,7 +673,7 @@ class TestPerformSpecs:
         stmt = parse_statement(
             {
                 "type": "PERFORM",
-                "children": [{"type": "DISPLAY", "operands": ["LOOP"]}],
+                "children": [{"type": "DISPLAY", "operands": [{"name": "LOOP"}]}],
                 "perform_type": "VARYING",
                 "varying_var": "WS-IDX",
                 "varying_from": "1",
@@ -730,7 +737,7 @@ class TestRoundTrip:
 
     @covers(CobolFeature.DISPLAY)
     def test_display_round_trip(self):
-        data = {"type": "DISPLAY", "operands": ["HELLO"]}
+        data = {"type": "DISPLAY", "operands": [{"name": "HELLO"}]}
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.GO_TO)
@@ -755,7 +762,7 @@ class TestRoundTrip:
                     "right": {"kind": "lit", "value": "0"},
                 },
             },
-            "children": [{"type": "DISPLAY", "operands": ["YES"]}],
+            "children": [{"type": "DISPLAY", "operands": [{"name": "YES"}]}],
         }
         assert self._round_trip(data) == data
 
@@ -771,8 +778,8 @@ class TestRoundTrip:
                     "right": {"kind": "lit", "value": "0"},
                 },
             },
-            "children": [{"type": "DISPLAY", "operands": ["YES"]}],
-            "else_children": [{"type": "DISPLAY", "operands": ["NO"]}],
+            "children": [{"type": "DISPLAY", "operands": [{"name": "YES"}]}],
+            "else_children": [{"type": "DISPLAY", "operands": [{"name": "NO"}]}],
         }
         assert self._round_trip(data) == data
 
@@ -869,11 +876,11 @@ class TestRoundTrip:
                 {
                     "type": "WHEN",
                     "condition": "WS-A = 1",
-                    "children": [{"type": "DISPLAY", "operands": ["ONE"]}],
+                    "children": [{"type": "DISPLAY", "operands": [{"name": "ONE"}]}],
                 },
                 {
                     "type": "WHEN_OTHER",
-                    "children": [{"type": "DISPLAY", "operands": ["OTHER"]}],
+                    "children": [{"type": "DISPLAY", "operands": [{"name": "OTHER"}]}],
                 },
             ],
         }
@@ -966,7 +973,7 @@ class TestRoundTrip:
             "whens": [
                 {
                     "condition": "WS-IDX = 5",
-                    "children": [{"type": "DISPLAY", "operands": ["FOUND"]}],
+                    "children": [{"type": "DISPLAY", "operands": [{"name": "FOUND"}]}],
                 }
             ],
         }
@@ -978,7 +985,7 @@ class TestRoundTrip:
             "type": "SEARCH",
             "table": "WS-TABLE",
             "whens": [{"condition": "WS-A = 1"}],
-            "at_end": [{"type": "DISPLAY", "operands": ["NOT FOUND"]}],
+            "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
         }
         assert self._round_trip(data) == data
 

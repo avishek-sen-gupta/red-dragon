@@ -53,6 +53,7 @@ class CobolFeature(Enum):
     SET_UP_BY = "SET index UP BY n index increment statements"
     SET_DOWN_BY = "SET index DOWN BY n index decrement statements"
     DISPLAY = "DISPLAY expr output display statements"
+    DISPLAY_REF_MOD = "DISPLAY WS-FIELD(start:length) reference modification on operand"
 
     # ---------------------------------------------------------------------------
     # String operations

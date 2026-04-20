@@ -342,15 +342,18 @@ class EvaluateStatement:
 class DisplayStatement:
     """DISPLAY operand."""
 
-    operand: str
+    operand: RefModOperand
 
     @classmethod
     def from_dict(cls, data: dict) -> DisplayStatement:
         operands = data.get("operands", [])
-        return cls(operand=operands[0] if operands else "")
+        raw = operands[0] if operands else {}
+        if isinstance(raw, str):
+            raw = {"name": raw}
+        return cls(operand=RefModOperand.from_dict(raw))
 
     def to_dict(self) -> dict:
-        return {"type": "DISPLAY", "operands": [self.operand]}
+        return {"type": "DISPLAY", "operands": [self.operand.to_dict()]}
 
 
 @dataclass(frozen=True)
