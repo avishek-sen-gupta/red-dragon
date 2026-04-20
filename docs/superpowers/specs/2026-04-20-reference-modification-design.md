@@ -134,27 +134,104 @@ private String extractCallBaseName(Call call) {
 }
 ```
 
-#### Changes to `serializeMoveToStatement`
+#### MOVE operand format change
 
-When serializing each source/target call, check for TABLE_CALL + referenceModifier:
+Currently `serializeMove` emits `operands` as a `JsonArray` of strings (source name, then target names). Ref mod requires operands to carry structured data, so **MOVE operands become objects consistently**:
 
-```java
-// For source:
-JsonObject srcObj = new JsonObject();
-srcObj.addProperty("name", extractCallBaseName(srcCall));
-CobolParser.ReferenceModifierContext srcRefMod = getRefMod(srcCall);
-if (srcRefMod != null) {
-    JsonObject rm = serializeRefMod(srcRefMod);
-    srcObj.add("ref_mod_start", rm.get("ref_mod_start"));
-    srcObj.add("ref_mod_length", rm.get("ref_mod_length"));
-}
-
-// Same pattern for each target call
+```json
+{"name": "WS-SRC"}
+{"name": "WS-FIELD", "ref_mod_start": {"kind":"lit","value":"2"}, "ref_mod_length": {"kind":"lit","value":"3"}}
 ```
 
-Where `getRefMod(Call call)` navigates `getCtx() → tableCall() → referenceModifier()` using reflection (same pattern as confirmed by the test).
+`ref_mod_start` / `ref_mod_length` keys are **absent** (not null) when no ref mod is present, so plain operand consumers only need `obj.get("name").getAsString()`.
+
+#### Changes to `serializeMove`
+
+Replace the current `operands.add(extractValueStmtText(vs))` / `operands.add(extractCallName(call))` pattern with a helper `serializeMoveOperand`:
+
+```java
+private static JsonObject serializeMoveOperand(Call call) {
+    JsonObject obj = new JsonObject();
+    obj.addProperty("name", extractCallBaseName(call));
+    CobolParser.ReferenceModifierContext refMod = getRefMod(call);
+    if (refMod != null) {
+        JsonObject rm = serializeRefMod(refMod);
+        obj.add("ref_mod_start",  rm.get("ref_mod_start"));
+        obj.add("ref_mod_length", rm.get("ref_mod_length"));
+    }
+    return obj;
+}
+```
+
+For the source operand, the value stmt is first resolved to a `Call` (already done for `extractValueStmtText`); for targets, `receivingCall` is passed directly. Both use `serializeMoveOperand`.
+
+`getRefMod(Call call)` navigates `getCtx() → tableCall() → referenceModifier()` via reflection (same approach confirmed by the standalone test).
+
+The existing bridge test `testMoveFields_moveStatement` currently checks `operands.size() == 2` — this still passes. However it must be updated to assert `operands.get(0).getAsJsonObject().get("name").getAsString()` equals `"WS-SRC"`, since each element is now an object.
 
 JAR rebuild required after changes: `cd proleap-bridge && mvn package -q`
+
+---
+
+### Layer 1b — Bridge Tests (`RefModSerializerTest.java`)
+
+New fixture `ref_mod.cbl` covering all expression forms:
+
+```cobol
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. REFMOD.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-FIELD PIC X(50).
+       01 WS-OUT   PIC X(20).
+       01 WS-A     PIC 9 VALUE 2.
+       01 WS-B     PIC 9 VALUE 3.
+       01 WS-C     PIC 9 VALUE 4.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           MOVE WS-FIELD(2:3) TO WS-OUT.
+           MOVE WS-FIELD(WS-A:WS-B) TO WS-OUT.
+           MOVE WS-FIELD(WS-A + 1:WS-B - 1) TO WS-OUT.
+           MOVE WS-FIELD(WS-A * WS-B:WS-C + WS-A) TO WS-OUT.
+           MOVE WS-FIELD((WS-A + 1) * 2:(WS-C - WS-B) * WS-A) TO WS-OUT.
+           MOVE WS-FIELD(WS-A + WS-B * WS-C:) TO WS-OUT.
+           MOVE WS-FIELD((WS-A + WS-B) * (WS-C - WS-A):3) TO WS-OUT.
+           STOP RUN.
+```
+
+New test class `RefModSerializerTest.java`:
+
+| Test | Assertion |
+|------|-----------|
+| `testRefMod_literalStartLength` | MOVE #1 source operand has `ref_mod_start = {"kind":"lit","value":"2"}`, `ref_mod_length = {"kind":"lit","value":"3"}` |
+| `testRefMod_datanameStartLength` | MOVE #2 source has `ref_mod_start = {"kind":"ref","name":"WS-A"}`, `ref_mod_length = {"kind":"ref","name":"WS-B"}` |
+| `testRefMod_addSubtractExpr` | MOVE #3 start is `binop(+, ref(WS-A), lit(1))`, length is `binop(-, ref(WS-B), lit(1))` |
+| `testRefMod_multiplyExpr` | MOVE #4 start is `binop(*, ref(WS-A), ref(WS-B))` |
+| `testRefMod_parenthesisedExpr` | MOVE #5 start is `binop(*, binop(+,...), lit(2))` |
+| `testRefMod_omittedLength` | MOVE #6 `ref_mod_length` key is absent (no ref mod length) |
+| `testRefMod_deeplyNested` | MOVE #7 start is `binop(*, binop(+,ref(WS-A),ref(WS-B)), binop(-,ref(WS-C),ref(WS-A)))` |
+| `testRefMod_targetOperand` | All MOVE target operands are objects with `name` = `"WS-OUT"`, no ref_mod keys |
+| `testRefMod_plainMoveUnchanged` | A plain `MOVE WS-SRC TO WS-DST` emits operands with `name` fields only, no `ref_mod_start` |
+
+Helper needed in the test class:
+
+```java
+private JsonObject getMoveSourceOperand(JsonObject asg, int moveIndex) {
+    JsonObject para = findParagraph(asg.getAsJsonArray("paragraphs"), "MAIN-PARA");
+    JsonArray stmts = para.getAsJsonArray("statements");
+    // filter to only MOVE statements
+    int count = 0;
+    for (JsonElement e : stmts) {
+        JsonObject s = e.getAsJsonObject();
+        if ("MOVE".equals(s.get("type").getAsString())) {
+            if (count++ == moveIndex) {
+                return s.getAsJsonArray("operands").get(0).getAsJsonObject();
+            }
+        }
+    }
+    return null;
+}
+```
 
 ---
 
@@ -204,7 +281,15 @@ class MoveOperand:
     ref_mod_length: RefModExpr | None = None
 ```
 
-`from_dict` reads `ref_mod_start` and `ref_mod_length` from the JSON, calling `ref_mod_expr_from_dict` when non-null.
+`from_dict` reads `name` (always present), and optionally `ref_mod_start` / `ref_mod_length` (absent = no ref mod):
+
+```python
+@classmethod
+def from_dict(cls, d: dict) -> "MoveOperand":
+    start = ref_mod_expr_from_dict(d["ref_mod_start"]) if "ref_mod_start" in d else None
+    length = ref_mod_expr_from_dict(d["ref_mod_length"]) if "ref_mod_length" in d else None
+    return cls(name=d["name"], ref_mod_start=start, ref_mod_length=length)
+```
 
 ---
 

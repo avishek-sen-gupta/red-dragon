@@ -183,4 +183,6 @@ fileignoreconfig:
   checksum: cd8f93a4af0591f7dc9421cc3d019719c07ae149be4eaaf6ceca500e20cbf5b9
 - filename: docs/superpowers/specs/2026-04-19-compute-on-size-error-design.md
   checksum: 56a4abe3a3657850c087098249dc2dccdd38f1192f5824c00a71634423a985d9
+- filename: docs/superpowers/specs/2026-04-20-reference-modification-design.md
+  checksum: 40e206f04ddbd407f825fff53ef8c8f27fb3e9b5273bad0db48e6d2c45691e13
 version: "1.0"
