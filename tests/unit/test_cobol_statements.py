@@ -53,8 +53,8 @@ class TestParseStatementDispatch:
     def test_move(self):
         stmt = parse_statement({"type": "MOVE", "operands": ["123", "WS-A"]})
         assert isinstance(stmt, MoveStatement)
-        assert stmt.source == "123"
-        assert stmt.target == "WS-A"
+        assert stmt.source.name == "123"
+        assert stmt.target.name == "WS-A"
 
     @covers(CobolFeature.ADD)
     def test_add(self):
@@ -709,7 +709,7 @@ class TestRoundTrip:
 
     @covers(CobolFeature.MOVE)
     def test_move_round_trip(self):
-        data = {"type": "MOVE", "operands": ["123", "WS-A"]}
+        data = {"type": "MOVE", "operands": [{"name": "123"}, {"name": "WS-A"}]}
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.ADD)
