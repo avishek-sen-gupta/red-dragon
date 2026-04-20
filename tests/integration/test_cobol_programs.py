@@ -3424,3 +3424,54 @@ class TestReferenceModification:
         assert _decode_alpha(region, 13, 2) == "EF"
         # WS-OUT3: offset 15
         assert _decode_alpha(region, 15, 4) == "GHIJ"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+    )
+    def test_ref_mod_target(self):
+        """MOVE WS-SRC TO WS-FIELD(2:3) replaces 3 bytes starting at position 2 (1-indexed)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-TGT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-SRC   PIC X(3)  VALUE 'XYZ'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-SRC TO WS-FIELD(2:3).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD starts at offset 0 (10 bytes)
+        # MOVE WS-SRC TO WS-FIELD(2:3) replaces positions 2,3,4 with "XYZ"
+        # Result: "AXYZEFGHIJ"
+        assert _decode_alpha(region, 0, 10) == "AXYZEFGHIJ"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+    )
+    def test_ref_mod_target_literal_source(self):
+        """MOVE literal TO WS-FIELD(start:length) replaces substring with literal value."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-TGTLIT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'AAAAAAAAAA'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 'BB' TO WS-FIELD(4:2).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD starts at offset 0 (10 bytes)
+        # MOVE 'BB' TO WS-FIELD(4:2) replaces positions 4 and 5 (1-indexed) with "BB"
+        # Result: "AAABBAAAAA"
+        assert _decode_alpha(region, 0, 10) == "AAABBAAAAA"
