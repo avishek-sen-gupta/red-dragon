@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 951 features across 16 languages — 753 covered, 198 uncovered
+**Totals**: 953 features across 16 languages — 755 covered, 198 uncovered
 
 ---
 
@@ -13,7 +13,7 @@
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
 | c | 48 | 33 | 15 ⚠ | 68% |
-| cobol | 107 | 99 | 8 ⚠ | 92% |
+| cobol | 109 | 101 | 8 ⚠ | 92% |
 | cpp | 84 | 38 | 46 ⚠ | 45% |
 | csharp | 94 | 71 | 23 ⚠ | 75% |
 | go | 44 | 41 | 3 ⚠ | 93% |
