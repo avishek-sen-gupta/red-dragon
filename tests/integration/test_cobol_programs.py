@@ -1020,26 +1020,83 @@ class TestInspectReplacing:
 
 class TestInspectRefMod:
     @covers(CobolFeature.INSPECT_REF_MOD, CobolFeature.INSPECT_TALLYING)
-    def test_inspect_tallying_ref_mod_basic(self):
-        """INSPECT TALLYING on a sliced subject counts only within the substring."""
+    def test_inspect_tallying_ref_mod_start_offset(self):
+        """INSPECT TALLYING on a sliced subject with start > 1 verifies 1→0 index conversion.
+
+        WS-DATA(3:3) = 'AAA' (3 A's). Full field has 5 A's. Wrong conversion
+        (no -1) would give 0-indexed start=3 → 'AAB' → 2 A's, not 3.
+        """
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
                 "PROGRAM-ID. TEST-INSP-RM.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
-                '77 WS-DATA PIC X(10) VALUE "AAXAAXAAX ".',
+                '77 WS-DATA PIC X(8) VALUE "XXAAABBB".',
                 "77 WS-COUNT PIC 9(4) VALUE 0.",
                 "PROCEDURE DIVISION.",
                 "MAIN-PARA.",
-                "    INSPECT WS-DATA(1:6) TALLYING WS-COUNT",
+                "    INSPECT WS-DATA(3:3) TALLYING WS-COUNT",
                 '        FOR ALL "A".',
                 "    STOP RUN.",
             ]
         )
         region = _first_region(vm)
-        # WS-DATA(1:6) = "AAXAAX" — contains 4 A's; full field has 6
-        assert _decode_zoned_unsigned(region, 10, 4) == 4
+        # WS-DATA(3:3) 1-indexed = 0-indexed[2:5] = "AAA" → 3 A's
+        # If index not adjusted: 0-indexed[3:6] = "AAB" → 2 A's
+        assert _decode_zoned_unsigned(region, 8, 4) == 3
+
+    @covers(CobolFeature.INSPECT_REF_MOD, CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_ref_mod_excludes_outside(self):
+        """INSPECT TALLYING counts only within the ref_mod window, not outside."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-INSP-RM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(8) VALUE "AAXAAXAA".',
+                "77 WS-COUNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-DATA(4:3) TALLYING WS-COUNT",
+                '        FOR ALL "A".',
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-DATA(4:3) 1-indexed = 0-indexed[3:6] = "AAX" → 2 A's
+        # Full field has 6 A's; slice reduces to 2
+        assert _decode_zoned_unsigned(region, 8, 4) == 2
+
+    @covers(CobolFeature.INSPECT_REF_MOD, CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_ref_mod_applies_to_slice(self):
+        """INSPECT REPLACING with ref_mod replaces only within the sliced region.
+
+        WS-DATA = 'XAAXX' (PIC X(5)). INSPECT WS-DATA(2:3) replaces 'A' by 'B'
+        in 0-indexed[1:4] = 'AAX' → 'BBX'. Wrong conversion (no -1) would act
+        on 0-indexed[2:5] = 'AXX' → 'BXX', giving byte[1] = X not B.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-INSP-RM3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(5) VALUE "XAAXX".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                '    INSPECT WS-DATA(2:3) REPLACING ALL "A" BY "B".',
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # 0-indexed[1:4] = "AAX" → replaced → "BBX"
+        # Written back to PIC X(5) field → bytes [B, B, X, ...]
+        # EBCDIC: B=0xC2, X=0xE7
+        assert region[0] == 0xC2, f"byte[0] should be B (0xC2), got {hex(region[0])}"
+        assert region[1] == 0xC2, f"byte[1] should be B (0xC2), got {hex(region[1])}"
+        assert region[2] == 0xE7, f"byte[2] should be X (0xE7), got {hex(region[2])}"
 
     @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying_no_ref_mod_unchanged(self):
