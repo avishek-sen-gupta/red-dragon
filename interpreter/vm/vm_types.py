@@ -282,6 +282,8 @@ class BuiltinResult:
 class StackFramePush(BaseModel):
     function_name: FuncName
     return_label: CodeLabel | None = None
+    return_ip: int | None = None
+    result_reg: Register = NO_REGISTER
     closure_env_id: ClosureId = NO_CLOSURE_ID
     captured_var_names: list[VarName] = []
     is_ctor: bool = False

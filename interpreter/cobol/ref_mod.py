@@ -73,13 +73,13 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
 
 
 @dataclass(frozen=True)
-class MoveOperand:
+class RefModOperand:
     """MOVE statement operand with optional reference modification.
 
     Examples:
-      MoveOperand(name="WS-FIELD", ref_mod_start=None, ref_mod_length=None)
-      MoveOperand(name="WS-FIELD", ref_mod_start=RefModLiteral("2"), ref_mod_length=RefModLiteral("3"))
-      MoveOperand(name="WS-FIELD", ref_mod_start=RefModReference("WS-A"), ref_mod_length=RefModReference("WS-B"))
+      RefModOperand(name="WS-FIELD", ref_mod_start=None, ref_mod_length=None)
+      RefModOperand(name="WS-FIELD", ref_mod_start=RefModLiteral("2"), ref_mod_length=RefModLiteral("3"))
+      RefModOperand(name="WS-FIELD", ref_mod_start=RefModReference("WS-A"), ref_mod_length=RefModReference("WS-B"))
     """
 
     name: str
@@ -87,8 +87,8 @@ class MoveOperand:
     ref_mod_length: RefModExpr | None = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> MoveOperand:
-        """Construct MoveOperand from JSON dict representation.
+    def from_dict(cls, data: dict) -> RefModOperand:
+        """Construct RefModOperand from JSON dict representation.
 
         Expected formats:
           {"name": "WS-FIELD"}
