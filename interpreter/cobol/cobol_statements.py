@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from interpreter.cobol.ref_mod import RefModOperand
+from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict
 
 # ── PERFORM specs ────────────────────────────────────────────────
 
@@ -248,7 +249,7 @@ class ArithmeticStatement:
 class ComputeStatement:
     """COMPUTE target = arithmetic-expression."""
 
-    expression: str  # e.g. "WS-A + WS-B * 2"
+    expression: ExprNode  # structured expression tree
     targets: list[str] = field(default_factory=list)  # target variable names
     on_size_error: list[CobolStatementType] = field(default_factory=list)
     not_on_size_error: list[CobolStatementType] = field(default_factory=list)
@@ -256,7 +257,7 @@ class ComputeStatement:
     @classmethod
     def from_dict(cls, data: dict) -> ComputeStatement:
         return cls(
-            expression=data.get("expression", ""),
+            expression=expr_from_dict(data["expression"]),
             targets=data.get("targets", []),
             on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
             not_on_size_error=[
@@ -265,10 +266,47 @@ class ComputeStatement:
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "COMPUTE", "expression": self.expression}
+        # Serialize expression back to dict
+        result: dict = {
+            "type": "COMPUTE",
+            "expression": _expr_node_to_dict(self.expression),
+        }
         if self.targets:
             result["targets"] = list(self.targets)
         return result
+
+
+def _expr_node_to_dict(node: ExprNode) -> dict:
+    """Convert an ExprNode back to a structured JSON dict for serialization."""
+    from interpreter.cobol.cobol_expression import (
+        LiteralNode,
+        FieldRefNode,
+        RefModNode,
+        BinOpNode,
+    )
+
+    if isinstance(node, LiteralNode):
+        return {"kind": "lit", "value": node.value}
+    elif isinstance(node, FieldRefNode):
+        return {"kind": "ref", "name": node.name}
+    elif isinstance(node, RefModNode):
+        result = {
+            "kind": "ref",
+            "name": node.name,
+            "ref_mod_start": _expr_node_to_dict(node.ref_mod_start),
+        }
+        if node.ref_mod_length is not None:
+            result["ref_mod_length"] = _expr_node_to_dict(node.ref_mod_length)
+        return result
+    elif isinstance(node, BinOpNode):
+        return {
+            "kind": "binop",
+            "op": node.op,
+            "left": _expr_node_to_dict(node.left),
+            "right": _expr_node_to_dict(node.right),
+        }
+    else:
+        return {}
 
 
 @dataclass(frozen=True)
