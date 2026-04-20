@@ -189,10 +189,12 @@ class ArithmeticStatement:
 
     For GIVING forms (MULTIPLY X BY Y GIVING Z), operands holds [X, Y]
     and giving holds [Z].  The result (X * Y) is stored in Z, not in Y.
+
+    Source can be a field name with optional reference modification (1-based slice).
     """
 
     op: str  # "ADD" | "SUBTRACT" | "MULTIPLY" | "DIVIDE"
-    source: str
+    source: RefModOperand
     target: str
     giving: list[str] = field(default_factory=list)
     on_size_error: list[CobolStatementType] = field(default_factory=list)
@@ -201,10 +203,26 @@ class ArithmeticStatement:
     @classmethod
     def from_dict(cls, data: dict) -> ArithmeticStatement:
         operands = data.get("operands", [])
+
+        # Parse source operand: can be a dict with ref_mod or a plain string
+        source_data = operands[0] if len(operands) > 0 else {"name": ""}
+        if isinstance(source_data, str):
+            source = RefModOperand(name=source_data)
+        else:
+            source = RefModOperand.from_dict(source_data)
+
+        # Target operand: can be a dict with name key or a plain string
+        target_data = operands[1] if len(operands) > 1 else ""
+        if isinstance(target_data, str):
+            target = target_data
+        else:
+            # If it's a dict, extract the name field (for compatibility with Java bridge)
+            target = target_data.get("name", "")
+
         return cls(
             op=data["type"],
-            source=operands[0] if len(operands) > 0 else "",
-            target=operands[1] if len(operands) > 1 else "",
+            source=source,
+            target=target,
             giving=data.get("giving", []),
             on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
             not_on_size_error=[
@@ -213,7 +231,10 @@ class ArithmeticStatement:
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": self.op, "operands": [self.source, self.target]}
+        result: dict = {
+            "type": self.op,
+            "operands": [self.source.to_dict(), {"name": self.target}],
+        }
         if self.giving:
             result["giving"] = list(self.giving)
         if self.on_size_error:

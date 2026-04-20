@@ -3784,3 +3784,77 @@ class TestDisplayRefMod:
         )
         out = capsys.readouterr().out
         assert out == "HELLO", f"Expected 'HELLO', got {out!r}"
+
+
+class TestArithmeticRefMod:
+    @covers(CobolFeature.ARITHMETIC_REF_MOD, CobolFeature.ADD)
+    def test_add_source_ref_mod(self):
+        """ADD WS-FIELD(1:3) TO WS-TOTAL where WS-FIELD='123ABC' adds 123.
+
+        Correct (start-1=0): slice[0:3]='123' → 123.0 added.
+        Wrong (no -1): slice[1:4]='23A' → not a number, or wrong value.
+        No ref_mod: '123ABC' → not parseable as number.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ADD-RM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-FIELD PIC X(6) VALUE '123ABC'.",
+                "77 WS-TOTAL PIC 9(5) VALUE 000.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD WS-FIELD(1:3) TO WS-TOTAL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 6 bytes at offset 0; WS-TOTAL: 5 bytes at offset 6
+        assert _decode_zoned_unsigned(region, 6, 5) == 123
+
+    @covers(CobolFeature.ARITHMETIC_REF_MOD, CobolFeature.ADD)
+    def test_add_source_ref_mod_offset(self):
+        """ADD WS-FIELD(4:3) TO WS-TOTAL where WS-FIELD='XXX456' adds 456.
+
+        Correct (start-1=3): slice[3:6]='456' → 456.
+        Wrong (no -1): slice[4:7]='56' (only 2 chars) → 56, not 456.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ADD-RM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-FIELD PIC X(6) VALUE 'XXX456'.",
+                "77 WS-TOTAL PIC 9(5) VALUE 000.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD WS-FIELD(4:3) TO WS-TOTAL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 6 bytes at offset 0; WS-TOTAL: 5 bytes at offset 6
+        assert _decode_zoned_unsigned(region, 6, 5) == 456
+
+    @covers(CobolFeature.ADD)
+    def test_add_no_ref_mod_unchanged(self):
+        """ADD without ref_mod still works correctly (regression)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ADD-NORM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A    PIC 9(3) VALUE 100.",
+                "77 WS-TOTAL PIC 9(5) VALUE 000.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD WS-A TO WS-TOTAL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A: 3 bytes at 0; WS-TOTAL: 5 bytes at 3
+        assert _decode_zoned_unsigned(region, 3, 5) == 100
