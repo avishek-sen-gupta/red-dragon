@@ -914,82 +914,6 @@ class WriteRegion(InstructionBase):
 # ── String/Substring Operations ──────────────────────────────────
 
 
-@dataclass(frozen=True)
-class Slice(InstructionBase):
-    """SLICE: extract substring from a value.
-
-    result_reg = value_reg[start_reg:start_reg+length_reg]
-
-    start_reg and length_reg can be registers (dynamic) or represented as constant
-    values pre-loaded into registers.
-    """
-
-    result_reg: Register = NO_REGISTER
-    value_reg: Register = NO_REGISTER
-    start_reg: Register = NO_REGISTER
-    length_reg: Register = NO_REGISTER
-
-    def reads(self) -> list[StorageIdentifier]:
-        return [
-            r
-            for r in (self.value_reg, self.start_reg, self.length_reg)
-            if r.is_present()
-        ]
-
-    @property
-    def opcode(self) -> Opcode:
-        return Opcode.SLICE
-
-    @property
-    def operands(self) -> list[Any]:
-        return [
-            str(self.value_reg),
-            str(self.start_reg),
-            str(self.length_reg),
-        ]
-
-
-@dataclass(frozen=True)
-class Splice(InstructionBase):
-    """SPLICE: replace substring in a value.
-
-    result_reg = value_reg[:start_reg] + replacement_reg + value_reg[start_reg+length_reg:]
-
-    Replaces length_reg bytes at start_reg offset with replacement_reg bytes.
-    """
-
-    result_reg: Register = NO_REGISTER
-    value_reg: Register = NO_REGISTER
-    start_reg: Register = NO_REGISTER
-    length_reg: Register = NO_REGISTER
-    replacement_reg: Register = NO_REGISTER
-
-    def reads(self) -> list[StorageIdentifier]:
-        return [
-            r
-            for r in (
-                self.value_reg,
-                self.start_reg,
-                self.length_reg,
-                self.replacement_reg,
-            )
-            if r.is_present()
-        ]
-
-    @property
-    def opcode(self) -> Opcode:
-        return Opcode.SPLICE
-
-    @property
-    def operands(self) -> list[Any]:
-        return [
-            str(self.value_reg),
-            str(self.start_reg),
-            str(self.length_reg),
-            str(self.replacement_reg),
-        ]
-
-
 # ── Continuations (COBOL PERFORM) ───────────────────────────────
 
 
@@ -1377,29 +1301,6 @@ def _write_region(inst: Any) -> WriteRegion:
     )
 
 
-def _slice(inst: Any) -> Slice:
-    ops = inst.operands
-    return Slice(
-        result_reg=_as_register(inst.result_reg),
-        value_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
-        start_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
-        length_reg=Register(str(ops[2])) if len(ops) >= 3 else NO_REGISTER,
-        source_location=inst.source_location,
-    )
-
-
-def _splice(inst: Any) -> Splice:
-    ops = inst.operands
-    return Splice(
-        result_reg=_as_register(inst.result_reg),
-        value_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
-        start_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
-        length_reg=Register(str(ops[2])) if len(ops) >= 3 else NO_REGISTER,
-        replacement_reg=Register(str(ops[3])) if len(ops) >= 4 else NO_REGISTER,
-        source_location=inst.source_location,
-    )
-
-
 def _import_module(inst: Any) -> ImportModule:
     ops = inst.operands
     return ImportModule(
@@ -1469,8 +1370,6 @@ _TO_TYPED: dict[Opcode, object] = {
     Opcode.ALLOC_REGION: _alloc_region,
     Opcode.LOAD_REGION: _load_region,
     Opcode.WRITE_REGION: _write_region,
-    Opcode.SLICE: _slice,
-    Opcode.SPLICE: _splice,
     Opcode.SET_CONTINUATION: _set_continuation,
     Opcode.RESUME_CONTINUATION: _resume_continuation,
 }

@@ -14,8 +14,6 @@ from interpreter.instructions import (
     AllocRegion,
     WriteRegion,
     LoadRegion,
-    Slice,
-    Splice,
 )
 from interpreter.vm.vm import (
     VMState,
