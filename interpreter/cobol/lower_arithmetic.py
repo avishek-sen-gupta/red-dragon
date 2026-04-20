@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.cobol_expression import parse_expression
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ref_mod import (
@@ -45,8 +46,6 @@ from interpreter.instructions import (
     Const,
     Label_,
     Return_,
-    Slice,
-    Splice,
 )
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
@@ -248,11 +247,14 @@ def lower_move(
                 f"start_reg={start_0indexed_reg}, length_reg={length_reg}, result_reg={result_reg}"
             )
             ctx.emit_inst(
-                Slice(
-                    value_reg=Register(str(value_str_reg)),
-                    start_reg=Register(str(start_0indexed_reg)),
-                    length_reg=Register(str(length_reg)),
-                    result_reg=Register(str(result_reg)),
+                CallFunction(
+                    result_reg=result_reg,
+                    func_name=FuncName(BuiltinName.STRING_SLICE),
+                    args=(
+                        Register(str(value_str_reg)),
+                        Register(str(start_0indexed_reg)),
+                        Register(str(length_reg)),
+                    ),
                 )
             )
             value_str_reg = result_reg
@@ -263,11 +265,14 @@ def lower_move(
             large_length = ctx.const_to_reg('"999999"')
             result_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                Slice(
-                    value_reg=Register(str(value_str_reg)),
-                    start_reg=Register(str(start_0indexed_reg)),
-                    length_reg=Register(str(large_length)),
-                    result_reg=Register(str(result_reg)),
+                CallFunction(
+                    result_reg=result_reg,
+                    func_name=FuncName(BuiltinName.STRING_SLICE),
+                    args=(
+                        Register(str(value_str_reg)),
+                        Register(str(start_0indexed_reg)),
+                        Register(str(large_length)),
+                    ),
                 )
             )
             value_str_reg = result_reg
@@ -310,12 +315,15 @@ def lower_move(
         # Emit SPLICE: replace substring in target with source value
         spliced_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            Splice(
-                result_reg=Register(str(spliced_reg)),
-                value_reg=Register(str(target_str_reg)),
-                start_reg=Register(str(tgt_start_0indexed_reg)),
-                length_reg=Register(str(tgt_length_reg)),
-                replacement_reg=Register(str(value_str_reg)),
+            CallFunction(
+                result_reg=spliced_reg,
+                func_name=FuncName(BuiltinName.STRING_SPLICE),
+                args=(
+                    Register(str(target_str_reg)),
+                    Register(str(tgt_start_0indexed_reg)),
+                    Register(str(tgt_length_reg)),
+                    Register(str(value_str_reg)),
+                ),
             )
         )
         value_str_reg = spliced_reg
