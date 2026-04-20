@@ -272,6 +272,54 @@ def lower_move(
             )
             value_str_reg = result_reg
 
+    # Handle target reference modification (write path): MOVE X TO Y(start:length)
+    if stmt.target.ref_mod_start is not None:
+        logging.debug(
+            f"lower_move: Detected reference modification on target {stmt.target.name}: "
+            f"start={stmt.target.ref_mod_start}, length={stmt.target.ref_mod_length}"
+        )
+        # Load current target field value as string (needed for SPLICE)
+        target_decoded = ctx.emit_decode_field(
+            region_reg, target_ref.fl, target_ref.offset_reg
+        )
+        target_str_reg = ctx.emit_to_string(target_decoded)
+
+        # Evaluate target ref mod start; convert 1-indexed → 0-indexed
+        tgt_start_reg = eval_ref_mod_expr(
+            ctx, stmt.target.ref_mod_start, layout, region_reg
+        )
+        one_reg = ctx.const_to_reg("1")
+        tgt_start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                operator=BinopKind.SUB,
+                left=Register(str(tgt_start_reg)),
+                right=Register(str(one_reg)),
+                result_reg=Register(str(tgt_start_0indexed_reg)),
+            )
+        )
+
+        # Evaluate target ref mod length (or use large sentinel for "to end")
+        if stmt.target.ref_mod_length is not None:
+            tgt_length_reg = eval_ref_mod_expr(
+                ctx, stmt.target.ref_mod_length, layout, region_reg
+            )
+        else:
+            tgt_length_reg = ctx.const_to_reg("999999")
+
+        # Emit SPLICE: replace substring in target with source value
+        spliced_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Splice(
+                result_reg=Register(str(spliced_reg)),
+                value_reg=Register(str(target_str_reg)),
+                start_reg=Register(str(tgt_start_0indexed_reg)),
+                length_reg=Register(str(tgt_length_reg)),
+                replacement_reg=Register(str(value_str_reg)),
+            )
+        )
+        value_str_reg = spliced_reg
+
     ctx.emit_encode_and_write(
         region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg
     )
