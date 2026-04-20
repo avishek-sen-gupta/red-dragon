@@ -59,8 +59,10 @@ class CobolFeature(Enum):
     # ---------------------------------------------------------------------------
     STRING_VERB = "STRING ... INTO dest string concatenation verb"
     STRING_DELIMITED_BY = "DELIMITED BY clause in STRING statements"
+    STRING_REF_MOD = "STRING ... (start:length) reference modification on sending items"
     UNSTRING_VERB = "UNSTRING src INTO dest string splitting verb"
     UNSTRING_DELIMITED_BY = "DELIMITED BY clause in UNSTRING statements"
+    UNSTRING_REF_MOD = "UNSTRING ... (start:length) reference modification on source"
     INSPECT_TALLYING = "INSPECT x TALLYING count FOR pattern character inspection"
     INSPECT_REPLACING = (
         "INSPECT x REPLACING pattern BY replacement character replacement"
