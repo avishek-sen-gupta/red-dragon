@@ -292,7 +292,9 @@ class TestProcedureDivisionLowering:
                 name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
             ),
         ]
-        stmts = [ArithmeticStatement(op="ADD", source="5", target="WS-A")]
+        stmts = [
+            ArithmeticStatement(op="ADD", source=RefModOperand(name="5"), target="WS-A")
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         binops = _find_opcodes(instructions, Opcode.BINOP)
@@ -317,7 +319,11 @@ class TestProcedureDivisionLowering:
                 name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
             ),
         ]
-        stmts = [ArithmeticStatement(op="SUBTRACT", source="3", target="WS-A")]
+        stmts = [
+            ArithmeticStatement(
+                op="SUBTRACT", source=RefModOperand(name="3"), target="WS-A"
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         binops = _find_opcodes(instructions, Opcode.BINOP)

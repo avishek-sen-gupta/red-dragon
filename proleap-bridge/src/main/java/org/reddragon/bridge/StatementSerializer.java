@@ -249,7 +249,7 @@ public final class StatementSerializer {
         if (addTo != null) {
             for (From from : addTo.getFroms()) {
                 ValueStmt vs = from.getFromValueStmt();
-                operands.add(extractValueStmtText(vs));
+                operands.add(serializeArithSource(vs));
             }
             for (To to : addTo.getTos()) {
                 operands.add(extractCallName(to.getToCall()));
@@ -258,7 +258,7 @@ public final class StatementSerializer {
             AddToGivingStatement addGiving = stmt.getAddToGivingStatement();
             if (addGiving != null) {
                 for (From from : addGiving.getFroms()) {
-                    operands.add(extractValueStmtText(from.getFromValueStmt()));
+                    operands.add(serializeArithSource(from.getFromValueStmt()));
                 }
                 for (ToGiving to : addGiving.getTos()) {
                     operands.add(extractValueStmtText(to.getToValueStmt()));
@@ -291,7 +291,7 @@ public final class StatementSerializer {
         if (subtractFrom != null) {
             for (Subtrahend sub : subtractFrom.getSubtrahends()) {
                 ValueStmt vs = sub.getSubtrahendValueStmt();
-                operands.add(extractValueStmtText(vs));
+                operands.add(serializeArithSource(vs));
             }
             for (Minuend min : subtractFrom.getMinuends()) {
                 operands.add(extractCallName(min.getMinuendCall()));
@@ -304,10 +304,10 @@ public final class StatementSerializer {
                 // Python computes source - target = Y - X
                 MinuendGiving minuend = subtractGiving.getMinuend();
                 if (minuend != null) {
-                    operands.add(extractValueStmtText(minuend.getMinuendValueStmt()));
+                    operands.add(serializeArithSource(minuend.getMinuendValueStmt()));
                 }
                 for (Subtrahend sub : subtractGiving.getSubtrahends()) {
-                    operands.add(extractValueStmtText(sub.getSubtrahendValueStmt()));
+                    operands.add(serializeArithSource(sub.getSubtrahendValueStmt()));
                 }
                 JsonArray givingTargets = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.subtract.Giving g : subtractGiving.getGivings()) {
@@ -336,7 +336,7 @@ public final class StatementSerializer {
             // Source operand: the value being multiplied
             ValueStmt operandVs = stmt.getOperandValueStmt();
             if (operandVs != null) {
-                operands.add(extractValueStmtText(operandVs));
+                operands.add(serializeArithSource(operandVs));
             }
 
             MultiplyStatement.MultiplyType multiplyType = stmt.getMultiplyType();
@@ -348,7 +348,7 @@ public final class StatementSerializer {
                 if (givingPhrase != null) {
                     io.proleap.cobol.asg.metamodel.procedure.multiply.GivingOperand givingOp = givingPhrase.getGivingOperand();
                     if (givingOp != null && givingOp.getOperandValueStmt() != null) {
-                        operands.add(extractValueStmtText(givingOp.getOperandValueStmt()));
+                        operands.add(serializeArithSource(givingOp.getOperandValueStmt()));
                     }
                     // GIVING targets
                     JsonArray givingTargets = new JsonArray();
@@ -394,7 +394,7 @@ public final class StatementSerializer {
             // Source operand (the divisor or dividend depending on form)
             ValueStmt operandVs = stmt.getOperandValueStmt();
             if (operandVs != null) {
-                operands.add(extractValueStmtText(operandVs));
+                operands.add(serializeArithSource(operandVs));
             }
 
             DivideStatement.DivideType divideType = stmt.getDivideType();
@@ -404,7 +404,7 @@ public final class StatementSerializer {
                 DivideIntoGivingStatement intoGiving = stmt.getDivideIntoGivingStatement();
                 if (intoGiving != null) {
                     if (intoGiving.getIntoValueStmt() != null) {
-                        operands.add(extractValueStmtText(intoGiving.getIntoValueStmt()));
+                        operands.add(serializeArithSource(intoGiving.getIntoValueStmt()));
                     }
                     GivingPhrase gp = intoGiving.getGivingPhrase();
                     if (gp != null) {
@@ -425,7 +425,7 @@ public final class StatementSerializer {
                 DivideByGivingStatement byGiving = stmt.getDivideByGivingStatement();
                 if (byGiving != null) {
                     if (byGiving.getByValueStmt() != null) {
-                        operands.add(extractValueStmtText(byGiving.getByValueStmt()));
+                        operands.add(serializeArithSource(byGiving.getByValueStmt()));
                     }
                     GivingPhrase gp = byGiving.getGivingPhrase();
                     if (gp != null) {
@@ -1441,6 +1441,20 @@ public final class StatementSerializer {
             }
         }
         return obj;
+    }
+
+
+    /**
+     * Serializes an arithmetic source operand ValueStmt.
+     * Returns a JsonElement: either a JsonObject with {name, ref_mod_start?, ref_mod_length?}
+     * for Call-based operands, or a string for literals.
+     */
+    private static JsonElement serializeArithSource(ValueStmt vs) {
+        if (vs instanceof CallValueStmt) {
+            return serializeMoveOperand(((CallValueStmt) vs).getCall());
+        }
+        // For literals and other operands, return as plain string
+        return new JsonPrimitive(extractValueStmtText(vs));
     }
 
     /**
