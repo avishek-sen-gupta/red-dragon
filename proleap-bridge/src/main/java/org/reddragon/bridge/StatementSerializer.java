@@ -860,7 +860,15 @@ public final class StatementSerializer {
                 JsonObject sendingObj = new JsonObject();
                 List<ValueStmt> valueStmts = sending.getSendingValueStmts();
                 if (!valueStmts.isEmpty()) {
-                    sendingObj.addProperty("value", extractValueStmtText(valueStmts.get(0)));
+                    ValueStmt vs = valueStmts.get(0);
+                    if (vs instanceof CallValueStmt) {
+                        Call sendingCall = ((CallValueStmt) vs).getCall();
+                        sendingObj.add("value", serializeMoveOperand(sendingCall));
+                    } else {
+                        JsonObject litObj = new JsonObject();
+                        litObj.addProperty("name", extractValueStmtText(vs));
+                        sendingObj.add("value", litObj);
+                    }
                 }
                 DelimitedByPhrase dbp = sending.getDelimitedByPhrase();
                 if (dbp != null) {
@@ -888,7 +896,7 @@ public final class StatementSerializer {
         JsonObject obj = newStatement("UNSTRING");
         try {
             if (stmt.getSending() != null && stmt.getSending().getSendingCall() != null) {
-                obj.addProperty("source", extractCallName(stmt.getSending().getSendingCall()));
+                obj.add("source", serializeMoveOperand(stmt.getSending().getSendingCall()));
             }
             // Delimiter
             if (stmt.getSending() != null && stmt.getSending().getDelimitedByPhrase() != null) {
