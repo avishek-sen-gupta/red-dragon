@@ -49,6 +49,50 @@ from interpreter.cobol.cobol_statements import (
 from interpreter.cobol.ref_mod import RefModOperand
 
 
+def _expr_dict(expr_str: str) -> dict:
+    """Convert an expression string to a structured expression dict.
+
+    This parses the string and converts it to the structured format that the Java bridge emits.
+    """
+    from interpreter.cobol.cobol_expression import parse_expression
+
+    expr_node = parse_expression(expr_str)
+    return _expr_node_to_dict(expr_node)
+
+
+def _expr_node_to_dict(node) -> dict:
+    """Convert an ExprNode to a dict (replicating the serialization from cobol_statements)."""
+    from interpreter.cobol.cobol_expression import (
+        LiteralNode,
+        FieldRefNode,
+        RefModNode,
+        BinOpNode,
+    )
+
+    if isinstance(node, LiteralNode):
+        return {"kind": "lit", "value": node.value}
+    elif isinstance(node, FieldRefNode):
+        return {"kind": "ref", "name": node.name}
+    elif isinstance(node, RefModNode):
+        result = {
+            "kind": "ref",
+            "name": node.name,
+            "ref_mod_start": _expr_node_to_dict(node.ref_mod_start),
+        }
+        if node.ref_mod_length is not None:
+            result["ref_mod_length"] = _expr_node_to_dict(node.ref_mod_length)
+        return result
+    elif isinstance(node, BinOpNode):
+        return {
+            "kind": "binop",
+            "op": node.op,
+            "left": _expr_node_to_dict(node.left),
+            "right": _expr_node_to_dict(node.right),
+        }
+    else:
+        return {}
+
+
 class TestParseStatementDispatch:
     @covers(CobolFeature.MOVE)
     def test_move(self):
@@ -110,12 +154,15 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "COMPUTE",
-                "expression": "WS-A + WS-B * 2",
+                "expression": _expr_dict("WS-A + WS-B * 2"),
                 "targets": ["WS-RESULT"],
             }
         )
         assert isinstance(stmt, ComputeStatement)
-        assert stmt.expression == "WS-A + WS-B * 2"
+        # expression is now an ExprNode, so we check its structure
+        from interpreter.cobol.cobol_expression import BinOpNode, FieldRefNode
+
+        assert isinstance(stmt.expression, BinOpNode)
         assert stmt.targets == ["WS-RESULT"]
 
     @covers(CobolFeature.COMPUTE)
@@ -123,7 +170,7 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "COMPUTE",
-                "expression": "100 - WS-A",
+                "expression": _expr_dict("100 - WS-A"),
                 "targets": ["WS-C", "WS-D"],
             }
         )
@@ -795,7 +842,7 @@ class TestRoundTrip:
     def test_compute_round_trip(self):
         data = {
             "type": "COMPUTE",
-            "expression": "WS-A + WS-B * 2",
+            "expression": _expr_dict("WS-A + WS-B * 2"),
             "targets": ["WS-RESULT"],
         }
         assert self._round_trip(data) == data
@@ -804,7 +851,7 @@ class TestRoundTrip:
     def test_compute_multiple_targets_round_trip(self):
         data = {
             "type": "COMPUTE",
-            "expression": "(WS-A + WS-B) * 100",
+            "expression": _expr_dict("(WS-A + WS-B) * 100"),
             "targets": ["WS-C", "WS-D"],
         }
         assert self._round_trip(data) == data

@@ -92,4 +92,6 @@ class TestExprFromDict:
         assert isinstance(result, BinOpNode)
         assert isinstance(result.left, RefModNode)
         assert result.left.name == "WS-FIELD"
+        assert result.left.ref_mod_start == LiteralNode(value="1")
+        assert result.left.ref_mod_length == LiteralNode(value="3")
         assert result.right == LiteralNode(value="5")
