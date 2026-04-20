@@ -1356,6 +1356,13 @@ public final class StatementSerializer {
         if (!(unwrapped instanceof ASGElementImpl)) return null;
         ParserRuleContext ctx = ((ASGElementImpl) unwrapped).getCtx();
         if (ctx == null) return null;
+
+        // If ctx is already a TableCallContext, call referenceModifier() directly
+        if (ctx instanceof CobolParser.TableCallContext) {
+            return ((CobolParser.TableCallContext) ctx).referenceModifier();
+        }
+
+        // Otherwise, try to find tableCall() method (e.g. for IdentifierContext)
         try {
             java.lang.reflect.Method m = ctx.getClass().getMethod("tableCall");
             CobolParser.TableCallContext tc = (CobolParser.TableCallContext) m.invoke(ctx);
