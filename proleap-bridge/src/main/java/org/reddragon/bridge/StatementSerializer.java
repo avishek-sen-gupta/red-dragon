@@ -1641,6 +1641,14 @@ public final class StatementSerializer {
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
             ref.addProperty("name", call != null ? extractCallName(call) : b.getCtx().getText());
+            CobolParser.ReferenceModifierContext refMod = call != null ? getRefMod(call) : null;
+            if (refMod != null) {
+                JsonObject rm = serializeRefMod(refMod);
+                ref.add("ref_mod_start", rm.get("ref_mod_start"));
+                if (rm.has("ref_mod_length")) {
+                    ref.add("ref_mod_length", rm.get("ref_mod_length"));
+                }
+            }
             return ref;
         }
         if (vs instanceof ArithmeticValueStmt) {
