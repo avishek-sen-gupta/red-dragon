@@ -475,8 +475,6 @@ _OPCODE_CATEGORIES: dict[str, str] = {
     "ADDRESS_OF": "memory",
     "LOAD_INDIRECT": "memory",
     "STORE_INDIRECT": "memory",
-    "SLICE": "strings",
-    "SPLICE": "strings",
     "SET_CONTINUATION": "continuations",
     "RESUME_CONTINUATION": "continuations",
     "IMPORT_MODULE": "modules",
@@ -660,16 +658,6 @@ _OPCODE_NOTES: dict[str, str] = {
         "Transfers control to the continuation registered under name. Paired with "
         "SET_CONTINUATION. Used to resume a suspended generator or coroutine from the "
         "point where SET_CONTINUATION was executed."
-    ),
-    "SLICE": (
-        "Extracts a substring from value_reg starting at start_reg with length "
-        "length_reg bytes. result_reg receives the extracted substring. Used for "
-        "COBOL reference modification and string slicing operations."
-    ),
-    "SPLICE": (
-        "Replaces a substring in value_reg starting at start_reg for length_reg bytes "
-        "with replacement_reg. result_reg receives the modified string. Used for COBOL "
-        "reference modification with assignment and other string manipulation operations."
     ),
     "IMPORT_MODULE": (
         "Imports a module specified by module_path and stores the result in result_reg. "
