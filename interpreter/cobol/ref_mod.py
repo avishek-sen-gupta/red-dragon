@@ -72,6 +72,22 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
         return RefModLiteral(value="")
 
 
+def _ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
+    """Serialize RefModExpr back to JSON dict format."""
+    if isinstance(expr, RefModLiteral):
+        return {"kind": "lit", "value": expr.value}
+    elif isinstance(expr, RefModReference):
+        return {"kind": "ref", "name": expr.name}
+    elif isinstance(expr, RefModBinOp):
+        return {
+            "kind": "binop",
+            "op": expr.op,
+            "left": _ref_mod_expr_to_dict(expr.left),
+            "right": _ref_mod_expr_to_dict(expr.right),
+        }
+    return {"kind": "lit", "value": "0"}
+
+
 @dataclass(frozen=True)
 class RefModOperand:
     """MOVE statement operand with optional reference modification.
@@ -115,3 +131,12 @@ class RefModOperand:
             ref_mod_start=ref_mod_start,
             ref_mod_length=ref_mod_length,
         )
+
+    def to_dict(self) -> dict:
+        """Serialize RefModOperand to JSON dict format."""
+        result: dict = {"name": self.name}
+        if self.ref_mod_start is not None:
+            result["ref_mod_start"] = _ref_mod_expr_to_dict(self.ref_mod_start)
+        if self.ref_mod_length is not None:
+            result["ref_mod_length"] = _ref_mod_expr_to_dict(self.ref_mod_length)
+        return result
