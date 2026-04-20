@@ -562,7 +562,7 @@ class InspectStatement:
     """INSPECT source TALLYING|REPLACING ..."""
 
     inspect_type: str = ""  # "TALLYING" or "REPLACING"
-    source: str = ""
+    source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     tallying_target: str = ""
     tallying_for: list[TallyingFor] = field(default_factory=list)
     replacings: list[Replacing] = field(default_factory=list)
@@ -571,7 +571,7 @@ class InspectStatement:
     def from_dict(cls, data: dict) -> InspectStatement:
         return cls(
             inspect_type=data.get("inspect_type", ""),
-            source=data.get("source", ""),
+            source=RefModOperand.from_dict(data.get("source", {})),
             tallying_target=data.get("tallying_target", ""),
             tallying_for=[
                 TallyingFor.from_dict(t) for t in data.get("tallying_for", [])
@@ -583,7 +583,7 @@ class InspectStatement:
         result: dict = {
             "type": "INSPECT",
             "inspect_type": self.inspect_type,
-            "source": self.source,
+            "source": self.source.to_dict(),
         }
         if self.inspect_type == "TALLYING":
             result["tallying_target"] = self.tallying_target

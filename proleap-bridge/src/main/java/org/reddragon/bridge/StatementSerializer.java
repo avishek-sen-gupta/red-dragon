@@ -925,7 +925,7 @@ public final class StatementSerializer {
         JsonObject obj = newStatement("INSPECT");
         try {
             if (stmt.getDataItemCall() != null) {
-                obj.addProperty("source", extractCallName(stmt.getDataItemCall()));
+                obj.add("source", serializeMoveOperand(stmt.getDataItemCall()));
             }
             InspectStatement.InspectType inspType = stmt.getInspectType();
             if (inspType == InspectStatement.InspectType.TALLYING) {
