@@ -110,9 +110,6 @@ import io.proleap.cobol.asg.metamodel.valuestmt.relation.RelationalOperator;
 import io.proleap.cobol.asg.metamodel.impl.ASGElementImpl;
 import io.proleap.cobol.CobolParser;
 import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.CharStream;
-import org.antlr.v4.runtime.Token;
-import org.antlr.v4.runtime.misc.Interval;
 
 import java.util.List;
 import java.util.logging.Logger;
