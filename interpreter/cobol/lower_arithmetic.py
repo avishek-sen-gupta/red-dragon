@@ -8,6 +8,12 @@ import logging
 
 from interpreter.cobol.cobol_expression import parse_expression
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
+from interpreter.cobol.ref_mod import (
+    RefModLiteral,
+    RefModReference,
+    RefModBinOp,
+    RefModExpr,
+)
 from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
     ComputeStatement,
@@ -29,7 +35,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.operator_kind import resolve_binop
+from interpreter.operator_kind import resolve_binop, BinopKind
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -39,6 +45,8 @@ from interpreter.instructions import (
     Const,
     Label_,
     Return_,
+    Slice,
+    Splice,
 )
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
@@ -115,15 +123,78 @@ def emit_overflow_check(
     )
 
 
+def eval_ref_mod_expr(
+    ctx: EmitContext,
+    expr: RefModExpr,
+    layout: DataLayout,
+    region_reg: str,
+) -> str:
+    """Evaluate a reference modification expression to an IR register.
+
+    Handles three cases:
+    - RefModLiteral: numeric literal → Const → register
+    - RefModReference: data item name → resolve field → decode → to_string → register
+    - RefModBinOp: binary operation → evaluate left/right → emit Binop → register
+    """
+    if isinstance(expr, RefModLiteral):
+        # Literal: numeric value for reference modification
+        # Keep as unquoted numeric literal so arithmetic operations work
+        value = expr.value
+        return ctx.const_to_reg(value)
+
+    elif isinstance(expr, RefModReference):
+        # Field reference: resolve field → decode
+        # Return the decoded numeric value (don't convert to string)
+        name = expr.name
+        if ctx.has_field(name, layout):
+            field_ref = ctx.resolve_field_ref(name, layout, region_reg)
+            decoded_reg = ctx.emit_decode_field(
+                region_reg, field_ref.fl, field_ref.offset_reg
+            )
+            logging.debug(
+                f"eval_ref_mod_expr: RefModReference {name} → decoded_reg={decoded_reg}"
+            )
+            # Return the decoded numeric value directly
+            return decoded_reg
+        else:
+            # Unknown field: treat as literal numeric 0
+            logging.debug(f"eval_ref_mod_expr: RefModReference {name} (unknown) → 0")
+            return ctx.const_to_reg("0")
+
+    elif isinstance(expr, RefModBinOp):
+        # Binary operation: evaluate left and right, emit Binop
+        left_reg = eval_ref_mod_expr(ctx, expr.left, layout, region_reg)
+        right_reg = eval_ref_mod_expr(ctx, expr.right, layout, region_reg)
+        result_reg = ctx.fresh_reg()
+
+        op_str = expr.op
+        binop_kind = resolve_binop(op_str)
+
+        ctx.emit_inst(
+            Binop(
+                operator=binop_kind,
+                left=Register(str(left_reg)),
+                right=Register(str(right_reg)),
+                result_reg=Register(str(result_reg)),
+            )
+        )
+        return result_reg
+
+    else:
+        # Fallback: treat as literal zero
+        return ctx.const_to_reg('"0"')
+
+
 def lower_move(
     ctx: EmitContext,
     stmt: MoveStatement,
     layout: DataLayout,
     region_reg: str,
 ) -> None:
-    """MOVE X TO Y: decode X, encode as Y's type, write to Y's region."""
+    """MOVE X [( start : length )] TO Y: handle reference modification."""
     target_ref = ctx.resolve_field_ref(stmt.target.name, layout, region_reg)
 
+    # Get the source value (decode field or literal)
     if ctx.has_field(stmt.source.name, layout):
         source_ref = ctx.resolve_field_ref(stmt.source.name, layout, region_reg)
         decoded_reg = ctx.emit_decode_field(
@@ -139,6 +210,67 @@ def lower_move(
         ):
             literal = f'"{literal}"'
         value_str_reg = ctx.const_to_reg(literal)
+
+    # Handle reference modification if present
+    logging.debug(
+        f"lower_move: {stmt.source.name} ref_mod_start={stmt.source.ref_mod_start}, ref_mod_length={stmt.source.ref_mod_length}"
+    )
+    if stmt.source.ref_mod_start is not None:
+        logging.debug(
+            f"lower_move: Detected reference modification on {stmt.source.name}: "
+            f"start={stmt.source.ref_mod_start}, length={stmt.source.ref_mod_length}"
+        )
+        # Evaluate start and length expressions
+        start_reg = eval_ref_mod_expr(
+            ctx, stmt.source.ref_mod_start, layout, region_reg
+        )
+        # COBOL uses 1-indexed positions, but SLICE uses 0-indexed.
+        # Convert: start_0indexed = start_1indexed - 1
+        one_reg = ctx.const_to_reg("1")  # Numeric 1, not string "1"
+        start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                operator=BinopKind.SUB,
+                left=Register(str(start_reg)),
+                right=Register(str(one_reg)),
+                result_reg=Register(str(start_0indexed_reg)),
+            )
+        )
+
+        if stmt.source.ref_mod_length is not None:
+            # Both start and length specified: SLICE operation
+            length_reg = eval_ref_mod_expr(
+                ctx, stmt.source.ref_mod_length, layout, region_reg
+            )
+            result_reg = ctx.fresh_reg()
+            logging.debug(
+                f"lower_move: Emitting SLICE with value_reg={value_str_reg}, "
+                f"start_reg={start_0indexed_reg}, length_reg={length_reg}, result_reg={result_reg}"
+            )
+            ctx.emit_inst(
+                Slice(
+                    value_reg=Register(str(value_str_reg)),
+                    start_reg=Register(str(start_0indexed_reg)),
+                    length_reg=Register(str(length_reg)),
+                    result_reg=Register(str(result_reg)),
+                )
+            )
+            value_str_reg = result_reg
+        else:
+            # Only start specified, no length: SLICE from start to end
+            # Use the length of the value string minus start position
+            # For now, use a very large number as length to get substring to end
+            large_length = ctx.const_to_reg('"999999"')
+            result_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Slice(
+                    value_reg=Register(str(value_str_reg)),
+                    start_reg=Register(str(start_0indexed_reg)),
+                    length_reg=Register(str(large_length)),
+                    result_reg=Register(str(result_reg)),
+                )
+            )
+            value_str_reg = result_reg
 
     ctx.emit_encode_and_write(
         region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg

@@ -3194,3 +3194,233 @@ class TestComputeOnSizeError:
             max_steps=500,
         )
         assert vm is not None
+
+
+class TestReferenceModification:
+    """Integration tests for COBOL reference modification (substring extraction/replacement).
+
+    Covers MOVE operands with reference modification syntax: WS-FIELD(start:length)
+    where start and length can be literals, field references, or arithmetic expressions.
+    """
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+    )
+    def test_ref_mod_literal_start_length(self):
+        """MOVE WS-FIELD(2:3) TO WS-OUT extracts 3 bytes starting at position 2 (1-indexed)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-LIT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-OUT   PIC X(3).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-FIELD(2:3) TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD is at offset 0 (10 bytes), WS-OUT is at offset 10 (3 bytes)
+        # WS-FIELD(2:3) extracts bytes at indices 1-3 (1-indexed) = "BCD"
+        assert _decode_alpha(region, 10, 3) == "BCD"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+    )
+    def test_ref_mod_dataname_start_length(self):
+        """MOVE WS-FIELD(WS-A:WS-B) TO WS-OUT uses field values for start and length."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-DN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-OUT   PIC X(3).",
+                "01 WS-A     PIC 9 VALUE 3.",
+                "01 WS-B     PIC 9 VALUE 2.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-FIELD(WS-A:WS-B) TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=3, WS-B=2; WS-FIELD(3:2) extracts 2 bytes at offset 2 (1-indexed) = "CD"
+        # WS-OUT is at offset 10 (after WS-FIELD which is 10 bytes)
+        assert _decode_alpha(region, 10, 2) == "CD"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+    )
+    def test_ref_mod_add_subtract_expr(self):
+        """MOVE WS-FIELD(WS-A + 1:WS-B - 1) TO WS-OUT uses arithmetic expressions."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-EXPR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-OUT   PIC X(2).",
+                "01 WS-A     PIC 9 VALUE 2.",
+                "01 WS-B     PIC 9 VALUE 3.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-FIELD(WS-A + 1:WS-B - 1) TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=2, WS-B=3; WS-FIELD(2+1:3-1) = WS-FIELD(3:2) = "CD"
+        # WS-OUT is at offset 10 (after WS-FIELD which is 10 bytes)
+        assert _decode_alpha(region, 10, 2) == "CD"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+    )
+    def test_ref_mod_multiply_expr(self):
+        """MOVE WS-FIELD(WS-A * WS-B:WS-C) TO WS-OUT uses multiply in start expression."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-MUL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-OUT   PIC X(3).",
+                "01 WS-A     PIC 9 VALUE 2.",
+                "01 WS-B     PIC 9 VALUE 1.",
+                "01 WS-C     PIC 9 VALUE 3.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-FIELD(WS-A * WS-B:WS-C) TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=2, WS-B=1, WS-C=3; WS-FIELD(2*1:3) = WS-FIELD(2:3) = "BCD"
+        # WS-OUT is at offset 10 (after WS-FIELD which is 10 bytes)
+        assert _decode_alpha(region, 10, 3) == "BCD"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+    )
+    def test_ref_mod_parenthesised_expr(self):
+        """MOVE WS-FIELD((WS-A + 1) * 2:WS-B) TO WS-OUT handles parenthesised expressions."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-PAREN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-OUT   PIC X(3).",
+                "01 WS-A     PIC 9 VALUE 1.",
+                "01 WS-B     PIC 9 VALUE 3.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-FIELD((WS-A + 1) * 2:WS-B) TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=1, WS-B=3; WS-FIELD((1+1)*2:3) = WS-FIELD(4:3) = "DEF"
+        # WS-OUT is at offset 10 (after WS-FIELD which is 10 bytes)
+        assert _decode_alpha(region, 10, 3) == "DEF"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+    )
+    def test_ref_mod_omitted_length(self):
+        """MOVE WS-FIELD(3:) TO WS-OUT (omitted length) extracts from position 3 to end."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-OMIT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-OUT   PIC X(20).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-FIELD(3:) TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD(3:) extracts from position 3 to end = "CDEFGHIJ"
+        assert _decode_alpha(region, 10, 8) == "CDEFGHIJ"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+        CobolFeature.ARITHMETIC_EXPRESSION,
+    )
+    def test_ref_mod_deeply_nested_expr(self):
+        """MOVE WS-FIELD((WS-A + WS-B) * (WS-C - WS-A):3) handles deeply nested expressions."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-NEST.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-OUT   PIC X(3).",
+                "01 WS-A     PIC 9 VALUE 1.",
+                "01 WS-B     PIC 9 VALUE 1.",
+                "01 WS-C     PIC 9 VALUE 3.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-FIELD((WS-A + WS-B) * (WS-C - WS-A):3) TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=1, WS-B=1, WS-C=3; WS-FIELD((1+1)*(3-1):3) = WS-FIELD(4:3) = "DEF"
+        # WS-OUT is at offset 10 (after WS-FIELD which is 10 bytes)
+        assert _decode_alpha(region, 10, 3) == "DEF"
+
+    @covers(
+        CobolFeature.MOVE,
+        CobolFeature.REFERENCE_MODIFICATION,
+    )
+    def test_ref_mod_multiple_in_sequence(self):
+        """Multiple MOVE statements with reference modification execute correctly in sequence."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REFMOD-SEQ.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD PIC X(10) VALUE 'ABCDEFGHIJ'.",
+                "01 WS-OUT1  PIC X(3).",
+                "01 WS-OUT2  PIC X(2).",
+                "01 WS-OUT3  PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-FIELD(1:3) TO WS-OUT1.",
+                "    MOVE WS-FIELD(5:2) TO WS-OUT2.",
+                "    MOVE WS-FIELD(7:4) TO WS-OUT3.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-OUT1: offset 10 (after WS-FIELD's 10 bytes)
+        assert _decode_alpha(region, 10, 3) == "ABC"
+        # WS-OUT2: offset 13
+        assert _decode_alpha(region, 13, 2) == "EF"
+        # WS-OUT3: offset 15
+        assert _decode_alpha(region, 15, 4) == "GHIJ"

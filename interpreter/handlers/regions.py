@@ -158,6 +158,12 @@ def _handle_slice(
     start = _resolve_reg(vm, t.start_reg).value
     length = _resolve_reg(vm, t.length_reg).value
 
+    import logging
+
+    logging.debug(
+        f"_handle_slice: value_reg={t.value_reg}→{value!r}, start_reg={t.start_reg}→{start!r}, length_reg={t.length_reg}→{length!r}"
+    )
+
     if _is_symbolic(value) or _is_symbolic(start) or _is_symbolic(length):
         sym = vm.fresh_symbolic(hint="slice")
         return ExecutionResult.success(
@@ -175,6 +181,8 @@ def _handle_slice(
     # Extract substring
     end_int = start_int + length_int
     result = value_str[start_int:end_int]
+
+    logging.debug(f"_handle_slice: result = {result!r}")
 
     return ExecutionResult.success(
         StateUpdate(
