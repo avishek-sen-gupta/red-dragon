@@ -937,7 +937,7 @@ class TestRoundTrip:
         data = {
             "type": "INSPECT",
             "inspect_type": "TALLYING",
-            "source": "WS-DATA",
+            "source": {"name": "WS-DATA"},
             "tallying_target": "WS-COUNT",
             "tallying_for": [{"mode": "ALL", "pattern": "A"}],
         }
@@ -948,7 +948,7 @@ class TestRoundTrip:
         data = {
             "type": "INSPECT",
             "inspect_type": "REPLACING",
-            "source": "WS-DATA",
+            "source": {"name": "WS-DATA"},
             "replacings": [{"mode": "ALL", "from": "A", "to": "B"}],
         }
         assert self._round_trip(data) == data

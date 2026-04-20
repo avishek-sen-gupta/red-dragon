@@ -1551,7 +1551,7 @@ class TestTier2Lowering:
         stmts = [
             InspectStatement(
                 inspect_type="TALLYING",
-                source="WS-DATA",
+                source=RefModOperand(name="WS-DATA"),
                 tallying_target="WS-COUNT",
                 tallying_for=[TallyingFor(mode="ALL", pattern="A")],
             )
@@ -1589,7 +1589,7 @@ class TestTier2Lowering:
         stmts = [
             InspectStatement(
                 inspect_type="REPLACING",
-                source="WS-DATA",
+                source=RefModOperand(name="WS-DATA"),
                 replacings=[Replacing(mode="ALL", from_pattern="A", to_pattern="B")],
             )
         ]

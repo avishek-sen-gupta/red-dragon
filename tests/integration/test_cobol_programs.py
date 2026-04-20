@@ -1018,6 +1018,51 @@ class TestInspectReplacing:
         assert list(region[:5]) == [0xC2] * 5
 
 
+class TestInspectRefMod:
+    @covers(CobolFeature.INSPECT_REF_MOD, CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_ref_mod_basic(self):
+        """INSPECT TALLYING on a sliced subject counts only within the substring."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-INSP-RM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(10) VALUE "AAXAAXAAX ".',
+                "77 WS-COUNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-DATA(1:6) TALLYING WS-COUNT",
+                '        FOR ALL "A".',
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-DATA(1:6) = "AAXAAX" — contains 4 A's; full field has 6
+        assert _decode_zoned_unsigned(region, 10, 4) == 4
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_no_ref_mod_unchanged(self):
+        """INSPECT TALLYING without ref_mod produces the same result as before."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-INSP-NRML.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(5) VALUE "AABAA".',
+                "77 WS-COUNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-DATA TALLYING WS-COUNT",
+                '        FOR ALL "A".',
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 5, 4) == 4
+
+
 class TestCallStatement:
     @covers(CobolFeature.CALL, CobolFeature.CALL_USING)
     def test_call_does_not_crash(self):

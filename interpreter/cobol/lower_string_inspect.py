@@ -220,13 +220,47 @@ def lower_inspect(
     region_reg: str,
 ) -> None:
     """INSPECT source TALLYING|REPLACING ..."""
-    if not ctx.has_field(stmt.source, layout):
-        logger.warning("INSPECT source %s not found in layout", stmt.source)
+    if not ctx.has_field(stmt.source.name, layout):
+        logger.warning("INSPECT source %s not found in layout", stmt.source.name)
         return
-    source_ref = ctx.resolve_field_ref(stmt.source, layout, region_reg)
+    source_ref = ctx.resolve_field_ref(stmt.source.name, layout, region_reg)
     source_fl = source_ref.fl
     decoded_reg = ctx.emit_decode_field(region_reg, source_fl, source_ref.offset_reg)
     src_str_reg = ctx.emit_to_string(decoded_reg)
+
+    if stmt.source.ref_mod_start is not None:
+        raw_start_reg = eval_ref_mod_expr(
+            ctx, stmt.source.ref_mod_start, layout, region_reg
+        )
+        one_reg = ctx.const_to_reg(1)
+        start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=start_0indexed_reg,
+                operator=resolve_binop("-"),
+                left=Register(str(raw_start_reg)),
+                right=Register(str(one_reg)),
+            )
+        )
+        if stmt.source.ref_mod_length is not None:
+            length_reg = eval_ref_mod_expr(
+                ctx, stmt.source.ref_mod_length, layout, region_reg
+            )
+        else:
+            length_reg = ctx.const_to_reg(9999)
+        sliced_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=sliced_reg,
+                func_name=FuncName(BuiltinName.STRING_SLICE),
+                args=(
+                    Register(str(src_str_reg)),
+                    Register(str(start_0indexed_reg)),
+                    Register(str(length_reg)),
+                ),
+            )
+        )
+        src_str_reg = sliced_reg
 
     if stmt.inspect_type == InspectType.TALLYING:
         lower_inspect_tallying(ctx, stmt, src_str_reg, layout, region_reg)

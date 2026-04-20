@@ -63,6 +63,7 @@ class CobolFeature(Enum):
     UNSTRING_VERB = "UNSTRING src INTO dest string splitting verb"
     UNSTRING_DELIMITED_BY = "DELIMITED BY clause in UNSTRING statements"
     UNSTRING_REF_MOD = "UNSTRING ... (start:length) reference modification on source"
+    INSPECT_REF_MOD = "INSPECT x(start:length) reference modification on subject"
     INSPECT_TALLYING = "INSPECT x TALLYING count FOR pattern character inspection"
     INSPECT_REPLACING = (
         "INSPECT x REPLACING pattern BY replacement character replacement"
