@@ -53,6 +53,15 @@ class FieldRefNode:
 
 
 @dataclass(frozen=True)
+class RefModNode:
+    """Reference modification: field reference with start position and optional length."""
+
+    name: str
+    ref_mod_start: "ExprNode"
+    ref_mod_length: "ExprNode | None"
+
+
+@dataclass(frozen=True)
 class BinOpNode:
     """Binary arithmetic operation."""
 
@@ -61,7 +70,47 @@ class BinOpNode:
     right: "ExprNode"
 
 
-ExprNode = LiteralNode | FieldRefNode | BinOpNode
+ExprNode = LiteralNode | FieldRefNode | RefModNode | BinOpNode
+
+
+def expr_from_dict(d: dict) -> ExprNode:
+    """Deserialize a structured JSON expression tree (emitted by the Java bridge) into an ExprNode.
+
+    The JSON uses "kind" as the discriminant with values:
+    - {"kind": "lit", "value": "5"} — literal
+    - {"kind": "ref", "name": "WS-FIELD"} — plain field reference
+    - {"kind": "ref", "name": "WS-FIELD", "ref_mod_start": {...}, "ref_mod_length": {...}} — reference modification
+    - {"kind": "binop", "op": "+", "left": {...}, "right": {...}} — binary operation
+    - {"kind": "neg", "expr": {...}} — unary negation (folded into binop * -1)
+    """
+    kind = d["kind"]
+    if kind == "lit":
+        return LiteralNode(value=d["value"])
+    if kind == "ref":
+        if "ref_mod_start" in d:
+            return RefModNode(
+                name=d["name"],
+                ref_mod_start=expr_from_dict(d["ref_mod_start"]),
+                ref_mod_length=(
+                    expr_from_dict(d["ref_mod_length"])
+                    if "ref_mod_length" in d
+                    else None
+                ),
+            )
+        return FieldRefNode(name=d["name"])
+    if kind == "binop":
+        return BinOpNode(
+            op=d["op"],
+            left=expr_from_dict(d["left"]),
+            right=expr_from_dict(d["right"]),
+        )
+    if kind == "neg":
+        return BinOpNode(
+            op="*",
+            left=LiteralNode(value="-1"),
+            right=expr_from_dict(d["expr"]),
+        )
+    raise ValueError(f"Unknown expression node kind: {kind!r}")
 
 
 # ── Tokenizer ────────────────────────────────────────────────────
