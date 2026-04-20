@@ -107,6 +107,9 @@ import io.proleap.cobol.asg.metamodel.valuestmt.condition.SimpleCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.relation.ArithmeticComparison;
 import io.proleap.cobol.asg.metamodel.valuestmt.relation.RelationalOperator;
 
+import io.proleap.cobol.asg.metamodel.impl.ASGElementImpl;
+import io.proleap.cobol.CobolParser;
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.misc.Interval;
@@ -206,7 +209,7 @@ public final class StatementSerializer {
             return obj;
         }
 
-        // Handle MOVE TO (existing logic)
+        // Handle MOVE TO — operands are now objects {name, ref_mod_start?, ref_mod_length?}
         JsonObject obj = newStatement("MOVE");
         JsonArray operands = new JsonArray();
 
@@ -215,11 +218,22 @@ public final class StatementSerializer {
             MoveToSendingArea sendingArea = moveToStmt.getSendingArea();
             if (sendingArea != null) {
                 ValueStmt vs = sendingArea.getSendingAreaValueStmt();
-                operands.add(extractValueStmtText(vs));
+                Call sourceCall = null;
+                if (vs instanceof CallValueStmt) {
+                    sourceCall = ((CallValueStmt) vs).getCall();
+                }
+                if (sourceCall != null) {
+                    operands.add(serializeMoveOperand(sourceCall));
+                } else {
+                    // Literal or complex expression source: plain name object, no ref mod
+                    JsonObject srcObj = new JsonObject();
+                    srcObj.addProperty("name", extractValueStmtText(vs));
+                    operands.add(srcObj);
+                }
             }
 
             for (Call receivingCall : moveToStmt.getReceivingAreaCalls()) {
-                operands.add(extractCallName(receivingCall));
+                operands.add(serializeMoveOperand(receivingCall));
             }
         }
 
@@ -1333,6 +1347,82 @@ public final class StatementSerializer {
     }
 
     /**
+     * Navigates a Call's grammar context to find its referenceModifier, or null if absent.
+     * ProLeap models ref-mod fields as TABLE_CALL; the grammar context has tableCall().referenceModifier().
+     */
+    private static CobolParser.ReferenceModifierContext getRefMod(Call call) {
+        if (call == null) return null;
+        Call unwrapped = call.unwrap();
+        if (!(unwrapped instanceof ASGElementImpl)) return null;
+        ParserRuleContext ctx = ((ASGElementImpl) unwrapped).getCtx();
+        if (ctx == null) return null;
+        try {
+            java.lang.reflect.Method m = ctx.getClass().getMethod("tableCall");
+            CobolParser.TableCallContext tc = (CobolParser.TableCallContext) m.invoke(ctx);
+            if (tc == null) return null;
+            return tc.referenceModifier();
+        } catch (Exception e) {
+            // ctx may not have a tableCall() method (e.g. if it's not an identifierContext);
+            // reflection lets us probe without a compile-time cast
+            return null;
+        }
+    }
+
+    /**
+     * Extracts the base data name for a call, stripping subscript/refmod notation.
+     * For TABLE_CALL: uses the first token of the grammar context (the data name token).
+     * Falls back to extractCallName for non-TABLE_CALL types.
+     */
+    private static String extractCallBaseName(Call call) {
+        if (call == null) return "";
+        Call unwrapped = call.unwrap();
+        if (unwrapped.getCallType() == Call.CallType.TABLE_CALL && unwrapped instanceof ASGElementImpl) {
+            ParserRuleContext ctx = ((ASGElementImpl) unwrapped).getCtx();
+            if (ctx != null) {
+                org.antlr.v4.runtime.Token start = ctx.getStart();
+                if (start != null) return start.getText();
+            }
+        }
+        String name = call.getName();
+        return (name != null) ? name : call.toString();
+    }
+
+    /**
+     * Serializes a referenceModifier context to a JsonObject with ref_mod_start
+     * and optionally ref_mod_length (key absent when length is omitted in source).
+     */
+    private static JsonObject serializeRefMod(CobolParser.ReferenceModifierContext refMod) {
+        JsonObject obj = new JsonObject();
+        CobolParser.CharacterPositionContext charPos = refMod.characterPosition();
+        obj.add("ref_mod_start",
+            (charPos != null) ? serializeArithExprCtx(charPos.arithmeticExpression()) : litNode(""));
+        CobolParser.LengthContext len = refMod.length();
+        if (len != null) {
+            obj.add("ref_mod_length",
+                serializeArithExprCtx(len.arithmeticExpression()));
+        }
+        return obj;
+    }
+
+    /**
+     * Serializes a MOVE operand Call to {name, ref_mod_start?, ref_mod_length?}.
+     * ref_mod keys are absent (not null) when no reference modification is present.
+     */
+    private static JsonObject serializeMoveOperand(Call call) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("name", extractCallBaseName(call));
+        CobolParser.ReferenceModifierContext refMod = getRefMod(call);
+        if (refMod != null) {
+            JsonObject rm = serializeRefMod(refMod);
+            obj.add("ref_mod_start", rm.get("ref_mod_start"));
+            if (rm.has("ref_mod_length")) {
+                obj.add("ref_mod_length", rm.get("ref_mod_length"));
+            }
+        }
+        return obj;
+    }
+
+    /**
      * Extracts text from a ValueStmt, falling back to ANTLR context getText().
      */
     private static String extractValueStmtText(ValueStmt vs) {
@@ -1526,6 +1616,90 @@ public final class StatementSerializer {
         String text = vs != null && vs.getCtx() != null ? vs.getCtx().getText()
                     : (b.getCtx() != null ? b.getCtx().getText() : "");
         return litNode(text);
+    }
+
+    // ── Grammar-context arithmetic serializers (for referenceModifier) ──────────
+
+    /**
+     * Grammar: arithmeticExpression : multDivs plusMinus*
+     * plusMinus : (PLUSCHAR | MINUSCHAR) multDivs
+     * Note: ctx.multDivs() is SINGULAR (not a list); ctx.plusMinus() is a List.
+     */
+    private static JsonElement serializeArithExprCtx(CobolParser.ArithmeticExpressionContext ctx) {
+        if (ctx == null) return litNode("");
+        JsonElement result = serializeMultDivsCtx(ctx.multDivs());
+        for (CobolParser.PlusMinusContext pm : ctx.plusMinus()) {
+            JsonObject binop = new JsonObject();
+            binop.addProperty("kind", "binop");
+            binop.addProperty("op", pm.PLUSCHAR() != null ? "+" : "-");
+            binop.add("left", result);
+            binop.add("right", serializeMultDivsCtx(pm.multDivs()));
+            result = binop;
+        }
+        return result;
+    }
+
+    /**
+     * Grammar: multDivs : powers multDiv*
+     * multDiv : (ASTERISKCHAR | SLASHCHAR) powers
+     * Note: ctx.powers() is SINGULAR; ctx.multDiv() is a List.
+     */
+    private static JsonElement serializeMultDivsCtx(CobolParser.MultDivsContext ctx) {
+        if (ctx == null) return litNode("");
+        JsonElement result = serializePowersCtx(ctx.powers());
+        for (CobolParser.MultDivContext md : ctx.multDiv()) {
+            JsonObject binop = new JsonObject();
+            binop.addProperty("kind", "binop");
+            binop.addProperty("op", md.ASTERISKCHAR() != null ? "*" : "/");
+            binop.add("left", result);
+            binop.add("right", serializePowersCtx(md.powers()));
+            result = binop;
+        }
+        return result;
+    }
+
+    /**
+     * Grammar: powers : (PLUSCHAR | MINUSCHAR)? basis power*
+     * power : DOUBLEASTERISKCHAR basis
+     * Note: ctx.basis() is SINGULAR; ctx.power() is a List.
+     */
+    private static JsonElement serializePowersCtx(CobolParser.PowersContext ctx) {
+        if (ctx == null) return litNode("");
+        JsonElement result = serializeBasisCtx(ctx.basis());
+        for (CobolParser.PowerContext p : ctx.power()) {
+            JsonObject binop = new JsonObject();
+            binop.addProperty("kind", "binop");
+            binop.addProperty("op", "**");
+            binop.add("left", result);
+            binop.add("right", serializeBasisCtx(p.basis()));
+            result = binop;
+        }
+        if (ctx.MINUSCHAR() != null) {
+            JsonObject neg = new JsonObject();
+            neg.addProperty("kind", "neg");
+            neg.add("expr", result);
+            return neg;
+        }
+        return result;
+    }
+
+    /**
+     * Grammar: basis : LPARENCHAR arithmeticExpression RPARENCHAR | identifier | literal
+     * Note: ctx.arithmeticExpression() is non-null for parenthesised sub-expressions.
+     */
+    private static JsonElement serializeBasisCtx(CobolParser.BasisContext ctx) {
+        if (ctx == null) return litNode("");
+        if (ctx.arithmeticExpression() != null) {
+            return serializeArithExprCtx(ctx.arithmeticExpression());
+        }
+        CobolParser.IdentifierContext id = ctx.identifier();
+        if (id != null) {
+            JsonObject ref = new JsonObject();
+            ref.addProperty("kind", "ref");
+            ref.addProperty("name", id.getText());
+            return ref;
+        }
+        return litNode(ctx.literal() != null ? ctx.literal().getText() : "");
     }
 
     private static JsonObject litNode(String value) {
