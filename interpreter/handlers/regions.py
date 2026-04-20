@@ -1,4 +1,4 @@
-"""Region opcode handlers: ALLOC_REGION, WRITE_REGION, LOAD_REGION."""
+"""Region opcode handlers: ALLOC_REGION, WRITE_REGION, LOAD_REGION, SLICE, SPLICE."""
 
 # pyright: standard
 
@@ -14,6 +14,8 @@ from interpreter.instructions import (
     AllocRegion,
     WriteRegion,
     LoadRegion,
+    Slice,
+    Splice,
 )
 from interpreter.vm.vm import (
     VMState,
@@ -139,5 +141,90 @@ def _handle_load_region(
         StateUpdate(
             register_writes={t.result_reg: typed(data, UNKNOWN)},
             reasoning=f"load_region({addr_str}, offset={start}, len={length}) = {data}",
+        )
+    )
+
+
+def _handle_slice(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
+    """SLICE: Extract substring from value_reg starting at start_reg with length length_reg.
+
+    result_reg = value_reg[start_reg : start_reg + length_reg]
+    """
+    t = inst
+    assert isinstance(t, Slice)
+    value = _resolve_reg(vm, t.value_reg).value
+    start = _resolve_reg(vm, t.start_reg).value
+    length = _resolve_reg(vm, t.length_reg).value
+
+    if _is_symbolic(value) or _is_symbolic(start) or _is_symbolic(length):
+        sym = vm.fresh_symbolic(hint="slice")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
+                reasoning=f"slice(symbolic args) → {sym.name}",
+            )
+        )
+
+    # Convert value to string if needed
+    value_str = str(value)
+    start_int = int(start)
+    length_int = int(length)
+
+    # Extract substring
+    end_int = start_int + length_int
+    result = value_str[start_int:end_int]
+
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={t.result_reg: typed(result, UNKNOWN)},
+            reasoning=f"slice({value_str!r}, start={start_int}, len={length_int}) = {result!r}",
+        )
+    )
+
+
+def _handle_splice(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
+    """SPLICE: Replace substring in value_reg starting at start_reg for length_reg bytes with replacement_reg.
+
+    result_reg = value_reg[:start_reg] + replacement_reg + value_reg[start_reg + length_reg:]
+    """
+    t = inst
+    assert isinstance(t, Splice)
+    value = _resolve_reg(vm, t.value_reg).value
+    start = _resolve_reg(vm, t.start_reg).value
+    length = _resolve_reg(vm, t.length_reg).value
+    replacement = _resolve_reg(vm, t.replacement_reg).value
+
+    if (
+        _is_symbolic(value)
+        or _is_symbolic(start)
+        or _is_symbolic(length)
+        or _is_symbolic(replacement)
+    ):
+        sym = vm.fresh_symbolic(hint="splice")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
+                reasoning=f"splice(symbolic args) → {sym.name}",
+            )
+        )
+
+    # Convert values to strings
+    value_str = str(value)
+    start_int = int(start)
+    length_int = int(length)
+    replacement_str = str(replacement)
+
+    # Splice: replace substring
+    end_int = start_int + length_int
+    result = value_str[:start_int] + replacement_str + value_str[end_int:]
+
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={t.result_reg: typed(result, UNKNOWN)},
+            reasoning=f"splice({value_str!r}, start={start_int}, len={length_int}, repl={replacement_str!r}) = {result!r}",
         )
     )
