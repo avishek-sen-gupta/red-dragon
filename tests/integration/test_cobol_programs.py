@@ -3858,3 +3858,103 @@ class TestArithmeticRefMod:
         region = _first_region(vm)
         # WS-A: 3 bytes at 0; WS-TOTAL: 5 bytes at 3
         assert _decode_zoned_unsigned(region, 3, 5) == 100
+
+    @covers(CobolFeature.ARITHMETIC_REF_MOD, CobolFeature.SUBTRACT)
+    def test_subtract_source_ref_mod(self):
+        """SUBTRACT WS-FIELD(1:3) FROM WS-TOTAL where WS-FIELD='789XYZ' subtracts 789.
+
+        Correct (start-1=0): slice[0:3]='789' → 999-789=210.
+        Wrong (no -1): slice[1:4]='89X' → not a number, or wrong value.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SUB-RM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-FIELD PIC X(6) VALUE '789XYZ'.",
+                "77 WS-TOTAL PIC 9(5) VALUE 999.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SUBTRACT WS-FIELD(1:3) FROM WS-TOTAL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 6 bytes at offset 0; WS-TOTAL: 5 bytes at offset 6
+        assert _decode_zoned_unsigned(region, 6, 5) == 210
+
+    @covers(CobolFeature.ARITHMETIC_REF_MOD, CobolFeature.SUBTRACT)
+    def test_subtract_source_ref_mod_offset(self):
+        """SUBTRACT WS-FIELD(4:3) FROM WS-TOTAL where WS-FIELD='ZZZ321' subtracts 321.
+
+        Correct (start-1=3): slice[3:6]='321' → 500-321=179.
+        Wrong (no -1): slice[4:7]='21' (only 2 chars) → 500-21=479, not 179.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SUB-RM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-FIELD PIC X(6) VALUE 'ZZZ321'.",
+                "77 WS-TOTAL PIC 9(5) VALUE 500.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SUBTRACT WS-FIELD(4:3) FROM WS-TOTAL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 6 bytes at offset 0; WS-TOTAL: 5 bytes at offset 6
+        assert _decode_zoned_unsigned(region, 6, 5) == 179
+
+    @covers(CobolFeature.ARITHMETIC_REF_MOD, CobolFeature.MULTIPLY)
+    def test_multiply_source_ref_mod(self):
+        """MULTIPLY WS-FIELD(1:3) BY WS-TOTAL where WS-FIELD='003XYZ' multiplies by 3.
+
+        Correct (start-1=0): slice[0:3]='003' → 50*3=150.
+        Wrong (no -1): slice[1:4]='03X' → not a number, or wrong value.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-MUL-RM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-FIELD PIC X(6) VALUE '003XYZ'.",
+                "77 WS-TOTAL PIC 9(5) VALUE 050.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MULTIPLY WS-FIELD(1:3) BY WS-TOTAL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 6 bytes at offset 0; WS-TOTAL: 5 bytes at offset 6
+        assert _decode_zoned_unsigned(region, 6, 5) == 150
+
+    @covers(CobolFeature.ARITHMETIC_REF_MOD, CobolFeature.MULTIPLY)
+    def test_multiply_source_ref_mod_offset(self):
+        """MULTIPLY WS-FIELD(4:3) BY WS-TOTAL where WS-FIELD='CCC100' multiplies by 100.
+
+        Correct (start-1=3): slice[3:6]='100' → 3*100=300.
+        Wrong (no -1): slice[4:7]='00' (only 2 chars) → 3*0=0, not 300.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-MUL-RM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-FIELD PIC X(6) VALUE 'CCC100'.",
+                "77 WS-TOTAL PIC 9(5) VALUE 003.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MULTIPLY WS-FIELD(4:3) BY WS-TOTAL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 6 bytes at offset 0; WS-TOTAL: 5 bytes at offset 6
+        assert _decode_zoned_unsigned(region, 6, 5) == 300
