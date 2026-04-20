@@ -63,9 +63,6 @@ class Opcode(str, Enum):
     STORE_INDIRECT = "STORE_INDIRECT"
     # Module imports (expanded by linker)
     IMPORT_MODULE = "IMPORT_MODULE"
-    # String/substring operations
-    SLICE = "SLICE"
-    SPLICE = "SPLICE"
     # Labels (pseudo-instruction)
     LABEL = "LABEL"
 
