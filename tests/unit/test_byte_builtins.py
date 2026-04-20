@@ -27,6 +27,8 @@ from interpreter.cobol.byte_builtins import (
     _builtin_string_replace,
     _builtin_string_concat,
     _builtin_string_concat_pair,
+    _builtin_string_slice,
+    _builtin_string_splice,
     BYTE_BUILTINS,
 )
 from interpreter.types.typed_value import typed_from_runtime
@@ -368,6 +370,8 @@ class TestByteBuiltinsRegistration:
             "__float_to_bytes",
             "__bytes_to_float",
             "__cobol_blank_when_zero",
+            "__string_slice",
+            "__string_splice",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:
@@ -1415,3 +1419,91 @@ class TestCobolBlankWhenZero:
 
     def test_registered_in_builtins(self):
         assert FuncName("__cobol_blank_when_zero") in BYTE_BUILTINS
+
+
+class TestStringSlice:
+    """Tests for __string_slice builtin."""
+
+    def test_string_slice_basic(self):
+        # "ABCDE", start=1 (0-indexed), length=3 → "BCD"
+        result = _builtin_string_slice(
+            [typed_from_runtime("ABCDE"), typed_from_runtime(1), typed_from_runtime(3)],
+            None,
+        )
+        assert result.value == "BCD"
+
+    def test_string_slice_clamps_to_end(self):
+        # "ABCDE", start=3, length=100 → "DE" (clamped)
+        result = _builtin_string_slice(
+            [
+                typed_from_runtime("ABCDE"),
+                typed_from_runtime(3),
+                typed_from_runtime(100),
+            ],
+            None,
+        )
+        assert result.value == "DE"
+
+    def test_string_slice_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_string_slice(
+            [typed_from_runtime(sym), typed_from_runtime(0), typed_from_runtime(3)],
+            None,
+        )
+        assert result.value is _UNCOMPUTABLE
+
+
+class TestStringSplice:
+    """Tests for __string_splice builtin."""
+
+    def test_string_splice_basic(self):
+        # Replace middle: "ABCDEFGHIJ"[1:4] with "XYZ" → "AXYZEFGHIJ"
+        result = _builtin_string_splice(
+            [
+                typed_from_runtime("ABCDEFGHIJ"),
+                typed_from_runtime(1),
+                typed_from_runtime(3),
+                typed_from_runtime("XYZ"),
+            ],
+            None,
+        )
+        assert result.value == "AXYZEFGHIJ"
+
+    def test_string_splice_replacement_shorter(self):
+        # "ABCDE"[1:3] with "X" → "AX" + "DE" = "AXDE"
+        result = _builtin_string_splice(
+            [
+                typed_from_runtime("ABCDE"),
+                typed_from_runtime(1),
+                typed_from_runtime(2),
+                typed_from_runtime("X"),
+            ],
+            None,
+        )
+        assert result.value == "AXDE"
+
+    def test_string_splice_replacement_longer(self):
+        # "ABCDE"[1:2] with "XXXX" → "A" + "XXXX" + "CDE" = "AXXXXCDE"
+        result = _builtin_string_splice(
+            [
+                typed_from_runtime("ABCDE"),
+                typed_from_runtime(1),
+                typed_from_runtime(1),
+                typed_from_runtime("XXXX"),
+            ],
+            None,
+        )
+        assert result.value == "AXXXXCDE"
+
+    def test_string_splice_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_string_splice(
+            [
+                typed_from_runtime("ABCDE"),
+                typed_from_runtime(sym),
+                typed_from_runtime(2),
+                typed_from_runtime("X"),
+            ],
+            None,
+        )
+        assert result.value is _UNCOMPUTABLE

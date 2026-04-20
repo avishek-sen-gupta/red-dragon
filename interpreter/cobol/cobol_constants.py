@@ -82,6 +82,8 @@ class BuiltinName:
     FLOAT_TO_BYTES = "__float_to_bytes"
     BYTES_TO_FLOAT = "__bytes_to_float"
     COBOL_BLANK_WHEN_ZERO = "__cobol_blank_when_zero"
+    STRING_SLICE = "__string_slice"
+    STRING_SPLICE = "__string_splice"
 
 
 class InspectType:
