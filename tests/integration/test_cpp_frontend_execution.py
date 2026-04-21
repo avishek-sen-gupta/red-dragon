@@ -7,6 +7,8 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from tests.covers import covers
+from interpreter.frontends.cpp.features import CppFeature
 
 
 def _run_cpp(source: str, max_steps: int = 500) -> dict:
@@ -22,6 +24,8 @@ def _run_cpp(source: str, max_steps: int = 500) -> dict:
 class TestCppConstructorFieldExecution:
     """Constructor without explicit 'this' param produces correct field values."""
 
+    @covers(CppFeature.THIS_POINTER)
+    @covers(CppFeature.ARROW_OPERATOR)
     def test_field_access_on_constructed_object(self):
         """Constructing a class and accessing a field should return
         a concrete value (not SymbolicValue)."""
@@ -39,6 +43,9 @@ int answer = b->x;
 """)
         assert vars_[VarName("answer")] == 42
 
+    @covers(CppFeature.POINTER_TYPE)
+    @covers(CppFeature.ARROW_OPERATOR)
+    @covers(CppFeature.NULLPTR)
     def test_linked_list_field_traversal(self):
         """Linked list with class nodes should allow field traversal
         to produce concrete sum."""
@@ -75,6 +82,8 @@ int answer = sumList(n1, 3);
 class TestCppStructuredBindingExecution:
     """auto [a, b] = expr; should decompose and bind correct values."""
 
+    @covers(CppFeature.STRUCTURED_BINDING)
+    @covers(CppFeature.ARRAY_LITERALS)
     def test_structured_binding_from_array(self):
         """auto [a, b] = arr; binds elements by position."""
         vars_ = _run_cpp("""\
@@ -86,6 +95,8 @@ int sum = a + b;
         assert vars_[VarName("b")] == 20
         assert vars_[VarName("sum")] == 30
 
+    @covers(CppFeature.STRUCTURED_BINDING)
+    @covers(CppFeature.ARRAY_LITERALS)
     def test_structured_binding_three_elements(self):
         """auto [x, y, z] = arr; with three elements."""
         vars_ = _run_cpp("""\
