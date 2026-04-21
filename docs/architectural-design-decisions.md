@@ -8,7 +8,7 @@ This document captures key architectural decisions made during the development o
 
 **Context:** The project needed a single representation that all source languages lower into, enabling language-agnostic analysis and execution. A tree-based AST would require per-language walkers for every downstream pass.
 
-**Decision:** Adopt a flattened three-address code (TAC) IR (see [IR Reference](ir-reference.md); currently 33 opcodes, grown from the original 27). Each opcode has a dedicated frozen dataclass with named, typed fields. No nested expressions — all intermediates are explicit.
+**Decision:** Adopt a flattened three-address code (TAC) IR (see [IR Reference](ir-reference.md); currently 34 opcodes, grown from the original 27). Each opcode has a dedicated frozen dataclass with named, typed fields. No nested expressions — all intermediates are explicit.
 
 **Consequences:** CFG construction, dataflow analysis, and VM execution all operate on the same flat instruction list, eliminating duplication. Adding a new language frontend only requires emitting these opcodes. The trade-off is that lowering must decompose complex expressions (e.g., `a + b * c`) into multiple instructions, increasing IR verbosity.
 
@@ -48,7 +48,7 @@ This document captures key architectural decisions made during the development o
 
 **Context:** Supporting languages without tree-sitter grammars required an alternative lowering path. Using an LLM as a "reasoning engine" to analyse code produces inconsistent, hallucination-prone results.
 
-**Decision:** Constrain the LLM to act as a **compiler frontend**: the prompt provides a pragmatic subset of the 33 opcode schemas (see [IR Reference](ir-reference.md)), concrete patterns for functions/classes/control flow, and a full worked example. The LLM's job is mechanical translation, not reasoning. Output is structured JSON matching the IR schema.
+**Decision:** Constrain the LLM to act as a **compiler frontend**: the prompt provides a pragmatic subset of the 34 opcode schemas (see [IR Reference](ir-reference.md)), concrete patterns for functions/classes/control flow, and a full worked example. The LLM's job is mechanical translation, not reasoning. Output is structured JSON matching the IR schema.
 
 **Consequences:** LLM output is far more consistent because the task is pattern-matching rather than open-ended reasoning. Any language the LLM has seen in training can be lowered. The trade-off is that the prompt is large (~2K tokens) and quality depends on the LLM's familiarity with the source language.
 
@@ -2557,7 +2557,7 @@ compilation. No chaining, no import tables, no special variable handling.
 
 **Implementation:**
 1. Define `StorageIdentifier` protocol with `name: str` property
-2. Add `reads()` → `list[StorageIdentifier]` and `writes()` → `list[StorageIdentifier]` to each of the 33 instruction classes
+2. Add `reads()` → `list[StorageIdentifier]` and `writes()` → `list[StorageIdentifier]` to each of the 34 instruction classes
 3. Refactor `dataflow.py` to use `instruction.reads()` and `instruction.writes()` instead of opcode conditionals
 4. Migrate `Definition.variable` and `Use.variable` from `str` to `StorageIdentifier`
 5. Fix `AddressOf.reads()` to return the variable name (dataflow tracking gap)
@@ -2684,7 +2684,7 @@ Imports are NOT a tree population source — they only appear in source code. Ty
 
 **Decision:**
 1. Expand `LLMFrontendPrompts.SYSTEM_PROMPT` and parser support to include `DECL_VAR`, `CALL_CTOR`, `TRY_PUSH`, and `TRY_POP` in the supported LLM opcode contract.
-2. Keep the LLM frontend contract explicitly scoped to a pragmatic opcode subset used for language lowering (not all 33 opcodes), while preserving compatibility with the universal IR output type.
+2. Keep the LLM frontend contract explicitly scoped to a pragmatic opcode subset used for language lowering (not all 34 opcodes), while preserving compatibility with the universal IR output type.
 3. Fix execution telemetry so `ExecutionStats.llm_calls` includes calls performed by `LLMPlausibleResolver`.
 
 ## ADR-139: IMPORT_MODULE Opcode — Dedicated IR for Import Stubs (2026-04-13)
@@ -2746,13 +2746,13 @@ The `is` and `is not` operators continue to use the existing `BINOP IS` / `BINOP
 
 ### ADR-141: Replace SLICE/SPLICE opcodes with `__string_slice`/`__string_splice` builtins (2026-04-18)
 
-**Context:** An early implementation of COBOL reference modification added two dedicated IR opcodes (`SLICE` and `SPLICE`) to the 33-opcode universal IR. This swelled the opcode count and introduced COBOL-specific concepts into the language-agnostic IR layer. Downstream consumers (LLM frontend, MCP server, dataflow analysis) all had to be updated every time an opcode was added or removed.
+**Context:** An early implementation of COBOL reference modification added two dedicated IR opcodes (`SLICE` and `SPLICE`) to the then-33-opcode universal IR. This swelled the opcode count and introduced COBOL-specific concepts into the language-agnostic IR layer. Downstream consumers (LLM frontend, MCP server, dataflow analysis) all had to be updated every time an opcode was added or removed.
 
 **Decision:** Remove `SLICE` and `SPLICE` opcodes. Replace them with ordinary `CALL_FUNCTION` instructions targeting two new VM builtins registered as `FuncName("__string_slice__")` and `FuncName("__string_splice__")`. The COBOL lowering layer emits these calls wherever a reference modification slice or in-place write is needed.
 
 **Rejected alternative:** Keep dedicated opcodes but mark them as "COBOL-only" in metadata — rejected because the IR was designed as a universal abstraction; language-specific opcodes break that invariant and force non-COBOL frontends to be aware of them.
 
-**Consequences:** The opcode count stays at 33. The IR remains language-agnostic. Adding new language-specific string operations follows the same builtin-registration pattern without touching the IR schema. The trade-off is that the call instruction for a slice is syntactically identical to any other function call, so tooling must inspect the function name to recognise it as a built-in string operation.
+**Consequences:** The opcode count returned to 33 (subsequently grown to 34 with `CALL_CTOR`). The IR remains language-agnostic. Adding new language-specific string operations follows the same builtin-registration pattern without touching the IR schema. The trade-off is that the call instruction for a slice is syntactically identical to any other function call, so tooling must inspect the function name to recognise it as a built-in string operation.
 
 ---
 

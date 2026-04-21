@@ -1,10 +1,10 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of typed instruction dataclasses drawn from 33 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of typed instruction dataclasses drawn from 34 opcodes.
 
 ## Instruction format
 
-Each opcode has a dedicated frozen dataclass in `interpreter/instructions.py` (33 classes total). All share an `InstructionBase` with `source_location`. All fields use domain types:
+Each opcode has a dedicated frozen dataclass in `interpreter/instructions.py` (34 classes total). All share an `InstructionBase` with `source_location`. All fields use domain types:
 
 - **Register-holding fields**: `Register` objects (e.g., `result_reg`, `left`, `right`)
 - **Label-holding fields**: `CodeLabel` objects (e.g., `label`, `true_label`, `false_label`)

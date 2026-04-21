@@ -37,7 +37,7 @@ flowchart TD
     ts["tree-sitter\n15 languages"]
     llm["LLM Frontend\nany language"]
     chunked["Chunked LLM\nchunk→LLM×N"]
-    ir["Flattened IR\n(33 opcodes)"]
+    ir["Flattened IR\n(34 opcodes)"]
     cfg["Build CFG"]
     reg["Registry"]
     df["Dataflow Analysis"]
@@ -47,7 +47,7 @@ flowchart TD
     ir --> cfg & reg & df
 
     subgraph VM ["Symbolic VM"]
-        exec["Local Executor\n← handles all 33 opcodes"]
+        exec["Local Executor\n← handles all 34 opcodes"]
         oracle["LLM Oracle\n← fallback only"]
         exec -- "not handled" --> oracle
     end
@@ -107,12 +107,12 @@ The IR is a **flattened high-level three-address code** defined in `interpreter/
 
 ### Opcodes
 
-The `Opcode` enum (`interpreter/ir.py:11`) defines 33 opcodes in six categories:
+The `Opcode` enum (`interpreter/ir.py:11`) defines 34 opcodes in six categories:
 
 | Category | Opcodes | Description |
 |---|---|---|
-| **Value producers** | `CONST`, `LOAD_VAR`, `LOAD_FIELD`, `LOAD_INDEX`, `NEW_OBJECT`, `NEW_ARRAY`, `BINOP`, `UNOP`, `CALL_FUNCTION`, `CALL_METHOD`, `CALL_UNKNOWN` | Write result to a register (`result_reg`) |
-| **Consumers / Control** | `DECL_VAR`, `STORE_VAR`, `STORE_FIELD`, `STORE_INDEX`, `BRANCH_IF`, `BRANCH`, `RETURN`, `THROW`, `TRY_PUSH`, `TRY_POP` | Consume values, affect control flow |
+| **Value producers** | `CONST`, `LOAD_VAR`, `LOAD_FIELD`, `LOAD_INDEX`, `NEW_OBJECT`, `NEW_ARRAY`, `BINOP`, `UNOP`, `CALL_FUNCTION`, `CALL_METHOD`, `CALL_UNKNOWN`, `CALL_CTOR` | Write result to a register (`result_reg`) |
+| **Consumers / Control** | `DECL_VAR`, `STORE_VAR`, `STORE_FIELD`, `STORE_INDEX`, `BRANCH_IF`, `BRANCH`, `RETURN`, `THROW`, `TRY_PUSH`, `TRY_POP`, `IMPORT_MODULE` | Consume values, affect control flow |
 | **Special** | `SYMBOLIC`, `LABEL` | Parameters, block boundaries |
 | **Pointer ops** | `ADDRESS_OF`, `LOAD_INDIRECT`, `LOAD_FIELD_INDIRECT`, `STORE_INDIRECT` | Pointer creation/dereference (`&x`, `*ptr`, `*ptr = val`) |
 | **Region ops** | `ALLOC_REGION`, `WRITE_REGION`, `LOAD_REGION` | Byte-addressed memory (COBOL) |
@@ -135,7 +135,7 @@ class Binop(InstructionBase):
     right: Register
 ```
 
-There are 33 per-opcode frozen dataclasses (e.g., `Const`, `LoadVar`, `StoreVar`, `Binop`, `CallFunction`, `NewObject`, etc.), each with named typed fields. All register-holding fields are `Register` objects, all label-holding fields are `CodeLabel` objects, variable names are `VarName`, field names are `FieldName`, function/method names are `FuncName`, and operators are `BinopKind`/`UnopKind` enums. Each instruction implements `reads()` and `writes()` methods returning `StorageIdentifier` values for dataflow analysis.
+There are 34 per-opcode frozen dataclasses (e.g., `Const`, `LoadVar`, `StoreVar`, `Binop`, `CallFunction`, `NewObject`, etc.), each with named typed fields. All register-holding fields are `Register` objects, all label-holding fields are `CodeLabel` objects, variable names are `VarName`, field names are `FieldName`, function/method names are `FuncName`, and operators are `BinopKind`/`UnopKind` enums. Each instruction implements `reads()` and `writes()` methods returning `StorageIdentifier` values for dataflow analysis.
 
 **Key design choice**: registers use SSA-like naming (`%0`, `%1`, ...) for temporaries, while named variables use string names (`x`, `total`). The `STORE_VAR` / `LOAD_VAR` opcodes bridge between registers and variables. For block-scoped languages, variable names may be mangled by the frontend (e.g. `x$1`) to disambiguate shadowed declarations — see the [Type System doc](type-system.md#block-scope-tracking-llvm-style) for details.
 
@@ -495,7 +495,7 @@ class LocalExecutor:
         CallFunction: _handle_call_function,
         CallMethod: _handle_call_method,
         CallCtorFunction: _handle_call_ctor,
-        ... # all 33 instruction types covered
+        ... # all 34 instruction types covered
     }
 ```
 
@@ -1009,7 +1009,7 @@ if result is Operators.UNCOMPUTABLE:
 
 ## 12. LLM Backend (Oracle Fallback)
 
-The LLM backend (`interpreter/backend.py`) is the fallback for instructions the local executor can't handle. In practice, the local executor handles all 33 opcodes, so the LLM is only called when the local executor explicitly delegates (which currently doesn't happen — all opcodes have handlers).
+The LLM backend (`interpreter/backend.py`) is the fallback for instructions the local executor can't handle. In practice, the local executor handles all 34 opcodes, so the LLM is only called when the local executor explicitly delegates (which currently doesn't happen — all opcodes have handlers).
 
 ### Architecture
 
@@ -1179,7 +1179,7 @@ Both graphs are returned in `DataflowResult`: `raw_dependency_graph` (direct edg
 ```
 interpreter/
 ├── ir.py                    Opcode enum, Register, CodeLabel, SourceLocation, IRInstruction factory
-├── instructions.py          33 per-opcode frozen dataclasses + InstructionBase + StorageIdentifier
+├── instructions.py          34 per-opcode frozen dataclasses + InstructionBase + StorageIdentifier
 ├── register.py              Register domain type
 ├── var_name.py              VarName domain type
 ├── field_name.py            FieldName domain type (with FieldKind enum)
@@ -1205,7 +1205,7 @@ interpreter/
 ├── vm/                      VM execution engine
 │   ├── vm_types.py          VM data types (SymbolicValue, HeapObject, VMState, StateUpdate, ...)
 │   ├── vm.py                apply_update(), helpers (Operators, _parse_const, _resolve_reg → TypedValue)
-│   ├── executor.py          LocalExecutor dispatch table, all 33 opcode handlers
+│   ├── executor.py          LocalExecutor dispatch table, all 34 opcode handlers
 │   ├── builtins.py          Built-in function table (len, range, print, ...)
 │   ├── unresolved_call.py   Symbolic/LLM call resolution strategies
 │   └── field_fallback.py    Field access fallback chain
@@ -1363,7 +1363,7 @@ Final state:
 
 | Principle | Manifestation |
 |---|---|
-| **Deterministic first** | Local executor handles all 33 opcodes; LLM is pure fallback |
+| **Deterministic first** | Local executor handles all 34 opcodes; LLM is pure fallback |
 | **Functional core, imperative shell** | Pure data types in `*_types.py`, mutation only in `apply_update()` |
 | **Result types over exceptions** | `ExecutionResult.not_handled()` instead of raising or returning `None` |
 | **Sentinel over exception** | `Operators.UNCOMPUTABLE` instead of try/catch for arithmetic failures |
