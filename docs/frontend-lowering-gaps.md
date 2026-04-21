@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 956 features across 16 languages — 769 covered, 187 uncovered
+**Totals**: 956 features across 16 languages — 784 covered, 172 uncovered
 
 ---
 
@@ -14,8 +14,8 @@
 |----------|-------|---------|-----------|-----------|
 | c | 48 | 33 | 15 ⚠ | 68% |
 | cobol | 112 | 104 | 8 ⚠ | 92% |
-| cpp | 84 | 38 | 46 ⚠ | 45% |
-| csharp | 94 | 71 | 23 ⚠ | 75% |
+| cpp | 84 | 44 | 40 ⚠ | 52% |
+| csharp | 94 | 73 | 21 ⚠ | 77% |
 | go | 44 | 41 | 3 ⚠ | 93% |
 | java | 72 | 72 | 0 | 100% |
 | javascript | 40 | 38 | 2 ⚠ | 95% |
@@ -26,8 +26,8 @@
 | python | 55 | 46 | 9 ⚠ | 83% |
 | ruby | 72 | 67 | 5 ⚠ | 93% |
 | rust | 60 | 46 | 14 ⚠ | 76% |
-| scala | 53 | 43 | 10 ⚠ | 81% |
-| typescript | 36 | 16 | 20 ⚠ | 44% |
+| scala | 53 | 45 | 8 ⚠ | 84% |
+| typescript | 36 | 21 | 15 ⚠ | 58% |
 
 ---
 
@@ -67,8 +67,6 @@
 - `ADDRESS_OF` — &expr address-of operator
 - `ARITHMETIC` — +, -, *, /, % arithmetic expressions
 - `ARRAY_ACCESS` — a[i] array element access
-- `ARRAY_LITERALS` — array declarations with initializer lists
-- `ARROW_OPERATOR` — ptr->field pointer member access
 - `ASSIGNMENT` — = and compound assignment operators
 - `BREAK_CONTINUE` — break and continue statements
 - `CAST` — (T)expr C-style casts inherited from C
@@ -90,22 +88,18 @@
 - `INITIALIZER_LIST` — {a, b, c} brace-enclosed initializer lists
 - `LABELED_STATEMENTS` — label: statement labels for goto targets
 - `LOGICAL_OPERATORS` — && and || logical short-circuit operators
-- `NULLPTR` — nullptr null pointer constant
 - `NUMBER_LITERAL` — integer and floating-point numeric literals
 - `POINTER_DEREFERENCE` — *ptr dereference operator
 - `POINTER_LOAD` — loading a value through a pointer
 - `POINTER_STORE` — storing a value through a pointer
-- `POINTER_TYPE` — T* pointer type declarations
 - `RAW_STRING_LITERAL` — R"(...)" raw string literals
 - `REINTERPRET_CAST` — reinterpret_cast<T>(expr) bit-level reinterpretation
 - `SIZEOF` — sizeof(T) and sizeof expr size queries
 - `STATIC_METHOD_CALL` — Class::method(...) static method calls
-- `STRUCTURED_BINDING` — auto [a, b] = pair; C++17 structured bindings
 - `STRUCT_DEFINITION` — struct declarations (equivalent to class with public default)
 - `SUBSCRIPT_EXPRESSION` — overloaded operator[] subscript calls
 - `SWITCH` — switch / case / default statements
 - `TERNARY_OPERATOR` — cond ? a : b ternary expressions
-- `THIS_POINTER` — this pointer keyword in member functions
 - `THROW_EXPRESSION` — throw expr used as an expression
 - `THROW_STATEMENT` — throw expr; exception throwing statements
 - `UNARY_OPERATORS` — unary +, -, ~, ! operators
@@ -116,8 +110,6 @@
 - `AS_CAST` — expr as Type safe cast expressions
 - `CAST` — (T)expr explicit cast expressions
 - `CHECKED_EXPRESSION` — checked(expr) overflow-checked arithmetic expressions
-- `CONSTRUCTOR` — constructor declarations in class and struct types
-- `CONSTRUCTOR_CHAINING` — this(...) and base(...) constructor chaining
 - `ELEMENT_ACCESS` — a[i] element access expressions
 - `GLOBAL_STATEMENT` — top-level statements outside any type (C# 9+)
 - `IMPLICIT_ARRAY_CREATION` — new[]{...} implicitly typed array creation
@@ -236,32 +228,25 @@
 - `CONSTRUCTOR_DELEGATION` — this(...) constructor delegation calls
 - `CONTINUE` — continue loop skip (via scala.util.control.Breaks)
 - `DEFAULT_PARAMETERS` — function parameters with default argument values
-- `ENUM` — enum Foo { case A, B } enumeration declarations (Scala 3)
 - `GUARD` — case pat if cond => guard conditions in match cases
 - `INFIX_PATTERN` — P1 op P2 infix extractor patterns
 - `LAMBDA_EXPRESSION` — (x: T) => expr and { case pat => expr } lambda expressions
-- `TRY_CATCH` — try { } catch { case e => } finally { } exception handling
 
 ### typescript
 
-- `ABSTRACT_CLASS` — abstract class declarations
 - `ABSTRACT_METHOD` — abstract method declarations in abstract classes
 - `ARITHMETIC` — +, -, *, /, % arithmetic expressions
 - `CLASS_STATIC_BLOCK` — static { } initializer blocks in classes
 - `EXPORT` — export declarations
 - `GENERIC_TYPES` — generic type parameters <T> on functions and classes
 - `IMPORT` — import declarations
-- `IMPORT_ALIAS` — import { X as Y } alias bindings
 - `INHERITANCE` — extends clause in class declarations
 - `INSTANCEOF` — instanceof type-check expressions
 - `INTERFACE_IMPLEMENTATION` — implements clause in class declarations
-- `NAMESPACE` — namespace and module declarations
 - `PRIVATE_MODIFIER` — private visibility modifier on class members
 - `PROTECTED_MODIFIER` — protected visibility modifier on class members
-- `PUBLIC_FIELD` — public class field declarations
 - `PUBLIC_MODIFIER` — public visibility modifier on class members
 - `READONLY_MODIFIER` — readonly modifier on properties and parameters
-- `REQUIRE_IMPORT` — require("module") CommonJS-style imports
 - `SATISFIES_EXPRESSION` — expr satisfies Type constraint (TypeScript 4.9+)
 - `STATIC_MODIFIER` — static modifier on class members
 

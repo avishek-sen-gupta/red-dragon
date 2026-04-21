@@ -9,11 +9,14 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from tests.covers import covers
+from interpreter.frontends.cpp.features import CppFeature
 
 
 class TestCppOverloadResolutionByArity:
     """C++ methods overloaded by parameter count."""
 
+    @covers(CppFeature.FUNCTION_CALL)
     def test_unary_vs_binary_picks_unary(self):
         source = """\
 class Calc {
@@ -33,6 +36,7 @@ int x = c.add(5);
         lv = unwrap_locals(vm.call_stack[0].local_vars)
         assert lv[VarName("x")] == 5
 
+    @covers(CppFeature.FUNCTION_CALL)
     def test_unary_vs_binary_picks_binary(self):
         source = """\
 class Calc {
@@ -52,6 +56,7 @@ int y = c.add(3, 4);
         lv = unwrap_locals(vm.call_stack[0].local_vars)
         assert lv[VarName("y")] == 7
 
+    @covers(CppFeature.FUNCTION_CALL)
     def test_three_arity_overloads(self):
         source = """\
 class Calc {
@@ -80,6 +85,7 @@ int r3 = c.add(1, 2, 3);
 class TestCppOverloadResolutionByType:
     """C++ methods overloaded by parameter type (same arity)."""
 
+    @covers(CppFeature.FUNCTION_CALL)
     def test_int_vs_string_picks_int(self):
         source = """\
 class Printer {
@@ -99,6 +105,7 @@ int result = p.show(42);
         lv = unwrap_locals(vm.call_stack[0].local_vars)
         assert lv[VarName("result")] == 43
 
+    @covers(CppFeature.FUNCTION_CALL)
     def test_int_vs_string_picks_string(self):
         source = """\
 class Printer {

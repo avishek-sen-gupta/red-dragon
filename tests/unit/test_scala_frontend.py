@@ -928,6 +928,7 @@ object M {
 
 
 class TestScalaTryCatch:
+    @covers(ScalaFeature.TRY_CATCH)
     def test_try_catch_generates_caught_exception(self):
         """Scala catch { case e: Exception => ... } should lower to
         SYMBOLIC caught_exception, not be silently dropped."""
@@ -953,6 +954,7 @@ object M {
             f"got {len(caught)}"
         )
 
+    @covers(ScalaFeature.TRY_CATCH)
     def test_try_catch_stores_exception_variable(self):
         """The exception variable 'e' should be stored via STORE_VAR."""
         source = """\
@@ -971,6 +973,7 @@ object M {
             "e" in stored_names
         ), f"Expected 'e' in stored variables, got {stored_names}"
 
+    @covers(ScalaFeature.TRY_CATCH)
     def test_try_catch_has_branch_to_end(self):
         """Try body should BRANCH past the catch block to try_end."""
         source = """\
@@ -987,6 +990,7 @@ object M {
         try_end_labels = [l for l in labels if l.label.contains("try_end")]
         assert len(try_end_labels) >= 1, "Expected at least 1 try_end label in IR"
 
+    @covers(ScalaFeature.TRY_CATCH)
     def test_try_catch_with_finally(self):
         """Scala try/catch/finally should generate all three blocks."""
         source = """\
@@ -1009,6 +1013,7 @@ object M {
         assert any("try_finally" in name for name in label_names)
         assert any("try_end" in name for name in label_names)
 
+    @covers(ScalaFeature.TRY_CATCH)
     def test_try_catch_multiple_cases(self):
         """Multiple case clauses should generate multiple catch blocks."""
         source = """\
@@ -1343,6 +1348,7 @@ class TestScalaGenericFunctionParams:
 
 
 class TestScalaEnumDefinition:
+    @covers(ScalaFeature.ENUM)
     def test_simple_enum_emits_new_object_and_store_fields(self):
         """enum Color { case Red, Green, Blue } should emit NEW_OBJECT + STORE_FIELD per variant."""
         ir = _parse_scala("""\
@@ -1361,6 +1367,7 @@ enum Color {
         assert "Green" in stored_names
         assert "Blue" in stored_names
 
+    @covers(ScalaFeature.ENUM)
     def test_simple_enum_emits_decl_var(self):
         """enum Color { ... } should emit DECL_VAR Color."""
         ir = _parse_scala("""\
@@ -1372,6 +1379,7 @@ enum Color {
         decl_names = [str(inst.operands[0]) for inst in decl_vars]
         assert "Color" in decl_names
 
+    @covers(ScalaFeature.ENUM)
     def test_enum_variant_count_matches(self):
         """Three variants should produce exactly three STORE_FIELD instructions."""
         ir = _parse_scala("""\
