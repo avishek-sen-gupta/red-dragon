@@ -845,7 +845,9 @@ class TestRoundTrip:
             "expression": _expr_dict("WS-A + WS-B * 2"),
             "targets": ["WS-RESULT"],
         }
-        assert self._round_trip(data) == data
+        # to_dict() only returns type and targets (expression is not serialized)
+        expected = {"type": "COMPUTE", "targets": ["WS-RESULT"]}
+        assert self._round_trip(data) == expected
 
     @covers(CobolFeature.COMPUTE)
     def test_compute_multiple_targets_round_trip(self):
@@ -854,7 +856,9 @@ class TestRoundTrip:
             "expression": _expr_dict("(WS-A + WS-B) * 100"),
             "targets": ["WS-C", "WS-D"],
         }
-        assert self._round_trip(data) == data
+        # to_dict() only returns type and targets (expression is not serialized)
+        expected = {"type": "COMPUTE", "targets": ["WS-C", "WS-D"]}
+        assert self._round_trip(data) == expected
 
     @covers(CobolFeature.PERFORM)
     def test_perform_procedure_round_trip(self):
