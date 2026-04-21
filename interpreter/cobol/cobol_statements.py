@@ -266,47 +266,10 @@ class ComputeStatement:
         )
 
     def to_dict(self) -> dict:
-        # Serialize expression back to dict
-        result: dict = {
-            "type": "COMPUTE",
-            "expression": _expr_node_to_dict(self.expression),
-        }
+        result: dict = {"type": "COMPUTE"}
         if self.targets:
             result["targets"] = list(self.targets)
         return result
-
-
-def _expr_node_to_dict(node: ExprNode) -> dict:
-    """Convert an ExprNode back to a structured JSON dict for serialization."""
-    from interpreter.cobol.cobol_expression import (
-        LiteralNode,
-        FieldRefNode,
-        RefModNode,
-        BinOpNode,
-    )
-
-    if isinstance(node, LiteralNode):
-        return {"kind": "lit", "value": node.value}
-    elif isinstance(node, FieldRefNode):
-        return {"kind": "ref", "name": node.name}
-    elif isinstance(node, RefModNode):
-        result = {
-            "kind": "ref",
-            "name": node.name,
-            "ref_mod_start": _expr_node_to_dict(node.ref_mod_start),
-        }
-        if node.ref_mod_length is not None:
-            result["ref_mod_length"] = _expr_node_to_dict(node.ref_mod_length)
-        return result
-    elif isinstance(node, BinOpNode):
-        return {
-            "kind": "binop",
-            "op": node.op,
-            "left": _expr_node_to_dict(node.left),
-            "right": _expr_node_to_dict(node.right),
-        }
-    else:
-        return {}
 
 
 @dataclass(frozen=True)
