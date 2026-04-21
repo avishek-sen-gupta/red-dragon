@@ -195,4 +195,16 @@ fileignoreconfig:
   checksum: ede78bb10fe82271d5f477eb43694647bf6f92a7ef5ae76ffb2f1b12120625cb
 - filename: .beads/backup/issues.jsonl
   checksum: c57b8be5886c6da5c3d52b4c5dbab114af22aeac80a942dea50e6c4f0de3c1d8
+- filename: .claude/hooks/guvnah/pre-tool-use.sh
+  checksum: 5bcba82371cd47b9e298f09a2ea99295977f3945a5714a68ab922ccd1aa47f4d
+- filename: .claude/hooks/guvnah/session-start.sh
+  checksum: 09f088e8f096e56adee03a9b423d20f5d29e12945d2d3e2732e5b7b2232817b6
+- filename: .claude/hooks/guvnah/post-tool-use.sh
+  checksum: 774a1e9411311accc5b4f5098f508ebf3be73f719bb4db6cad3b1f84ba5d8878
+- filename: .claude/hooks/guvnah/ctl
+  checksum: 38c2cc4b5baa982f6cf56707f683e8267b754ab88ab882acc7324d119f1cd99a
+- filename: .claude/hooks/guvnah/user-prompt-submit.sh
+  checksum: 2be377b58fda09a03726238c02b60c843ce7d2750524fddd3d2a68f44395be5e
+- filename: .claude/hooks/guvnah/post-tool-use-failure.sh
+  checksum: 291bc11cf54cb5c15a6c6cce850e3439ef953503dd0269ba5d1eb50043c255db
 version: "1.0"
