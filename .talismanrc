@@ -208,3 +208,5 @@ fileignoreconfig:
 - filename: .claude/hooks/guvnah/post-tool-use-failure.sh
   checksum: 291bc11cf54cb5c15a6c6cce850e3439ef953503dd0269ba5d1eb50043c255db
 version: "1.0"
+- filename: README.md
+  checksum: 15e9276aa2b86512d26d5657f202cf53e6627a60f0abfe6c47d6cfa4d9000f68
