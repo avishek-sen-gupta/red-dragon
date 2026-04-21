@@ -55,6 +55,23 @@
             "command": "python3 /Users/asgupta/code/red-dragon/.claude/hooks/covers-guard.py"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/guvnah/pre-tool-use.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/guvnah/pipefail-guard.sh"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -65,14 +82,51 @@
             "command": "~/.claude/plugins/context-injector/hooks/user-prompt-submit.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/guvnah/user-prompt-submit.sh"
+          }
+        ]
       }
     ],
-    "SessionStart": [],
-    "PostToolUse": [],
-    "PreCompact": []
+    "PreCompact": [],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/guvnah/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/guvnah/post-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/guvnah/post-tool-use-failure.sh"
+          }
+        ]
+      }
+    ]
   },
   "permissions": {
     "allow": [
+      "Bash(.claude/hooks/guvnah/ctl*)",
       "Bash(awk:*)",
       "Bash(basename:*)",
       "Bash(bash:*)",
@@ -110,7 +164,7 @@
       "Bash(python3:*)",
       "Bash(python:*)",
       "Bash(realpath:*)",
-      "Bash(rm:/tmp/ctx-governor/)",
+      "Bash(rm:/tmp/ctx-governor/*)",
       "Bash(rm:/tmp/ctx-lint/)",
       "Bash(rm:/tmp/ctx-locks/)",
       "Bash(rtk proxy:*)",
