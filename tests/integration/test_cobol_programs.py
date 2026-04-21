@@ -3302,6 +3302,116 @@ class TestComputeOnSizeError:
         assert vm is not None
 
 
+class TestComputeRefMod:
+    """Integration tests for COMPUTE with reference modification (substring in expressions)."""
+
+    @covers(CobolFeature.COMPUTE, CobolFeature.REFERENCE_MODIFICATION)
+    def test_compute_ref_mod_simple(self):
+        """WS-FIELD(1:3) extracts first 3 chars and assigns to result."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-RM1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD    PIC X(6) VALUE '123ABC'.",
+                "01 WS-RESULT   PIC 9(5).",
+                "PROCEDURE DIVISION.",
+                "    COMPUTE WS-RESULT = WS-FIELD(1:3).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 6 bytes at offset 0; WS-RESULT: 5 bytes at offset 6
+        # WS-FIELD(1:3) extracts '123' → 123
+        assert _decode_zoned_unsigned(region, 6, 5) == 123
+
+    @covers(CobolFeature.COMPUTE, CobolFeature.REFERENCE_MODIFICATION)
+    def test_compute_ref_mod_offset(self):
+        """WS-FIELD(4:3) extracts 3 chars starting at position 4."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-RM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD    PIC X(6) VALUE 'XXX456'.",
+                "01 WS-RESULT   PIC 9(5).",
+                "PROCEDURE DIVISION.",
+                "    COMPUTE WS-RESULT = WS-FIELD(4:3).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 6 bytes at offset 0; WS-RESULT: 5 bytes at offset 6
+        # WS-FIELD(4:3) extracts '456' → 456
+        assert _decode_zoned_unsigned(region, 6, 5) == 456
+
+    @covers(CobolFeature.COMPUTE, CobolFeature.REFERENCE_MODIFICATION)
+    def test_compute_ref_mod_in_expression(self):
+        """WS-FIELD(1:3) + 5 adds 5 to the extracted numeric substring."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-RM3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD    PIC X(5) VALUE '010XY'.",
+                "01 WS-RESULT   PIC 9(5).",
+                "PROCEDURE DIVISION.",
+                "    COMPUTE WS-RESULT = WS-FIELD(1:3) + 5.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 5 bytes at offset 0; WS-RESULT: 5 bytes at offset 5
+        # WS-FIELD(1:3) extracts '010' → 10, +5 = 15
+        assert _decode_zoned_unsigned(region, 5, 5) == 15
+
+    @covers(CobolFeature.COMPUTE, CobolFeature.REFERENCE_MODIFICATION)
+    def test_compute_ref_mod_multiply(self):
+        """WS-FIELD(1:3) * 4 multiplies extracted numeric substring."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-RM4.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FIELD    PIC X(5) VALUE '003XY'.",
+                "01 WS-RESULT   PIC 9(5).",
+                "PROCEDURE DIVISION.",
+                "    COMPUTE WS-RESULT = WS-FIELD(1:3) * 4.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIELD: 5 bytes at offset 0; WS-RESULT: 5 bytes at offset 5
+        # WS-FIELD(1:3) extracts '003' → 3, *4 = 12
+        assert _decode_zoned_unsigned(region, 5, 5) == 12
+
+    @covers(CobolFeature.COMPUTE, CobolFeature.REFERENCE_MODIFICATION)
+    def test_compute_no_ref_mod_regression(self):
+        """Plain COMPUTE with no ref_mod still works correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-RM5.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A        PIC 9(3) VALUE 10.",
+                "01 WS-B        PIC 9(3) VALUE 3.",
+                "01 WS-RESULT   PIC 9(5).",
+                "PROCEDURE DIVISION.",
+                "    COMPUTE WS-RESULT = WS-A + WS-B.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A: 3 bytes at offset 0; WS-B: 3 bytes at offset 3; WS-RESULT: 5 bytes at offset 6
+        # 10 + 3 = 13
+        assert _decode_zoned_unsigned(region, 6, 5) == 13
+
+
 class TestReferenceModification:
     """Integration tests for COBOL reference modification (substring extraction/replacement).
 
