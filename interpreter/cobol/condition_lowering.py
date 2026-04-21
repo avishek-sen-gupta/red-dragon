@@ -422,16 +422,25 @@ def lower_expr_node(
             length_reg = lower_expr_node(ctx, node.ref_mod_length, layout, region_reg)
         else:
             length_reg = ctx.const_to_reg(999999)
-        result_reg = ctx.fresh_reg()
+        sliced_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=result_reg,
+                result_reg=sliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
                 args=(
                     Register(str(full_str_reg)),
                     Register(str(start_0based_reg)),
                     Register(str(length_reg)),
                 ),
+            )
+        )
+        # Convert string slice result back to float for arithmetic operations
+        result_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=result_reg,
+                func_name=FuncName("float"),
+                args=(Register(str(sliced_reg)),),
             )
         )
         return result_reg
