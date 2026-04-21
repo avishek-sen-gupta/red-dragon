@@ -47,7 +47,7 @@ interpreter/frontends/<language>/
 ## Key Files
 
 - `interpreter/ir.py` -- IR types (Opcode enum, Register, CodeLabel, SourceLocation, IRInstruction factory)
-- `interpreter/instructions.py` -- 33 per-opcode frozen dataclasses with typed fields and `reads()`/`writes()` methods
+- `interpreter/instructions.py` -- 34 per-opcode frozen dataclasses with typed fields and `reads()`/`writes()` methods
 - `interpreter/frontend.py` -- `Frontend` ABC and `get_frontend()` factory
 - `interpreter/frontends/__init__.py` -- lazy-loading registry mapping Language enum to frontend classes
 - `interpreter/frontends/context.py` -- `TreeSitterEmitContext` and `GrammarConstants` definitions

@@ -554,7 +554,7 @@ The dataflow analysis operates on **exactly the same** data structures used by t
 
 - `CFG` from `interpreter/cfg_types.py` — blocks, edges, entry point
 - `BasicBlock` — label, instructions, successors, predecessors
-- `InstructionBase` subclasses from `interpreter/instructions.py` — 33 per-opcode frozen dataclasses with typed fields
+- `InstructionBase` subclasses from `interpreter/instructions.py` — 34 per-opcode frozen dataclasses with typed fields
 - Each instruction implements `reads()` and `writes()` returning `list[StorageIdentifier]` — the dataflow module uses these directly
 
 This means dataflow analysis can run on CFGs built from any frontend (deterministic or LLM).
@@ -740,7 +740,7 @@ interpreter/
 ├── cfg_types.py         BasicBlock, CFG (input to analysis)
 ├── cfg.py               build_cfg() (produces CFG from IR)
 ├── ir.py                Opcode enum, Register, CodeLabel
-├── instructions.py      33 per-opcode dataclasses with reads()/writes()
+├── instructions.py      34 per-opcode dataclasses with reads()/writes()
 └── constants.py         DATAFLOW_MAX_ITERATIONS = 1000
 
 tests/unit/
