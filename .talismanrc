@@ -138,7 +138,7 @@ fileignoreconfig:
 - filename: .beads/backup/backup_state.json
   checksum: 979f62fa04f2f0e8c0e17d53a87c08e23a4dba6a94e991e35a6c5800dec388fe
 - filename: .beads/backup/issues.jsonl
-  checksum: 7994dcee418bf0084eb0fe78faa77f4cd242d7a0e0aaeefc50e1717316811c32
+  checksum: 001516911142703e764f44bec3df9f8cee3d9e9525396a083ca2bf84bdfaeb8b
 - filename: .beads/backup/config.jsonl
   checksum: 6272a10b8d746764bbeaf4d2abfe759ac7491508b9c51264a9d4f5480b394c53
 - filename: scripts/redact-beads-issues
@@ -189,4 +189,8 @@ fileignoreconfig:
   checksum: 07f76a5f8ee725299d810d5366e63e2c775da1bae0e412c8cec7c6b72d4c421a
 - filename: docs/superpowers/specs/2026-04-20-reference-modification-followups.md
   checksum: eacf269499bce8144766aa3068477b64ece681767dce2610275b82464f9b456a
+- filename: .beads/backup/issues.jsonl
+  checksum: 001516911142703e764f44bec3df9f8cee3d9e9525396a083ca2bf84bdfaeb8b
+- filename: docs/superpowers/plans/2026-04-21-compute-ref-mod.md
+  checksum: ede78bb10fe82271d5f477eb43694647bf6f92a7ef5ae76ffb2f1b12120625cb
 version: "1.0"
