@@ -122,8 +122,24 @@ def discover_feature_modules(project_root: Path) -> tuple[FeatureModule, ...]:
 # ---------------------------------------------------------------------------
 
 
+def _is_unsupported(dec: ast.Call) -> bool:
+    """Return True if @covers(..., status=FeatureStatus.UNSUPPORTED)."""
+    for kw in dec.keywords:
+        if (
+            kw.arg == "status"
+            and isinstance(kw.value, ast.Attribute)
+            and kw.value.attr == "UNSUPPORTED"
+        ):
+            return True
+    return False
+
+
 def _covers_refs_in_file(path: Path) -> frozenset[FeatureRef]:
-    """Return all FeatureRefs found in @covers(...) decorators in a test file."""
+    """Return all FeatureRefs found in @covers(...) decorators in a test file.
+
+    Decorators with ``status=FeatureStatus.UNSUPPORTED`` are excluded —
+    they document known gaps, not real coverage.
+    """
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     return frozenset(
@@ -135,6 +151,7 @@ def _covers_refs_in_file(path: Path) -> frozenset[FeatureRef]:
         if isinstance(dec, ast.Call)
         and isinstance(dec.func, ast.Name)
         and dec.func.id == "covers"
+        and not _is_unsupported(dec)
         for arg in dec.args
         if isinstance(arg, ast.Attribute) and isinstance(arg.value, ast.Name)
     )
