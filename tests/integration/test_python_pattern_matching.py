@@ -14,6 +14,8 @@ from interpreter.types.typed_value import unwrap_locals
 from interpreter.types.type_expr import scalar
 from interpreter.vm.vm import _heap_addr
 from interpreter.project.entry_point import EntryPoint
+from tests.covers import covers
+from interpreter.frontends.python.features import PythonFeature
 
 
 def _run_python(source: str, max_steps: int = 500):
@@ -27,6 +29,8 @@ def _run_python(source: str, max_steps: int = 500):
 
 
 class TestLiteralMatch:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.LITERAL_PATTERN)
     def test_literal_int_match(self):
         _, local_vars = _run_python("""\
 x = 2
@@ -40,6 +44,8 @@ match x:
 """)
         assert local_vars[VarName("y")] == 20
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.LITERAL_PATTERN)
     def test_literal_str_match(self):
         _, local_vars = _run_python("""\
 x = "hello"
@@ -53,6 +59,7 @@ match x:
 
 
 class TestWildcardMatch:
+    @covers(PythonFeature.PATTERN_MATCHING)
     def test_wildcard_default(self):
         _, local_vars = _run_python("""\
 x = 99
@@ -66,6 +73,8 @@ match x:
 
 
 class TestCaptureMatch:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CAPTURE_PATTERN)
     def test_capture_binds_value(self):
         _, local_vars = _run_python("""\
 x = 42
@@ -77,6 +86,7 @@ match x:
 
 
 class TestFallThrough:
+    @covers(PythonFeature.PATTERN_MATCHING)
     def test_fall_through_to_default(self):
         _, local_vars = _run_python("""\
 x = 100
@@ -91,6 +101,7 @@ match x:
 """)
         assert local_vars[VarName("y")] == 999
 
+    @covers(PythonFeature.PATTERN_MATCHING)
     def test_no_match_no_crash(self):
         _, local_vars = _run_python("""\
 x = 100
@@ -105,6 +116,8 @@ match x:
 
 
 class TestTupleDestructure:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_tuple_destructure(self):
         _, local_vars = _run_python(
             """\
@@ -119,6 +132,8 @@ match point:
 
 
 class TestListDestructure:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_list_destructure(self):
         _, local_vars = _run_python(
             """\
@@ -133,6 +148,8 @@ match items:
 
 
 class TestNestedSequence:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_nested_sequence(self):
         _, local_vars = _run_python(
             """\
@@ -147,6 +164,8 @@ match data:
 
 
 class TestDictPattern:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.MAPPING_PATTERN)
     def test_dict_pattern(self):
         _, local_vars = _run_python(
             """\
@@ -161,6 +180,8 @@ match d:
 
 
 class TestOrPattern:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
     def test_or_pattern(self):
         _, local_vars = _run_python("""\
 x = 2
@@ -174,6 +195,8 @@ match x:
 
 
 class TestAsPattern:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.AS_PATTERN)
     def test_as_pattern(self):
         _, local_vars = _run_python("""\
 x = 42
@@ -185,6 +208,7 @@ match x:
 
 
 class TestGuard:
+    @covers(PythonFeature.PATTERN_MATCHING)
     def test_guard_filters(self):
         _, local_vars = _run_python("""\
 x = -5
@@ -198,6 +222,8 @@ match x:
 
 
 class TestClassPattern:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_class_keyword(self):
         _, local_vars = _run_python(
             """\
@@ -215,6 +241,8 @@ match p:
         )
         assert local_vars[VarName("result")] == 4
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_class_positional(self):
         _, local_vars = _run_python(
             """\
@@ -235,6 +263,8 @@ match p:
 
 
 class TestPositionalClassPattern:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_class_positional_with_match_args(self):
         """Point(3, b) with __match_args__ — b bound to 4."""
         _, local_vars = _run_python(
@@ -257,6 +287,8 @@ match p:
             and local_vars[VarName("result")] == 4
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_class_positional_two_captures(self):
         """Point(a, b) captures both fields via __match_args__."""
         _, local_vars = _run_python(
@@ -284,6 +316,9 @@ match p:
             and local_vars[VarName("rb")] == 4
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.LITERAL_PATTERN)
     def test_class_positional_literal_rejects(self):
         """Point(99, b) with non-matching x — falls to default."""
         _, local_vars = _run_python(
@@ -309,6 +344,10 @@ match p:
             and local_vars[VarName("result")] == "default"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_class_positional_in_sequence_with_star(self):
         """Positional class patterns inside a list with star — verify rest element fields+types."""
         vm, local_vars = _run_python(
@@ -370,6 +409,8 @@ match points:
         assert vm.heap_get(r0_addr).type_hint == scalar(TypeName("Point"))
         assert vm.heap_get(r1_addr).type_hint == scalar(TypeName("Point"))
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_nested_positional_line_of_points(self):
         """Line(Point(x1,y1), Point(x2,y2)) — nested positional resolution."""
         _, local_vars = _run_python(
@@ -403,6 +444,8 @@ match line:
             and local_vars[VarName("dy")] == 4
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_positional_with_guard_pythagorean(self):
         """Positional capture + guard using x*x + y*y."""
         _, local_vars = _run_python(
@@ -435,6 +478,9 @@ match p:
             isinstance(local_vars[VarName("y")], int) and local_vars[VarName("y")] == 4
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.OR_PATTERN)
     def test_or_pattern_with_positional_class_alternatives(self):
         """Or-pattern across Success(v) | Error(v) — positional on both."""
         _, local_vars = _run_python(
@@ -461,6 +507,11 @@ match result_obj:
             and local_vars[VarName("extracted")] == "not found"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_positional_in_or_inside_list_with_star(self):
         """Point(a,b) | Vec(a,b) as first element of list with star — verify rest contents."""
         vm, local_vars = _run_python(
@@ -528,6 +579,8 @@ match items:
         assert vm.heap_get(r0_addr).type_hint == scalar(TypeName("Point"))
         assert vm.heap_get(r1_addr).type_hint == scalar(TypeName("Point"))
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_three_level_deep_tree_positional(self):
         """Node(Node(Leaf(a), Leaf(b)), Leaf(c)) — 3 levels deep."""
         vm, local_vars = _run_python(
@@ -562,6 +615,8 @@ class TestComplexLiteralPattern:
     @pytest.mark.xfail(
         reason="Complex literal patterns not yet implemented (red-dragon-2qem)"
     )
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.LITERAL_PATTERN)
     def test_complex_pattern_rejects_mismatch(self):
         """1+2j pattern must reject 3+4j — currently matches anything."""
         _, local_vars = _run_python(
@@ -580,6 +635,8 @@ match z:
 
 
 class TestValuePatterns:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
     def test_value_pattern_class_constant(self):
         """case Color.RED: with matching value."""
         _, local_vars = _run_python(
@@ -605,6 +662,8 @@ match c:
             and local_vars[VarName("result")] == "red"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
     def test_value_pattern_rejects_mismatch(self):
         """case Color.RED: with non-matching value — falls to default."""
         _, local_vars = _run_python(
@@ -628,6 +687,8 @@ match c:
             and local_vars[VarName("result")] == "no match"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
     def test_value_pattern_multi_level(self):
         """Three-level dotted lookup."""
         _, local_vars = _run_python(
@@ -653,6 +714,9 @@ match code:
             and local_vars[VarName("result")] == "ok"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
+    @covers(PythonFeature.OR_PATTERN)
     def test_value_pattern_in_or(self):
         """case Color.RED | Color.GREEN: with matching value."""
         _, local_vars = _run_python(
@@ -676,6 +740,9 @@ match c:
             and local_vars[VarName("result")] == "warm"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_value_pattern_inside_tuple(self):
         """Value pattern as element of a tuple pattern."""
         _, local_vars = _run_python(
@@ -700,6 +767,8 @@ match data:
             and local_vars[VarName("result")] == "moving up"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
     def test_value_pattern_with_guard(self):
         """Value pattern combined with guard on a separate variable."""
         _, local_vars = _run_python(
@@ -726,6 +795,10 @@ match severity:
             and local_vars[VarName("result")] == "log"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_value_pattern_in_list_with_star(self):
         """Value pattern as first element of list with star capture."""
         _, local_vars = _run_python(
@@ -772,6 +845,9 @@ match instructions:
             and local_vars[VarName("op_2")] == 3
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_value_pattern_as_class_keyword(self):
         """Value pattern used as keyword argument in class pattern."""
         _, local_vars = _run_python(
@@ -802,6 +878,9 @@ match s:
             and local_vars[VarName("result")] == "red circle"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
+    @covers(PythonFeature.OR_PATTERN)
     def test_value_or_pattern_http_status(self):
         """Multiple value patterns in or-pattern across cases."""
         _, local_vars = _run_python(
@@ -831,6 +910,9 @@ match code:
             and local_vars[VarName("category")] == "client_error"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_value_pattern_in_positional_class(self):
         """Value pattern as positional arg in class pattern via __match_args__."""
         _, local_vars = _run_python(
@@ -865,6 +947,10 @@ match m:
             and local_vars[VarName("direction")] == "horizontal"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.VALUE_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_value_pattern_head_with_star_of_typed_objects(self):
         """Value pattern as list head + star rest of class instances — verify all fields and types."""
         vm, local_vars = _run_python(
@@ -929,6 +1015,9 @@ match commands:
 
 
 class TestOutOfScopePatterns:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_pattern_in_list(self):
         _, local_vars = _run_python(
             """\
@@ -941,6 +1030,9 @@ match items:
         )
         assert local_vars[VarName("result")] == 1
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_or_pattern_with_captures(self):
         _, local_vars = _run_python(
             """\
@@ -955,6 +1047,9 @@ match data:
 
 
 class TestNestedCrossPattern:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_nested_class_in_sequence(self):
         _, local_vars = _run_python(
             """\
@@ -972,6 +1067,9 @@ match data:
         )
         assert local_vars[VarName("result")] == 6
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.MAPPING_PATTERN)
     def test_nested_mapping_in_class(self):
         _, local_vars = _run_python(
             """\
@@ -990,6 +1088,9 @@ match cfg:
 
 
 class TestStarPatterns:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_at_end(self):
         vm, local_vars = _run_python(
             """\
@@ -1010,6 +1111,9 @@ match items:
         assert local_vars[VarName("rest_1")] == 3
         assert local_vars[VarName("rest_2")] == 4
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_at_beginning(self):
         _, local_vars = _run_python(
             """\
@@ -1028,6 +1132,9 @@ match items:
         assert local_vars[VarName("head_0")] == 1
         assert local_vars[VarName("head_1")] == 2
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_in_middle(self):
         _, local_vars = _run_python(
             """\
@@ -1050,6 +1157,9 @@ match items:
         assert local_vars[VarName("mid_1")] == 3
         assert local_vars[VarName("mid_2")] == 4
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_empty_rest(self):
         _, local_vars = _run_python(
             """\
@@ -1066,6 +1176,9 @@ match items:
         assert local_vars[VarName("result_b")] == 2
         assert local_vars[VarName("rest_len")] == 0
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_in_tuple(self):
         _, local_vars = _run_python(
             """\
@@ -1082,6 +1195,9 @@ match data:
         assert local_vars[VarName("rest_0")] == 20
         assert local_vars[VarName("rest_1")] == 30
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_minimum_length_rejects(self):
         _, local_vars = _run_python(
             """\
@@ -1097,6 +1213,9 @@ match items:
         )
         assert local_vars[VarName("result")] == "default"
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_wildcard_star_no_binding(self):
         _, local_vars = _run_python(
             """\
@@ -1109,6 +1228,9 @@ match items:
         )
         assert local_vars[VarName("result")] == 1
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_nested_star_pattern(self):
         _, local_vars = _run_python(
             """\
@@ -1135,6 +1257,10 @@ match data:
 class TestCompoundPatterns:
     """Complex scenarios combining multiple pattern types."""
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_array_of_points_with_star(self):
         """Class patterns inside a list with star — verify types + field values of rest."""
         vm, local_vars = _run_python(
@@ -1196,6 +1322,10 @@ match points:
         assert vm.heap_get(r0_addr).type_hint == scalar(TypeName("Point"))
         assert vm.heap_get(r1_addr).type_hint == scalar(TypeName("Point"))
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.MAPPING_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_dict_inside_sequence_with_star(self):
         """Dict pattern inside list with star — verify extracted fields + rest element fields."""
         _, local_vars = _run_python(
@@ -1232,6 +1362,8 @@ match data:
             and local_vars[VarName("rest0_age")] == 25
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_guard_with_sequence_captures(self):
         """Guard referencing captured variables from a tuple pattern."""
         _, local_vars = _run_python(
@@ -1262,6 +1394,8 @@ match data:
             and local_vars[VarName("rb")] == 20
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_class_pattern_with_guard(self):
         """Class keyword pattern with guard on field product — verify matched object type."""
         vm, local_vars = _run_python(
@@ -1300,6 +1434,9 @@ match r:
         r_addr = _heap_addr(local_vars[VarName("r")])
         assert vm.heap_get(r_addr).type_hint == scalar(TypeName("Rect"))
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.MAPPING_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_mixed_pattern_types_across_cases(self):
         """Dict matches before list — verify each captured field individually."""
         _, local_vars = _run_python(
@@ -1335,6 +1472,10 @@ match data:
             and local_vars[VarName("ry")] == 4
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_with_class_field_access(self):
         """Star captures rest of array after class-pattern head — verify types + all fields."""
         vm, local_vars = _run_python(
@@ -1396,6 +1537,8 @@ match cart:
         assert vm.heap_get(o0_addr).type_hint == scalar(TypeName("Item"))
         assert vm.heap_get(o1_addr).type_hint == scalar(TypeName("Item"))
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_guard_rejects_then_next_case_matches(self):
         """First case guard fails, second case (same pattern, different guard) matches."""
         _, local_vars = _run_python(
@@ -1421,6 +1564,11 @@ match data:
 class TestStressPatterns:
     """Complex compound scenarios that stress the pattern matching infrastructure."""
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.MAPPING_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_class_containing_dict_containing_list_with_star(self):
         """3-level nesting: Class -> dict -> list with star capture."""
         vm, local_vars = _run_python(
@@ -1463,6 +1611,9 @@ match resp:
         r_addr = _heap_addr(local_vars[VarName("resp")])
         assert vm.heap_get(r_addr).type_hint == scalar(TypeName("Response"))
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_multi_case_dispatch_with_guards(self):
         """Multiple cases with different pattern shapes + guards + fall-through."""
         vm, local_vars = _run_python(
@@ -1500,6 +1651,9 @@ match cmd:
         cmd_addr = _heap_addr(local_vars[VarName("cmd")])
         assert vm.heap_get(cmd_addr).type_hint == scalar(TypeName("Cmd"))
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.AS_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_as_pattern_wrapping_sequence(self):
         """As-pattern captures the whole subject after structural match succeeds."""
         _, local_vars = _run_python(
@@ -1521,6 +1675,8 @@ match data:
             and local_vars[VarName("rc")] == 3
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
     def test_many_alternative_or_pattern(self):
         """Or-pattern with 4+ alternatives per case across multiple cases."""
         _, local_vars = _run_python(
@@ -1543,6 +1699,8 @@ match status:
         assert isinstance(local_vars[VarName("category")], str)
         assert local_vars[VarName("category")] == "client_error"
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_binary_tree_nested_class_patterns(self):
         """3-level deep nested class patterns on a binary tree."""
         vm, local_vars = _run_python(
@@ -1581,6 +1739,8 @@ match tree:
         ll_addr = _heap_addr(vm.heap_get(left_addr).fields[FieldName("left")].value)
         assert vm.heap_get(ll_addr).type_hint == scalar(TypeName("Node"))
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_guard_with_pythagorean_computation(self):
         """Guard uses x*x + y*y == 25 on destructured class fields."""
         _, local_vars = _run_python(
@@ -1612,6 +1772,9 @@ match v:
             isinstance(local_vars[VarName("y")], int) and local_vars[VarName("y")] == 4
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_star_with_guard_on_rest_length(self):
         """Star capture with guard checking len(rest) > threshold."""
         _, local_vars = _run_python(
@@ -1642,6 +1805,8 @@ match items:
             and local_vars[VarName("rl")] == 4
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.MAPPING_PATTERN)
     def test_dict_pattern_all_fields_extracted(self):
         """Dict pattern matching and extracting all keys."""
         _, local_vars = _run_python(
@@ -1667,6 +1832,9 @@ match config:
 
 
 class TestOrPatternWithBindings:
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_or_pattern_tuple_with_captures(self):
         """case (1, x) | (2, x): with (2, 99) — x bound to 99."""
         _, local_vars = _run_python(
@@ -1683,6 +1851,9 @@ match data:
             and local_vars[VarName("result")] == 99
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_or_pattern_first_alternative_binds(self):
         """case (1, x) | (2, x): with (1, 77) — first alt matches, x bound to 77."""
         _, local_vars = _run_python(
@@ -1699,6 +1870,9 @@ match data:
             and local_vars[VarName("result")] == 77
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_or_pattern_list_with_captures(self):
         """case [1, y] | [2, y]: with [2, 42] — y bound to 42."""
         _, local_vars = _run_python(
@@ -1715,6 +1889,9 @@ match data:
             and local_vars[VarName("result")] == 42
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_or_pattern_no_match_falls_through(self):
         """Neither alternative matches — falls to default."""
         _, local_vars = _run_python(
@@ -1734,6 +1911,9 @@ match data:
             and local_vars[VarName("result")] == "default"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.CLASS_PATTERN)
     def test_or_pattern_with_class_alternatives(self):
         """Or-pattern across different class types sharing a field name."""
         _, local_vars = _run_python(
@@ -1760,6 +1940,10 @@ match pet:
             and local_vars[VarName("result")] == "Whiskers"
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.STAR_PATTERN)
     def test_or_pattern_with_star_in_alternatives(self):
         """Or-pattern where each alternative uses star capture."""
         _, local_vars = _run_python(
@@ -1781,6 +1965,10 @@ match data:
             and local_vars[VarName("rest_len")] == 3
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
+    @covers(PythonFeature.LITERAL_PATTERN)
     def test_or_pattern_nested_inside_sequence(self):
         """Or-pattern as an element inside a tuple pattern."""
         _, local_vars = _run_python(
@@ -1799,6 +1987,9 @@ match data:
             and local_vars[VarName("result")] == 404
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_or_pattern_with_guard_on_capture(self):
         """Or-pattern with guard referencing the captured variable."""
         _, local_vars = _run_python(
@@ -1823,6 +2014,9 @@ match data:
             and local_vars[VarName("rv")] == 100
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.MAPPING_PATTERN)
     def test_or_pattern_with_mapping_alternatives(self):
         """Or-pattern across dict patterns sharing a key."""
         _, local_vars = _run_python(
@@ -1841,6 +2035,9 @@ match event:
             and local_vars[VarName("result")] == 42
         )
 
+    @covers(PythonFeature.PATTERN_MATCHING)
+    @covers(PythonFeature.OR_PATTERN)
+    @covers(PythonFeature.SEQUENCE_PATTERN)
     def test_three_way_or_pattern(self):
         """Three alternatives in an or-pattern, third matches."""
         _, local_vars = _run_python(

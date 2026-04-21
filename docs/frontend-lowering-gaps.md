@@ -1,10 +1,10 @@
 # Frontend Feature Coverage Gaps
 
-**Generated**: 2026-04-21
+**Generated**: 2026-04-22
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 956 features across 16 languages — 758 covered, 198 uncovered
+**Totals**: 956 features across 16 languages — 769 covered, 187 uncovered
 
 ---
 
@@ -23,7 +23,7 @@
 | lua | 25 | 19 | 6 ⚠ | 76% |
 | pascal | 47 | 38 | 9 ⚠ | 80% |
 | php | 55 | 46 | 9 ⚠ | 83% |
-| python | 55 | 35 | 20 ⚠ | 63% |
+| python | 55 | 46 | 9 ⚠ | 83% |
 | ruby | 72 | 67 | 5 ⚠ | 93% |
 | rust | 60 | 46 | 14 ⚠ | 76% |
 | scala | 53 | 43 | 10 ⚠ | 81% |
@@ -194,26 +194,15 @@
 
 ### python
 
-- `AS_PATTERN` — case P as x: pattern with alias binding
 - `ATTRIBUTE_ACCESS` — obj.attr attribute access expressions
 - `AUGMENTED_ASSIGNMENT` — +=, -=, *=, /= and other augmented assignments
-- `CAPTURE_PATTERN` — case x: name capture in match cases
-- `CLASS_PATTERN` — case Cls(x=a): class attribute destructuring
 - `CONDITIONAL_EXPRESSION` — a if cond else b ternary expressions
 - `DEFAULT_PARAMETERS` — function parameters with default values
-- `IMPORT_FROM` — from module import name statements
-- `LITERAL_PATTERN` — case 42 or case "str": literal matching
-- `MAPPING_PATTERN` — case {"key": v}: mapping destructuring patterns
-- `OR_PATTERN` — case P | Q: alternative patterns
 - `PARENTHESIZED_EXPRESSION` — expressions wrapped in parentheses
-- `PATTERN_MATCHING` — match statement with case clauses
 - `RAISE_STATEMENT` — raise ExcType(...) exception raising
-- `SEQUENCE_PATTERN` — case [a, b]: sequence destructuring patterns
-- `STAR_PATTERN` — case [a, *rest]: star wildcard in sequence patterns
 - `SUBSCRIPT_ACCESS` — obj[key] subscript / index access
 - `TUPLE_UNPACKING` — a, b = value and (a, b) = value destructuring
 - `TYPE_HINTS` — function and variable type annotations
-- `VALUE_PATTERN` — case Enum.MEMBER: dotted value patterns
 
 ### ruby
 

@@ -9,9 +9,12 @@ from __future__ import annotations
 from tests.unit.rosetta.conftest import execute_for_language
 from interpreter.var_name import VarName
 from interpreter.types.typed_value import unwrap
+from tests.covers import covers
+from interpreter.frontends.python.features import PythonFeature
 
 
 class TestListComprehensionScopingExecution:
+    @covers(PythonFeature.LIST_COMPREHENSION)
     def test_outer_var_preserved_after_comprehension(self):
         """x=99 should survive [x for x in [1,2,3]]."""
         vm, stats = execute_for_language(
@@ -27,6 +30,7 @@ answer = x
 
 
 class TestDictComprehensionScopingExecution:
+    @covers(PythonFeature.DICT_COMPREHENSION)
     def test_outer_var_preserved_after_dict_comprehension(self):
         """k=99 should survive {k: k for k in [1,2,3]}."""
         vm, stats = execute_for_language(
@@ -42,6 +46,7 @@ answer = k
 
 
 class TestSetComprehensionScopingExecution:
+    @covers(PythonFeature.SET_COMPREHENSION)
     def test_outer_var_preserved_after_set_comprehension(self):
         """x=99 should survive {x for x in [1,2,3]}."""
         vm, stats = execute_for_language(
@@ -57,6 +62,7 @@ answer = x
 
 
 class TestGeneratorExpressionScopingExecution:
+    @covers(PythonFeature.GENERATOR_EXPRESSION)
     def test_outer_var_preserved_after_generator(self):
         """x=99 should survive list(x for x in [1,2,3])."""
         vm, stats = execute_for_language(

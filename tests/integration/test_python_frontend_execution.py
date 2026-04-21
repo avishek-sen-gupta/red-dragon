@@ -7,9 +7,12 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from tests.covers import covers
+from interpreter.frontends.python.features import PythonFeature
 
 
 class TestPythonFutureImportExecution:
+    @covers(PythonFeature.IMPORT_FROM)
     def test_future_import_does_not_crash(self):
         """from __future__ import annotations should execute without errors."""
         vm = run(
@@ -21,6 +24,8 @@ class TestPythonFutureImportExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("answer")] == 42
 
+    @covers(PythonFeature.IMPORT_FROM)
+    @covers(PythonFeature.ARITHMETIC)
     def test_future_import_with_arithmetic(self):
         """Future import followed by arithmetic should not interfere."""
         source = """\
@@ -40,6 +45,7 @@ answer = y
 
 
 class TestPythonIdentityOperatorsExecution:
+    @covers(PythonFeature.COMPARISON)
     def test_is_none_true(self):
         """'x is None' should evaluate to True when x is None."""
         vm = run(
@@ -51,6 +57,7 @@ class TestPythonIdentityOperatorsExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is True
 
+    @covers(PythonFeature.COMPARISON)
     def test_is_none_false(self):
         """'x is None' should evaluate to False when x is not None."""
         vm = run(
@@ -62,6 +69,7 @@ class TestPythonIdentityOperatorsExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is False
 
+    @covers(PythonFeature.COMPARISON)
     def test_is_not_none_true(self):
         """'x is not None' should evaluate to True when x is not None."""
         vm = run(
@@ -73,6 +81,7 @@ class TestPythonIdentityOperatorsExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is True
 
+    @covers(PythonFeature.COMPARISON)
     def test_is_not_none_false(self):
         """'x is not None' should evaluate to False when x is None."""
         vm = run(
@@ -84,6 +93,7 @@ class TestPythonIdentityOperatorsExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is False
 
+    @covers(PythonFeature.COMPARISON)
     def test_not_in_list_true(self):
         """'5 not in [1, 2, 3]' should evaluate to True."""
         vm = run(
@@ -95,6 +105,7 @@ class TestPythonIdentityOperatorsExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is True
 
+    @covers(PythonFeature.COMPARISON)
     def test_in_list_true(self):
         """'2 in [1, 2, 3]' should evaluate to True."""
         vm = run(
@@ -106,6 +117,7 @@ class TestPythonIdentityOperatorsExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is True
 
+    @covers(PythonFeature.COMPARISON)
     def test_in_list_false(self):
         """'5 in [1, 2, 3]' should evaluate to False."""
         vm = run(
@@ -117,6 +129,8 @@ class TestPythonIdentityOperatorsExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] is False
 
+    @covers(PythonFeature.COMPARISON)
+    @covers(PythonFeature.IF_ELSE)
     def test_not_in_list_branch_taken(self):
         """'if x not in [1,2,3]: result = 99' should execute the branch when x=5."""
         source = """\
@@ -133,6 +147,8 @@ if x not in [1, 2, 3]:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars[VarName("result")] == 99
 
+    @covers(PythonFeature.COMPARISON)
+    @covers(PythonFeature.IF_ELSE)
     def test_not_in_list_branch_skipped(self):
         """'if x not in [1,2,3]: result = 99' should skip the branch when x=2."""
         source = """\
