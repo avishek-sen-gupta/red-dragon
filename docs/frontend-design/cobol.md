@@ -43,9 +43,9 @@ The pipeline has three layers, each independently testable:
 |------|---------|
 | `cobol_frontend.py` | Main frontend: DATA DIVISION allocation, PROCEDURE DIVISION lowering |
 | `cobol_statements.py` | Typed statement hierarchy — 25 frozen dataclasses + union type |
-| `features.py` | `CobolFeature` enum — 95 semantic features; used with `@covers(CobolFeature.X)` test decorators |
+| `features.py` | `CobolFeature` enum — 112 semantic features; used with `@covers(CobolFeature.X)` test decorators |
 | `io_provider.py` | Injectable I/O provider: `CobolIOProvider` ABC, `NullIOProvider`, `StubIOProvider` |
-| `cobol_expression.py` | Recursive-descent expression parser for COMPUTE |
+| `cobol_expression.py` | `ExprNode` union type (`LiteralNode | FieldRefNode | RefModNode | BinOpNode`) + `expr_from_dict()` deserializer; legacy `parse_expression` tokenizer retained for standalone tests |
 | `cobol_parser.py` | Subprocess bridge to ProLeap JAR |
 | `asg_types.py` | `CobolASG`, `CobolSection`, `CobolParagraph`, `CobolField` |
 | `cobol_types.py` | `CobolDataCategory` enum, `CobolTypeDescriptor` |
@@ -177,7 +177,7 @@ At the end of each paragraph, `RESUME_CONTINUATION "para_WORK_end"` returns to t
 
 ## String Operation Builtins
 
-String operations use 5 low-level builtins registered in `byte_builtins.py`:
+String operations use 7 low-level builtins registered in `byte_builtins.py`:
 
 | Builtin | Signature | Purpose |
 |---|---|---|
@@ -186,6 +186,8 @@ String operations use 5 low-level builtins registered in `byte_builtins.py`:
 | `__string_count` | `(source, pattern, mode) → int` | Count occurrences (mode: all/leading/characters) |
 | `__string_replace` | `(source, from, to, mode) → str` | Replace occurrences (mode: all/leading/first) |
 | `__string_concat` | `(parts) → str` | Concatenate list of strings |
+| `__string_slice__` | `(source, start, length) → str` | Extract substring (0-based start, exclusive end); used for reference modification reads |
+| `__string_splice__` | `(source, start, length, replacement) → str` | Replace substring (0-based start); used for reference modification writes |
 
 These are composed into IR instruction sequences via builders in `ir_encoders.py` (`build_string_split_ir`, `build_inspect_tally_ir`, `build_inspect_replace_ir`). The composed IR is inlined at each lowering site, keeping all operations visible to data-flow analysis.
 
@@ -221,7 +223,14 @@ LABEL search_end:
 
 ## Condition Lowering
 
-`_lower_condition()` parses simple condition strings of the form `"field OP value"` where OP is `>`, `<`, `>=`, `<=`, `=`, or `NOT =`. Each side is resolved as either a field decode or a literal constant, producing a `BINOP` comparison.
+Conditions are serialized by the Java bridge as recursive JSON trees (not raw source text). Each node carries a `"kind"` discriminant:
+
+- `{"kind": "relation", "left": ..., "right": ..., "op": "EQ"|"GT"|"LT"|...}` — relational comparison
+- `{"kind": "and"|"or", "left": ..., "right": ...}` — compound condition
+- `{"kind": "not", "expr": ...}` — negation
+- `{"kind": "condition_name", "name": "COND-88-NAME"}` — 88-level condition name test
+
+`_lower_condition()` deserializes this tree and recursively emits IR: leaf relation nodes produce a `BINOP` comparison; compound nodes chain via `BRANCH_IF` with short-circuit blocks.
 
 ## Differences from Tree-Sitter Frontends
 
@@ -289,6 +298,18 @@ Full-pipeline tests in `tests/integration/test_cobol_programs.py` exercise real 
 | STRING | `TestStringStatement` | DELIMITED BY SIZE concatenation into PIC X target |
 | UNSTRING | `TestUnstringStatement` | DELIMITED BY SPACES splitting into multiple targets |
 | Combined program | `TestCombinedProgram` | Arithmetic + IF + PERFORM TIMES + GO TO |
+| MOVE CORRESPONDING | `TestMoveCorresponding` | Group-to-group field matching by name |
+| Figurative constants | `TestFigurativeConstants` | SPACES, ZEROS, HIGH-VALUES, LOW-VALUES, QUOTES |
+| Reference modification (MOVE) | `TestMoveRefMod` | Source and target `WS-FIELD(start:length)` slice semantics |
+| Reference modification (DISPLAY) | `TestDisplayRefMod` | `DISPLAY WS-FIELD(start:length)` operand slicing |
+| Reference modification (STRING/UNSTRING) | `TestStringRefMod`, `TestUnstringRefMod` | Sending-item and source slicing |
+| Reference modification (INSPECT) | `TestInspectRefMod` | Subject slicing on TALLYING and REPLACING |
+| Reference modification (arithmetic) | `TestArithmeticRefMod` | Source ref_mod in ADD, SUBTRACT, MULTIPLY, DIVIDE |
+| Reference modification (COMPUTE) | `TestComputeRefMod` | `WS-FIELD(start:length)` in arithmetic expressions |
+| ON SIZE ERROR | `TestOnSizeError` | Overflow detection in ADD/SUBTRACT/MULTIPLY/DIVIDE + div-by-zero |
+| COMPUTE ON SIZE ERROR | `TestComputeOnSizeError` | Overflow detection in COMPUTE expressions |
+| 88-level conditions | `TestLevel88Condition` | Condition name resolution via BRANCH_IF |
+| REDEFINES | `TestRedefines` | Field overlay and type reuse |
 
 #### Not covered (with rationale)
 

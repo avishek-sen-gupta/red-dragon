@@ -48,7 +48,7 @@ This document captures key architectural decisions made during the development o
 
 **Context:** Supporting languages without tree-sitter grammars required an alternative lowering path. Using an LLM as a "reasoning engine" to analyse code produces inconsistent, hallucination-prone results.
 
-**Decision:** Constrain the LLM to act as a **compiler frontend**: the prompt provides all 27 opcode schemas (see [IR Reference](ir-reference.md)), concrete patterns for functions/classes/control flow, and a full worked example. The LLM's job is mechanical translation, not reasoning. Output is structured JSON matching the IR schema.
+**Decision:** Constrain the LLM to act as a **compiler frontend**: the prompt provides a pragmatic subset of the 33 opcode schemas (see [IR Reference](ir-reference.md)), concrete patterns for functions/classes/control flow, and a full worked example. The LLM's job is mechanical translation, not reasoning. Output is structured JSON matching the IR schema.
 
 **Consequences:** LLM output is far more consistent because the task is pattern-matching rather than open-ended reasoning. Any language the LLM has seen in training can be lowered. The trade-off is that the prompt is large (~2K tokens) and quality depends on the LLM's familiarity with the source language.
 
@@ -2741,3 +2741,40 @@ A new builtin `_builtin_py_contains(args, vm)` is registered as `FuncName("__py_
 The `is` and `is not` operators continue to use the existing `BINOP IS` / `BINOP IS_NOT` path because they operate on concrete Python object identity, which works fine in `BINOP_TABLE`.
 
 **Consequences:** `x in [literal_list]` and `x not in [literal_list]` produce concrete booleans in VM execution. `BINOP_TABLE` remains pure (no `vm` threading). The pattern generalises: any language needing heap-aware containment can add a language-prefixed builtin following the same convention.
+
+---
+
+### ADR-141: Replace SLICE/SPLICE opcodes with `__string_slice`/`__string_splice` builtins (2026-04-18)
+
+**Context:** An early implementation of COBOL reference modification added two dedicated IR opcodes (`SLICE` and `SPLICE`) to the 33-opcode universal IR. This swelled the opcode count and introduced COBOL-specific concepts into the language-agnostic IR layer. Downstream consumers (LLM frontend, MCP server, dataflow analysis) all had to be updated every time an opcode was added or removed.
+
+**Decision:** Remove `SLICE` and `SPLICE` opcodes. Replace them with ordinary `CALL_FUNCTION` instructions targeting two new VM builtins registered as `FuncName("__string_slice__")` and `FuncName("__string_splice__")`. The COBOL lowering layer emits these calls wherever a reference modification slice or in-place write is needed.
+
+**Rejected alternative:** Keep dedicated opcodes but mark them as "COBOL-only" in metadata — rejected because the IR was designed as a universal abstraction; language-specific opcodes break that invariant and force non-COBOL frontends to be aware of them.
+
+**Consequences:** The opcode count stays at 33. The IR remains language-agnostic. Adding new language-specific string operations follows the same builtin-registration pattern without touching the IR schema. The trade-off is that the call instruction for a slice is syntactically identical to any other function call, so tooling must inspect the function name to recognise it as a built-in string operation.
+
+---
+
+### ADR-142: Structured condition serialization for COBOL relation conditions (2026-04-18)
+
+**Context:** COBOL `IF` and `PERFORM UNTIL` conditions were serialized from the ProLeap AST as flat strings (raw source text via `getCtx().getText()`). The Python condition parser then re-tokenized and re-parsed these strings, with a custom recursive-descent parser separate from the IR expression pipeline. Compound conditions (`A > B AND C = D`) were difficult to extend and required maintaining two parsers.
+
+**Decision:** Extend the Java bridge to walk ProLeap's condition AST recursively and emit a normalized JSON condition tree (same structural style as the arithmetic expression tree introduced later in ADR-143). Relation conditions become `{"kind": "relation", "left": ..., "right": ..., "op": ...}`; compound conditions use `{"kind": "and"/"or"/"not", ...}`. Python deserializes the tree directly and lowers via the existing `lower_condition` pipeline.
+
+**Consequences:** Condition lowering is aligned with the IR expression pipeline. The flat-string parser is no longer on the critical path for new condition features. Compound conditions with parenthesized sub-expressions serialize and lower correctly without special-casing.
+
+---
+
+### ADR-143: Structured arithmetic expression tree for COMPUTE reference modification (2026-04-21)
+
+**Context:** COBOL `COMPUTE` statements serialized their arithmetic expression as raw source text and re-parsed it in Python using `parse_expression` / `tokenize_expression` — a custom tokenizer/recursive-descent parser pair. Reference modification syntax (`WS-FIELD(1:3)`) uses a colon inside parentheses; the tokenizer silently dropped it, making ref_mod in COMPUTE expressions impossible to implement.
+
+Three approaches were considered:
+- **Approach A — Extend the string tokenizer** to recognise `NAME(start:length)` syntax. Rejected: fragile; the tokenizer is already a bespoke mini-language.
+- **Approach B — Regex pre-processing** to extract ref_mod before tokenizing. Rejected: breaks nested expressions.
+- **Approach C (chosen) — Structured JSON expression tree from the Java bridge.**
+
+**Decision:** The Java bridge walks ProLeap's `ArithmeticValueStmt` AST and emits a normalized JSON binary tree: `{"kind": "lit"/"ref"/"binop"/"neg", ...}`. Field references that carry reference modification emit `"ref_mod_start"` and `"ref_mod_length"` sub-keys. Python deserializes the tree into the `ExprNode` union type (`LiteralNode | FieldRefNode | RefModNode | BinOpNode`) via a new `expr_from_dict` function. `ComputeStatement.expression` was migrated from `str` to `ExprNode`. The old `parse_expression` call in `lower_compute` was removed.
+
+**Consequences:** Reference modification is fully supported in `COMPUTE` expressions. The expression pipeline is unified: the same `ExprNode` union and `lower_expr_node` lowerer handle both `COMPUTE` and condition expressions. The bespoke string tokenizer is retained only for legacy compatibility; no new features should be added to it. The trade-off is that the Java bridge is now responsible for correct arithmetic AST walking, adding a test burden on the bridge layer.
