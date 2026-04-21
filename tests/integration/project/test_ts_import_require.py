@@ -20,6 +20,8 @@ from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
+from tests.covers import covers
+from interpreter.frontends.typescript.features import TypeScriptFeature
 
 # ── Source fixtures ────────────────────────────────────────────────
 
@@ -103,6 +105,7 @@ def _local_vars(vm):
 class TestTsImportRequireFunction:
     """import utils = require('./utils'); — linking and IR generation."""
 
+    @covers(TypeScriptFeature.REQUIRE_IMPORT)
     def test_linked_ir_contains_dependency_function(self, ts_func_project: Path):
         """After linking, merged IR should contain the 'add' function from utils.ts."""
         linked = compile_directory(ts_func_project, Language.TYPESCRIPT)
@@ -116,6 +119,7 @@ class TestTsImportRequireFunction:
             "add" in label for label in ir_labels
         ), f"'add' function not in linked IR labels: {ir_labels[:20]}"
 
+    @covers(TypeScriptFeature.REQUIRE_IMPORT)
     def test_require_stores_variable(self, ts_func_project: Path):
         """The require() call should store 'utils' in scope (even as symbolic)."""
         linked = compile_directory(ts_func_project, Language.TYPESCRIPT)
@@ -125,6 +129,7 @@ class TestTsImportRequireFunction:
             VarName("utils") in lvars
         ), f"'utils' not in scope after require: {list(lvars.keys())}"
 
+    @covers(TypeScriptFeature.REQUIRE_IMPORT)
     def test_answer_variable_in_scope(self, ts_func_project: Path):
         """The downstream variable 'answer' should exist in scope."""
         linked = compile_directory(ts_func_project, Language.TYPESCRIPT)
@@ -134,6 +139,7 @@ class TestTsImportRequireFunction:
             VarName("answer") in lvars
         ), f"'answer' not in scope: {list(lvars.keys())}"
 
+    @covers(TypeScriptFeature.REQUIRE_IMPORT)
     def test_require_emits_call_function_in_ir(self, ts_func_project: Path):
         """Merged IR should contain a CALL_FUNCTION for 'require'."""
         linked = compile_directory(ts_func_project, Language.TYPESCRIPT)
@@ -153,6 +159,7 @@ class TestTsImportRequireFunction:
 class TestTsImportRequireClass:
     """import greeter = require('./greeter'); — linking and IR generation."""
 
+    @covers(TypeScriptFeature.REQUIRE_IMPORT)
     def test_linked_ir_contains_class(self, ts_class_project: Path):
         """After linking, merged IR should contain the 'Greeter' class."""
         linked = compile_directory(ts_class_project, Language.TYPESCRIPT)
@@ -166,6 +173,7 @@ class TestTsImportRequireClass:
             "Greeter" in label for label in ir_labels
         ), f"'Greeter' class not in linked IR labels: {ir_labels[:20]}"
 
+    @covers(TypeScriptFeature.REQUIRE_IMPORT)
     def test_require_stores_variable(self, ts_class_project: Path):
         """The require() call should store 'greeter' in scope."""
         linked = compile_directory(ts_class_project, Language.TYPESCRIPT)
@@ -175,6 +183,7 @@ class TestTsImportRequireClass:
             VarName("greeter") in lvars
         ), f"'greeter' not in scope after require: {list(lvars.keys())}"
 
+    @covers(TypeScriptFeature.REQUIRE_IMPORT)
     def test_g_variable_in_scope(self, ts_class_project: Path):
         """The Greeter instance 'g' should exist in scope."""
         linked = compile_directory(ts_class_project, Language.TYPESCRIPT)

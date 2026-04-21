@@ -11,6 +11,8 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
 from interpreter.project.entry_point import EntryPoint
+from tests.covers import covers
+from interpreter.frontends.csharp.features import CSharpFeature
 
 
 def _run_csharp(source: str, max_steps: int = 500) -> dict:
@@ -92,6 +94,7 @@ int x = checked(a + b);
 
 
 class TestCSharpFileScopedNamespaceExecution:
+    @covers(CSharpFeature.FILE_SCOPED_NAMESPACE)
     def test_class_in_file_scoped_ns_executes(self):
         """Class inside file-scoped namespace should be accessible."""
         locals_ = _run_csharp("""\
@@ -115,6 +118,8 @@ class TestCSharpRangeExpressionExecution:
 class TestCSharpConstructorChainingExecution:
     """C# : this(args) constructor chaining with field initializers."""
 
+    @covers(CSharpFeature.CONSTRUCTOR)
+    @covers(CSharpFeature.CONSTRUCTOR_CHAINING)
     def test_single_field_constructor_chaining(self):
         """Two-arg constructor delegates to one-arg via : this(v + scale)."""
         locals_ = _run_csharp(
@@ -131,6 +136,8 @@ int answer = b.value;
         )
         assert locals_[VarName("answer")] == 7
 
+    @covers(CSharpFeature.CONSTRUCTOR)
+    @covers(CSharpFeature.CONSTRUCTOR_CHAINING)
     def test_chaining_with_field_initializer(self):
         """Field initializer should exist after constructor chaining."""
         locals_ = _run_csharp(
@@ -149,6 +156,8 @@ int answer = c.Total();
         )
         assert locals_[VarName("answer")] == 17
 
+    @covers(CSharpFeature.CONSTRUCTOR)
+    @covers(CSharpFeature.CONSTRUCTOR_CHAINING)
     def test_chaining_body_reads_field_by_bare_name(self):
         """After : this(...), constructor body can read fields via implicit this."""
         locals_ = _run_csharp(

@@ -449,7 +449,7 @@ class TestTypeScriptDestructuring:
 
 
 class TestTypeScriptAbstractClass:
-    @covers(TypeScriptFeature.CLASS)
+    @covers(TypeScriptFeature.ABSTRACT_CLASS)
     def test_abstract_class_basic(self):
         source = """\
 abstract class Shape {
@@ -465,7 +465,7 @@ abstract class Shape {
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class_" in str(inst.operands) for inst in consts)
 
-    @covers(TypeScriptFeature.CLASS)
+    @covers(TypeScriptFeature.ABSTRACT_CLASS)
     def test_abstract_class_with_constructor(self):
         source = """\
 abstract class Animal {
@@ -482,7 +482,7 @@ abstract class Animal {
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("name" in inst.operands for inst in store_fields)
 
-    @covers(TypeScriptFeature.CLASS)
+    @covers(TypeScriptFeature.ABSTRACT_CLASS)
     def test_abstract_class_with_concrete_method(self):
         source = """\
 abstract class Base {
@@ -512,7 +512,7 @@ class Foo {
             "public_field_definition" in str(inst.operands) for inst in symbolics
         )
 
-    @covers(TypeScriptFeature.VARIABLE_DECLARATION)
+    @covers(TypeScriptFeature.PUBLIC_FIELD)
     def test_public_field_store_var(self):
         source = """\
 class Foo {
@@ -523,7 +523,7 @@ class Foo {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("count" in inst.operands for inst in stores)
 
-    @covers(TypeScriptFeature.VARIABLE_DECLARATION)
+    @covers(TypeScriptFeature.PUBLIC_FIELD)
     def test_public_field_no_value(self):
         source = """\
 class Foo {
@@ -573,7 +573,7 @@ namespace Geometry {
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
-    @covers(TypeScriptFeature.VARIABLE_DECLARATION)
+    @covers(TypeScriptFeature.NAMESPACE)
     def test_internal_module_lowers_body(self):
         source = """\
 namespace Utils {
@@ -953,7 +953,7 @@ class TestTypeScriptImportAlias:
         ]
         assert not symbolics, f"import_alias produced SYMBOLIC: {symbolics}"
 
-    @covers(TypeScriptFeature.VARIABLE_DECLARATION)
+    @covers(TypeScriptFeature.IMPORT_ALIAS)
     def test_import_alias_stores_var(self):
         """import Foo = Bar.Baz should emit STORE_VAR Foo."""
         ir = _parse_ts("import Foo = Bar.Baz;")
@@ -966,7 +966,7 @@ class TestTypeScriptImportAlias:
         ]
         assert len(stores) >= 1
 
-    @covers(TypeScriptFeature.VARIABLE_DECLARATION)
+    @covers(TypeScriptFeature.IMPORT_ALIAS)
     def test_import_alias_simple_identifier(self):
         """import Foo = Bar should emit LOAD_VAR Bar + STORE_VAR Foo."""
         ir = _parse_ts("import Foo = Bar;")

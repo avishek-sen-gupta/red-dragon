@@ -8,7 +8,7 @@ from interpreter.ir import Opcode, SpreadArguments
 from interpreter.instructions import InstructionBase
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from interpreter.frontends.javascript.features import JavaScriptFeature
-from tests.covers import covers
+from tests.covers import covers, FeatureStatus
 
 
 def _parse_js(source: str) -> list[InstructionBase]:
@@ -1166,7 +1166,7 @@ class TestJSStringFragment:
 
 
 class TestJavaScriptExportClause:
-    @covers(JavaScriptFeature.EXPORT)
+    @covers(JavaScriptFeature.EXPORT_REEXPORT, status=FeatureStatus.UNSUPPORTED)
     def test_export_clause_no_unsupported(self):
         """export { a, b } from './module' should not produce unsupported SYMBOLIC."""
         source = 'export { a, b } from "./module";'
@@ -1174,7 +1174,7 @@ class TestJavaScriptExportClause:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
-    @covers(JavaScriptFeature.EXPORT)
+    @covers(JavaScriptFeature.EXPORT_NAMED, status=FeatureStatus.UNSUPPORTED)
     def test_export_clause_basic(self):
         source = 'export { foo, bar } from "./lib";'
         instructions = _parse_js(source)
