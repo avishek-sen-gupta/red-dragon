@@ -193,4 +193,6 @@ fileignoreconfig:
   checksum: 001516911142703e764f44bec3df9f8cee3d9e9525396a083ca2bf84bdfaeb8b
 - filename: docs/superpowers/plans/2026-04-21-compute-ref-mod.md
   checksum: ede78bb10fe82271d5f477eb43694647bf6f92a7ef5ae76ffb2f1b12120625cb
+- filename: .beads/backup/issues.jsonl
+  checksum: c57b8be5886c6da5c3d52b4c5dbab114af22aeac80a942dea50e6c4f0de3c1d8
 version: "1.0"
