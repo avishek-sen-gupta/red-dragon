@@ -10,13 +10,16 @@ from interpreter.cobol.cobol_expression import (
     ExprNode,
     FieldRefNode,
     LiteralNode,
+    RefModNode,
 )
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name import ConditionValue
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.func_name import FuncName
 from interpreter.operator_kind import resolve_binop
-from interpreter.instructions import Binop, Const
+from interpreter.instructions import Binop, Const, CallFunction
 from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
@@ -398,6 +401,37 @@ def lower_expr_node(
                 operator=resolve_binop(node.op),
                 left=Register(str(left_reg)),
                 right=Register(str(right_reg)),
+            )
+        )
+        return result_reg
+    if isinstance(node, RefModNode):
+        ref = ctx.resolve_field_ref(node.name, layout, region_reg)
+        full_str_reg = ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+        start_1based_reg = lower_expr_node(ctx, node.ref_mod_start, layout, region_reg)
+        one_reg = ctx.const_to_reg(1)
+        start_0based_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=start_0based_reg,
+                operator=resolve_binop("-"),
+                left=Register(str(start_1based_reg)),
+                right=Register(str(one_reg)),
+            )
+        )
+        if node.ref_mod_length is not None:
+            length_reg = lower_expr_node(ctx, node.ref_mod_length, layout, region_reg)
+        else:
+            length_reg = ctx.const_to_reg(999999)
+        result_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=result_reg,
+                func_name=FuncName(BuiltinName.STRING_SLICE),
+                args=(
+                    Register(str(full_str_reg)),
+                    Register(str(start_0based_reg)),
+                    Register(str(length_reg)),
+                ),
             )
         )
         return result_reg
