@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from interpreter.api import build_cfg_from_source
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.c.features import CFeature
-from interpreter.parser import TreeSitterParserFactory
+from interpreter.instructions import BranchIf, InstructionBase
 from interpreter.ir import Opcode
-from interpreter.instructions import InstructionBase
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from tests.covers import covers
@@ -194,7 +195,7 @@ void f() {
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(ir, Opcode.LABEL)
         label_names = [str(lbl.label) for lbl in labels]
-        for_labels = [l for l in label_names if l and "for_" in l]
+        for_labels = [lbl for lbl in label_names if lbl and "for_" in lbl]
         assert len(for_labels) >= 2
 
 
@@ -260,7 +261,7 @@ int result = c.radius;
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
         load_fields = _find_all(ir, Opcode.LOAD_FIELD)
         radius_stores = [s for s in store_fields if "radius" in s.operands]
-        radius_loads = [l for l in load_fields if "radius" in l.operands]
+        radius_loads = [load for load in load_fields if "radius" in load.operands]
         assert len(radius_stores) >= 1
         assert len(radius_loads) >= 1
 
@@ -1011,3 +1012,34 @@ struct Node { int value; struct Node* next; };
         ir = _parse_and_lower("int arr[] = {1, 2, 3};")
         new_arrays = _find_all(ir, Opcode.NEW_ARRAY)
         assert len(new_arrays) >= 1, "Array init should still use NEW_ARRAY"
+
+
+class TestCFrontendTernaryOperator:
+    @covers(CFeature.TERNARY_OPERATOR)
+    def test_c_ternary_operator(self) -> None:
+        source = """
+        int test_func(int condition) {
+            int result = condition ? 42 : 99;
+            return result;
+        }
+        """
+        cfg = build_cfg_from_source(source, "c", function_name="test_func")
+
+        # Verify the structure: conditional branch and a merge point
+        branch_block = cfg.blocks[cfg.entry]
+        branch_inst = branch_block.instructions[-1]
+        assert isinstance(branch_inst, BranchIf)
+
+        true_label, false_label = branch_inst.branch_targets
+        assert true_label.value.startswith("ternary_true")
+        assert false_label.value.startswith("ternary_false")
+
+        true_block = cfg.blocks[true_label]
+        false_block = cfg.blocks[false_label]
+
+        # Verify both branches merge
+        assert len(true_block.successors) == 1
+        assert len(false_block.successors) == 1
+        merge_label = true_block.successors[0]
+        assert merge_label == false_block.successors[0]
+        assert merge_label.value.startswith("ternary_end")

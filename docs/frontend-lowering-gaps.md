@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 956 features across 16 languages — 784 covered, 172 uncovered
+**Totals**: 956 features across 16 languages — 785 covered, 171 uncovered
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
-| c | 48 | 33 | 15 ⚠ | 68% |
+| c | 48 | 34 | 14 ⚠ | 70% |
 | cobol | 112 | 104 | 8 ⚠ | 92% |
 | cpp | 84 | 44 | 40 ⚠ | 52% |
 | csharp | 94 | 73 | 21 ⚠ | 77% |
@@ -48,7 +48,6 @@
 - `POINTER_LOAD` — loading a value through a pointer
 - `STRING_CONCATENATION` — adjacent string literal concatenation
 - `STRING_LITERAL` — "..." string literals
-- `TERNARY_OPERATOR` — cond ? a : b ternary expressions
 - `UNARY_OPERATORS` — unary +, -, ~, ! operators
 
 ### cobol
