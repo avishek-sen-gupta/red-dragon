@@ -21,15 +21,6 @@ Add unit tests to `tests/unit/test_c_frontend.py`:
 ### 2. Integration Test
 Add a new end-to-end integration test `test_c_ternary_operator_execution` to `tests/unit/test_c_frontend.py`:
 - Use the `@covers(CFeature.TERNARY_OPERATOR)` annotation.
-- Provide a complete, runnable C program that uses both basic and nested ternary operators to compute results. For example:
-  ```c
-  int main() {
-      int condition1 = 1;
-      int condition2 = 0;
-      int result1 = condition1 ? 42 : 99;
-      int result2 = condition2 ? 10 : (condition1 ? 20 : 30);
-      return result1 + result2;
-  }
-  ```
-- Use `load_program` and `run_to_end` to execute the program in the VM.
-- Assert that the VM reaches a `COMPLETED` state and the return value is the expected result (e.g., `42 + 20 = 62`).
+- Provide a complete, runnable C program with `compute()` helper and `main()` using both basic and nested ternary operators.
+- Use the two-phase `execute_cfg` pattern (preamble → find `main` label → execute main) to run the program in the VM.
+- Assert that the VM produces the expected variable values (e.g., `result1 == 6`, `result2 == -1`).

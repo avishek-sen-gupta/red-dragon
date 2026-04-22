@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-from interpreter.run import execute_cfg, VMConfig
-from interpreter.registry import FunctionRegistry as Registry
-from interpreter.func_name import FuncName
-from interpreter.var_name import VarName
-from interpreter.types.typed_value import unwrap
 from interpreter.api import build_cfg_from_source
+from interpreter.cfg import build_cfg
+from interpreter.constants import Language
+from interpreter.frontend import get_frontend
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.c.features import CFeature
 from interpreter.instructions import BranchIf, InstructionBase, CallFunction, Binop
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
+from interpreter.registry import build_registry
+from interpreter.run import execute_cfg, build_execution_strategies
+from interpreter.run_types import VMConfig
 from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
 from tests.covers import covers
 
 
@@ -1032,23 +1035,13 @@ class TestCFrontendTernaryOperator:
             // a > 5 is true
             // b (0) is false, so it takes the 'a + b' branch = 6 + 0 = 6
             int result1 = (a > 5) ? (b ? compute(a) * 2 : a + b) : compute(b) - 1;
-            
+
             // a < 5 is false, so it evaluates compute(b) - 1 = compute(0) - 1 = -1
             int result2 = (a < 5) ? 100 : compute(b) - 1;
-            
+
             return result1 + result2;
         }
         """
-        from interpreter.api import build_cfg_from_source
-        from interpreter.frontend import get_frontend
-        from interpreter.constants import Language
-        from interpreter.run_types import VMConfig
-        from interpreter.run import execute_cfg, build_execution_strategies
-        from interpreter.cfg import build_cfg
-        from interpreter.registry import build_registry
-        from interpreter.types.typed_value import unwrap
-        from interpreter.var_name import VarName
-
         c_frontend = get_frontend(Language("c"))
 
         instructions = c_frontend.lower(source.encode("utf-8"))
@@ -1073,12 +1066,10 @@ class TestCFrontendTernaryOperator:
         )
 
         # Phase 2: call main
-        final_state, stats = execute_cfg(
+        final_state, _ = execute_cfg(
             cfg, main_label, registry, VMConfig(max_steps=200), strategies, vm=vm
         )
 
-        # Expected return: result1 (6) + result2 (-1) = 5
-        assert final_state is not None
         assert unwrap(final_state.current_frame.local_vars[VarName("result1")]) == 6
         assert unwrap(final_state.current_frame.local_vars[VarName("result2")]) == -1
 
