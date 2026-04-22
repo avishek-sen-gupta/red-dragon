@@ -1039,28 +1039,28 @@ class TestCFrontendTernaryOperator:
             return result1 + result2;
         }
         """
-        from interpreter.api import build_cfg_from_source, lower_source
-        from interpreter.cfg import build_cfg
-        from interpreter.registry import build_registry
-        from interpreter.run import execute_cfg, VMConfig
-        from interpreter.var_name import VarName
-        from interpreter.types.typed_value import unwrap
-
-        from interpreter.run import build_execution_strategies
+        from interpreter.api import build_cfg_from_source
         from interpreter.frontend import get_frontend
         from interpreter.constants import Language
+        from interpreter.run_types import VMConfig
+        from interpreter.run import execute_cfg, build_execution_strategies
+        from interpreter.cfg import build_cfg
+        from interpreter.registry import build_registry
+        from interpreter.types.typed_value import unwrap
+        from interpreter.var_name import VarName
 
-        frontend = get_frontend(Language("c"))
-        instructions = frontend.lower(source.encode("utf-8"))
+        c_frontend = get_frontend(Language("c"))
+
+        instructions = c_frontend.lower(source.encode("utf-8"))
         cfg = build_cfg(instructions)
         registry = build_registry(
             instructions,
             cfg,
-            func_symbol_table=frontend.func_symbol_table,
-            class_symbol_table=frontend.class_symbol_table,
+            func_symbol_table=c_frontend.func_symbol_table,
+            class_symbol_table=c_frontend.class_symbol_table,
         )
         strategies = build_execution_strategies(
-            frontend, instructions, registry, Language("c")
+            c_frontend, instructions, registry, Language("c")
         )
 
         # Phase 1: preamble
