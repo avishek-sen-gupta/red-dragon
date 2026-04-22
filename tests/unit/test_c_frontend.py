@@ -5,7 +5,7 @@ from __future__ import annotations
 from interpreter.api import build_cfg_from_source
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.c.features import CFeature
-from interpreter.instructions import BranchIf, InstructionBase
+from interpreter.instructions import BranchIf, InstructionBase, CallFunction, Binop
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.type_name import TypeName
@@ -1043,3 +1043,41 @@ class TestCFrontendTernaryOperator:
         merge_label = true_block.successors[0]
         assert merge_label == false_block.successors[0]
         assert merge_label.value.startswith("ternary_end")
+
+    @covers(CFeature.TERNARY_OPERATOR)
+    def test_c_complex_nested_ternary(self) -> None:
+        source = """
+        int compute(int x);
+        int test_complex(int a, int b) {
+            int result = (a > 5) ? (b ? compute(a) * 2 : a + b) : compute(b) - 1;
+            return result;
+        }
+        """
+        cfg = build_cfg_from_source(source, "c", function_name="test_complex")
+
+        # Verify we have multiple BranchIf instructions
+        branch_ifs = [
+            inst
+            for block in cfg.blocks.values()
+            for inst in block.instructions
+            if isinstance(inst, BranchIf)
+        ]
+        assert len(branch_ifs) == 2
+
+        # Verify we have both CallFunction (compute) and Binop instructions
+        calls = [
+            inst
+            for block in cfg.blocks.values()
+            for inst in block.instructions
+            if isinstance(inst, CallFunction)
+        ]
+        assert len(calls) == 2
+
+        binops = [
+            inst
+            for block in cfg.blocks.values()
+            for inst in block.instructions
+            if isinstance(inst, Binop)
+        ]
+        # At least one > for the condition, one * for compute(a)*2, one + for a+b, one - for compute(b)-1
+        assert len(binops) >= 4
