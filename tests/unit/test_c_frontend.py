@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from interpreter.run import execute_cfg, VMConfig
+from interpreter.registry import FunctionRegistry as Registry
+from interpreter.func_name import FuncName
+from interpreter.var_name import VarName
+from interpreter.types.typed_value import unwrap
 from interpreter.api import build_cfg_from_source
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.c.features import CFeature
@@ -1015,6 +1020,68 @@ struct Node { int value; struct Node* next; };
 
 
 class TestCFrontendTernaryOperator:
+    @covers(CFeature.TERNARY_OPERATOR)
+    def test_c_ternary_operator_execution(self) -> None:
+        source = """
+        int compute(int val) {
+            return val * 10;
+        }
+        int main() {
+            int a = 6;
+            int b = 0;
+            // a > 5 is true
+            // b (0) is false, so it takes the 'a + b' branch = 6 + 0 = 6
+            int result1 = (a > 5) ? (b ? compute(a) * 2 : a + b) : compute(b) - 1;
+            
+            // a < 5 is false, so it evaluates compute(b) - 1 = compute(0) - 1 = -1
+            int result2 = (a < 5) ? 100 : compute(b) - 1;
+            
+            return result1 + result2;
+        }
+        """
+        from interpreter.api import build_cfg_from_source, lower_source
+        from interpreter.cfg import build_cfg
+        from interpreter.registry import build_registry
+        from interpreter.run import execute_cfg, VMConfig
+        from interpreter.var_name import VarName
+        from interpreter.types.typed_value import unwrap
+
+        from interpreter.run import build_execution_strategies
+        from interpreter.frontend import get_frontend
+        from interpreter.constants import Language
+
+        frontend = get_frontend(Language("c"))
+        instructions = frontend.lower(source.encode("utf-8"))
+        cfg = build_cfg(instructions)
+        registry = build_registry(
+            instructions,
+            cfg,
+            func_symbol_table=frontend.func_symbol_table,
+            class_symbol_table=frontend.class_symbol_table,
+        )
+        strategies = build_execution_strategies(
+            frontend, instructions, registry, Language("c")
+        )
+
+        # Phase 1: preamble
+        vm, _ = execute_cfg(
+            cfg, cfg.entry, registry, VMConfig(max_steps=200), strategies
+        )
+
+        main_label = next(
+            lbl for lbl in cfg.blocks if "main" in str(lbl) and "func" in str(lbl)
+        )
+
+        # Phase 2: call main
+        final_state, stats = execute_cfg(
+            cfg, main_label, registry, VMConfig(max_steps=200), strategies, vm=vm
+        )
+
+        # Expected return: result1 (6) + result2 (-1) = 5
+        assert final_state is not None
+        assert unwrap(final_state.current_frame.local_vars[VarName("result1")]) == 6
+        assert unwrap(final_state.current_frame.local_vars[VarName("result2")]) == -1
+
     @covers(CFeature.TERNARY_OPERATOR)
     def test_c_ternary_operator(self) -> None:
         source = """
