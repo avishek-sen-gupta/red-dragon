@@ -1,0 +1,37 @@
+#!/bin/bash
+# Terminology guard for commit messages.
+# Receives the commit message file path as $1 (standard commit-msg hook contract).
+# Blocklist lives at ~/.config/git/blocklist.txt (one regex pattern per line).
+# Exit 0 = clean, Exit 1 = blocked.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib-terminology.sh"
+
+load_pattern || exit 0
+
+MSG_FILE="$1"
+if [ -z "$MSG_FILE" ] || [ ! -f "$MSG_FILE" ]; then
+  echo "check-commit-msg: no message file provided" >&2
+  exit 1
+fi
+
+if grep -iqE "$PATTERN" "$MSG_FILE"; then
+  echo ""
+  print_table_header "Forbidden terms in commit message"
+
+  while IFS= read -r line; do
+    echo "$line" | grep -ioE "$PATTERN" | sort -u | while read -r term; do
+      ctx=$(snippet_around "$line" "$term")
+      branch=$(git branch --show-current 2>/dev/null || echo "-")
+      print_table_row "staged" "$branch" "commit-msg" "$term" "$ctx"
+    done
+  done < "$MSG_FILE"
+
+  local_count=$(grep -icE "$PATTERN" "$MSG_FILE" || echo 0)
+  print_table_footer "$local_count"
+  print_blocked
+  exit 1
+fi
+
+echo -e "${GREEN}[terminology-guard] Commit message clean.${RESET}"
+exit 0

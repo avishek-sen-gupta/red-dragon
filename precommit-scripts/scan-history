@@ -1,0 +1,121 @@
+#!/bin/bash
+# Scan full git history for forbidden terminology.
+# Uses the same blocklist as the pre-commit guard.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib-terminology.sh"
+
+# ── Scanners ────────────────────────────────────────────────────
+
+scan_file_contents() {
+  local commits count=0
+  echo -e "  ${DIM}Searching commits for pattern matches...${RESET}" >&2
+  commits=$(git log --all --regexp-ignore-case --perl-regexp -G "$PATTERN" --pretty=format:"%H" -- 2>/dev/null | sort -u)
+  [ -z "$commits" ] && { echo -e "  ${DIM}No matches in file contents.${RESET}" >&2; return 1; }
+
+  local num_commits
+  num_commits=$(echo "$commits" | wc -l | tr -d ' ')
+  echo -e "  ${DIM}Found $num_commits commit(s) to inspect...${RESET}" >&2
+
+  print_table_header "Forbidden terms in file contents"
+
+  local i=0
+  echo "$commits" | while read -r sha; do
+    i=$((i + 1))
+    local files short branches
+    files=$(git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null)
+    short=$(git log -1 --format='%h' "$sha" 2>/dev/null)
+    branches=$(git branch --all --contains "$sha" 2>/dev/null \
+      | sed 's/^[* ]*//' | sed 's|remotes/origin/||' | sort -u | paste -sd ',' -)
+    [ -z "$branches" ] && branches="-"
+    echo -ne "  ${DIM}Scanning commit $i/$num_commits ($short) [${branches}]...\r${RESET}" >&2
+
+    echo "$files" | while read -r file; do
+      git show "$sha:$file" 2>/dev/null | grep -inE "$PATTERN" | while IFS=: read -r lineno rest; do
+        echo "$rest" | grep -ioE "$PATTERN" | sort -u | while read -r term; do
+          local ctx
+          ctx=$(snippet_around "$rest" "$term")
+          print_table_row "$short" "$branches" "$file:$lineno" "$term" "$ctx"
+          count=$((count + 1))
+        done
+      done
+    done
+  done | head -80
+  echo -ne "  ${DIM}$(printf '%80s')\r${RESET}" >&2
+
+  # Count hits for footer (re-run is cheap since git caches)
+  local total
+  total=$(echo "$commits" | while read -r sha; do
+    git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null | while read -r file; do
+      git show "$sha:$file" 2>/dev/null | grep -icE "$PATTERN" 2>/dev/null
+    done
+  done | awk '{s+=$1} END {print s+0}')
+  print_table_footer "$total"
+  return 0
+}
+
+scan_commit_messages() {
+  # Use %x00 as record separator so multi-line bodies stay with their commit
+  local hits
+  echo -e "  ${DIM}Searching commit messages for pattern matches...${RESET}" >&2
+  hits=$(git log --all --format='%x00%H %h %s %b' 2>/dev/null \
+    | tr '\n' ' ' | tr '\0' '\n' \
+    | grep -iE "$PATTERN" | head -10)
+  [ -z "$hits" ] && { echo -e "  ${DIM}No matches in commit messages.${RESET}" >&2; return 1; }
+
+  local num_hits
+  num_hits=$(echo "$hits" | wc -l | tr -d ' ')
+  echo -e "  ${DIM}Found $num_hits commit message(s) to inspect...${RESET}" >&2
+
+  print_table_header "Forbidden terms in commit messages"
+
+  local count=0 i=0
+  echo "$hits" | while IFS= read -r line; do
+    i=$((i + 1))
+    local full_sha sha msg branches
+    full_sha=$(echo "$line" | cut -d' ' -f1)
+    sha=$(echo "$line" | cut -d' ' -f2)
+    msg=$(echo "$line" | cut -d' ' -f3-)
+    branches=$(git branch --all --contains "$full_sha" 2>/dev/null \
+      | sed 's/^[* ]*//' | sed 's|remotes/origin/||' | sort -u | paste -sd ',' -)
+    [ -z "$branches" ] && branches="-"
+    echo -ne "  ${DIM}Scanning message $i/$num_hits ($sha) [${branches}]...\r${RESET}" >&2
+
+    echo "$msg" | grep -ioE "$PATTERN" | sort -u | while read -r term; do
+      local pos ctx
+      pos=$(echo "$msg" | grep -iboE "$term" | head -1 | cut -d: -f1)
+      ctx=$(snippet_around "$msg" "$term")
+      print_table_row "$sha" "$branches" "col:$pos" "$term" "$ctx"
+      count=$((count + 1))
+    done
+  done
+  echo -ne "  ${DIM}$(printf '%80s')\r${RESET}" >&2
+
+  local total
+  total=$(echo "$hits" | wc -l | tr -d ' ')
+  print_table_footer "$total"
+  return 0
+}
+
+# ── Main ────────────────────────────────────────────────────────
+
+load_pattern || exit 0
+
+echo ""
+echo -e "${BOLD}Scanning git history for forbidden terms...${RESET}"
+
+# Log branches being scanned
+local_branches=$(git branch --format='%(refname:short)' 2>/dev/null | paste -sd ', ' -)
+remote_branches=$(git branch -r --format='%(refname:short)' 2>/dev/null | paste -sd ', ' -)
+echo -e "  ${DIM}Local branches: ${local_branches:-none}${RESET}"
+[ -n "$remote_branches" ] && echo -e "  ${DIM}Remote branches: ${remote_branches}${RESET}"
+
+FOUND=0
+scan_file_contents   && FOUND=1
+scan_commit_messages && FOUND=1
+
+if [ $FOUND -eq 0 ]; then
+  print_clean
+fi
+
+exit $FOUND
