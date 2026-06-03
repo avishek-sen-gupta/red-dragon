@@ -39,9 +39,7 @@ dolt-server.*
 *.db
 
 # Beads: ignore Dolt database and events audit trail (contains historical content)
-.beads/backup/events.jsonl
-.beads/backup/backup_state.json
-.beads/dolt/
+.beads/
 .serena/
 
 # bv (beads viewer) local config and caches
