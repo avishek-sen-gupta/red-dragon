@@ -34,7 +34,7 @@ def lower_perform(
     ctx: EmitContext,
     stmt: PerformStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """PERFORM paragraph-name [THRU paragraph-name] [TIMES|UNTIL|VARYING]."""
     if stmt.children and stmt.spec is None:
@@ -82,7 +82,7 @@ def emit_perform_branch(
     ctx: EmitContext,
     stmt: PerformStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """Emit SET_CONTINUATION + BRANCH + return LABEL for a simple procedure PERFORM."""
     branch_label, continuation_key = resolve_perform_target(ctx, stmt)
@@ -100,7 +100,7 @@ def lower_perform_body(
     ctx: EmitContext,
     stmt: PerformStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """Emit the body of a PERFORM loop — inline children or procedure branch."""
     if stmt.children:
@@ -114,7 +114,7 @@ def lower_perform_times(
     ctx: EmitContext,
     stmt: PerformStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """PERFORM ... TIMES — counter-based loop."""
     spec = stmt.spec
@@ -182,7 +182,7 @@ def lower_perform_until(
     ctx: EmitContext,
     stmt: PerformStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """PERFORM ... UNTIL — condition-based loop."""
     spec = stmt.spec
@@ -222,7 +222,7 @@ def lower_perform_varying(
     ctx: EmitContext,
     stmt: PerformStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """PERFORM ... VARYING — counter variable loop with FROM/BY/UNTIL."""
     spec = stmt.spec
@@ -271,7 +271,7 @@ def emit_varying_increment(
     ctx: EmitContext,
     spec: PerformVaryingSpec,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """Emit IR to increment the VARYING variable by the BY value."""
     if not ctx.has_field(spec.varying_var, layout):

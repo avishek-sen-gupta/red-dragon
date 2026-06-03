@@ -29,7 +29,7 @@ def lower_call(
     ctx: EmitContext,
     stmt: CallStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """CALL 'program' USING params — symbolic subprogram invocation."""
     arg_regs: list[str] = []
@@ -63,7 +63,7 @@ def lower_alter(
     ctx: EmitContext,
     stmt: AlterStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """ALTER para-1 TO PROCEED TO para-2."""
     for pt in stmt.proceed_tos:
@@ -81,7 +81,7 @@ def lower_entry(
     ctx: EmitContext,
     stmt: EntryStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """ENTRY 'name' — alternate entry point for a subprogram."""
     if stmt.entry_name:
@@ -93,7 +93,7 @@ def lower_cancel(
     ctx: EmitContext,
     stmt: CancelStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """CANCEL program — no-op for static analysis."""
     for prog in stmt.programs:
