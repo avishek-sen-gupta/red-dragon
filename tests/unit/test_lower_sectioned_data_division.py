@@ -32,6 +32,8 @@ def test_lower_sectioned_emits_load_var_for_ws():
     load_var_insts = [i for i in ctx.instructions if isinstance(i, LoadVar)]
     names = [str(i.name) for i in load_var_insts]
     assert "__ws_region" in names
+    # WS must be the first LOAD_VAR so it is available before any field access
+    assert names[0] == "__ws_region"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
