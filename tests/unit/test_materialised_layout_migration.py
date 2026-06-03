@@ -280,8 +280,8 @@ class TestLowerPerformWithMaterialised:
         materialised = lower_sectioned_data_division(ctx, sl)
 
         stmt = PerformStatement(
-            target=None,
-            thru=None,
+            target="",
+            thru="",
             spec=None,
             children=[StopRunStatement()],
         )
@@ -305,7 +305,7 @@ class TestLowerCallWithMaterialised:
         ctx = EmitContext(dispatch_fn=dispatch_statement)
         materialised = lower_sectioned_data_division(ctx, sl)
 
-        stmt = CallStatement(program="MY-PROG", using=[], giving=None)
+        stmt = CallStatement(program="MY-PROG", using=[], giving="")
         lower_call(ctx, stmt, materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]
