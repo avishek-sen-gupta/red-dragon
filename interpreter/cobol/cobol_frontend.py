@@ -149,11 +149,12 @@ class CobolFrontend(Frontend):
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
 
-        # Allocate the WS region and bind it to __ws_region so that
+        # TODO(Task 5): remove this inline alloc once CobolFrontend emits a
+        # proper init block via lower_program_init.  In the full singleton
+        # model the allocation happens inside the init block; for the current
+        # standalone / test execution path we emit it inline here so that
         # lower_sectioned_data_division (which emits LOAD_VAR __ws_region)
-        # finds it available.  In the full singleton model this allocation
-        # happens in the init block emitted by lower_program_init; for the
-        # standalone / test execution path we emit it inline here.
+        # finds the variable in scope.
         ws_reg = lower_data_division(self._ctx, sectioned.working_storage)
         self._ctx.emit_inst(StoreVar(name=VarName("__ws_region"), value_reg=ws_reg))
 
