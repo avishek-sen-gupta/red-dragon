@@ -103,7 +103,10 @@ def handle_analyze_program(source: str, language: str) -> dict[str, Any]:
             for f in sorted(call_graph.functions, key=lambda f: str(f.label))
         ],
         "call_graph": [
-            {"caller": s.caller.label, "callees": sorted(c.label for c in s.callees)}
+            {
+                "caller": s.caller.label,
+                "callees": sorted(str(c.label) for c in s.callees),
+            }
             for s in call_graph.call_sites
         ],
         "summary_counts": {
@@ -188,7 +191,10 @@ def handle_get_call_chain(
     chains = []
     func_by_label = {f.label: f for f in interprocedural.call_graph.functions}
     for call in top_calls:
-        callee = func_by_label.get(call.callee_label)
+        callee = next(
+            (f for f in func_by_label.values() if str(f.label) == call.callee_label),
+            None,
+        )
         if not callee:
             callee = next(
                 (
