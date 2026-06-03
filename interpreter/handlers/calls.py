@@ -675,18 +675,18 @@ def _handle_call_with_memory(
     singleton_key = VarName(f"__prog_{program_id}")
 
     # Walk scope chain to find singleton HeapObject address
-    singleton_addr_val: Any = None
+    singleton_addr_val: Address | None = None
     for frame in reversed(vm.call_stack):
         if singleton_key in frame.local_vars:
-            singleton_addr_val = frame.local_vars[singleton_key].value
+            val = frame.local_vars[singleton_key].value
+            if isinstance(val, Address):
+                singleton_addr_val = val
             break
 
-    if singleton_addr_val is None or not vm.heap_contains(
-        Address(str(singleton_addr_val))
-    ):
+    if singleton_addr_val is None or not vm.heap_contains(singleton_addr_val):
         return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
 
-    singleton = vm.heap_get(Address(str(singleton_addr_val)))
+    singleton = vm.heap_get(singleton_addr_val)
     init_params_tv = singleton.fields.get(FieldName("__init_params__"))
 
     if init_params_tv is None or not isinstance(init_params_tv.value, BoundFuncRef):
