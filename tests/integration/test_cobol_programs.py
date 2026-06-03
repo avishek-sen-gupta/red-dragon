@@ -14,7 +14,13 @@ import pytest
 
 from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
-from interpreter.run import run
+from interpreter.constants import Language
+from interpreter.field_name import FieldName
+from interpreter.project.compiler import compile_directory
+from interpreter.project.entry_point import EntryPoint
+from interpreter.run import run, run_linked
+from interpreter.var_name import VarName
+from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
 
 _JAR_PATH = os.environ.get(
@@ -4126,13 +4132,6 @@ class TestSubprogramWsPersistence:
     @covers(CobolFeature.CALL_USING, CobolFeature.SECTION_WORKING_STORAGE)
     def test_ws_counter_survives_two_calls(self, tmp_path):
         """SUBPROG increments WS-COUNTER on each CALL; value must be 2 after two calls."""
-        from interpreter.project.compiler import compile_directory
-        from interpreter.project.entry_point import EntryPoint
-        from interpreter.run import run_linked
-        from interpreter.constants import Language
-        from interpreter.var_name import VarName
-        from interpreter.field_name import FieldName
-
         (tmp_path / "MAIN.cbl").write_text(
             _to_fixed(
                 [
@@ -4178,8 +4177,6 @@ class TestSubprogramWsPersistence:
         # Find SUBPROG's singleton and read WS-COUNTER.
         # The singleton TypedValue holds a Pointer; dereference via .base to
         # get the heap Address, then look up the ws_handle field.
-        from interpreter.vm.vm_types import Pointer
-
         singleton_key = VarName("__prog_SUBPROG")
         singleton_ptr = None
         for frame in reversed(vm.call_stack):
