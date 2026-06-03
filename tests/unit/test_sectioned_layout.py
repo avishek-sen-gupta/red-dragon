@@ -1,7 +1,10 @@
 import logging
-import pytest
-from interpreter.cobol.asg_types import CobolField
+from interpreter.cobol.asg_types import CobolASG, CobolField
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
+from interpreter.cobol.sectioned_layout import (
+    MaterialisedSectionedLayout,
+    build_sectioned_layout,
+)
 from interpreter.register import Register
 from tests.covers import covers, NotLanguageFeature
 
@@ -16,9 +19,6 @@ def _make_layout(field_name: str, pic: str = "X(5)") -> DataLayout:
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_build_sectioned_layout_all_three_sections():
-    from interpreter.cobol.asg_types import CobolASG
-    from interpreter.cobol.sectioned_layout import build_sectioned_layout
-
     asg = CobolASG(
         data_fields=[_make_field("WS-A")],
         linkage_fields=[_make_field("LK-B")],
@@ -33,9 +33,6 @@ def test_build_sectioned_layout_all_three_sections():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_build_sectioned_layout_empty_sections():
-    from interpreter.cobol.asg_types import CobolASG
-    from interpreter.cobol.sectioned_layout import build_sectioned_layout
-
     asg = CobolASG(data_fields=[_make_field("WS-A")])
     sl = build_sectioned_layout(asg)
 
@@ -46,8 +43,6 @@ def test_build_sectioned_layout_empty_sections():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_materialised_resolve_ws_field():
-    from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-
     ws_layout = _make_layout("WS-X")
     ls_layout = DataLayout()
     lk_layout = DataLayout()
@@ -68,8 +63,6 @@ def test_materialised_resolve_ws_field():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_materialised_resolve_local_storage_wins_over_ws_on_collision(caplog):
-    from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-
     ws_layout = _make_layout("SHARED-FIELD")
     ls_layout = _make_layout("SHARED-FIELD")
     lk_layout = DataLayout()
@@ -95,8 +88,6 @@ def test_materialised_resolve_local_storage_wins_over_ws_on_collision(caplog):
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_materialised_has_field():
-    from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-
     ws_layout = _make_layout("WS-X")
     ls_layout = DataLayout()
     lk_layout = _make_layout("LK-Y")
