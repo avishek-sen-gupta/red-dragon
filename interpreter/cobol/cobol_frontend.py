@@ -38,7 +38,7 @@ from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_, StoreVar
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.ir import CodeLabel
 from interpreter.register import Register
 from interpreter.var_name import VarName
 
