@@ -4,7 +4,8 @@
 Emits (in order):
   1. Init block — runs once at program load:
        NEW_OBJECT %ptr
-       ALLOC_REGION %ws_reg, <ws_size>  + VALUE initialisers
+       CONST %size_reg, <ws_size>
+       ALLOC_REGION %ws_reg, %size_reg  + VALUE initialisers
        STORE_FIELD %ptr, ws_handle, %ws_reg
        CONST %run_reg, "func_<pid>_0"       → BoundFuncRef at runtime
        STORE_FIELD %ptr, run, %run_reg
