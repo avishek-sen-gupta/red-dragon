@@ -4,6 +4,7 @@ from interpreter.cobol.sectioned_layout import SectionedLayout, build_sectioned_
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.features import CobolFeature
 from interpreter.ir import Opcode
 from tests.covers import covers, NotLanguageFeature
 
@@ -31,7 +32,7 @@ def test_lower_sectioned_emits_alloc_region_for_ws():
     assert Opcode.ALLOC_REGION in opcodes
 
 
-@covers(NotLanguageFeature.INFRASTRUCTURE)
+@covers(CobolFeature.SECTION_LINKAGE)
 def test_lower_sectioned_emits_load_var_for_non_empty_linkage():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     asg = CobolASG(
@@ -54,7 +55,7 @@ def test_lower_sectioned_no_load_var_when_linkage_empty():
     assert Opcode.LOAD_VAR not in opcodes
 
 
-@covers(NotLanguageFeature.INFRASTRUCTURE)
+@covers(CobolFeature.SECTION_LOCAL_STORAGE)
 def test_lower_sectioned_emits_alloc_region_for_local_storage():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     asg = CobolASG(
