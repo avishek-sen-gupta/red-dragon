@@ -11,6 +11,7 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import Label_, ResumeContinuation
 from interpreter.ir import CodeLabel
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ def lower_procedure_division(
     ctx: EmitContext,
     asg: CobolASG,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """Lower division-level bare statements, standalone paragraphs, and sections."""
     ctx.section_paragraphs = {
@@ -40,7 +41,7 @@ def lower_section(
     ctx: EmitContext,
     section: CobolSection,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     ctx.emit_inst(Label_(label=CodeLabel(f"section_{section.name}")))
     for stmt in section.statements:
@@ -56,7 +57,7 @@ def lower_paragraph(
     ctx: EmitContext,
     para: CobolParagraph,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     ctx.emit_inst(Label_(label=CodeLabel(f"para_{para.name}")))
     for stmt in para.statements:

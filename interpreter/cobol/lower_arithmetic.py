@@ -126,7 +126,7 @@ def eval_ref_mod_expr(
     ctx: EmitContext,
     expr: RefModExpr,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> str:
     """Evaluate a reference modification expression to an IR register.
 
@@ -188,7 +188,7 @@ def lower_move(
     ctx: EmitContext,
     stmt: MoveStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """MOVE X [( start : length )] TO Y: handle reference modification."""
     target_ref = ctx.resolve_field_ref(stmt.target.name, layout, region_reg)
@@ -337,7 +337,7 @@ def lower_move_corresponding(
     ctx: EmitContext,
     stmt: MoveCorrespondingStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """MOVE CORRESPONDING src TO dst — copy matching direct leaf fields."""
     src_layout = layout.lookup_group(stmt.source)
@@ -362,7 +362,7 @@ def lower_arithmetic(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """ADD/SUBTRACT/MULTIPLY/DIVIDE X TO/FROM/BY/INTO Y [GIVING Z]."""
     if stmt.giving:
@@ -521,7 +521,7 @@ def lower_arithmetic_giving(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """MULTIPLY/DIVIDE X BY/INTO Y GIVING Z."""
 
@@ -687,7 +687,7 @@ def lower_compute(
     ctx: EmitContext,
     stmt: ComputeStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
     result_reg = lower_expr_node(ctx, stmt.expression, layout, region_reg)
@@ -768,7 +768,7 @@ def lower_if(
     ctx: EmitContext,
     stmt: IfStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """IF condition ... [ELSE ...] END-IF."""
     cond_reg = ctx.lower_condition(stmt.condition, layout, region_reg)
@@ -800,7 +800,7 @@ def lower_evaluate(
     ctx: EmitContext,
     stmt: EvaluateStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """EVALUATE subject WHEN value ..."""
     end_label = ctx.fresh_label("eval_end")
@@ -838,7 +838,7 @@ def lower_continue(
     ctx: EmitContext,
     stmt: ContinueStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """CONTINUE — no-op, emit nothing."""
     pass
@@ -848,7 +848,7 @@ def lower_exit(
     ctx: EmitContext,
     stmt: ExitStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """EXIT — no-op sentinel, emit nothing."""
     pass
@@ -894,7 +894,7 @@ def lower_initialize(
     ctx: EmitContext,
     stmt: InitializeStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """INITIALIZE field1 field2 — reset to type-appropriate defaults.
 
@@ -920,7 +920,7 @@ def lower_set(
     ctx: EmitContext,
     stmt: SetStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """SET target TO value / SET target UP|DOWN BY value."""
     if stmt.set_type == "TO":
@@ -965,7 +965,7 @@ def lower_display(
     ctx: EmitContext,
     stmt: DisplayStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """DISPLAY field-or-literal."""
     operand = stmt.operand
@@ -1023,7 +1023,7 @@ def lower_stop_run(
     ctx: EmitContext,
     stmt: StopRunStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """STOP RUN."""
     zero_reg = ctx.fresh_reg()
@@ -1035,7 +1035,7 @@ def lower_goto(
     ctx: EmitContext,
     stmt: GotoStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """GO TO paragraph-name."""
     ctx.emit_inst(Branch(label=CodeLabel(f"para_{stmt.target}")))

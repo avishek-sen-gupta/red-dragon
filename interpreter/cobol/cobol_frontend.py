@@ -32,6 +32,7 @@ from interpreter.path_name import PathName
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import Opcode, CodeLabel
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class CobolFrontend(Frontend):
         self._ctx._instructions = value
 
     def _resolve_field_ref(
-        self, name: str, layout: DataLayout, region_reg: str
+        self, name: str, layout: DataLayout, region_reg: Register
     ) -> ResolvedFieldRef:
         return self._ctx.resolve_field_ref(name, layout, region_reg)
 

@@ -39,6 +39,7 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.register import Register
 from interpreter.cobol.lower_arithmetic import (
     lower_arithmetic,
     lower_compute,
@@ -85,7 +86,7 @@ def dispatch_statement(
     ctx: EmitContext,
     stmt: CobolStatementType,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """Route a COBOL statement to its lowering function."""
     if isinstance(stmt, MoveStatement):

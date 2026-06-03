@@ -29,9 +29,9 @@ def _emit_single_value_test(
     ctx: EmitContext,
     cv: ConditionValue,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
     parent_field_name: str,
-) -> str:
+) -> Register:
     """Emit IR to test a parent field against a single ConditionValue.
 
     For discrete values: parent_field == value
@@ -91,7 +91,7 @@ def _emit_single_value_test(
     return eq_result
 
 
-def _emit_or_chain(ctx: EmitContext, regs: list[str]) -> str:
+def _emit_or_chain(ctx: EmitContext, regs: list[Register]) -> Register:
     """Combine a list of boolean registers with OR. Returns result register."""
     return reduce(
         lambda acc, reg: _emit_or(ctx, acc, reg),
@@ -100,7 +100,7 @@ def _emit_or_chain(ctx: EmitContext, regs: list[str]) -> str:
     )
 
 
-def _emit_or(ctx: EmitContext, left_reg: str, right_reg: str) -> str:
+def _emit_or(ctx: EmitContext, left_reg: Register, right_reg: Register) -> Register:
     """Emit a single OR between two boolean registers."""
     result = ctx.fresh_reg()
     ctx.emit_inst(
@@ -119,8 +119,8 @@ def _expand_condition_name(
     condition_name: str,
     condition_index: ConditionNameIndex,
     layout: DataLayout,
-    region_reg: str,
-) -> str:
+    region_reg: Register,
+) -> Register:
     """Expand a level-88 condition name into field comparison IR.
 
     For single-value conditions: parent == value
@@ -146,9 +146,9 @@ def lower_condition(
     ctx: EmitContext,
     condition: dict,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
     condition_index: ConditionNameIndex = ConditionNameIndex({}),
-) -> str:
+) -> Register:
     """Lower a structured condition dict to a register holding a boolean."""
     return _lower_condition_node(ctx, condition, layout, region_reg, condition_index)
 
@@ -157,9 +157,9 @@ def _lower_condition_node(
     ctx: EmitContext,
     node: dict,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
     condition_index: ConditionNameIndex,
-) -> str:
+) -> Register:
     """Recursively walk a structured condition dict node and emit IR."""
     if "op" in node:
         # Compound: {"op": "AND"/"OR", "left": {...}, "right": {...}}
@@ -236,8 +236,8 @@ def _lower_relation_node(
     ctx: EmitContext,
     rel: dict,
     layout: DataLayout,
-    region_reg: str,
-) -> str:
+    region_reg: Register,
+) -> Register:
     """Lower a structured relation dict {"left": <expr>, "op": "...", "right": <expr>}."""
     left_reg = _lower_expr_dict(ctx, rel["left"], layout, region_reg)
     right_reg = _lower_expr_dict(ctx, rel["right"], layout, region_reg)
@@ -258,8 +258,8 @@ def _lower_expr_dict(
     ctx: EmitContext,
     expr: dict,
     layout: DataLayout,
-    region_reg: str,
-) -> str:
+    region_reg: Register,
+) -> Register:
     """Recursively lower an expression dict node to a register.
 
     Supported kinds:
@@ -317,9 +317,9 @@ def _lower_condition_str(
     ctx: EmitContext,
     condition: str,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
     condition_index: ConditionNameIndex,
-) -> str:
+) -> Register:
     """Lower a flat condition string to a boolean register.
 
     Supports:
@@ -381,8 +381,8 @@ def lower_expr_node(
     ctx: EmitContext,
     node: ExprNode,
     layout: DataLayout,
-    region_reg: str,
-) -> str:
+    region_reg: Register,
+) -> Register:
     """Walk an expression tree node and emit IR. Returns result register."""
     if isinstance(node, LiteralNode):
         return ctx.const_to_reg(ctx.parse_literal(node.value))
