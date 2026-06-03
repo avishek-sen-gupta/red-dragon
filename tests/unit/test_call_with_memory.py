@@ -121,11 +121,12 @@ def _make_handler_ctx(callee_label: str):
     """Build a minimal HandlerContext with the callee block in the CFG."""
     import dataclasses
     from interpreter.vm.executor import _default_handler_context
-    from interpreter.cfg import CFG
+    from interpreter.cfg import CFG, BasicBlock
     from interpreter.ir import NO_LABEL, CodeLabel
 
     cfg = CFG()
-    cfg.blocks[CodeLabel(callee_label)] = []
+    lbl = CodeLabel(callee_label)
+    cfg.blocks[lbl] = BasicBlock(label=lbl)
     ctx = _default_handler_context()
     ctx = dataclasses.replace(ctx, cfg=cfg, current_label=NO_LABEL)
     return ctx

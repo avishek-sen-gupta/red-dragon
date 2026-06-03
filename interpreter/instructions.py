@@ -381,7 +381,9 @@ class CallMethod(InstructionBase):
     args: tuple[Register | SpreadArguments, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
-        args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
+        args_regs: list[StorageIdentifier] = [
+            r for r in self.args if isinstance(r, Register) and r.is_present()
+        ]
         return ([self.obj_reg] if self.obj_reg.is_present() else []) + args_regs
 
     @property
@@ -406,7 +408,9 @@ class CallUnknown(InstructionBase):
     args: tuple[Register | SpreadArguments, ...] = ()
 
     def reads(self) -> list[StorageIdentifier]:
-        args_regs = [r for r in self.args if isinstance(r, Register) and r.is_present()]
+        args_regs: list[StorageIdentifier] = [
+            r for r in self.args if isinstance(r, Register) and r.is_present()
+        ]
         return ([self.target_reg] if self.target_reg.is_present() else []) + args_regs
 
     @property
@@ -1379,7 +1383,7 @@ def _resume_continuation(inst: Any) -> ResumeContinuation:
     )
 
 
-_TO_TYPED: dict[Opcode, object] = {
+_TO_TYPED: dict[Opcode, Callable[[Any], Instruction]] = {
     Opcode.CONST: _const,
     Opcode.LOAD_VAR: _load_var,
     Opcode.DECL_VAR: _decl_var,
