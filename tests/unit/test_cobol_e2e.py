@@ -1683,7 +1683,9 @@ class TestPicXDigitOnlyValue:
         instructions = frontend.lower(b"")
 
         vm = _execute_straight_line(instructions)
-        region = list(vm.region_get(list(vm.region_keys())[0]))
+        raw = vm.region_get(list(vm.region_keys())[0])
+        assert raw is not None
+        region = list(raw)
 
         assert region != [0] * 5, "digit-only VALUE stored as zeros (vt2i regression)"
         expected = list("12345".encode("cp500"))
