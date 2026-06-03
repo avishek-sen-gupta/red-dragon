@@ -6,6 +6,7 @@ from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.features import CobolFeature
 from interpreter.ir import Opcode
+from interpreter.instructions import LoadVar
 from tests.covers import covers, NotLanguageFeature
 
 
@@ -23,13 +24,24 @@ def test_lower_sectioned_data_division_returns_materialised():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_lower_sectioned_emits_alloc_region_for_ws():
+def test_lower_sectioned_emits_load_var_for_ws():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     asg = CobolASG(data_fields=[_make_field("WS-X")])
     sl = build_sectioned_layout(asg)
     lower_sectioned_data_division(ctx, sl)
-    opcodes = [i.opcode for i in ctx.instructions]
-    assert Opcode.ALLOC_REGION in opcodes
+    load_var_insts = [i for i in ctx.instructions if isinstance(i, LoadVar)]
+    names = [str(i.name) for i in load_var_insts]
+    assert "__ws_region" in names
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_sectioned_no_alloc_region_for_ws():
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    asg = CobolASG(data_fields=[_make_field("WS-X")])
+    sl = build_sectioned_layout(asg)
+    lower_sectioned_data_division(ctx, sl)
+    alloc_count = sum(1 for i in ctx.instructions if i.opcode == Opcode.ALLOC_REGION)
+    assert alloc_count == 0  # WS comes from singleton — no ALLOC_REGION
 
 
 @covers(CobolFeature.SECTION_LINKAGE)
@@ -46,13 +58,14 @@ def test_lower_sectioned_emits_load_var_for_non_empty_linkage():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_lower_sectioned_no_load_var_when_linkage_empty():
+def test_lower_sectioned_no_params_region_load_var_when_linkage_empty():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     asg = CobolASG(data_fields=[_make_field("WS-X")])
     sl = build_sectioned_layout(asg)
     lower_sectioned_data_division(ctx, sl)
-    opcodes = [i.opcode for i in ctx.instructions]
-    assert Opcode.LOAD_VAR not in opcodes
+    load_var_insts = [i for i in ctx.instructions if isinstance(i, LoadVar)]
+    names = [str(i.name) for i in load_var_insts]
+    assert "__params_region" not in names
 
 
 @covers(CobolFeature.SECTION_LOCAL_STORAGE)
@@ -65,4 +78,4 @@ def test_lower_sectioned_emits_alloc_region_for_local_storage():
     sl = build_sectioned_layout(asg)
     lower_sectioned_data_division(ctx, sl)
     alloc_count = sum(1 for i in ctx.instructions if i.opcode == Opcode.ALLOC_REGION)
-    assert alloc_count == 2  # one for WS, one for LS
+    assert alloc_count == 1  # LS only — WS comes from singleton
