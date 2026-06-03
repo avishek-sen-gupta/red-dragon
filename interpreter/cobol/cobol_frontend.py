@@ -27,16 +27,20 @@ from interpreter.cobol.field_resolution import (
     parse_subscript_notation,
 )
 from interpreter.cobol.cobol_parser import CobolParser
-from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.lower_data_division import (
+    lower_data_division,
+    lower_sectioned_data_division,
+)
 from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.instructions import InstructionBase, Label_
+from interpreter.instructions import InstructionBase, Label_, StoreVar
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +148,14 @@ class CobolFrontend(Frontend):
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
+
+        # Allocate the WS region and bind it to __ws_region so that
+        # lower_sectioned_data_division (which emits LOAD_VAR __ws_region)
+        # finds it available.  In the full singleton model this allocation
+        # happens in the init block emitted by lower_program_init; for the
+        # standalone / test execution path we emit it inline here.
+        ws_reg = lower_data_division(self._ctx, sectioned.working_storage)
+        self._ctx.emit_inst(StoreVar(name=VarName("__ws_region"), value_reg=ws_reg))
 
         materialised = lower_sectioned_data_division(self._ctx, sectioned)
         lower_procedure_division(self._ctx, asg, materialised)
