@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 
 from interpreter.cobol.data_layout import FieldLayout
+from interpreter.register import Register
 
 _SUBSCRIPT_RE = re.compile(r"^([A-Za-z][A-Za-z0-9-]*)\((.+)\)$")
 
@@ -34,4 +35,4 @@ class ResolvedFieldRef:
     """
 
     fl: FieldLayout
-    offset_reg: str
+    offset_reg: Register

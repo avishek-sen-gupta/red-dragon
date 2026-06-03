@@ -12,7 +12,7 @@ from interpreter.register import Register
 logger = logging.getLogger(__name__)
 
 
-def lower_data_division(ctx: EmitContext, layout: DataLayout) -> str:
+def lower_data_division(ctx: EmitContext, layout: DataLayout) -> Register:
     """Emit ALLOC_REGION + initial VALUE encodings. Returns region register."""
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=layout.total_bytes))

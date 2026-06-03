@@ -31,7 +31,7 @@ def lower_string(
     ctx: EmitContext,
     stmt: StringStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """STRING ... DELIMITED BY ... INTO target."""
     part_regs: list[str] = []
@@ -142,7 +142,7 @@ def lower_unstring(
     ctx: EmitContext,
     stmt: UnstringStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """UNSTRING source DELIMITED BY ... INTO targets."""
     source_name = stmt.source.name
@@ -217,7 +217,7 @@ def lower_inspect(
     ctx: EmitContext,
     stmt: InspectStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """INSPECT source TALLYING|REPLACING ..."""
     if not ctx.has_field(stmt.source.name, layout):
@@ -273,7 +273,7 @@ def lower_inspect_tallying(
     stmt: InspectStatement,
     src_str_reg: str,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """INSPECT TALLYING — count pattern occurrences and write to tally target."""
     total_count_reg = ctx.const_to_reg(0)
@@ -315,7 +315,7 @@ def lower_inspect_replacing(
     src_str_reg: str,
     source_fl: FieldLayout,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """INSPECT REPLACING — apply replacements and write back."""
     current_str_reg = src_str_reg
