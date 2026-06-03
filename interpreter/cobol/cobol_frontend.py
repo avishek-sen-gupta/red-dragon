@@ -17,13 +17,17 @@ import logging
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.sectioned_layout import (
+    MaterialisedSectionedLayout,
+    build_sectioned_layout,
+)
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.cobol.field_resolution import (
     ResolvedFieldRef,
     parse_subscript_notation,
 )
 from interpreter.cobol.cobol_parser import CobolParser
-from interpreter.cobol.lower_data_division import lower_data_division
+from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
@@ -92,12 +96,12 @@ class CobolFrontend(Frontend):
         self._ctx._instructions = value
 
     def _resolve_field_ref(
-        self, name: str, layout: DataLayout, region_reg: Register
-    ) -> ResolvedFieldRef:
-        return self._ctx.resolve_field_ref(name, layout, region_reg)
+        self, name: str, materialised: MaterialisedSectionedLayout
+    ) -> tuple[ResolvedFieldRef, Register]:
+        return self._ctx.resolve_field_ref(name, materialised)
 
-    def _has_field(self, name: str, layout: DataLayout) -> bool:
-        return self._ctx.has_field(name, layout)
+    def _has_field(self, name: str, materialised: MaterialisedSectionedLayout) -> bool:
+        return self._ctx.has_field(name, materialised)
 
     # ── Main entry point ──────────────────────────────────────────
 
@@ -141,8 +145,9 @@ class CobolFrontend(Frontend):
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
 
-        region_reg = lower_data_division(self._ctx, layout)
-        lower_procedure_division(self._ctx, asg, layout, region_reg)
+        sectioned = build_sectioned_layout(asg)
+        materialised = lower_sectioned_data_division(self._ctx, sectioned)
+        lower_procedure_division(self._ctx, asg, materialised)
 
         logger.info(
             "COBOL frontend produced %d IR instructions",
