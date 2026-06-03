@@ -27,7 +27,7 @@ def lower_accept(
     ctx: EmitContext,
     stmt: AcceptStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """ACCEPT target [FROM device] — read input via __cobol_accept."""
     device_reg = ctx.const_to_reg(stmt.from_device)
@@ -52,7 +52,7 @@ def lower_open(
     ctx: EmitContext,
     stmt: OpenStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """OPEN mode file1 file2 ... — open files via __cobol_open_file."""
     for filename in stmt.files:
@@ -73,7 +73,7 @@ def lower_close(
     ctx: EmitContext,
     stmt: CloseStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """CLOSE file1 file2 ... — close files via __cobol_close_file."""
     for filename in stmt.files:
@@ -93,7 +93,7 @@ def lower_read(
     ctx: EmitContext,
     stmt: ReadStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """READ file-name [INTO target] — read record via __cobol_read_record."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
@@ -118,7 +118,7 @@ def lower_write(
     ctx: EmitContext,
     stmt: WriteStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """WRITE record-name [FROM field] — write record via __cobol_write_record."""
     if stmt.from_field and ctx.has_field(stmt.from_field, layout):
@@ -146,7 +146,7 @@ def lower_rewrite(
     ctx: EmitContext,
     stmt: RewriteStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """REWRITE record-name [FROM field] — rewrite record via __cobol_rewrite_record."""
     if stmt.from_field and ctx.has_field(stmt.from_field, layout):
@@ -174,7 +174,7 @@ def lower_start(
     ctx: EmitContext,
     stmt: StartStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """START file-name [KEY ...] — position file via __cobol_start_file."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
@@ -194,7 +194,7 @@ def lower_delete(
     ctx: EmitContext,
     stmt: DeleteStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """DELETE file-name — delete record via __cobol_delete_record."""
     fn_reg = ctx.const_to_reg(stmt.file_name)

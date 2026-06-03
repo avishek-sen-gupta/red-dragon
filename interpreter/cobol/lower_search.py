@@ -27,7 +27,7 @@ def lower_search(
     ctx: EmitContext,
     stmt: SearchStatement,
     layout: DataLayout,
-    region_reg: str,
+    region_reg: Register,
 ) -> None:
     """SEARCH table VARYING index WHEN cond ... AT END ..."""
     loop_label = ctx.fresh_label("search_loop")

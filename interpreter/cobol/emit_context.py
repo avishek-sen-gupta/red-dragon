@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 # Type alias for the dispatch callback signature.
 # Any is CobolStatementType — avoided here to prevent a circular import via statement_dispatch.
 DispatchFn = Callable[
-    ["EmitContext", Any, DataLayout, str], None
+    ["EmitContext", Any, DataLayout, "Register"], None
 ]  # Any: CobolStatementType, circular-import boundary
 
 
@@ -118,7 +118,7 @@ class EmitContext:
         self._instructions.append(inst)
         return inst
 
-    def const_to_reg(self, value: Any) -> str:
+    def const_to_reg(self, value: Any) -> Register:
         """Emit a CONST and return its register."""
         reg = self.fresh_reg()
         self.emit_inst(Const(result_reg=reg, value=value))
@@ -168,7 +168,7 @@ class EmitContext:
     # ── Statement Dispatch ────────────────────────────────────────
 
     def lower_statement(
-        self, stmt: Any, layout: DataLayout, region_reg: str
+        self, stmt: Any, layout: DataLayout, region_reg: Register
     ) -> None:  # Any: CobolStatementType, circular-import boundary
         """Dispatch a statement through the injected callback."""
         self._dispatch_fn(self, stmt, layout, region_reg)
@@ -176,7 +176,7 @@ class EmitContext:
     # ── Field Reference Resolution ────────────────────────────────
 
     def resolve_field_ref(
-        self, name: str, layout: DataLayout, region_reg: str
+        self, name: str, layout: DataLayout, region_reg: Register
     ) -> ResolvedFieldRef:
         """Resolve a field reference that may contain subscript notation."""
         base_name, subscript = parse_subscript_notation(name)
@@ -257,7 +257,7 @@ class EmitContext:
         return layout.lookup_as_storage(base_name) is not None
 
     def resolve_field_ref_from(
-        self, fl: FieldLayout, region_reg: str
+        self, fl: FieldLayout, region_reg: Register
     ) -> ResolvedFieldRef:
         """Resolve a FieldLayout to a ResolvedFieldRef without a name lookup.
 
@@ -270,11 +270,15 @@ class EmitContext:
     # ── Field Encode / Decode ─────────────────────────────────────
 
     def emit_field_encode(
-        self, region_reg: str, fl: FieldLayout, value: str, offset_reg: str = ""
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        value: str,
+        offset_reg: Register = NO_REGISTER,
     ) -> None:
         """Emit IR to encode a value and write it to the region."""
         encoded_reg = self.emit_encode_value(fl, value)
-        if not offset_reg:
+        if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
             self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
         self.emit_inst(
@@ -306,7 +310,7 @@ class EmitContext:
         except (ValueError, TypeError):
             return False
 
-    def _emit_ebcdic_spaces(self, byte_length: int) -> str:
+    def _emit_ebcdic_spaces(self, byte_length: int) -> Register:
         """Emit IR to create a list of EBCDIC spaces (0x40). Returns result register."""
         length_reg = self.const_to_reg(byte_length)
         space_reg = self.const_to_reg(ByteConstants.EBCDIC_SPACE)
@@ -404,10 +408,10 @@ class EmitContext:
         return self.inline_ir(ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg})
 
     def emit_decode_field(
-        self, region_reg: str, fl: FieldLayout, offset_reg: str = ""
+        self, region_reg: Register, fl: FieldLayout, offset_reg: Register = NO_REGISTER
     ) -> str:
         """Emit IR to load and decode a field from the region. Returns decoded value register."""
-        if not offset_reg:
+        if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
             self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
 
@@ -457,7 +461,7 @@ class EmitContext:
 
     # ── String Conversion Helpers ─────────────────────────────────
 
-    def emit_to_string(self, value_reg: str) -> str:
+    def emit_to_string(self, value_reg: str) -> Register:
         """Emit IR to convert a value to a string."""
         result = self.fresh_reg()
         self.emit_inst(
@@ -471,7 +475,7 @@ class EmitContext:
 
     def _emit_blank_when_zero_wrap(
         self, encoded_reg: str, value_str_reg: str, byte_length: int
-    ) -> str:
+    ) -> Register:
         """Wrap encoded bytes with BLANK WHEN ZERO check via builtin."""
         result = self.fresh_reg()
         length_reg = self.const_to_reg(byte_length)
@@ -586,14 +590,14 @@ class EmitContext:
 
     def emit_encode_and_write(
         self,
-        region_reg: str,
+        region_reg: Register,
         fl: FieldLayout,
         value_str_reg: str,
-        offset_reg: str = "",
+        offset_reg: Register = NO_REGISTER,
     ) -> None:
         """Encode a string value and write it to the field's region slot."""
         encoded_reg = self.emit_encode_from_string(fl, value_str_reg)
-        if not offset_reg:
+        if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
             self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
         self.emit_inst(
@@ -608,8 +612,8 @@ class EmitContext:
     # ── Condition Lowering ───────────────────────────────────────
 
     def lower_condition(
-        self, condition: dict, layout: DataLayout, region_reg: str
-    ) -> str:
+        self, condition: dict, layout: DataLayout, region_reg: Register
+    ) -> Register:
         """Lower a condition — delegates to condition_lowering module."""
         from interpreter.cobol.condition_lowering import (
             lower_condition as _lower_condition,
