@@ -19,6 +19,7 @@ from interpreter.instructions import (
     CallCtorFunction,
     CallMethod,
     CallUnknown,
+    CallWithMemory,
 )
 from interpreter.ir import CodeLabel
 from interpreter.vm.vm import (
@@ -645,4 +646,61 @@ def _handle_call_unknown(
     target_desc = _symbolic_name(target_val.value)
     return ctx.call_resolver.resolve_call(
         target_desc, [a.value for a in args], inst, vm
+    )
+
+
+def _handle_call_with_memory(
+    inst: InstructionBase,
+    vm: VMState,
+    ctx: HandlerContext,
+) -> ExecutionResult:
+    """Handle CALL_WITH_MEMORY — call a subprogram passing two memory regions.
+
+    Resolves params_reg and results_reg from the current VM registers, looks up
+    the callee BoundFuncRef by func_name in the call-stack scope chain, and
+    injects __params_region and __results_region into the new call frame.
+    """
+    t = inst
+    assert isinstance(t, CallWithMemory)
+
+    params_tv = _resolve_reg(vm, t.params_reg)
+    results_tv = _resolve_reg(vm, t.results_reg)
+
+    # Look up callee BoundFuncRef via scope chain
+    func_val = ""
+    lookup_key = VarName(str(t.func_name))
+    for f in reversed(vm.call_stack):
+        if lookup_key in f.local_vars:
+            func_val = f.local_vars[lookup_key].value
+            break
+
+    if not isinstance(func_val, BoundFuncRef):
+        # Fall back to the configured call resolver (e.g. symbolic)
+        return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
+
+    fname = func_val.func_ref.name
+    flabel = func_val.func_ref.label
+    if flabel not in ctx.cfg.blocks:
+        return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
+
+    new_vars: dict[VarName, TypedValue] = {
+        VarName("__params_region"): params_tv,
+        VarName("__results_region"): results_tv,
+    }
+
+    return ExecutionResult.success(
+        StateUpdate(
+            call_push=StackFramePush(
+                function_name=fname,
+                return_label=ctx.current_label,
+            ),
+            next_label=flabel,
+            reasoning=(
+                f"call_with_memory {fname},"
+                f" params={params_tv.value!r},"
+                f" results={results_tv.value!r},"
+                f" dispatch to {flabel}"
+            ),
+            var_writes=new_vars,
+        )
     )

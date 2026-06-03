@@ -455,6 +455,7 @@ _OPCODE_CATEGORIES: dict[str, str] = {
     "CALL_METHOD": "calls",
     "CALL_UNKNOWN": "calls",
     "CALL_CTOR": "calls",
+    "CALL_WITH_MEMORY": "calls",
     "LOAD_FIELD": "fields_and_indices",
     "STORE_FIELD": "fields_and_indices",
     "LOAD_FIELD_INDIRECT": "fields_and_indices",
@@ -542,6 +543,14 @@ _OPCODE_NOTES: dict[str, str] = {
         "Distinct from CALL_FUNCTION because constructor semantics require the VM to "
         "initialise 'self' before dispatch. result_reg receives the newly constructed "
         "object. type_hint is the TypeExpr describing the class."
+    ),
+    "CALL_WITH_MEMORY": (
+        "Calls a subprogram passing two memory regions. params_reg holds the region "
+        "the caller passes to the callee (callee reads LINKAGE SECTION fields from it). "
+        "results_reg holds the region the callee writes output back into (BY REF: may "
+        "be the same register as params_reg). The VM injects __params_region and "
+        "__results_region as variables in the new call frame. Used by the COBOL "
+        "frontend for CALL … USING statements."
     ),
     "LOAD_FIELD": (
         "Reads field field_name from the object in obj_reg. result_reg receives the "
