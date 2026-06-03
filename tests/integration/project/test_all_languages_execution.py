@@ -30,19 +30,37 @@ def _run_project_vm(tmp_path, files, entry, language):
     linked = compile_directory(tmp_path, language)
 
     # COBOL uses the singleton init pattern: two-phase execution via run_linked.
-    # For multi-module programs, the entry module is the last one in dependency
-    # order (dependencies are listed first).  We pick the last proc label that
-    # matches *func_*_0 and is not an init_params wrapper.
+    # For multi-module programs, the entry module is the one that no other
+    # module depends on (i.e., not listed as a dependency in import_graph).
+    # We derive it from import_graph to avoid order-dependent [-1] selection.
     if linked.language == Language.COBOL and linked.func_symbol_table:
+        all_deps: set[Path] = set()
+        for deps in linked.import_graph.values():
+            all_deps.update(deps)
+        entry_paths = [p for p in linked.import_graph if p not in all_deps]
+        if not entry_paths:
+            # Fallback: all modules are roots (single-module project)
+            entry_paths = list(linked.import_graph.keys())
+
+        # Build a set of entry program-id labels from entry module filenames.
+        # The proc label for COBOL is func_<program-id-lower>_0.
+        entry_stems = {p.stem.lower() for p in entry_paths}
         proc_refs = [
             ref
             for ref in linked.func_symbol_table.values()
-            if "func_" in str(ref.label)
-            and str(ref.label).endswith("_0")
-            and "init_params" not in str(ref.label)
+            if str(ref.label).endswith("_0") and "init_params" not in str(ref.label)
         ]
-        if proc_refs:
-            entry_ref = proc_refs[-1]
+        # Prefer a ref whose label contains the entry module stem; fall back to
+        # the alphabetically-last ref to keep behaviour stable.
+        entry_ref = next(
+            (
+                ref
+                for ref in proc_refs
+                if any(stem in str(ref.label) for stem in entry_stems)
+            ),
+            sorted(proc_refs, key=lambda r: str(r.label))[-1] if proc_refs else None,
+        )
+        if entry_ref is not None:
             return run_linked(
                 linked,
                 entry_point=EntryPoint.function(
