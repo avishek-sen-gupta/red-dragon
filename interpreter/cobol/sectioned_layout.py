@@ -33,10 +33,10 @@ class MaterialisedSectionedLayout:
     def resolve(self, name: str) -> tuple[FieldLayout, Register]:
         """Return (FieldLayout, region_register). Precedence: LOCAL-STORAGE > WORKING-STORAGE > LINKAGE."""
         ls_layout, ls_reg = self.local_storage
-        ls_fl = ls_layout.lookup(name)
+        ls_fl = ls_layout.lookup_as_storage(name)
         if ls_fl is not None:
             ws_layout, _ = self.working_storage
-            if ws_layout.lookup(name) is not None:
+            if ws_layout.lookup_as_storage(name) is not None:
                 logger.warning(
                     "Field %r found in both LOCAL-STORAGE and WORKING-STORAGE — LOCAL-STORAGE wins (collision)",
                     name,
@@ -44,12 +44,12 @@ class MaterialisedSectionedLayout:
             return ls_fl, ls_reg
 
         ws_layout, ws_reg = self.working_storage
-        ws_fl = ws_layout.lookup(name)
+        ws_fl = ws_layout.lookup_as_storage(name)
         if ws_fl is not None:
             return ws_fl, ws_reg
 
         lk_layout, lk_reg = self.linkage
-        lk_fl = lk_layout.lookup(name)
+        lk_fl = lk_layout.lookup_as_storage(name)
         if lk_fl is not None:
             return lk_fl, lk_reg
 
@@ -60,9 +60,9 @@ class MaterialisedSectionedLayout:
         ws_layout, _ = self.working_storage
         lk_layout, _ = self.linkage
         return (
-            ls_layout.lookup(name) is not None
-            or ws_layout.lookup(name) is not None
-            or lk_layout.lookup(name) is not None
+            ls_layout.lookup_as_storage(name) is not None
+            or ws_layout.lookup_as_storage(name) is not None
+            or lk_layout.lookup_as_storage(name) is not None
         )
 
 
