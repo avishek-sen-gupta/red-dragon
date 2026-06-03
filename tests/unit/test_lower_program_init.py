@@ -3,8 +3,8 @@ from interpreter.cobol.data_layout import build_data_layout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_program_init import lower_program_init
 from interpreter.cobol.statement_dispatch import dispatch_statement
-from interpreter.ir import CodeLabel, Opcode
-from interpreter.cobol.features import CobolFeature
+from interpreter.instructions import StoreVar
+from interpreter.ir import Opcode
 from tests.covers import covers, NotLanguageFeature
 
 
@@ -41,7 +41,7 @@ def test_lower_program_init_emits_three_store_fields():
 def test_lower_program_init_emits_store_var_singleton():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     lower_program_init(ctx, "SUBPROG", _ws_layout_5bytes())
-    store_var_insts = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
+    store_var_insts = [i for i in ctx.instructions if isinstance(i, StoreVar)]
     names = [str(i.name) for i in store_var_insts]
     assert "__prog_SUBPROG" in names
 
