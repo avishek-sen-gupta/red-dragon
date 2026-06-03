@@ -209,6 +209,67 @@ public class AsgSerializerTest {
         assertFalse("Section should not have paragraphs", mainSection.has("paragraphs"));
     }
 
+    // ── Linkage Section ──────────────────────────────────────────────────
+
+    @Test
+    public void testLinkageSection_hasLinkageFields() throws Exception {
+        JsonObject asg = parseFixture("linkage_section.cbl");
+
+        assertTrue("ASG must have linkage_fields", asg.has("linkage_fields"));
+        JsonArray fields = asg.getAsJsonArray("linkage_fields");
+        assertEquals("Should have 2 linkage fields", 2, fields.size());
+
+        JsonObject lsInput = fields.get(0).getAsJsonObject();
+        assertEquals("LS-INPUT", lsInput.get("name").getAsString());
+
+        JsonObject lsOutput = fields.get(1).getAsJsonObject();
+        assertEquals("LS-OUTPUT", lsOutput.get("name").getAsString());
+    }
+
+    @Test
+    public void testLinkageSection_noWorkingStorage() throws Exception {
+        JsonObject asg = parseFixture("linkage_section.cbl");
+
+        assertFalse("ASG must not have data_fields when there is no WORKING-STORAGE", asg.has("data_fields"));
+    }
+
+    @Test
+    public void testLinkageSection_withWorkingStorage() throws Exception {
+        JsonObject asg = parseFixture("linkage_with_working_storage.cbl");
+
+        assertTrue("ASG must have data_fields", asg.has("data_fields"));
+        assertTrue("ASG must have linkage_fields", asg.has("linkage_fields"));
+
+        JsonArray wsFields = asg.getAsJsonArray("data_fields");
+        assertEquals("Should have 1 working-storage field", 1, wsFields.size());
+        assertEquals("WS-RESULT", wsFields.get(0).getAsJsonObject().get("name").getAsString());
+
+        JsonArray lsFields = asg.getAsJsonArray("linkage_fields");
+        assertEquals("Should have 1 linkage field", 1, lsFields.size());
+        assertEquals("LS-INPUT", lsFields.get(0).getAsJsonObject().get("name").getAsString());
+    }
+
+    // ── Local Storage Section ─────────────────────────────────────────────
+
+    @Test
+    public void testLocalStorageSection_hasLocalStorageFields() throws Exception {
+        JsonObject asg = parseFixture("local_storage_section.cbl");
+
+        assertTrue("ASG must have local_storage_fields", asg.has("local_storage_fields"));
+        JsonArray fields = asg.getAsJsonArray("local_storage_fields");
+        assertEquals("Should have 1 local-storage field", 1, fields.size());
+
+        JsonObject lsCount = fields.get(0).getAsJsonObject();
+        assertEquals("LS-COUNT", lsCount.get("name").getAsString());
+    }
+
+    @Test
+    public void testLocalStorageSection_noLinkageFields() throws Exception {
+        JsonObject asg = parseFixture("local_storage_section.cbl");
+
+        assertFalse("ASG must not have linkage_fields", asg.has("linkage_fields"));
+    }
+
     // ── DataFieldSerializer unit tests ───────────────────────────────────
 
     @Test
