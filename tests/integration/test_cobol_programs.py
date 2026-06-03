@@ -4119,3 +4119,86 @@ class TestSectionedDataDivision:
         region = _first_region(vm)
         # WS-OUT at offset 0, 2 bytes; initial VALUE 42 should be preserved
         assert _decode_zoned_unsigned(region, 0, 2) == 42
+
+
+class TestSubprogramWsPersistence:
+    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
+    @covers(CobolFeature.CALL_USING, CobolFeature.SECTION_WORKING_STORAGE)
+    def test_ws_counter_survives_two_calls(self, tmp_path):
+        """SUBPROG increments WS-COUNTER on each CALL; value must be 2 after two calls."""
+        from interpreter.project.compiler import compile_directory
+        from interpreter.project.entry_point import EntryPoint
+        from interpreter.run import run_linked
+        from interpreter.constants import Language
+        from interpreter.var_name import VarName
+        from interpreter.field_name import FieldName
+
+        (tmp_path / "MAIN.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAIN.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-DUMMY PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'SUBPROG'.",
+                    "    CALL 'SUBPROG'.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+
+        (tmp_path / "SUBPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. SUBPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-COUNTER PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    ADD 1 TO WS-COUNTER.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_main_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        # Find SUBPROG's singleton and read WS-COUNTER.
+        # The singleton TypedValue holds a Pointer; dereference via .base to
+        # get the heap Address, then look up the ws_handle field.
+        from interpreter.vm.vm_types import Pointer
+
+        singleton_key = VarName("__prog_SUBPROG")
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if singleton_key in frame.local_vars:
+                singleton_ptr = frame.local_vars[singleton_key].value
+                break
+        assert (
+            singleton_ptr is not None
+        ), "__prog_SUBPROG singleton not found in VM state"
+
+        assert isinstance(
+            singleton_ptr, Pointer
+        ), f"Expected Pointer, got {type(singleton_ptr)}"
+        singleton = vm.heap_get(singleton_ptr.base)
+        ws_handle_tv = singleton.fields[FieldName("ws_handle")]
+        ws_addr = Address(ws_handle_tv.value)
+        region = vm.region_get(ws_addr)
+        assert region is not None, f"WS region not found at {ws_addr}"
+        counter = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            counter == 2
+        ), f"Expected WS-COUNTER=2 after two CALL SUBPROG, got {counter}"
