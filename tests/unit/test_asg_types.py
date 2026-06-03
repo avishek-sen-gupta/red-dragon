@@ -514,3 +514,14 @@ class TestCobolASG:
         asg = CobolASG.from_dict({})
         assert "linkage_fields" not in asg.to_dict()
         assert "local_storage_fields" not in asg.to_dict()
+
+    def test_cobol_asg_reads_program_id(self):
+        from tests.covers import covers, NotLanguageFeature
+
+        data = {"program_id": "SUBPROG"}
+        asg = CobolASG.from_dict(data)
+        assert asg.program_id == "SUBPROG"
+
+    def test_cobol_asg_program_id_defaults_empty(self):
+        asg = CobolASG.from_dict({})
+        assert asg.program_id == ""
