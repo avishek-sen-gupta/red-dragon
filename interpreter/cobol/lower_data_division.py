@@ -42,14 +42,15 @@ def lower_sectioned_data_division(
     ctx: EmitContext,
     layout: SectionedLayout,
 ) -> MaterialisedSectionedLayout:
-    """Allocate regions for WS and LS; bind LINKAGE to the injected params region.
+    """Bind WS to the persistent singleton region; allocate fresh LS per call.
 
-    Emits at callee entry:
-      - AllocRegion for WORKING-STORAGE (+ VALUE initialisers)
-      - LoadVar(__params_region) for LINKAGE if non-empty, else NO_REGISTER
-      - AllocRegion for LOCAL-STORAGE (+ VALUE initialisers) — fresh each call
+    The WS region handle was stored into __ws_region by func_PROGRAMID_0
+    before this function is called (loaded from the singleton HeapObject).
+    LINKAGE is bound to __params_region injected by _handle_call_with_memory.
+    LOCAL-STORAGE is freshly allocated on every call.
     """
-    ws_reg = lower_data_division(ctx, layout.working_storage)
+    ws_reg = ctx.fresh_reg()
+    ctx.emit_inst(LoadVar(result_reg=ws_reg, name=VarName("__ws_region")))
 
     if layout.linkage.total_bytes > 0:
         lk_reg = ctx.fresh_reg()
