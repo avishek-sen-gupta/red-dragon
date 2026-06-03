@@ -4,7 +4,7 @@
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 956 features across 16 languages — 785 covered, 171 uncovered
+**Totals**: 956 features across 16 languages — 786 covered, 170 uncovered
 
 ---
 
@@ -13,7 +13,7 @@
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
 | c | 48 | 34 | 14 ⚠ | 70% |
-| cobol | 112 | 104 | 8 ⚠ | 92% |
+| cobol | 112 | 105 | 7 ⚠ | 93% |
 | cpp | 84 | 44 | 40 ⚠ | 52% |
 | csharp | 94 | 73 | 21 ⚠ | 77% |
 | go | 44 | 41 | 3 ⚠ | 93% |
@@ -58,7 +58,6 @@
 - `SEARCH_BINARY` — SEARCH ALL table WHEN cond binary table search statements
 - `SECTION_FILE` — FILE SECTION file record layout declarations
 - `SECTION_LINKAGE` — LINKAGE SECTION parameter and return data declarations
-- `SECTION_LOCAL_STORAGE` — LOCAL-STORAGE SECTION per-call local data declarations
 - `USAGE_INDEX` — USAGE INDEX table index storage type
 
 ### cpp
