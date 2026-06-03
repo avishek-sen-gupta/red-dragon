@@ -32,7 +32,7 @@ def lower_call(
     region_reg: Register,
 ) -> None:
     """CALL 'program' USING params — symbolic subprogram invocation."""
-    arg_regs: list[str] = []
+    arg_regs: list[Register] = []
     for param in stmt.using:
         if ctx.has_field(param.name, layout):
             ref = ctx.resolve_field_ref(param.name, layout, region_reg)
@@ -45,7 +45,7 @@ def lower_call(
         CallFunction(
             result_reg=result_reg,
             func_name=FuncName(stmt.program),
-            args=tuple(Register(str(a)) for a in arg_regs),
+            args=tuple(arg_regs),
         )
     )
 
@@ -71,7 +71,7 @@ def lower_alter(
         ctx.emit_inst(
             StoreVar(
                 name=VarName(f"__alter_{pt.source}"),
-                value_reg=Register(str(target_reg)),
+                value_reg=target_reg,
             )
         )
         logger.info("ALTER %s TO PROCEED TO %s", pt.source, pt.target)
