@@ -158,6 +158,7 @@ class TestHelloWorldFixture:
         assert vm.region_count() >= 1
         region_addr = list(vm.region_keys())[0]
         region = vm.region_get(region_addr)
+        assert region is not None
 
         # Region should have 11 bytes written (EBCDIC-encoded "HELLO WORLD")
         assert len(region) == 11

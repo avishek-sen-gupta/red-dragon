@@ -1015,13 +1015,18 @@ def run(
         and entry_point.is_top_level
         and frontend.func_symbol_table
     ):
-        entry_point = EntryPoint.function(
-            lambda ref: (
-                str(ref.label).startswith("func_")
-                and str(ref.label).endswith("_0")
-                and not str(ref.label).startswith("func_init_params_")
-            )
+        # Use the exact proc_label from func_symbol_table rather than string patterns
+        proc_label = next(
+            (
+                label
+                for label in frontend.func_symbol_table
+                if not str(label).startswith("func_init_params_")
+            ),
+            None,
         )
+        if proc_label is not None:
+            _label = proc_label
+            entry_point = EntryPoint.function(lambda ref: ref.label == _label)
 
     # 5. Execute via run_linked
     exec_start = time.perf_counter()
