@@ -42,7 +42,7 @@ def _set_bridge_jar_env():
         os.environ["PROLEAP_BRIDGE_JAR"] = old
 
 
-def _decode_zoned_unsigned(region: list[int], offset: int, length: int) -> int:
+def _decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
     """Decode unsigned zoned decimal from a memory region.
 
     Each byte is EBCDIC zoned: 0xF0=0, 0xF1=1, ..., 0xF9=9.
@@ -68,12 +68,14 @@ def _run_cobol(lines: list[str], max_steps: int = 1000):
     return run(source=source, language="cobol", max_steps=max_steps)
 
 
-def _first_region(vm):
+def _first_region(vm) -> bytearray:
     """Return the first memory region from the VM state."""
-    return vm.region_get(list(vm.region_keys())[0])
+    region = vm.region_get(list(vm.region_keys())[0])
+    assert region is not None
+    return region
 
 
-def _decode_alpha(region: list[int], offset: int, length: int) -> str:
+def _decode_alpha(region: bytearray, offset: int, length: int) -> str:
     """Decode EBCDIC alphanumeric bytes from a memory region to an ASCII string."""
     ebcdic_to_ascii = {
         0x40: " ",
@@ -2608,7 +2610,7 @@ class TestEntryPoint:
 # ---------------------------------------------------------------------------
 
 
-def _decode_binary(region: list[int], offset: int, length: int) -> int:
+def _decode_binary(region: bytearray, offset: int, length: int) -> int:
     """Decode big-endian unsigned binary integer from memory region bytes."""
     value = 0
     for i in range(length):
@@ -2616,7 +2618,7 @@ def _decode_binary(region: list[int], offset: int, length: int) -> int:
     return value
 
 
-def _decode_comp3(region: list[int], offset: int, length: int) -> int:
+def _decode_comp3(region: bytearray, offset: int, length: int) -> int:
     """Decode COMP-3 packed BCD from memory region bytes.
 
     Each byte holds two BCD digits, except the last byte whose low nibble
