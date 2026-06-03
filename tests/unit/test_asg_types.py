@@ -458,3 +458,59 @@ class TestCobolASG:
         assert asg.sections == []
         assert asg.paragraphs == []
         assert asg.to_dict() == {}
+
+    def test_asg_with_linkage_fields(self):
+        data = {
+            "linkage_fields": [
+                {"name": "LS-INPUT", "level": 1, "pic": "X(10)", "offset": 0},
+                {"name": "LS-OUTPUT", "level": 1, "pic": "9(5)", "offset": 0},
+            ],
+        }
+        asg = CobolASG.from_dict(data)
+        assert len(asg.linkage_fields) == 2
+        assert asg.linkage_fields[0].name == "LS-INPUT"
+        assert asg.linkage_fields[1].name == "LS-OUTPUT"
+        assert asg.data_fields == []
+
+    def test_asg_with_local_storage_fields(self):
+        data = {
+            "local_storage_fields": [
+                {"name": "LS-COUNT", "level": 1, "pic": "9(3)", "offset": 0},
+            ],
+        }
+        asg = CobolASG.from_dict(data)
+        assert len(asg.local_storage_fields) == 1
+        assert asg.local_storage_fields[0].name == "LS-COUNT"
+        assert asg.linkage_fields == []
+
+    def test_asg_linkage_and_working_storage_together(self):
+        data = {
+            "data_fields": [
+                {"name": "WS-RESULT", "level": 77, "pic": "9(5)", "offset": 0},
+            ],
+            "linkage_fields": [
+                {"name": "LS-INPUT", "level": 1, "pic": "X(10)", "offset": 0},
+            ],
+        }
+        asg = CobolASG.from_dict(data)
+        assert len(asg.data_fields) == 1
+        assert len(asg.linkage_fields) == 1
+        assert asg.data_fields[0].name == "WS-RESULT"
+        assert asg.linkage_fields[0].name == "LS-INPUT"
+
+    def test_asg_linkage_round_trip(self):
+        data = {
+            "linkage_fields": [
+                {"name": "LS-INPUT", "level": 1, "pic": "X(10)", "offset": 0},
+            ],
+            "local_storage_fields": [
+                {"name": "LS-COUNT", "level": 1, "pic": "9(3)", "offset": 0},
+            ],
+        }
+        asg = CobolASG.from_dict(data)
+        assert CobolASG.from_dict(asg.to_dict()) == asg
+
+    def test_asg_empty_linkage_not_in_to_dict(self):
+        asg = CobolASG.from_dict({})
+        assert "linkage_fields" not in asg.to_dict()
+        assert "local_storage_fields" not in asg.to_dict()

@@ -176,12 +176,16 @@ class CobolASG:
 
     Attributes:
         data_fields: Working-Storage Section fields.
+        linkage_fields: Linkage Section fields (subprogram parameters).
+        local_storage_fields: Local-Storage Section fields (per-call locals).
         sections: Procedure Division sections.
         paragraphs: Standalone paragraphs (no section).
         statements: Division-level bare statements (no paragraph or section).
     """
 
     data_fields: list[CobolField] = field(default_factory=list)
+    linkage_fields: list[CobolField] = field(default_factory=list)
+    local_storage_fields: list[CobolField] = field(default_factory=list)
     sections: list[CobolSection] = field(default_factory=list)
     paragraphs: list[CobolParagraph] = field(default_factory=list)
     statements: list[CobolStatementType] = field(default_factory=list)
@@ -190,6 +194,12 @@ class CobolASG:
     def from_dict(cls, data: dict) -> CobolASG:
         return cls(
             data_fields=[CobolField.from_dict(f) for f in data.get("data_fields", [])],
+            linkage_fields=[
+                CobolField.from_dict(f) for f in data.get("linkage_fields", [])
+            ],
+            local_storage_fields=[
+                CobolField.from_dict(f) for f in data.get("local_storage_fields", [])
+            ],
             sections=[CobolSection.from_dict(s) for s in data.get("sections", [])],
             paragraphs=[
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
@@ -201,6 +211,12 @@ class CobolASG:
         result: dict = {}
         if self.data_fields:
             result["data_fields"] = [f.to_dict() for f in self.data_fields]
+        if self.linkage_fields:
+            result["linkage_fields"] = [f.to_dict() for f in self.linkage_fields]
+        if self.local_storage_fields:
+            result["local_storage_fields"] = [
+                f.to_dict() for f in self.local_storage_fields
+            ]
         if self.sections:
             result["sections"] = [s.to_dict() for s in self.sections]
         if self.paragraphs:
