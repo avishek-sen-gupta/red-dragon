@@ -81,6 +81,27 @@ def _execute_straight_line(
     return vm
 
 
+def _execute_cobol_program(
+    cfg: Any,
+    registry: Any,
+    max_steps: int = 500,
+    program_id: str = "MAIN",
+) -> tuple[Any, Any]:
+    """Execute a COBOL program in two phases:
+    1. Run from 'entry' to execute the singleton init block (allocates WS).
+    2. Run from 'func_<pid>_0' to execute the procedure division.
+
+    Returns the (VMState, ExecutionStats) from the procedure phase.
+    """
+    # Phase 1: init block — allocates WS and stores singleton
+    init_vm, _ = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=100))
+    # Phase 2: procedure — loads WS from singleton and runs procedure body
+    proc_label = f"func_{program_id.lower()}_0"
+    return execute_cfg(
+        cfg, proc_label, registry, VMConfig(max_steps=max_steps), vm=init_vm
+    )
+
+
 class TestHelloWorldFixture:
     @covers(
         CobolFeature.PIC_CLAUSE,
@@ -253,7 +274,7 @@ class TestPerformReturnFixture:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         # Execution should have completed (hit STOP RUN)
         assert vm.region_count() >= 1
@@ -315,7 +336,7 @@ class TestPerformReturnFixture:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=300))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=300)
 
         assert stats.steps < 300
         assert vm.region_count() >= 1
@@ -366,7 +387,7 @@ class TestPerformReturnFixture:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         # Should complete within steps (hit STOP RUN in SECOND-PARA)
         assert stats.steps < 200
@@ -513,7 +534,7 @@ class TestIfElseExecution:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
         assert stats.steps < 200
         assert vm.region_count() >= 1
         # WS-RESULT should be 1 (THEN branch: MOVE 1 TO WS-RESULT)
@@ -582,7 +603,7 @@ class TestIfElseExecution:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
         assert stats.steps < 200
         assert vm.region_count() >= 1
         # WS-RESULT should be 2 (ELSE branch: MOVE 2 TO WS-RESULT)
@@ -637,7 +658,7 @@ class TestPerformTimesExecution:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         # Should complete within step limit
         assert stats.steps < 500
@@ -703,7 +724,7 @@ class TestPerformUntilExecution:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         assert stats.steps < 500
         assert vm.region_count() >= 1
@@ -782,7 +803,7 @@ class TestPerformVaryingExecution:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=1000)
 
         assert stats.steps < 1000
         assert vm.region_count() >= 1
@@ -841,7 +862,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 3) == 42
@@ -890,7 +911,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 10  # WS-A unchanged
@@ -940,7 +961,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 7  # WS-A = 10 - 3
@@ -981,7 +1002,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 25
@@ -1031,7 +1052,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 3
@@ -1072,7 +1093,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 123
@@ -1114,7 +1135,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 15
@@ -1172,7 +1193,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=1000)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 30
@@ -1232,7 +1253,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=1000)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 130
@@ -1289,7 +1310,7 @@ class TestSectionFallThrough:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         assert stats.steps < 200
         assert vm.region_count() >= 1
@@ -1357,7 +1378,7 @@ class TestNestedPerformNumericValues:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 111
@@ -1427,7 +1448,7 @@ class TestNestedPerformNumericValues:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=2000))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=2000)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 6
@@ -1486,7 +1507,7 @@ class TestGotoInsidePerform:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 11
@@ -1547,7 +1568,7 @@ class TestGotoInsidePerform:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 11
@@ -1614,7 +1635,7 @@ class TestGotoInsidePerform:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         # WORK-PARA adds 10, GO TO jumps to EXIT-PARA which adds 100.
@@ -1695,7 +1716,7 @@ class TestPicXDigitOnlyValue:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, _ = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
         region = list(vm.region_get(list(vm.region_keys())[0]))
 
         assert (
