@@ -2547,3 +2547,22 @@ class TestMoveCorrespondingLowering:
         # Should emit WRITE_REGION for matching field (FIELD-X) but not non-matching ones
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 1  # At least FIELD-X match
+
+
+class TestSectionedLayout:
+    @covers(CobolFeature.SECTION_LOCAL_STORAGE)
+    def test_frontend_lower_produces_two_alloc_regions_for_ws_and_ls(self):
+        """CobolFrontend.lower() must emit one ALLOC_REGION for WS and one for LS."""
+        asg = CobolASG(
+            data_fields=[
+                CobolField(name="WS-X", level=1, pic="X(5)", usage="DISPLAY", offset=0)
+            ],
+            local_storage_fields=[
+                CobolField(name="LS-Y", level=1, pic="X(3)", usage="DISPLAY", offset=0)
+            ],
+        )
+        frontend = CobolFrontend(cobol_parser=_FakeParser(asg))
+        instructions = frontend.lower(b"")
+
+        alloc_count = sum(1 for i in instructions if i.opcode == Opcode.ALLOC_REGION)
+        assert alloc_count == 2, f"Expected 2 ALLOC_REGION (WS + LS), got {alloc_count}"

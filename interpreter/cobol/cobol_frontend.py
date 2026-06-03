@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.condition_name_index import build_condition_index
-from interpreter.cobol.data_layout import DataLayout, build_data_layout
+from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
@@ -132,10 +132,10 @@ class CobolFrontend(Frontend):
     ) -> list[InstructionBase]:
         """Lower COBOL source to IR via the ProLeap bridge."""
         asg = self._parser.parse(source)
-        layout = build_data_layout(asg.data_fields)
-        self._layout = layout
-        self._symbol_table = SymbolTable.from_data_layout(layout)
-        condition_index = build_condition_index(layout)
+        sectioned = build_sectioned_layout(asg)
+        self._layout = sectioned.working_storage
+        self._symbol_table = SymbolTable.from_data_layout(sectioned.working_storage)
+        condition_index = build_condition_index(sectioned.working_storage)
 
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
@@ -145,7 +145,6 @@ class CobolFrontend(Frontend):
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
 
-        sectioned = build_sectioned_layout(asg)
         materialised = lower_sectioned_data_division(self._ctx, sectioned)
         lower_procedure_division(self._ctx, asg, materialised)
 
