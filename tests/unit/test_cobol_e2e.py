@@ -231,6 +231,7 @@ class TestArithmeticFixture:
 
         region_addr = list(vm.region_keys())[0]
         region = vm.region_get(region_addr)
+        assert region is not None
         assert len(region) == 5  # 9(5)
         assert (
             _decode_zoned_unsigned(region, 0, 5) == 100
@@ -253,6 +254,7 @@ class TestArithmeticFixture:
 
         region_addr = list(vm.region_keys())[0]
         region = vm.region_get(region_addr)
+        assert region is not None
         assert len(region) == 5  # 9(5)
         assert (
             _decode_zoned_unsigned(region, 0, 5) == 125
@@ -814,7 +816,7 @@ class TestPerformVaryingExecution:
         assert _decode_zoned_unsigned(region, 3, 5) == 6
 
 
-def _decode_zoned_unsigned(region: list[int], offset: int, length: int) -> int:
+def _decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
     """Decode unsigned zoned decimal from a memory region.
 
     Each byte is EBCDIC zoned: 0xF0=0, 0xF1=1, ..., 0xF9=9.

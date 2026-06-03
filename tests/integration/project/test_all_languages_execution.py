@@ -547,6 +547,7 @@ class TestCobolMultiFile:
         assert vm.region_count() == 2
         # Second region is MAIN's WS-RESULT: PIC 9(4) zoned = 0042
         main_region = vm.region_get(list(vm.region_keys())[1])
+        assert main_region is not None
         digits = [main_region[i] & 0x0F for i in range(4)]
         value = sum(d * (10 ** (3 - i)) for i, d in enumerate(digits))
         assert value == 42
