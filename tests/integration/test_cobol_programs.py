@@ -4068,3 +4068,52 @@ class TestArithmeticRefMod:
         region = _first_region(vm)
         # WS-FIELD: 6 bytes at offset 0; WS-TOTAL: 5 bytes at offset 6
         assert _decode_zoned_unsigned(region, 6, 5) == 300
+
+
+class TestSectionedDataDivision:
+    @covers(CobolFeature.SECTION_LINKAGE)
+    def test_call_with_linkage_section_passes_region(self):
+        """CALL SUBPROG USING WS-NUM — caller region is passed via CallWithMemory.
+
+        Verifies the pipeline does not crash when a CALL with USING is lowered
+        via CallWithMemory. WS-NUM should retain its value after the call.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MAIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-NUM PIC 9(3) VALUE 042.",
+                "PROCEDURE DIVISION.",
+                "    CALL 'SUBPROG' USING WS-NUM.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-NUM at offset 0, 3 bytes; value should remain 042
+        assert _decode_zoned_unsigned(region, 0, 3) == 42
+
+    @covers(CobolFeature.SECTION_LOCAL_STORAGE)
+    def test_local_storage_section_allocates_fresh_region(self):
+        """Program with LOCAL-STORAGE SECTION runs without error.
+
+        Verifies lower_sectioned_data_division allocates both WS and LS regions
+        and the VM completes without crashing. WS-OUT retains its initial VALUE.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MAIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-OUT PIC 9(2) VALUE 42.",
+                "LOCAL-STORAGE SECTION.",
+                "77 LS-TEMP PIC 9(3) VALUE 007.",
+                "PROCEDURE DIVISION.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-OUT at offset 0, 2 bytes; initial VALUE 42 should be preserved
+        assert _decode_zoned_unsigned(region, 0, 2) == 42

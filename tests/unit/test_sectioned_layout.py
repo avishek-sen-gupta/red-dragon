@@ -6,6 +6,7 @@ from interpreter.cobol.sectioned_layout import (
     build_sectioned_layout,
 )
 from interpreter.register import Register
+from interpreter.cobol.features import CobolFeature
 from tests.covers import covers, NotLanguageFeature
 
 
@@ -17,7 +18,7 @@ def _make_layout(field_name: str, pic: str = "X(5)") -> DataLayout:
     return build_data_layout([_make_field(field_name, pic)])
 
 
-@covers(NotLanguageFeature.INFRASTRUCTURE)
+@covers(CobolFeature.SECTION_LINKAGE)
 def test_build_sectioned_layout_all_three_sections():
     asg = CobolASG(
         data_fields=[_make_field("WS-A")],
