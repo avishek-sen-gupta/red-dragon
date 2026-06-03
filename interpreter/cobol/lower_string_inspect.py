@@ -10,7 +10,7 @@ from interpreter.cobol.cobol_statements import (
     StringStatement,
     UnstringStatement,
 )
-from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ir_encoders import (
@@ -19,6 +19,7 @@ from interpreter.cobol.ir_encoders import (
     build_string_split_ir,
 )
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction
@@ -30,17 +31,16 @@ logger = logging.getLogger(__name__)
 def lower_string(
     ctx: EmitContext,
     stmt: StringStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """STRING ... DELIMITED BY ... INTO target."""
     part_regs: list[Register] = []
     for sending in stmt.sendings:
         operand_name = sending.value.name
-        if ctx.has_field(operand_name, layout):
-            source_ref = ctx.resolve_field_ref(operand_name, layout, region_reg)
+        if ctx.has_field(operand_name, materialised):
+            source_ref, source_rr = ctx.resolve_field_ref(operand_name, materialised)
             decoded_reg = ctx.emit_decode_field(
-                region_reg, source_ref.fl, source_ref.offset_reg
+                source_rr, source_ref.fl, source_ref.offset_reg
             )
             src_str_reg = ctx.emit_to_string(decoded_reg)
         else:
@@ -48,7 +48,7 @@ def lower_string(
 
         if sending.value.ref_mod_start is not None:
             raw_start_reg = eval_ref_mod_expr(
-                ctx, sending.value.ref_mod_start, layout, region_reg
+                ctx, sending.value.ref_mod_start, materialised
             )
             one_reg = ctx.const_to_reg(1)
             start_0indexed_reg = ctx.fresh_reg()
@@ -62,7 +62,7 @@ def lower_string(
             )
             if sending.value.ref_mod_length is not None:
                 length_reg = eval_ref_mod_expr(
-                    ctx, sending.value.ref_mod_length, layout, region_reg
+                    ctx, sending.value.ref_mod_length, materialised
                 )
             else:
                 length_reg = ctx.const_to_reg(9999)
@@ -126,10 +126,10 @@ def lower_string(
             )
             concat_reg = new_concat
 
-    if stmt.into and ctx.has_field(stmt.into, layout):
-        target_ref = ctx.resolve_field_ref(stmt.into, layout, region_reg)
+    if stmt.into and ctx.has_field(stmt.into, materialised):
+        target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
         ctx.emit_encode_and_write(
-            region_reg, target_ref.fl, concat_reg, target_ref.offset_reg
+            target_rr, target_ref.fl, concat_reg, target_ref.offset_reg
         )
     else:
         logger.warning("STRING INTO target %s not found in layout", stmt.into)
@@ -138,24 +138,21 @@ def lower_string(
 def lower_unstring(
     ctx: EmitContext,
     stmt: UnstringStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """UNSTRING source DELIMITED BY ... INTO targets."""
     source_name = stmt.source.name
-    if ctx.has_field(source_name, layout):
-        source_ref = ctx.resolve_field_ref(source_name, layout, region_reg)
+    if ctx.has_field(source_name, materialised):
+        source_ref, source_rr = ctx.resolve_field_ref(source_name, materialised)
         decoded_reg = ctx.emit_decode_field(
-            region_reg, source_ref.fl, source_ref.offset_reg
+            source_rr, source_ref.fl, source_ref.offset_reg
         )
         src_str_reg = ctx.emit_to_string(decoded_reg)
     else:
         src_str_reg = ctx.const_to_reg(str(stmt.source.name))
 
     if stmt.source.ref_mod_start is not None:
-        raw_start_reg = eval_ref_mod_expr(
-            ctx, stmt.source.ref_mod_start, layout, region_reg
-        )
+        raw_start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
         one_reg = ctx.const_to_reg(1)
         start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -168,7 +165,7 @@ def lower_unstring(
         )
         if stmt.source.ref_mod_length is not None:
             length_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_length, layout, region_reg
+                ctx, stmt.source.ref_mod_length, materialised
             )
         else:
             length_reg = ctx.const_to_reg(9999)
@@ -188,10 +185,10 @@ def lower_unstring(
     parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})
 
     for i, target_name in enumerate(stmt.into):
-        if not ctx.has_field(target_name, layout):
+        if not ctx.has_field(target_name, materialised):
             logger.warning("UNSTRING INTO target %s not found in layout", target_name)
             continue
-        target_ref = ctx.resolve_field_ref(target_name, layout, region_reg)
+        target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
         idx_reg = ctx.const_to_reg(i)
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -202,29 +199,26 @@ def lower_unstring(
             ),
         )
         ctx.emit_encode_and_write(
-            region_reg, target_ref.fl, part_reg, target_ref.offset_reg
+            target_rr, target_ref.fl, part_reg, target_ref.offset_reg
         )
 
 
 def lower_inspect(
     ctx: EmitContext,
     stmt: InspectStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """INSPECT source TALLYING|REPLACING ..."""
-    if not ctx.has_field(stmt.source.name, layout):
+    if not ctx.has_field(stmt.source.name, materialised):
         logger.warning("INSPECT source %s not found in layout", stmt.source.name)
         return
-    source_ref = ctx.resolve_field_ref(stmt.source.name, layout, region_reg)
+    source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
     source_fl = source_ref.fl
-    decoded_reg = ctx.emit_decode_field(region_reg, source_fl, source_ref.offset_reg)
+    decoded_reg = ctx.emit_decode_field(source_rr, source_fl, source_ref.offset_reg)
     src_str_reg = ctx.emit_to_string(decoded_reg)
 
     if stmt.source.ref_mod_start is not None:
-        raw_start_reg = eval_ref_mod_expr(
-            ctx, stmt.source.ref_mod_start, layout, region_reg
-        )
+        raw_start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
         one_reg = ctx.const_to_reg(1)
         start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -237,7 +231,7 @@ def lower_inspect(
         )
         if stmt.source.ref_mod_length is not None:
             length_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_length, layout, region_reg
+                ctx, stmt.source.ref_mod_length, materialised
             )
         else:
             length_reg = ctx.const_to_reg(9999)
@@ -252,17 +246,16 @@ def lower_inspect(
         src_str_reg = sliced_reg
 
     if stmt.inspect_type == InspectType.TALLYING:
-        lower_inspect_tallying(ctx, stmt, src_str_reg, layout, region_reg)
+        lower_inspect_tallying(ctx, stmt, src_str_reg, materialised)
     elif stmt.inspect_type == InspectType.REPLACING:
-        lower_inspect_replacing(ctx, stmt, src_str_reg, source_fl, layout, region_reg)
+        lower_inspect_replacing(ctx, stmt, src_str_reg, source_fl, materialised)
 
 
 def lower_inspect_tallying(
     ctx: EmitContext,
     stmt: InspectStatement,
     src_str_reg: Register,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """INSPECT TALLYING — count pattern occurrences and write to tally target."""
     total_count_reg = ctx.const_to_reg(0)
@@ -290,11 +283,11 @@ def lower_inspect_tallying(
         )
         total_count_reg = new_total
 
-    if stmt.tallying_target and ctx.has_field(stmt.tallying_target, layout):
-        tally_ref = ctx.resolve_field_ref(stmt.tallying_target, layout, region_reg)
+    if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
+        tally_ref, tally_rr = ctx.resolve_field_ref(stmt.tallying_target, materialised)
         count_str_reg = ctx.emit_to_string(total_count_reg)
         ctx.emit_encode_and_write(
-            region_reg, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+            tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
         )
 
 
@@ -303,8 +296,7 @@ def lower_inspect_replacing(
     stmt: InspectStatement,
     src_str_reg: Register,
     source_fl: FieldLayout,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """INSPECT REPLACING — apply replacements and write back."""
     current_str_reg: Register = src_str_reg
@@ -325,4 +317,13 @@ def lower_inspect_replacing(
         )
         current_str_reg = new_str_reg
 
-    ctx.emit_encode_and_write(region_reg, source_fl, current_str_reg)
+    # Resolve the source region register for the write-back
+    if ctx.has_field(stmt.source.name, materialised):
+        _, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        ctx.emit_encode_and_write(source_rr, source_fl, current_str_reg)
+    else:
+        # Fallback: source_fl carries offset; need a region register — skip write
+        logger.warning(
+            "INSPECT REPLACING: source field %s not found in materialised layout; skipping write-back",
+            stmt.source.name,
+        )

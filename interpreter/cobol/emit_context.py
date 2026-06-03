@@ -20,6 +20,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cobol.field_resolution import (
     ResolvedFieldRef,
@@ -61,7 +62,7 @@ logger = logging.getLogger(__name__)
 # Type alias for the dispatch callback signature.
 # Any is CobolStatementType — avoided here to prevent a circular import via statement_dispatch.
 DispatchFn = Callable[
-    ["EmitContext", Any, DataLayout, "Register"], None
+    ["EmitContext", Any, "MaterialisedSectionedLayout"], None
 ]  # Any: CobolStatementType, circular-import boundary
 
 
@@ -171,25 +172,28 @@ class EmitContext:
     # ── Statement Dispatch ────────────────────────────────────────
 
     def lower_statement(
-        self, stmt: Any, layout: DataLayout, region_reg: Register
+        self, stmt: Any, materialised: MaterialisedSectionedLayout
     ) -> None:  # Any: CobolStatementType, circular-import boundary
         """Dispatch a statement through the injected callback."""
-        self._dispatch_fn(self, stmt, layout, region_reg)
+        self._dispatch_fn(self, stmt, materialised)
 
     # ── Field Reference Resolution ────────────────────────────────
 
     def resolve_field_ref(
-        self, name: str, layout: DataLayout, region_reg: Register
-    ) -> ResolvedFieldRef:
-        """Resolve a field reference that may contain subscript notation."""
+        self, name: str, materialised: MaterialisedSectionedLayout
+    ) -> tuple[ResolvedFieldRef, Register]:
+        """Resolve a field reference that may contain subscript notation.
+
+        Returns (ResolvedFieldRef, region_register) — the region register is
+        determined by which DATA DIVISION section owns the field.
+        """
         base_name, subscript = parse_subscript_notation(name)
-        fl = layout.lookup_as_storage(base_name)
-        assert fl is not None, f"Field or group not found in layout: {base_name!r}"
+        fl, region_reg = materialised.resolve(base_name)
 
         if not subscript:
             offset_reg = self.fresh_reg()
             self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
-            return ResolvedFieldRef(fl=fl, offset_reg=offset_reg)
+            return ResolvedFieldRef(fl=fl, offset_reg=offset_reg), region_reg
 
         # Resolve subscript value: literal or field
         try:
@@ -198,9 +202,9 @@ class EmitContext:
         except ValueError:
             # Subscript is a field reference — decode it
             sub_base, _ = parse_subscript_notation(subscript)
-            sub_fl = layout.lookup(sub_base)
-            if sub_fl is not None:
-                idx_reg = self.emit_decode_field(region_reg, sub_fl)
+            if materialised.has_field(sub_base):
+                sub_fl, sub_rr = materialised.resolve(sub_base)
+                idx_reg = self.emit_decode_field(sub_rr, sub_fl)
             else:
                 idx_reg = self.const_to_reg(1)
                 logger.warning(
@@ -252,12 +256,12 @@ class EmitContext:
             redefines=fl.redefines,
             value=fl.value,
         )
-        return ResolvedFieldRef(fl=element_fl, offset_reg=final_offset_reg)
+        return ResolvedFieldRef(fl=element_fl, offset_reg=final_offset_reg), region_reg
 
-    def has_field(self, name: str, layout: DataLayout) -> bool:
+    def has_field(self, name: str, materialised: MaterialisedSectionedLayout) -> bool:
         """Check if a name (possibly subscripted) refers to a known field."""
         base_name, _ = parse_subscript_notation(name)
-        return layout.lookup_as_storage(base_name) is not None
+        return materialised.has_field(base_name)
 
     def resolve_field_ref_from(
         self, fl: FieldLayout, region_reg: Register
@@ -613,16 +617,14 @@ class EmitContext:
     # ── Condition Lowering ───────────────────────────────────────
 
     def lower_condition(
-        self, condition: dict, layout: DataLayout, region_reg: Register
+        self, condition: dict, materialised: MaterialisedSectionedLayout
     ) -> Register:
         """Lower a condition — delegates to condition_lowering module."""
         from interpreter.cobol.condition_lowering import (
             lower_condition as _lower_condition,
         )
 
-        return _lower_condition(
-            self, condition, layout, region_reg, self._condition_index
-        )
+        return _lower_condition(self, condition, materialised, self._condition_index)
 
     # ── Parse Literal ─────────────────────────────────────────────
 

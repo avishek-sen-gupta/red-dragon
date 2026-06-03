@@ -1,6 +1,6 @@
 """Tests for condition lowering with level-88 condition name expansion."""
 
-from interpreter.cobol.asg_types import CobolField
+from interpreter.cobol.asg_types import CobolField, CobolASG
 from interpreter.cobol.condition_lowering import lower_condition
 from interpreter.cobol.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.condition_name_index import (
@@ -11,12 +11,18 @@ from interpreter.cobol.condition_name_index import (
 from interpreter.cobol.data_layout import build_data_layout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.lower_data_division import lower_data_division
+from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.sectioned_layout import (
+    MaterialisedSectionedLayout,
+    SectionedLayout,
+    build_sectioned_layout,
+)
+from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.ir import Opcode
 from tests.covers import covers
 
 
-def _noop_dispatch(ctx, stmt, layout, region_reg):
+def _noop_dispatch(ctx, stmt, materialised):
     pass
 
 
@@ -28,8 +34,10 @@ def _setup_with_fields(cobol_fields: list[CobolField]):
         dispatch_fn=_noop_dispatch,
         condition_index=condition_index,
     )
-    region_reg = lower_data_division(ctx, layout)
-    return ctx, layout, region_reg, condition_index
+    asg = CobolASG(data_fields=cobol_fields)
+    sl = build_sectioned_layout(asg)
+    materialised = lower_sectioned_data_division(ctx, sl)
+    return ctx, materialised, condition_index
 
 
 class TestConditionLoweringBasic:
@@ -40,7 +48,7 @@ class TestConditionLoweringBasic:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
-        ctx, layout, region_reg, idx = _setup_with_fields(fields)
+        ctx, materialised, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {
@@ -51,8 +59,7 @@ class TestConditionLoweringBasic:
                     "right": {"kind": "lit", "value": "10"},
                 },
             },
-            layout,
-            region_reg,
+            materialised,
             idx,
         )
         assert str(result_reg).startswith("%r")
@@ -69,9 +76,9 @@ class TestConditionLoweringBasic:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
-        ctx, layout, region_reg, idx = _setup_with_fields(fields)
+        ctx, materialised, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "text": "UNKNOWN-TOKEN"}, layout, region_reg, idx
+            ctx, {"not": False, "text": "UNKNOWN-TOKEN"}, materialised, idx
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
@@ -99,12 +106,11 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, layout, region_reg, idx = _setup_with_fields(fields)
+        ctx, materialised, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {"not": False, "condition_name": "STATUS-ACTIVE"},
-            layout,
-            region_reg,
+            materialised,
             idx,
         )
         assert str(result_reg).startswith("%r")
@@ -139,12 +145,11 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, layout, region_reg, idx = _setup_with_fields(fields)
+        ctx, materialised, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {"not": False, "condition_name": "STATUS-VALID"},
-            layout,
-            region_reg,
+            materialised,
             idx,
         )
         assert str(result_reg).startswith("%r")
@@ -172,12 +177,11 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, layout, region_reg, idx = _setup_with_fields(fields)
+        ctx, materialised, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {"not": False, "condition_name": "STATUS-ALPHA"},
-            layout,
-            region_reg,
+            materialised,
             idx,
         )
         assert str(result_reg).startswith("%r")
@@ -216,9 +220,9 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, layout, region_reg, idx = _setup_with_fields(fields)
+        ctx, materialised, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "condition_name": "VALID-CODE"}, layout, region_reg, idx
+            ctx, {"not": False, "condition_name": "VALID-CODE"}, materialised, idx
         )
         assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -247,9 +251,9 @@ class TestConditionNameExpansion:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
-        ctx, layout, region_reg, idx = _setup_with_fields(fields)
+        ctx, materialised, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "text": "NONEXISTENT-COND"}, layout, region_reg, idx
+            ctx, {"not": False, "text": "NONEXISTENT-COND"}, materialised, idx
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
@@ -281,7 +285,7 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, layout, region_reg, idx = _setup_with_fields(fields)
+        ctx, materialised, idx = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {
@@ -292,8 +296,7 @@ class TestConditionNameExpansion:
                     "right": {"kind": "lit", "value": "A"},
                 },
             },
-            layout,
-            region_reg,
+            materialised,
             idx,
         )
         assert str(result_reg).startswith("%r")
