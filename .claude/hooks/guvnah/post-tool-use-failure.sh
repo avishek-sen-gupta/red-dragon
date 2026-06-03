@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GUVNAH_ROOT="/Users/asgupta/code/context-injector"
+GUVNAH_ROOT="/Users/asgupta/code/guvnah"
 export PYTHONPATH="$GUVNAH_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export GUVNAH_MACHINES="$(cd "$(dirname "$0")" && pwd)/machines"
 # PostToolUseFailure hook — capture failed tool output as evidence.
