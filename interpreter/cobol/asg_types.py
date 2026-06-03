@@ -183,6 +183,7 @@ class CobolASG:
         statements: Division-level bare statements (no paragraph or section).
     """
 
+    program_id: str = ""
     data_fields: list[CobolField] = field(default_factory=list)
     linkage_fields: list[CobolField] = field(default_factory=list)
     local_storage_fields: list[CobolField] = field(default_factory=list)
@@ -193,6 +194,7 @@ class CobolASG:
     @classmethod
     def from_dict(cls, data: dict) -> CobolASG:
         return cls(
+            program_id=data.get("program_id", ""),
             data_fields=[CobolField.from_dict(f) for f in data.get("data_fields", [])],
             linkage_fields=[
                 CobolField.from_dict(f) for f in data.get("linkage_fields", [])
