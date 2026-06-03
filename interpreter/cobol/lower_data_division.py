@@ -44,8 +44,9 @@ def lower_sectioned_data_division(
 ) -> MaterialisedSectionedLayout:
     """Bind WS to the persistent singleton region; allocate fresh LS per call.
 
-    The WS region handle was stored into __ws_region by func_PROGRAMID_0
-    before this function is called (loaded from the singleton HeapObject).
+    The WS region handle must already be stored in __ws_region by the caller
+    (currently the inline shim in CobolFrontend; Task 5 will replace this
+    with the program init block that loads it from the singleton HeapObject).
     LINKAGE is bound to __params_region injected by _handle_call_with_memory.
     LOCAL-STORAGE is freshly allocated on every call.
     """
