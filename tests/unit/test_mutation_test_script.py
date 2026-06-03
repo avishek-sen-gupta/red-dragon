@@ -13,7 +13,7 @@ from tests.covers import covers, NotLanguageFeature
 
 # Make scripts/ importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
-import mutation_test  # type: ignore[import]  # noqa: E402
+import mutation_test  # pyright: ignore[reportMissingImports]  # noqa: E402
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
