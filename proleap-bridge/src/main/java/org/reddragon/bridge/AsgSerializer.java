@@ -10,6 +10,7 @@ import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.linkage.LinkageSection;
 import io.proleap.cobol.asg.metamodel.data.localstorage.LocalStorageSection;
 import io.proleap.cobol.asg.metamodel.data.workingstorage.WorkingStorageSection;
+import io.proleap.cobol.asg.metamodel.identification.IdentificationDivision;
 import io.proleap.cobol.asg.metamodel.procedure.Paragraph;
 import io.proleap.cobol.asg.metamodel.procedure.ProcedureDivision;
 import io.proleap.cobol.asg.metamodel.procedure.Section;
@@ -61,6 +62,13 @@ public final class AsgSerializer {
         if (pu == null) {
             LOG.warning("No ProgramUnit found in CompilationUnit");
             return asg;
+        }
+
+        IdentificationDivision id = pu.getIdentificationDivision();
+        if (id != null && id.getProgramIdParagraph() != null) {
+            asg.addProperty("program_id", id.getProgramIdParagraph().getName());
+        } else {
+            asg.addProperty("program_id", cu.getName());
         }
 
         serializeDataDivision(pu, asg);
