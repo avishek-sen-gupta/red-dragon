@@ -36,6 +36,7 @@ class Opcode(str, Enum):
     CALL_METHOD = "CALL_METHOD"
     CALL_UNKNOWN = "CALL_UNKNOWN"
     CALL_CTOR = "CALL_CTOR"
+    CALL_WITH_MEMORY = "CALL_WITH_MEMORY"
     # Value consumers / control flow
     DECL_VAR = "DECL_VAR"
     STORE_VAR = "STORE_VAR"

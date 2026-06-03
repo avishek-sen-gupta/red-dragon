@@ -445,6 +445,36 @@ class CallCtorFunction(InstructionBase):
         ]
 
 
+@dataclass(frozen=True)
+class CallWithMemory(InstructionBase):
+    """CALL_WITH_MEMORY: call a subprogram passing two memory regions.
+
+    params_reg: caller passes this region to the callee (callee reads LINKAGE fields from it).
+    results_reg: callee writes output back here (BY REF: same as params_reg).
+    result_reg: inherited from InstructionBase — scalar return value for GIVING clause.
+    """
+
+    func_name: FuncName = NO_FUNC_NAME
+    params_reg: Register = NO_REGISTER
+    results_reg: Register = NO_REGISTER
+
+    @property
+    def opcode(self) -> Opcode:
+        return Opcode.CALL_WITH_MEMORY
+
+    @property
+    def operands(self) -> list[Any]:
+        return [str(self.func_name), str(self.params_reg), str(self.results_reg)]
+
+    def reads(self) -> list[StorageIdentifier]:
+        reads: list[StorageIdentifier] = []
+        if self.params_reg.is_present():
+            reads.append(self.params_reg)
+        if self.results_reg.is_present() and self.results_reg != self.params_reg:
+            reads.append(self.results_reg)
+        return reads
+
+
 # ── Memory — Fields ──────────────────────────────────────────────
 
 
@@ -968,6 +998,7 @@ Instruction = Union[
     CallMethod,
     CallUnknown,
     CallCtorFunction,
+    CallWithMemory,
     LoadField,
     StoreField,
     LoadFieldIndirect,
@@ -1120,6 +1151,17 @@ def _call_ctor(inst: Any) -> CallCtorFunction:
         func_name=FuncName(raw_hint) if raw_hint else NO_FUNC_NAME,
         type_hint=scalar(TypeName(raw_hint)) if raw_hint else UNKNOWN,
         args=args,
+        source_location=inst.source_location,
+    )
+
+
+def _call_with_memory(inst: Any) -> CallWithMemory:
+    ops = inst.operands
+    return CallWithMemory(
+        result_reg=inst.result_reg,
+        func_name=FuncName(str(ops[0])) if len(ops) >= 1 else NO_FUNC_NAME,
+        params_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
+        results_reg=Register(str(ops[2])) if len(ops) >= 3 else NO_REGISTER,
         source_location=inst.source_location,
     )
 
@@ -1349,6 +1391,7 @@ _TO_TYPED: dict[Opcode, object] = {
     Opcode.CALL_METHOD: _call_method,
     Opcode.CALL_UNKNOWN: _call_unknown,
     Opcode.CALL_CTOR: _call_ctor,
+    Opcode.CALL_WITH_MEMORY: _call_with_memory,
     Opcode.LOAD_FIELD: _load_field,
     Opcode.STORE_FIELD: _store_field,
     Opcode.LOAD_FIELD_INDIRECT: _load_field_indirect,
