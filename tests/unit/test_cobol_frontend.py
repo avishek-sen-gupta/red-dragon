@@ -1862,8 +1862,8 @@ class TestCallAlterEntryCancelLowering:
         CobolFeature.VALUE_CLAUSE,
         CobolFeature.USAGE_DISPLAY,
     )
-    def test_call_emits_call_function(self):
-        """CALL should emit CALL_FUNCTION with program name."""
+    def test_call_emits_call_with_memory(self):
+        """CALL should emit CALL_WITH_MEMORY with program name."""
         fields = [
             CobolField(
                 name="WS-A",
@@ -1882,7 +1882,7 @@ class TestCallAlterEntryCancelLowering:
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        calls = _find_opcodes(instructions, Opcode.CALL_WITH_MEMORY)
         subprog_calls = [c for c in calls if c.operands and c.operands[0] == "SUBPROG"]
         assert len(subprog_calls) >= 1
 

@@ -296,7 +296,7 @@ class TestLowerPerformWithMaterialised:
 
 class TestLowerCallWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_lower_call_emits_call_function(self):
+    def test_lower_call_emits_call_with_memory(self):
         from interpreter.cobol.lower_call import lower_call
         from interpreter.cobol.cobol_statements import CallStatement
 
@@ -309,4 +309,4 @@ class TestLowerCallWithMaterialised:
         lower_call(ctx, stmt, materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]
-        assert Opcode.CALL_FUNCTION in opcodes
+        assert Opcode.CALL_WITH_MEMORY in opcodes

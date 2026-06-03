@@ -15,12 +15,11 @@ from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    CallFunction,
+    CallWithMemory,
     Label_,
     StoreVar,
 )
 from interpreter.ir import CodeLabel
-from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -30,21 +29,20 @@ def lower_call(
     stmt: CallStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """CALL 'program' USING params — symbolic subprogram invocation."""
-    arg_regs: list[Register] = []
-    for param in stmt.using:
-        if ctx.has_field(param.name, materialised):
-            ref, rr = ctx.resolve_field_ref(param.name, materialised)
-            arg_regs.append(ctx.emit_decode_field(rr, ref.fl, ref.offset_reg))
-        else:
-            arg_regs.append(ctx.const_to_reg(param.name))
+    """CALL 'program' USING params — region-passing subprogram invocation via CallWithMemory.
+
+    BY REFERENCE (default): passes the caller's WORKING-STORAGE region to the callee
+    as both params_reg and results_reg. The callee reads LINKAGE fields from that region.
+    """
+    ws_layout, ws_reg = materialised.working_storage
 
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(
+        CallWithMemory(
             result_reg=result_reg,
             func_name=FuncName(stmt.program),
-            args=tuple(arg_regs),
+            params_reg=ws_reg,
+            results_reg=ws_reg,
         )
     )
 
@@ -55,7 +53,9 @@ def lower_call(
             giving_rr, giving_ref.fl, str_reg, giving_ref.offset_reg
         )
 
-    logger.info("CALL %s with %d params (symbolic)", stmt.program, len(stmt.using))
+    logger.info(
+        "CALL %s with %d params (CallWithMemory)", stmt.program, len(stmt.using)
+    )
 
 
 def lower_alter(
