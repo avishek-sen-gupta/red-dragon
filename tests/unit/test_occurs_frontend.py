@@ -11,7 +11,20 @@ from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_la
 from interpreter.cobol.pic_parser import parse_pic
 from interpreter.cobol.cobol_expression import tokenize_expression, parse_expression
 from interpreter.cobol.cobol_expression import FieldRefNode
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.ir import Opcode
+from interpreter.register import Register
+
+
+def _materialise(layout: DataLayout) -> MaterialisedSectionedLayout:
+    """Wrap a DataLayout in a MaterialisedSectionedLayout with a dummy region register."""
+    empty = DataLayout()
+    dummy_reg = Register("%r_region")
+    return MaterialisedSectionedLayout(
+        working_storage=(layout, dummy_reg),
+        linkage=(empty, Register("__no_reg__")),
+        local_storage=(empty, Register("__no_reg__")),
+    )
 
 
 class TestParseSubscriptNotation:
@@ -114,7 +127,8 @@ class TestResolveFieldRef:
         frontend._label_counter = 0
         frontend._instructions = []
 
-        ref = frontend._resolve_field_ref("WS-IDX", layout, "%r_region")
+        materialised = _materialise(layout)
+        ref, _ = frontend._resolve_field_ref("WS-IDX", materialised)
         assert ref.fl.name == "WS-IDX"
         assert ref.fl.byte_length == 4
         # Should have emitted a CONST for offset
@@ -130,7 +144,8 @@ class TestResolveFieldRef:
         frontend._label_counter = 0
         frontend._instructions = []
 
-        ref = frontend._resolve_field_ref("WS-TBL(3)", layout, "%r_region")
+        materialised = _materialise(layout)
+        ref, _ = frontend._resolve_field_ref("WS-TBL(3)", materialised)
         assert ref.fl.name == "WS-TBL"
         # Element size should be 4 (single element), not 20 (total)
         assert ref.fl.byte_length == 4
@@ -145,8 +160,9 @@ class TestResolveFieldRef:
         """_has_field correctly identifies subscripted field references."""
         frontend = self._make_frontend()
         layout = self._make_layout_with_occurs()
-        assert frontend._has_field("WS-TBL(3)", layout)
-        assert frontend._has_field("WS-TBL", layout)
-        assert frontend._has_field("WS-IDX", layout)
-        assert not frontend._has_field("WS-NONEXISTENT", layout)
-        assert not frontend._has_field("WS-NONEXISTENT(1)", layout)
+        materialised = _materialise(layout)
+        assert frontend._has_field("WS-TBL(3)", materialised)
+        assert frontend._has_field("WS-TBL", materialised)
+        assert frontend._has_field("WS-IDX", materialised)
+        assert not frontend._has_field("WS-NONEXISTENT", materialised)
+        assert not frontend._has_field("WS-NONEXISTENT(1)", materialised)

@@ -6,8 +6,8 @@ import logging
 
 from interpreter.cobol.cobol_statements import SearchStatement
 from interpreter.cobol.condition_lowering import _lower_condition_str
-from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
 from interpreter.instructions import (
@@ -26,8 +26,7 @@ logger = logging.getLogger(__name__)
 def lower_search(
     ctx: EmitContext,
     stmt: SearchStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """SEARCH table VARYING index WHEN cond ... AT END ..."""
     loop_label = ctx.fresh_label("search_loop")
@@ -70,7 +69,7 @@ def lower_search(
         if not when.condition:
             continue
         cond_reg = _lower_condition_str(
-            ctx, when.condition, layout, region_reg, ctx._condition_index
+            ctx, when.condition, materialised, ctx._condition_index
         )
         when_true = ctx.fresh_label("search_when_true")
         when_next = ctx.fresh_label("search_when_next")
@@ -82,17 +81,17 @@ def lower_search(
         )
         ctx.emit_inst(Label_(label=when_true))
         for child in when.children:
-            ctx.lower_statement(child, layout, region_reg)
+            ctx.lower_statement(child, materialised)
         ctx.emit_inst(Branch(label=end_label))
         ctx.emit_inst(Label_(label=when_next))
 
     ctx.emit_inst(Branch(label=increment_label))
     ctx.emit_inst(Label_(label=increment_label))
 
-    if stmt.varying and ctx.has_field(stmt.varying, layout):
-        varying_ref = ctx.resolve_field_ref(stmt.varying, layout, region_reg)
+    if stmt.varying and ctx.has_field(stmt.varying, materialised):
+        varying_ref, varying_rr = ctx.resolve_field_ref(stmt.varying, materialised)
         decoded_reg = ctx.emit_decode_field(
-            region_reg, varying_ref.fl, varying_ref.offset_reg
+            varying_rr, varying_ref.fl, varying_ref.offset_reg
         )
         one_reg = ctx.const_to_reg(1)
         inc_reg = ctx.fresh_reg()
@@ -106,7 +105,7 @@ def lower_search(
         )
         str_reg = ctx.emit_to_string(inc_reg)
         ctx.emit_encode_and_write(
-            region_reg, varying_ref.fl, str_reg, varying_ref.offset_reg
+            varying_rr, varying_ref.fl, str_reg, varying_ref.offset_reg
         )
 
     ctr_reg2 = ctx.fresh_reg()
@@ -126,6 +125,6 @@ def lower_search(
 
     ctx.emit_inst(Label_(label=at_end_label))
     for child in stmt.at_end:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
 
     ctx.emit_inst(Label_(label=end_label))

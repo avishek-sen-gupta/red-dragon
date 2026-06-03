@@ -10,8 +10,8 @@ from interpreter.cobol.cobol_statements import (
     CancelStatement,
     EntryStatement,
 )
-from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -28,15 +28,14 @@ logger = logging.getLogger(__name__)
 def lower_call(
     ctx: EmitContext,
     stmt: CallStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """CALL 'program' USING params — symbolic subprogram invocation."""
     arg_regs: list[Register] = []
     for param in stmt.using:
-        if ctx.has_field(param.name, layout):
-            ref = ctx.resolve_field_ref(param.name, layout, region_reg)
-            arg_regs.append(ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg))
+        if ctx.has_field(param.name, materialised):
+            ref, rr = ctx.resolve_field_ref(param.name, materialised)
+            arg_regs.append(ctx.emit_decode_field(rr, ref.fl, ref.offset_reg))
         else:
             arg_regs.append(ctx.const_to_reg(param.name))
 
@@ -49,11 +48,11 @@ def lower_call(
         )
     )
 
-    if stmt.giving and ctx.has_field(stmt.giving, layout):
-        giving_ref = ctx.resolve_field_ref(stmt.giving, layout, region_reg)
+    if stmt.giving and ctx.has_field(stmt.giving, materialised):
+        giving_ref, giving_rr = ctx.resolve_field_ref(stmt.giving, materialised)
         str_reg = ctx.emit_to_string(result_reg)
         ctx.emit_encode_and_write(
-            region_reg, giving_ref.fl, str_reg, giving_ref.offset_reg
+            giving_rr, giving_ref.fl, str_reg, giving_ref.offset_reg
         )
 
     logger.info("CALL %s with %d params (symbolic)", stmt.program, len(stmt.using))
@@ -62,8 +61,7 @@ def lower_call(
 def lower_alter(
     ctx: EmitContext,
     stmt: AlterStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """ALTER para-1 TO PROCEED TO para-2."""
     for pt in stmt.proceed_tos:
@@ -80,8 +78,7 @@ def lower_alter(
 def lower_entry(
     ctx: EmitContext,
     stmt: EntryStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """ENTRY 'name' — alternate entry point for a subprogram."""
     if stmt.entry_name:
@@ -92,8 +89,7 @@ def lower_entry(
 def lower_cancel(
     ctx: EmitContext,
     stmt: CancelStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """CANCEL program — no-op for static analysis."""
     for prog in stmt.programs:
