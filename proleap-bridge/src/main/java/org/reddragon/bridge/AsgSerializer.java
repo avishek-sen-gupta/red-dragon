@@ -7,6 +7,8 @@ import io.proleap.cobol.asg.metamodel.Program;
 import io.proleap.cobol.asg.metamodel.ProgramUnit;
 import io.proleap.cobol.asg.metamodel.data.DataDivision;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
+import io.proleap.cobol.asg.metamodel.data.linkage.LinkageSection;
+import io.proleap.cobol.asg.metamodel.data.localstorage.LocalStorageSection;
 import io.proleap.cobol.asg.metamodel.data.workingstorage.WorkingStorageSection;
 import io.proleap.cobol.asg.metamodel.procedure.Paragraph;
 import io.proleap.cobol.asg.metamodel.procedure.ProcedureDivision;
@@ -25,7 +27,9 @@ import java.util.logging.Logger;
  * <p>Output structure:
  * <pre>
  * {
- *   "data_fields": [...],
+ *   "data_fields": [...],          // WORKING-STORAGE SECTION
+ *   "linkage_fields": [...],       // LINKAGE SECTION (optional)
+ *   "local_storage_fields": [...], // LOCAL-STORAGE SECTION (optional)
  *   "sections": [{"name": "...", "paragraphs": [...]}],
  *   "paragraphs": [{"name": "...", "statements": [...]}]
  * }
@@ -66,7 +70,7 @@ public final class AsgSerializer {
     }
 
     /**
-     * Extracts DATA DIVISION fields from Working-Storage Section.
+     * Extracts DATA DIVISION fields from Working-Storage, Linkage, and Local-Storage sections.
      */
     private static void serializeDataDivision(ProgramUnit pu, JsonObject asg) {
         DataDivision dataDivision = pu.getDataDivision();
@@ -76,16 +80,33 @@ public final class AsgSerializer {
         }
 
         WorkingStorageSection ws = dataDivision.getWorkingStorageSection();
-        if (ws == null) {
-            LOG.info("No WORKING-STORAGE SECTION found");
-            return;
+        if (ws != null) {
+            List<DataDescriptionEntry> rootEntries = ws.getRootDataDescriptionEntries();
+            if (rootEntries != null && !rootEntries.isEmpty()) {
+                JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
+                asg.add("data_fields", fields);
+                LOG.info("Serialized " + fields.size() + " working-storage fields");
+            }
         }
 
-        List<DataDescriptionEntry> rootEntries = ws.getRootDataDescriptionEntries();
-        if (rootEntries != null && !rootEntries.isEmpty()) {
-            JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
-            asg.add("data_fields", fields);
-            LOG.info("Serialized " + fields.size() + " data fields");
+        LinkageSection ls = dataDivision.getLinkageSection();
+        if (ls != null) {
+            List<DataDescriptionEntry> rootEntries = ls.getRootDataDescriptionEntries();
+            if (rootEntries != null && !rootEntries.isEmpty()) {
+                JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
+                asg.add("linkage_fields", fields);
+                LOG.info("Serialized " + fields.size() + " linkage fields");
+            }
+        }
+
+        LocalStorageSection lss = dataDivision.getLocalStorageSection();
+        if (lss != null) {
+            List<DataDescriptionEntry> rootEntries = lss.getRootDataDescriptionEntries();
+            if (rootEntries != null && !rootEntries.isEmpty()) {
+                JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
+                asg.add("local_storage_fields", fields);
+                LOG.info("Serialized " + fields.size() + " local-storage fields");
+            }
         }
     }
 
