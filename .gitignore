@@ -52,3 +52,6 @@ dolt-server.*
 .claude/audit/
 .claude/state/
 .remember/
+
+# mutmut results cache
+.mutmut-cache
