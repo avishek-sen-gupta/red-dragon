@@ -273,7 +273,7 @@ version = "0.5.0"
 description = "Extract semantic information about static Python code"
 optional = false
 python-versions = ">=3.6"
-groups = ["dev"]
+groups = ["main"]
 files = [
     {file = "beniget-0.5.0-py3-none-any.whl", hash = "sha256:909efcd083af1ac4a5db311f57c415df8cb05c4307eda345edeafac3cd930043"},
     {file = "beniget-0.5.0.tar.gz", hash = "sha256:e7af11fa8ec7de3d3eb3d98b1e722d15d44017d8b35d8aa11d54f6719b312f22"},
@@ -1148,7 +1148,7 @@ version = "0.7.0"
 description = "Python AST that abstracts the underlying Python version"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
-groups = ["dev"]
+groups = ["main"]
 files = [
     {file = "gast-0.7.0-py3-none-any.whl", hash = "sha256:99cbf1365633a74099f69c59bd650476b96baa5ef196fec88032b00b31ba36f7"},
     {file = "gast-0.7.0.tar.gz", hash = "sha256:0bb14cd1b806722e91ddbab6fb86bba148c22b40e7ff11e248974e04c8adfdae"},
@@ -2752,9 +2752,9 @@ version = "0.1.0"
 description = "Functional-programming lint rules for Python — Semgrep + ast-grep + beniget"
 optional = false
 python-versions = ">=3.10"
-groups = ["dev"]
+groups = ["main"]
 files = []
-develop = true
+develop = false
 
 [package.dependencies]
 beniget = ">=0.5.0"
@@ -2764,8 +2764,10 @@ pyyaml = ">=6.0"
 dev = ["black (>=24.0)", "pytest (>=8.0)"]
 
 [package.source]
-type = "directory"
-url = "../python-fp-lint"
+type = "git"
+url = "https://github.com/avishek-sen-gupta/python-fp-lint.git"
+reference = "HEAD"
+resolved_reference = "c98f3c48bde632f14b443017da90c911460e8383"
 
 [[package]]
 name = "python-multipart"
@@ -2871,7 +2873,7 @@ version = "6.0.3"
 description = "YAML parser and emitter for Python"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "dev"]
+groups = ["main"]
 files = [
     {file = "PyYAML-6.0.3-cp38-cp38-macosx_10_13_x86_64.whl", hash = "sha256:c2514fceb77bc5e7a2f7adfaa1feb2fb311607c9cb518dbc378688ec73d8292f"},
     {file = "PyYAML-6.0.3-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:9c57bb8c96f6d1808c030b1687b9b5fb476abaa47f0db9c0101f5e9f394e97f4"},
@@ -4131,4 +4133,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "cc39487cc0a867a1d34869c1cdd14d844aec1b7c7b4b396db0efe38345ce105c"
+content-hash = "7021730f9978f6c30025d846eabd656a469eaa32d31e038968b28647dd819c7c"
