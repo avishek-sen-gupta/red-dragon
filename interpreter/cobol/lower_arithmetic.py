@@ -36,6 +36,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop, BinopKind
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -125,8 +126,7 @@ def emit_overflow_check(
 def eval_ref_mod_expr(
     ctx: EmitContext,
     expr: RefModExpr,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> Register:
     """Evaluate a reference modification expression to an IR register.
 
@@ -145,11 +145,9 @@ def eval_ref_mod_expr(
         # Field reference: resolve field → decode
         # Return the decoded numeric value (don't convert to string)
         name = expr.name
-        if ctx.has_field(name, layout):
-            field_ref = ctx.resolve_field_ref(name, layout, region_reg)
-            decoded_reg = ctx.emit_decode_field(
-                region_reg, field_ref.fl, field_ref.offset_reg
-            )
+        if ctx.has_field(name, materialised):
+            field_ref, rr = ctx.resolve_field_ref(name, materialised)
+            decoded_reg = ctx.emit_decode_field(rr, field_ref.fl, field_ref.offset_reg)
             logging.debug(
                 f"eval_ref_mod_expr: RefModReference {name} → decoded_reg={decoded_reg}"
             )
@@ -162,8 +160,8 @@ def eval_ref_mod_expr(
 
     elif isinstance(expr, RefModBinOp):
         # Binary operation: evaluate left and right, emit Binop
-        left_reg = eval_ref_mod_expr(ctx, expr.left, layout, region_reg)
-        right_reg = eval_ref_mod_expr(ctx, expr.right, layout, region_reg)
+        left_reg = eval_ref_mod_expr(ctx, expr.left, materialised)
+        right_reg = eval_ref_mod_expr(ctx, expr.right, materialised)
         result_reg = ctx.fresh_reg()
 
         op_str = expr.op
@@ -187,17 +185,16 @@ def eval_ref_mod_expr(
 def lower_move(
     ctx: EmitContext,
     stmt: MoveStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """MOVE X [( start : length )] TO Y: handle reference modification."""
-    target_ref = ctx.resolve_field_ref(stmt.target.name, layout, region_reg)
+    target_ref, target_rr = ctx.resolve_field_ref(stmt.target.name, materialised)
 
     # Get the source value (decode field or literal)
-    if ctx.has_field(stmt.source.name, layout):
-        source_ref = ctx.resolve_field_ref(stmt.source.name, layout, region_reg)
+    if ctx.has_field(stmt.source.name, materialised):
+        source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
         decoded_reg = ctx.emit_decode_field(
-            region_reg, source_ref.fl, source_ref.offset_reg
+            source_rr, source_ref.fl, source_ref.offset_reg
         )
         value_str_reg = ctx.emit_to_string(decoded_reg)
     else:
@@ -220,9 +217,7 @@ def lower_move(
             f"start={stmt.source.ref_mod_start}, length={stmt.source.ref_mod_length}"
         )
         # Evaluate start and length expressions
-        start_reg = eval_ref_mod_expr(
-            ctx, stmt.source.ref_mod_start, layout, region_reg
-        )
+        start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
         # COBOL uses 1-indexed positions, but SLICE uses 0-indexed.
         # Convert: start_0indexed = start_1indexed - 1
         one_reg = ctx.const_to_reg("1")  # Numeric 1, not string "1"
@@ -239,7 +234,7 @@ def lower_move(
         if stmt.source.ref_mod_length is not None:
             # Both start and length specified: SLICE operation
             length_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_length, layout, region_reg
+                ctx, stmt.source.ref_mod_length, materialised
             )
             result_reg = ctx.fresh_reg()
             logging.debug(
@@ -277,14 +272,12 @@ def lower_move(
         )
         # Load current target field value as string (needed for SPLICE)
         target_decoded = ctx.emit_decode_field(
-            region_reg, target_ref.fl, target_ref.offset_reg
+            target_rr, target_ref.fl, target_ref.offset_reg
         )
         target_str_reg = ctx.emit_to_string(target_decoded)
 
         # Evaluate target ref mod start; convert 1-indexed → 0-indexed
-        tgt_start_reg = eval_ref_mod_expr(
-            ctx, stmt.target.ref_mod_start, layout, region_reg
-        )
+        tgt_start_reg = eval_ref_mod_expr(ctx, stmt.target.ref_mod_start, materialised)
         one_reg = ctx.const_to_reg("1")
         tgt_start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -299,7 +292,7 @@ def lower_move(
         # Evaluate target ref mod length (or use large sentinel for "to end")
         if stmt.target.ref_mod_length is not None:
             tgt_length_reg = eval_ref_mod_expr(
-                ctx, stmt.target.ref_mod_length, layout, region_reg
+                ctx, stmt.target.ref_mod_length, materialised
             )
         else:
             tgt_length_reg = ctx.const_to_reg("999999")
@@ -321,7 +314,7 @@ def lower_move(
         value_str_reg = spliced_reg
 
     ctx.emit_encode_and_write(
-        region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg
+        target_rr, target_ref.fl, value_str_reg, target_ref.offset_reg
     )
 
 
@@ -353,21 +346,20 @@ def lower_move_corresponding(
 def lower_arithmetic(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """ADD/SUBTRACT/MULTIPLY/DIVIDE X TO/FROM/BY/INTO Y [GIVING Z]."""
     if stmt.giving:
-        lower_arithmetic_giving(ctx, stmt, layout, region_reg)
+        lower_arithmetic_giving(ctx, stmt, materialised)
         return
 
-    target_ref = ctx.resolve_field_ref(stmt.target, layout, region_reg)
+    target_ref, target_rr = ctx.resolve_field_ref(stmt.target, materialised)
 
     # Decode source operand
-    if ctx.has_field(stmt.source.name, layout):
-        source_ref = ctx.resolve_field_ref(stmt.source.name, layout, region_reg)
+    if ctx.has_field(stmt.source.name, materialised):
+        source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
         src_decoded = ctx.emit_decode_field(
-            region_reg, source_ref.fl, source_ref.offset_reg
+            source_rr, source_ref.fl, source_ref.offset_reg
         )
 
         # Handle reference modification on source
@@ -376,9 +368,7 @@ def lower_arithmetic(
             src_str_reg = ctx.emit_to_string(src_decoded)
 
             # Evaluate start and length
-            start_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_start, layout, region_reg
-            )
+            start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
             # Convert 1-indexed to 0-indexed
             one_reg = ctx.const_to_reg("1")
             start_0indexed_reg = ctx.fresh_reg()
@@ -394,7 +384,7 @@ def lower_arithmetic(
             # Perform slice
             if stmt.source.ref_mod_length is not None:
                 length_reg = eval_ref_mod_expr(
-                    ctx, stmt.source.ref_mod_length, layout, region_reg
+                    ctx, stmt.source.ref_mod_length, materialised
                 )
             else:
                 length_reg = ctx.const_to_reg("999999")
@@ -420,9 +410,7 @@ def lower_arithmetic(
     else:
         src_decoded = ctx.const_to_reg(float(stmt.source.name))
 
-    tgt_decoded = ctx.emit_decode_field(
-        region_reg, target_ref.fl, target_ref.offset_reg
-    )
+    tgt_decoded = ctx.emit_decode_field(target_rr, target_ref.fl, target_ref.offset_reg)
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 
@@ -439,7 +427,7 @@ def lower_arithmetic(
         )
         result_str_reg = ctx.emit_to_string(result_reg)
         ctx.emit_encode_and_write(
-            region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
+            target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
         )
         return
 
@@ -490,16 +478,16 @@ def lower_arithmetic(
 
     ctx.emit_inst(Label_(label=on_size_err_label))
     for child in stmt.on_size_error:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=not_on_size_err_label))
     result_str_reg = ctx.emit_to_string(result_reg)
     ctx.emit_encode_and_write(
-        region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
+        target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
     )
     for child in stmt.not_on_size_error:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -508,23 +496,20 @@ def lower_arithmetic(
 def lower_arithmetic_giving(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """MULTIPLY/DIVIDE X BY/INTO Y GIVING Z."""
 
     def _decode_operand(operand: RefModOperand) -> Register:
         field_name = operand.name
-        if ctx.has_field(field_name, layout):
-            ref = ctx.resolve_field_ref(field_name, layout, region_reg)
-            decoded = ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+        if ctx.has_field(field_name, materialised):
+            ref, rr = ctx.resolve_field_ref(field_name, materialised)
+            decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
 
             # Apply ref_mod if present
             if operand.ref_mod_start is not None:
                 src_str = ctx.emit_to_string(decoded)
-                start_reg = eval_ref_mod_expr(
-                    ctx, operand.ref_mod_start, layout, region_reg
-                )
+                start_reg = eval_ref_mod_expr(ctx, operand.ref_mod_start, materialised)
                 # Convert 1-indexed to 0-indexed
                 one_reg = ctx.const_to_reg(1)
                 zero_indexed_start = ctx.fresh_reg()
@@ -538,7 +523,7 @@ def lower_arithmetic_giving(
                 )
 
                 length_reg = (
-                    eval_ref_mod_expr(ctx, operand.ref_mod_length, layout, region_reg)
+                    eval_ref_mod_expr(ctx, operand.ref_mod_length, materialised)
                     if operand.ref_mod_length is not None
                     else ctx.const_to_reg(999999)
                 )
@@ -569,9 +554,9 @@ def lower_arithmetic_giving(
 
     def _decode_field(name: str) -> Register:
         """Decode a plain string field name (for target operand)."""
-        if ctx.has_field(name, layout):
-            ref = ctx.resolve_field_ref(name, layout, region_reg)
-            return ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+        if ctx.has_field(name, materialised):
+            ref, rr = ctx.resolve_field_ref(name, materialised)
+            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         return ctx.const_to_reg(float(name))
 
     left_reg = _decode_operand(stmt.source)
@@ -619,18 +604,18 @@ def lower_arithmetic_giving(
 
     if not has_clause:
         for giving_name in stmt.giving:
-            giving_ref = ctx.resolve_field_ref(giving_name, layout, region_reg)
+            giving_ref, giving_rr = ctx.resolve_field_ref(giving_name, materialised)
             result_str_reg = ctx.emit_to_string(result_reg)
             ctx.emit_encode_and_write(
-                region_reg, giving_ref.fl, result_str_reg, giving_ref.offset_reg
+                giving_rr, giving_ref.fl, result_str_reg, giving_ref.offset_reg
             )
         return
 
     # Compute combined overflow flag across all GIVING fields
-    giving_refs = [ctx.resolve_field_ref(n, layout, region_reg) for n in stmt.giving]
+    giving_pairs = [ctx.resolve_field_ref(n, materialised) for n in stmt.giving]
     overflow_flags = [
         _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
-        for ref in giving_refs
+        for ref, _ in giving_pairs
     ]
     combined_flag = overflow_flags[0]
     for flag in overflow_flags[1:]:
@@ -654,15 +639,15 @@ def lower_arithmetic_giving(
 
     ctx.emit_inst(Label_(label=on_size_err_label))
     for child in stmt.on_size_error:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=not_on_size_err_label))
-    for ref in giving_refs:
+    for ref, rr in giving_pairs:
         result_str_reg = ctx.emit_to_string(result_reg)
-        ctx.emit_encode_and_write(region_reg, ref.fl, result_str_reg, ref.offset_reg)
+        ctx.emit_encode_and_write(rr, ref.fl, result_str_reg, ref.offset_reg)
     for child in stmt.not_on_size_error:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -671,23 +656,22 @@ def lower_arithmetic_giving(
 def lower_compute(
     ctx: EmitContext,
     stmt: ComputeStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
-    result_reg = lower_expr_node(ctx, stmt.expression, layout, region_reg)
+    result_reg = lower_expr_node(ctx, stmt.expression, materialised)
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 
     if not has_clause:
         result_str_reg = ctx.emit_to_string(result_reg)
         for target_name in stmt.targets:
-            if not ctx.has_field(target_name, layout):
+            if not ctx.has_field(target_name, materialised):
                 logger.warning("COMPUTE target %s not found in layout", target_name)
                 continue
-            target_ref = ctx.resolve_field_ref(target_name, layout, region_reg)
+            target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
             ctx.emit_encode_and_write(
-                region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
+                target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
             )
         return
 
@@ -696,22 +680,22 @@ def lower_compute(
     end_label = ctx.fresh_label("size_err_end")
 
     # Resolve all valid targets up front
-    target_refs = []
+    target_pairs: list[tuple] = []
     for target_name in stmt.targets:
-        if not ctx.has_field(target_name, layout):
+        if not ctx.has_field(target_name, materialised):
             logger.warning("COMPUTE target %s not found in layout", target_name)
             continue
-        target_refs.append(ctx.resolve_field_ref(target_name, layout, region_reg))
+        target_pairs.append(ctx.resolve_field_ref(target_name, materialised))
 
     # Guard: no valid targets means no writes and no overflow check — execute
     # not_on_size_error path (same as fast path: silent skip).
-    if not target_refs:
+    if not target_pairs:
         return
 
     # OR overflow flags across all targets (all-or-nothing semantics)
     overflow_flags = [
         _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
-        for ref in target_refs
+        for ref, _ in target_pairs
     ]
     combined_flag = overflow_flags[0]
     for flag in overflow_flags[1:]:
@@ -735,15 +719,15 @@ def lower_compute(
 
     ctx.emit_inst(Label_(label=on_size_err_label))
     for child in stmt.on_size_error:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=not_on_size_err_label))
     result_str_reg = ctx.emit_to_string(result_reg)
-    for ref in target_refs:
-        ctx.emit_encode_and_write(region_reg, ref.fl, result_str_reg, ref.offset_reg)
+    for ref, rr in target_pairs:
+        ctx.emit_encode_and_write(rr, ref.fl, result_str_reg, ref.offset_reg)
     for child in stmt.not_on_size_error:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -752,11 +736,10 @@ def lower_compute(
 def lower_if(
     ctx: EmitContext,
     stmt: IfStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """IF condition ... [ELSE ...] END-IF."""
-    cond_reg = ctx.lower_condition(stmt.condition, layout, region_reg)
+    cond_reg = ctx.lower_condition(stmt.condition, materialised)
     true_label = ctx.fresh_label("if_true")
     false_label = ctx.fresh_label("if_false")
     end_label = ctx.fresh_label("if_end")
@@ -770,12 +753,12 @@ def lower_if(
 
     ctx.emit_inst(Label_(label=true_label))
     for child in stmt.children:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=false_label))
     for child in stmt.else_children:
-        ctx.lower_statement(child, layout, region_reg)
+        ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -784,8 +767,7 @@ def lower_if(
 def lower_evaluate(
     ctx: EmitContext,
     stmt: EvaluateStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """EVALUATE subject WHEN value ..."""
     end_label = ctx.fresh_label("eval_end")
@@ -797,7 +779,7 @@ def lower_evaluate(
             else:
                 full_condition = child.condition
             cond_reg = _lower_condition_str(
-                ctx, full_condition, layout, region_reg, ctx._condition_index
+                ctx, full_condition, materialised, ctx._condition_index
             )
             when_true = ctx.fresh_label("when_true")
             when_false = ctx.fresh_label("when_false")
@@ -809,12 +791,12 @@ def lower_evaluate(
             )
             ctx.emit_inst(Label_(label=when_true))
             for grandchild in child.children:
-                ctx.lower_statement(grandchild, layout, region_reg)
+                ctx.lower_statement(grandchild, materialised)
             ctx.emit_inst(Branch(label=end_label))
             ctx.emit_inst(Label_(label=when_false))
         elif isinstance(child, WhenOtherStatement):
             for grandchild in child.children:
-                ctx.lower_statement(grandchild, layout, region_reg)
+                ctx.lower_statement(grandchild, materialised)
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -822,8 +804,7 @@ def lower_evaluate(
 def lower_continue(
     ctx: EmitContext,
     stmt: ContinueStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """CONTINUE — no-op, emit nothing."""
     pass
@@ -832,8 +813,7 @@ def lower_continue(
 def lower_exit(
     ctx: EmitContext,
     stmt: ExitStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """EXIT — no-op sentinel, emit nothing."""
     pass
@@ -878,8 +858,7 @@ def _leaf_fields_of(target_fl: FieldLayout, layout: DataLayout) -> list[FieldLay
 def lower_initialize(
     ctx: EmitContext,
     stmt: InitializeStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """INITIALIZE field1 field2 — reset to type-appropriate defaults.
 
@@ -887,48 +866,63 @@ def lower_initialize(
     type-appropriate default: spaces for ALPHANUMERIC, zeros for numeric.
     """
     for operand in stmt.operands:
-        if not ctx.has_field(operand, layout):
+        if not ctx.has_field(operand, materialised):
             logger.warning("INITIALIZE target %s not found in layout", operand)
             continue
-        ref = ctx.resolve_field_ref(operand, layout, region_reg)
-        for leaf_fl in _leaf_fields_of(ref.fl, layout):
-            leaf_ref = ctx.resolve_field_ref(leaf_fl.name, layout, region_reg)
+        ref, rr = ctx.resolve_field_ref(operand, materialised)
+        # Look up the layout section that owns this field for _leaf_fields_of
+        fl_layout, _ = materialised.resolve(operand)
+        # Determine which DataLayout to use for leaf enumeration
+        # We use the working_storage layout as a fallback; the actual layout
+        # is the one from the resolved section.
+        # Since _leaf_fields_of needs the full DataLayout for all_leaves(),
+        # we pick the right section layout.
+        ws_layout, _ = materialised.working_storage
+        ls_layout, _ = materialised.local_storage
+        lk_layout, _ = materialised.linkage
+        if ws_layout.lookup_as_storage(operand) is not None:
+            section_layout = ws_layout
+        elif ls_layout.lookup_as_storage(operand) is not None:
+            section_layout = ls_layout
+        else:
+            section_layout = lk_layout
+        for leaf_fl in _leaf_fields_of(ref.fl, section_layout):
+            leaf_ref, leaf_rr = ctx.resolve_field_ref(leaf_fl.name, materialised)
             td = leaf_fl.type_descriptor
             if td.category == CobolDataCategory.ALPHANUMERIC:
                 default = " " * td.total_digits
             else:
                 default = "0"
-            ctx.emit_field_encode(region_reg, leaf_fl, default, leaf_ref.offset_reg)
+            ctx.emit_field_encode(leaf_rr, leaf_fl, default, leaf_ref.offset_reg)
 
 
 def lower_set(
     ctx: EmitContext,
     stmt: SetStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """SET target TO value / SET target UP|DOWN BY value."""
     if stmt.set_type == "TO":
         value_str = stmt.values[0] if stmt.values else "0"
         for target_name in stmt.targets:
-            if not ctx.has_field(target_name, layout):
+            if not ctx.has_field(target_name, materialised):
                 logger.warning("SET target %s not found in layout", target_name)
                 continue
-            target_ref = ctx.resolve_field_ref(target_name, layout, region_reg)
+            target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
             value_str_reg = ctx.const_to_reg(str(value_str))
             ctx.emit_encode_and_write(
-                region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg
+                target_rr, target_ref.fl, value_str_reg, target_ref.offset_reg
             )
     elif stmt.set_type == "BY":
         step_val = stmt.values[0] if stmt.values else "1"
         op = "+" if stmt.by_type == "UP" else "-"
         for target_name in stmt.targets:
-            if not ctx.has_field(target_name, layout):
+            if not ctx.has_field(target_name, materialised):
                 logger.warning("SET target %s not found in layout", target_name)
                 continue
-            target_ref = ctx.resolve_field_ref(target_name, layout, region_reg)
+            target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
             tgt_decoded = ctx.emit_decode_field(
-                region_reg, target_ref.fl, target_ref.offset_reg
+                target_rr, target_ref.fl, target_ref.offset_reg
             )
             step_reg = ctx.const_to_reg(ctx.parse_literal(step_val))
             result_reg = ctx.fresh_reg()
@@ -942,30 +936,27 @@ def lower_set(
             )
             result_str_reg = ctx.emit_to_string(result_reg)
             ctx.emit_encode_and_write(
-                region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
+                target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
             )
 
 
 def lower_display(
     ctx: EmitContext,
     stmt: DisplayStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """DISPLAY field-or-literal."""
     operand = stmt.operand
 
-    if ctx.has_field(operand.name, layout):
-        ref = ctx.resolve_field_ref(operand.name, layout, region_reg)
-        decoded_reg = ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+    if ctx.has_field(operand.name, materialised):
+        ref, rr = ctx.resolve_field_ref(operand.name, materialised)
+        decoded_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         display_reg = ctx.emit_to_string(decoded_reg)
     else:
         display_reg = ctx.const_to_reg(str(operand.name))
 
     if operand.ref_mod_start is not None:
-        raw_start_reg = eval_ref_mod_expr(
-            ctx, operand.ref_mod_start, layout, region_reg
-        )
+        raw_start_reg = eval_ref_mod_expr(ctx, operand.ref_mod_start, materialised)
         one_reg = ctx.const_to_reg(1)
         start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -977,7 +968,7 @@ def lower_display(
             )
         )
         length_reg = (
-            eval_ref_mod_expr(ctx, operand.ref_mod_length, layout, region_reg)
+            eval_ref_mod_expr(ctx, operand.ref_mod_length, materialised)
             if operand.ref_mod_length is not None
             else ctx.const_to_reg(9999)
         )
@@ -1003,8 +994,7 @@ def lower_display(
 def lower_stop_run(
     ctx: EmitContext,
     stmt: StopRunStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """STOP RUN."""
     zero_reg = ctx.fresh_reg()
@@ -1015,8 +1005,7 @@ def lower_stop_run(
 def lower_goto(
     ctx: EmitContext,
     stmt: GotoStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """GO TO paragraph-name."""
     ctx.emit_inst(Branch(label=CodeLabel(f"para_{stmt.target}")))

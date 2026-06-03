@@ -10,8 +10,8 @@ from interpreter.cobol.cobol_statements import (
     PerformUntilSpec,
     PerformVaryingSpec,
 )
-from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
 from interpreter.instructions import (
@@ -33,25 +33,24 @@ logger = logging.getLogger(__name__)
 def lower_perform(
     ctx: EmitContext,
     stmt: PerformStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """PERFORM paragraph-name [THRU paragraph-name] [TIMES|UNTIL|VARYING]."""
     if stmt.children and stmt.spec is None:
         for child in stmt.children:
-            ctx.lower_statement(child, layout, region_reg)
+            ctx.lower_statement(child, materialised)
         return
 
     if stmt.target and stmt.spec is None:
-        emit_perform_branch(ctx, stmt, layout, region_reg)
+        emit_perform_branch(ctx, stmt, materialised)
         return
 
     if isinstance(stmt.spec, PerformTimesSpec):
-        lower_perform_times(ctx, stmt, layout, region_reg)
+        lower_perform_times(ctx, stmt, materialised)
     elif isinstance(stmt.spec, PerformUntilSpec):
-        lower_perform_until(ctx, stmt, layout, region_reg)
+        lower_perform_until(ctx, stmt, materialised)
     elif isinstance(stmt.spec, PerformVaryingSpec):
-        lower_perform_varying(ctx, stmt, layout, region_reg)
+        lower_perform_varying(ctx, stmt, materialised)
     else:
         logger.warning("PERFORM with unknown spec: %s", stmt.spec)
 
@@ -81,8 +80,7 @@ def resolve_perform_target(
 def emit_perform_branch(
     ctx: EmitContext,
     stmt: PerformStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """Emit SET_CONTINUATION + BRANCH + return LABEL for a simple procedure PERFORM."""
     branch_label, continuation_key = resolve_perform_target(ctx, stmt)
@@ -99,22 +97,20 @@ def emit_perform_branch(
 def lower_perform_body(
     ctx: EmitContext,
     stmt: PerformStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """Emit the body of a PERFORM loop — inline children or procedure branch."""
     if stmt.children:
         for child in stmt.children:
-            ctx.lower_statement(child, layout, region_reg)
+            ctx.lower_statement(child, materialised)
     elif stmt.target:
-        emit_perform_branch(ctx, stmt, layout, region_reg)
+        emit_perform_branch(ctx, stmt, materialised)
 
 
 def lower_perform_times(
     ctx: EmitContext,
     stmt: PerformStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """PERFORM ... TIMES — counter-based loop."""
     spec = stmt.spec
@@ -130,11 +126,9 @@ def lower_perform_times(
         StoreVar(name=VarName(counter_var), value_reg=Register(str(zero_reg)))
     )
 
-    if ctx.has_field(spec.times, layout):
-        times_ref = ctx.resolve_field_ref(spec.times, layout, region_reg)
-        times_reg = ctx.emit_decode_field(
-            region_reg, times_ref.fl, times_ref.offset_reg
-        )
+    if ctx.has_field(spec.times, materialised):
+        times_ref, times_rr = ctx.resolve_field_ref(spec.times, materialised)
+        times_reg = ctx.emit_decode_field(times_rr, times_ref.fl, times_ref.offset_reg)
     else:
         times_reg = ctx.const_to_reg(ctx.parse_literal(spec.times))
 
@@ -158,7 +152,7 @@ def lower_perform_times(
     )
 
     ctx.emit_inst(Label_(label=body_label))
-    lower_perform_body(ctx, stmt, layout, region_reg)
+    lower_perform_body(ctx, stmt, materialised)
 
     ctr_reg2 = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=VarName(counter_var)))
@@ -181,8 +175,7 @@ def lower_perform_times(
 def lower_perform_until(
     ctx: EmitContext,
     stmt: PerformStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """PERFORM ... UNTIL — condition-based loop."""
     spec = stmt.spec
@@ -194,7 +187,7 @@ def lower_perform_until(
 
     if spec.test_before:
         ctx.emit_inst(Label_(label=loop_label))
-        cond_reg = ctx.lower_condition(spec.condition, layout, region_reg)
+        cond_reg = ctx.lower_condition(spec.condition, materialised)
         ctx.emit_inst(
             BranchIf(
                 cond_reg=Register(str(cond_reg)),
@@ -202,13 +195,13 @@ def lower_perform_until(
             )
         )
         ctx.emit_inst(Label_(label=body_label))
-        lower_perform_body(ctx, stmt, layout, region_reg)
+        lower_perform_body(ctx, stmt, materialised)
         ctx.emit_inst(Branch(label=loop_label))
         ctx.emit_inst(Label_(label=exit_label))
     else:
         ctx.emit_inst(Label_(label=loop_label))
-        lower_perform_body(ctx, stmt, layout, region_reg)
-        cond_reg = ctx.lower_condition(spec.condition, layout, region_reg)
+        lower_perform_body(ctx, stmt, materialised)
+        cond_reg = ctx.lower_condition(spec.condition, materialised)
         ctx.emit_inst(
             BranchIf(
                 cond_reg=Register(str(cond_reg)),
@@ -221,8 +214,7 @@ def lower_perform_until(
 def lower_perform_varying(
     ctx: EmitContext,
     stmt: PerformStatement,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """PERFORM ... VARYING — counter variable loop with FROM/BY/UNTIL."""
     spec = stmt.spec
@@ -232,16 +224,16 @@ def lower_perform_varying(
     body_label = ctx.fresh_label("perform_varying_body")
     exit_label = ctx.fresh_label("perform_varying_exit")
 
-    if ctx.has_field(spec.varying_var, layout):
-        varying_ref = ctx.resolve_field_ref(spec.varying_var, layout, region_reg)
+    if ctx.has_field(spec.varying_var, materialised):
+        varying_ref, varying_rr = ctx.resolve_field_ref(spec.varying_var, materialised)
         from_str_reg = ctx.const_to_reg(str(spec.varying_from))
         ctx.emit_encode_and_write(
-            region_reg, varying_ref.fl, from_str_reg, varying_ref.offset_reg
+            varying_rr, varying_ref.fl, from_str_reg, varying_ref.offset_reg
         )
 
     if spec.test_before:
         ctx.emit_inst(Label_(label=loop_label))
-        cond_reg = ctx.lower_condition(spec.condition, layout, region_reg)
+        cond_reg = ctx.lower_condition(spec.condition, materialised)
         ctx.emit_inst(
             BranchIf(
                 cond_reg=Register(str(cond_reg)),
@@ -249,15 +241,15 @@ def lower_perform_varying(
             )
         )
         ctx.emit_inst(Label_(label=body_label))
-        lower_perform_body(ctx, stmt, layout, region_reg)
-        emit_varying_increment(ctx, spec, layout, region_reg)
+        lower_perform_body(ctx, stmt, materialised)
+        emit_varying_increment(ctx, spec, materialised)
         ctx.emit_inst(Branch(label=loop_label))
         ctx.emit_inst(Label_(label=exit_label))
     else:
         ctx.emit_inst(Label_(label=loop_label))
-        lower_perform_body(ctx, stmt, layout, region_reg)
-        emit_varying_increment(ctx, spec, layout, region_reg)
-        cond_reg = ctx.lower_condition(spec.condition, layout, region_reg)
+        lower_perform_body(ctx, stmt, materialised)
+        emit_varying_increment(ctx, spec, materialised)
+        cond_reg = ctx.lower_condition(spec.condition, materialised)
         ctx.emit_inst(
             BranchIf(
                 cond_reg=Register(str(cond_reg)),
@@ -270,16 +262,15 @@ def lower_perform_varying(
 def emit_varying_increment(
     ctx: EmitContext,
     spec: PerformVaryingSpec,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """Emit IR to increment the VARYING variable by the BY value."""
-    if not ctx.has_field(spec.varying_var, layout):
+    if not ctx.has_field(spec.varying_var, materialised):
         logger.warning("VARYING variable %s not found in layout", spec.varying_var)
         return
 
-    varying_ref = ctx.resolve_field_ref(spec.varying_var, layout, region_reg)
-    val_reg = ctx.emit_decode_field(region_reg, varying_ref.fl, varying_ref.offset_reg)
+    varying_ref, varying_rr = ctx.resolve_field_ref(spec.varying_var, materialised)
+    val_reg = ctx.emit_decode_field(varying_rr, varying_ref.fl, varying_ref.offset_reg)
 
     by_reg = ctx.const_to_reg(ctx.parse_literal(spec.varying_by))
     new_val_reg = ctx.fresh_reg()
@@ -294,5 +285,5 @@ def emit_varying_increment(
 
     new_str_reg = ctx.emit_to_string(new_val_reg)
     ctx.emit_encode_and_write(
-        region_reg, varying_ref.fl, new_str_reg, varying_ref.offset_reg
+        varying_rr, varying_ref.fl, new_str_reg, varying_ref.offset_reg
     )

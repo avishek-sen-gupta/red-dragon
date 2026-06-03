@@ -15,7 +15,7 @@ from interpreter.cobol.cobol_expression import (
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name import ConditionValue
 from interpreter.cobol.condition_name_index import ConditionNameIndex
-from interpreter.cobol.data_layout import DataLayout
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.func_name import FuncName
 from interpreter.operator_kind import resolve_binop
@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 def _emit_single_value_test(
     ctx: EmitContext,
     cv: ConditionValue,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
     parent_field_name: str,
 ) -> Register:
     """Emit IR to test a parent field against a single ConditionValue.
@@ -37,8 +36,8 @@ def _emit_single_value_test(
     For discrete values: parent_field == value
     For THRU ranges: parent_field >= from AND parent_field <= to
     """
-    parent_ref = ctx.resolve_field_ref(parent_field_name, layout, region_reg)
-    parent_reg = ctx.emit_decode_field(region_reg, parent_ref.fl, parent_ref.offset_reg)
+    parent_ref, parent_rr = ctx.resolve_field_ref(parent_field_name, materialised)
+    parent_reg = ctx.emit_decode_field(parent_rr, parent_ref.fl, parent_ref.offset_reg)
 
     if cv.is_range:
         from_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
@@ -52,9 +51,9 @@ def _emit_single_value_test(
             )
         )
 
-        parent_ref2 = ctx.resolve_field_ref(parent_field_name, layout, region_reg)
+        parent_ref2, parent_rr2 = ctx.resolve_field_ref(parent_field_name, materialised)
         parent_reg2 = ctx.emit_decode_field(
-            region_reg, parent_ref2.fl, parent_ref2.offset_reg
+            parent_rr2, parent_ref2.fl, parent_ref2.offset_reg
         )
         to_reg = ctx.const_to_reg(ctx.parse_literal(cv.to_val))
         le_result = ctx.fresh_reg()
@@ -118,8 +117,7 @@ def _expand_condition_name(
     ctx: EmitContext,
     condition_name: str,
     condition_index: ConditionNameIndex,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> Register:
     """Expand a level-88 condition name into field comparison IR.
 
@@ -130,7 +128,7 @@ def _expand_condition_name(
     """
     entry = condition_index.lookup(condition_name)
     value_regs = [
-        _emit_single_value_test(ctx, cv, layout, region_reg, entry.parent_field_name)
+        _emit_single_value_test(ctx, cv, materialised, entry.parent_field_name)
         for cv in entry.values
     ]
 
@@ -145,19 +143,17 @@ def _expand_condition_name(
 def lower_condition(
     ctx: EmitContext,
     condition: dict,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
     condition_index: ConditionNameIndex = ConditionNameIndex({}),
 ) -> Register:
     """Lower a structured condition dict to a register holding a boolean."""
-    return _lower_condition_node(ctx, condition, layout, region_reg, condition_index)
+    return _lower_condition_node(ctx, condition, materialised, condition_index)
 
 
 def _lower_condition_node(
     ctx: EmitContext,
     node: dict,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
     condition_index: ConditionNameIndex,
 ) -> Register:
     """Recursively walk a structured condition dict node and emit IR."""
@@ -165,10 +161,10 @@ def _lower_condition_node(
         # Compound: {"op": "AND"/"OR", "left": {...}, "right": {...}}
         op = node["op"]
         left_reg = _lower_condition_node(
-            ctx, node["left"], layout, region_reg, condition_index
+            ctx, node["left"], materialised, condition_index
         )
         right_reg = _lower_condition_node(
-            ctx, node["right"], layout, region_reg, condition_index
+            ctx, node["right"], materialised, condition_index
         )
         result = ctx.fresh_reg()
         ctx.emit_inst(
@@ -187,24 +183,22 @@ def _lower_condition_node(
         # 88-level condition name reference
         name = node["condition_name"]
         if condition_index.has_condition(name):
-            inner = _expand_condition_name(
-                ctx, name, condition_index, layout, region_reg
-            )
+            inner = _expand_condition_name(ctx, name, condition_index, materialised)
         else:
             # Fall back to string lowering for unresolved names
-            inner = _lower_condition_str(ctx, name, layout, region_reg, condition_index)
+            inner = _lower_condition_str(ctx, name, materialised, condition_index)
     elif "condition" in node:
         # Nested parenthesised condition
         inner = _lower_condition_node(
-            ctx, node["condition"], layout, region_reg, condition_index
+            ctx, node["condition"], materialised, condition_index
         )
     elif "relation" in node:
         # Structured relation: {"left": <expr>, "op": "...", "right": <expr>}
-        inner = _lower_relation_node(ctx, node["relation"], layout, region_reg)
+        inner = _lower_relation_node(ctx, node["relation"], materialised)
     else:
         # Fallback: flat text (CLASS/SIGN conditions, EVALUATE/SEARCH callers)
         inner = _lower_condition_str(
-            ctx, node.get("text", ""), layout, region_reg, condition_index
+            ctx, node.get("text", ""), materialised, condition_index
         )
 
     if not not_flag:
@@ -235,12 +229,11 @@ _OP_MAP: dict[str, str] = {
 def _lower_relation_node(
     ctx: EmitContext,
     rel: dict,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> Register:
     """Lower a structured relation dict {"left": <expr>, "op": "...", "right": <expr>}."""
-    left_reg = _lower_expr_dict(ctx, rel["left"], layout, region_reg)
-    right_reg = _lower_expr_dict(ctx, rel["right"], layout, region_reg)
+    left_reg = _lower_expr_dict(ctx, rel["left"], materialised)
+    right_reg = _lower_expr_dict(ctx, rel["right"], materialised)
     op = _OP_MAP.get(rel.get("op", "=="), "==")
     result = ctx.fresh_reg()
     ctx.emit_inst(
@@ -257,8 +250,7 @@ def _lower_relation_node(
 def _lower_expr_dict(
     ctx: EmitContext,
     expr: dict,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> Register:
     """Recursively lower an expression dict node to a register.
 
@@ -272,17 +264,17 @@ def _lower_expr_dict(
 
     if kind == "ref":
         name = expr.get("name", "")
-        if ctx.has_field(name, layout):
-            ref = ctx.resolve_field_ref(name, layout, region_reg)
-            return ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+        if ctx.has_field(name, materialised):
+            ref, rr = ctx.resolve_field_ref(name, materialised)
+            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         return ctx.const_to_reg(ctx.parse_literal(name))
 
     if kind == "lit":
         return ctx.const_to_reg(ctx.parse_literal(expr.get("value", "")))
 
     if kind == "binop":
-        left_reg = _lower_expr_dict(ctx, expr["left"], layout, region_reg)
-        right_reg = _lower_expr_dict(ctx, expr["right"], layout, region_reg)
+        left_reg = _lower_expr_dict(ctx, expr["left"], materialised)
+        right_reg = _lower_expr_dict(ctx, expr["right"], materialised)
         op = _OP_MAP.get(expr.get("op", "+"), "+")
         result = ctx.fresh_reg()
         ctx.emit_inst(
@@ -296,7 +288,7 @@ def _lower_expr_dict(
         return result
 
     if kind == "neg":
-        inner = _lower_expr_dict(ctx, expr["expr"], layout, region_reg)
+        inner = _lower_expr_dict(ctx, expr["expr"], materialised)
         zero_reg = ctx.const_to_reg(0)
         result = ctx.fresh_reg()
         ctx.emit_inst(
@@ -316,8 +308,7 @@ def _lower_expr_dict(
 def _lower_condition_str(
     ctx: EmitContext,
     condition: str,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
     condition_index: ConditionNameIndex,
 ) -> Register:
     """Lower a flat condition string to a boolean register.
@@ -330,9 +321,7 @@ def _lower_condition_str(
 
     if len(parts) == 1 and condition_index.has_condition(parts[0]):
         logger.debug("Expanding condition name: %s", parts[0])
-        return _expand_condition_name(
-            ctx, parts[0], condition_index, layout, region_reg
-        )
+        return _expand_condition_name(ctx, parts[0], condition_index, materialised)
 
     if len(parts) >= 3:
         left_name = parts[0]
@@ -344,19 +333,17 @@ def _lower_condition_str(
             op = op_map.get(parts[1], "==")
             right_val = parts[2]
 
-        if ctx.has_field(left_name, layout):
-            left_ref = ctx.resolve_field_ref(left_name, layout, region_reg)
-            left_reg = ctx.emit_decode_field(
-                region_reg, left_ref.fl, left_ref.offset_reg
-            )
+        if ctx.has_field(left_name, materialised):
+            left_ref, left_rr = ctx.resolve_field_ref(left_name, materialised)
+            left_reg = ctx.emit_decode_field(left_rr, left_ref.fl, left_ref.offset_reg)
         else:
             left_reg = ctx.const_to_reg(ctx.parse_literal(left_name))
 
         right_parsed = ctx.parse_literal(right_val)
-        if isinstance(right_parsed, str) and ctx.has_field(right_parsed, layout):
-            right_ref = ctx.resolve_field_ref(right_parsed, layout, region_reg)
+        if isinstance(right_parsed, str) and ctx.has_field(right_parsed, materialised):
+            right_ref, right_rr = ctx.resolve_field_ref(right_parsed, materialised)
             right_reg = ctx.emit_decode_field(
-                region_reg, right_ref.fl, right_ref.offset_reg
+                right_rr, right_ref.fl, right_ref.offset_reg
             )
         else:
             right_reg = ctx.const_to_reg(right_parsed)
@@ -380,20 +367,19 @@ def _lower_condition_str(
 def lower_expr_node(
     ctx: EmitContext,
     node: ExprNode,
-    layout: DataLayout,
-    region_reg: Register,
+    materialised: MaterialisedSectionedLayout,
 ) -> Register:
     """Walk an expression tree node and emit IR. Returns result register."""
     if isinstance(node, LiteralNode):
         return ctx.const_to_reg(ctx.parse_literal(node.value))
     if isinstance(node, FieldRefNode):
-        if ctx.has_field(node.name, layout):
-            ref = ctx.resolve_field_ref(node.name, layout, region_reg)
-            return ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+        if ctx.has_field(node.name, materialised):
+            ref, rr = ctx.resolve_field_ref(node.name, materialised)
+            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         return ctx.const_to_reg(ctx.parse_literal(node.name))
     if isinstance(node, BinOpNode):
-        left_reg = lower_expr_node(ctx, node.left, layout, region_reg)
-        right_reg = lower_expr_node(ctx, node.right, layout, region_reg)
+        left_reg = lower_expr_node(ctx, node.left, materialised)
+        right_reg = lower_expr_node(ctx, node.right, materialised)
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -405,9 +391,9 @@ def lower_expr_node(
         )
         return result_reg
     if isinstance(node, RefModNode):
-        ref = ctx.resolve_field_ref(node.name, layout, region_reg)
-        full_str_reg = ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
-        start_1based_reg = lower_expr_node(ctx, node.ref_mod_start, layout, region_reg)
+        ref, rr = ctx.resolve_field_ref(node.name, materialised)
+        full_str_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+        start_1based_reg = lower_expr_node(ctx, node.ref_mod_start, materialised)
         one_reg = ctx.const_to_reg(1)
         start_0based_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -419,7 +405,7 @@ def lower_expr_node(
             )
         )
         if node.ref_mod_length is not None:
-            length_reg = lower_expr_node(ctx, node.ref_mod_length, layout, region_reg)
+            length_reg = lower_expr_node(ctx, node.ref_mod_length, materialised)
         else:
             length_reg = ctx.const_to_reg(999999)
         sliced_reg = ctx.fresh_reg()
