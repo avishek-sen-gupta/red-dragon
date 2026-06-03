@@ -522,6 +522,7 @@ class TestCobolMultiFile:
                     "       01 WS-VAL PIC 9(4) VALUE 0.\n"
                     "       PROCEDURE DIVISION.\n"
                     "           COMPUTE WS-VAL = 99.\n"
+                    "           STOP RUN.\n"
                 ),
                 "MAIN.cbl": (
                     "       IDENTIFICATION DIVISION.\n"
@@ -538,16 +539,22 @@ class TestCobolMultiFile:
             "MAIN.cbl",
             Language.COBOL,
         )
-        # Both modules compiled, linked, and executed.
-        # HELPER runs first (dependency order), then MAIN.
-        # Note: HELPER omits STOP RUN — in the linked model, STOP RUN
-        # terminates the entire merged program. Only the entry module
-        # should have STOP RUN. This is a simplification vs. real COBOL
-        # runtime semantics where CALL returns control to the caller.
+        # Both modules compiled, linked, and executed via singleton dispatch.
+        # HELPER's init block runs in the preamble phase (creating its WS region),
+        # then MAIN-PROG's init block runs. Phase 2 enters func_main-prog_0:
+        # CALL 'HELPER' dispatches via singleton __init_params__, HELPER runs
+        # COMPUTE WS-VAL = 99 and returns via STOP RUN, then MAIN continues
+        # with COMPUTE WS-RESULT = 42 and terminates.
         assert vm.region_count() == 2
-        # Second region is MAIN's WS-RESULT: PIC 9(4) zoned = 0042
+        # rgn_1 is HELPER's WS (created first in preamble); value = 99
+        helper_region = vm.region_get(list(vm.region_keys())[0])
+        assert helper_region is not None
+        helper_digits = [helper_region[i] & 0x0F for i in range(4)]
+        helper_value = sum(d * (10 ** (3 - i)) for i, d in enumerate(helper_digits))
+        assert helper_value == 99
+        # rgn_3 is MAIN-PROG's WS; WS-RESULT = 42 after COMPUTE
         main_region = vm.region_get(list(vm.region_keys())[1])
         assert main_region is not None
-        digits = [main_region[i] & 0x0F for i in range(4)]
-        value = sum(d * (10 ** (3 - i)) for i, d in enumerate(digits))
-        assert value == 42
+        main_digits = [main_region[i] & 0x0F for i in range(4)]
+        main_value = sum(d * (10 ** (3 - i)) for i, d in enumerate(main_digits))
+        assert main_value == 42

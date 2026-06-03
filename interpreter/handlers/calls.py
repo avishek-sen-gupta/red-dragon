@@ -674,12 +674,15 @@ def _handle_call_with_memory(
     program_id = str(t.func_name).upper()
     singleton_key = VarName(f"__prog_{program_id}")
 
-    # Walk scope chain to find singleton HeapObject address
+    # Walk scope chain to find singleton HeapObject address.
+    # NEW_OBJECT stores a Pointer(base=Address, offset=0); unwrap to base.
     singleton_addr_val: Address | None = None
     for frame in reversed(vm.call_stack):
         if singleton_key in frame.local_vars:
             val = frame.local_vars[singleton_key].value
-            if isinstance(val, Address):
+            if isinstance(val, Pointer):
+                singleton_addr_val = val.base
+            elif isinstance(val, Address):
                 singleton_addr_val = val
             break
 
