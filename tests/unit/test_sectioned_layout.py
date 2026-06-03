@@ -87,6 +87,19 @@ def test_materialised_resolve_local_storage_wins_over_ws_on_collision(caplog):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_materialised_resolve_raises_key_error_for_unknown_field():
+    m = MaterialisedSectionedLayout(
+        working_storage=(DataLayout(), Register("%r0")),
+        linkage=(DataLayout(), Register("%r1")),
+        local_storage=(DataLayout(), Register("%r2")),
+    )
+    import pytest
+
+    with pytest.raises(KeyError, match="UNKNOWN"):
+        m.resolve("UNKNOWN")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_materialised_has_field():
     ws_layout = _make_layout("WS-X")
     ls_layout = DataLayout()
