@@ -526,3 +526,8 @@ class TestCobolASG:
     def test_cobol_asg_program_id_defaults_empty(self):
         asg = CobolASG.from_dict({})
         assert asg.program_id == ""
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_cobol_asg_program_id_round_trips(self):
+        asg = CobolASG.from_dict({"program_id": "SUBPROG"})
+        assert CobolASG.from_dict(asg.to_dict()) == asg
