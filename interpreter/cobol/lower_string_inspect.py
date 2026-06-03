@@ -34,7 +34,7 @@ def lower_string(
     region_reg: Register,
 ) -> None:
     """STRING ... DELIMITED BY ... INTO target."""
-    part_regs: list[str] = []
+    part_regs: list[Register] = []
     for sending in stmt.sendings:
         operand_name = sending.value.name
         if ctx.has_field(operand_name, layout):
@@ -56,8 +56,8 @@ def lower_string(
                 Binop(
                     result_reg=start_0indexed_reg,
                     operator=resolve_binop("-"),
-                    left=Register(str(raw_start_reg)),
-                    right=Register(str(one_reg)),
+                    left=raw_start_reg,
+                    right=one_reg,
                 )
             )
             if sending.value.ref_mod_length is not None:
@@ -71,11 +71,7 @@ def lower_string(
                 CallFunction(
                     result_reg=sliced_reg,
                     func_name=FuncName(BuiltinName.STRING_SLICE),
-                    args=(
-                        Register(str(src_str_reg)),
-                        Register(str(start_0indexed_reg)),
-                        Register(str(length_reg)),
-                    ),
+                    args=(src_str_reg, start_0indexed_reg, length_reg),
                 )
             )
             src_str_reg = sliced_reg
@@ -91,7 +87,7 @@ def lower_string(
                 CallFunction(
                     result_reg=find_pos,
                     func_name=FuncName(BuiltinName.STRING_FIND),
-                    args=(Register(str(src_str_reg)), Register(str(delim_reg))),
+                    args=(src_str_reg, delim_reg),
                 ),
             )
             parts = ctx.fresh_reg()
@@ -99,15 +95,16 @@ def lower_string(
                 CallFunction(
                     result_reg=parts,
                     func_name=FuncName(BuiltinName.STRING_SPLIT),
-                    args=(Register(str(src_str_reg)), Register(str(delim_reg))),
+                    args=(src_str_reg, delim_reg),
                 ),
             )
             first_part = ctx.fresh_reg()
+            zero_reg = ctx.const_to_reg(0)
             ctx.emit_inst(
                 CallFunction(
                     result_reg=first_part,
                     func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(Register(str(parts)), 0),
+                    args=(parts, zero_reg),
                 ),
             )
             part_regs.append(first_part)
@@ -124,7 +121,7 @@ def lower_string(
                 CallFunction(
                     result_reg=new_concat,
                     func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
-                    args=(Register(str(concat_reg)), Register(str(next_reg))),
+                    args=(concat_reg, next_reg),
                 ),
             )
             concat_reg = new_concat
@@ -165,8 +162,8 @@ def lower_unstring(
             Binop(
                 result_reg=start_0indexed_reg,
                 operator=resolve_binop("-"),
-                left=Register(str(raw_start_reg)),
-                right=Register(str(one_reg)),
+                left=raw_start_reg,
+                right=one_reg,
             )
         )
         if stmt.source.ref_mod_length is not None:
@@ -180,11 +177,7 @@ def lower_unstring(
             CallFunction(
                 result_reg=sliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
-                args=(
-                    Register(str(src_str_reg)),
-                    Register(str(start_0indexed_reg)),
-                    Register(str(length_reg)),
-                ),
+                args=(src_str_reg, start_0indexed_reg, length_reg),
             )
         )
         src_str_reg = sliced_reg
@@ -205,7 +198,7 @@ def lower_unstring(
             CallFunction(
                 result_reg=part_reg,
                 func_name=FuncName(BuiltinName.LIST_GET),
-                args=(Register(str(parts_reg)), Register(str(idx_reg))),
+                args=(parts_reg, idx_reg),
             ),
         )
         ctx.emit_encode_and_write(
@@ -238,8 +231,8 @@ def lower_inspect(
             Binop(
                 result_reg=start_0indexed_reg,
                 operator=resolve_binop("-"),
-                left=Register(str(raw_start_reg)),
-                right=Register(str(one_reg)),
+                left=raw_start_reg,
+                right=one_reg,
             )
         )
         if stmt.source.ref_mod_length is not None:
@@ -253,11 +246,7 @@ def lower_inspect(
             CallFunction(
                 result_reg=sliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
-                args=(
-                    Register(str(src_str_reg)),
-                    Register(str(start_0indexed_reg)),
-                    Register(str(length_reg)),
-                ),
+                args=(src_str_reg, start_0indexed_reg, length_reg),
             )
         )
         src_str_reg = sliced_reg
@@ -271,7 +260,7 @@ def lower_inspect(
 def lower_inspect_tallying(
     ctx: EmitContext,
     stmt: InspectStatement,
-    src_str_reg: str,
+    src_str_reg: Register,
     layout: DataLayout,
     region_reg: Register,
 ) -> None:
@@ -295,8 +284,8 @@ def lower_inspect_tallying(
             Binop(
                 result_reg=new_total,
                 operator=resolve_binop("+"),
-                left=Register(str(total_count_reg)),
-                right=Register(str(count_reg)),
+                left=total_count_reg,
+                right=count_reg,
             ),
         )
         total_count_reg = new_total
@@ -312,13 +301,13 @@ def lower_inspect_tallying(
 def lower_inspect_replacing(
     ctx: EmitContext,
     stmt: InspectStatement,
-    src_str_reg: str,
+    src_str_reg: Register,
     source_fl: FieldLayout,
     layout: DataLayout,
     region_reg: Register,
 ) -> None:
     """INSPECT REPLACING — apply replacements and write back."""
-    current_str_reg = src_str_reg
+    current_str_reg: Register = src_str_reg
 
     for replacing in stmt.replacings:
         from_reg = ctx.const_to_reg(str(replacing.from_pattern))

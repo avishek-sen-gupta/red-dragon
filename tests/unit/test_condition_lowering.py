@@ -75,7 +75,7 @@ class TestConditionLoweringBasic:
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
-        assert last_const.operands == [True]
+        assert last_const.operands == ["True"]
 
 
 class TestConditionNameExpansion:
@@ -253,7 +253,7 @@ class TestConditionNameExpansion:
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
-        assert last_const.operands == [True]
+        assert last_const.operands == ["True"]
         # No expansion: no or/and BINOPs that condition-name expansion would produce
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         expansion_ops = [i for i in binop_insts if i.operands[0] in ("or", "and", "==")]
