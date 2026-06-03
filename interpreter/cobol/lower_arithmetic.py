@@ -62,9 +62,9 @@ ARITHMETIC_OPS = {
 
 def _compute_overflow_flag(
     ctx: EmitContext,
-    result_reg: str,
+    result_reg: Register,
     td: CobolTypeDescriptor,
-) -> str:
+) -> Register:
     """Emit CONST/BINOP sequence to compute overflow bool register.
 
     Returns the register holding True iff result_reg overflows td's bounds.
@@ -77,8 +77,8 @@ def _compute_overflow_flag(
         Binop(
             result_reg=over_max,
             operator=resolve_binop(">"),
-            left=Register(str(result_reg)),
-            right=Register(str(max_reg)),
+            left=result_reg,
+            right=max_reg,
         )
     )
     if td.signed:
@@ -88,8 +88,8 @@ def _compute_overflow_flag(
             Binop(
                 result_reg=under_min,
                 operator=resolve_binop("<"),
-                left=Register(str(result_reg)),
-                right=Register(str(min_reg)),
+                left=result_reg,
+                right=min_reg,
             )
         )
         overflow_reg = ctx.fresh_reg()
@@ -97,8 +97,8 @@ def _compute_overflow_flag(
             Binop(
                 result_reg=overflow_reg,
                 operator=resolve_binop("or"),
-                left=Register(str(over_max)),
-                right=Register(str(under_min)),
+                left=over_max,
+                right=under_min,
             )
         )
         return overflow_reg
@@ -107,7 +107,7 @@ def _compute_overflow_flag(
 
 def emit_overflow_check(
     ctx: EmitContext,
-    result_reg: str,
+    result_reg: Register,
     td: CobolTypeDescriptor,
     on_size_err_label: CodeLabel,
     not_on_size_err_label: CodeLabel,
@@ -116,7 +116,7 @@ def emit_overflow_check(
     overflow_reg = _compute_overflow_flag(ctx, result_reg, td)
     ctx.emit_inst(
         BranchIf(
-            cond_reg=Register(str(overflow_reg)),
+            cond_reg=overflow_reg,
             branch_targets=(on_size_err_label, not_on_size_err_label),
         )
     )
@@ -127,7 +127,7 @@ def eval_ref_mod_expr(
     expr: RefModExpr,
     layout: DataLayout,
     region_reg: Register,
-) -> str:
+) -> Register:
     """Evaluate a reference modification expression to an IR register.
 
     Handles three cases:
@@ -172,9 +172,9 @@ def eval_ref_mod_expr(
         ctx.emit_inst(
             Binop(
                 operator=binop_kind,
-                left=Register(str(left_reg)),
-                right=Register(str(right_reg)),
-                result_reg=Register(str(result_reg)),
+                left=left_reg,
+                right=right_reg,
+                result_reg=result_reg,
             )
         )
         return result_reg
@@ -230,9 +230,9 @@ def lower_move(
         ctx.emit_inst(
             Binop(
                 operator=BinopKind.SUB,
-                left=Register(str(start_reg)),
-                right=Register(str(one_reg)),
-                result_reg=Register(str(start_0indexed_reg)),
+                left=start_reg,
+                right=one_reg,
+                result_reg=start_0indexed_reg,
             )
         )
 
@@ -250,11 +250,7 @@ def lower_move(
                 CallFunction(
                     result_reg=result_reg,
                     func_name=FuncName(BuiltinName.STRING_SLICE),
-                    args=(
-                        Register(str(value_str_reg)),
-                        Register(str(start_0indexed_reg)),
-                        Register(str(length_reg)),
-                    ),
+                    args=(value_str_reg, start_0indexed_reg, length_reg),
                 )
             )
             value_str_reg = result_reg
@@ -268,11 +264,7 @@ def lower_move(
                 CallFunction(
                     result_reg=result_reg,
                     func_name=FuncName(BuiltinName.STRING_SLICE),
-                    args=(
-                        Register(str(value_str_reg)),
-                        Register(str(start_0indexed_reg)),
-                        Register(str(large_length)),
-                    ),
+                    args=(value_str_reg, start_0indexed_reg, large_length),
                 )
             )
             value_str_reg = result_reg
@@ -298,9 +290,9 @@ def lower_move(
         ctx.emit_inst(
             Binop(
                 operator=BinopKind.SUB,
-                left=Register(str(tgt_start_reg)),
-                right=Register(str(one_reg)),
-                result_reg=Register(str(tgt_start_0indexed_reg)),
+                left=tgt_start_reg,
+                right=one_reg,
+                result_reg=tgt_start_0indexed_reg,
             )
         )
 
@@ -319,10 +311,10 @@ def lower_move(
                 result_reg=spliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SPLICE),
                 args=(
-                    Register(str(target_str_reg)),
-                    Register(str(tgt_start_0indexed_reg)),
-                    Register(str(tgt_length_reg)),
-                    Register(str(value_str_reg)),
+                    target_str_reg,
+                    tgt_start_0indexed_reg,
+                    tgt_length_reg,
+                    value_str_reg,
                 ),
             )
         )
@@ -393,9 +385,9 @@ def lower_arithmetic(
             ctx.emit_inst(
                 Binop(
                     operator=BinopKind.SUB,
-                    left=Register(str(start_reg)),
-                    right=Register(str(one_reg)),
-                    result_reg=Register(str(start_0indexed_reg)),
+                    left=start_reg,
+                    right=one_reg,
+                    result_reg=start_0indexed_reg,
                 )
             )
 
@@ -412,11 +404,7 @@ def lower_arithmetic(
                 CallFunction(
                     result_reg=sliced_reg,
                     func_name=FuncName(BuiltinName.STRING_SLICE),
-                    args=(
-                        Register(str(src_str_reg)),
-                        Register(str(start_0indexed_reg)),
-                        Register(str(length_reg)),
-                    ),
+                    args=(src_str_reg, start_0indexed_reg, length_reg),
                 )
             )
 
@@ -426,7 +414,7 @@ def lower_arithmetic(
                 CallFunction(
                     result_reg=src_decoded,
                     func_name=FuncName("float"),
-                    args=(Register(str(sliced_reg)),),
+                    args=(sliced_reg,),
                 )
             )
     else:
@@ -445,8 +433,8 @@ def lower_arithmetic(
             Binop(
                 result_reg=result_reg,
                 operator=resolve_binop(op),
-                left=Register(str(tgt_decoded)),
-                right=Register(str(src_decoded)),
+                left=tgt_decoded,
+                right=src_decoded,
             )
         )
         result_str_reg = ctx.emit_to_string(result_reg)
@@ -468,14 +456,14 @@ def lower_arithmetic(
             Binop(
                 result_reg=divzero_reg,
                 operator=resolve_binop("=="),
-                left=Register(str(src_decoded)),
-                right=Register(str(zero_reg)),
+                left=src_decoded,
+                right=zero_reg,
             )
         )
         compute_label = ctx.fresh_label("divide_compute")
         ctx.emit_inst(
             BranchIf(
-                cond_reg=Register(str(divzero_reg)),
+                cond_reg=divzero_reg,
                 branch_targets=(on_size_err_label, compute_label),
             )
         )
@@ -487,8 +475,8 @@ def lower_arithmetic(
         Binop(
             result_reg=result_reg,
             operator=resolve_binop(op),
-            left=Register(str(tgt_decoded)),
-            right=Register(str(src_decoded)),
+            left=tgt_decoded,
+            right=src_decoded,
         )
     )
 
@@ -525,7 +513,7 @@ def lower_arithmetic_giving(
 ) -> None:
     """MULTIPLY/DIVIDE X BY/INTO Y GIVING Z."""
 
-    def _decode_operand(operand: RefModOperand) -> str:
+    def _decode_operand(operand: RefModOperand) -> Register:
         field_name = operand.name
         if ctx.has_field(field_name, layout):
             ref = ctx.resolve_field_ref(field_name, layout, region_reg)
@@ -534,24 +522,25 @@ def lower_arithmetic_giving(
             # Apply ref_mod if present
             if operand.ref_mod_start is not None:
                 src_str = ctx.emit_to_string(decoded)
-                start_reg = ctx.eval_ref_mod_expr(
-                    operand.ref_mod_start, layout, region_reg
+                start_reg = eval_ref_mod_expr(
+                    ctx, operand.ref_mod_start, layout, region_reg
                 )
                 # Convert 1-indexed to 0-indexed
-                zero_reg = ctx.const_to_reg(0)
                 one_reg = ctx.const_to_reg(1)
                 zero_indexed_start = ctx.fresh_reg()
                 ctx.emit_inst(
                     Binop(
                         result_reg=zero_indexed_start,
                         operator=resolve_binop("-"),
-                        left=Register(str(start_reg)),
-                        right=Register(str(one_reg)),
+                        left=start_reg,
+                        right=one_reg,
                     )
                 )
 
-                length_reg = ctx.eval_ref_mod_expr(
-                    operand.ref_mod_length, layout, region_reg
+                length_reg = (
+                    eval_ref_mod_expr(ctx, operand.ref_mod_length, layout, region_reg)
+                    if operand.ref_mod_length is not None
+                    else ctx.const_to_reg(999999)
                 )
 
                 # Emit STRING_SLICE
@@ -560,11 +549,7 @@ def lower_arithmetic_giving(
                     CallFunction(
                         result_reg=sliced,
                         func_name=FuncName("STRING_SLICE"),
-                        args=[
-                            Register(str(src_str)),
-                            Register(str(zero_indexed_start)),
-                            Register(str(length_reg)),
-                        ],
+                        args=(src_str, zero_indexed_start, length_reg),
                     )
                 )
 
@@ -574,7 +559,7 @@ def lower_arithmetic_giving(
                     CallFunction(
                         result_reg=result,
                         func_name=FuncName("float"),
-                        args=[Register(str(sliced))],
+                        args=(sliced,),
                     )
                 )
                 return result
@@ -582,7 +567,7 @@ def lower_arithmetic_giving(
             return decoded
         return ctx.const_to_reg(float(field_name))
 
-    def _decode_field(name: str) -> str:
+    def _decode_field(name: str) -> Register:
         """Decode a plain string field name (for target operand)."""
         if ctx.has_field(name, layout):
             ref = ctx.resolve_field_ref(name, layout, region_reg)
@@ -604,14 +589,14 @@ def lower_arithmetic_giving(
             Binop(
                 result_reg=divzero_reg,
                 operator=resolve_binop("=="),
-                left=Register(str(right_reg)),
-                right=Register(str(zero_reg)),
+                left=right_reg,
+                right=zero_reg,
             )
         )
         compute_label = ctx.fresh_label("divide_compute")
         ctx.emit_inst(
             BranchIf(
-                cond_reg=Register(str(divzero_reg)),
+                cond_reg=divzero_reg,
                 branch_targets=(on_size_err_label, compute_label),
             )
         )
@@ -627,8 +612,8 @@ def lower_arithmetic_giving(
         Binop(
             result_reg=result_reg,
             operator=resolve_binop(op),
-            left=Register(str(left_reg)),
-            right=Register(str(right_reg)),
+            left=left_reg,
+            right=right_reg,
         )
     )
 
@@ -654,15 +639,15 @@ def lower_arithmetic_giving(
             Binop(
                 result_reg=new_combined,
                 operator=resolve_binop("or"),
-                left=Register(str(combined_flag)),
-                right=Register(str(flag)),
+                left=combined_flag,
+                right=flag,
             )
         )
         combined_flag = new_combined
 
     ctx.emit_inst(
         BranchIf(
-            cond_reg=Register(str(combined_flag)),
+            cond_reg=combined_flag,
             branch_targets=(on_size_err_label, not_on_size_err_label),
         )
     )
@@ -735,15 +720,15 @@ def lower_compute(
             Binop(
                 result_reg=new_combined,
                 operator=resolve_binop("or"),
-                left=Register(str(combined_flag)),
-                right=Register(str(flag)),
+                left=combined_flag,
+                right=flag,
             )
         )
         combined_flag = new_combined
 
     ctx.emit_inst(
         BranchIf(
-            cond_reg=Register(str(combined_flag)),
+            cond_reg=combined_flag,
             branch_targets=(on_size_err_label, not_on_size_err_label),
         )
     )
@@ -778,7 +763,7 @@ def lower_if(
 
     ctx.emit_inst(
         BranchIf(
-            cond_reg=Register(str(cond_reg)),
+            cond_reg=cond_reg,
             branch_targets=(true_label, false_label),
         )
     )
@@ -818,7 +803,7 @@ def lower_evaluate(
             when_false = ctx.fresh_label("when_false")
             ctx.emit_inst(
                 BranchIf(
-                    cond_reg=Register(str(cond_reg)),
+                    cond_reg=cond_reg,
                     branch_targets=(when_true, when_false),
                 )
             )
@@ -951,8 +936,8 @@ def lower_set(
                 Binop(
                     result_reg=result_reg,
                     operator=resolve_binop(op),
-                    left=Register(str(tgt_decoded)),
-                    right=Register(str(step_reg)),
+                    left=tgt_decoded,
+                    right=step_reg,
                 )
             )
             result_str_reg = ctx.emit_to_string(result_reg)
@@ -987,8 +972,8 @@ def lower_display(
             Binop(
                 result_reg=start_0indexed_reg,
                 operator=resolve_binop("-"),
-                left=Register(str(raw_start_reg)),
-                right=Register(str(one_reg)),
+                left=raw_start_reg,
+                right=one_reg,
             )
         )
         length_reg = (
@@ -1001,11 +986,7 @@ def lower_display(
             CallFunction(
                 result_reg=sliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
-                args=(
-                    Register(str(display_reg)),
-                    Register(str(start_0indexed_reg)),
-                    Register(str(length_reg)),
-                ),
+                args=(display_reg, start_0indexed_reg, length_reg),
             )
         )
         display_reg = sliced_reg
@@ -1014,7 +995,7 @@ def lower_display(
         CallFunction(
             result_reg=ctx.fresh_reg(),
             func_name=FuncName("print"),
-            args=(Register(str(display_reg)),),
+            args=(display_reg,),
         )
     )
 

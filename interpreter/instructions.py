@@ -203,7 +203,7 @@ class Const(InstructionBase):
     """CONST: load a literal value into a register."""
 
     result_reg: Register = NO_REGISTER
-    value: str = ""
+    value: Any = ""
 
     @property
     def opcode(self) -> Opcode:

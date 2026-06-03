@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from collections.abc import Sequence
 from typing import Any, Callable
 
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
@@ -113,7 +114,7 @@ class EmitContext:
         self._label_counter += 1
         return name
 
-    def emit_inst(self, inst: Instruction) -> Instruction:
+    def emit_inst(self, inst: InstructionBase) -> InstructionBase:
         """Emit a typed instruction directly."""
         self._instructions.append(inst)
         return inst
@@ -125,36 +126,38 @@ class EmitContext:
         return reg
 
     def inline_ir(
-        self, ir_instructions: list[Instruction], param_regs: dict[str, str]
-    ) -> str:
+        self,
+        ir_instructions: Sequence[InstructionBase],
+        param_regs: dict[str, Register],
+    ) -> Register:
         """Inline a generated IR function body, mapping parameter registers.
 
         Returns the register holding the return value.
         """
-        reg_map: dict[str, str] = dict(param_regs)
-        return_reg = ""
+        reg_map: dict[str, Register] = dict(param_regs)
+        return_reg: Register = NO_REGISTER
 
         def remap(r: Register) -> Register:
             mapped = reg_map.get(str(r))
-            return Register(str(mapped)) if mapped else r
+            return mapped if mapped is not None else r
 
         for inst in ir_instructions:
             if isinstance(inst, Label_):
                 continue
             if isinstance(inst, Return_):
-                resolved = remap(inst.value_reg)
-                resolved_str = str(resolved)
-                return_reg = (
-                    resolved_str
-                    if resolved_str.startswith("%")
-                    else self.const_to_reg(resolved)
-                )
+                if inst.value_reg is not None:
+                    resolved = remap(inst.value_reg)
+                    resolved_str = str(resolved)
+                    if resolved_str.startswith("%"):
+                        return_reg = resolved
+                    else:
+                        return_reg = self.const_to_reg(resolved_str)
                 continue
 
             # Allocate fresh result register and record the mapping
             if inst.result_reg.is_present():
                 new_result = self.fresh_reg()
-                reg_map[str(inst.result_reg)] = str(new_result)
+                reg_map[str(inst.result_reg)] = new_result
             else:
                 new_result = NO_REGISTER
 
@@ -290,7 +293,7 @@ class EmitContext:
             ),
         )
 
-    def emit_encode_value(self, fl: FieldLayout, value: str) -> str:
+    def emit_encode_value(self, fl: FieldLayout, value: str) -> Register:
         """Emit inline IR to encode a value per the field's type. Returns result register."""
         td = fl.type_descriptor
         if td.blank_when_zero and self._is_zero_value(value):
@@ -319,7 +322,7 @@ class EmitContext:
             CallFunction(
                 result_reg=result,
                 func_name=FuncName(BuiltinName.MAKE_LIST),
-                args=(Register(str(length_reg)), Register(str(space_reg))),
+                args=(length_reg, space_reg),
             ),
         )
         return result
@@ -330,7 +333,7 @@ class EmitContext:
         value: str,
         length: int,
         justified_right: bool = False,
-    ) -> str:
+    ) -> Register:
         """Emit inline alphanumeric encoding IR. Returns result register."""
         value_reg = self.fresh_reg()
         self.emit_inst(Const(result_reg=value_reg, value=f'"{value}"'))
@@ -345,7 +348,7 @@ class EmitContext:
 
     def emit_encode_float(
         self, field_name: str, value: str, td: CobolTypeDescriptor
-    ) -> str:
+    ) -> Register:
         """Emit inline float encoding IR for COMP-1/COMP-2. Returns result register."""
         float_val = float(value)
         value_reg = self.fresh_reg()
@@ -356,7 +359,7 @@ class EmitContext:
 
     def emit_encode_numeric(
         self, field_name: str, value: str, td: CobolTypeDescriptor
-    ) -> str:
+    ) -> Register:
         """Emit inline numeric encoding IR. Returns result register."""
         negative = value.startswith("-")
         clean = value.lstrip("+-")
@@ -409,7 +412,7 @@ class EmitContext:
 
     def emit_decode_field(
         self, region_reg: Register, fl: FieldLayout, offset_reg: Register = NO_REGISTER
-    ) -> str:
+    ) -> Register:
         """Emit IR to load and decode a field from the region. Returns decoded value register."""
         if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
@@ -461,20 +464,20 @@ class EmitContext:
 
     # ── String Conversion Helpers ─────────────────────────────────
 
-    def emit_to_string(self, value_reg: str) -> Register:
+    def emit_to_string(self, value_reg: Register) -> Register:
         """Emit IR to convert a value to a string."""
         result = self.fresh_reg()
         self.emit_inst(
             CallFunction(
                 result_reg=result,
                 func_name=FuncName("str"),
-                args=(Register(str(value_reg)),),
+                args=(value_reg,),
             ),
         )
         return result
 
     def _emit_blank_when_zero_wrap(
-        self, encoded_reg: str, value_str_reg: str, byte_length: int
+        self, encoded_reg: Register, value_str_reg: Register, byte_length: int
     ) -> Register:
         """Wrap encoded bytes with BLANK WHEN ZERO check via builtin."""
         result = self.fresh_reg()
@@ -483,16 +486,14 @@ class EmitContext:
             CallFunction(
                 result_reg=result,
                 func_name=FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO),
-                args=(
-                    Register(str(encoded_reg)),
-                    Register(str(value_str_reg)),
-                    Register(str(length_reg)),
-                ),
+                args=(encoded_reg, value_str_reg, length_reg),
             ),
         )
         return result
 
-    def emit_encode_from_string(self, fl: FieldLayout, value_str_reg: str) -> str:
+    def emit_encode_from_string(
+        self, fl: FieldLayout, value_str_reg: Register
+    ) -> Register:
         """Emit encoding IR from a string value register."""
         td = fl.type_descriptor
         if td.category == CobolDataCategory.ALPHANUMERIC:
@@ -513,7 +514,7 @@ class EmitContext:
                 CallFunction(
                     result_reg=float_reg,
                     func_name=FuncName("float"),
-                    args=(Register(str(value_str_reg)),),
+                    args=(value_str_reg,),
                 ),
             )
             ir = build_encode_float_ir(f"enc_float_{fl.name}", td.byte_length)
@@ -532,8 +533,8 @@ class EmitContext:
         return encoded
 
     def emit_numeric_encode_from_string(
-        self, fl: FieldLayout, value_str_reg: str
-    ) -> str:
+        self, fl: FieldLayout, value_str_reg: Register
+    ) -> Register:
         """Emit IR to parse a string into digits + sign, then encode numerically."""
         td = fl.type_descriptor
         total_digits_reg = self.const_to_reg(td.total_digits)
@@ -545,10 +546,10 @@ class EmitContext:
                 result_reg=digits_reg,
                 func_name=FuncName(BuiltinName.COBOL_PREPARE_DIGITS),
                 args=(
-                    Register(str(value_str_reg)),
-                    Register(str(total_digits_reg)),
-                    Register(str(decimal_digits_reg)),
-                    Register(str(signed_reg)),
+                    value_str_reg,
+                    total_digits_reg,
+                    decimal_digits_reg,
+                    signed_reg,
                 ),
             ),
         )
@@ -559,7 +560,7 @@ class EmitContext:
             CallFunction(
                 result_reg=sign_reg,
                 func_name=FuncName(BuiltinName.COBOL_PREPARE_SIGN),
-                args=(Register(str(value_str_reg)), Register(str(signed_reg2))),
+                args=(value_str_reg, signed_reg2),
             ),
         )
 
@@ -592,7 +593,7 @@ class EmitContext:
         self,
         region_reg: Register,
         fl: FieldLayout,
-        value_str_reg: str,
+        value_str_reg: Register,
         offset_reg: Register = NO_REGISTER,
     ) -> None:
         """Encode a string value and write it to the field's region slot."""

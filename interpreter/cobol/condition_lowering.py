@@ -136,7 +136,7 @@ def _expand_condition_name(
 
     if not value_regs:
         result = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=result, value=True))
+        ctx.emit_inst(Const(result_reg=result, value="True"))
         return result
 
     return _emit_or_chain(ctx, value_regs)
@@ -373,7 +373,7 @@ def _lower_condition_str(
         return result
 
     result = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=result, value=True))
+    ctx.emit_inst(Const(result_reg=result, value="True"))
     return result
 
 
