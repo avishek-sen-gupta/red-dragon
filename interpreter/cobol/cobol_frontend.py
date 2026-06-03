@@ -134,7 +134,7 @@ class CobolFrontend(Frontend):
     @property
     def program_id(self) -> str:
         """COBOL PROGRAM-ID value. Available after lower() has been called."""
-        return getattr(self, "_program_id", "")
+        return getattr(self, "_program_id", "MAIN")
 
     @property
     def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
