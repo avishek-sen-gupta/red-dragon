@@ -211,6 +211,8 @@ class CobolASG:
 
     def to_dict(self) -> dict:
         result: dict = {}
+        if self.program_id:
+            result["program_id"] = self.program_id
         if self.data_fields:
             result["data_fields"] = [f.to_dict() for f in self.data_fields]
         if self.linkage_fields:
