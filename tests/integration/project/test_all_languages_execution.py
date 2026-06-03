@@ -14,7 +14,8 @@ from interpreter.address import Address
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
-from interpreter.run import execute_cfg, ExecutionStrategies
+from interpreter.run import execute_cfg, ExecutionStrategies, run_linked
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 
@@ -27,6 +28,29 @@ def _run_project_vm(tmp_path, files, entry, language):
         p.write_text(content)
 
     linked = compile_directory(tmp_path, language)
+
+    # COBOL uses the singleton init pattern: two-phase execution via run_linked.
+    # For multi-module programs, the entry module is the last one in dependency
+    # order (dependencies are listed first).  We pick the last proc label that
+    # matches *func_*_0 and is not an init_params wrapper.
+    if linked.language == Language.COBOL and linked.func_symbol_table:
+        proc_refs = [
+            ref
+            for ref in linked.func_symbol_table.values()
+            if "func_" in str(ref.label)
+            and str(ref.label).endswith("_0")
+            and "init_params" not in str(ref.label)
+        ]
+        if proc_refs:
+            entry_ref = proc_refs[-1]
+            return run_linked(
+                linked,
+                entry_point=EntryPoint.function(
+                    lambda ref, _target=entry_ref: ref.label == _target.label
+                ),
+                max_steps=200,
+            )
+
     strategies = ExecutionStrategies(
         func_symbol_table=linked.func_symbol_table,
         class_symbol_table=linked.class_symbol_table,

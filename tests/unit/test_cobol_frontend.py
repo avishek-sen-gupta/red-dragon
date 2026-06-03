@@ -2566,3 +2566,43 @@ class TestSectionedLayout:
 
         alloc_count = sum(1 for i in instructions if i.opcode == Opcode.ALLOC_REGION)
         assert alloc_count == 2, f"Expected 2 ALLOC_REGION (WS + LS), got {alloc_count}"
+
+
+class TestSingletonInit:
+    """Tests for Task 5: singleton init block and func_PROGRAMID_0 label."""
+
+    @covers(CobolFeature.SECTION_WORKING_STORAGE)
+    def test_frontend_lower_emits_func_proc_label(self):
+        """lower() must wrap the procedure division in func_<pid>_0 label."""
+        asg = CobolASG(
+            program_id="TEST-INIT",
+            data_fields=[
+                CobolField(
+                    name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0
+                ),
+            ],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(b"")
+
+        labels = [
+            str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL
+        ]
+        assert any(
+            l.startswith("func_") and l.endswith("_0") for l in labels
+        ), f"Expected a func_*_0 label, got labels: {labels}"
+
+    @covers(CobolFeature.SECTION_WORKING_STORAGE)
+    def test_frontend_exposes_program_id(self):
+        """frontend.program_id must return the PROGRAM-ID after lower()."""
+        asg = CobolASG(
+            program_id="TEST-INIT",
+            data_fields=[
+                CobolField(
+                    name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0
+                ),
+            ],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        frontend.lower(b"")
+        assert frontend.program_id == "TEST-INIT"

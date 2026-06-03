@@ -28,19 +28,22 @@ from interpreter.cobol.field_resolution import (
 )
 from interpreter.cobol.cobol_parser import CobolParser
 from interpreter.cobol.lower_data_division import (
-    lower_data_division,
     lower_sectioned_data_division,
 )
+from interpreter.cobol.lower_program_init import (
+    lower_program_init,
+    lower_ws_from_singleton,
+)
+from interpreter.refs.func_ref import FuncRef
 from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.instructions import InstructionBase, Label_, StoreVar
+from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
-from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +131,30 @@ class CobolFrontend(Frontend):
             for fl in self._layout.all_fields()
         }
 
+    @property
+    def program_id(self) -> str:
+        """COBOL PROGRAM-ID value. Available after lower() has been called."""
+        return getattr(self, "_program_id", "")
+
+    @property
+    def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
+        """Expose func_PROGRAMID_0 and func_init_params_PROGRAMID_0 so that
+        Const instructions in the init block resolve to BoundFuncRef at runtime."""
+        from interpreter.func_name import FuncName
+
+        pid = self.program_id
+        if not pid:
+            return {}
+        pid_lower = pid.lower()
+        proc_label = CodeLabel(f"func_{pid_lower}_0")
+        init_params_label = CodeLabel(f"func_init_params_{pid_lower}_0")
+        return {
+            proc_label: FuncRef(name=FuncName(str(proc_label)), label=proc_label),
+            init_params_label: FuncRef(
+                name=FuncName(str(init_params_label)), label=init_params_label
+            ),
+        }
+
     def lower(
         self,
         source: bytes,
@@ -137,6 +164,7 @@ class CobolFrontend(Frontend):
         """Lower COBOL source to IR via the ProLeap bridge."""
         asg = self._parser.parse(source)
         sectioned = build_sectioned_layout(asg)
+        self._program_id = asg.program_id or "MAIN"
         self._layout = sectioned.working_storage
         self._symbol_table = SymbolTable.from_data_layout(sectioned.working_storage)
         condition_index = build_condition_index(sectioned.working_storage)
@@ -149,17 +177,24 @@ class CobolFrontend(Frontend):
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
 
-        # TODO(Task 5): remove this inline alloc once CobolFrontend emits a
-        # proper init block via lower_program_init.  In the full singleton
-        # model the allocation happens inside the init block; for the current
-        # standalone / test execution path we emit it inline here so that
-        # lower_sectioned_data_division (which emits LOAD_VAR __ws_region)
-        # finds the variable in scope.
-        ws_reg = lower_data_division(self._ctx, sectioned.working_storage)
-        self._ctx.emit_inst(StoreVar(name=VarName("__ws_region"), value_reg=ws_reg))
+        # Emit singleton init block (ALLOC_REGION for WS lives here, runs once)
+        after_label = lower_program_init(
+            self._ctx, self._program_id, sectioned.working_storage
+        )
 
+        # Procedure division function — reachable only via __init_params__ dispatch
+        proc_label = CodeLabel(f"func_{self._program_id.lower()}_0")
+        self._ctx.emit_inst(Label_(label=proc_label))
+
+        # Load persistent WS from singleton into __ws_region
+        lower_ws_from_singleton(self._ctx, self._program_id)
+
+        # Bind LINKAGE to __params_region (injected by handler); alloc fresh LS
         materialised = lower_sectioned_data_division(self._ctx, sectioned)
         lower_procedure_division(self._ctx, asg, materialised)
+
+        # Skip target — init block branches here to skip past procedure body
+        self._ctx.emit_inst(Label_(label=after_label))
 
         logger.info(
             "COBOL frontend produced %d IR instructions",
