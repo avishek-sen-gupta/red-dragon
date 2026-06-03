@@ -95,22 +95,39 @@ class TestCallWithMemoryInstruction:
 
 
 def _make_vm_with_func_ref(callee_label: str, func_name: str, params_val, results_val):
-    """Build a minimal VMState with a BoundFuncRef in scope and two region registers."""
-    from interpreter.vm.vm_types import VMState, StackFrame
+    """Build a minimal VMState with a singleton HeapObject in scope and two region registers.
+
+    Updated for singleton dispatch: stores __prog_<FUNCNAME> singleton with
+    __init_params__ BoundFuncRef pointing at callee_label.
+    """
+    from interpreter.address import Address
+    from interpreter.field_name import FieldName
     from interpreter.func_name import FuncName as FN
-    from interpreter.var_name import VarName as VN
-    from interpreter.refs.func_ref import FuncRef, BoundFuncRef
-    from interpreter.types.typed_value import typed_from_runtime
-    from interpreter.register import Register as Reg
     from interpreter.ir import CodeLabel
+    from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+    from interpreter.register import Register as Reg
+    from interpreter.types.typed_value import typed_from_runtime
+    from interpreter.var_name import VarName as VN
+    from interpreter.vm.vm_types import HeapObject, StackFrame, VMState
 
     vm = VMState()
     frame = StackFrame(function_name=FN("CALLER"))
-    frame.local_vars[VN(func_name)] = typed_from_runtime(
-        BoundFuncRef(
-            func_ref=FuncRef(name=FN(func_name), label=CodeLabel(callee_label))
-        )
+
+    # Build singleton HeapObject with __init_params__ pointing at callee_label
+    init_params_ref = BoundFuncRef(
+        func_ref=FuncRef(name=FN(func_name), label=CodeLabel(callee_label))
     )
+    singleton = HeapObject(
+        fields={
+            FieldName("__init_params__"): typed_from_runtime(init_params_ref),
+        }
+    )
+    singleton_addr = Address("obj_singleton")
+    vm._heap[singleton_addr] = singleton
+    frame.local_vars[VN(f"__prog_{func_name.upper()}")] = typed_from_runtime(
+        singleton_addr
+    )
+
     frame.registers[Reg("%r1")] = typed_from_runtime(params_val)
     frame.registers[Reg("%r2")] = typed_from_runtime(results_val)
     vm.call_stack.append(frame)

@@ -657,11 +657,13 @@ def _handle_call_with_memory(
     vm: VMState,
     ctx: HandlerContext,
 ) -> ExecutionResult:
-    """Handle CALL_WITH_MEMORY — call a subprogram passing two memory regions.
+    """Handle CALL_WITH_MEMORY via singleton dispatch.
 
-    Resolves params_reg and results_reg from the current VM registers, looks up
-    the callee BoundFuncRef by func_name in the call-stack scope chain, and
-    injects __params_region and __results_region into the new call frame.
+    Protocol:
+      1. Resolve __prog_<PROGRAMID> in scope chain → singleton HeapObject address
+      2. Load __init_params__ field → BoundFuncRef
+      3. Dispatch to __init_params__, injecting __params_region and __results_region
+         into the new call frame
     """
     t = inst
     assert isinstance(t, CallWithMemory)
@@ -669,20 +671,31 @@ def _handle_call_with_memory(
     params_tv = _resolve_reg(vm, t.params_reg)
     results_tv = _resolve_reg(vm, t.results_reg)
 
-    # Look up callee BoundFuncRef via scope chain
-    func_val = ""
-    lookup_key = VarName(str(t.func_name))
-    for f in reversed(vm.call_stack):
-        if lookup_key in f.local_vars:
-            func_val = f.local_vars[lookup_key].value
+    program_id = str(t.func_name).upper()
+    singleton_key = VarName(f"__prog_{program_id}")
+
+    # Walk scope chain to find singleton HeapObject address
+    singleton_addr_val: Any = None
+    for frame in reversed(vm.call_stack):
+        if singleton_key in frame.local_vars:
+            singleton_addr_val = frame.local_vars[singleton_key].value
             break
 
-    if not isinstance(func_val, BoundFuncRef):
-        # Fall back to the configured call resolver (e.g. symbolic)
+    if singleton_addr_val is None or not vm.heap_contains(
+        Address(str(singleton_addr_val))
+    ):
         return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
 
-    fname = func_val.func_ref.name
-    flabel = func_val.func_ref.label
+    singleton = vm.heap_get(Address(str(singleton_addr_val)))
+    init_params_tv = singleton.fields.get(FieldName("__init_params__"))
+
+    if init_params_tv is None or not isinstance(init_params_tv.value, BoundFuncRef):
+        return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
+
+    init_params_ref = init_params_tv.value
+    flabel = init_params_ref.func_ref.label
+    fname = init_params_ref.func_ref.name
+
     if flabel not in ctx.cfg.blocks:
         return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
 
@@ -699,10 +712,10 @@ def _handle_call_with_memory(
             ),
             next_label=flabel,
             reasoning=(
-                f"call_with_memory {fname},"
+                f"call_with_memory {str(t.func_name)},"
                 f" params={params_tv.value!r},"
                 f" results={results_tv.value!r},"
-                f" dispatch to {flabel}"
+                f" dispatch to {flabel} via singleton __init_params__"
             ),
             var_writes=new_vars,
         )
