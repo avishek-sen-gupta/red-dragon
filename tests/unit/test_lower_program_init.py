@@ -1,9 +1,12 @@
 from interpreter.cobol.asg_types import CobolField
 from interpreter.cobol.data_layout import build_data_layout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.lower_program_init import lower_program_init
+from interpreter.cobol.lower_program_init import (
+    lower_program_init,
+    lower_ws_from_singleton,
+)
 from interpreter.cobol.statement_dispatch import dispatch_statement
-from interpreter.instructions import StoreVar
+from interpreter.instructions import LoadField, LoadVar, StoreVar
 from interpreter.ir import Opcode
 from tests.covers import covers, NotLanguageFeature
 
@@ -68,3 +71,30 @@ def test_lower_program_init_returns_after_label():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     after_label = lower_program_init(ctx, "SUBPROG", _ws_layout_5bytes())
     assert str(after_label) == "__after_subprog_0"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_ws_from_singleton_emits_load_var_singleton():
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    lower_ws_from_singleton(ctx, "SUBPROG")
+    load_var_insts = [i for i in ctx.instructions if isinstance(i, LoadVar)]
+    names = [str(i.name) for i in load_var_insts]
+    assert "__prog_SUBPROG" in names
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_ws_from_singleton_emits_load_field_ws_handle():
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    lower_ws_from_singleton(ctx, "SUBPROG")
+    load_field_insts = [i for i in ctx.instructions if isinstance(i, LoadField)]
+    field_names = [str(i.field_name) for i in load_field_insts]
+    assert "ws_handle" in field_names
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_ws_from_singleton_emits_store_var_ws_region():
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    lower_ws_from_singleton(ctx, "SUBPROG")
+    store_var_insts = [i for i in ctx.instructions if isinstance(i, StoreVar)]
+    names = [str(i.name) for i in store_var_insts]
+    assert "__ws_region" in names
