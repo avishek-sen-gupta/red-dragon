@@ -227,6 +227,13 @@ _LANGUAGE_EXTENSIONS: dict[Language, tuple[str, ...]] = {
     Language.COBOL: (".cbl", ".cob", ".cpy"),
 }
 
+# Extensions that are copybook *fragments*, not standalone compilation units.
+# They are resolved into the programs that COPY them (via copybook_dirs) and
+# must never be compiled on their own — they have no IDENTIFICATION DIVISION.
+_COPYBOOK_EXTENSIONS: dict[Language, frozenset[str]] = {
+    Language.COBOL: frozenset({".cpy"}),
+}
+
 
 def compile_directory(
     directory: Path,
@@ -254,9 +261,11 @@ def compile_directory(
     copybook_dirs = _collect_copybook_dirs(directory)
 
     extensions = _LANGUAGE_EXTENSIONS.get(language, ())
+    copybook_exts = _COPYBOOK_EXTENSIONS.get(language, frozenset())
     source_files = sorted(
         f.resolve()
         for ext in extensions
+        if ext not in copybook_exts
         for f in directory.rglob(f"*{ext}")
         if f.is_file()
     )
