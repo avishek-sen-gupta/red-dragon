@@ -153,11 +153,19 @@ def build_export_table(
     return ExportTable(functions=functions, classes=classes, variables=variables)
 
 
+def _collect_copybook_dirs(directory: Path) -> list[Path]:
+    """Project root plus every subdirectory, for copybook resolution."""
+    directory = directory.resolve()
+    subdirs = [p for p in directory.rglob("*") if p.is_dir()]
+    return [directory, *subdirs]
+
+
 def compile_module(
     file_path: Path,
     language: Language,
     source: bytes | None = None,
     namespace_resolver: NamespaceResolver = NamespaceResolver(),
+    copybook_dirs: list[Path] | None = None,
 ) -> ModuleUnit:
     """Compile a single file into a ModuleUnit.
 
@@ -173,7 +181,11 @@ def compile_module(
         if language == Language.COBOL
         else constants.FRONTEND_DETERMINISTIC
     )
-    frontend = get_frontend(language, frontend_type=resolved_frontend_type)
+    frontend = get_frontend(
+        language,
+        frontend_type=resolved_frontend_type,
+        copybook_dirs=copybook_dirs,
+    )
     ir = frontend.lower(source, namespace_resolver=namespace_resolver)
 
     exports = build_export_table(
@@ -239,6 +251,8 @@ def compile_directory(
     if not directory.is_dir():
         raise FileNotFoundError(f"Directory not found: {directory}")
 
+    copybook_dirs = _collect_copybook_dirs(directory)
+
     extensions = _LANGUAGE_EXTENSIONS.get(language, ())
     source_files = sorted(
         f.resolve()
@@ -263,7 +277,12 @@ def compile_directory(
 
     # --- PASS 1: Compile each module (with namespace resolver if available) ---
     modules = {
-        path: compile_module(path, language, namespace_resolver=namespace_resolver)
+        path: compile_module(
+            path,
+            language,
+            namespace_resolver=namespace_resolver,
+            copybook_dirs=copybook_dirs,
+        )
         for path in source_files
     }
 
