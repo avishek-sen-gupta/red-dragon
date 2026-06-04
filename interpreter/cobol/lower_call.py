@@ -42,7 +42,7 @@ def lower_call(
 
     When stmt.using is empty, the caller's WS region is passed as params_reg (legacy behaviour).
     """
-    ws_layout, ws_reg = materialised.working_storage
+    _ws_layout, ws_reg = materialised.working_storage
 
     if stmt.using:
         # Resolve field layouts for all USING params (all are in WS).
@@ -134,7 +134,7 @@ def lower_call(
 def lower_alter(
     ctx: EmitContext,
     stmt: AlterStatement,
-    materialised: MaterialisedSectionedLayout,
+    _materialised: MaterialisedSectionedLayout,
 ) -> None:
     """ALTER para-1 TO PROCEED TO para-2."""
     for pt in stmt.proceed_tos:
@@ -151,7 +151,7 @@ def lower_alter(
 def lower_entry(
     ctx: EmitContext,
     stmt: EntryStatement,
-    materialised: MaterialisedSectionedLayout,
+    _materialised: MaterialisedSectionedLayout,
 ) -> None:
     """ENTRY 'name' — alternate entry point for a subprogram."""
     if stmt.entry_name:
@@ -160,9 +160,9 @@ def lower_entry(
 
 
 def lower_cancel(
-    ctx: EmitContext,
+    _ctx: EmitContext,
     stmt: CancelStatement,
-    materialised: MaterialisedSectionedLayout,
+    _materialised: MaterialisedSectionedLayout,
 ) -> None:
     """CANCEL program — no-op for static analysis."""
     for prog in stmt.programs:
