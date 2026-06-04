@@ -17,7 +17,9 @@ from interpreter.cobol.cobol_statements import (
     DisplayStatement,
     EntryStatement,
     EvaluateStatement,
+    ExitProgramStatement,
     ExitStatement,
+    GobackStatement,
     GotoStatement,
     IfStatement,
     InitializeStatement,
@@ -46,6 +48,8 @@ from interpreter.cobol.lower_arithmetic import (
     lower_display,
     lower_evaluate,
     lower_exit,
+    lower_exit_program,
+    lower_goback,
     lower_goto,
     lower_if,
     lower_initialize,
@@ -105,6 +109,10 @@ def dispatch_statement(
         lower_display(ctx, stmt, materialised)
     elif isinstance(stmt, StopRunStatement):
         lower_stop_run(ctx, stmt, materialised)
+    elif isinstance(stmt, GobackStatement):
+        lower_goback(ctx, stmt, materialised)
+    elif isinstance(stmt, ExitProgramStatement):
+        lower_exit_program(ctx, stmt, materialised)
     elif isinstance(stmt, GotoStatement):
         lower_goto(ctx, stmt, materialised)
     elif isinstance(stmt, EvaluateStatement):

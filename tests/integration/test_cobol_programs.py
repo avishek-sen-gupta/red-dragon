@@ -4212,7 +4212,13 @@ class TestCallUsingByReference:
 
     @covers(CobolFeature.SECTION_LINKAGE)
     def test_callee_linkage_write_propagates_to_caller_ws(self, tmp_path):
-        """BY REFERENCE: DOUBLIT moves 42 into LS-VALUE; MAINPROG sees WS-VALUE == 42."""
+        """BY REFERENCE full round-trip: receipt, mutation, and write-back all verified.
+
+        MAINPROG passes WS-VALUE=5 BY REFERENCE to DOUBLIT.
+        DOUBLIT stores the received value in WS-RECEIVED (proves receipt of 5),
+        then adds 3 to LS-VALUE (5 → 8), writing back via the shared region.
+        After return, MAINPROG's WS-VALUE == 8 (proves mutation propagated back).
+        """
         (tmp_path / "MAINPROG.cbl").write_text(
             _to_fixed(
                 [
@@ -4233,10 +4239,13 @@ class TestCallUsingByReference:
                     "IDENTIFICATION DIVISION.",
                     "PROGRAM-ID. DOUBLIT.",
                     "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-RECEIVED PIC 9(4) VALUE 0.",
                     "LINKAGE SECTION.",
                     "01 LS-VALUE PIC 9(4).",
                     "PROCEDURE DIVISION.",
-                    "    MOVE 42 TO LS-VALUE.",
+                    "    MOVE LS-VALUE TO WS-RECEIVED.",
+                    "    ADD 3 TO LS-VALUE.",
                     "    STOP RUN.",
                 ]
             )
@@ -4252,27 +4261,38 @@ class TestCallUsingByReference:
             max_steps=500,
         )
 
-        # Read WS-VALUE from MAINPROG's singleton.
-        singleton_key = VarName("__prog_MAINPROG")
-        singleton_ptr = None
-        for frame in reversed(vm.call_stack):
-            if singleton_key in frame.local_vars:
-                singleton_ptr = frame.local_vars[singleton_key].value
-                break
-        assert singleton_ptr is not None, "__prog_MAINPROG singleton not found"
-        assert isinstance(
-            singleton_ptr, Pointer
-        ), f"Expected Pointer, got {type(singleton_ptr)}"
-        singleton = vm.heap_get(singleton_ptr.base)
-        ws_handle_tv = singleton.fields[FieldName("ws_handle")]
-        ws_addr = Address(ws_handle_tv.value)
-        region = vm.region_get(ws_addr)
-        assert region is not None, f"WS region not found at {ws_addr}"
+        def _ws(prog_name: str) -> bytearray:
+            key = VarName(f"__prog_{prog_name}")
+            ptr = next(
+                (
+                    f.local_vars[key]
+                    for f in reversed(vm.call_stack)
+                    if key in f.local_vars
+                ),
+                None,
+            )
+            assert ptr is not None, f"__prog_{prog_name} not found"
+            region = vm.region_get(
+                Address(
+                    vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                )
+            )
+            assert region is not None, f"WS region for {prog_name} not found"
+            return region
 
-        ws_value = _decode_zoned_unsigned(region, offset=0, length=4)
+        # Callee received the correct original value
+        doublit_ws = _ws("DOUBLIT")
+        received = _decode_zoned_unsigned(doublit_ws, offset=0, length=4)
         assert (
-            ws_value == 42
-        ), f"Expected WS-VALUE=42 after BY REFERENCE call, got {ws_value}"
+            received == 5
+        ), f"DOUBLIT WS-RECEIVED: expected 5 (original WS-VALUE), got {received}"
+
+        # Mutation propagated back to caller via the shared BY REFERENCE region
+        mainprog_ws = _ws("MAINPROG")
+        ws_value = _decode_zoned_unsigned(mainprog_ws, offset=0, length=4)
+        assert (
+            ws_value == 8
+        ), f"WS-VALUE: expected 8 (5 + 3 written by DOUBLIT), got {ws_value}"
 
 
 class TestCallUsingByValue:
@@ -4281,7 +4301,12 @@ class TestCallUsingByValue:
     @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.USING_BY_VALUE)
     def test_by_value_caller_ws_unchanged(self, tmp_path):
-        """BY VALUE: MODIFIER moves 99 into its local LS-PARAM copy; MAINPROG's WS-DATA stays 5."""
+        """BY VALUE: callee receives a copy of WS-DATA=5; overwrites it with 99; caller sees 5.
+
+        Two assertions:
+        - MODIFIER's WS-RECEIVED == 5: proves the callee received the correct copy.
+        - MAINPROG's WS-DATA == 5: proves the overwrite did not propagate back (no copy-back).
+        """
         (tmp_path / "MAINPROG.cbl").write_text(
             _to_fixed(
                 [
@@ -4302,9 +4327,12 @@ class TestCallUsingByValue:
                     "IDENTIFICATION DIVISION.",
                     "PROGRAM-ID. MODIFIER.",
                     "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-RECEIVED PIC 9(4) VALUE 0.",
                     "LINKAGE SECTION.",
                     "01 LS-PARAM PIC 9(4).",
                     "PROCEDURE DIVISION.",
+                    "    MOVE LS-PARAM TO WS-RECEIVED.",
                     "    MOVE 99 TO LS-PARAM.",
                     "    STOP RUN.",
                 ]
@@ -4321,21 +4349,35 @@ class TestCallUsingByValue:
             max_steps=500,
         )
 
-        singleton_ptr = None
-        for frame in reversed(vm.call_stack):
-            if VarName("__prog_MAINPROG") in frame.local_vars:
-                singleton_ptr = frame.local_vars[VarName("__prog_MAINPROG")].value
-                break
-        assert singleton_ptr is not None, "__prog_MAINPROG singleton not found"
-        assert isinstance(
-            singleton_ptr, Pointer
-        ), f"Expected Pointer, got {type(singleton_ptr)}"
-        singleton = vm.heap_get(singleton_ptr.base)
-        ws_addr = Address(singleton.fields[FieldName("ws_handle")].value)
-        region = vm.region_get(ws_addr)
-        assert region is not None, f"WS region not found at {ws_addr}"
+        def _ws(prog_name: str) -> bytearray:
+            key = VarName(f"__prog_{prog_name}")
+            ptr = next(
+                (
+                    f.local_vars[key]
+                    for f in reversed(vm.call_stack)
+                    if key in f.local_vars
+                ),
+                None,
+            )
+            assert ptr is not None, f"__prog_{prog_name} not found"
+            region = vm.region_get(
+                Address(
+                    vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                )
+            )
+            assert region is not None, f"WS region for {prog_name} not found"
+            return region
 
-        ws_data = _decode_zoned_unsigned(region, offset=0, length=4)
+        modifier_ws = _ws("MODIFIER")
+        assert modifier_ws is not None
+        received = _decode_zoned_unsigned(modifier_ws, offset=0, length=4)
+        assert (
+            received == 5
+        ), f"MODIFIER WS-RECEIVED: expected 5 (copy of WS-DATA), got {received}"
+
+        mainprog_ws = _ws("MAINPROG")
+        assert mainprog_ws is not None
+        ws_data = _decode_zoned_unsigned(mainprog_ws, offset=0, length=4)
         assert (
             ws_data == 5
         ), f"WS-DATA must be unchanged after BY VALUE call, got {ws_data}"
@@ -4343,7 +4385,12 @@ class TestCallUsingByValue:
     @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.USING_BY_CONTENT)
     def test_by_content_caller_ws_unchanged(self, tmp_path):
-        """BY CONTENT: identical to BY VALUE semantics; MAINPROG's WS-DATA stays 5."""
+        """BY CONTENT: callee receives a copy of WS-DATA=5; overwrites it with 99; caller sees 5.
+
+        Two assertions:
+        - MODIFIER's WS-RECEIVED == 5: proves the callee received the correct copy.
+        - MAINPROG's WS-DATA == 5: proves the overwrite did not propagate back (no copy-back).
+        """
         (tmp_path / "MAINPROG.cbl").write_text(
             _to_fixed(
                 [
@@ -4364,9 +4411,12 @@ class TestCallUsingByValue:
                     "IDENTIFICATION DIVISION.",
                     "PROGRAM-ID. MODIFIER.",
                     "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-RECEIVED PIC 9(4) VALUE 0.",
                     "LINKAGE SECTION.",
                     "01 LS-PARAM PIC 9(4).",
                     "PROCEDURE DIVISION.",
+                    "    MOVE LS-PARAM TO WS-RECEIVED.",
                     "    MOVE 99 TO LS-PARAM.",
                     "    STOP RUN.",
                 ]
@@ -4383,21 +4433,35 @@ class TestCallUsingByValue:
             max_steps=500,
         )
 
-        singleton_ptr = None
-        for frame in reversed(vm.call_stack):
-            if VarName("__prog_MAINPROG") in frame.local_vars:
-                singleton_ptr = frame.local_vars[VarName("__prog_MAINPROG")].value
-                break
-        assert singleton_ptr is not None, "__prog_MAINPROG singleton not found"
-        assert isinstance(
-            singleton_ptr, Pointer
-        ), f"Expected Pointer, got {type(singleton_ptr)}"
-        singleton = vm.heap_get(singleton_ptr.base)
-        ws_addr = Address(singleton.fields[FieldName("ws_handle")].value)
-        region = vm.region_get(ws_addr)
-        assert region is not None, f"WS region not found at {ws_addr}"
+        def _ws(prog_name: str) -> bytearray:
+            key = VarName(f"__prog_{prog_name}")
+            ptr = next(
+                (
+                    f.local_vars[key]
+                    for f in reversed(vm.call_stack)
+                    if key in f.local_vars
+                ),
+                None,
+            )
+            assert ptr is not None, f"__prog_{prog_name} not found"
+            region = vm.region_get(
+                Address(
+                    vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                )
+            )
+            assert region is not None, f"WS region for {prog_name} not found"
+            return region
 
-        ws_data = _decode_zoned_unsigned(region, offset=0, length=4)
+        modifier_ws = _ws("MODIFIER")
+        assert modifier_ws is not None
+        received = _decode_zoned_unsigned(modifier_ws, offset=0, length=4)
+        assert (
+            received == 5
+        ), f"MODIFIER WS-RECEIVED: expected 5 (copy of WS-DATA), got {received}"
+
+        mainprog_ws = _ws("MAINPROG")
+        assert mainprog_ws is not None
+        ws_data = _decode_zoned_unsigned(mainprog_ws, offset=0, length=4)
         assert (
             ws_data == 5
         ), f"WS-DATA must be unchanged after BY CONTENT call, got {ws_data}"
@@ -4537,3 +4601,195 @@ class TestCallUsingLinkageRead:
 
         ws_copy = _decode_zoned_unsigned(region, offset=0, length=4)
         assert ws_copy == 7, f"WS-COPY: expected 7 (LK-B at offset 4), got {ws_copy}"
+
+
+class TestGobackExitProgram:
+    """GOBACK and EXIT PROGRAM must return control to the caller, not halt the VM."""
+
+    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
+    @covers(CobolFeature.GOBACK)
+    def test_goback_in_subprogram_returns_to_caller(self, tmp_path):
+        """Subprogram ending with GOBACK returns; MAIN continues and sets WS-RESULT=42."""
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-RESULT PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'HELPER'.",
+                    "    MOVE 42 TO WS-RESULT.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "HELPER.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. HELPER.",
+                    "PROCEDURE DIVISION.",
+                    "    GOBACK.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if VarName("__prog_MAINPROG") in frame.local_vars:
+                singleton_ptr = frame.local_vars[VarName("__prog_MAINPROG")].value
+                break
+        assert singleton_ptr is not None
+        assert isinstance(singleton_ptr, Pointer)
+        ws_addr = Address(
+            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+        )
+        region = vm.region_get(ws_addr)
+        assert region is not None
+        ws_result = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            ws_result == 42
+        ), f"WS-RESULT: expected 42 (MAIN continued after GOBACK), got {ws_result}"
+
+    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
+    @covers(CobolFeature.EXIT_PROGRAM)
+    def test_exit_program_in_subprogram_returns_to_caller(self, tmp_path):
+        """Subprogram ending with EXIT PROGRAM returns; MAIN continues and sets WS-RESULT=99."""
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-RESULT PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'HELPER'.",
+                    "    MOVE 99 TO WS-RESULT.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "HELPER.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. HELPER.",
+                    "PROCEDURE DIVISION.",
+                    "    EXIT PROGRAM.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if VarName("__prog_MAINPROG") in frame.local_vars:
+                singleton_ptr = frame.local_vars[VarName("__prog_MAINPROG")].value
+                break
+        assert singleton_ptr is not None
+        assert isinstance(singleton_ptr, Pointer)
+        ws_addr = Address(
+            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+        )
+        region = vm.region_get(ws_addr)
+        assert region is not None
+        ws_result = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            ws_result == 99
+        ), f"WS-RESULT: expected 99 (MAIN continued after EXIT PROGRAM), got {ws_result}"
+
+    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
+    @covers(CobolFeature.GOBACK, CobolFeature.CALL_USING, CobolFeature.SECTION_LINKAGE)
+    def test_goback_after_linkage_write_propagates_to_caller(self, tmp_path):
+        """Callee writes to LINKAGE field then GOBACKs; caller sees the updated value.
+
+        MAINPROG passes WS-VALUE=5 BY REFERENCE to SETTER.
+        SETTER moves 88 into LK-VALUE (its LINKAGE field), then GOBACKs.
+        Copy-back writes 88 into MAINPROG's WS-VALUE.
+        WS-FLAG is set to 1 after the CALL, proving MAIN continued executing.
+        """
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-VALUE PIC 9(4) VALUE 5.",
+                    "77 WS-FLAG  PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'SETTER' USING BY REFERENCE WS-VALUE.",
+                    "    MOVE 1 TO WS-FLAG.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "SETTER.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. SETTER.",
+                    "DATA DIVISION.",
+                    "LINKAGE SECTION.",
+                    "01 LK-VALUE PIC 9(4).",
+                    "PROCEDURE DIVISION.",
+                    "    MOVE 88 TO LK-VALUE.",
+                    "    GOBACK.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if VarName("__prog_MAINPROG") in frame.local_vars:
+                singleton_ptr = frame.local_vars[VarName("__prog_MAINPROG")].value
+                break
+        assert singleton_ptr is not None
+        assert isinstance(singleton_ptr, Pointer)
+        ws_addr = Address(
+            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+        )
+        region = vm.region_get(ws_addr)
+        assert region is not None
+        # WS-VALUE at offset 0: SETTER wrote 88 via LK-VALUE; copy-back propagated it
+        ws_value = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            ws_value == 88
+        ), f"WS-VALUE: expected 88 (set by SETTER via LINKAGE), got {ws_value}"
+        # WS-FLAG at offset 4: MAIN executed MOVE 1 TO WS-FLAG after the CALL returned
+        ws_flag = _decode_zoned_unsigned(region, offset=4, length=4)
+        assert (
+            ws_flag == 1
+        ), f"WS-FLAG: expected 1 (MAIN continued after GOBACK), got {ws_flag}"
