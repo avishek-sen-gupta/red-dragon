@@ -7,9 +7,11 @@ import logging
 from interpreter.cobol.cobol_statements import (
     AlterStatement,
     CallStatement,
+    CallUsingParam,
     CancelStatement,
     EntryStatement,
 )
+from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.var_name import VarName
@@ -43,10 +45,10 @@ def lower_call(
     When stmt.using is empty, the caller's WS region is passed as params_reg (legacy behaviour).
     """
     _ws_layout, ws_reg = materialised.working_storage
+    param_fls: list[tuple[CallUsingParam, FieldLayout]] = []
 
     if stmt.using:
         # Resolve field layouts for all USING params (all are in WS).
-        param_fls = []
         for param in stmt.using:
             fl, _ = materialised.resolve(param.name)
             param_fls.append((param, fl))
