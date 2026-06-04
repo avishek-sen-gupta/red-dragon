@@ -88,6 +88,8 @@ def get_frontend(
         observer: Timing observer for parse/lower phases.
         repair_client: Optional LLMClient for AST repair. When provided with
             a deterministic frontend, wraps it in RepairingFrontendDecorator.
+        copybook_dirs: COBOL copybook search directories, passed to the
+            ProLeap parser for COPY resolution. Ignored by other languages.
 
     Returns:
         A Frontend instance.
