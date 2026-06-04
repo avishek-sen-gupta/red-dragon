@@ -50,7 +50,7 @@ class ProLeapCobolParser(CobolParser):
         try:
             json_str = self._runner.run(command, source.decode("utf-8"))
         except CobolParseError as e:
-            raise self._enrich_copybook_error(e)
+            raise self._enrich_copybook_error(e) from e
         data = json.loads(json_str)
         asg = CobolASG.from_dict(data)
         logger.info(
