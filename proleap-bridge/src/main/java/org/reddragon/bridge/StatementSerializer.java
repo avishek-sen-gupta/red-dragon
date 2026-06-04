@@ -43,6 +43,9 @@ import io.proleap.cobol.asg.metamodel.procedure.read.ReadStatement;
 import io.proleap.cobol.asg.metamodel.procedure.search.SearchStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.AlterStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.ProceedTo;
+import io.proleap.cobol.asg.metamodel.procedure.call.ByContent;
+import io.proleap.cobol.asg.metamodel.procedure.call.ByReference;
+import io.proleap.cobol.asg.metamodel.procedure.call.ByValue;
 import io.proleap.cobol.asg.metamodel.procedure.call.CallStatement;
 import io.proleap.cobol.asg.metamodel.procedure.call.UsingParameter;
 import io.proleap.cobol.asg.metamodel.procedure.accept.AcceptStatement;
@@ -1033,33 +1036,37 @@ public final class StatementSerializer {
                 progName = progName.replaceAll("^['\"]|['\"]$", "");
                 obj.addProperty("program", progName);
             }
-            // USING parameters
+            // USING parameters — each BY REFERENCE/VALUE/CONTENT clause may carry
+            // multiple operands (e.g. CALL 'X' USING BY REFERENCE WS-A WS-B).
+            // Emit one JSON param object per operand, not one per clause.
             if (stmt.getUsingPhrase() != null && stmt.getUsingPhrase().getUsingParameters() != null) {
                 JsonArray params = new JsonArray();
                 for (UsingParameter param : stmt.getUsingPhrase().getUsingParameters()) {
-                    JsonObject paramObj = new JsonObject();
-                    String paramType = "REFERENCE"; // default
-                    if (param.getParameterType() != null) {
-                        paramType = param.getParameterType().name();
+                    if (param.getByReferencePhrase() != null
+                            && param.getByReferencePhrase().getByReferences() != null) {
+                        for (ByReference br : param.getByReferencePhrase().getByReferences()) {
+                            JsonObject paramObj = new JsonObject();
+                            paramObj.addProperty("type", "REFERENCE");
+                            paramObj.addProperty("name", extractValueStmtText(br.getValueStmt()));
+                            params.add(paramObj);
+                        }
+                    } else if (param.getByContentPhrase() != null
+                            && param.getByContentPhrase().getByContents() != null) {
+                        for (ByContent bc : param.getByContentPhrase().getByContents()) {
+                            JsonObject paramObj = new JsonObject();
+                            paramObj.addProperty("type", "CONTENT");
+                            paramObj.addProperty("name", extractValueStmtText(bc.getValueStmt()));
+                            params.add(paramObj);
+                        }
+                    } else if (param.getByValuePhrase() != null
+                            && param.getByValuePhrase().getByValues() != null) {
+                        for (ByValue bv : param.getByValuePhrase().getByValues()) {
+                            JsonObject paramObj = new JsonObject();
+                            paramObj.addProperty("type", "VALUE");
+                            paramObj.addProperty("name", extractValueStmtText(bv.getValueStmt()));
+                            params.add(paramObj);
+                        }
                     }
-                    paramObj.addProperty("type", paramType);
-                    // Extract the actual operand name from the appropriate phrase
-                    String paramName = "";
-                    if (param.getByReferencePhrase() != null && param.getByReferencePhrase().getByReferences() != null
-                            && !param.getByReferencePhrase().getByReferences().isEmpty()) {
-                        ValueStmt vs = param.getByReferencePhrase().getByReferences().get(0).getValueStmt();
-                        paramName = extractValueStmtText(vs);
-                    } else if (param.getByContentPhrase() != null && param.getByContentPhrase().getByContents() != null
-                            && !param.getByContentPhrase().getByContents().isEmpty()) {
-                        ValueStmt vs = param.getByContentPhrase().getByContents().get(0).getValueStmt();
-                        paramName = extractValueStmtText(vs);
-                    } else if (param.getByValuePhrase() != null && param.getByValuePhrase().getByValues() != null
-                            && !param.getByValuePhrase().getByValues().isEmpty()) {
-                        ValueStmt vs = param.getByValuePhrase().getByValues().get(0).getValueStmt();
-                        paramName = extractValueStmtText(vs);
-                    }
-                    paramObj.addProperty("name", paramName);
-                    params.add(paramObj);
                 }
                 obj.add("using", params);
             }
