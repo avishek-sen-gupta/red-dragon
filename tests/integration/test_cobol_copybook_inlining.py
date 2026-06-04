@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from interpreter.address import Address
@@ -16,38 +14,22 @@ from interpreter.run import run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
-
-_JAR_PATH = os.environ.get(
-    "PROLEAP_BRIDGE_JAR",
-    os.path.expanduser(
-        "~/code/red-dragon/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
-    ),
+from tests.integration.cobol_helpers import (
+    JAR_AVAILABLE,
+    bridge_jar_env,
+    decode_zoned_unsigned as _decode_zoned_unsigned,
+    to_fixed as _to_fixed,
 )
-_JAR_AVAILABLE = os.path.isfile(_JAR_PATH)
 
 pytestmark = pytest.mark.skipif(
-    not _JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
+    not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
 )
-
-
-def _to_fixed(lines: list[str]) -> str:
-    return "\n".join("       " + ln for ln in lines) + "\n"
-
-
-def _decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
-    digits = [region[offset + i] & 0x0F for i in range(length)]
-    return sum(d * (10 ** (length - 1 - i)) for i, d in enumerate(digits))
 
 
 @pytest.fixture(autouse=True)
-def _bridge_jar_env():
-    old = os.environ.get("PROLEAP_BRIDGE_JAR")
-    os.environ["PROLEAP_BRIDGE_JAR"] = _JAR_PATH
+def _bridge_jar_env(bridge_jar_env):
+    """Auto-apply the shared PROLEAP_BRIDGE_JAR env fixture to every test here."""
     yield
-    if old is None:
-        os.environ.pop("PROLEAP_BRIDGE_JAR", None)
-    else:
-        os.environ["PROLEAP_BRIDGE_JAR"] = old
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
