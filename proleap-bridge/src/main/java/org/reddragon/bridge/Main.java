@@ -28,6 +28,7 @@ import java.util.logging.Logger;
  *   <li>No args: reads COBOL source from stdin</li>
  *   <li>One arg: reads from file path</li>
  *   <li>{@code -format FIXED|FREE|TANDEM}: sets source format (default FIXED)</li>
+ *   <li>{@code -copybook-dir <dir>}: copybook search directory (repeatable)</li>
  * </ul>
  *
  * <p>Writes JSON ASG to stdout, matching the RedDragon {@code CobolASG} contract.
