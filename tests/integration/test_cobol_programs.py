@@ -4199,3 +4199,71 @@ class TestSubprogramWsPersistence:
         assert (
             counter == 2
         ), f"Expected WS-COUNTER=2 after two CALL SUBPROG, got {counter}"
+
+
+class TestCallUsingByReference:
+    """CALL USING BY REFERENCE: callee modifies LINKAGE field; caller sees updated WS value."""
+
+    @covers(CobolFeature.SECTION_LINKAGE)
+    def test_callee_linkage_write_propagates_to_caller_ws(self, tmp_path):
+        """BY REFERENCE: DOUBLIT moves 42 into LS-VALUE; MAINPROG sees WS-VALUE == 42."""
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-VALUE PIC 9(4) VALUE 5.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'DOUBLIT' USING BY REFERENCE WS-VALUE.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "DOUBLIT.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. DOUBLIT.",
+                    "DATA DIVISION.",
+                    "LINKAGE SECTION.",
+                    "01 LS-VALUE PIC 9(4).",
+                    "PROCEDURE DIVISION.",
+                    "    MOVE 42 TO LS-VALUE.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        # Read WS-VALUE from MAINPROG's singleton.
+        singleton_key = VarName("__prog_MAINPROG")
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if singleton_key in frame.local_vars:
+                singleton_ptr = frame.local_vars[singleton_key].value
+                break
+        assert singleton_ptr is not None, "__prog_MAINPROG singleton not found"
+        assert isinstance(
+            singleton_ptr, Pointer
+        ), f"Expected Pointer, got {type(singleton_ptr)}"
+        singleton = vm.heap_get(singleton_ptr.base)
+        ws_handle_tv = singleton.fields[FieldName("ws_handle")]
+        ws_addr = Address(ws_handle_tv.value)
+        region = vm.region_get(ws_addr)
+        assert region is not None, f"WS region not found at {ws_addr}"
+
+        ws_value = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            ws_value == 42
+        ), f"Expected WS-VALUE=42 after BY REFERENCE call, got {ws_value}"
