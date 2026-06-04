@@ -12,7 +12,7 @@
 2. **Full LLM frontends for unsupported languages** — for languages without a tree-sitter frontend, an LLM lowers source to IR entirely — supporting any language without new parser code. A chunked variant splits large files into per-function chunks via tree-sitter, lowering each independently. Both produce the same [34-opcode IR](docs/ir-reference.md).
 3. **A VM that integrates LLMs to produce plausible state changes** when execution hits missing dependencies, unresolved imports, or unknown externals — keeping execution moving through incomplete programs instead of halting at the first unknown.
 
-**Scale:** 34-opcode universal IR · 15 tree-sitter frontends + COBOL (112 enumerated features) + LLM · 13,794+ tests
+**Scale:** 34-opcode universal IR · 15 tree-sitter frontends + COBOL (114 enumerated features) + LLM · 13,900+ tests
 
 When source is complete and all dependencies are present, the entire pipeline (parse → lower → execute) is **deterministic with 0 LLM calls**. LLMs are only invoked at the boundaries where information is genuinely missing.
 

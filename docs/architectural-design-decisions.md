@@ -2778,3 +2778,29 @@ Three approaches were considered:
 **Decision:** The Java bridge walks ProLeap's `ArithmeticValueStmt` AST and emits a normalized JSON binary tree: `{"kind": "lit"/"ref"/"binop"/"neg", ...}`. Field references that carry reference modification emit `"ref_mod_start"` and `"ref_mod_length"` sub-keys. Python deserializes the tree into the `ExprNode` union type (`LiteralNode | FieldRefNode | RefModNode | BinOpNode`) via a new `expr_from_dict` function. `ComputeStatement.expression` was migrated from `str` to `ExprNode`. The old `parse_expression` call in `lower_compute` was removed.
 
 **Consequences:** Reference modification is fully supported in `COMPUTE` expressions. The expression pipeline is unified: the same `ExprNode` union and `lower_expr_node` lowerer handle both `COMPUTE` and condition expressions. The bespoke string tokenizer is retained only for legacy compatibility; no new features should be added to it. The trade-off is that the Java bridge is now responsible for correct arithmetic AST walking, adding a test burden on the bridge layer.
+
+---
+
+### ADR-144: COBOL CALL USING parameter passing via region copy-in/copy-back (2026-06-04)
+
+**Context:** COBOL subprogram invocation (`CALL 'prog' USING ...`) was previously lowered to a symbolic, unresolved `CALL_FUNCTION` — the callee never executed and parameters were ignored. Real COBOL passes parameters by position through shared raw memory: the caller's USING arguments overlay the callee's LINKAGE SECTION fields at matching byte offsets. Three parameter modes exist with distinct semantics — BY REFERENCE (callee mutations visible to caller), BY VALUE and BY CONTENT (callee gets a copy, no write-back).
+
+**Decision:** `lower_call` builds an explicit params region per call:
+1. `ALLOC_REGION` sized to the sum of USING field byte lengths.
+2. Copy-in: for each USING field, `LOAD_REGION` from caller WS + `WRITE_REGION` into the params region at cumulative byte offsets.
+3. `CALL_WITH_MEMORY` dispatches to the callee's singleton `__init_params__`, which injects the params region as `__params_region`. The callee's LINKAGE fields bind to `__params_region` at their natural offsets (handled in `lower_sectioned_data_division`).
+4. Copy-back (BY REFERENCE only): after the call, `LOAD_REGION` from the params region + `WRITE_REGION` back into caller WS. BY VALUE / BY CONTENT skip this step — a one-line `param_type == "REFERENCE"` guard.
+
+The ProLeap bridge serializes each USING operand individually: a `BY REFERENCE WS-A WS-B` clause iterates all entries in `getByReferences()` (previously only `.get(0)` was read, silently dropping every field after the first). Each operand emits a JSON object with its `type` (REFERENCE/VALUE/CONTENT) and `name`.
+
+**Consequences:** Multi-module COBOL programs pass parameters correctly end-to-end, including multiple operands per clause and LINKAGE fields at non-zero offsets. The VM's region model (zero-initialised `ALLOC_REGION`, byte-addressed `LOAD_REGION`/`WRITE_REGION`) carries COBOL's "raw memory by position" semantics without a dedicated parameter-passing mechanism. The trade-off: caller USING field sizes and callee LINKAGE field sizes must align by position (standard COBOL practice); a size mismatch where the callee field is wider currently reads past the region end (tracked as red-dragon-hktj — LoadRegion zero-padding).
+
+---
+
+### ADR-145: COBOL GOBACK and EXIT PROGRAM emit RETURN, not HALT (2026-06-04)
+
+**Context:** `STOP RUN` lowers to `RETURN` (so a subprogram returns to its caller rather than halting the whole VM). `GOBACK` and `EXIT PROGRAM` are the two other COBOL subprogram-exit verbs and must share that semantic — but `GOBACK` was not serialized by the bridge at all (raised `Unknown COBOL statement type: 'GO_BACK'`), and `EXIT PROGRAM` was indistinguishable from plain `EXIT` (both emitted `"EXIT"`, a no-op).
+
+**Decision:** Add `GobackStatement` and `ExitProgramStatement` to the Python statement model; `lower_goback` and `lower_exit_program` emit `Return_` (identical IR to `lower_stop_run`). The ProLeap bridge serializes `GO_BACK` → `"GOBACK"`, and `serializeExit` checks `ExitStatementContext.PROGRAM()` to emit `"EXIT_PROGRAM"` for `EXIT PROGRAM` versus `"EXIT"` for the plain no-op form.
+
+**Consequences:** Subprograms ending in `GOBACK` or `EXIT PROGRAM` return control to the caller, which continues executing after the `CALL`. At the IR level all three exit verbs collapse to `RETURN`; the distinction between main-program termination and subprogram return is handled by the VM's call-stack unwinding, not by the lowering. Adds `CobolFeature.GOBACK` and `CobolFeature.EXIT_PROGRAM` (114 enumerated features total).
