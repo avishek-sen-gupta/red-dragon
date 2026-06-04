@@ -11,13 +11,20 @@ from pathlib import Path
 import pytest
 
 from interpreter.address import Address
+from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
+from interpreter.vm.vm_types import Pointer
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.run import execute_cfg, ExecutionStrategies, run_linked
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
+
+
+def _decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
+    digits = [region[offset + i] & 0x0F for i in range(length)]
+    return sum(d * (10 ** (length - 1 - i)) for i, d in enumerate(digits))
 
 
 def _run_project_vm(tmp_path, files, entry, language):
@@ -511,50 +518,66 @@ class TestCobolMultiFile:
             os.environ["PROLEAP_BRIDGE_JAR"] = old
 
     def test_call_subprogram(self, tmp_path):
-        vm = _run_project_vm(
-            tmp_path,
-            {
-                "HELPER.cbl": (
-                    "       IDENTIFICATION DIVISION.\n"
-                    "       PROGRAM-ID. HELPER.\n"
-                    "       DATA DIVISION.\n"
-                    "       WORKING-STORAGE SECTION.\n"
-                    "       01 WS-VAL PIC 9(4) VALUE 0.\n"
-                    "       PROCEDURE DIVISION.\n"
-                    "           COMPUTE WS-VAL = 99.\n"
-                    "           STOP RUN.\n"
-                ),
-                "MAIN.cbl": (
-                    "       IDENTIFICATION DIVISION.\n"
-                    "       PROGRAM-ID. MAIN-PROG.\n"
-                    "       DATA DIVISION.\n"
-                    "       WORKING-STORAGE SECTION.\n"
-                    "       01 WS-RESULT PIC 9(4) VALUE 0.\n"
-                    "       PROCEDURE DIVISION.\n"
-                    "           CALL 'HELPER'.\n"
-                    "           COMPUTE WS-RESULT = 42.\n"
-                    "           STOP RUN.\n"
-                ),
-            },
-            "MAIN.cbl",
-            Language.COBOL,
+        """MAIN passes WS-TICKET BY REFERENCE; HELPER writes 77 into LK-TICKET.
+
+        Verifies end-to-end multi-module CALL USING BY REFERENCE:
+        - The params region (MAIN's WS-TICKET bytes) reaches HELPER's LINKAGE SECTION.
+        - HELPER writes 77 into LK-TICKET, mutating the shared params region.
+        - Copy-back after the CALL propagates 77 into MAIN's WS-TICKET.
+        - MAIN's WS-RESULT equals 42 (execution continued after the CALL).
+
+        Note: reading FROM a LINKAGE field into WS is tracked separately under
+        red-dragon-4q25.33 (SECTION_LINKAGE read path).
+        """
+        (tmp_path / "HELPER.cbl").write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. HELPER.\n"
+            "       DATA DIVISION.\n"
+            "       LINKAGE SECTION.\n"
+            "       01 LK-TICKET PIC 9(4).\n"
+            "       PROCEDURE DIVISION.\n"
+            "           MOVE 77 TO LK-TICKET.\n"
+            "           STOP RUN.\n"
         )
-        # Both modules compiled, linked, and executed via singleton dispatch.
-        # HELPER's init block runs in the preamble phase (creating its WS region),
-        # then MAIN-PROG's init block runs. Phase 2 enters func_main-prog_0:
-        # CALL 'HELPER' dispatches via singleton __init_params__, HELPER runs
-        # COMPUTE WS-VAL = 99 and returns via STOP RUN, then MAIN continues
-        # with COMPUTE WS-RESULT = 42 and terminates.
-        assert vm.region_count() == 2
-        # rgn_1 is HELPER's WS (created first in preamble); value = 99
-        helper_region = vm.region_get(list(vm.region_keys())[0])
-        assert helper_region is not None
-        helper_digits = [helper_region[i] & 0x0F for i in range(4)]
-        helper_value = sum(d * (10 ** (3 - i)) for i, d in enumerate(helper_digits))
-        assert helper_value == 99
-        # rgn_3 is MAIN-PROG's WS; WS-RESULT = 42 after COMPUTE
-        main_region = vm.region_get(list(vm.region_keys())[1])
-        assert main_region is not None
-        main_digits = [main_region[i] & 0x0F for i in range(4)]
-        main_value = sum(d * (10 ** (3 - i)) for i, d in enumerate(main_digits))
-        assert main_value == 42
+        (tmp_path / "MAIN.cbl").write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. MAIN.\n"
+            "       DATA DIVISION.\n"
+            "       WORKING-STORAGE SECTION.\n"
+            "       01 WS-TICKET PIC 9(4) VALUE 0.\n"
+            "       01 WS-RESULT PIC 9(4) VALUE 0.\n"
+            "       PROCEDURE DIVISION.\n"
+            "           CALL 'HELPER' USING BY REFERENCE WS-TICKET.\n"
+            "           COMPUTE WS-RESULT = 42.\n"
+            "           STOP RUN.\n"
+        )
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_main_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        # Locate MAIN's WS via its program singleton (region ordering is unstable
+        # when a params region is also allocated during CALL USING).
+        main_ptr = None
+        for frame in reversed(vm.call_stack):
+            if VarName("__prog_MAIN") in frame.local_vars:
+                main_ptr = frame.local_vars[VarName("__prog_MAIN")].value
+                break
+
+        assert main_ptr is not None, "__prog_MAIN singleton not found"
+        assert isinstance(main_ptr, Pointer)
+        main_ws = vm.region_get(
+            Address(vm.heap_get(main_ptr.base).fields[FieldName("ws_handle")].value)
+        )
+        assert main_ws is not None
+        # WS-TICKET at offset 0, 4 bytes — HELPER wrote 77 to LK-TICKET (copy-back)
+        ticket = _decode_zoned_unsigned(main_ws, 0, 4)
+        assert ticket == 77, f"WS-TICKET: expected 77 after HELPER write, got {ticket}"
+        # WS-RESULT at offset 4, 4 bytes — 42 after COMPUTE
+        result = _decode_zoned_unsigned(main_ws, 4, 4)
+        assert result == 42, f"WS-RESULT: expected 42, got {result}"
