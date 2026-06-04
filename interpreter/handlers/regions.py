@@ -133,8 +133,13 @@ def _handle_load_region(
         )
 
     start = int(offset)
-    end = start + int(length)
-    data = list(region_data[start:end])
+    n = int(length)
+    end = start + n
+    # Zero-pad reads past the region end: COBOL CALL USING passes raw memory by
+    # position, so a callee LINKAGE field wider than the caller's USING argument
+    # reads zeroes for the overrun (matching ALLOC_REGION's zero-init semantics).
+    raw = list(region_data[start:end])
+    data = raw + [0] * (n - len(raw))
     return ExecutionResult.success(
         StateUpdate(
             register_writes={t.result_reg: typed(data, UNKNOWN)},

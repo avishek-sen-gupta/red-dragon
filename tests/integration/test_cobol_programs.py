@@ -4602,6 +4602,76 @@ class TestCallUsingLinkageRead:
         ws_copy = _decode_zoned_unsigned(region, offset=0, length=4)
         assert ws_copy == 7, f"WS-COPY: expected 7 (LK-B at offset 4), got {ws_copy}"
 
+    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
+    @covers(CobolFeature.SECTION_LINKAGE, CobolFeature.CALL_USING)
+    def test_callee_linkage_wider_than_caller_arg_reads_zero_pad(self, tmp_path):
+        """Callee LINKAGE field wider than caller's USING arg: overrun reads as zeroes.
+
+        MAINPROG passes WS-SMALL PIC 9(2) VALUE 7 (2 bytes) BY REFERENCE.
+        READER declares LK-BIG PIC 9(4) (4 bytes) — wider than the params region.
+        Reading LK-BIG must not crash; the 2 overrun bytes read as zoned zeroes,
+        so the decoded value is 0700 (digits 0,7 from WS-SMALL, then 0,0 padding).
+        """
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-SMALL PIC 9(2) VALUE 7.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'READER' USING BY REFERENCE WS-SMALL.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "READER.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. READER.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-COPY PIC 9(4) VALUE 0.",
+                    "LINKAGE SECTION.",
+                    "01 LK-BIG PIC 9(4).",
+                    "PROCEDURE DIVISION.",
+                    "    MOVE LK-BIG TO WS-COPY.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=1000,
+        )
+
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if VarName("__prog_READER") in frame.local_vars:
+                singleton_ptr = frame.local_vars[VarName("__prog_READER")].value
+                break
+        assert singleton_ptr is not None, "__prog_READER singleton not found"
+        assert isinstance(singleton_ptr, Pointer)
+        singleton = vm.heap_get(singleton_ptr.base)
+        ws_addr = Address(singleton.fields[FieldName("ws_handle")].value)
+        region = vm.region_get(ws_addr)
+        assert region is not None
+
+        # WS-SMALL=7 occupies the first 2 bytes; the 2 overrun bytes read as zero,
+        # so LK-BIG decodes as 0700 (no crash from the out-of-bounds read).
+        ws_copy = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            ws_copy == 700
+        ), f"WS-COPY: expected 700 (zero-padded overrun), got {ws_copy}"
+
 
 class TestGobackExitProgram:
     """GOBACK and EXIT PROGRAM must return control to the caller, not halt the VM."""
