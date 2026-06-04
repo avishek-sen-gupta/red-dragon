@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from interpreter.cobol.asg_types import CobolASG, CobolField
 from interpreter.cobol.cobol_statements import CallStatement, CallUsingParam
 from interpreter.cobol.emit_context import EmitContext
