@@ -165,6 +165,78 @@ class TestWriteAndLoadRegion:
         )
         assert unwrap(vm.current_frame.registers[Register("%last4")]) == [5, 6, 7, 8]
 
+    def test_load_out_of_bounds_zero_pads(self):
+        """LOAD_REGION reading past the region end returns real bytes + zero padding.
+
+        COBOL CALL USING passes raw memory by position. When a callee's LINKAGE
+        field is wider than the caller's USING argument, the overrun must read as
+        zeroes (matching OS zero-page semantics), not raise or silently truncate.
+        """
+        vm = _make_vm()
+
+        # Allocate 4 bytes, fill with [1, 2, 3, 4]
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.ALLOC_REGION,
+                result_reg=Register("%rgn"),
+                operands=[4],
+            ),
+        )
+        vm.current_frame.registers[Register("%off0")] = 0
+        vm.current_frame.registers[Register("%data")] = [1, 2, 3, 4]
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.WRITE_REGION,
+                operands=["%rgn", "%off0", 4, "%data"],
+            ),
+        )
+
+        # Read 8 bytes from offset 0 — 4 past the region end
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.LOAD_REGION,
+                result_reg=Register("%result"),
+                operands=["%rgn", "%off0", 8],
+            ),
+        )
+
+        # Must return exactly 8 bytes: the 4 real bytes + 4 zero bytes
+        assert unwrap(vm.current_frame.registers[Register("%result")]) == [
+            1,
+            2,
+            3,
+            4,
+            0,
+            0,
+            0,
+            0,
+        ]
+
+    def test_load_offset_past_end_all_zeros(self):
+        """LOAD_REGION entirely beyond the region end returns all zero bytes."""
+        vm = _make_vm()
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.ALLOC_REGION,
+                result_reg=Register("%rgn"),
+                operands=[4],
+            ),
+        )
+        vm.current_frame.registers[Register("%off")] = 8
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.LOAD_REGION,
+                result_reg=Register("%result"),
+                operands=["%rgn", "%off", 4],
+            ),
+        )
+        assert unwrap(vm.current_frame.registers[Register("%result")]) == [0, 0, 0, 0]
+
     def test_load_unknown_region_returns_symbolic(self):
         vm = _make_vm()
         vm.current_frame.registers[Register("%rgn")] = "rgn_nonexistent"
