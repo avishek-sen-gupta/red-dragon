@@ -14,7 +14,7 @@ from interpreter.cobol.sectioned_layout import (
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.ir import Opcode
 from interpreter.cobol.features import CobolFeature
-from tests.covers import covers, FeatureStatus, NotLanguageFeature
+from tests.covers import covers, NotLanguageFeature
 
 
 def _make_field(name: str, pic: str = "X(5)", offset: int = 0) -> CobolField:
@@ -78,7 +78,7 @@ def test_lower_call_giving_result_written_back():
     assert Opcode.WRITE_REGION in opcodes
 
 
-@covers(CobolFeature.CALL_USING, status=FeatureStatus.UNSUPPORTED)
+@covers(CobolFeature.CALL_USING)
 def test_lower_call_using_copy_in_before_call():
     """CALL with USING: ALLOC_REGION + LOAD_REGION+WRITE_REGION (copy-in) appear before CALL_WITH_MEMORY."""
     ctx, materialised = _materialised_with_ws("WS-INPUT")
@@ -102,7 +102,7 @@ def test_lower_call_using_copy_in_before_call():
     ), "WRITE_REGION (copy-in) must precede CALL_WITH_MEMORY"
 
 
-@covers(CobolFeature.USING_BY_REFERENCE, status=FeatureStatus.UNSUPPORTED)
+@covers(CobolFeature.USING_BY_REFERENCE)
 def test_lower_call_by_reference_copy_back_after_call():
     """BY REFERENCE: LOAD_REGION+WRITE_REGION copy-back appear after CALL_WITH_MEMORY."""
     ctx, materialised = _materialised_with_ws("WS-INPUT")
@@ -121,3 +121,45 @@ def test_lower_call_by_reference_copy_back_after_call():
     assert (
         Opcode.WRITE_REGION in post_call
     ), "WRITE_REGION (copy-back) must follow CALL_WITH_MEMORY for BY REFERENCE"
+
+
+@covers(CobolFeature.USING_BY_VALUE)
+def test_lower_call_by_value_no_copy_back():
+    """BY VALUE: callee gets a copy; no LOAD_REGION or WRITE_REGION after CALL_WITH_MEMORY."""
+    ctx, materialised = _materialised_with_ws("WS-INPUT")
+    stmt = CallStatement(
+        program="SUBPROG",
+        using=[CallUsingParam(name="WS-INPUT", param_type="VALUE")],
+        giving="",
+    )
+    lower_call(ctx, stmt, materialised)
+    opcodes = [i.opcode for i in ctx.instructions]
+    call_idx = next(i for i, op in enumerate(opcodes) if op == Opcode.CALL_WITH_MEMORY)
+    post_call = opcodes[call_idx + 1 :]
+    assert (
+        Opcode.LOAD_REGION not in post_call
+    ), "BY VALUE must not emit copy-back LoadRegion"
+    assert (
+        Opcode.WRITE_REGION not in post_call
+    ), "BY VALUE must not emit copy-back WriteRegion"
+
+
+@covers(CobolFeature.USING_BY_CONTENT)
+def test_lower_call_by_content_no_copy_back():
+    """BY CONTENT: identical to BY VALUE at the IR level; no copy-back after CALL_WITH_MEMORY."""
+    ctx, materialised = _materialised_with_ws("WS-INPUT")
+    stmt = CallStatement(
+        program="SUBPROG",
+        using=[CallUsingParam(name="WS-INPUT", param_type="CONTENT")],
+        giving="",
+    )
+    lower_call(ctx, stmt, materialised)
+    opcodes = [i.opcode for i in ctx.instructions]
+    call_idx = next(i for i, op in enumerate(opcodes) if op == Opcode.CALL_WITH_MEMORY)
+    post_call = opcodes[call_idx + 1 :]
+    assert (
+        Opcode.LOAD_REGION not in post_call
+    ), "BY CONTENT must not emit copy-back LoadRegion"
+    assert (
+        Opcode.WRITE_REGION not in post_call
+    ), "BY CONTENT must not emit copy-back WriteRegion"
