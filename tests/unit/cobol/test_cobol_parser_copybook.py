@@ -109,3 +109,18 @@ def test_get_frontend_passes_copybook_dirs(monkeypatch):
         copybook_dirs=[Path("/proj/cpy")],
     )
     assert captured["copybook_dirs"] == [Path("/proj/cpy")]
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_collect_project_copybook_dirs(tmp_path):
+    from interpreter.project.compiler import _collect_copybook_dirs
+
+    root = tmp_path.resolve()
+    (root / "cbl").mkdir()
+    (root / "cpy").mkdir()
+    (root / "cpy-bms").mkdir()
+    dirs = _collect_copybook_dirs(root)
+    assert root in dirs
+    assert root / "cpy" in dirs
+    assert root / "cpy-bms" in dirs
+    assert root / "cbl" in dirs

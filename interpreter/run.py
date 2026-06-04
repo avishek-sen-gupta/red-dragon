@@ -6,6 +6,7 @@ import copy
 import logging
 import time
 from dataclasses import dataclass, field as dataclass_field, replace
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
@@ -903,6 +904,7 @@ def run(
     llm_client: Any = None,  # Any: Optional LLM client injection — see red-dragon-c7y2
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
+    copybook_dirs: list[Path] | None = None,
 ) -> VMState:
     """End-to-end: parse → lower → build LinkedProgram → run_linked.
 
@@ -953,6 +955,7 @@ def run(
         llm_provider=backend,
         llm_client=llm_client,
         observer=observer,
+        copybook_dirs=copybook_dirs,
     )
     instructions = frontend.lower(source.encode("utf-8"))
 
