@@ -53,3 +53,30 @@ def test_parse_no_dirs_emits_no_copybook_dir_args():
     parser.parse(b"       PROGRAM-ID. T.\n")
     assert runner.command is not None
     assert "-copybook-dir" not in runner.command
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_missing_copybook_raises_clean_error():
+    raw = CobolParseError(
+        "ProLeap bridge failed (exit 1): "
+        "io.proleap.cobol.preprocessor.exception.CobolPreprocessorException: "
+        "Could not find copy book MYBOOK in directory of COBOL input file"
+    )
+    runner = _RecordingRunner(raise_exc=raw)
+    parser = ProLeapCobolParser(runner, "bridge.jar", copybook_dirs=[Path("/x/cpy")])
+    with pytest.raises(CobolParseError) as excinfo:
+        parser.parse(b"       COPY MYBOOK.\n")
+    text = str(excinfo.value)
+    assert "MYBOOK" in text
+    assert "/x/cpy" in text
+    assert "Could not find copy book" not in text  # raw Java message not leaked
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_non_copybook_error_passes_through():
+    raw = CobolParseError("ProLeap bridge failed (exit 1): some other syntax error")
+    runner = _RecordingRunner(raise_exc=raw)
+    parser = ProLeapCobolParser(runner, "bridge.jar")
+    with pytest.raises(CobolParseError) as excinfo:
+        parser.parse(b"       PROGRAM-ID. T.\n")
+    assert "some other syntax error" in str(excinfo.value)
