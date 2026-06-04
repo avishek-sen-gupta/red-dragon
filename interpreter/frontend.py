@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from interpreter.constants import Language
@@ -75,6 +76,7 @@ def get_frontend(
     llm_client: Any = None,
     observer: FrontendObserver = NullFrontendObserver(),
     repair_client: Any = _NO_REPAIR_CLIENT,
+    copybook_dirs: list[Path] | None = None,
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -98,7 +100,9 @@ def get_frontend(
         from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 
         bridge_jar = os.environ.get("PROLEAP_BRIDGE_JAR", "proleap-bridge.jar")
-        parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
+        parser = ProLeapCobolParser(
+            RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
+        )
         return CobolFrontend(parser, observer=observer)
 
     if frontend_type == constants.FRONTEND_DETERMINISTIC:
