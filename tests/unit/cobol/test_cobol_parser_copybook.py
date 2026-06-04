@@ -80,3 +80,32 @@ def test_non_copybook_error_passes_through():
     with pytest.raises(CobolParseError) as excinfo:
         parser.parse(b"       PROGRAM-ID. T.\n")
     assert "some other syntax error" in str(excinfo.value)
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_get_frontend_passes_copybook_dirs(monkeypatch):
+    import interpreter.frontend as frontend_mod
+    from interpreter import constants
+    from interpreter.constants import Language
+
+    captured = {}
+
+    class _SpyParser:
+        def __init__(self, runner, bridge_jar, copybook_dirs=None):
+            captured["copybook_dirs"] = copybook_dirs
+
+    # get_frontend imports ProLeapCobolParser locally at call time, so patching
+    # the module attribute is picked up.
+    import interpreter.cobol.cobol_parser as cp
+
+    monkeypatch.setattr(cp, "ProLeapCobolParser", _SpyParser)
+
+    # COBOL only routes to ProLeapCobolParser via the FRONTEND_COBOL branch
+    # (run.py resolves Language.COBOL -> FRONTEND_COBOL). The deterministic
+    # default has no COBOL frontend, so the COBOL frontend_type is required.
+    frontend_mod.get_frontend(
+        Language.COBOL,
+        frontend_type=constants.FRONTEND_COBOL,
+        copybook_dirs=[Path("/proj/cpy")],
+    )
+    assert captured["copybook_dirs"] == [Path("/proj/cpy")]
