@@ -15,9 +15,12 @@ from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
+    AllocRegion,
     CallWithMemory,
     Label_,
+    LoadRegion,
     StoreVar,
+    WriteRegion,
 )
 from interpreter.ir import CodeLabel
 
@@ -31,20 +34,90 @@ def lower_call(
 ) -> None:
     """CALL 'program' USING params — region-passing subprogram invocation via CallWithMemory.
 
-    BY REFERENCE (default): passes the caller's WORKING-STORAGE region to the callee
-    as both params_reg and results_reg. The callee reads LINKAGE fields from that region.
+    When stmt.using is non-empty:
+      1. Allocate a fresh params region (sum of USING field byte lengths).
+      2. Copy each USING field from WS into the params region at cumulative byte offsets.
+      3. Emit CallWithMemory with params_reg pointing at the fresh region.
+      4. For BY REFERENCE params, copy bytes back from the params region into WS.
+
+    When stmt.using is empty, the caller's WS region is passed as params_reg (legacy behaviour).
     """
     ws_layout, ws_reg = materialised.working_storage
+
+    if stmt.using:
+        # Resolve field layouts for all USING params (all are in WS).
+        param_fls = []
+        for param in stmt.using:
+            fl, _ = materialised.resolve(param.name)
+            param_fls.append((param, fl))
+
+        # Allocate fresh params region sized to total USING bytes.
+        total_bytes = sum(fl.byte_length for _, fl in param_fls)
+        size_reg = ctx.const_to_reg(total_bytes)
+        params_reg = ctx.fresh_reg()
+        ctx.emit_inst(AllocRegion(result_reg=params_reg, size_reg=size_reg))
+
+        # Copy-in: write each USING field from WS into the params region.
+        cumulative = 0
+        for _, fl in param_fls:
+            src_off = ctx.const_to_reg(fl.offset)
+            tmp = ctx.fresh_reg()
+            ctx.emit_inst(
+                LoadRegion(
+                    result_reg=tmp,
+                    region_reg=ws_reg,
+                    offset_reg=src_off,
+                    length=fl.byte_length,
+                )
+            )
+            dst_off = ctx.const_to_reg(cumulative)
+            ctx.emit_inst(
+                WriteRegion(
+                    region_reg=params_reg,
+                    offset_reg=dst_off,
+                    length=fl.byte_length,
+                    value_reg=tmp,
+                )
+            )
+            cumulative += fl.byte_length
+    else:
+        params_reg = ws_reg
 
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallWithMemory(
             result_reg=result_reg,
             func_name=FuncName(stmt.program),
-            params_reg=ws_reg,
-            results_reg=ws_reg,
+            params_reg=params_reg,
+            results_reg=params_reg,
         )
     )
+
+    # Copy-back: for BY REFERENCE params, write updated bytes from params region back to WS.
+    if stmt.using:
+        cumulative = 0
+        for param, fl in param_fls:
+            if param.param_type == "REFERENCE":
+                src_off = ctx.const_to_reg(cumulative)
+                tmp = ctx.fresh_reg()
+                ctx.emit_inst(
+                    LoadRegion(
+                        result_reg=tmp,
+                        region_reg=params_reg,
+                        offset_reg=src_off,
+                        length=fl.byte_length,
+                    )
+                )
+                dst_off = ctx.const_to_reg(fl.offset)
+                ctx.emit_inst(
+                    WriteRegion(
+                        region_reg=ws_reg,
+                        offset_reg=dst_off,
+                        length=fl.byte_length,
+                        value_reg=tmp,
+                    )
+                )
+            cumulative += fl.byte_length
 
     if stmt.giving and ctx.has_field(stmt.giving, materialised):
         giving_ref, giving_rr = ctx.resolve_field_ref(stmt.giving, materialised)

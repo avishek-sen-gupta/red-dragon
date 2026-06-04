@@ -80,9 +80,6 @@ def test_lower_call_giving_result_written_back():
     assert Opcode.WRITE_REGION in opcodes
 
 
-@pytest.mark.xfail(
-    strict=True, reason="LOAD_REGION/WRITE_REGION copy-in not yet implemented"
-)
 @covers(CobolFeature.CALL_USING, status=FeatureStatus.UNSUPPORTED)
 def test_lower_call_using_copy_in_before_call():
     """CALL with USING: ALLOC_REGION + LOAD_REGION+WRITE_REGION (copy-in) appear before CALL_WITH_MEMORY."""
@@ -107,9 +104,6 @@ def test_lower_call_using_copy_in_before_call():
     ), "WRITE_REGION (copy-in) must precede CALL_WITH_MEMORY"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="LOAD_REGION/WRITE_REGION copy-back not yet implemented"
-)
 @covers(CobolFeature.USING_BY_REFERENCE, status=FeatureStatus.UNSUPPORTED)
 def test_lower_call_by_reference_copy_back_after_call():
     """BY REFERENCE: LOAD_REGION+WRITE_REGION copy-back appear after CALL_WITH_MEMORY."""
