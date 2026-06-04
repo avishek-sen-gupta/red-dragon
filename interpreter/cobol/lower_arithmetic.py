@@ -21,7 +21,9 @@ from interpreter.cobol.cobol_statements import (
     ContinueStatement,
     DisplayStatement,
     EvaluateStatement,
+    ExitProgramStatement,
     ExitStatement,
+    GobackStatement,
     GotoStatement,
     IfStatement,
     InitializeStatement,
@@ -997,6 +999,28 @@ def lower_stop_run(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """STOP RUN."""
+    zero_reg = ctx.fresh_reg()
+    ctx.emit_inst(Const(result_reg=zero_reg, value=0))
+    ctx.emit_inst(Return_(value_reg=zero_reg))
+
+
+def lower_goback(
+    ctx: EmitContext,
+    stmt: GobackStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """GOBACK — return control to the caller (same as STOP RUN at the IR level)."""
+    zero_reg = ctx.fresh_reg()
+    ctx.emit_inst(Const(result_reg=zero_reg, value=0))
+    ctx.emit_inst(Return_(value_reg=zero_reg))
+
+
+def lower_exit_program(
+    ctx: EmitContext,
+    stmt: ExitProgramStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """EXIT PROGRAM — return control to the caller."""
     zero_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=zero_reg, value=0))
     ctx.emit_inst(Return_(value_reg=zero_reg))

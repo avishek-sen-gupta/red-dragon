@@ -43,6 +43,7 @@ import io.proleap.cobol.asg.metamodel.procedure.read.ReadStatement;
 import io.proleap.cobol.asg.metamodel.procedure.search.SearchStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.AlterStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.ProceedTo;
+import io.proleap.cobol.asg.metamodel.procedure.goback.GobackStatement;
 import io.proleap.cobol.asg.metamodel.procedure.call.ByContent;
 import io.proleap.cobol.asg.metamodel.procedure.call.ByReference;
 import io.proleap.cobol.asg.metamodel.procedure.call.ByValue;
@@ -165,6 +166,7 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.EVALUATE) return serializeEvaluate((EvaluateStatement) stmt);
         if (stmtType == StatementTypeEnum.CONTINUE) return serializeContinue((ContinueStatement) stmt);
         if (stmtType == StatementTypeEnum.EXIT) return serializeExit((ExitStatement) stmt);
+        if (stmtType == StatementTypeEnum.GO_BACK) return serializeGoback((GobackStatement) stmt);
         if (stmtType == StatementTypeEnum.INITIALIZE) return serializeInitialize((InitializeStatement) stmt);
         if (stmtType == StatementTypeEnum.SET) return serializeSet((SetStatement) stmt);
         if (stmtType == StatementTypeEnum.STRING) return serializeString((StringStatement) stmt);
@@ -789,7 +791,17 @@ public final class StatementSerializer {
     }
 
     private static JsonObject serializeExit(ExitStatement stmt) {
+        // Distinguish EXIT (no-op paragraph terminator) from EXIT PROGRAM (return to caller).
+        io.proleap.cobol.CobolParser.ExitStatementContext ctx =
+                (io.proleap.cobol.CobolParser.ExitStatementContext) stmt.getCtx();
+        if (ctx != null && ctx.PROGRAM() != null) {
+            return newStatement("EXIT_PROGRAM");
+        }
         return newStatement("EXIT");
+    }
+
+    private static JsonObject serializeGoback(GobackStatement stmt) {
+        return newStatement("GOBACK");
     }
 
     private static JsonObject serializeInitialize(InitializeStatement stmt) {

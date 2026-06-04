@@ -58,6 +58,8 @@ CobolStatementType = Union[
     "DisplayStatement",
     "GotoStatement",
     "StopRunStatement",
+    "GobackStatement",
+    "ExitProgramStatement",
     "PerformStatement",
     "WhenStatement",
     "WhenOtherStatement",
@@ -403,6 +405,30 @@ class StopRunStatement:
 
     def to_dict(self) -> dict:
         return {"type": "STOP_RUN"}
+
+
+@dataclass(frozen=True)
+class GobackStatement:
+    """GOBACK — return control to the caller (or terminate if called as main program)."""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> GobackStatement:
+        return cls()
+
+    def to_dict(self) -> dict:
+        return {"type": "GOBACK"}
+
+
+@dataclass(frozen=True)
+class ExitProgramStatement:
+    """EXIT PROGRAM — return control to the caller (no-op in main program)."""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ExitProgramStatement:
+        return cls()
+
+    def to_dict(self) -> dict:
+        return {"type": "EXIT_PROGRAM"}
 
 
 @dataclass(frozen=True)
@@ -1035,6 +1061,8 @@ _DISPATCH_TABLE: dict[str, type] = {
     "DISPLAY": DisplayStatement,
     "GOTO": GotoStatement,
     "STOP_RUN": StopRunStatement,
+    "GOBACK": GobackStatement,
+    "EXIT_PROGRAM": ExitProgramStatement,
     "PERFORM": PerformStatement,
     "WHEN": WhenStatement,
     "WHEN_OTHER": WhenOtherStatement,
