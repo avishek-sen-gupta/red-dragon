@@ -43,7 +43,7 @@ The pipeline has three layers, each independently testable:
 |------|---------|
 | `cobol_frontend.py` | Main frontend: DATA DIVISION allocation, PROCEDURE DIVISION lowering |
 | `cobol_statements.py` | Typed statement hierarchy — 25 frozen dataclasses + union type |
-| `features.py` | `CobolFeature` enum — 112 semantic features; used with `@covers(CobolFeature.X)` test decorators |
+| `features.py` | `CobolFeature` enum — 114 semantic features; used with `@covers(CobolFeature.X)` test decorators |
 | `io_provider.py` | Injectable I/O provider: `CobolIOProvider` ABC, `NullIOProvider`, `StubIOProvider` |
 | `cobol_expression.py` | `ExprNode` union type (`LiteralNode | FieldRefNode | RefModNode | BinOpNode`) + `expr_from_dict()` deserializer; legacy `parse_expression` tokenizer retained for standalone tests |
 | `cobol_parser.py` | Subprocess bridge to ProLeap JAR |
@@ -92,7 +92,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `DIVIDE X INTO Y` | Decode both → `BINOP /` → encode → write |
 | `COMPUTE Y = expr` | Recursive expression lowering → encode → write |
 
-### Control Flow (5 types)
+### Control Flow (7 types)
 
 | Statement | IR Pattern |
 |---|---|
@@ -101,6 +101,8 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `PERFORM` | Simple: `SET_CONTINUATION` + `BRANCH` to paragraph. TIMES/UNTIL/VARYING: loop with counter/condition. THRU: range of paragraphs. Section-level: all paragraphs in section. |
 | `GO TO` | `BRANCH` to paragraph label |
 | `STOP RUN` | `RETURN` |
+| `GOBACK` | `RETURN` — returns control to the caller (subprogram) or terminates (main program). Same IR as STOP RUN. |
+| `EXIT PROGRAM` | `RETURN` — returns control to the caller. Distinguished from plain `EXIT` (no-op) by the bridge via `ExitStatementContext.PROGRAM()`. |
 
 ### No-ops (2 types)
 
@@ -134,7 +136,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `CALL 'prog' USING params` | Decode USING params → `CALL_FUNCTION` with program name (symbolic, unresolved). GIVING writes result back. |
+| `CALL 'prog' USING params` | Allocate a fresh params region (`ALLOC_REGION`), copy each USING field in from WS (`LOAD_REGION`+`WRITE_REGION`), dispatch via `CALL_WITH_MEMORY`. BY REFERENCE: copy-back after the call (`LOAD_REGION`+`WRITE_REGION` into caller WS). BY VALUE / BY CONTENT: no copy-back (callee mutates its own copy). The callee binds LINKAGE fields to `__params_region` at their natural byte offsets. GIVING writes the result back. |
 | `ALTER para-1 TO PROCEED TO para-2` | `STORE_VAR __alter_source = target_label` (captures data flow of dynamic retargeting) |
 | `ENTRY 'name'` | `LABEL entry_name` (alternate subprogram entry point) |
 | `CANCEL prog` | No-op for static analysis (program state invalidation has no data-flow effect) |
