@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import io.proleap.cobol.asg.metamodel.Program;
+import io.proleap.cobol.asg.params.CobolParserParams;
+import io.proleap.cobol.asg.params.impl.CobolParserParamsImpl;
 import io.proleap.cobol.asg.runner.impl.CobolParserRunnerImpl;
 import io.proleap.cobol.preprocessor.CobolPreprocessor.CobolSourceFormatEnum;
 
@@ -12,6 +14,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -40,10 +45,14 @@ public final class Main {
 
         CobolSourceFormatEnum format = CobolSourceFormatEnum.FIXED;
         String filePath = "";
+        List<File> copyBookDirs = new ArrayList<>();
 
         for (int i = 0; i < args.length; i++) {
             if ("-format".equals(args[i]) && i + 1 < args.length) {
                 format = parseFormat(args[i + 1]);
+                i++;
+            } else if ("-copybook-dir".equals(args[i]) && i + 1 < args.length) {
+                copyBookDirs.add(new File(args[i + 1]));
                 i++;
             } else {
                 filePath = args[i];
@@ -58,7 +67,14 @@ public final class Main {
         System.setOut(new PrintStream(new ByteArrayOutputStream()));
         Program program;
         try {
-            program = new CobolParserRunnerImpl().analyzeFile(cobolFile, format);
+            CobolParserParams params = new CobolParserParamsImpl();
+            params.setFormat(format);
+            params.setCopyBookExtensions(
+                Arrays.asList("", "cpy", "CPY", "cob", "cbl", "copy", "COPY"));
+            if (!copyBookDirs.isEmpty()) {
+                params.setCopyBookDirectories(copyBookDirs);
+            }
+            program = new CobolParserRunnerImpl().analyzeFile(cobolFile, params);
         } finally {
             System.setOut(originalOut);
         }
