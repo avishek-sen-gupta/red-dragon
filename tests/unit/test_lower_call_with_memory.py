@@ -16,7 +16,7 @@ from interpreter.cobol.sectioned_layout import (
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.ir import Opcode
 from interpreter.cobol.features import CobolFeature
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import covers, FeatureStatus, NotLanguageFeature
 
 
 def _make_field(name: str, pic: str = "X(5)", offset: int = 0) -> CobolField:
@@ -80,30 +80,12 @@ def test_lower_call_giving_result_written_back():
     assert Opcode.WRITE_REGION in opcodes
 
 
-@pytest.mark.xfail(strict=True, reason="ALLOC_REGION emission not yet implemented")
-@covers(CobolFeature.CALL_USING)
-def test_lower_call_using_emits_alloc_region_before_call():
-    """CALL with USING params must emit ALLOC_REGION before CALL_WITH_MEMORY."""
-    ctx, materialised = _materialised_with_ws("WS-INPUT")
-    stmt = CallStatement(
-        program="DOUBLIT",
-        using=[CallUsingParam(name="WS-INPUT", param_type="REFERENCE")],
-        giving="",
-    )
-    lower_call(ctx, stmt, materialised)
-    opcodes = [i.opcode for i in ctx.instructions]
-    call_idx = next(i for i, op in enumerate(opcodes) if op == Opcode.CALL_WITH_MEMORY)
-    assert (
-        Opcode.ALLOC_REGION in opcodes[:call_idx]
-    ), "ALLOC_REGION must appear before CALL_WITH_MEMORY"
-
-
 @pytest.mark.xfail(
     strict=True, reason="LOAD_REGION/WRITE_REGION copy-in not yet implemented"
 )
-@covers(CobolFeature.CALL_USING)
+@covers(CobolFeature.CALL_USING, status=FeatureStatus.UNSUPPORTED)
 def test_lower_call_using_copy_in_before_call():
-    """CALL with USING: LOAD_REGION+WRITE_REGION (copy-in) appear before CALL_WITH_MEMORY."""
+    """CALL with USING: ALLOC_REGION + LOAD_REGION+WRITE_REGION (copy-in) appear before CALL_WITH_MEMORY."""
     ctx, materialised = _materialised_with_ws("WS-INPUT")
     stmt = CallStatement(
         program="DOUBLIT",
@@ -115,6 +97,9 @@ def test_lower_call_using_copy_in_before_call():
     call_idx = next(i for i, op in enumerate(opcodes) if op == Opcode.CALL_WITH_MEMORY)
     pre_call = opcodes[:call_idx]
     assert (
+        Opcode.ALLOC_REGION in pre_call
+    ), "ALLOC_REGION must appear before CALL_WITH_MEMORY"
+    assert (
         Opcode.LOAD_REGION in pre_call
     ), "LOAD_REGION (copy-in) must precede CALL_WITH_MEMORY"
     assert (
@@ -125,7 +110,7 @@ def test_lower_call_using_copy_in_before_call():
 @pytest.mark.xfail(
     strict=True, reason="LOAD_REGION/WRITE_REGION copy-back not yet implemented"
 )
-@covers(CobolFeature.USING_BY_REFERENCE)
+@covers(CobolFeature.USING_BY_REFERENCE, status=FeatureStatus.UNSUPPORTED)
 def test_lower_call_by_reference_copy_back_after_call():
     """BY REFERENCE: LOAD_REGION+WRITE_REGION copy-back appear after CALL_WITH_MEMORY."""
     ctx, materialised = _materialised_with_ws("WS-INPUT")
