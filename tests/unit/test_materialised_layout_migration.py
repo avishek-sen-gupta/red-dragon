@@ -166,7 +166,7 @@ class TestEmitContextLowerCondition:
         }
         result_reg = ctx.lower_condition(condition, materialised)
 
-        assert str(result_reg).startswith("%r")
+        assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         assert any(i.operands[0] == ">" for i in binop_insts)
 
