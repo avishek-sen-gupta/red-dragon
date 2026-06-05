@@ -48,7 +48,11 @@ from interpreter import constants
 
 # ── Public helpers (tested individually) ─────────────────────────
 
-_REGISTER_RE = re.compile(r"^%(\d+)$")
+# Registers are "%" + an optional alpha prefix + a number. Tree-sitter frontends
+# emit "%0", "%1", ...; the COBOL frontend emits "%r0", "%r1", .... Both must be
+# recognized so per-module rebasing computes a correct offset (group 1 = prefix,
+# group 2 = number).
+_REGISTER_RE = re.compile(r"^%([A-Za-z]*)(\d+)$")
 
 
 def module_prefix(file_path: Path, project_root: Path) -> str:
@@ -72,10 +76,13 @@ def namespace_label(label: str, prefix: str) -> str:
 
 
 def rebase_register(operand: str, offset: int) -> str:
-    """Shift a register %N by offset. Non-registers pass through unchanged."""
+    """Shift a register's number by offset, preserving any alpha prefix.
+
+    "%47" → "%147"; "%r5" → "%r105". Non-registers pass through unchanged.
+    """
     m = _REGISTER_RE.match(str(operand))
     if m:
-        return f"%{int(m.group(1)) + offset}"
+        return f"%{m.group(1)}{int(m.group(2)) + offset}"
     return operand
 
 
@@ -89,11 +96,11 @@ def max_register_number(ir: tuple[InstructionBase, ...] | list[InstructionBase])
         if raw.result_reg.is_present():
             m = _REGISTER_RE.match(str(raw.result_reg))
             if m:
-                max_reg = max(max_reg, int(m.group(1)))
+                max_reg = max(max_reg, int(m.group(2)))
         for op in raw.operands:
             m = _REGISTER_RE.match(str(op))
             if m:
-                max_reg = max(max_reg, int(m.group(1)))
+                max_reg = max(max_reg, int(m.group(2)))
     return max_reg
 
 

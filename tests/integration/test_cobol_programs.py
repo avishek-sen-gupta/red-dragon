@@ -4272,6 +4272,75 @@ class TestCallUsingByReference:
             ws_value == 8
         ), f"WS-VALUE: expected 8 (5 + 3 written by DOUBLIT), got {ws_value}"
 
+    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
+    @covers(CobolFeature.SECTION_LINKAGE)
+    def test_linkage_only_subprogram_reads_parameter(self, tmp_path):
+        """Regression (red-dragon-irl8): a subprogram with a LINKAGE SECTION and
+        NO WORKING-STORAGE SECTION must read its USING BY REFERENCE parameter.
+
+        Previously the linker failed to rebase the COBOL '%rN' registers (the
+        regex only matched '%N'), so MAINPROG's and CALLEE's registers collided
+        in the merged IR and type inference coerced MAINPROG's byte to float —
+        making MOVE 7 a symbolic no-op. CALLEE then read 0 (result 10) instead of
+        7 (result 17). A WORKING-STORAGE section in the callee accidentally
+        shifted the numbering and hid the bug.
+
+        MAINPROG passes WS-VALUE=7; CALLEE (LINKAGE only) ADD 10; caller sees 17.
+        """
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-VALUE PIC 9(4) VALUE 7.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'ADDER' USING BY REFERENCE WS-VALUE.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "ADDER.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. ADDER.",
+                    "DATA DIVISION.",
+                    "LINKAGE SECTION.",
+                    "01 LS-VALUE PIC 9(4).",
+                    "PROCEDURE DIVISION.",
+                    "    ADD 10 TO LS-VALUE.",
+                    "    GOBACK.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        key = VarName("__prog_MAINPROG")
+        ptr = next(
+            (f.local_vars[key] for f in reversed(vm.call_stack) if key in f.local_vars),
+            None,
+        )
+        assert ptr is not None, "__prog_MAINPROG not found"
+        region = vm.region_get(
+            Address(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+        )
+        assert region is not None
+        ws_value = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            ws_value == 17
+        ), f"WS-VALUE: expected 17 (7 + 10 by LINKAGE-only ADDER), got {ws_value}"
+
 
 class TestCallUsingByValue:
     """CALL USING BY VALUE: callee receives a copy; caller WS is unchanged after return."""

@@ -82,6 +82,12 @@ class TestRebaseRegister:
         """Negative numbers in operands shouldn't match register pattern."""
         assert rebase_register("-1", 100) == "-1"
 
+    def test_r_prefixed_register_rebased_preserving_prefix(self):
+        """COBOL frontend names registers %r0, %r1, ...; rebasing must keep the
+        'r' prefix and shift the number (else modules collide in the merged IR)."""
+        assert rebase_register("%r5", 100) == "%r105"
+        assert rebase_register("%r0", 0) == "%r0"
+
 
 # ── max_register_number ─────────────────────────────────────────
 
@@ -121,3 +127,18 @@ class TestMaxRegisterNumber:
     def test_no_registers(self):
         ir = (IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),)
         assert max_register_number(ir) == -1
+
+    def test_counts_r_prefixed_registers(self):
+        """COBOL frontend registers (%r0, %r1, ...) must be counted, else the
+        per-module rebase offset stays 0 and modules collide in the merged IR."""
+        ir = (
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%r0"), operands=["42"]
+            ),
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=Register("%r7"),
+                operands=["+", "%r0", "%r3"],
+            ),
+        )
+        assert max_register_number(ir) == 7
