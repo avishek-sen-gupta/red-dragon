@@ -48,16 +48,19 @@ repos:
         pass_filenames: false
         always_run: true
 
-      - id: feature-coverage-gaps
-        name: Regenerate frontend lowering gaps doc
-        entry: bash -c 'poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md && git add -u docs/frontend-lowering-gaps.md'
-        language: system
-        pass_filenames: false
-        always_run: true
+      # Temporarily disabled — these hooks rewrite tracked files (the gaps-doc
+      # datestamp / issues.jsonl) during pre-commit, which intermittently aborts
+      # commits. Re-enable once they no longer mutate the tree mid-commit.
+      # - id: feature-coverage-gaps
+      #   name: Regenerate frontend lowering gaps doc
+      #   entry: bash -c 'poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md && git add -u docs/frontend-lowering-gaps.md'
+      #   language: system
+      #   pass_filenames: false
+      #   always_run: true
 
-      - id: beads-backup
-        name: Beads backup
-        entry: bash -c 'command -v bd >/dev/null 2>&1 && bd export --all -o ./issues/issues.jsonl || true'
-        language: system
-        pass_filenames: false
-        always_run: true
+      # - id: beads-backup
+      #   name: Beads backup
+      #   entry: bash -c 'command -v bd >/dev/null 2>&1 && bd export --all -o ./issues/issues.jsonl || true'
+      #   language: system
+      #   pass_filenames: false
+      #   always_run: true
