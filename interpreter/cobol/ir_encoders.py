@@ -309,7 +309,7 @@ def build_decode_zoned_ir(
     """Generate IR for zoned decimal decoding (embedded sign).
 
     Inputs: %p_data (list[int] of bytes)
-    Output: float
+    Output: int when decimal_digits == 0, else float
 
     When sign_leading=True, sign nibble is extracted from byte 0.
     Otherwise (default), sign nibble is extracted from the last byte.
@@ -344,15 +344,8 @@ def build_decode_zoned_ir(
             )
         )
         accum = scaled
-    else:
-        # Convert to float for consistency
-        as_float = rc.next()
-        instructions.append(
-            CallFunction(
-                result_reg=as_float, func_name=FuncName("float"), args=(accum,)
-            )
-        )
-        accum = as_float
+    # Integer field (decimal_digits == 0): keep accum as int. Converting to
+    # float silently corrupts integers beyond 2^53 (e.g. PIC 9(18)).
 
     # Extract sign from the sign byte's high nibble
     sign_byte = rc.next()
@@ -570,7 +563,7 @@ def build_decode_zoned_separate_ir(
     """Generate IR for zoned decimal decoding with SEPARATE sign character.
 
     Inputs: %p_data (list[int] of bytes, length = total_digits + 1)
-    Output: float
+    Output: int when decimal_digits == 0, else float
 
     sign_leading=True: byte 0 is the sign, bytes 1..N are digits.
     sign_leading=False: bytes 0..N-1 are digits, byte N is the sign.
@@ -625,14 +618,7 @@ def build_decode_zoned_separate_ir(
             )
         )
         accum = scaled
-    else:
-        as_float = rc.next()
-        instructions.append(
-            CallFunction(
-                result_reg=as_float, func_name=FuncName("float"), args=(accum,)
-            )
-        )
-        accum = as_float
+    # Integer field (decimal_digits == 0): keep accum as int (see build_decode_zoned_ir).
 
     # Apply sign: 0x60 = negative
     is_neg = rc.next()
@@ -859,7 +845,7 @@ def build_decode_comp3_ir(
     """Generate IR for COMP-3 packed BCD decoding.
 
     Inputs: %p_data (list[int] of bytes)
-    Output: float
+    Output: int when decimal_digits == 0, else float
     """
     rc = _RegCounter(func_name)
     instructions: list[InstructionBase] = []
@@ -968,14 +954,7 @@ def build_decode_comp3_ir(
             )
         )
         accum = scaled
-    else:
-        as_float = rc.next()
-        instructions.append(
-            CallFunction(
-                result_reg=as_float, func_name=FuncName("float"), args=(accum,)
-            )
-        )
-        accum = as_float
+    # Integer field (decimal_digits == 0): keep accum as int (see build_decode_zoned_ir).
 
     # Apply sign: sign_nibble == 0xD → negative
     is_neg = rc.next()
@@ -1117,7 +1096,7 @@ def build_decode_binary_ir(
     """Generate IR for COMP/BINARY decoding.
 
     Inputs: %p_data (list[int] of bytes)
-    Output: float
+    Output: int when decimal_digits == 0, else float
     """
     rc = _RegCounter(func_name)
     instructions: list[InstructionBase] = []
@@ -1151,14 +1130,7 @@ def build_decode_binary_ir(
             )
         )
         int_val = scaled
-    else:
-        as_float = rc.next()
-        instructions.append(
-            CallFunction(
-                result_reg=as_float, func_name=FuncName("float"), args=(int_val,)
-            )
-        )
-        int_val = as_float
+    # Integer field (decimal_digits == 0): keep int_val as int (see build_decode_zoned_ir).
 
     instructions.append(Return_(value_reg=int_val))
     return instructions
