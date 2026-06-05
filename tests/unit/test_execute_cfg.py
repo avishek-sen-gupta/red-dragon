@@ -6,23 +6,15 @@ import pytest
 
 from interpreter.var_name import VarName
 from interpreter.register import Register
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.cfg import CFG, BasicBlock, build_cfg
+from interpreter.ir import Opcode, CodeLabel
+from interpreter.cfg import build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg, VMConfig, ExecutionStats
 from interpreter.types.typed_value import unwrap
-
-
-def _make_instructions(*specs):
-    """Helper: build IRInstruction list from (opcode, kwargs) tuples."""
-    return [IRInstruction(opcode=op, **kw) for op, kw in specs]
-
-
-def _build_simple_cfg(instructions):
-    """Build a CFG + registry from instructions."""
-    cfg = build_cfg(instructions)
-    registry = build_registry(instructions, cfg)
-    return cfg, registry
+from tests.unit.cfg_helpers import (
+    make_instructions as _make_instructions,
+    build_simple_cfg as _build_simple_cfg,
+)
 
 
 class TestExecuteCfgBasic:
