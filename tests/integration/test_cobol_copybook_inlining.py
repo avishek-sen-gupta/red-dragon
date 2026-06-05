@@ -204,11 +204,6 @@ def test_copy_shared_record_across_call(tmp_path):
 
     SHARED-REC.SR-VALUE starts at 7 in MAINPROG; CALLEE adds 10 via its LINKAGE
     view and GOBACKs; copy-back propagates 17 back to MAINPROG's WS.
-
-    Note: CALLEE also has a WORKING-STORAGE SECTION. A subprogram with ONLY a
-    LINKAGE section (no WS) currently mis-reads its parameters
-    (red-dragon-irl8); the both-sections shape here is the realistic CardDemo
-    pattern.
     """
     (tmp_path / "SHARED.cpy").write_text(
         _to_fixed(
@@ -239,8 +234,6 @@ def test_copy_shared_record_across_call(tmp_path):
                 "IDENTIFICATION DIVISION.",
                 "PROGRAM-ID. CALLEE.",
                 "DATA DIVISION.",
-                "WORKING-STORAGE SECTION.",
-                "01 WS-WORK PIC 9(4) VALUE 0.",
                 "LINKAGE SECTION.",
                 "COPY SHARED.",
                 "PROCEDURE DIVISION.",
