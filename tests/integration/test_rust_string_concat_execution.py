@@ -4,19 +4,11 @@ from __future__ import annotations
 
 from interpreter.var_name import VarName
 from interpreter.constants import Language
-from interpreter.run import run
-from interpreter.types.typed_value import unwrap_locals
-from interpreter.project.entry_point import EntryPoint
+from tests.integration.exec_helpers import run_locals
 
 
 def _run_rust(source: str, max_steps: int = 300):
-    vm = run(
-        source,
-        language=Language.RUST,
-        max_steps=max_steps,
-        entry_point=EntryPoint.top_level(),
-    )
-    return unwrap_locals(vm.call_stack[0].local_vars)
+    return run_locals(source, Language.RUST, max_steps)
 
 
 class TestRustStringFromExecution:
