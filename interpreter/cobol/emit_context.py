@@ -100,7 +100,7 @@ class EmitContext:
     # ── Core Primitives ───────────────────────────────────────────
 
     def fresh_reg(self) -> Register:
-        name = Register(f"%r{self._reg_counter}")
+        name = Register(f"%{self._reg_counter}")
         self._reg_counter += 1
         return name
 
