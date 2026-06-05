@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
@@ -20,6 +20,7 @@ class SectionedLayout:
     working_storage: DataLayout
     linkage: DataLayout
     local_storage: DataLayout
+    file: DataLayout = field(default_factory=DataLayout)
 
 
 @dataclass(frozen=True)
@@ -72,4 +73,5 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
         working_storage=build_data_layout(asg.data_fields),
         linkage=build_data_layout(asg.linkage_fields),
         local_storage=build_data_layout(asg.local_storage_fields),
+        file=build_data_layout(asg.file_fields),
     )
