@@ -11,19 +11,17 @@ import pytest
 
 from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
-from interpreter.run import run
 from tests.covers import covers
-
-_JAR_PATH = os.environ.get(
-    "PROLEAP_BRIDGE_JAR",
-    os.path.expanduser(
-        "~/code/red-dragon/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
-    ),
+from tests.integration.cobol_helpers import (
+    JAR_PATH,
+    JAR_AVAILABLE,
+    decode_zoned_unsigned as _decode,
+    first_region as _first_region,
+    run_cobol,
 )
-_JAR_AVAILABLE = os.path.isfile(_JAR_PATH)
 
 pytestmark = pytest.mark.skipif(
-    not _JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
+    not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
 )
 
 
@@ -31,7 +29,7 @@ pytestmark = pytest.mark.skipif(
 def _set_bridge_jar_env():
     """Ensure PROLEAP_BRIDGE_JAR is set for the entire test session."""
     old = os.environ.get("PROLEAP_BRIDGE_JAR")
-    os.environ["PROLEAP_BRIDGE_JAR"] = _JAR_PATH
+    os.environ["PROLEAP_BRIDGE_JAR"] = JAR_PATH
     yield
     if old is None:
         os.environ.pop("PROLEAP_BRIDGE_JAR", None)
@@ -41,38 +39,14 @@ def _set_bridge_jar_env():
 
 # ── Helpers ──────────────────────────────────────────────────────
 
-_AREA_A = "       "  # 7 spaces: cols 1-6 (seq) + col 7 (indicator = space)
-_COMMENT = "      *"  # col 7 = * for comment line
-
-
-def _to_fixed(lines: list[str]) -> str:
-    """Convert short-form COBOL lines to FIXED format.
-
-    Lines starting with '*' become comment lines (indicator in col 7).
-    All other lines get the standard 7-space Area A prefix.
-    """
-    formatted = [
-        _COMMENT + line[1:] if line.startswith("*") else _AREA_A + line
-        for line in lines
-    ]
-    return "\n".join(formatted) + "\n"
-
 
 def _run_cobol(lines: list[str], max_steps: int = 20000):
-    """Run COBOL source through the full pipeline, return VMState."""
-    source = _to_fixed(lines)
-    return run(source=source, language="cobol", max_steps=max_steps)
+    """Run COBOL source through the full pipeline, return VMState.
 
-
-def _first_region(vm):
-    """Return the first memory region from the VM state."""
-    return vm.region_get(list(vm.region_keys())[0])
-
-
-def _decode(region, offset: int, length: int) -> int:
-    """Decode unsigned zoned decimal (EBCDIC) from a memory region."""
-    digits = [region[offset + i] & 0x0F for i in range(length)]
-    return sum(d * (10 ** (length - 1 - i)) for i, d in enumerate(digits))
+    These multi-feature programs need a higher default step budget than the
+    shared ``run_cobol`` default, so this thin wrapper preserves it.
+    """
+    return run_cobol(lines, max_steps=max_steps)
 
 
 def _decode_alpha(region, offset: int, length: int) -> str:
