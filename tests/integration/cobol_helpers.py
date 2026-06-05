@@ -11,6 +11,8 @@ import os
 
 import pytest
 
+from interpreter.run import run
+
 JAR_PATH = os.environ.get(
     "PROLEAP_BRIDGE_JAR",
     os.path.expanduser(
@@ -20,14 +22,24 @@ JAR_PATH = os.environ.get(
 JAR_AVAILABLE = os.path.isfile(JAR_PATH)
 
 
+_AREA_A = "       "  # 7 spaces: cols 1-6 (seq) + col 7 (indicator = space)
+_COMMENT = "      *"  # col 7 = * for comment line
+
+
 def to_fixed(lines: list[str]) -> str:
     """Convert short-form COBOL lines to FIXED format (columns 1-80).
 
-    Each input line is treated as starting at column 8 (Area A).
-    6 spaces for sequence area + 1 space for indicator area are prepended.
+    Each input line is treated as starting at column 8 (Area A): 6 spaces for
+    the sequence area + 1 space for the indicator area are prepended.
+
+    A line starting with ``*`` is emitted as a COBOL comment line (the ``*``
+    goes in the column-7 indicator area); the rest of the line follows.
     """
-    prefix = "       "  # 7 spaces: cols 1-6 (seq) + col 7 (indicator)
-    return "\n".join(prefix + line for line in lines) + "\n"
+    formatted = [
+        _COMMENT + line[1:] if line.startswith("*") else _AREA_A + line
+        for line in lines
+    ]
+    return "\n".join(formatted) + "\n"
 
 
 def decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
@@ -38,6 +50,17 @@ def decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
     """
     digits = [region[offset + i] & 0x0F for i in range(length)]
     return sum(d * (10 ** (length - 1 - i)) for i, d in enumerate(digits))
+
+
+def run_cobol(lines: list[str], max_steps: int = 1000):
+    """Run short-form COBOL lines through the full pipeline; return the VMState."""
+    source = to_fixed(lines)
+    return run(source=source, language="cobol", max_steps=max_steps)
+
+
+def first_region(vm):
+    """Return the first memory region from the VM state."""
+    return vm.region_get(list(vm.region_keys())[0])
 
 
 @pytest.fixture
