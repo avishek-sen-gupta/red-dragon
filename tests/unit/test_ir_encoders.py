@@ -762,3 +762,53 @@ class TestEncodeAlphanumericJustifiedIR:
         ir_result = _execute_ir(ir, {"%p_value": ""})
         assert len(ir_result) == 4
         assert all(b == 0x40 for b in ir_result)
+
+
+class TestIntegerFieldsDecodeToInt:
+    """Integer COBOL fields (decimal_digits == 0) must decode to Python int,
+    not float — converting to float silently corrupts integers beyond 2^53
+    (e.g. PIC 9(18)). Decimal fields (decimal_digits > 0) stay float."""
+
+    def test_zoned_integer_returns_int(self):
+        data = [0xF1, 0xF2, 0xF3, 0xF4, 0xF5]  # zoned 12345
+        ir = build_decode_zoned_ir("z", total_digits=5, decimal_digits=0)
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == 12345
+        assert isinstance(result, int)
+
+    def test_zoned_decimal_still_float(self):
+        data = [0xF1, 0xF2, 0xF3, 0xF4, 0xF5]
+        ir = build_decode_zoned_ir("z", total_digits=5, decimal_digits=2)
+        result = _execute_ir(ir, {"%p_data": data})
+        assert isinstance(result, float)
+
+    def test_zoned_separate_integer_returns_int(self):
+        data = [0xF1, 0xF2, 0xF3, 0x4E]  # 123 with trailing '+'
+        ir = build_decode_zoned_separate_ir(
+            "zs", total_digits=3, decimal_digits=0, sign_leading=False
+        )
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == 123
+        assert isinstance(result, int)
+
+    def test_comp3_integer_returns_int(self):
+        data = [0x12, 0x34, 0x5F]  # packed 12345, positive
+        ir = build_decode_comp3_ir("c3", total_digits=5, decimal_digits=0)
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == 12345
+        assert isinstance(result, int)
+
+    def test_binary_integer_returns_int(self):
+        data = list((1234).to_bytes(2, "big", signed=False))
+        ir = build_decode_binary_ir("bin", byte_count=2, decimal_digits=0, signed=False)
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == 1234
+        assert isinstance(result, int)
+
+    def test_large_zoned_integer_exact(self):
+        """18-digit value must be exact — the failure mode that motivated this."""
+        data = [0xF0 | int(ch) for ch in "123456789012345678"]
+        ir = build_decode_zoned_ir("z18", total_digits=18, decimal_digits=0)
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == 123456789012345678
+        assert isinstance(result, int)
