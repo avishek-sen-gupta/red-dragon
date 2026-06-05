@@ -178,6 +178,7 @@ class CobolASG:
         data_fields: Working-Storage Section fields.
         linkage_fields: Linkage Section fields (subprogram parameters).
         local_storage_fields: Local-Storage Section fields (per-call locals).
+        file_fields: File Section (FD) record fields.
         sections: Procedure Division sections.
         paragraphs: Standalone paragraphs (no section).
         statements: Division-level bare statements (no paragraph or section).
@@ -187,6 +188,7 @@ class CobolASG:
     data_fields: list[CobolField] = field(default_factory=list)
     linkage_fields: list[CobolField] = field(default_factory=list)
     local_storage_fields: list[CobolField] = field(default_factory=list)
+    file_fields: list[CobolField] = field(default_factory=list)
     sections: list[CobolSection] = field(default_factory=list)
     paragraphs: list[CobolParagraph] = field(default_factory=list)
     statements: list[CobolStatementType] = field(default_factory=list)
@@ -202,6 +204,7 @@ class CobolASG:
             local_storage_fields=[
                 CobolField.from_dict(f) for f in data.get("local_storage_fields", [])
             ],
+            file_fields=[CobolField.from_dict(f) for f in data.get("file_fields", [])],
             sections=[CobolSection.from_dict(s) for s in data.get("sections", [])],
             paragraphs=[
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
@@ -221,6 +224,8 @@ class CobolASG:
             result["local_storage_fields"] = [
                 f.to_dict() for f in self.local_storage_fields
             ]
+        if self.file_fields:
+            result["file_fields"] = [f.to_dict() for f in self.file_fields]
         if self.sections:
             result["sections"] = [s.to_dict() for s in self.sections]
         if self.paragraphs:
