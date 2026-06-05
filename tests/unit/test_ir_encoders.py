@@ -6,6 +6,8 @@ results to the reference Python implementations when executed through the VM.
 
 from typing import Any
 
+import pytest
+
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.typed_value import unwrap
@@ -781,9 +783,10 @@ class TestIntegerFieldsDecodeToInt:
         ir = build_decode_zoned_ir("z", total_digits=5, decimal_digits=2)
         result = _execute_ir(ir, {"%p_data": data})
         assert isinstance(result, float)
+        assert result == pytest.approx(123.45)
 
     def test_zoned_separate_integer_returns_int(self):
-        data = [0xF1, 0xF2, 0xF3, 0x4E]  # 123 with trailing '+'
+        data = [0xF1, 0xF2, 0xF3, 0x4E]  # digits 1-2-3 followed by EBCDIC '+' (0x4E)
         ir = build_decode_zoned_separate_ir(
             "zs", total_digits=3, decimal_digits=0, sign_leading=False
         )
