@@ -21,7 +21,7 @@ from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 from tests.integration.cobol_helpers import (
     JAR_AVAILABLE as _JAR_AVAILABLE,
     JAR_PATH,
@@ -4109,6 +4109,32 @@ class TestSectionedDataDivision:
         region = _first_region(vm)
         # WS-OUT at offset 0, 2 bytes; initial VALUE 42 should be preserved
         assert _decode_zoned_unsigned(region, 0, 2) == 42
+
+    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_eighteen_digit_move_is_exact(self):
+        """An 18-digit integer field survives MOVE exactly. Before integer
+        fields decoded to int, MOVE went through float -> scientific-notation
+        string -> COBOL_PREPARE_DIGITS, which could not parse it, leaving the
+        destination = 1 instead of the original value (red-dragon-4q25.42)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. BIGT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 BIG PIC 9(18) VALUE 123456789012345678.",
+                "77 OUT PIC 9(18) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "    MOVE BIG TO OUT.",
+                "    STOP RUN.",
+            ],
+            max_steps=20000,
+        )
+        region = _first_region(vm)
+        # Layout: BIG at offset 0 (18 bytes), OUT at offset 18 (18 bytes).
+        assert _decode_zoned_unsigned(region, 0, 18) == 123456789012345678
+        assert _decode_zoned_unsigned(region, 18, 18) == 123456789012345678
 
 
 class TestSubprogramWsPersistence:
