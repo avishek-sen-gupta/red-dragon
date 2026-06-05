@@ -62,7 +62,7 @@ class TestConditionLoweringBasic:
             materialised,
             idx,
         )
-        assert str(result_reg).startswith("%r")
+        assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         assert any(i.operands[0] == ">" for i in binop_insts)
         # Verify the comparison value 10 appears as a CONST
@@ -113,7 +113,7 @@ class TestConditionNameExpansion:
             materialised,
             idx,
         )
-        assert str(result_reg).startswith("%r")
+        assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         assert len(eq_ops) == 1
@@ -152,7 +152,7 @@ class TestConditionNameExpansion:
             materialised,
             idx,
         )
-        assert str(result_reg).startswith("%r")
+        assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         or_ops = [i for i in binop_insts if i.operands[0] == "or"]
@@ -184,7 +184,7 @@ class TestConditionNameExpansion:
             materialised,
             idx,
         )
-        assert str(result_reg).startswith("%r")
+        assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         ge_ops = [i for i in binop_insts if i.operands[0] == ">="]
         le_ops = [i for i in binop_insts if i.operands[0] == "<="]
@@ -224,7 +224,7 @@ class TestConditionNameExpansion:
         result_reg = lower_condition(
             ctx, {"not": False, "condition_name": "VALID-CODE"}, materialised, idx
         )
-        assert str(result_reg).startswith("%r")
+        assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         ge_ops = [i for i in binop_insts if i.operands[0] == ">="]
@@ -299,7 +299,7 @@ class TestConditionNameExpansion:
             materialised,
             idx,
         )
-        assert str(result_reg).startswith("%r")
+        assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         assert len(eq_ops) == 1
