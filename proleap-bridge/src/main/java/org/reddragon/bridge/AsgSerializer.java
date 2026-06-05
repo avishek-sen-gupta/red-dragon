@@ -80,7 +80,8 @@ public final class AsgSerializer {
     }
 
     /**
-     * Extracts DATA DIVISION fields from Working-Storage, Linkage, and Local-Storage sections.
+     * Extracts DATA DIVISION fields from Working-Storage, Linkage, Local-Storage,
+     * and File sections.
      */
     private static void serializeDataDivision(ProgramUnit pu, JsonObject asg) {
         DataDivision dataDivision = pu.getDataDivision();
