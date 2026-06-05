@@ -62,11 +62,33 @@ from interpreter.handlers.memory import (
 logger = logging.getLogger(__name__)
 
 
+# Strings that genuinely name a heap/region address start with one of these.
+# (See NEW_OBJECT/NEW_ARRAY/ALLOC_REGION and _handle_address_of's "mem_".)
+_HEAP_ADDR_PREFIXES = (
+    constants.OBJ_ADDR_PREFIX,
+    constants.ARR_ADDR_PREFIX,
+    constants.REGION_ADDR_PREFIX,
+    "mem_",
+)
+
+
+def _looks_like_heap_address(value: object) -> bool:
+    """True only for values that genuinely reference a heap address: a Pointer,
+    or a string with a known address prefix. Plain strings (e.g. "7" from the
+    str builtin) are NOT addresses, so they do not trip the bare-address warning.
+    """
+    if isinstance(value, Pointer):
+        return True
+    if isinstance(value, str):
+        return value.startswith(_HEAP_ADDR_PREFIXES)
+    return False
+
+
 def _unwrap_builtin_result(result: BuiltinResult, name: str) -> TypedValue:
     """Extract TypedValue from BuiltinResult, warning if heap address returned bare."""
     if isinstance(result.value, TypedValue):
         return result.value
-    if isinstance(result.value, (Pointer, str)) and _heap_addr(result.value):
+    if _looks_like_heap_address(result.value):
         logger.warning(
             "Builtin %s returned bare heap address %r, expected TypedValue",
             name,
