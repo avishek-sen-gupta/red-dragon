@@ -9,19 +9,14 @@ from __future__ import annotations
 from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
-from interpreter.types.typed_value import unwrap, unwrap_locals
+from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm_types import SymbolicValue
 from interpreter.project.entry_point import EntryPoint
+from tests.integration.exec_helpers import run_locals
 
 
 def _run_java(source: str, max_steps: int = 2000) -> dict:
-    vm = run(
-        source,
-        language=Language.JAVA,
-        max_steps=max_steps,
-        entry_point=EntryPoint.top_level(),
-    )
-    return unwrap_locals(vm.call_stack[0].local_vars)
+    return run_locals(source, Language.JAVA, max_steps)
 
 
 class TestJavaStringConcatenation:
