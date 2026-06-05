@@ -7,17 +7,11 @@ from interpreter.cfg import (
     cfg_to_mermaid,
     extract_function_instructions,
     _collapse_inst_lines,
-    CFG,
-    BasicBlock,
 )
 from interpreter.register import Register
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.instructions import Label_
-
-
-def _make_instructions(*specs):
-    """Helper: build IRInstruction list from (opcode, kwargs) tuples."""
-    return [IRInstruction(opcode=op, **kw) for op, kw in specs]
+from tests.unit.cfg_helpers import make_instructions as _make_instructions
 
 
 class TestCfgToMermaidBasic:
