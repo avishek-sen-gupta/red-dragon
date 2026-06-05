@@ -36,3 +36,16 @@ def test_cobol_asg_round_trips_file_fields():
     # to_dict/from_dict round-trip preserves file_fields
     restored = CobolASG.from_dict(asg.to_dict())
     assert [f.name for f in restored.file_fields] == ["CUSTOMER-RECORD"]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_build_sectioned_layout_includes_file_section():
+    from interpreter.cobol.sectioned_layout import build_sectioned_layout
+
+    asg = CobolASG(program_id="T", file_fields=_file_record_fields())
+    layout = build_sectioned_layout(asg)
+    # FILE SECTION fields are present in the dedicated `file` layout...
+    assert layout.file.lookup_as_storage("CUST-ID") is not None
+    assert layout.file.lookup_as_storage("CUST-NAME") is not None
+    # ...and NOT leaked into working-storage (no wiring/merging).
+    assert layout.working_storage.lookup_as_storage("CUST-ID") is None
