@@ -23,7 +23,7 @@
 - **`interpreter/cobol/asg_types.py`** (modify) — add `CobolASG.file_fields` with `from_dict`/`to_dict` handling.
 - **`interpreter/cobol/sectioned_layout.py`** (modify) — add `SectionedLayout.file: DataLayout`; `build_sectioned_layout` builds it from `asg.file_fields`.
 - **`tests/unit/cobol/test_file_section_layout.py`** (create) — unit test (hand-built `CobolASG`) that FD fields land in `SectionedLayout.file` and are accessible.
-- **`tests/integration/test_cobol_file_section.py`** (create) — integration test (real ProLeap parse) that a FILE SECTION program populates `asg.file_fields` and `build_sectioned_layout(asg).file`. Carries `@covers(CobolFeature.SECTION_FILE)`.
+- **`tests/integration/test_cobol_file_section.py`** (create) — integration test (real ProLeap parse) that a FILE SECTION program populates `asg.file_fields` and `build_sectioned_layout(asg).file`. Tagged `@covers(NotLanguageFeature.INFRASTRUCTURE)` — NOT `SECTION_FILE` (the feature isn't runtime-functional yet).
 
 ---
 
@@ -271,7 +271,14 @@ git commit -m "feat(cobol): SectionedLayout.file from FILE SECTION fields (layou
 
 ---
 
-## Task 4: Integration test (real ProLeap parse) + mark SECTION_FILE covered
+## Task 4: Integration test (real ProLeap parse) — layout only
+
+**SECTION_FILE stays UNCOVERED.** This slice only puts FD fields in the layout; the
+`SECTION_FILE` language feature is not "done" until `READ`/`WRITE` actually populate
+and flush the FD record at runtime. Marking it covered now would game the coverage
+number. So the test below claims `NotLanguageFeature.INFRASTRUCTURE` (it verifies the
+layout plumbing), `red-dragon-4q25.32` stays OPEN, and the `@covers(SECTION_FILE)`
+tag waits for the future READ/WRITE wiring slice.
 
 **Files:**
 - Create: `tests/integration/test_cobol_file_section.py`
@@ -282,18 +289,21 @@ Create `tests/integration/test_cobol_file_section.py`:
 
 ```python
 """Integration: a COBOL FILE SECTION parses through the ProLeap bridge and its FD
-record fields land in CobolASG.file_fields and SectionedLayout.file (layout only —
-no runtime wiring yet). red-dragon-4q25.32."""
+record fields land in CobolASG.file_fields and SectionedLayout.file.
+
+LAYOUT ONLY — no runtime wiring (READ/WRITE do not yet populate the FD record), so
+this asserts the layout plumbing and is tagged INFRASTRUCTURE, NOT
+@covers(SECTION_FILE). SECTION_FILE coverage waits for the READ/WRITE wiring slice
+(red-dragon-4q25.32)."""
 
 from __future__ import annotations
 
 import pytest
 
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
-from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 from tests.integration.cobol_helpers import JAR_PATH, JAR_AVAILABLE, to_fixed
 
 pytestmark = pytest.mark.skipif(
@@ -301,7 +311,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@covers(CobolFeature.SECTION_FILE)
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_file_section_fields_in_sectioned_layout():
     source = to_fixed(
         [
@@ -345,24 +355,31 @@ def test_file_section_fields_in_sectioned_layout():
 Run: `poetry run python -m pytest tests/integration/test_cobol_file_section.py -v --no-header 2>&1 | tail -8`
 Expected: PASS (1 passed). If `asg.file_fields` is empty, the Task-1 JAR change didn't take — confirm the rebuilt JAR and re-run.
 
-- [ ] **Step 3: Confirm SECTION_FILE is now covered**
+- [ ] **Step 3: Confirm SECTION_FILE is still UNCOVERED (not gamed)**
 
 Run: `poetry run python scripts/feature_coverage_audit.py --language cobol 2>&1 | grep -E "covered_count|uncovered_count|SECTION_FILE"`
-Expected: `covered_count` 109, `uncovered_count` 5, and `SECTION_FILE` no longer in the uncovered list.
+Expected: `covered_count` **108** (unchanged), `uncovered_count` **6** (unchanged), and `SECTION_FILE` still listed in `uncovered`. This is intentional — the layout plumbing exists but the feature isn't runtime-functional until READ/WRITE wiring. The new test is tagged INFRASTRUCTURE, so coverage is correctly unaffected.
 
 - [ ] **Step 4: Run the full COBOL suite for regressions**
 
 Run: `poetry run python -m pytest tests/unit/cobol/ tests/integration/test_cobol_programs.py tests/integration/test_cobol_file_section.py -q 2>&1 | tail -5`
 Expected: PASS.
 
-- [ ] **Step 5: Format, commit, close the issue**
+- [ ] **Step 5: Format and commit (do NOT close red-dragon-4q25.32)**
 
 ```bash
 poetry run python -m black tests/integration/test_cobol_file_section.py
 git add tests/integration/test_cobol_file_section.py
-git commit -m "test(cobol): FILE SECTION fields in SectionedLayout end-to-end (covers SECTION_FILE)"
-bd update red-dragon-4q25.32 --status closed
-git add issues/issues.jsonl 2>/dev/null && git commit -m "chore: close red-dragon-4q25.32" || true
+git commit -m "test(cobol): FILE SECTION fields reach SectionedLayout end-to-end (layout only)"
+```
+
+- [ ] **Step 6: Record progress on the issue (keep it OPEN)**
+
+`red-dragon-4q25.32` stays open — the layout half is done but the feature is not. Leave a progress note so the remaining work (READ/WRITE wiring) is explicit:
+
+```bash
+bd comment red-dragon-4q25.32 "Layout half done: FD record fields now flow ProLeap -> CobolASG.file_fields -> SectionedLayout.file (build_sectioned_layout). NOT closed: SECTION_FILE remains uncovered because there is no runtime wiring yet — READ must populate the FD record region and WRITE must flush it, and the record fields must be resolvable in PROCEDURE DIVISION (MaterialisedSectionedLayout + resolve() + region binding + I/O verb integration). @covers(SECTION_FILE) attaches when a READ-populates-record test passes."
+git add issues/issues.jsonl 2>/dev/null && git commit -m "chore(beads): note FILE SECTION layout progress on 4q25.32" || true
 ```
 
 ---
@@ -375,7 +392,7 @@ git add issues/issues.jsonl 2>/dev/null && git commit -m "chore: close red-drago
 - `SectionedLayout.file` built from them → Task 3. ✓
 - Verified end-to-end via real parse → Task 4. ✓
 - **No wiring:** `MaterialisedSectionedLayout`, `resolve()`/`has_field()`, region allocation in `lower_sectioned_data_division`, and the I/O verbs are all untouched — confirmed by the absence of any task touching them, and Task 3 Step 5 verifies the unchanged constructors still work. The unit/integration tests assert FILE fields do NOT leak into working-storage. ✓
-- Marks `SECTION_FILE` covered + closes `red-dragon-4q25.32`, whose acceptance ("FILE SECTION fields included in DataLayout; dedicated test verifies field accessibility; @covers(SECTION_FILE)") is satisfied by this layout-only slice. ✓
+- **Does NOT mark `SECTION_FILE` covered and does NOT close `red-dragon-4q25.32`.** The feature isn't runtime-functional until READ/WRITE wiring, so claiming coverage now would game the number. The slice tags its test INFRASTRUCTURE, leaves the issue open with a progress note, and reserves `@covers(SECTION_FILE)` for the wiring slice (`4q25.32`'s acceptance is correspondingly tightened — layout alone is not "done"). ✓
 
 **Placeholder scan:** No TBDs. Each Java/Python edit shows complete code; the few "verify the import path / kwargs against the existing file" notes are precise verification steps, not hand-waving, because exact ProLeap package names and `CobolField` kwargs must be confirmed against source (paths given).
 
