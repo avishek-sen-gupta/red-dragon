@@ -10,7 +10,7 @@ from interpreter.field_name import FieldName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.instructions import InstructionBase
 from interpreter.vm.vm import VMState, HeapObject, apply_update
-from interpreter.vm.vm_types import StackFrame, StateUpdate, SymbolicValue
+from interpreter.vm.vm_types import StateUpdate, SymbolicValue
 from interpreter.vm.executor import (
     LocalExecutor,
     HandlerContext,
@@ -22,22 +22,17 @@ from interpreter.registry import FunctionRegistry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, typed, unwrap
-from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.constants import METHOD_MISSING
 from interpreter.register import Register
 
 
 from dataclasses import replace as _replace
+from tests.unit.vm_helpers import make_vm as _make_vm
 
 
 def _ctx(**overrides) -> HandlerContext:
     return _replace(_default_handler_context(), **overrides)
-
-
-def _make_vm() -> VMState:
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
-    return vm
 
 
 def _empty_cfg() -> CFG:

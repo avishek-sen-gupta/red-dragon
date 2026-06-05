@@ -10,24 +10,16 @@ from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import typed_from_runtime, unwrap, typed
 from interpreter.vm.vm import VMState, apply_update
-from interpreter.vm.vm_types import HeapObject, StackFrame, StateUpdate, StackFramePush
+from interpreter.vm.vm_types import HeapObject, StackFrame, StateUpdate
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.vm.field_fallback import ImplicitThisFieldFallback
 from interpreter.vm.executor import (
     LocalExecutor,
-    HandlerContext,
     _default_handler_context,
 )
-from interpreter.cfg import CFG
-from interpreter.registry import FunctionRegistry
 from interpreter.register import Register
 from interpreter.func_name import FuncName
-
-
-def _make_vm() -> VMState:
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
-    return vm
+from tests.unit.vm_helpers import make_vm as _make_vm
 
 
 def _execute(vm, inst, **kwargs):

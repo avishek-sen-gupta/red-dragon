@@ -9,17 +9,11 @@ from interpreter.vm.executor import (
 
 _CTX = _default_handler_context()
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.vm.vm import VMState, apply_update
-from interpreter.vm.vm_types import StackFrame, StateUpdate
+from interpreter.vm.vm import apply_update
+from interpreter.vm.vm_types import StateUpdate
 from interpreter.continuation_name import ContinuationName
-from interpreter.func_name import FuncName
 from interpreter.register import Register
-
-
-def _make_vm() -> VMState:
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
-    return vm
+from tests.unit.vm_helpers import make_vm as _make_vm
 
 
 class TestHandleSetContinuation:
