@@ -13,19 +13,17 @@ import os
 import pytest
 
 from interpreter.cobol.features import CobolFeature
-from interpreter.run import run
 from tests.covers import covers
-
-_JAR_PATH = os.environ.get(
-    "PROLEAP_BRIDGE_JAR",
-    os.path.expanduser(
-        "~/code/red-dragon/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
-    ),
+from tests.integration.cobol_helpers import (
+    JAR_PATH,
+    JAR_AVAILABLE,
+    decode_zoned_unsigned as _decode_zoned_unsigned,
+    first_region as _first_region,
+    run_cobol as _run_cobol,
 )
-_JAR_AVAILABLE = os.path.isfile(_JAR_PATH)
 
 pytestmark = pytest.mark.skipif(
-    not _JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
+    not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
 )
 
 
@@ -33,22 +31,12 @@ pytestmark = pytest.mark.skipif(
 def _set_bridge_jar_env():
     """Ensure PROLEAP_BRIDGE_JAR is set for the entire test session."""
     old = os.environ.get("PROLEAP_BRIDGE_JAR")
-    os.environ["PROLEAP_BRIDGE_JAR"] = _JAR_PATH
+    os.environ["PROLEAP_BRIDGE_JAR"] = JAR_PATH
     yield
     if old is None:
         os.environ.pop("PROLEAP_BRIDGE_JAR", None)
     else:
         os.environ["PROLEAP_BRIDGE_JAR"] = old
-
-
-def _decode_zoned_unsigned(region: list[int], offset: int, length: int) -> int:
-    """Decode unsigned zoned decimal from a memory region.
-
-    Each byte is EBCDIC zoned: 0xF0=0, 0xF1=1, ..., 0xF9=9.
-    The digit is in the low nibble (b & 0x0F).
-    """
-    digits = [region[offset + i] & 0x0F for i in range(length)]
-    return sum(d * (10 ** (length - 1 - i)) for i, d in enumerate(digits))
 
 
 def _ebcdic_to_ascii(region: list[int], offset: int, length: int) -> str:
@@ -95,27 +83,6 @@ def _ebcdic_to_ascii(region: list[int], offset: int, length: int) -> str:
         else:
             result += f"\\x{byte:02x}"
     return result
-
-
-def _to_fixed(lines: list[str]) -> str:
-    """Convert short-form COBOL lines to FIXED format (columns 1-80).
-
-    Each input line is treated as starting at column 8 (Area A).
-    6 spaces for sequence area + 1 space for indicator area are prepended.
-    """
-    prefix = "       "  # 7 spaces: cols 1-6 (seq) + col 7 (indicator)
-    return "\n".join(prefix + line for line in lines) + "\n"
-
-
-def _run_cobol(lines: list[str], max_steps: int = 1000):
-    """Run a COBOL program through the full pipeline and return VMState."""
-    source = _to_fixed(lines)
-    return run(source=source, language="cobol", max_steps=max_steps)
-
-
-def _first_region(vm):
-    """Return the first memory region from the VM state."""
-    return vm.region_get(list(vm.region_keys())[0])
 
 
 # ---------------------------------------------------------------------------
