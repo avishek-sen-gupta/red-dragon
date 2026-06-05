@@ -6,19 +6,11 @@ from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
-from interpreter.vm.vm import VMState, _resolve_typed_reg, runtime_type_name
-from interpreter.vm.vm_types import StackFrame
-from interpreter.func_name import FuncName
+from interpreter.vm.vm import _resolve_typed_reg, runtime_type_name
 from interpreter.register import Register
-
-
-def _make_vm() -> VMState:
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
-    return vm
+from tests.unit.vm_helpers import make_vm as _make_vm
 
 
 def _type_env_with(register_types: dict) -> TypeEnvironment:

@@ -7,35 +7,26 @@ write time — so str(2) == "2" matches on both store and load.
 
 from types import MappingProxyType
 
-from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.constants import FoundationTypeName
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import scalar
-from interpreter.vm.vm import VMState, apply_update, _heap_addr
-from interpreter.vm.vm_types import StackFrame, StateUpdate
-from interpreter.func_name import FuncName
+from interpreter.vm.vm import apply_update, _heap_addr
+from interpreter.vm.vm_types import StateUpdate
 from interpreter.vm.executor import (
     LocalExecutor,
-    HandlerContext,
     _default_handler_context,
 )
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.register import Register
-
-
-def _make_vm() -> VMState:
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
-    return vm
+from tests.unit.vm_helpers import make_vm as _make_vm
 
 
 def _empty_cfg() -> CFG:
