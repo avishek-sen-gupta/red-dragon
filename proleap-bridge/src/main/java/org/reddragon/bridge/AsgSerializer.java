@@ -7,6 +7,8 @@ import io.proleap.cobol.asg.metamodel.Program;
 import io.proleap.cobol.asg.metamodel.ProgramUnit;
 import io.proleap.cobol.asg.metamodel.data.DataDivision;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
+import io.proleap.cobol.asg.metamodel.data.file.FileDescriptionEntry;
+import io.proleap.cobol.asg.metamodel.data.file.FileSection;
 import io.proleap.cobol.asg.metamodel.data.linkage.LinkageSection;
 import io.proleap.cobol.asg.metamodel.data.localstorage.LocalStorageSection;
 import io.proleap.cobol.asg.metamodel.data.workingstorage.WorkingStorageSection;
@@ -78,7 +80,8 @@ public final class AsgSerializer {
     }
 
     /**
-     * Extracts DATA DIVISION fields from Working-Storage, Linkage, and Local-Storage sections.
+     * Extracts DATA DIVISION fields from Working-Storage, Linkage, Local-Storage,
+     * and File sections.
      */
     private static void serializeDataDivision(ProgramUnit pu, JsonObject asg) {
         DataDivision dataDivision = pu.getDataDivision();
@@ -114,6 +117,23 @@ public final class AsgSerializer {
                 JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
                 asg.add("local_storage_fields", fields);
                 LOG.info("Serialized " + fields.size() + " local-storage fields");
+            }
+        }
+
+        FileSection fileSection = dataDivision.getFileSection();
+        if (fileSection != null) {
+            // Flatten every FD's record entries into one list. For a single FD
+            // (the common case) byte offsets are correct; multiple FDs would get
+            // sequential offsets rather than each starting at 0 — acceptable for
+            // this layout-only slice (no file buffering yet).
+            List<DataDescriptionEntry> rootEntries = new ArrayList<>();
+            for (FileDescriptionEntry fd : fileSection.getFileDescriptionEntries()) {
+                rootEntries.addAll(fd.getRootDataDescriptionEntries());
+            }
+            if (!rootEntries.isEmpty()) {
+                JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
+                asg.add("file_fields", fields);
+                LOG.info("Serialized " + fields.size() + " file-section fields");
             }
         }
     }
