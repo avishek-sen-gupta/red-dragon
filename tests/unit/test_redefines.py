@@ -11,15 +11,10 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm import VMState, apply_update
-from interpreter.vm.vm_types import StackFrame
-from interpreter.func_name import FuncName
 from interpreter.vm.executor import (
     LocalExecutor,
-    HandlerContext,
     _default_handler_context,
 )
-from interpreter.cfg import CFG
-from interpreter.registry import FunctionRegistry
 
 from interpreter.cobol.ir_encoders import (
     build_encode_zoned_ir,
@@ -29,12 +24,7 @@ from interpreter.cobol.ir_encoders import (
 )
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.register import Register
-
-
-def _make_vm() -> VMState:
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
-    return vm
+from tests.unit.vm_helpers import make_vm as _make_vm
 
 
 def _execute(vm: VMState, inst: InstructionBase) -> Any:

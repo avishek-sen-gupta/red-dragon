@@ -10,23 +10,16 @@ from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import typed_from_runtime, unwrap
-from interpreter.vm.vm import VMState, _is_symbolic, apply_update
-from interpreter.vm.vm_types import HeapObject, StackFrame, StateUpdate
-from interpreter.func_name import FuncName
+from interpreter.vm.vm import _is_symbolic, apply_update
+from interpreter.vm.vm_types import HeapObject, StateUpdate
 from interpreter.vm.executor import (
     LocalExecutor,
-    HandlerContext,
     _default_handler_context,
 )
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.register import Register
-
-
-def _make_vm() -> VMState:
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
-    return vm
+from tests.unit.vm_helpers import make_vm as _make_vm
 
 
 def _empty_cfg() -> CFG:
