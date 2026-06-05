@@ -4184,6 +4184,87 @@ class TestSubprogramWsPersistence:
             counter == 2
         ), f"Expected WS-COUNTER=2 after two CALL SUBPROG, got {counter}"
 
+    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
+    @covers(CobolFeature.SECTION_LOCAL_STORAGE)
+    def test_local_storage_reinitializes_on_each_call(self, tmp_path):
+        """LOCAL-STORAGE re-initializes to VALUE on every invocation — the
+        defining contrast with WORKING-STORAGE, which persists across calls
+        (see test_ws_counter_survives_two_calls above).
+
+        LSINC declares LS-COUNTER PIC 9(4) VALUE 5. Each call does
+        ADD 1 TO LS-COUNTER then writes the result back through a BY REFERENCE
+        linkage param. If LOCAL-STORAGE re-initialises per call, both calls
+        compute 5 + 1 = 6. If it wrongly persisted like WORKING-STORAGE, the
+        second call would compute 7. MAINCLR captures each call's result in a
+        distinct field (WS-A, then WS-B) so both invocations are observable.
+        """
+        (tmp_path / "MAINCLR.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINCLR.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-A PIC 9(4) VALUE 0.",
+                    "77 WS-B PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'LSINC' USING BY REFERENCE WS-A.",
+                    "    CALL 'LSINC' USING BY REFERENCE WS-B.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "LSINC.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. LSINC.",
+                    "DATA DIVISION.",
+                    "LOCAL-STORAGE SECTION.",
+                    "77 LS-COUNTER PIC 9(4) VALUE 5.",
+                    "LINKAGE SECTION.",
+                    "01 LK-OUT PIC 9(4).",
+                    "PROCEDURE DIVISION USING LK-OUT.",
+                    "    ADD 1 TO LS-COUNTER.",
+                    "    MOVE LS-COUNTER TO LK-OUT.",
+                    "    GOBACK.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        # Two full CALL round-trips, each with zoned decode + encode (~80
+        # instructions apiece) on both sides, comfortably exceed a 500-step
+        # budget — a too-small budget halts mid-second-call and looks like a
+        # dropped write-back. Give it ample headroom.
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainclr_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=5000,
+        )
+
+        key = VarName("__prog_MAINCLR")
+        ptr = next(
+            (f.local_vars[key] for f in reversed(vm.call_stack) if key in f.local_vars),
+            None,
+        )
+        assert ptr is not None, "__prog_MAINCLR singleton not found in VM state"
+        region = vm.region_get(
+            Address(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+        )
+        assert region is not None, "MAINCLR WS region not found"
+
+        first = _decode_zoned_unsigned(region, offset=0, length=4)  # WS-A
+        second = _decode_zoned_unsigned(region, offset=4, length=4)  # WS-B
+        assert first == 6, f"first call: expected 5 + 1 = 6, got {first}"
+        assert second == 6, (
+            f"second call: expected LS reset to 5 then + 1 = 6, got {second} "
+            "(LOCAL-STORAGE did not re-initialise — it behaved like WORKING-STORAGE)"
+        )
+
 
 class TestCallUsingByReference:
     """CALL USING BY REFERENCE: callee modifies LINKAGE field; caller sees updated WS value."""
