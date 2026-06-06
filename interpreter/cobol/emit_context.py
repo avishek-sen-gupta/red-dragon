@@ -15,6 +15,7 @@ import logging
 from collections.abc import Sequence
 from typing import Any, Callable
 
+from interpreter.cics.strategy import CatchAllLoweringStrategy, ExecCicsStrategy
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
@@ -74,10 +75,12 @@ class EmitContext:
         dispatch_fn: DispatchFn,
         observer: FrontendObserver | None = None,
         condition_index: ConditionNameIndex = ConditionNameIndex({}),
+        exec_cics_strategy: ExecCicsStrategy = CatchAllLoweringStrategy(),  # type: ignore[assignment]
     ) -> None:
         self._dispatch_fn = dispatch_fn
         self._observer = observer
         self._condition_index = condition_index
+        self._exec_cics_strategy = exec_cics_strategy
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
@@ -96,6 +99,10 @@ class EmitContext:
     @section_paragraphs.setter
     def section_paragraphs(self, value: dict[str, list[str]]) -> None:
         self._section_paragraphs = value
+
+    @property
+    def exec_cics_strategy(self) -> ExecCicsStrategy:
+        return self._exec_cics_strategy
 
     # ── Core Primitives ───────────────────────────────────────────
 
