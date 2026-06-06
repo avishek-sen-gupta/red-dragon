@@ -63,6 +63,15 @@ def first_region(vm):
     return vm.region_get(list(vm.region_keys())[0])
 
 
+def all_field_names(fields) -> set[str]:
+    """Recursively collect all field names from a list of CobolFields."""
+    names: set[str] = set()
+    for f in fields:
+        names.add(f.name)
+        names |= all_field_names(f.children)
+    return names
+
+
 @pytest.fixture
 def bridge_jar_env():
     """Ensure PROLEAP_BRIDGE_JAR is set for the duration of the fixture.
