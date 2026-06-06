@@ -731,6 +731,7 @@ def run_linked(
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
+    initial_vm: VMState | None = None,
 ) -> VMState:
     """Execute a LinkedProgram with the given entry point.
 
@@ -761,6 +762,7 @@ def run_linked(
             linked.merged_registry,
             vm_config,
             strategies,
+            vm=initial_vm,
         )
     else:
         # Phase 1: preamble
@@ -771,6 +773,7 @@ def run_linked(
             linked.merged_registry,
             vm_config,
             strategies,
+            vm=initial_vm,
         )
 
         # Resolve entry point function via predicate
