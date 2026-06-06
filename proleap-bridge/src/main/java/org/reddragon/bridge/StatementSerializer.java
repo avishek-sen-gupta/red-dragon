@@ -91,6 +91,7 @@ import io.proleap.cobol.asg.metamodel.procedure.write.WriteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.delete.DeleteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.rewrite.RewriteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.start.StartStatement;
+import io.proleap.cobol.asg.metamodel.procedure.execcics.ExecCicsStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.call.TableCall;
 import io.proleap.cobol.asg.metamodel.valuestmt.ArithmeticValueStmt;
@@ -185,6 +186,8 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.REWRITE) return serializeRewrite((RewriteStatement) stmt);
         if (stmtType == StatementTypeEnum.START) return serializeStart((StartStatement) stmt);
         if (stmtType == StatementTypeEnum.DELETE) return serializeDelete((DeleteStatement) stmt);
+
+        if (stmtType == StatementTypeEnum.EXEC_CICS) return serializeExecCics((ExecCicsStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -1322,6 +1325,15 @@ public final class StatementSerializer {
             }
         } catch (Exception e) {
             LOG.fine("Could not extract DELETE operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeExecCics(ExecCicsStatement stmt) {
+        JsonObject obj = newStatement("EXEC_CICS");
+        String text = stmt.getExecCicsText();
+        if (text != null) {
+            obj.addProperty("exec_cics_text", text);
         }
         return obj;
     }
