@@ -37,6 +37,7 @@ forbidden_modules =
 ignore_imports =
     interpreter.cics.strategy -> interpreter.vm.builtins
     interpreter.cics.builtins.system -> interpreter.vm.vm_types
+    interpreter.cics.builtins.flow -> interpreter.vm.vm_types
 
 [importlinter:contract:frontend-independence]
 name = Language frontends must not import each other
