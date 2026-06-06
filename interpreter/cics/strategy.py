@@ -16,7 +16,8 @@ from interpreter.cics.builtins.system import (
     make_abend_builtin,
 )
 from interpreter.func_name import FuncName
-from interpreter.instructions import CallFunction
+from interpreter.instructions import CallFunction, Const, Return_
+from interpreter.register import NO_REGISTER
 
 if TYPE_CHECKING:
     from interpreter.cobol.emit_context import EmitContext
@@ -37,7 +38,6 @@ _SYS_VERBS: dict[str, str] = {
     "HANDLE ABEND": "__cics_handle_abend",
     "HANDLE CONDITION": "__cics_handle_abend",
     "HANDLE AID": "__cics_handle_abend",
-    "ABEND": "__cics_abend",
 }
 
 
@@ -82,8 +82,12 @@ class CicsLoweringStrategy:
         sysid: str = "SYS1",
     ) -> None:
         self._context_holder = context_holder
-        # Deferred import to avoid violating project-no-vm-internals import contract.
+        # Deferred imports to avoid violating project-no-vm-internals import contract.
         from interpreter.vm.builtins import Builtins  # noqa: PLC0415
+        from interpreter.cics.builtins.flow import (  # noqa: PLC0415
+            make_set_return_context_builtin,
+            make_set_xctl_context_builtin,
+        )
 
         if _BUILTIN_INIT_EIB in Builtins.TABLE:
             logger.warning(
@@ -105,6 +109,16 @@ class CicsLoweringStrategy:
         _register(Builtins.TABLE, "__cics_writeq_td", make_writeq_td_builtin(td))
         _register(Builtins.TABLE, "__cics_handle_abend", make_handle_abend_builtin())
         _register(Builtins.TABLE, "__cics_abend", make_abend_builtin(_holder))
+        _register(
+            Builtins.TABLE,
+            "__cics_set_return_context",
+            make_set_return_context_builtin(_holder),
+        )
+        _register(
+            Builtins.TABLE,
+            "__cics_set_xctl_context",
+            make_set_xctl_context_builtin(_holder),
+        )
 
     def on_procedure_entry(
         self,
@@ -125,18 +139,84 @@ class CicsLoweringStrategy:
         stmt: "ExecCicsStatement",
         materialised: "MaterialisedSectionedLayout",
     ) -> None:
-        builtin_name = _SYS_VERBS.get(stmt.verb)
-        if builtin_name:
+        verb = stmt.verb
+        opts = stmt.options
+
+        # ── Flow control ──────────────────────────────────────────────────
+        if verb == "RETURN":
+            if "TRANSID" in opts:
+                r_transid = ctx.fresh_reg()
+                ctx.emit_inst(
+                    Const(result_reg=r_transid, value=opts.get("TRANSID", ""))
+                )
+                r_ca = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_ca, value=b""))
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName("__cics_set_return_context"),
+                        args=(r_transid, r_ca),
+                    )
+                )
+            else:
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName("__cics_set_return_context"),
+                        args=(),
+                    )
+                )
+            ctx.emit_inst(Return_())
+            return
+
+        if verb == "XCTL":
+            r_prog = ctx.fresh_reg()
+            prog_opt = opts.get("PROGRAM", "")
+            ctx.emit_inst(Const(result_reg=r_prog, value=prog_opt))
+            r_ca = ctx.fresh_reg()
+            ctx.emit_inst(Const(result_reg=r_ca, value=b""))
+            r_res = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
-                    result_reg=ctx.fresh_reg(),
+                    result_reg=r_res,
+                    func_name=FuncName("__cics_set_xctl_context"),
+                    args=(r_prog, r_ca),
+                )
+            )
+            ctx.emit_inst(Return_())
+            return
+
+        if verb == "ABEND":
+            r_code = ctx.fresh_reg()
+            ctx.emit_inst(Const(result_reg=r_code, value=opts.get("ABCODE", "UNKN")))
+            r_res = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=r_res,
+                    func_name=FuncName("__cics_abend"),
+                    args=(r_code,),
+                )
+            )
+            ctx.emit_inst(Return_())
+            return
+
+        # ── System verbs ──────────────────────────────────────────────────
+        builtin_name = _SYS_VERBS.get(verb)
+        if builtin_name:
+            r_res = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=r_res,
                     func_name=FuncName(builtin_name),
                     args=(),
                 )
             )
             return
+
         logger.warning(
-            "CicsLoweringStrategy: unimplemented verb %r — no IR emitted", stmt.verb
+            "CicsLoweringStrategy: unimplemented verb %r — no IR emitted", verb
         )
 
 

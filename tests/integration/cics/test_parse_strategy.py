@@ -69,6 +69,51 @@ def test_catchall_strategy_does_not_raise(cobol_parser):
     assert len(instructions) > 0
 
 
+COBOL_RETURN = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TESTRET.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-DUMMY PIC X.
+       PROCEDURE DIVISION.
+           EXEC CICS RETURN END-EXEC.
+           STOP RUN.
+"""
+
+
+@covers(CobolFeature.EXEC_CICS)
+def test_return_lowers_to_call_and_return(bridge_jar_env, cobol_parser):
+    """EXEC CICS RETURN lowers to __cics_set_return_context call + Return_."""
+    from interpreter.cics.preprocessor import apply_cics_prepass
+    from interpreter.cobol.cobol_frontend import CobolFrontend
+    from interpreter.cics.strategy import CicsLoweringStrategy
+    from interpreter.cics.types import CicsContext
+    from interpreter.ir import Opcode
+    from interpreter.func_name import FuncName
+
+    context_holder = [CicsContext(transid="CC00", commarea=b"", eibaid="\x7d")]
+    result_holder: list = [None]
+    strategy = CicsLoweringStrategy(
+        context_holder=context_holder,
+        result_holder=result_holder,
+    )
+
+    source = apply_cics_prepass(COBOL_RETURN.decode()).encode()
+    frontend = CobolFrontend(cobol_parser=cobol_parser, exec_cics_strategy=strategy)
+    instructions = frontend.lower(source)
+
+    opcodes = [i.opcode for i in instructions]
+    call_names = [
+        i.func_name  # type: ignore[attr-defined]
+        for i in instructions
+        if i.opcode == Opcode.CALL_FUNCTION
+    ]
+    assert (
+        FuncName("__cics_set_return_context") in call_names
+    ), f"__cics_set_return_context not called; calls were {call_names}"
+    assert Opcode.RETURN in opcodes, "Return_ not emitted after EXEC CICS RETURN"
+
+
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
 @covers(CobolFeature.EXEC_CICS)
 def test_dfhaid_copy_resolves_and_exposes_aid_key_constants():
