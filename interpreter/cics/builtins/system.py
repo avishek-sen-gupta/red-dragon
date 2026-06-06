@@ -21,7 +21,9 @@ def _ascii_to_ebcdic_bytes(s: str, length: int) -> list[int]:
     from interpreter.cobol.ebcdic_table import EbcdicTable
 
     padded = s.ljust(length)[:length]
-    return [EbcdicTable.ASCII_TO_EBCDIC[ord(c)] for c in padded]
+    return [
+        EbcdicTable.ASCII_TO_EBCDIC[ord(c)] if ord(c) < 256 else 0x40 for c in padded
+    ]
 
 
 def _get_ws_region_addr(vm: VMState) -> Address | None:
