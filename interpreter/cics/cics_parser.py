@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from lark import Lark, Transformer
+from lark.exceptions import UnexpectedInput
 
 # Grammar for the CICS command body (after stripping EXEC CICS / END-EXEC wrappers).
 # Each token is either KEYWORD(value) or a bare KEYWORD flag.
@@ -14,7 +15,7 @@ _BODY_GRAMMAR = r"""
     token: NAME "(" value ")" -> option
          | NAME               -> flag
 
-    value: /[^)]+/
+    value: /(?:'[^']*'|"[^"]*"|[^)'"]+)+/
 
     NAME: /[A-Za-z][A-Za-z0-9-]*/
 
@@ -31,7 +32,7 @@ _COMPOUND: dict[str, frozenset[str]] = {
 _EXEC_CICS_RE = re.compile(r"^\s*EXEC\s+CICS\s+", re.IGNORECASE)
 _END_EXEC_RE = re.compile(r"\s*END-EXEC\s*$", re.IGNORECASE)
 
-_body_parser = Lark(_BODY_GRAMMAR, parser="earley")
+_body_parser = Lark(_BODY_GRAMMAR, parser="lalr")
 
 
 class _Transformer(Transformer):
@@ -64,11 +65,11 @@ def parse_exec_cics_text(text: str) -> tuple[str, dict[str, str | None]]:
     if not body:
         return "", {}
 
-    tree = _body_parser.parse(body)
+    try:
+        tree = _body_parser.parse(body)
+    except UnexpectedInput as exc:
+        raise ValueError(f"Cannot parse EXEC CICS text: {body!r}") from exc
     tokens: list[tuple[str, str | None]] = _Transformer().transform(tree)
-
-    if not tokens:
-        return "", {}
 
     first_key, first_val = tokens[0]
 

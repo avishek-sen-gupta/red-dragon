@@ -122,6 +122,16 @@ def test_parse_handle_condition():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_handle_aid():
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS HANDLE AID PF3(PF3-HANDLER) CLEAR(CLEAR-HANDLER) END-EXEC"
+    )
+    assert verb == "HANDLE AID"
+    assert opts["PF3"] == "PF3-HANDLER"
+    assert opts["CLEAR"] == "CLEAR-HANDLER"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_parse_multiline():
     verb, opts = parse_exec_cics_text(
         "EXEC CICS\n    READ FILE('ACCTDAT')\n    INTO(WS-REC)\n    RESP(WS-RESP) END-EXEC"
