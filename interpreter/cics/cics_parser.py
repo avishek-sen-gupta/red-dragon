@@ -1,50 +1,93 @@
-"""Parse EXEC CICS text into (verb, options) for ExecCicsStatement."""
+"""Parse EXEC CICS text into (verb, options) using a Lark PEG grammar."""
 
 from __future__ import annotations
 
 import re
 
-# Compound verbs detected by first word + second word prefix
-_COMPOUND_FIRST = {"SEND", "RECEIVE", "HANDLE"}
-_COMPOUND_SECOND: dict[str, set[str]] = {
-    "SEND": {"MAP", "TEXT"},
-    "RECEIVE": {"MAP"},
-    "HANDLE": {"ABEND", "CONDITION", "AID"},
+from lark import Lark, Transformer
+
+# Grammar for the CICS command body (after stripping EXEC CICS / END-EXEC wrappers).
+# Each token is either KEYWORD(value) or a bare KEYWORD flag.
+_BODY_GRAMMAR = r"""
+    start: token+
+
+    token: NAME "(" value ")" -> option
+         | NAME               -> flag
+
+    value: /[^)]+/
+
+    NAME: /[A-Za-z][A-Za-z0-9-]*/
+
+    %ignore /\s+/
+"""
+
+# Compound verbs: first word → valid second words
+_COMPOUND: dict[str, frozenset[str]] = {
+    "SEND": frozenset({"MAP", "TEXT"}),
+    "RECEIVE": frozenset({"MAP"}),
+    "HANDLE": frozenset({"ABEND", "CONDITION", "AID"}),
 }
 
-_EXEC_CICS_PREFIX = re.compile(r"^\s*EXEC\s+CICS\s+", re.IGNORECASE)
-_END_EXEC_SUFFIX = re.compile(r"\s*END-EXEC\s*$", re.IGNORECASE)
-_OPTION_RE = re.compile(r"([A-Z][A-Z0-9-]*)(?:\(([^)]*)\))?", re.IGNORECASE)
+_EXEC_CICS_RE = re.compile(r"^\s*EXEC\s+CICS\s+", re.IGNORECASE)
+_END_EXEC_RE = re.compile(r"\s*END-EXEC\s*$", re.IGNORECASE)
+
+_body_parser = Lark(_BODY_GRAMMAR, parser="earley")
+
+
+class _Transformer(Transformer):
+    def start(self, items: list) -> list[tuple[str, str | None]]:
+        return items
+
+    def option(self, items: list) -> tuple[str, str | None]:
+        key = str(items[0]).upper()
+        val = str(items[1]).strip().strip("'\"")
+        return (key, val)
+
+    def flag(self, items: list) -> tuple[str, str | None]:
+        return (str(items[0]).upper(), None)
+
+    def value(self, items: list) -> str:
+        return str(items[0])
 
 
 def parse_exec_cics_text(text: str) -> tuple[str, dict[str, str | None]]:
-    """Parse 'EXEC CICS VERB OPT1(val) FLAG END-EXEC' → (verb, {OPT1: val, FLAG: None})."""
-    body = _EXEC_CICS_PREFIX.sub("", text.strip())
-    body = _END_EXEC_SUFFIX.sub("", body).strip()
+    """Parse 'EXEC CICS VERB OPT(val) FLAG END-EXEC' → (verb, {OPT: val, FLAG: None}).
+
+    Compound verbs (SEND MAP, RECEIVE MAP, HANDLE ABEND, etc.) are detected and
+    their second word is excluded from opts when it is a bare keyword.
+    When the second word carries a value (e.g. MAP('COSGN0A')), that value is
+    included in opts under the second word's key.
+    """
+    body = _EXEC_CICS_RE.sub("", text.strip())
+    body = _END_EXEC_RE.sub("", body).strip()
 
     if not body:
         return "", {}
 
-    words = body.split()
-    first = words[0].upper()
+    tree = _body_parser.parse(body)
+    tokens: list[tuple[str, str | None]] = _Transformer().transform(tree)
 
-    if first in _COMPOUND_FIRST and len(words) >= 2:
-        second_prefix = words[1].split("(")[0].upper()
-        if second_prefix in _COMPOUND_SECOND.get(first, set()):
-            verb = f"{first} {second_prefix}"
-            options_body = body[len(words[0]) :].strip()
-            return verb, _parse_options(options_body)
+    if not tokens:
+        return "", {}
 
-    options_body = body[len(words[0]) :].strip()
-    return first, _parse_options(options_body)
+    first_key, first_val = tokens[0]
 
+    # Single-word verb (first token has a value — unusual but safe)
+    if first_val is not None:
+        return first_key, dict(tokens[1:])
 
-def _parse_options(text: str) -> dict[str, str | None]:
-    options: dict[str, str | None] = {}
-    for m in _OPTION_RE.finditer(text):
-        key = m.group(1).upper()
-        val = m.group(2)
-        if val is not None:
-            val = val.strip().strip("'\"")
-        options[key] = val
-    return options
+    # Check for compound verb
+    if first_key in _COMPOUND and len(tokens) > 1:
+        second_key, second_val = tokens[1]
+        if second_key in _COMPOUND[first_key]:
+            verb = f"{first_key} {second_key}"
+            rest = list(tokens[2:])
+            if second_val is not None:
+                # Second word carried a value (e.g. MAP('name')) — include it
+                opts = {second_key: second_val, **dict(rest)}
+            else:
+                # Second word was bare — it is purely part of the verb name
+                opts = dict(rest)
+            return verb, opts
+
+    return first_key, dict(tokens[1:])
