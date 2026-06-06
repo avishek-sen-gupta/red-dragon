@@ -186,7 +186,6 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.REWRITE) return serializeRewrite((RewriteStatement) stmt);
         if (stmtType == StatementTypeEnum.START) return serializeStart((StartStatement) stmt);
         if (stmtType == StatementTypeEnum.DELETE) return serializeDelete((DeleteStatement) stmt);
-
         if (stmtType == StatementTypeEnum.EXEC_CICS) return serializeExecCics((ExecCicsStatement) stmt);
 
         return serializeUnknown(stmtType);
