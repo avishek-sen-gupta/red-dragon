@@ -85,10 +85,10 @@ def make_assign_builtin(applid: str = "CARDDEMO", sysid: str = "SYS1") -> object
 
 def make_asktime_builtin() -> object:
     def __cics_asktime(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
-        epoch_1900 = datetime(1900, 1, 1)
-        now = datetime.utcnow()
+        epoch_1900 = datetime(1900, 1, 1, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         abstime = int((now - epoch_1900).total_seconds() * 1_000_000)
         return BuiltinResult(value=abstime)
 
@@ -97,9 +97,9 @@ def make_asktime_builtin() -> object:
 
 def make_formattime_builtin() -> object:
     def __cics_formattime(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
-        return BuiltinResult(value=datetime.utcnow().strftime("%Y%m%d"))
+        return BuiltinResult(value=datetime.now(timezone.utc).strftime("%Y%m%d"))
 
     return __cics_formattime
 
