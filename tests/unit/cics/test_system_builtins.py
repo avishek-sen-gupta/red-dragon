@@ -4,6 +4,7 @@ from tests.covers import covers, NotLanguageFeature
 from interpreter.cics.builtins.system import (
     make_assign_builtin,
     make_asktime_builtin,
+    make_formattime_builtin,
     make_writeq_td_builtin,
     make_handle_abend_builtin,
     make_abend_builtin,
@@ -33,6 +34,18 @@ def test_asktime_builtin_returns_positive_integer():
     assert isinstance(result, BuiltinResult)
     assert isinstance(result.value, int)
     assert result.value > 0
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_formattime_builtin_returns_yyyymmdd():
+    import re
+
+    builtin = make_formattime_builtin()
+    result = builtin([], _vm())
+    assert isinstance(result, BuiltinResult)
+    assert re.fullmatch(
+        r"\d{8}", str(result.value)
+    ), f"Expected YYYYMMDD, got {result.value!r}"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
