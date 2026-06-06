@@ -14,6 +14,7 @@ from typing import Union
 
 from interpreter.cobol.ref_mod import RefModOperand
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict
+from interpreter.cics.cics_parser import parse_exec_cics_text
 
 # ── PERFORM specs ────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ CobolStatementType = Union[
     "RewriteStatement",
     "StartStatement",
     "DeleteStatement",
+    "ExecCicsStatement",
 ]
 
 
@@ -964,6 +966,23 @@ class DeleteStatement:
         return {"type": "DELETE", "file_name": self.file_name}
 
 
+@dataclass(frozen=True)
+class ExecCicsStatement:
+    """EXEC CICS verb-with-options block."""
+
+    verb: str
+    options: dict[str, str | None]
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ExecCicsStatement":
+        text = data.get("exec_cics_text", "")
+        verb, options = parse_exec_cics_text(text)
+        return cls(verb=verb, options=options)
+
+    def to_dict(self) -> dict:
+        return {"type": "EXEC_CICS", "verb": self.verb, "options": self.options}
+
+
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -1086,6 +1105,7 @@ _DISPATCH_TABLE: dict[str, type] = {
     "REWRITE": RewriteStatement,
     "START": StartStatement,
     "DELETE": DeleteStatement,
+    "EXEC_CICS": ExecCicsStatement,
 }
 
 
