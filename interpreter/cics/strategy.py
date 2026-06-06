@@ -46,12 +46,18 @@ class CicsLoweringStrategy:
 
     def __init__(
         self,
-        context_holder: list,  # list[CicsContext] — avoid circular import
+        context_holder: "list[CicsContext]",
     ) -> None:
         self._context_holder = context_holder
         # Deferred import to avoid violating project-no-vm-internals import contract.
         from interpreter.vm.builtins import Builtins  # noqa: PLC0415
 
+        if _BUILTIN_INIT_EIB in Builtins.TABLE:
+            logger.warning(
+                "Builtins.TABLE already contains %s — overwriting. "
+                "Multiple CicsLoweringStrategy instances in one process is unsupported.",
+                _BUILTIN_INIT_EIB,
+            )
         init_eib = make_init_eib_builtin(context_holder)
         Builtins.TABLE[_BUILTIN_INIT_EIB] = init_eib
 
