@@ -40,6 +40,7 @@ from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
+from interpreter.cics.strategy import CatchAllLoweringStrategy, ExecCicsStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import CodeLabel
@@ -63,13 +64,16 @@ class CobolFrontend(Frontend):
         self,
         cobol_parser: CobolParser,
         observer: FrontendObserver = NullFrontendObserver(),
+        exec_cics_strategy: ExecCicsStrategy = CatchAllLoweringStrategy(),  # type: ignore[assignment]
     ):
         self._parser = cobol_parser
         self._observer = observer
+        self._exec_cics_strategy = exec_cics_strategy
         self._layout = DataLayout()
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
             observer=observer,
+            exec_cics_strategy=exec_cics_strategy,
         )
 
     @property
@@ -173,6 +177,7 @@ class CobolFrontend(Frontend):
             dispatch_fn=dispatch_statement,
             observer=self._observer,
             condition_index=condition_index,
+            exec_cics_strategy=self._exec_cics_strategy,
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
