@@ -71,3 +71,26 @@ def test_apply_cics_prepass_combines_both():
     assert "COPY DFHEIBLK." in result
     assert "DFHRESP" not in result
     assert "0" in result
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_inject_dfheiblk_injects_only_once():
+    """Malformed source with two WS sections gets exactly one injection."""
+    source = (
+        "       WORKING-STORAGE SECTION.\n"
+        "       01 X PIC X.\n"
+        "       WORKING-STORAGE SECTION.\n"
+        "       01 Y PIC X.\n"
+    )
+    result = inject_dfheiblk(source)
+    assert result.count("COPY DFHEIBLK.") == 1
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_substitute_dfhresp_unknown_logs_warning(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="interpreter.cics.preprocessor"):
+        result = substitute_dfhresp("IF X = DFHRESP(UNKNOWNCODE)")
+    assert "UNKNOWNCODE" in caplog.text
+    assert "DFHRESP" not in result  # still substituted, not left as-is
