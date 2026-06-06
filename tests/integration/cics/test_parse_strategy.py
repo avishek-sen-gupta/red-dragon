@@ -15,7 +15,13 @@ from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
-from tests.integration.cobol_helpers import JAR_AVAILABLE, JAR_PATH, to_fixed
+from tests.integration.cobol_helpers import (
+    JAR_AVAILABLE,
+    JAR_PATH,
+    all_field_names as _all_field_names,
+    bridge_jar_env,
+    to_fixed,
+)
 
 pytestmark = pytest.mark.skipif(
     not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
@@ -24,13 +30,10 @@ pytestmark = pytest.mark.skipif(
 _CICS_COPYBOOKS = Path(__file__).parents[3] / "interpreter" / "cics" / "copybooks"
 
 
-def _all_field_names(fields) -> set[str]:
-    """Recursively collect all field names from a list of CobolFields."""
-    names: set[str] = set()
-    for f in fields:
-        names.add(f.name)
-        names |= _all_field_names(f.children)
-    return names
+@pytest.fixture(autouse=True)
+def _bridge_jar_env(bridge_jar_env):
+    """Auto-apply the shared PROLEAP_BRIDGE_JAR env fixture to every test here."""
+    yield
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
