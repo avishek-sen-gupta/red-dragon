@@ -9,7 +9,7 @@ from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 from interpreter.address import Address
 from interpreter.types.typed_value import typed
-from interpreter.types.type_expr import scalar
+from interpreter.types.type_expr import UNKNOWN
 
 
 def _make_vm_with_ws_region(region_bytes: bytearray) -> tuple[VMState, Address]:
@@ -18,7 +18,7 @@ def _make_vm_with_ws_region(region_bytes: bytearray) -> tuple[VMState, Address]:
     vm.region_set(addr, region_bytes)
     frame = StackFrame(
         function_name=FuncName("main"),
-        local_vars={VarName("__ws_region"): typed(str(addr), scalar("str"))},
+        local_vars={VarName("__ws_region"): typed(str(addr), UNKNOWN)},
     )
     vm.call_stack.append(frame)
     vm.data_layout = {
@@ -62,5 +62,6 @@ def test_eib_init_writes_zero_calen_for_empty_commarea():
     vm, addr = _make_vm_with_ws_region(bytearray(64))
     builtin([], vm)
     region = vm.region_get(addr)
+    assert region is not None
     calen = struct.unpack(">h", bytes(region[4:6]))[0]
     assert calen == 0
