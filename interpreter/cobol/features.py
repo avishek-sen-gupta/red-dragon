@@ -182,3 +182,4 @@ class CobolFeature(Enum):
     NUMERIC_EXECUTION = "decimal arithmetic runtime for COBOL numeric types"
     FRONTEND_IDEMPOTENCY = "re-entrant lowering producing the same IR on repeated calls"
     BARE_STATEMENTS = "statements without an enclosing PROGRAM-ID structure"
+    EXEC_CICS = "EXEC CICS statement lowering via injectable ExecCicsStrategy"
