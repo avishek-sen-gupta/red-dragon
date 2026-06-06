@@ -75,7 +75,7 @@ class EmitContext:
         dispatch_fn: DispatchFn,
         observer: FrontendObserver | None = None,
         condition_index: ConditionNameIndex = ConditionNameIndex({}),
-        exec_cics_strategy: ExecCicsStrategy = CatchAllLoweringStrategy(),  # type: ignore[assignment]
+        exec_cics_strategy: ExecCicsStrategy = CatchAllLoweringStrategy(),  # type: ignore[assignment]  # Pyright can't infer structural Protocol match for default args
     ) -> None:
         self._dispatch_fn = dispatch_fn
         self._observer = observer

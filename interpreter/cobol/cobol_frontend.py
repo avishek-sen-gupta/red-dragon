@@ -64,7 +64,7 @@ class CobolFrontend(Frontend):
         self,
         cobol_parser: CobolParser,
         observer: FrontendObserver = NullFrontendObserver(),
-        exec_cics_strategy: ExecCicsStrategy = CatchAllLoweringStrategy(),  # type: ignore[assignment]
+        exec_cics_strategy: ExecCicsStrategy = CatchAllLoweringStrategy(),  # type: ignore[assignment]  # Pyright can't infer structural Protocol match for default args
     ):
         self._parser = cobol_parser
         self._observer = observer
