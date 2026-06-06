@@ -70,6 +70,7 @@ def test_catchall_strategy_does_not_raise(cobol_parser):
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
+@covers(CobolFeature.EXEC_CICS)
 def test_dfhaid_copy_resolves_and_exposes_aid_key_constants():
     """COPY DFHAID resolves to the canonical copybook and exposes DFHENTER and DFHPF3."""
     source = to_fixed(

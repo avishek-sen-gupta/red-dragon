@@ -158,6 +158,7 @@ def dispatch_statement(
         lower_start(ctx, stmt, materialised)
     elif isinstance(stmt, DeleteStatement):
         lower_delete(ctx, stmt, materialised)
+    # ── CICS ──────────────────────────────────────────────
     elif isinstance(stmt, ExecCicsStatement):
         ctx.exec_cics_strategy.lower(ctx, stmt, materialised)
     else:

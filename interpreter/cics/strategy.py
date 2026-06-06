@@ -42,7 +42,7 @@ class CatchAllLoweringStrategy:
         ctx: "EmitContext",
         materialised: "MaterialisedSectionedLayout",
     ) -> None:
-        pass
+        logger.debug("on_procedure_entry: no-op (CatchAllLoweringStrategy)")
 
     def lower(
         self,
