@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 _DFHRESP_TABLE: dict[str, int] = {
     "NORMAL": 0,
@@ -12,7 +15,7 @@ _DFHRESP_TABLE: dict[str, int] = {
     "DISABLED": 84,
     "ILLOGIC": 21,
     "IOERR": 17,
-    "LENOVF": 27,
+    "LENOVF": 522,  # was 27, which collides with PGMIDERR
     "LENGERR": 22,
     "NOSPACE": 18,
     "NOTOPEN": 19,
@@ -32,6 +35,7 @@ _DFHRESP_TABLE: dict[str, int] = {
 _WS_SECTION_RE = re.compile(r"^(\s*)WORKING-STORAGE\s+SECTION\s*\.", re.IGNORECASE)
 _DFHRESP_RE = re.compile(r"DFHRESP\((\w+)\)", re.IGNORECASE)
 
+# 7 spaces = Area A (column 8); valid for COPY, matches IBM CICS translator output
 _DFHEIBLK_COPY = "       COPY DFHEIBLK."
 
 
@@ -39,11 +43,13 @@ def inject_dfheiblk(source: str) -> str:
     """Insert COPY DFHEIBLK. on the line immediately after WORKING-STORAGE SECTION."""
     lines = source.splitlines(keepends=True)
     result: list[str] = []
+    injected = False
     for line in lines:
         result.append(line)
-        if _WS_SECTION_RE.match(line):
+        if not injected and _WS_SECTION_RE.match(line):
             ending = "\r\n" if line.endswith("\r\n") else "\n"
             result.append(_DFHEIBLK_COPY + ending)
+            injected = True
     return "".join(result)
 
 
@@ -52,6 +58,8 @@ def substitute_dfhresp(source: str) -> str:
 
     def _replace(m: re.Match) -> str:
         name = m.group(1).upper()
+        if name not in _DFHRESP_TABLE:
+            logger.warning("Unknown DFHRESP condition %r — substituting 0", name)
         return str(_DFHRESP_TABLE.get(name, 0))
 
     return _DFHRESP_RE.sub(_replace, source)
