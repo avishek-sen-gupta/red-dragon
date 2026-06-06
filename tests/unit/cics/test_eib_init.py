@@ -4,6 +4,7 @@ import struct
 from tests.covers import covers, NotLanguageFeature
 from interpreter.cics.types import CicsContext
 from interpreter.cics.builtins.system import make_init_eib_builtin
+from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.vm.vm_types import VMState, StackFrame, BuiltinResult
 from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
@@ -40,7 +41,10 @@ def test_eib_init_writes_transid():
     assert isinstance(result, BuiltinResult)
     region = vm.region_get(addr)
     assert region is not None
-    assert region[0:4] != bytearray(4)  # EIBTRNID written
+    expected_eibtrnid = [EbcdicTable.ASCII_TO_EBCDIC[ord(c)] for c in "CC00"]
+    assert list(region[0:4]) == expected_eibtrnid
+    assert region[6] == 0x7D  # EIBAID = DFHENTER (the eibaid value passed)
+    assert list(region[7:11]) == [0, 0, 0, 0]  # EIBRESP = 0
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
