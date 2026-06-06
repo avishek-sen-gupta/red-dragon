@@ -17,7 +17,6 @@ from interpreter.cics.builtins.system import (
 )
 from interpreter.func_name import FuncName
 from interpreter.instructions import CallFunction, Const, Return_
-from interpreter.register import NO_REGISTER
 
 if TYPE_CHECKING:
     from interpreter.cobol.emit_context import EmitContext
