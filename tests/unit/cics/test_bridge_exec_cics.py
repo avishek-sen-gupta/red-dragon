@@ -1,12 +1,17 @@
 """Verify the ProLeap bridge emits exec_cics_text for EXEC CICS statements."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from tests.covers import covers, NotLanguageFeature
 
-BRIDGE_JAR = "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
+REPO_ROOT = Path(__file__).parents[3]
+BRIDGE_JAR = "proleap-bridge.jar"
+JAR_AVAILABLE = os.path.isfile(REPO_ROOT / BRIDGE_JAR)
 
 COBOL_WITH_EXEC_CICS = """\
        IDENTIFICATION DIVISION.
@@ -21,6 +26,7 @@ COBOL_WITH_EXEC_CICS = """\
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.skipif(not JAR_AVAILABLE, reason="bridge JAR not available")
 def test_bridge_emits_exec_cics_text():
     result = subprocess.run(
         ["java", "-jar", BRIDGE_JAR],
@@ -28,7 +34,7 @@ def test_bridge_emits_exec_cics_text():
         capture_output=True,
         text=True,
         timeout=30,
-        cwd="/Users/asgupta/code/red-dragon",
+        cwd=str(REPO_ROOT),
     )
     assert result.returncode == 0, result.stderr
     asg = json.loads(result.stdout)
