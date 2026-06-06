@@ -109,3 +109,23 @@ def test_parse_assign():
     assert verb == "ASSIGN"
     assert opts["APPLID"] == "WS-APPL"
     assert opts["SYSID"] == "WS-SYS"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_handle_condition():
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS HANDLE CONDITION NOTFND(NOT-FOUND-RTN) ERROR(ERROR-RTN) END-EXEC"
+    )
+    assert verb == "HANDLE CONDITION"
+    assert opts["NOTFND"] == "NOT-FOUND-RTN"
+    assert opts["ERROR"] == "ERROR-RTN"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_multiline():
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS\n    READ FILE('ACCTDAT')\n    INTO(WS-REC)\n    RESP(WS-RESP) END-EXEC"
+    )
+    assert verb == "READ"
+    assert opts["FILE"] == "ACCTDAT"
+    assert opts["RESP"] == "WS-RESP"
