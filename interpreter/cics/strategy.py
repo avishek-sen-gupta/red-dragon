@@ -103,7 +103,7 @@ def emit_copy_back_str(
 def emit_resp_writeback(
     ctx: "EmitContext",
     r_resp_result: "Register",
-    opts: dict[str, str],
+    opts: dict[str, str | None],
     materialised: "MaterialisedSectionedLayout",
 ) -> None:
     """Write a builtin's returned resp code into EIBRESP (always) and RESP(name) if present.
@@ -355,6 +355,47 @@ class CicsLoweringStrategy:
                     args=(r_map, r_set, r_region),
                 )
             )
+            return
+
+        # ── ASSIGN / FORMATTIME: write each output sub-option to its field ──
+        if verb == "ASSIGN":
+            for subopt in ("APPLID", "SYSID"):
+                field_name = opts.get(subopt)
+                if field_name is None:
+                    continue
+                r_key = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_key, value=subopt))
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName("__cics_assign"),
+                        args=(r_key,),
+                    )
+                )
+                str_reg = ctx.emit_to_string(r_res)
+                emit_copy_back_str(ctx, field_name, str_reg, materialised)
+            return
+
+        if verb == "FORMATTIME":
+            # ABSTIME(src) names the time base; each remaining output sub-option
+            # names a field to receive a formatted value.
+            for subopt in ("YYYYMMDD", "DATE", "TIME"):
+                field_name = opts.get(subopt)
+                if field_name is None:
+                    continue
+                r_key = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_key, value=subopt))
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName("__cics_formattime"),
+                        args=(r_key,),
+                    )
+                )
+                str_reg = ctx.emit_to_string(r_res)
+                emit_copy_back_str(ctx, field_name, str_reg, materialised)
             return
 
         # ── System verbs ──────────────────────────────────────────────────
