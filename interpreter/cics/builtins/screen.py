@@ -53,6 +53,38 @@ def make_send_map_builtin(
     return __cics_send_map
 
 
+_DFHENTER = "\x7d"
+
+
+def _write_eibaid(vm: VMState, aid: str) -> None:
+    """Write the attention id into the EIB's EIBAID field in the WS region.
+
+    Mirrors ``make_init_eib_builtin``'s single-byte EIBAID write. Missing WS
+    region or no EIBAID in the data layout → log + skip (non-fatal).
+    """
+    from interpreter.cics.builtins.system import _get_ws_region_addr
+
+    if vm is None:
+        logger.warning("RECEIVE MAP: no VM state — EIBAID not updated")
+        return
+    addr = _get_ws_region_addr(vm)
+    if addr is None:
+        logger.warning("RECEIVE MAP: no __ws_region in VM — EIBAID not updated")
+        return
+    region = vm.region_get(addr)
+    if region is None:
+        logger.warning("RECEIVE MAP: WS region not allocated — EIBAID not updated")
+        return
+    f = vm.data_layout.get("EIBAID")
+    if f is None:
+        logger.warning("RECEIVE MAP: EIBAID not in data layout — EIBAID not updated")
+        return
+    off = f["offset"]
+    aid_byte = ord(aid) if aid else 0x7D
+    region[off : off + 1] = bytes([aid_byte])
+    vm.region_set(addr, region)
+
+
 def make_receive_map_builtin(
     loader: BmsLoader, input_queue: "queue.Queue[Any]", timeout: float = 30.0
 ) -> object:
@@ -65,10 +97,15 @@ def make_receive_map_builtin(
                 "RECEIVE MAP: unknown map %s — blocking on input_queue", map_name
             )
         try:
-            field_values: dict[str, bytes | str] = input_queue.get(timeout=timeout)
+            item: Any = input_queue.get(timeout=timeout)
         except queue.Empty:
             logger.warning("RECEIVE MAP: timeout waiting for input")
             return BuiltinResult(value=bytes(region))
+        # Duck-type the queue item: an InputEvent carries .fields and .eibaid;
+        # a plain dict (legacy producers) is the field map with a default aid.
+        field_values: dict[str, bytes | str] = getattr(item, "fields", item)
+        aid: str = getattr(item, "eibaid", _DFHENTER)
+        _write_eibaid(vm, aid)
         if bms_map is not None:
             cp037_space = " ".encode("cp037")  # 0x40
             encoded: dict[str, bytes] = {}

@@ -9,9 +9,13 @@ from interpreter.cics.builtins.screen import (
     make_receive_map_builtin,
     make_send_text_builtin,
 )
+from interpreter.cics.dispatcher import InputEvent
+from interpreter.func_name import FuncName
+from interpreter.var_name import VarName
+from interpreter.address import Address
 from interpreter.types.typed_value import typed
 from interpreter.types.type_expr import UNKNOWN
-from interpreter.vm.vm_types import VMState, BuiltinResult
+from interpreter.vm.vm_types import VMState, StackFrame, BuiltinResult
 
 
 def _make_loader() -> BmsLoader:
@@ -106,6 +110,74 @@ def test_receive_map_timeout_returns_unchanged_region():
     ]
     result = builtin(args, VMState())
     assert bytes(result.value) == b"X" * 16
+
+
+def _make_vm_with_ws_region(region_bytes: bytearray) -> tuple[VMState, Address]:
+    vm = VMState()
+    addr = Address("ws_region_0")
+    vm.region_set(addr, region_bytes)
+    frame = StackFrame(
+        function_name=FuncName("main"),
+        local_vars={VarName("__ws_region"): typed(str(addr), UNKNOWN)},
+    )
+    vm.call_stack.append(frame)
+    vm.data_layout = {
+        "EIBAID": {"offset": 0, "length": 1, "category": "ALPHANUMERIC"},
+    }
+    return vm, addr
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_receive_map_writes_eibaid_from_input_event():
+    input_q: queue.Queue = queue.Queue()
+    loader = _make_loader()
+    input_q.put(
+        InputEvent(
+            eibaid="\x33", fields={"USERID": b"ALICE   ", "PASSWORD": b"SECRET  "}
+        )
+    )
+    builtin = make_receive_map_builtin(loader, input_q)
+    vm, addr = _make_vm_with_ws_region(bytearray(8))
+    args = [
+        typed("COSGN0A", UNKNOWN),
+        typed("COSGN0", UNKNOWN),
+        typed(b" " * 16, UNKNOWN),
+    ]
+    result = builtin(args, vm)
+    # Field values still land in the INTO region.
+    region = bytes(result.value)
+    assert region[0:8] == b"ALICE   "
+    assert region[8:16] == b"SECRET  "
+    # The attention key is written into EIBAID in the WS region.
+    ws = vm.region_get(addr)
+    assert ws is not None
+    assert ws[0] == ord("\x33")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_receive_map_backcompat_dict_leaves_eibaid_default():
+    input_q: queue.Queue = queue.Queue()
+    loader = _make_loader()
+    # Plain dict on the queue (legacy producers) — treated as field values.
+    input_q.put({"USERID": b"BOB     ", "PASSWORD": b"PW      "})
+    builtin = make_receive_map_builtin(loader, input_q)
+    vm, addr = _make_vm_with_ws_region(bytearray(8))
+    # Pre-seed EIBAID with a sentinel so a default write is observable.
+    ws = vm.region_get(addr)
+    assert ws is not None
+    ws[0] = 0x00
+    vm.region_set(addr, ws)
+    args = [
+        typed("COSGN0A", UNKNOWN),
+        typed("COSGN0", UNKNOWN),
+        typed(b" " * 16, UNKNOWN),
+    ]
+    result = builtin(args, vm)
+    region = bytes(result.value)
+    assert region[0:8] == b"BOB     "
+    ws = vm.region_get(addr)
+    assert ws is not None
+    assert ws[0] == 0x7D  # default DFHENTER
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
