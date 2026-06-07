@@ -755,6 +755,12 @@ def run_linked(
         io_provider=io_provider,
     )
 
+    # Make the data layout visible to builtins that run *during* execution
+    # (e.g. CICS EIB-init and SEND/RECEIVE MAP read named fields via
+    # vm.data_layout). Without this it would only be populated after the run.
+    if initial_vm is not None:
+        initial_vm.data_layout = linked.data_layout
+
     if entry_point.is_top_level:
         vm, exec_stats = execute_cfg(
             linked.merged_cfg,

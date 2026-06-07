@@ -129,6 +129,7 @@ def _write_eibaid(vm: VMState, aid: str) -> None:
     if region is None:
         logger.warning("RECEIVE MAP: no WS region — EIBAID not updated")
         return
+    assert addr is not None  # region non-None implies addr non-None (_ws_region)
     aid_byte = ord(aid) if aid else 0x7D
     if _write_ws_field(vm, region, "EIBAID", bytes([aid_byte])):
         vm.region_set(addr, region)
@@ -175,6 +176,7 @@ def make_receive_map_builtin(
                     wrote_symbolic = True
                     _write_ws_field(vm, ws, length_name, struct.pack(">h", len(raw)))
             if wrote_symbolic:
+                assert addr is not None  # ws non-None implies addr non-None
                 vm.region_set(addr, ws)
                 return BuiltinResult(value=bytes(region))
 
