@@ -29,6 +29,28 @@ def test_assign_builtin_is_callable():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_assign_builtin_returns_applid_for_applid_key():
+    builtin = make_assign_builtin(applid="CARDDEMO", sysid="SYS1")
+    result = builtin([typed("APPLID", UNKNOWN)], _vm())
+    assert isinstance(result, BuiltinResult)
+    assert result.value == "CARDDEMO"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_assign_builtin_returns_sysid_for_sysid_key():
+    builtin = make_assign_builtin(applid="CARDDEMO", sysid="SYS1")
+    result = builtin([typed("SYSID", UNKNOWN)], _vm())
+    assert result.value == "SYS1"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_assign_builtin_returns_empty_for_unknown_key():
+    builtin = make_assign_builtin(applid="CARDDEMO", sysid="SYS1")
+    result = builtin([typed("BOGUS", UNKNOWN)], _vm())
+    assert result.value == ""
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_asktime_builtin_returns_positive_integer():
     builtin = make_asktime_builtin()
     result = builtin([], _vm())
@@ -47,6 +69,29 @@ def test_formattime_builtin_returns_yyyymmdd():
     assert re.fullmatch(
         r"\d{8}", str(result.value)
     ), f"Expected YYYYMMDD, got {result.value!r}"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_formattime_builtin_returns_yyyymmdd_for_key():
+    import re
+
+    builtin = make_formattime_builtin()
+    result = builtin([typed("YYYYMMDD", UNKNOWN)], _vm())
+    assert isinstance(result, BuiltinResult)
+    assert re.fullmatch(
+        r"\d{8}", str(result.value)
+    ), f"Expected YYYYMMDD, got {result.value!r}"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_formattime_builtin_returns_time_for_time_key():
+    import re
+
+    builtin = make_formattime_builtin()
+    result = builtin([typed("TIME", UNKNOWN)], _vm())
+    assert re.fullmatch(
+        r"\d{6}", str(result.value)
+    ), f"Expected HHMMSS, got {result.value!r}"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

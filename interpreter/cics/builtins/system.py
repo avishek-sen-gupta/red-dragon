@@ -77,8 +77,19 @@ def make_init_eib_builtin(context_holder: list[CicsContext]) -> object:
 
 
 def make_assign_builtin(applid: str = "CARDDEMO", sysid: str = "SYS1") -> object:
+    """Return a builtin that yields the value of an ASSIGN output sub-option.
+
+    Called once per output sub-option with the sub-option key in ``args[0]``
+    (e.g. "APPLID", "SYSID"); returns the configured value so the caller can
+    copy it back into the named field. Unknown keys (and the no-arg call) yield
+    an empty string.
+    """
+
+    values = {"APPLID": applid, "SYSID": sysid}
+
     def __cics_assign(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-        return BuiltinResult(value=None)
+        key = str(args[0].value).strip().upper() if args else ""
+        return BuiltinResult(value=values.get(key, ""))
 
     return __cics_assign
 
@@ -96,10 +107,21 @@ def make_asktime_builtin() -> object:
 
 
 def make_formattime_builtin() -> object:
+    """Return a builtin that formats the current time per a FORMATTIME sub-option.
+
+    Called once per output sub-option with the sub-option key in ``args[0]``:
+    "YYYYMMDD" → ``%Y%m%d``, "DATE" → ``%Y%m%d``, "TIME" → ``%H%M%S``. The no-arg
+    call defaults to YYYYMMDD (back-compat).
+    """
+
+    formats = {"YYYYMMDD": "%Y%m%d", "DATE": "%Y%m%d", "TIME": "%H%M%S"}
+
     def __cics_formattime(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         from datetime import datetime, timezone
 
-        return BuiltinResult(value=datetime.now(timezone.utc).strftime("%Y%m%d"))
+        key = str(args[0].value).strip().upper() if args else "YYYYMMDD"
+        fmt = formats.get(key, "%Y%m%d")
+        return BuiltinResult(value=datetime.now(timezone.utc).strftime(fmt))
 
     return __cics_formattime
 
