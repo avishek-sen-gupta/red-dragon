@@ -70,6 +70,35 @@ def test_bms_map_write_fields_pads_and_truncates():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_symbolic_names_derives_by_convention():
+    bms_map = BmsMap(name="M", fields={"ACCTNAM": BmsField(offset=0, length=8)})
+    inp, out, length = bms_map.symbolic_names("ACCTNAM")
+    assert inp == "ACCTNAMI"
+    assert out == "ACCTNAMO"
+    assert length == "ACCTNAML"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_symbolic_names_explicit_overrides_win():
+    bms_map = BmsMap(
+        name="M",
+        fields={
+            "ACCTNAM": BmsField(
+                offset=0,
+                length=8,
+                input_name="NAME_IN",
+                output_name="NAME_OUT",
+                length_name="NAME_LEN",
+            )
+        },
+    )
+    inp, out, length = bms_map.symbolic_names("ACCTNAM")
+    assert inp == "NAME_IN"
+    assert out == "NAME_OUT"
+    assert length == "NAME_LEN"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_bms_loader_parses_bms_file(tmp_path):
     bms = tmp_path / "sgn.bms"
     bms.write_text(
