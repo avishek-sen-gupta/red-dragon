@@ -21,6 +21,7 @@ from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 from interpreter.cobol.features import CobolFeature
+from interpreter.cics.bootstrap import compile_cics_program
 from interpreter.cics.preprocessor import apply_cics_prepass
 from interpreter.cics.strategy import CicsLoweringStrategy
 from interpreter.cics.types import CicsContext, DispatchKind
@@ -75,36 +76,6 @@ COBOL_RETURN_LIT = """\
 """
 
 
-def _link_single_cobol(source: bytes, frontend: CobolFrontend):
-    """Compile a single CICS COBOL source into a LinkedProgram (mirrors run())."""
-    from interpreter.cfg import build_cfg
-    from interpreter.registry import build_registry
-    from interpreter.constants import Language
-    from interpreter.project.types import LinkedProgram
-
-    instructions = frontend.lower(source)
-    cfg = build_cfg(instructions)
-    registry = build_registry(
-        instructions,
-        cfg,
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
-    )
-    return LinkedProgram(
-        modules={},
-        merged_ir=list(instructions),
-        merged_cfg=cfg,
-        merged_registry=registry,
-        language=Language.COBOL,
-        import_graph={},
-        type_env_builder=frontend.type_env_builder,
-        symbol_table=frontend.symbol_table,
-        data_layout=frontend.data_layout,
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
-    )
-
-
 @covers(CobolFeature.EXEC_CICS)
 def test_commarea_carries_bytes(cobol_parser):
     """RETURN TRANSID COMMAREA(WS-CA) round-trips the program-written bytes."""
@@ -116,8 +87,7 @@ def test_commarea_carries_bytes(cobol_parser):
         context_holder=context_holder, result_holder=result_holder
     )
     source = apply_cics_prepass(COBOL_COMMAREA).encode()
-    frontend = CobolFrontend(cobol_parser=cobol_parser, exec_cics_strategy=strategy)
-    program = _link_single_cobol(source, frontend)
+    program = compile_cics_program(source, cobol_parser, strategy)
 
     result = run_cics(
         program,
