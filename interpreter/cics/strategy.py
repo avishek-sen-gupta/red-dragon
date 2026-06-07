@@ -17,7 +17,7 @@ from interpreter.cics.builtins.system import (
     make_abend_builtin,
 )
 from interpreter.func_name import FuncName
-from interpreter.instructions import CallFunction, Const, Return_
+from interpreter.instructions import CallFunction, Const, LoadRegion, Return_
 
 if TYPE_CHECKING:
     import queue
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
     from interpreter.cics.types import CicsContext
     from interpreter.cics.bms.loader import BmsLoader
+    from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,46 @@ _BMS_VERBS: dict[str, str] = {
     "RECEIVE MAP": "__cics_receive_map",
     "SEND TEXT": "__cics_send_text",
 }
+
+
+def emit_copy_in(
+    ctx: "EmitContext",
+    name: str | None,
+    materialised: "MaterialisedSectionedLayout",
+) -> "Register | None":
+    """If ``name`` is a data item, LoadRegion its bytes into a fresh register and return it.
+
+    Returns ``None`` when ``name`` is ``None`` or a literal (caller falls back to Const).
+    """
+    if name is None or not ctx.has_field(name, materialised):
+        return None
+    ref, region_reg = ctx.resolve_field_ref(name, materialised)
+    out = ctx.fresh_reg()
+    ctx.emit_inst(
+        LoadRegion(
+            result_reg=out,
+            region_reg=region_reg,
+            offset_reg=ref.offset_reg,
+            length=ref.fl.byte_length,
+        )
+    )
+    return out
+
+
+def emit_copy_back_str(
+    ctx: "EmitContext",
+    name: str | None,
+    value_str_reg: "Register",
+    materialised: "MaterialisedSectionedLayout",
+) -> None:
+    """Encode a string-valued result into the named field, if it is a data item.
+
+    No-op for ``None`` or literal names.
+    """
+    if name is None or not ctx.has_field(name, materialised):
+        return
+    ref, region_reg = ctx.resolve_field_ref(name, materialised)
+    ctx.emit_encode_and_write(region_reg, ref.fl, value_str_reg, ref.offset_reg)
 
 
 def _register(table: dict, name: str, fn: object) -> None:  # type: ignore[type-arg]
