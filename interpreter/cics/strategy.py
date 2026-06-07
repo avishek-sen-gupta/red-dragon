@@ -242,8 +242,10 @@ class CicsLoweringStrategy:
                 ctx.emit_inst(
                     Const(result_reg=r_transid, value=opts.get("TRANSID", ""))
                 )
-                r_ca = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=r_ca, value=b""))
+                r_ca = emit_copy_in(ctx, opts.get("COMMAREA"), materialised)
+                if r_ca is None:
+                    r_ca = ctx.fresh_reg()
+                    ctx.emit_inst(Const(result_reg=r_ca, value=b""))
                 r_res = ctx.fresh_reg()
                 ctx.emit_inst(
                     CallFunction(
@@ -268,8 +270,10 @@ class CicsLoweringStrategy:
             r_prog = ctx.fresh_reg()
             prog_opt = opts.get("PROGRAM", "")
             ctx.emit_inst(Const(result_reg=r_prog, value=prog_opt))
-            r_ca = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=r_ca, value=b""))
+            r_ca = emit_copy_in(ctx, opts.get("COMMAREA"), materialised)
+            if r_ca is None:
+                r_ca = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_ca, value=b""))
             r_res = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
