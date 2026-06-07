@@ -159,3 +159,76 @@ def test_resp_writeback_writes_eibresp_only_when_no_resp_option() -> None:
     assert len(ctx.encode_writes) == 1
     _, fl, _, _ = ctx.encode_writes[0]
     assert fl.name == "EIBRESP"
+
+
+# ── ASSIGN / FORMATTIME output sub-option lowering (Task F3) ──────────────────
+
+
+class FakeStmt:
+    def __init__(self, verb: str, options: dict[str, str | None]) -> None:
+        self.verb = verb
+        self.options = options
+
+
+def _make_strategy():
+    from interpreter.cics.strategy import CicsLoweringStrategy
+    from interpreter.cics.types import CicsContext
+
+    holder = [CicsContext(transid="CC00", commarea=b"", eibaid="\x7d")]
+    return CicsLoweringStrategy(context_holder=holder, applid="CARDDEMO", sysid="SYS1")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_assign_applid_emits_copy_back_to_field() -> None:
+    from interpreter.instructions import CallFunction
+
+    ctx = FakeCtx({"WS-APPLID": (0, 8)})
+    strategy = _make_strategy()
+    strategy.lower(ctx, FakeStmt("ASSIGN", {"APPLID": "WS-APPLID"}), MATERIALISED)
+
+    # A __cics_assign call was emitted for the APPLID sub-option ...
+    calls = [
+        i
+        for i in ctx.emitted
+        if isinstance(i, CallFunction) and str(i.func_name) == "__cics_assign"
+    ]
+    assert len(calls) == 1
+    # ... and its result was encoded into WS-APPLID.
+    assert len(ctx.encode_writes) == 1
+    _, fl, _, _ = ctx.encode_writes[0]
+    assert fl.name == "WS-APPLID"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_assign_skips_absent_suboptions() -> None:
+    ctx = FakeCtx({"WS-APPLID": (0, 8), "WS-SYSID": (8, 4)})
+    strategy = _make_strategy()
+    # Only SYSID requested — APPLID should not be written.
+    strategy.lower(ctx, FakeStmt("ASSIGN", {"SYSID": "WS-SYSID"}), MATERIALISED)
+
+    assert len(ctx.encode_writes) == 1
+    _, fl, _, _ = ctx.encode_writes[0]
+    assert fl.name == "WS-SYSID"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_formattime_yyyymmdd_emits_copy_back_to_field() -> None:
+    from interpreter.instructions import CallFunction
+
+    ctx = FakeCtx({"WS-T": (0, 8), "WS-D": (8, 8)})
+    strategy = _make_strategy()
+    strategy.lower(
+        ctx,
+        FakeStmt("FORMATTIME", {"ABSTIME": "WS-T", "YYYYMMDD": "WS-D"}),
+        MATERIALISED,
+    )
+
+    calls = [
+        i
+        for i in ctx.emitted
+        if isinstance(i, CallFunction) and str(i.func_name) == "__cics_formattime"
+    ]
+    assert len(calls) == 1
+    assert len(ctx.encode_writes) == 1
+    _, fl, _, _ = ctx.encode_writes[0]
+    assert fl.name == "WS-D"
