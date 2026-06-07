@@ -19,10 +19,13 @@ from interpreter.func_name import FuncName
 from interpreter.instructions import CallFunction, Const, Return_
 
 if TYPE_CHECKING:
+    import queue
+
     from interpreter.cobol.emit_context import EmitContext
     from interpreter.cobol.cobol_statements import ExecCicsStatement
     from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
     from interpreter.cics.types import CicsContext
+    from interpreter.cics.bms.loader import BmsLoader
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,12 @@ _SYS_VERBS: dict[str, str] = {
     "HANDLE ABEND": "__cics_handle_abend",
     "HANDLE CONDITION": "__cics_handle_abend",
     "HANDLE AID": "__cics_handle_abend",
+}
+
+_BMS_VERBS: dict[str, str] = {
+    "SEND MAP": "__cics_send_map",
+    "RECEIVE MAP": "__cics_receive_map",
+    "SEND TEXT": "__cics_send_text",
 }
 
 
@@ -79,6 +88,9 @@ class CicsLoweringStrategy:
         td_queue: list[str] | None = None,
         applid: str = "CARDDEMO",
         sysid: str = "SYS1",
+        bms_loader: "BmsLoader | None" = None,
+        screen_queue: "queue.Queue | None" = None,  # type: ignore[type-arg]
+        input_queue: "queue.Queue | None" = None,  # type: ignore[type-arg]
     ) -> None:
         self._context_holder = context_holder
         # Deferred imports to avoid violating project-no-vm-internals import contract.
@@ -118,6 +130,33 @@ class CicsLoweringStrategy:
             "__cics_set_xctl_context",
             make_set_xctl_context_builtin(_holder),
         )
+
+        if (
+            bms_loader is not None
+            and screen_queue is not None
+            and input_queue is not None
+        ):
+            from interpreter.cics.builtins.screen import (  # noqa: PLC0415
+                make_send_map_builtin,
+                make_receive_map_builtin,
+                make_send_text_builtin,
+            )
+
+            _register(
+                Builtins.TABLE,
+                "__cics_send_map",
+                make_send_map_builtin(bms_loader, screen_queue),
+            )
+            _register(
+                Builtins.TABLE,
+                "__cics_receive_map",
+                make_receive_map_builtin(bms_loader, input_queue),
+            )
+            _register(
+                Builtins.TABLE,
+                "__cics_send_text",
+                make_send_text_builtin(screen_queue),
+            )
 
     def on_procedure_entry(
         self,
@@ -199,6 +238,39 @@ class CicsLoweringStrategy:
                 )
             )
             ctx.emit_inst(Return_())
+            return
+
+        # ── BMS screen verbs ──────────────────────────────────────────────
+        bms_builtin = _BMS_VERBS.get(verb)
+        if bms_builtin:
+            if verb == "SEND TEXT":
+                r_text = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_text, value=opts.get("TEXT", "")))
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName(bms_builtin),
+                        args=(r_text,),
+                    )
+                )
+                return
+            r_map = ctx.fresh_reg()
+            ctx.emit_inst(
+                Const(result_reg=r_map, value=opts.get("MAP", opts.get("MAPNAME", "")))
+            )
+            r_set = ctx.fresh_reg()
+            ctx.emit_inst(Const(result_reg=r_set, value=opts.get("MAPSET", "")))
+            r_region = ctx.fresh_reg()
+            ctx.emit_inst(Const(result_reg=r_region, value=b""))
+            r_res = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=r_res,
+                    func_name=FuncName(bms_builtin),
+                    args=(r_map, r_set, r_region),
+                )
+            )
             return
 
         # ── System verbs ──────────────────────────────────────────────────
