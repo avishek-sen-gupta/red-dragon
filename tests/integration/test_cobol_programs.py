@@ -156,6 +156,29 @@ class TestValueClauseAlphanumericInit:
         assert _decode_alpha(region, 0, 5) == "HELLO"
 
 
+class TestValueClauseHexLiteralInit:
+    """Hex literal VALUE X'nn' stores RAW bytes, not EBCDIC-translated chars."""
+
+    @covers(CobolFeature.VALUE_CLAUSE, CobolFeature.SECTION_WORKING_STORAGE)
+    def test_pic_x_hex_literal_stores_raw_byte(self):
+        """01 WS-AID PIC X VALUE X'7D' — byte 0 must be raw 0x7D, not 0xE7 ('X')."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. HEXVAL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-AID   PIC X VALUE X'7D'.",
+                "01 WS-OUT   PIC X.",
+                "PROCEDURE DIVISION.",
+                "    MOVE WS-AID TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert region[0] == 0x7D
+
+
 class TestValueClauseDefaultZeroFill:
     """AC3 (4q25.9.3): PIC 9 field without VALUE is zero-filled at startup."""
 
