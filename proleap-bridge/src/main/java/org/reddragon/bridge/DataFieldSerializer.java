@@ -319,7 +319,11 @@ public final class DataFieldSerializer {
         int offset = 0;
         for (DataDescriptionEntry sibling : siblings) {
             if (sibling instanceof DataDescriptionEntryGroup siblingGroup) {
-                if (siblingGroup.getName().equalsIgnoreCase(targetName)) {
+                // An anonymous FILLER sibling has a null name; it can never be
+                // the redefines target, so skip the comparison (mirrors the
+                // null-safe FILLER handling in disambiguateFiller).
+                if (siblingGroup.getName() != null
+                        && siblingGroup.getName().equalsIgnoreCase(targetName)) {
                     return offset;
                 }
                 if (siblingGroup.getRedefinesClause() == null) {
