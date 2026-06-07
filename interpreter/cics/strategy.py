@@ -13,6 +13,7 @@ from interpreter.cics.builtins.system import (
     make_inquire_builtin,
     make_writeq_td_builtin,
     make_handle_abend_builtin,
+    make_handle_noop_builtin,
     make_abend_builtin,
 )
 from interpreter.func_name import FuncName
@@ -38,8 +39,11 @@ _SYS_VERBS: dict[str, str] = {
     "INQUIRE": "__cics_inquire",
     "WRITEQ TD": "__cics_writeq_td",
     "HANDLE ABEND": "__cics_handle_abend",
-    "HANDLE CONDITION": "__cics_handle_abend",
-    "HANDLE AID": "__cics_handle_abend",
+    # HANDLE CONDITION / HANDLE AID are explicit no-ops for now — the real
+    # runtime-dispatch machinery is a deferred follow-up
+    # (docs/superpowers/plans/2026-06-07-cics-handle-condition-machinery.md).
+    "HANDLE CONDITION": "__cics_handle_condition",
+    "HANDLE AID": "__cics_handle_aid",
 }
 
 _BMS_VERBS: dict[str, str] = {
@@ -119,6 +123,16 @@ class CicsLoweringStrategy:
         _register(Builtins.TABLE, "__cics_inquire", make_inquire_builtin(prog_cache))
         _register(Builtins.TABLE, "__cics_writeq_td", make_writeq_td_builtin(td))
         _register(Builtins.TABLE, "__cics_handle_abend", make_handle_abend_builtin())
+        _register(
+            Builtins.TABLE,
+            "__cics_handle_condition",
+            make_handle_noop_builtin("HANDLE CONDITION"),
+        )
+        _register(
+            Builtins.TABLE,
+            "__cics_handle_aid",
+            make_handle_noop_builtin("HANDLE AID"),
+        )
         _register(Builtins.TABLE, "__cics_abend", make_abend_builtin(_holder))
         _register(
             Builtins.TABLE,
