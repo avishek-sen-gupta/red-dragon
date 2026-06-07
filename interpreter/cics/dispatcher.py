@@ -41,11 +41,18 @@ def run_cics(
     """Execute one CICS program with the given context. Returns DispatchResult."""
     from interpreter.run import run_linked, EntryPoint
     from interpreter.vm.vm_types import VMState, StackFrame
+    from interpreter.address import Address
 
     context_holder[0] = context
     result_holder[0] = None
 
     initial_vm = VMState()
+    # The COMMAREA is bound to the LINKAGE SECTION (DFHCOMMAREA) via
+    # __params_region. Field reads in the program resolve through this register
+    # as a region handle, so the bytes must live in an addressable VM region
+    # (not a raw-bytes local). Allocate one and point __params_region at it.
+    commarea_addr = Address("rgn_commarea")
+    initial_vm.region_set(commarea_addr, bytearray(context.commarea))
     initial_vm.call_stack.append(
         StackFrame(
             function_name=FuncName("main"),
@@ -53,7 +60,7 @@ def run_cics(
                 VarName("__cics_transid"): typed(context.transid, UNKNOWN),
                 VarName("__cics_eibcalen"): typed(len(context.commarea), UNKNOWN),
                 VarName("__cics_eibaid"): typed(context.eibaid, UNKNOWN),
-                VarName("__params_region"): typed(context.commarea, UNKNOWN),
+                VarName("__params_region"): typed(commarea_addr, UNKNOWN),
             },
         )
     )
