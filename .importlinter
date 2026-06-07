@@ -39,6 +39,7 @@ ignore_imports =
     interpreter.cics.builtins.system -> interpreter.vm.vm_types
     interpreter.cics.builtins.flow -> interpreter.vm.vm_types
     interpreter.cics.builtins.screen -> interpreter.vm.vm_types
+    interpreter.cics.builtins.vsam -> interpreter.vm.vm_types
 
 [importlinter:contract:frontend-independence]
 name = Language frontends must not import each other
