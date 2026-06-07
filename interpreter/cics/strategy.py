@@ -53,6 +53,9 @@ _SYS_VERBS: dict[str, str] = {
 # VSAM verbs (READ/WRITE/REWRITE/DELETE/STARTBR/...).
 _RESP_PRODUCING_VERBS: set[str] = {"INQUIRE"}
 
+# VSAM point operations (browse verbs STARTBR/READNEXT/... are added in D3b).
+_VSAM_POINT_VERBS: set[str] = {"READ", "WRITE", "REWRITE", "DELETE"}
+
 _BMS_VERBS: dict[str, str] = {
     "SEND MAP": "__cics_send_map",
     "RECEIVE MAP": "__cics_receive_map",
@@ -119,6 +122,38 @@ def emit_resp_writeback(
     emit_copy_back_str(ctx, opts.get("RESP"), str_reg, materialised)
 
 
+def _resolve_keylen(
+    ctx: "EmitContext",
+    opts: dict[str, str | None],
+    materialised: "MaterialisedSectionedLayout",
+) -> int:
+    """Key length for a VSAM verb.
+
+    Precedence: a digit-literal KEYLENGTH option, else the RIDFLD field's byte
+    length, else 0.
+    """
+    keylength = opts.get("KEYLENGTH")
+    if keylength is not None and str(keylength).strip().isdigit():
+        return int(str(keylength).strip())
+    ridfld = opts.get("RIDFLD")
+    if ridfld is not None and ctx.has_field(ridfld, materialised):
+        ref, _ = ctx.resolve_field_ref(ridfld, materialised)
+        return ref.fl.byte_length
+    return 0
+
+
+def _resolve_into(
+    ctx: "EmitContext",
+    name: str | None,
+    materialised: "MaterialisedSectionedLayout",
+) -> tuple[int, int]:
+    """(offset, byte_length) of the INTO field, or (0, 0) if it is not a field."""
+    if name is not None and ctx.has_field(name, materialised):
+        ref, _ = ctx.resolve_field_ref(name, materialised)
+        return ref.fl.offset, ref.fl.byte_length
+    return 0, 0
+
+
 def _register(table: dict, name: str, fn: object) -> None:  # type: ignore[type-arg]
     key = FuncName(name)
     if key in table:
@@ -161,6 +196,7 @@ class CicsLoweringStrategy:
         bms_loader: "BmsLoader | None" = None,
         screen_queue: "queue.Queue | None" = None,  # type: ignore[type-arg]
         input_queue: "queue.Queue | None" = None,  # type: ignore[type-arg]
+        vsam_engine: object = None,
     ) -> None:
         self._context_holder = context_holder
         # Deferred imports to avoid violating project-no-vm-internals import contract.
@@ -236,6 +272,29 @@ class CicsLoweringStrategy:
                 Builtins.TABLE,
                 "__cics_send_text",
                 make_send_text_builtin(screen_queue),
+            )
+
+        if vsam_engine is not None:
+            from interpreter.cics.builtins.vsam import (  # noqa: PLC0415
+                make_vsam_read_builtin,
+                make_vsam_write_builtin,
+                make_vsam_rewrite_builtin,
+                make_vsam_delete_builtin,
+            )
+
+            _register(
+                Builtins.TABLE, "__cics_read", make_vsam_read_builtin(vsam_engine)
+            )
+            _register(
+                Builtins.TABLE, "__cics_write", make_vsam_write_builtin(vsam_engine)
+            )
+            _register(
+                Builtins.TABLE,
+                "__cics_rewrite",
+                make_vsam_rewrite_builtin(vsam_engine),
+            )
+            _register(
+                Builtins.TABLE, "__cics_delete", make_vsam_delete_builtin(vsam_engine)
             )
 
     def on_procedure_entry(
@@ -396,6 +455,60 @@ class CicsLoweringStrategy:
                 )
                 str_reg = ctx.emit_to_string(r_res)
                 emit_copy_back_str(ctx, field_name, str_reg, materialised)
+            return
+
+        # ── VSAM point operations ─────────────────────────────────────────
+        if verb in _VSAM_POINT_VERBS:
+            r_file = ctx.fresh_reg()
+            ctx.emit_inst(
+                Const(result_reg=r_file, value=(opts.get("FILE") or "").strip("'\" "))
+            )
+            r_key = emit_copy_in(ctx, opts.get("RIDFLD"), materialised)
+            if r_key is None:
+                r_key = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_key, value=b""))
+            klen = _resolve_keylen(ctx, opts, materialised)
+            r_klen = ctx.fresh_reg()
+            ctx.emit_inst(Const(result_reg=r_klen, value=klen))
+
+            if verb == "READ":
+                into_off, into_len = _resolve_into(ctx, opts.get("INTO"), materialised)
+                r_off = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_off, value=into_off))
+                r_len = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_len, value=into_len))
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName("__cics_read"),
+                        args=(r_file, r_key, r_klen, r_off, r_len),
+                    )
+                )
+            elif verb in ("WRITE", "REWRITE"):
+                r_rec = emit_copy_in(ctx, opts.get("FROM"), materialised)
+                if r_rec is None:
+                    r_rec = ctx.fresh_reg()
+                    ctx.emit_inst(Const(result_reg=r_rec, value=b""))
+                name = "__cics_write" if verb == "WRITE" else "__cics_rewrite"
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName(name),
+                        args=(r_file, r_key, r_klen, r_rec),
+                    )
+                )
+            else:  # DELETE
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName("__cics_delete"),
+                        args=(r_file, r_key, r_klen),
+                    )
+                )
+            emit_resp_writeback(ctx, r_res, opts, materialised)
             return
 
         # ── System verbs ──────────────────────────────────────────────────
