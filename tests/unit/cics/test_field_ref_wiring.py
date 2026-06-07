@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from interpreter.cics.strategy import emit_copy_in, emit_copy_back_str
+from interpreter.cics.strategy import (
+    emit_copy_in,
+    emit_copy_back_str,
+    emit_resp_writeback,
+)
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef
@@ -56,6 +60,11 @@ class FakeCtx:
         self, region_reg, fl, value_str_reg, offset_reg=None
     ):  # type: ignore[no-untyped-def]
         self.encode_writes.append((region_reg, fl, value_str_reg, offset_reg))
+
+    def emit_to_string(self, value_reg) -> Register:  # type: ignore[no-untyped-def]
+        out = self.fresh_reg()
+        self.emit_inst(("to_string", out, value_reg))
+        return out
 
 
 def Region_for(name: str) -> Register:
@@ -116,3 +125,37 @@ def test_copy_back_str_noop_for_literal_or_none() -> None:
     emit_copy_back_str(ctx, "'CC01'", value_reg, MATERIALISED)
     emit_copy_back_str(ctx, None, value_reg, MATERIALISED)
     assert ctx.encode_writes == []
+
+
+def _resp_ctx() -> FakeCtx:
+    # EIBRESP (binary) at offset 0 len 4; WS-RC (the RESP target) at offset 16 len 4.
+    return FakeCtx({"EIBRESP": (0, 4), "WS-RC": (16, 4)})
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_resp_writeback_writes_eibresp_and_resp_field() -> None:
+    """INQUIRE-style resp write-back targets BOTH EIBRESP and the RESP(name) field."""
+    ctx = _resp_ctx()
+    r_resp = ctx.fresh_reg()
+    emit_resp_writeback(ctx, r_resp, {"RESP": "WS-RC"}, MATERIALISED)
+
+    assert len(ctx.encode_writes) == 2
+    written_offsets = sorted(fl.offset for (_, fl, _, _) in ctx.encode_writes)
+    assert written_offsets == [0, 16]
+    written_names = {fl.name for (_, fl, _, _) in ctx.encode_writes}
+    assert written_names == {"EIBRESP", "WS-RC"}
+    # Both write-backs encode the SAME stringified resp register.
+    value_regs = {written for (_, _, written, _) in ctx.encode_writes}
+    assert len(value_regs) == 1
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_resp_writeback_writes_eibresp_only_when_no_resp_option() -> None:
+    """With no RESP(name) option, only EIBRESP is written."""
+    ctx = _resp_ctx()
+    r_resp = ctx.fresh_reg()
+    emit_resp_writeback(ctx, r_resp, {}, MATERIALISED)
+
+    assert len(ctx.encode_writes) == 1
+    _, fl, _, _ = ctx.encode_writes[0]
+    assert fl.name == "EIBRESP"
