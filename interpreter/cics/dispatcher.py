@@ -60,7 +60,10 @@ def run_cics(
 
     run_linked(
         program,
-        EntryPoint.function(lambda label: str(label).startswith("func_")),
+        EntryPoint.function(
+            lambda ref: str(ref.label).startswith("func_")
+            and not str(ref.label).startswith("func_init_params_")
+        ),
         max_steps=max_steps,
         initial_vm=initial_vm,
     )
