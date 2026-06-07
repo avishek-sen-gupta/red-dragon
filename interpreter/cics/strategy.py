@@ -53,8 +53,11 @@ _SYS_VERBS: dict[str, str] = {
 # VSAM verbs (READ/WRITE/REWRITE/DELETE/STARTBR/...).
 _RESP_PRODUCING_VERBS: set[str] = {"INQUIRE"}
 
-# VSAM point operations (browse verbs STARTBR/READNEXT/... are added in D3b).
+# VSAM point operations.
 _VSAM_POINT_VERBS: set[str] = {"READ", "WRITE", "REWRITE", "DELETE"}
+
+# VSAM browse operations (implicit single cursor per file).
+_VSAM_BROWSE_VERBS: set[str] = {"STARTBR", "READNEXT", "READPREV", "ENDBR"}
 
 _BMS_VERBS: dict[str, str] = {
     "SEND MAP": "__cics_send_map",
@@ -280,6 +283,10 @@ class CicsLoweringStrategy:
                 make_vsam_write_builtin,
                 make_vsam_rewrite_builtin,
                 make_vsam_delete_builtin,
+                make_vsam_startbr_builtin,
+                make_vsam_readnext_builtin,
+                make_vsam_readprev_builtin,
+                make_vsam_endbr_builtin,
             )
 
             _register(
@@ -295,6 +302,26 @@ class CicsLoweringStrategy:
             )
             _register(
                 Builtins.TABLE, "__cics_delete", make_vsam_delete_builtin(vsam_engine)
+            )
+            _register(
+                Builtins.TABLE,
+                "__cics_startbr",
+                make_vsam_startbr_builtin(vsam_engine),
+            )
+            _register(
+                Builtins.TABLE,
+                "__cics_readnext",
+                make_vsam_readnext_builtin(vsam_engine),
+            )
+            _register(
+                Builtins.TABLE,
+                "__cics_readprev",
+                make_vsam_readprev_builtin(vsam_engine),
+            )
+            _register(
+                Builtins.TABLE,
+                "__cics_endbr",
+                make_vsam_endbr_builtin(vsam_engine),
             )
 
     def on_procedure_entry(
@@ -506,6 +533,55 @@ class CicsLoweringStrategy:
                         result_reg=r_res,
                         func_name=FuncName("__cics_delete"),
                         args=(r_file, r_key, r_klen),
+                    )
+                )
+            emit_resp_writeback(ctx, r_res, opts, materialised)
+            return
+
+        # ── VSAM browse operations (implicit single cursor per file) ───────
+        if verb in _VSAM_BROWSE_VERBS:
+            r_file = ctx.fresh_reg()
+            ctx.emit_inst(
+                Const(result_reg=r_file, value=(opts.get("FILE") or "").strip("'\" "))
+            )
+            if verb == "STARTBR":
+                r_key = emit_copy_in(ctx, opts.get("RIDFLD"), materialised)
+                if r_key is None:
+                    r_key = ctx.fresh_reg()
+                    ctx.emit_inst(Const(result_reg=r_key, value=b""))
+                klen = _resolve_keylen(ctx, opts, materialised)
+                r_klen = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_klen, value=klen))
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName("__cics_startbr"),
+                        args=(r_file, r_key, r_klen),
+                    )
+                )
+            elif verb in ("READNEXT", "READPREV"):
+                into_off, into_len = _resolve_into(ctx, opts.get("INTO"), materialised)
+                r_off = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_off, value=into_off))
+                r_len = ctx.fresh_reg()
+                ctx.emit_inst(Const(result_reg=r_len, value=into_len))
+                name = "__cics_readnext" if verb == "READNEXT" else "__cics_readprev"
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName(name),
+                        args=(r_file, r_off, r_len),
+                    )
+                )
+            else:  # ENDBR
+                r_res = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=r_res,
+                        func_name=FuncName("__cics_endbr"),
+                        args=(r_file,),
                     )
                 )
             emit_resp_writeback(ctx, r_res, opts, materialised)
