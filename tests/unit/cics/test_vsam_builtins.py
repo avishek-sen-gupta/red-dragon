@@ -10,6 +10,7 @@ from interpreter.cics.vsam.engine import (
     VsamEngine,
     RESP_NORMAL,
     RESP_NOTFND,
+    RESP_ENDFILE,
 )
 from interpreter.cics.vsam.fct import FctConfig, DatasetConfig
 from interpreter.cics.builtins.vsam import (
@@ -17,6 +18,10 @@ from interpreter.cics.builtins.vsam import (
     make_vsam_write_builtin,
     make_vsam_rewrite_builtin,
     make_vsam_delete_builtin,
+    make_vsam_startbr_builtin,
+    make_vsam_readnext_builtin,
+    make_vsam_readprev_builtin,
+    make_vsam_endbr_builtin,
 )
 from interpreter.vm.vm_types import VMState, StackFrame, BuiltinResult
 from interpreter.func_name import FuncName
@@ -124,6 +129,7 @@ def test_rewrite_updates_record():
     vm, addr = _make_vm_with_ws_region(bytearray(32))
     read(_args("TESTDS", b"AA01", KEY_LEN, 0, REC_LEN), vm)
     region = vm.region_get(addr)
+    assert region is not None
     assert b"NEW" in bytes(region[0:REC_LEN])
 
 
@@ -134,6 +140,80 @@ def test_read_no_ws_region_still_returns_resp():
     read = make_vsam_read_builtin(engine)
     rresult = read(_args("TESTDS", b"AA01", KEY_LEN, 4, REC_LEN), VMState())
     assert rresult.value == RESP_NORMAL
+
+
+# ── Browse builtin tests ──────────────────────────────────────────────────────
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_browse_forward_fills_buffer_in_key_order():
+    """STARTBR then READNEXT twice fills the INTO buffer with successive records."""
+    rec_a = _rec("AA01", "ALPHA")
+    rec_b = _rec("BB02", "BRAVO")
+    engine = _engine_with_records([rec_b, rec_a])  # written out of order
+    startbr = make_vsam_startbr_builtin(engine)
+    readnext = make_vsam_readnext_builtin(engine)
+
+    sresult = startbr(_args("TESTDS", b"\x00" * KEY_LEN, KEY_LEN), VMState())
+    assert isinstance(sresult, BuiltinResult)
+    assert sresult.value == RESP_NORMAL
+
+    into_off, into_len = 4, REC_LEN
+    vm, addr = _make_vm_with_ws_region(bytearray(32))
+    r1 = readnext(_args("TESTDS", into_off, into_len), vm)
+    assert r1.value == RESP_NORMAL
+    region = vm.region_get(addr)
+    assert region is not None
+    assert bytes(region[into_off : into_off + into_len]) == rec_a  # sorted first
+
+    r2 = readnext(_args("TESTDS", into_off, into_len), vm)
+    assert r2.value == RESP_NORMAL
+    region = vm.region_get(addr)
+    assert region is not None
+    assert bytes(region[into_off : into_off + into_len]) == rec_b
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_readnext_past_end_returns_endfile():
+    engine = _engine_with_records([_rec("AA01", "ONE")])
+    startbr = make_vsam_startbr_builtin(engine)
+    readnext = make_vsam_readnext_builtin(engine)
+    startbr(_args("TESTDS", b"\x00" * KEY_LEN, KEY_LEN), VMState())
+    vm, _ = _make_vm_with_ws_region(bytearray(32))
+    first = readnext(_args("TESTDS", 4, REC_LEN), vm)
+    assert first.value == RESP_NORMAL
+    second = readnext(_args("TESTDS", 4, REC_LEN), vm)
+    assert second.value == RESP_ENDFILE
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_readprev_after_stepping_forward_returns_prior_record():
+    rec_a = _rec("AA01", "ALPHA")
+    rec_b = _rec("BB02", "BRAVO")
+    engine = _engine_with_records([rec_a, rec_b])
+    startbr = make_vsam_startbr_builtin(engine)
+    readnext = make_vsam_readnext_builtin(engine)
+    readprev = make_vsam_readprev_builtin(engine)
+    startbr(_args("TESTDS", b"\x00" * KEY_LEN, KEY_LEN), VMState())
+    vm, addr = _make_vm_with_ws_region(bytearray(32))
+    readnext(_args("TESTDS", 4, REC_LEN), vm)  # rec_a
+    readnext(_args("TESTDS", 4, REC_LEN), vm)  # rec_b
+    pres = readprev(_args("TESTDS", 4, REC_LEN), vm)
+    assert pres.value == RESP_NORMAL
+    region = vm.region_get(addr)
+    assert region is not None
+    assert bytes(region[4 : 4 + REC_LEN]) == rec_a
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_endbr_returns_normal():
+    engine = _engine_with_records([_rec("AA01", "ONE")])
+    startbr = make_vsam_startbr_builtin(engine)
+    endbr = make_vsam_endbr_builtin(engine)
+    startbr(_args("TESTDS", b"\x00" * KEY_LEN, KEY_LEN), VMState())
+    eresult = endbr(_args("TESTDS"), VMState())
+    assert isinstance(eresult, BuiltinResult)
+    assert eresult.value == RESP_NORMAL
 
 
 # ── Lowering tests (fake-ctx, mirror test_field_ref_wiring.py) ────────────────
@@ -274,3 +354,61 @@ def test_lower_delete_emits_call_with_three_args():
     calls = _calls_to(ctx, "__cics_delete")
     assert len(calls) == 1
     assert len(calls[0].args) == 3  # file, key, key_len
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_startbr_emits_call_and_resp_writeback():
+    """STARTBR FILE RIDFLD emits __cics_startbr then EIBRESP write-back."""
+    ctx = FakeCtx({"WS-KEY": (0, 4), "EIBRESP": (20, 4)})
+    strategy = _make_strategy()
+    strategy.lower(
+        ctx,
+        FakeStmt("STARTBR", {"FILE": "'TESTDS'", "RIDFLD": "WS-KEY"}),
+        MATERIALISED,
+    )
+    calls = _calls_to(ctx, "__cics_startbr")
+    assert len(calls) == 1
+    assert len(calls[0].args) == 3  # file, key, key_len
+    assert any(fl.name == "EIBRESP" for (_, fl, _, _) in ctx.encode_writes)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_readnext_emits_call_and_resp_writeback():
+    """READNEXT FILE INTO emits __cics_readnext then EIBRESP write-back."""
+    ctx = FakeCtx({"WS-REC": (4, 10), "EIBRESP": (20, 4)})
+    strategy = _make_strategy()
+    strategy.lower(
+        ctx,
+        FakeStmt("READNEXT", {"FILE": "'TESTDS'", "INTO": "WS-REC"}),
+        MATERIALISED,
+    )
+    calls = _calls_to(ctx, "__cics_readnext")
+    assert len(calls) == 1
+    assert len(calls[0].args) == 3  # file, into_off, into_len
+    assert any(fl.name == "EIBRESP" for (_, fl, _, _) in ctx.encode_writes)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_readprev_emits_call():
+    ctx = FakeCtx({"WS-REC": (4, 10), "EIBRESP": (20, 4)})
+    strategy = _make_strategy()
+    strategy.lower(
+        ctx,
+        FakeStmt("READPREV", {"FILE": "'TESTDS'", "INTO": "WS-REC"}),
+        MATERIALISED,
+    )
+    assert len(_calls_to(ctx, "__cics_readprev")) == 1
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_endbr_emits_call_with_one_arg():
+    ctx = FakeCtx({"EIBRESP": (20, 4)})
+    strategy = _make_strategy()
+    strategy.lower(
+        ctx,
+        FakeStmt("ENDBR", {"FILE": "'TESTDS'"}),
+        MATERIALISED,
+    )
+    calls = _calls_to(ctx, "__cics_endbr")
+    assert len(calls) == 1
+    assert len(calls[0].args) == 1  # file only
