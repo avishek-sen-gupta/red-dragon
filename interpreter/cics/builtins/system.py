@@ -122,6 +122,22 @@ def make_handle_abend_builtin() -> object:
     return __cics_handle_abend
 
 
+def make_handle_noop_builtin(verb: str) -> object:
+    """Explicit no-op for HANDLE CONDITION / HANDLE AID.
+
+    Deferred to the HANDLE runtime-dispatch machinery follow-up
+    (docs/superpowers/plans/2026-06-07-cics-handle-condition-machinery.md). The
+    registration args (condition/AID -> label pairs) are intentionally ignored;
+    we log so the deferral is visible rather than silently dropped.
+    """
+
+    def __cics_handle_noop(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+        logger.info("%s ignored (no-op; HANDLE machinery deferred)", verb)
+        return BuiltinResult(value=None)
+
+    return __cics_handle_noop
+
+
 def make_abend_builtin(result_holder: list) -> object:  # type: ignore[type-arg]
     def __cics_abend(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         abcode = str(args[0].value) if args else "UNKN"
