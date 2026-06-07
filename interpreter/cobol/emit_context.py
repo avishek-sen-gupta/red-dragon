@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from typing import Any, Callable
 
 from interpreter.cics.strategy import CatchAllLoweringStrategy, ExecCicsStrategy
+from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
@@ -310,6 +311,9 @@ class EmitContext:
         if td.blank_when_zero and self._is_zero_value(value):
             return self._emit_ebcdic_spaces(fl.byte_length)
         if td.category == CobolDataCategory.ALPHANUMERIC:
+            raw = parse_hex_literal(value)
+            if raw is not None:
+                return self._emit_hex_literal_bytes(raw, fl.byte_length)
             return self.emit_encode_alphanumeric(
                 fl.name, value, td.total_digits, justified_right=td.justified_right
             )
@@ -323,6 +327,17 @@ class EmitContext:
             return float(value) == 0.0
         except (ValueError, TypeError):
             return False
+
+    def _emit_hex_literal_bytes(self, raw: bytes, byte_length: int) -> Register:
+        """Emit a Const holding raw hex-literal bytes padded to the field length.
+
+        COBOL hex literals (X'nn') denote raw bytes and bypass ASCII→EBCDIC
+        translation; they are stored verbatim into the field region.
+        """
+        padded = encode_hex_literal(raw, byte_length)
+        result = self.fresh_reg()
+        self.emit_inst(Const(result_reg=result, value=list(padded)))
+        return result
 
     def _emit_ebcdic_spaces(self, byte_length: int) -> Register:
         """Emit IR to create a list of EBCDIC spaces (0x40). Returns result register."""

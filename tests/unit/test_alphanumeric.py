@@ -3,10 +3,77 @@
 Test vectors ported from smojol AlphanumericDataTypeSpec.java.
 """
 
-from interpreter.cobol.alphanumeric import encode_alphanumeric, decode_alphanumeric
+from interpreter.cobol.alphanumeric import (
+    encode_alphanumeric,
+    decode_alphanumeric,
+    encode_hex_literal,
+    parse_hex_literal,
+)
 from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 EBCDIC_SPACE = 0x40
+
+
+class TestParseHexLiteral:
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_single_byte(self):
+        assert parse_hex_literal("X'7D'") == b"\x7d"
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_multi_byte(self):
+        assert parse_hex_literal("X'C1C2'") == b"\xc1\xc2"
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_lowercase_prefix(self):
+        assert parse_hex_literal("x'7d'") == b"\x7d"
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_lowercase_digits(self):
+        assert parse_hex_literal("X'7d'") == b"\x7d"
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_plain_string_is_not_hex(self):
+        assert parse_hex_literal("A") is None
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_quoted_alpha_is_not_hex(self):
+        # An ordinary alphanumeric VALUE must not be treated as hex.
+        assert parse_hex_literal("HELLO") is None
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_odd_digit_count_rejected(self):
+        assert parse_hex_literal("X'7'") is None
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_non_hex_digits_rejected(self):
+        assert parse_hex_literal("X'ZZ'") is None
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_empty_inner_rejected(self):
+        assert parse_hex_literal("X''") is None
+
+
+class TestEncodeHexLiteral:
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_single_byte_exact(self):
+        assert encode_hex_literal(b"\x7d", 1) == b"\x7d"
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_under_length_space_padded(self):
+        assert encode_hex_literal(b"\x7d", 3) == b"\x7d" + bytes(
+            [EBCDIC_SPACE, EBCDIC_SPACE]
+        )
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_over_length_truncated(self):
+        assert encode_hex_literal(b"\xc1\xc2\xc3", 2) == b"\xc1\xc2"
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_normal_value_still_ebcdic_translated(self):
+        # Regression guard: a normal alphanumeric VALUE 'A' → EBCDIC 0xC1.
+        assert encode_alphanumeric("A", 1) == bytes([0xC1])
 
 
 class TestEncodeAlphanumeric:
