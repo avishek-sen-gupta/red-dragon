@@ -9,7 +9,10 @@ that resp into EIBRESP/RESP via ``emit_resp_writeback``.
 NOTE: the INTO field is assumed to live in WORKING-STORAGE — true for the target
 programs. ``_get_ws_region_addr`` locates that region by walking the call stack.
 
-Browse operations (STARTBR/READNEXT/READPREV/ENDBR) are a separate task (D3b).
+Browse operations (STARTBR/READNEXT/READPREV/ENDBR) reuse the same Option-A
+buffer fill: READNEXT/READPREV write the record into the INTO field and return
+the resp code. This is single-task emulation, so every browse op on a file uses
+a fixed implicit cursor key ``(_TASK_ID, file_name, "0")``.
 """
 
 from __future__ import annotations
@@ -25,6 +28,29 @@ if TYPE_CHECKING:
     from interpreter.types.typed_value import TypedValue
 
 logger = logging.getLogger(__name__)
+
+# Single-task emulation: one implicit cursor per file (see module docstring).
+_TASK_ID = "cics_task"
+
+
+def _write_into_ws(vm: VMState, record: bytes, offset: int, length: int) -> None:
+    """Write ``record`` into the WORKING-STORAGE region at the INTO field's offset.
+
+    Locates the WS region via ``_get_ws_region_addr``; pads/truncates the record
+    to ``length`` bytes. No-op (with a warning) if the region is missing.
+    Shared by READ, READNEXT, and READPREV (Option-A buffer fill).
+    """
+    addr = _get_ws_region_addr(vm)
+    if addr is None:
+        logger.warning("VSAM read: no __ws_region in VM — INTO not filled")
+        return
+    region = vm.region_get(addr)
+    if region is None:
+        logger.warning("VSAM read: WS region not allocated — INTO not filled")
+        return
+    payload = record[:length].ljust(length, b"\x00")
+    region[offset : offset + length] = payload
+    vm.region_set(addr, region)
 
 
 def _file(args: list[TypedValue], i: int = 0) -> str:
@@ -59,20 +85,7 @@ def make_vsam_read_builtin(engine: VsamEngine) -> object:
 
         record, resp = engine.read(file_name, key, key_len)
         if record is not None:
-            addr = _get_ws_region_addr(vm)
-            if addr is None:
-                logger.warning("__cics_read: no __ws_region in VM — INTO not filled")
-            else:
-                region = vm.region_get(addr)
-                if region is None:
-                    logger.warning(
-                        "__cics_read: WS region not allocated — INTO not filled"
-                    )
-                else:
-                    # Pad/truncate the record to the INTO field length.
-                    payload = record[:into_len].ljust(into_len, b"\x00")
-                    region[into_off : into_off + into_len] = payload
-                    vm.region_set(addr, region)
+            _write_into_ws(vm, record, into_off, into_len)
         return BuiltinResult(value=resp)
 
     return __cics_read
@@ -113,3 +126,63 @@ def make_vsam_delete_builtin(engine: VsamEngine) -> object:
         )
 
     return __cics_delete
+
+
+def make_vsam_startbr_builtin(engine: VsamEngine) -> object:
+    """STARTBR: args (file, key_bytes, key_len); returns resp.
+
+    Positions the file's implicit cursor at or after the key.
+    """
+
+    def __cics_startbr(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+        fname = _file(args, 0)
+        resp = engine.startbr(
+            fname, _bytes(args, 1), _int(args, 2), (_TASK_ID, fname, "0")
+        )
+        return BuiltinResult(value=resp)
+
+    return __cics_startbr
+
+
+def make_vsam_readnext_builtin(engine: VsamEngine) -> object:
+    """READNEXT: args (file, into_offset, into_length); returns resp.
+
+    On a record, fills the INTO buffer (Option A) and advances the cursor.
+    """
+
+    def __cics_readnext(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+        fname = _file(args, 0)
+        into_off, into_len = _int(args, 1), _int(args, 2)
+        record, resp = engine.readnext(fname, (_TASK_ID, fname, "0"))
+        if record is not None:
+            _write_into_ws(vm, record, into_off, into_len)
+        return BuiltinResult(value=resp)
+
+    return __cics_readnext
+
+
+def make_vsam_readprev_builtin(engine: VsamEngine) -> object:
+    """READPREV: args (file, into_offset, into_length); returns resp.
+
+    On a record, fills the INTO buffer (Option A) and moves the cursor back.
+    """
+
+    def __cics_readprev(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+        fname = _file(args, 0)
+        into_off, into_len = _int(args, 1), _int(args, 2)
+        record, resp = engine.readprev(fname, (_TASK_ID, fname, "0"))
+        if record is not None:
+            _write_into_ws(vm, record, into_off, into_len)
+        return BuiltinResult(value=resp)
+
+    return __cics_readprev
+
+
+def make_vsam_endbr_builtin(engine: VsamEngine) -> object:
+    """ENDBR: args (file,); releases the implicit cursor. Returns resp."""
+
+    def __cics_endbr(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+        fname = _file(args, 0)
+        return BuiltinResult(value=engine.endbr(fname, (_TASK_ID, fname, "0")))
+
+    return __cics_endbr
