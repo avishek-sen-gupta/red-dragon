@@ -90,6 +90,25 @@ def emit_copy_in(
     return out
 
 
+def emit_operand_value(
+    ctx: "EmitContext",
+    name: str | None,
+    materialised: "MaterialisedSectionedLayout",
+) -> "Register":
+    """Resolve a CICS operand to a register holding its runtime VALUE.
+
+    If ``name`` is a data item, decode the field to a register; otherwise treat it
+    as a literal (strip COBOL quotes) and emit a Const. Returns a Register.
+    """
+    if name and ctx.has_field(name, materialised):
+        ref, region_reg = ctx.resolve_field_ref(name, materialised)
+        return ctx.emit_decode_field(region_reg, ref.fl)
+    literal = (name or "").strip("'\" ")
+    r = ctx.fresh_reg()
+    ctx.emit_inst(Const(result_reg=r, value=literal))
+    return r
+
+
 def emit_copy_back_str(
     ctx: "EmitContext",
     name: str | None,
@@ -349,10 +368,7 @@ class CicsLoweringStrategy:
         # ── Flow control ──────────────────────────────────────────────────
         if verb == "RETURN":
             if "TRANSID" in opts:
-                r_transid = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(result_reg=r_transid, value=opts.get("TRANSID", ""))
-                )
+                r_transid = emit_operand_value(ctx, opts.get("TRANSID"), materialised)
                 r_ca = emit_copy_in(ctx, opts.get("COMMAREA"), materialised)
                 if r_ca is None:
                     r_ca = ctx.fresh_reg()
@@ -378,9 +394,7 @@ class CicsLoweringStrategy:
             return
 
         if verb == "XCTL":
-            r_prog = ctx.fresh_reg()
-            prog_opt = opts.get("PROGRAM", "")
-            ctx.emit_inst(Const(result_reg=r_prog, value=prog_opt))
+            r_prog = emit_operand_value(ctx, opts.get("PROGRAM"), materialised)
             r_ca = emit_copy_in(ctx, opts.get("COMMAREA"), materialised)
             if r_ca is None:
                 r_ca = ctx.fresh_reg()
