@@ -47,6 +47,12 @@ _SYS_VERBS: dict[str, str] = {
     "HANDLE AID": "__cics_handle_aid",
 }
 
+# Verbs whose builtin returns a CICS response code to be written into EIBRESP
+# (always) and the RESP(name) option's field (when present). Only INQUIRE among
+# the current system verbs produces a resp code; D extends this set with the
+# VSAM verbs (READ/WRITE/REWRITE/DELETE/STARTBR/...).
+_RESP_PRODUCING_VERBS: set[str] = {"INQUIRE"}
+
 _BMS_VERBS: dict[str, str] = {
     "SEND MAP": "__cics_send_map",
     "RECEIVE MAP": "__cics_receive_map",
@@ -92,6 +98,25 @@ def emit_copy_back_str(
         return
     ref, region_reg = ctx.resolve_field_ref(name, materialised)
     ctx.emit_encode_and_write(region_reg, ref.fl, value_str_reg, ref.offset_reg)
+
+
+def emit_resp_writeback(
+    ctx: "EmitContext",
+    r_resp_result: "Register",
+    opts: dict[str, str],
+    materialised: "MaterialisedSectionedLayout",
+) -> None:
+    """Write a builtin's returned resp code into EIBRESP (always) and RESP(name) if present.
+
+    ``r_resp_result`` is the numeric register returned by the service builtin.
+    It is stringified, then encoded per each target field's layout — EIBRESP is
+    ``PIC S9(8) COMP`` (binary), so the numeric string is packed correctly by
+    ``emit_encode_and_write`` (same path as the GIVING clause in lower_call.py).
+    Reusable by D for the VSAM verbs.
+    """
+    str_reg = ctx.emit_to_string(r_resp_result)
+    emit_copy_back_str(ctx, "EIBRESP", str_reg, materialised)
+    emit_copy_back_str(ctx, opts.get("RESP"), str_reg, materialised)
 
 
 def _register(table: dict, name: str, fn: object) -> None:  # type: ignore[type-arg]
@@ -343,6 +368,8 @@ class CicsLoweringStrategy:
                     args=(),
                 )
             )
+            if verb in _RESP_PRODUCING_VERBS:
+                emit_resp_writeback(ctx, r_res, opts, materialised)
             return
 
         logger.warning(
