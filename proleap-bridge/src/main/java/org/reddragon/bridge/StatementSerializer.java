@@ -726,7 +726,8 @@ public final class StatementSerializer {
             // Extract the EVALUATE subject (e.g., WS-A in EVALUATE WS-A)
             io.proleap.cobol.asg.metamodel.procedure.evaluate.Select select = stmt.getSelect();
             if (select != null && select.getSelectValueStmt() != null) {
-                obj.addProperty("subject", extractValueStmtText(select.getSelectValueStmt()));
+                obj.addProperty(
+                        "subject", insertSpaces(extractValueStmtText(select.getSelectValueStmt())));
             }
 
             // Each WhenPhrase maps to a WHEN branch with condition + statements
@@ -753,7 +754,10 @@ public final class StatementSerializer {
 
                 JsonObject whenObj = newStatement("WHEN");
                 if (!conditionText.isEmpty()) {
-                    whenObj.addProperty("condition", conditionText);
+                    // Mirror the IF / SEARCH WHEN paths: re-introduce token
+                    // spacing lost by raw getText() so downstream condition
+                    // lowering can parse it (red-dragon-lu25).
+                    whenObj.addProperty("condition", insertSpaces(conditionText));
                 }
 
                 // Nested statements
