@@ -16,6 +16,11 @@ class BmsField:
     offset: int
     length: int
     attr: int = 0x00  # BMS attribute byte (default: unprotected, alphanumeric)
+    # Symbolic-map COBOL subfield names (from the generated symbolic copybook).
+    # When unset, derived by suffix convention (see BmsMap.symbolic_names).
+    input_name: str | None = None  # <base>I
+    output_name: str | None = None  # <base>O
+    length_name: str | None = None  # <base>L
 
 
 @dataclass
@@ -31,6 +36,21 @@ class BmsMap:
                 for fname, f in self.fields.items()
             },
         }
+
+    def symbolic_names(self, base: str) -> tuple[str, str, str]:
+        """Return (input, output, length) symbolic-map COBOL subfield names.
+
+        Explicit names on the BmsField win; otherwise names are derived by
+        appending the conventional I/O/L suffixes to the base field name.
+        Assumption: COBOL names cap at 30 chars; for long bases the host map
+        generator truncates per its own rules — we simply append the suffix
+        here and rely on explicit overrides for the truncated cases.
+        """
+        f = self.fields[base]
+        inp = f.input_name or (base + "I")
+        out = f.output_name or (base + "O")
+        length = f.length_name or (base + "L")
+        return inp, out, length
 
     def extract_fields(self, region: bytes) -> dict[str, bytes]:
         """Extract named field values from a map region (byte slice)."""
