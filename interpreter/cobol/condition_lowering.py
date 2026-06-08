@@ -26,6 +26,22 @@ from interpreter.register import Register
 logger = logging.getLogger(__name__)
 
 
+def _emit_88_value_reg(ctx: EmitContext, raw: str, parent_is_alpha: bool) -> Register:
+    """Build the comparison-value register for one side of an 88 VALUE.
+
+    On a numeric parent the value is parsed (digit string -> int/float) so it
+    compares against the decoded numeric value. On an ALPHANUMERIC (PIC X) parent
+    the field decodes to its CHARACTER string, so the 88 VALUE must compare as a
+    character literal too — a digit-character VALUE like '1' must stay the string
+    "1" (not be coerced to int 1, which never equals the decoded "1"). This is
+    the read-side counterpart of the SET <88> TO TRUE character write
+    (red-dragon-0sq2).
+    """
+    if parent_is_alpha:
+        return ctx.const_to_reg(f'"{raw}"')
+    return ctx.const_to_reg(ctx.parse_literal(raw))
+
+
 def _emit_single_value_test(
     ctx: EmitContext,
     cv: ConditionValue,
@@ -38,10 +54,13 @@ def _emit_single_value_test(
     For THRU ranges: parent_field >= from AND parent_field <= to
     """
     parent_ref, parent_rr = ctx.resolve_field_ref(parent_field_name, materialised)
+    parent_is_alpha = (
+        parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
+    )
     parent_reg = ctx.emit_decode_field(parent_rr, parent_ref.fl, parent_ref.offset_reg)
 
     if cv.is_range:
-        from_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
+        from_reg = _emit_88_value_reg(ctx, cv.from_val, parent_is_alpha)
         ge_result = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -56,7 +75,7 @@ def _emit_single_value_test(
         parent_reg2 = ctx.emit_decode_field(
             parent_rr2, parent_ref2.fl, parent_ref2.offset_reg
         )
-        to_reg = ctx.const_to_reg(ctx.parse_literal(cv.to_val))
+        to_reg = _emit_88_value_reg(ctx, cv.to_val, parent_is_alpha)
         le_result = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -78,7 +97,7 @@ def _emit_single_value_test(
         )
         return and_result
 
-    value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
+    value_reg = _emit_88_value_reg(ctx, cv.from_val, parent_is_alpha)
     eq_result = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(

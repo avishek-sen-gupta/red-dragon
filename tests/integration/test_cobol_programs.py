@@ -5526,6 +5526,37 @@ class TestSetConditionNameToTrue:
         assert _decode_alpha(region, 1, 1) == "B"
         assert _decode_alpha(region, 2, 1) == "C"
 
+    @covers(CobolFeature.SET_TO, CobolFeature.LEVEL_88_CONDITION)
+    def test_if_88_with_digit_char_value_on_pic_x_parent_is_true(self):
+        """IF <88 with a DIGIT-CHARACTER VALUE> on a PIC X parent reads TRUE.
+
+        Regression (read side of red-dragon-0sq2 / COACTVWC FOUND-ACCT-IN-MASTER):
+        SET F-OK TO TRUE writes the CHARACTER '1' into a PIC X(1) flag. The IF-88
+        test decodes that byte as the STRING "1"; the 88 VALUE '1' must therefore
+        also be compared as the character "1", NOT coerced to the integer 1 (which
+        made the str-vs-int compare always false, so the gated MOVEs were skipped).
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-IF88DIGIT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLG PIC X VALUE '0'.",
+                "   88 FLG-OK VALUE '1'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET FLG-OK TO TRUE.",
+                "    IF FLG-OK MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # FLG-OK set to TRUE writes '1' → IF FLG-OK must be TRUE → WS-R == 1.
+        assert _decode_zoned_unsigned(region, 1, 1) == 1
+
 
 class TestClassConditions:
     """IS [NOT] NUMERIC / ALPHABETIC class tests (red-dragon-pz9g.20)."""
