@@ -255,6 +255,95 @@ class TestValueClauseGroupChildInit:
         assert _decode_zoned_unsigned(region, 8, 2) == 7
 
 
+class TestMoveNumericDisplayToAlphanumeric:
+    """MOVE of a USAGE DISPLAY (zoned) numeric field to an alphanumeric field
+    moves the sending field's zoned digit characters, left-justified and
+    width-preserving (leading zeros kept) — NOT the int->str form (red-dragon-0fqr).
+    """
+
+    @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE)
+    def test_move_pic9_11_value_11_to_x11_preserves_leading_zeros(self):
+        """MOVE WS-N (PIC 9(11) VALUE 11) TO WS-A (PIC X(11)) -> '00000000011'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MOVZA1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-N PIC 9(11) VALUE 11.",
+                "77 WS-A PIC X(11).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-N TO WS-A.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 11, 11) == "00000000011"
+
+    @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE)
+    def test_move_pic9_5_value_42_to_x5_preserves_leading_zeros(self):
+        """MOVE WS-N (PIC 9(5) VALUE 42) TO WS-A (PIC X(5)) -> '00042'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MOVZA2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-N PIC 9(5) VALUE 42.",
+                "77 WS-A PIC X(5).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-N TO WS-A.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 5, 5) == "00042"
+
+    @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE)
+    def test_move_pic9_5_value_42_to_x3_left_justified_truncates(self):
+        """MOVE WS-N (PIC 9(5) VALUE 42) TO WS-A (PIC X(3)): sending zoned chars
+        '00042' move left-justified into the 3-char receiver -> '000'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MOVZA3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-N PIC 9(5) VALUE 42.",
+                "77 WS-A PIC X(3).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-N TO WS-A.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 5, 3) == "000"
+
+    @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE)
+    def test_move_numeric_to_numeric_unchanged(self):
+        """Regression: numeric->numeric is a value move (target-width zero-pad).
+        MOVE WS-N (PIC 9(5) VALUE 42) TO WS-M (PIC 9(3)) keeps low-order -> 042."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MOVZN1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-N PIC 9(5) VALUE 42.",
+                "77 WS-M PIC 9(3).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-N TO WS-M.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 5, 3) == 42
+
+
 class TestAddSubtract:
     @covers(CobolFeature.ADD, CobolFeature.SUBTRACT, CobolFeature.ARITHMETIC_EXPRESSION)
     def test_add_subtract(self):

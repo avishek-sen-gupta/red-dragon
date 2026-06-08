@@ -288,9 +288,14 @@ def lower_move(
             _store_move_value(ctx, target, source_value_reg, materialised)
         return
 
+    # Resolve the source field once (when it is a field). A numeric-DISPLAY
+    # (zoned) source carries an extra character representation, picked per target
+    # by category-pair in _store_move_value (red-dragon-0fqr).
+    source_fl: FieldLayout | None = None
     # Get the source value (decode field or literal) — evaluated ONCE.
     if ctx.has_field(stmt.source.name, materialised):
         source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        source_fl = source_ref.fl
         decoded_reg = ctx.emit_decode_field(
             source_rr, source_ref.fl, source_ref.offset_reg
         )
@@ -362,12 +367,30 @@ def lower_move(
             )
             value_str_reg = result_reg
 
+    # For a numeric-DISPLAY (zoned) source with NO source reference modification,
+    # compute its zoned character representation ONCE (width-preserving digit
+    # characters). _store_move_value uses this only for alphanumeric receivers,
+    # where COBOL moves the sending field's characters left-justified rather than
+    # the numeric value (red-dragon-0fqr). Ref-modified sources keep the existing
+    # sliced-string path.
+    zoned_display_reg: Register | None = None
+    if (
+        source_fl is not None
+        and stmt.source.ref_mod_start is None
+        and source_fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
+    ):
+        zoned_display_reg = ctx.emit_decode_zoned_display(
+            source_rr, source_fl, source_ref.offset_reg
+        )
+
     # Store the (once-evaluated) source value into each receiving field. Each
     # target gets its own reference modification and PICTURE conversion; the
     # base source value (source_value_reg) is never clobbered across targets.
     source_value_reg = value_str_reg
     for target in stmt.targets:
-        _store_move_value(ctx, target, source_value_reg, materialised)
+        _store_move_value(
+            ctx, target, source_value_reg, materialised, zoned_display_reg
+        )
 
 
 def _store_move_value(
@@ -375,13 +398,28 @@ def _store_move_value(
     target: RefModOperand,
     source_value_reg: Register,
     materialised: MaterialisedSectionedLayout,
+    zoned_display_reg: Register | None = None,
 ) -> None:
     """Store an already-evaluated MOVE source value into one receiving field.
 
     Applies the target's own reference modification (SPLICE write path) and
     PICTURE conversion. The source value register is never clobbered.
+
+    When the source is a numeric-DISPLAY (zoned) field and this receiver is
+    alphanumeric, COBOL moves the sending field's CHARACTER representation
+    (zoned digit characters, width-preserving) left-justified — NOT the numeric
+    value. zoned_display_reg carries that character form; it is used only for
+    alphanumeric receivers without target reference modification (red-dragon-0fqr).
     """
     target_ref, target_rr = ctx.resolve_field_ref(target.name, materialised)
+
+    if (
+        zoned_display_reg is not None
+        and target.ref_mod_start is None
+        and target_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
+    ):
+        source_value_reg = zoned_display_reg
+
     target_value_reg = source_value_reg
 
     # Handle target reference modification (write path): MOVE X TO Y(start:length)
