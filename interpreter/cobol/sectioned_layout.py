@@ -66,6 +66,24 @@ class MaterialisedSectionedLayout:
             or lk_layout.lookup_as_storage(name) is not None
         )
 
+    def group_leaf_names(self, group_name: str) -> list[str]:
+        """Return the leaf field names of a group, searched across sections.
+
+        Order is the layout's depth-first order. Returns [] if no such group.
+        Precedence mirrors resolve(): LOCAL-STORAGE > WORKING-STORAGE > LINKAGE.
+        """
+        for layout, _reg in (
+            self.local_storage,
+            self.working_storage,
+            self.linkage,
+        ):
+            try:
+                grp = layout.lookup_group(group_name)
+            except KeyError:
+                continue
+            return [leaf.name for leaf in grp.all_leaves()]
+        return []
+
 
 def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
     """Build SectionedLayout from a CobolASG — one DataLayout per section."""
