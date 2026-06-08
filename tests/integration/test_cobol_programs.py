@@ -5040,3 +5040,101 @@ class TestGobackExitProgram:
         assert (
             ws_flag == 1
         ), f"WS-FLAG: expected 1 (MAIN continued after GOBACK), got {ws_flag}"
+
+
+class TestEvaluateFigurativeCondition:
+    @covers(
+        CobolFeature.EVALUATE,
+        CobolFeature.FIGURATIVE_SPACES,
+        CobolFeature.FIGURATIVE_LOW_VALUES,
+    )
+    def test_evaluate_true_when_field_equals_spaces_or_low_values(self):
+        """EVALUATE TRUE WHEN WS-X = SPACES OR LOW-VALUES fires only when blank."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVALFIG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-X PIC X(8) VALUE 'AAAAAAAA'.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE SPACES TO WS-X",
+                "    EVALUATE TRUE",
+                "        WHEN WS-X = SPACES OR LOW-VALUES",
+                "            MOVE 1 TO WS-R",
+                "        WHEN OTHER",
+                "            MOVE 2 TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-X is blank (SPACES), so the WHEN branch must fire → WS-R = 1.
+        assert _decode_zoned_unsigned(region, 8, 4) == 1
+
+    @covers(
+        CobolFeature.EVALUATE,
+        CobolFeature.FIGURATIVE_SPACES,
+    )
+    def test_evaluate_true_when_field_not_spaces_takes_other(self):
+        """When WS-X holds non-blank data the figurative WHEN must NOT fire."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVALFIG2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-X PIC X(8) VALUE SPACES.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 'USER0001' TO WS-X",
+                "    EVALUATE TRUE",
+                "        WHEN WS-X = SPACES OR LOW-VALUES",
+                "            MOVE 1 TO WS-R",
+                "        WHEN OTHER",
+                "            MOVE 2 TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-X holds 'USER0001' (not blank) → WHEN OTHER → WS-R = 2.
+        assert _decode_zoned_unsigned(region, 8, 4) == 2
+
+
+class TestIfOfQualifiedFigurative:
+    @covers(
+        CobolFeature.IF_ELSE,
+        CobolFeature.FIGURATIVE_SPACES,
+    )
+    def test_if_of_qualified_field_equals_spaces(self):
+        """IF USERIDI OF COSGN0AI = SPACES (OF-qualified) lowers correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-OFQUAL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 COSGN0AI.",
+                "   05 USERIDI PIC X(8) VALUE 'XXXXXXXX'.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE SPACES TO USERIDI OF COSGN0AI",
+                "    IF USERIDI OF COSGN0AI = SPACES",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # USERIDI is blank → IF fires → WS-R = 1. WS-R is at offset 8 (after X(8)).
+        assert _decode_zoned_unsigned(region, 8, 4) == 1
