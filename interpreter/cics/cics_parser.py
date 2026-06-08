@@ -9,14 +9,25 @@ from lark.exceptions import UnexpectedInput
 
 # Grammar for the CICS command body (after stripping EXEC CICS / END-EXEC wrappers).
 # Each token is either KEYWORD(value) or a bare KEYWORD flag.
+#
+# An option value can itself contain balanced, nested parentheses — e.g. a
+# subscripted data-name PROGRAM(CDEMO-MENU-OPT-PGMNAME(WS-OPTION)) or a
+# reference-modified operand FROM(WS-MSG(1:8)). Nesting is handled structurally
+# by the recursive `value`/`value_part` rules (the contextual LALR lexer scopes
+# CHARS/STRING/parens to value position) — NOT by regex paren-balancing.
 _BODY_GRAMMAR = r"""
     start: token+
 
     token: NAME "(" value ")" -> option
          | NAME               -> flag
 
-    value: /(?:'[^']*'|"[^"]*"|[^)'"]+)+/
+    value: value_part*
+    value_part: STRING           -> vstring
+              | CHARS            -> vchars
+              | "(" value ")"    -> vnested
 
+    STRING: /'[^']*'|"[^"]*"/
+    CHARS: /[^()'"]+/
     NAME: /[A-Za-z][A-Za-z0-9-]*/
 
     %ignore /\s+/
@@ -48,7 +59,19 @@ class _Transformer(Transformer):
         return (str(items[0]).upper(), None)
 
     def value(self, items: list) -> str:
+        # Concatenate the parts back into the original operand text (preserving
+        # nested parentheses for subscripted / reference-modified operands).
+        return "".join(str(i) for i in items)
+
+    def vstring(self, items: list) -> str:
         return str(items[0])
+
+    def vchars(self, items: list) -> str:
+        return str(items[0])
+
+    def vnested(self, items: list) -> str:
+        inner = str(items[0]) if items else ""
+        return f"({inner})"
 
 
 def parse_exec_cics_text(text: str) -> tuple[str, dict[str, str | None]]:
