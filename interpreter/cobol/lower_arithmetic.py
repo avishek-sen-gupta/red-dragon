@@ -1008,15 +1008,73 @@ def lower_initialize(
             ctx.emit_field_encode(leaf_rr, leaf_fl, default, leaf_ref.offset_reg)
 
 
+def _set_condition_name(
+    ctx: EmitContext,
+    condition_name: str,
+    value_str: str,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """SET <88-condition-name> TO TRUE|FALSE — write the VALUE into the parent.
+
+    For TRUE: write the first ConditionValue's literal into the parent elementary
+    field (mirrors the condition-read path in condition_lowering). For FALSE: the
+    ConditionNameIndex/ConditionValue carries no FALSE-value, so we warn and skip
+    rather than guessing (never silently behave as TRUE).
+    """
+    truth = str(value_str).strip().upper()
+    entry = ctx._condition_index.lookup(condition_name)
+
+    if truth == "FALSE":
+        logger.warning(
+            "SET %s TO FALSE unsupported (no FALSE value captured) — skipping",
+            condition_name,
+        )
+        return
+
+    if truth != "TRUE":
+        logger.warning(
+            "SET %s TO %r is not a TRUE/FALSE condition assignment — skipping",
+            condition_name,
+            value_str,
+        )
+        return
+
+    if not entry.values:
+        logger.warning(
+            "SET %s TO TRUE has no condition VALUE to write — skipping",
+            condition_name,
+        )
+        return
+
+    # First discrete value / range-low is what makes the condition true. Mirror
+    # the read path's literal handling so SET-then-test round-trips.
+    cv = entry.values[0]
+    parent_ref, parent_rr = ctx.resolve_field_ref(entry.parent_field_name, materialised)
+    value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
+    ctx.emit_encode_and_write(
+        parent_rr, parent_ref.fl, value_reg, parent_ref.offset_reg
+    )
+
+
 def lower_set(
     ctx: EmitContext,
     stmt: SetStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """SET target TO value / SET target UP|DOWN BY value."""
+    """SET target TO value / SET target UP|DOWN BY value.
+
+    A target that names a level-88 condition (e.g. SET FLG-ON TO TRUE) writes the
+    condition's VALUE into its parent elementary field, so a later test of that 88
+    reads true. SET <88> TO FALSE requires a captured false-value; absent one it
+    warns rather than guessing.
+    """
+    condition_index = ctx._condition_index
     if stmt.set_type == "TO":
         value_str = stmt.values[0] if stmt.values else "0"
         for target_name in stmt.targets:
+            if condition_index.has_condition(target_name):
+                _set_condition_name(ctx, target_name, value_str, materialised)
+                continue
             if not ctx.has_field(target_name, materialised):
                 logger.warning("SET target %s not found in layout", target_name)
                 continue

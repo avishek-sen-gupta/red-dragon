@@ -5287,3 +5287,81 @@ class TestIntrinsicFunctionCurrentDate:
         assert decoded[:8].isdigit()
         year = int(decoded[:4])
         assert 2020 <= year <= 2100
+
+
+class TestSetConditionNameToTrue:
+    @covers(CobolFeature.SET_TO, CobolFeature.LEVEL_88_CONDITION)
+    def test_set_88_to_true_flips_flag(self):
+        """SET <88-name> TO TRUE writes the condition VALUE into its parent field."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET88.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLG PIC X VALUE 'N'.",
+                "   88 FLG-ON  VALUE 'Y'.",
+                "   88 FLG-OFF VALUE 'N'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET FLG-ON TO TRUE.",
+                "    IF FLG-ON MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-R is one zoned digit at offset 1 (WS-FLG occupies byte 0).
+        assert _decode_zoned_unsigned(region, 1, 1) == 1
+
+    @covers(CobolFeature.SET_TO, CobolFeature.LEVEL_88_CONDITION)
+    def test_set_88_off_makes_other_condition_false(self):
+        """SET <88-name(OFF)> TO TRUE leaves the sibling ON condition false."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET88B.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLG PIC X VALUE 'Y'.",
+                "   88 FLG-ON  VALUE 'Y'.",
+                "   88 FLG-OFF VALUE 'N'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET FLG-OFF TO TRUE.",
+                "    IF FLG-ON MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # FLG-OFF set to TRUE writes 'N' → FLG-ON ('Y') is false → WS-R == 2.
+        assert _decode_zoned_unsigned(region, 1, 1) == 2
+
+    @covers(CobolFeature.SET_TO, CobolFeature.LEVEL_88_CONDITION)
+    def test_set_multiple_88_targets_to_true(self):
+        """SET A B TO TRUE writes each condition's VALUE into its own parent."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET88M.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC X VALUE 'N'.",
+                "   88 A-ON  VALUE 'Y'.",
+                "01 WS-B PIC X VALUE 'N'.",
+                "   88 B-ON  VALUE 'Y'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET A-ON B-ON TO TRUE.",
+                "    IF A-ON AND B-ON MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-R at offset 2 (WS-A byte 0, WS-B byte 1).
+        assert _decode_zoned_unsigned(region, 2, 1) == 1
