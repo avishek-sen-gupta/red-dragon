@@ -179,3 +179,105 @@ def test_parse_numeric_length_operand_is_not_literal():
         "EXEC CICS SEND TEXT FROM(WS-MSG) LENGTH(8) END-EXEC"
     )
     assert opts["LENGTH"] == CicsOperand("8", False)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_send_map_with_value_keeps_map_in_opts():
+    """SEND MAP where MAP carries a value: verb is 'SEND MAP', MAP stays in opts."""
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS SEND MAP(WS-MAPNM) MAPSET('COSGN0A') FROM(X) END-EXEC"
+    )
+    assert verb == "SEND MAP"
+    assert opts["MAP"] == CicsOperand("WS-MAPNM", False)
+    assert opts["MAPSET"] == CicsOperand("COSGN0A", True)
+    assert opts["FROM"] == CicsOperand("X", False)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_bare_send_from_is_not_compound():
+    """SEND followed by a non-second-word option stays verb 'SEND', not 'SEND MAP'."""
+    verb, opts = parse_exec_cics_text("EXEC CICS SEND FROM(WS-MSG) LENGTH(8) END-EXEC")
+    assert verb == "SEND"
+    assert opts["FROM"] == CicsOperand("WS-MSG", False)
+    assert opts["LENGTH"] == CicsOperand("8", False)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_case_insensitive_lowercase():
+    """Lowercase envelope and verb parse identically to uppercase."""
+    verb, opts = parse_exec_cics_text("exec cics read dataset('x') end-exec")
+    assert verb == "READ"
+    assert opts["DATASET"] == CicsOperand("x", True)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_case_insensitive_mixed():
+    """Mixed-case envelope parses identically; verb upper-folded to 'READ'."""
+    verb, opts = parse_exec_cics_text("Exec Cics ReAd Dataset('x') End-Exec")
+    assert verb == "READ"
+    assert opts["DATASET"] == CicsOperand("x", True)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_read_dataset_single_word_verb():
+    """Canonical single-word verb with DATASET and RIDFLD."""
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS READ DATASET('ACCTDAT') RIDFLD(WS-KEY) END-EXEC"
+    )
+    assert verb == "READ"
+    assert opts["DATASET"] == CicsOperand("ACCTDAT", True)
+    assert opts["RIDFLD"] == CicsOperand("WS-KEY", False)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_leading_trailing_whitespace_envelope():
+    """Whitespace around the envelope is consumed by the grammar."""
+    verb, opts = parse_exec_cics_text("   EXEC CICS RETURN TRANSID(CC00) END-EXEC   ")
+    assert verb == "RETURN"
+    assert opts["TRANSID"] == CicsOperand("CC00", False)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_xctl_subscripted_program():
+    """XCTL with subscripted PROGRAM operand preserves nested parens verbatim."""
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS XCTL PROGRAM(CDEMO-MENU-OPT-PGMNAME(WS-OPTION)) END-EXEC"
+    )
+    assert verb == "XCTL"
+    assert opts["PROGRAM"] == CicsOperand("CDEMO-MENU-OPT-PGMNAME(WS-OPTION)", False)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_send_map_literal_collision_guard():
+    """g5gx guard: a quoted MAP literal stays is_literal=True."""
+    _, opts = parse_exec_cics_text("EXEC CICS SEND MAP('SGNMAP') END-EXEC")
+    assert opts["MAP"] == CicsOperand("SGNMAP", True)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_empty_command_envelope_only():
+    """Envelope with no verb yields empty verb and no opts (historical contract)."""
+    assert parse_exec_cics_text("EXEC CICS END-EXEC") == ("", {})
+    assert parse_exec_cics_text("") == ("", {})
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_two_concatenated_blocks_peels_outer_envelope_only():
+    """Two EXEC CICS blocks captured as one block: only the FIRST EXEC CICS and
+    the LAST END-EXEC are the envelope; inner envelope words become bare flags.
+
+    This pins the historical first-envelope/last-envelope peeling so the real
+    CardDemo (two adjacent ASSIGN blocks) keeps parsing identically.
+    """
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS ASSIGN APPLID(APPLIDO OF COSGN0AO) END-EXEC "
+        "EXEC CICS ASSIGN SYSID(SYSIDO OF COSGN0AO) END-EXEC"
+    )
+    assert verb == "ASSIGN"
+    assert opts["APPLID"] == CicsOperand("APPLIDO OF COSGN0AO", False)
+    assert opts["SYSID"] == CicsOperand("SYSIDO OF COSGN0AO", False)
+    # Inner envelope words and the second verb survive as bare flags.
+    assert opts["END-EXEC"] is None
+    assert opts["EXEC"] is None
+    assert opts["CICS"] is None
+    assert opts["ASSIGN"] is None
