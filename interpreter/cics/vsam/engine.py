@@ -26,16 +26,23 @@ RESP_IOERR = 17
 @dataclass
 class VsamDataset:
     record_length: int
+    # Offset/length of the key within each record (from DatasetConfig). A
+    # key_offset of 0 + key_length of 0 reproduces the legacy offset-0 match.
+    key_offset: int = 0
+    key_length: int = 0
     store: SortedDict = field(default_factory=SortedDict)  # key_bytes → record_bytes
 
 
 class VsamEngine:
     """In-memory VSAM engine. One SortedDict per dataset.
 
-    NOTE: records are stored keyed by their full record bytes and matched on
-    ``record[:key_length]``. This assumes the key occupies the record at
-    offset 0 (true for carddemo KSDS files); offset-based keys are a future
-    refinement.
+    Records are stored keyed by their full record bytes. Key matching uses the
+    record slice ``record[key_offset : key_offset + klen]`` where ``key_offset``
+    comes from the dataset config (default 0) and ``klen`` is the operation's
+    key length (or the config's ``key_length`` when pinned). With the defaults
+    this is the historical offset-0 prefix match; a non-zero ``key_offset``
+    supports alternate-index paths whose key lives inside the record (e.g. the
+    CARD-XREF ACCT-ID at offset 25).
     """
 
     def __init__(self, config: FctConfig) -> None:
@@ -46,7 +53,11 @@ class VsamEngine:
     def load_all(self) -> None:
         """Load all configured datasets from their ASCII flat files."""
         for name, cfg in self._config.datasets.items():
-            ds = VsamDataset(record_length=cfg.record_length)
+            ds = VsamDataset(
+                record_length=cfg.record_length,
+                key_offset=cfg.key_offset,
+                key_length=cfg.key_length,
+            )
             if cfg.path.exists():
                 data = cfg.path.read_bytes()
                 rec_len = cfg.record_length
@@ -65,6 +76,19 @@ class VsamEngine:
     def _get_ds(self, file_name: str) -> VsamDataset | None:
         return self._datasets.get(file_name.upper().strip("'\""))
 
+    @staticmethod
+    def _record_key(ds: VsamDataset, record: bytes, key_length: int) -> bytes:
+        """The portion of ``record`` that participates in key matching.
+
+        Slices ``record[key_offset : key_offset + klen]`` where ``klen`` is the
+        dataset's pinned ``key_length`` if set, else the operation's
+        ``key_length``. With key_offset=0 and an unpinned width this is the
+        legacy ``record[:key_length]`` prefix.
+        """
+        klen = ds.key_length or key_length
+        start = ds.key_offset
+        return record[start : start + klen]
+
     # ── Point operations ──────────────────────────────────────────────
 
     def read(
@@ -74,9 +98,10 @@ class VsamEngine:
         ds = self._get_ds(file_name)
         if ds is None:
             return None, RESP_DISABLED
-        # Find record whose key prefix matches
+        klen = ds.key_length or key_length
+        search = key[:klen]
         for record in ds.store.keys():
-            if record[:key_length] == key[:key_length]:
+            if self._record_key(ds, record, key_length) == search:
                 return bytes(record), RESP_NORMAL
         return None, RESP_NOTFND
 
@@ -85,9 +110,9 @@ class VsamEngine:
         ds = self._get_ds(file_name)
         if ds is None:
             return RESP_DISABLED
-        key_prefix = record[:key_length]
+        key_prefix = self._record_key(ds, record, key_length)
         for existing in list(ds.store.keys()):
-            if existing[:key_length] == key_prefix:
+            if self._record_key(ds, existing, key_length) == key_prefix:
                 return RESP_DUPREC
         ds.store[bytes(record)] = bytes(record)
         return RESP_NORMAL
@@ -99,9 +124,10 @@ class VsamEngine:
         ds = self._get_ds(file_name)
         if ds is None:
             return RESP_DISABLED
-        key_prefix = key[:key_length]
+        klen = ds.key_length or key_length
+        key_prefix = key[:klen]
         for existing in list(ds.store.keys()):
-            if existing[:key_length] == key_prefix:
+            if self._record_key(ds, existing, key_length) == key_prefix:
                 del ds.store[existing]
                 ds.store[bytes(record)] = bytes(record)
                 return RESP_NORMAL
@@ -112,9 +138,10 @@ class VsamEngine:
         ds = self._get_ds(file_name)
         if ds is None:
             return RESP_DISABLED
-        key_prefix = key[:key_length]
+        klen = ds.key_length or key_length
+        key_prefix = key[:klen]
         for existing in list(ds.store.keys()):
-            if existing[:key_length] == key_prefix:
+            if self._record_key(ds, existing, key_length) == key_prefix:
                 del ds.store[existing]
                 return RESP_NORMAL
         return RESP_NOTFND
@@ -129,11 +156,12 @@ class VsamEngine:
         if ds is None:
             return RESP_DISABLED
         keys = list(ds.store.keys())
-        prefix = key[:key_length]
-        # Find first key >= prefix
+        klen = ds.key_length or key_length
+        prefix = key[:klen]
+        # Find first key >= prefix (compared on the dataset's key slice)
         idx = 0
         for i, k in enumerate(keys):
-            if k[:key_length] >= prefix:
+            if self._record_key(ds, k, key_length) >= prefix:
                 idx = i
                 break
         self._cursors[cursor_key] = idx
