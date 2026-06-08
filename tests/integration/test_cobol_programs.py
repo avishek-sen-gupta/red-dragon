@@ -5748,3 +5748,221 @@ class TestRefModLengthOf:
         assert (
             _decode_alpha(region, 5, 1) == "Z"
         ), "group-slice source length LENGTH OF G mis-resolved (oq2c)"
+
+
+class TestNumericDisplayVsAlphanumericRelation:
+    """red-dragon-dmu8: relation compare of a numeric USAGE DISPLAY field
+    (PIC 9(n), ZONED_DECIMAL) against an alphanumeric figurative (SPACES /
+    LOW-VALUES) or a non-numeric character literal ('*') must compare via the
+    numeric field's zoned CHARACTER (display) representation, NOT its decoded
+    integer value.
+
+    Real CardDemo COACTVWC.cbl:628-629:
+        IF ACCTSIDI OF CACTVWAI = '*' OR ACCTSIDI = SPACES
+    where ACCTSIDI is PIC 9(11). After RECEIVE writes ACCTSIDI='00000000011',
+    this must evaluate FALSE so 9000-READ-ACCT runs.
+
+    Scope: ZONED DISPLAY numerics only (COMP/COMP-3 untouched). Signed handling
+    is scoped to unsigned-effective values — the display representation used is
+    the raw zoned digit characters.
+    """
+
+    @covers(CobolFeature.COMPARISON_OPERATORS, CobolFeature.FIGURATIVE_SPACES)
+    def test_numeric_display_with_digits_not_equal_spaces(self):
+        """PIC 9(11) holding digit chars '00000000011' = SPACES is FALSE.
+
+        The COACTVWC ENTER case: a valid account id is NOT spaces. The zoned
+        DISPLAY field's character representation ('00000000011') compared to
+        SPACES (11 blanks) is unequal, so the ELSE branch (R=2) runs.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-NDS.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 G.",
+                "   05 N PIC 9(11).",
+                "01 NA REDEFINES G PIC X(11).",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE '00000000011' TO NA.",
+                "    IF N = SPACES",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        # G/N occupies bytes 0..10; R is byte 11.
+        assert _decode_zoned_unsigned(region, 11, 1) == 2, (
+            "numeric-DISPLAY field with digits compared equal to SPACES "
+            "(dmu8): it must compare via zoned character representation"
+        )
+
+    @covers(CobolFeature.COMPARISON_OPERATORS, CobolFeature.FIGURATIVE_SPACES)
+    def test_numeric_display_holding_spaces_equals_spaces(self):
+        """PIC 9(11) whose bytes are all spaces = SPACES is TRUE (dmu8).
+
+        A zoned DISPLAY field filled with blank characters compares EQUAL to the
+        SPACES figurative when compared by its character representation. Decoding
+        such a field to an integer (0) would compare unequal to the 11-blank
+        figurative string, giving the wrong answer; the fix compares characters.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-NDSP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 G.",
+                "   05 N PIC 9(11).",
+                "01 NA REDEFINES G PIC X(11).",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE SPACES TO NA.",
+                "    IF N = SPACES",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 11, 1) == 1, (
+            "a spaces-filled zoned DISPLAY field must compare EQUAL to SPACES "
+            "via its character representation (dmu8)"
+        )
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_numeric_display_holding_placeholder_equals_char_literal(self):
+        """PIC 9(11) holding the BMS placeholder '*' (left-justified, blank
+        padded) = '*' is TRUE (dmu8).
+
+        This is the exact COACTVWC.cbl:628 case before a valid id is entered:
+        ``IF ACCTSIDI = '*'``. The literal '*' extends to the field's 11-char
+        width ('*' + 10 blanks); the field's character representation is the
+        same, so they compare EQUAL. Decoding the non-numeric zoned field to an
+        integer and comparing to the string '*' gives the wrong (unequal) answer.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-NDC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 G.",
+                "   05 N PIC 9(11).",
+                "01 NA REDEFINES G PIC X(11).",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE '*' TO NA.",
+                "    IF N = '*'",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 11, 1) == 1, (
+            "numeric-DISPLAY field holding '*' (blank-padded) must compare "
+            "EQUAL to the char literal '*' via character representation (dmu8)"
+        )
+
+    @covers(CobolFeature.COMPARISON_OPERATORS, CobolFeature.PIC_CLAUSE)
+    def test_numeric_display_field_equals_numeric_literal_regression(self):
+        """Regression: numeric<->numeric-literal still compares by value.
+
+        PIC 9(11) VALUE 11 = 11 is TRUE (R=1).
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-NDN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 N PIC 9(11) VALUE 11.",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF N = 11",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert (
+            _decode_zoned_unsigned(region, 11, 1) == 1
+        ), "numeric<->numeric value comparison regressed (dmu8 over-reach)"
+
+    @covers(CobolFeature.COMPARISON_OPERATORS, CobolFeature.FIGURATIVE_SPACES)
+    def test_alphanumeric_field_equals_spaces_regression(self):
+        """Regression: a spaces-filled X field still compares equal to SPACES."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-AS.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 A PIC X(5).",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE SPACES TO A.",
+                "    IF A = SPACES",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert (
+            _decode_zoned_unsigned(region, 5, 1) == 1
+        ), "alphanumeric SPACES comparison regressed (dmu8 over-reach)"
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_alphanumeric_field_equals_char_literal_regression(self):
+        """Regression: an X field holding 'XXXXX' compares equal to 'X' only
+        at full width — here A='X    ' (left-justified) != 'X' padded to 5,
+        so the unequal case must take the ELSE branch (R=2)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-AC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 A PIC X(5) VALUE 'XXXXX'.",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF A = 'XXXXX'",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert (
+            _decode_zoned_unsigned(region, 5, 1) == 1
+        ), "alphanumeric char-literal comparison regressed (dmu8 over-reach)"
