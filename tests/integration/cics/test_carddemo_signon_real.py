@@ -34,7 +34,6 @@ from interpreter.cics.strategy import CicsLoweringStrategy
 from interpreter.cics.types import CicsContext, DispatchKind
 from interpreter.cics.dispatcher import run_cics, InputEvent
 from interpreter.cics.bootstrap import compile_cics_program
-from interpreter.cics.bms.loader import BmsLoader, BmsMap, BmsField
 from interpreter.cics.vsam.engine import VsamEngine
 from interpreter.cics.vsam.fct import FctConfig, DatasetConfig
 from interpreter.cobol.features import CobolFeature
@@ -78,40 +77,6 @@ def _usrsec_engine() -> VsamEngine:
     return engine
 
 
-def _map_loader() -> BmsLoader:
-    loader = BmsLoader(maps_dir=None)
-    loader.register_stub(
-        "COSGN0A",
-        BmsMap(
-            name="COSGN0A",
-            fields={
-                "USERID": BmsField(offset=0, length=8),
-                "PASSWD": BmsField(offset=8, length=8),
-                "ERRMSG": BmsField(offset=16, length=78),
-            },
-        ),
-    )
-    loader.register_stub(
-        "COMEN1A",
-        BmsMap(
-            name="COMEN1A",
-            fields={
-                b: BmsField(offset=0, length=8)
-                for b in (
-                    "TITLE01",
-                    "TITLE02",
-                    "TRNNAME",
-                    "PGMNAME",
-                    "CURDATE",
-                    "ERRMSG",
-                    "OPTION",
-                )
-            },
-        ),
-    )
-    return loader
-
-
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
 def test_real_carddemo_signon_menu_and_option_select():
     """Real three-turn flow through unmodified CardDemo source:
@@ -149,7 +114,6 @@ def test_real_carddemo_signon_menu_and_option_select():
         context_holder=context_holder,
         result_holder=result_holder,
         vsam_engine=_usrsec_engine(),
-        bms_loader=_map_loader(),
         screen_queue=screen_q,
         input_queue=input_q,
     )
