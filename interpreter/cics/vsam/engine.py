@@ -124,8 +124,12 @@ class VsamEngine:
         ds = self._get_ds(file_name)
         if ds is None:
             return RESP_DISABLED
+        # EXEC CICS REWRITE has no RIDFLD: the record key comes from the FROM
+        # record's own key field. When the caller passes an empty key (the
+        # REWRITE lowering, which has no RIDFLD to copy in), derive the match
+        # key from the record itself — mirroring write()'s self-keyed behaviour.
         klen = ds.key_length or key_length
-        key_prefix = key[:klen]
+        key_prefix = key[:klen] if key else self._record_key(ds, record, key_length)
         for existing in list(ds.store.keys()):
             if self._record_key(ds, existing, key_length) == key_prefix:
                 del ds.store[existing]
