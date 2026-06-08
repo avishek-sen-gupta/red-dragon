@@ -78,7 +78,7 @@ def _usrsec_engine() -> VsamEngine:
     return engine
 
 
-def _signon_map_loader() -> BmsLoader:
+def _map_loader() -> BmsLoader:
     loader = BmsLoader(maps_dir=None)
     loader.register_stub(
         "COSGN0A",
@@ -91,20 +91,47 @@ def _signon_map_loader() -> BmsLoader:
             },
         ),
     )
+    loader.register_stub(
+        "COMEN1A",
+        BmsMap(
+            name="COMEN1A",
+            fields={
+                b: BmsField(offset=0, length=8)
+                for b in (
+                    "TITLE01",
+                    "TITLE02",
+                    "TRNNAME",
+                    "PGMNAME",
+                    "CURDATE",
+                    "ERRMSG",
+                )
+            },
+        ),
+    )
     return loader
 
 
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
-def test_real_carddemo_signon_reaches_menu_xctl():
-    """Real COSGN00C: valid credentials -> READ USRSEC -> XCTL to COMEN01C."""
+def test_real_carddemo_signon_then_menu_renders():
+    """Real two-program flow:
+
+    Turn 1 (COSGN00C): valid credentials -> RECEIVE MAP -> UPPER-CASE ->
+        READ USRSEC -> password check -> XCTL COMEN01C.
+    Turn 2 (COMEN01C): first display -> SEND MAP COMEN1A (the user menu) ->
+        RETURN TRANSID CM00.
+
+    Each program is the real, unmodified CardDemo source; they share one
+    CicsLoweringStrategy (and its USRSEC engine + BMS maps). Driven via the
+    single-execution run_cics entry (no unbounded dispatcher loop).
+    """
     from interpreter.cobol.cobol_parser import ProLeapCobolParser
     from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 
     app = Path(_CARDDEMO_HOME)
-    source_path = app / "cbl" / "COSGN00C.cbl"
-    assert (
-        source_path.is_file()
-    ), f"COSGN00C not found under CARDDEMO_HOME: {source_path}"
+    signon_path = app / "cbl" / "COSGN00C.cbl"
+    menu_path = app / "cbl" / "COMEN01C.cbl"
+    assert signon_path.is_file(), f"COSGN00C not found: {signon_path}"
+    assert menu_path.is_file(), f"COMEN01C not found: {menu_path}"
 
     parser = ProLeapCobolParser(
         RealSubprocessRunner(),
@@ -120,36 +147,65 @@ def test_real_carddemo_signon_reaches_menu_xctl():
         context_holder=context_holder,
         result_holder=result_holder,
         vsam_engine=_usrsec_engine(),
-        bms_loader=_signon_map_loader(),
+        bms_loader=_map_loader(),
         screen_queue=screen_q,
         input_queue=input_q,
     )
 
-    src = apply_cics_prepass(source_path.read_text()).encode()
-    program = compile_cics_program(src, parser, strategy)
+    signon = compile_cics_program(
+        apply_cics_prepass(signon_path.read_text()).encode(), parser, strategy
+    )
+    menu = compile_cics_program(
+        apply_cics_prepass(menu_path.read_text()).encode(), parser, strategy
+    )
 
-    # ENTER turn: non-empty COMMAREA => EIBCALEN>0 => PROCESS-ENTER-KEY path.
+    # --- Turn 1: sign-on ENTER turn -> XCTL COMEN01C ---
     input_q.put(
         InputEvent(eibaid="\x7d", fields={"USERID": "USER0001", "PASSWD": "PASS0001"})
     )
-    ctx = CicsContext(transid="CC00", commarea=b"\x00" * 100, eibaid="\x7d")
-
-    result = run_cics(
-        program,
-        ctx,
+    r1 = run_cics(
+        signon,
+        CicsContext(transid="CC00", commarea=b"\x00" * 100, eibaid="\x7d"),
         screen_q,
         input_q,
         context_holder=context_holder,
         result_holder=result_holder,
         max_steps=200_000,
     )
-
-    assert result.kind == DispatchKind.XCTL, (
-        f"sign-on did not XCTL (kind={result.kind}); the sign-on screen likely "
-        f"re-sent with an error message instead of advancing to the menu"
+    assert r1.kind == DispatchKind.XCTL, (
+        f"sign-on did not XCTL (kind={r1.kind}); it likely re-sent the sign-on "
+        f"screen with an error instead of advancing to the menu"
     )
     assert (
-        result.program or ""
+        r1.program or ""
     ).strip() == "COMEN01C", (
-        f"sign-on XCTL'd to {result.program!r}, expected COMEN01C (the user menu)"
+        f"sign-on XCTL'd to {r1.program!r}, expected COMEN01C (the user menu)"
     )
+
+    # --- Turn 2: the menu program's first display renders the menu map ---
+    while not screen_q.empty():  # drain any sign-on screen output
+        screen_q.get_nowait()
+    menu_commarea = (r1.commarea or b"").ljust(300, b"\x00")
+    r2 = run_cics(
+        menu,
+        CicsContext(transid="CM00", commarea=menu_commarea, eibaid="\x7d"),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=400_000,
+    )
+
+    screens = []
+    while not screen_q.empty():
+        screens.append(screen_q.get_nowait())
+
+    assert any(
+        s.get("map") == "COMEN1A" for s in screens
+    ), f"menu program did not render COMEN1A; screens={[s.get('map') for s in screens]}"
+    menu_screen = next(s for s in screens if s.get("map") == "COMEN1A")
+    # The menu header reflects the running transid/program (proves real execution).
+    assert menu_screen["fields"].get("TRNNAME") == "CM00"
+    assert menu_screen["fields"].get("PGMNAME") == "COMEN01C"
+    # COMEN01C parks for the next terminal action (pseudo-conversational).
+    assert r2.kind == DispatchKind.RETURN_TRANSID
