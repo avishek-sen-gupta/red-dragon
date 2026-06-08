@@ -31,6 +31,17 @@ class RefModReference:
 
 
 @dataclass(frozen=True)
+class RefModLengthOf:
+    """LENGTH OF <field> special register inside a reference modification.
+
+    Resolves to the byte length of the named field (a compile-time constant),
+    NOT a decode of the field's value. Example: WS-DEST(LENGTH OF G + 1 : ...).
+    """
+
+    name: str
+
+
+@dataclass(frozen=True)
 class RefModBinOp:
     """Binary arithmetic operation in reference modification.
 
@@ -43,7 +54,7 @@ class RefModBinOp:
 
 
 # Discriminated union of all reference modification expression types
-RefModExpr = Union[RefModLiteral, RefModReference, RefModBinOp]
+RefModExpr = Union[RefModLiteral, RefModReference, RefModLengthOf, RefModBinOp]
 
 
 def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
@@ -62,6 +73,9 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
     elif kind == "ref":
         return RefModReference(name=data.get("name", ""))
 
+    elif kind == "length_of":
+        return RefModLengthOf(name=data.get("name", ""))
+
     elif kind == "binop":
         left = ref_mod_expr_from_dict(data.get("left", {}))
         right = ref_mod_expr_from_dict(data.get("right", {}))
@@ -78,6 +92,8 @@ def _ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
         return {"kind": "lit", "value": expr.value}
     elif isinstance(expr, RefModReference):
         return {"kind": "ref", "name": expr.name}
+    elif isinstance(expr, RefModLengthOf):
+        return {"kind": "length_of", "name": expr.name}
     elif isinstance(expr, RefModBinOp):
         return {
             "kind": "binop",

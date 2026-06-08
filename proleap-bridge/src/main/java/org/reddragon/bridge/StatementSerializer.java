@@ -2236,6 +2236,19 @@ public final class StatementSerializer {
         }
         CobolParser.IdentifierContext id = ctx.identifier();
         if (id != null) {
+            // LENGTH OF <field> surfaces as an identifier wrapping a
+            // specialRegister; getText() would glue it into "LENGTHOF<field>"
+            // (an unresolvable name the frontend treats as 0). Emit a structured
+            // length_of node so the frontend resolves the field's byte length —
+            // matching serializeFromValue's PERFORM-VARYING handling. (oq2c)
+            CobolParser.SpecialRegisterContext sr = findLengthOfSpecialRegister(id);
+            if (sr != null) {
+                JsonObject obj = new JsonObject();
+                obj.addProperty("kind", "length_of");
+                CobolParser.IdentifierContext inner = sr.identifier();
+                obj.addProperty("name", inner != null ? leafDataName(inner) : "");
+                return obj;
+            }
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
             ref.addProperty("name", leafDataName(id));
