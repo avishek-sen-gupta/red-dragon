@@ -456,6 +456,29 @@ class TestMoveLiteral:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 4) == 42
 
+    @covers(CobolFeature.MOVE)
+    def test_move_multi_target(self):
+        """MOVE x TO A B C distributes the source to every receiving field."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-MMOVE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 0.",
+                "77 WS-B PIC 9(4) VALUE 0.",
+                "77 WS-C PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 42 TO WS-A WS-B WS-C.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 42
+        assert _decode_zoned_unsigned(region, 4, 4) == 42
+        assert _decode_zoned_unsigned(region, 8, 4) == 42
+
 
 class TestIfElseBranch:
     @covers(CobolFeature.IF_ELSE, CobolFeature.COMPARISON_OPERATORS)

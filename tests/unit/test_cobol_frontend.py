@@ -260,7 +260,7 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             MoveStatement(
-                source=RefModOperand(name="123"), target=RefModOperand(name="WS-A")
+                source=RefModOperand(name="123"), targets=[RefModOperand(name="WS-A")]
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -289,7 +289,7 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             MoveStatement(
-                source=RefModOperand(name="WS-A"), target=RefModOperand(name="WS-B")
+                source=RefModOperand(name="WS-A"), targets=[RefModOperand(name="WS-B")]
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)

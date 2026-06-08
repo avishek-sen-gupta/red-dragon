@@ -189,10 +189,13 @@ def lower_move(
     stmt: MoveStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """MOVE X [( start : length )] TO Y: handle reference modification."""
-    target_ref, target_rr = ctx.resolve_field_ref(stmt.target.name, materialised)
+    """MOVE X [( start : length )] TO Y...Z.
 
-    # Get the source value (decode field or literal)
+    The source is evaluated ONCE and stored into every receiving field, each with
+    its own reference modification and PICTURE conversion (COBOL semantics).
+    """
+
+    # Get the source value (decode field or literal) — evaluated ONCE.
     if ctx.has_field(stmt.source.name, materialised):
         source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
         decoded_reg = ctx.emit_decode_field(
@@ -266,58 +269,66 @@ def lower_move(
             )
             value_str_reg = result_reg
 
-    # Handle target reference modification (write path): MOVE X TO Y(start:length)
-    if stmt.target.ref_mod_start is not None:
-        logging.debug(
-            f"lower_move: Detected reference modification on target {stmt.target.name}: "
-            f"start={stmt.target.ref_mod_start}, length={stmt.target.ref_mod_length}"
-        )
-        # Load current target field value as string (needed for SPLICE)
-        target_decoded = ctx.emit_decode_field(
-            target_rr, target_ref.fl, target_ref.offset_reg
-        )
-        target_str_reg = ctx.emit_to_string(target_decoded)
+    # Store the (once-evaluated) source value into each receiving field. Each
+    # target gets its own reference modification and PICTURE conversion; the
+    # base source value (source_value_reg) is never clobbered across targets.
+    source_value_reg = value_str_reg
+    for target in stmt.targets:
+        target_ref, target_rr = ctx.resolve_field_ref(target.name, materialised)
+        target_value_reg = source_value_reg
 
-        # Evaluate target ref mod start; convert 1-indexed → 0-indexed
-        tgt_start_reg = eval_ref_mod_expr(ctx, stmt.target.ref_mod_start, materialised)
-        one_reg = ctx.const_to_reg("1")
-        tgt_start_0indexed_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                operator=BinopKind.SUB,
-                left=tgt_start_reg,
-                right=one_reg,
-                result_reg=tgt_start_0indexed_reg,
+        # Handle target reference modification (write path): MOVE X TO Y(start:length)
+        if target.ref_mod_start is not None:
+            logging.debug(
+                f"lower_move: Detected reference modification on target {target.name}: "
+                f"start={target.ref_mod_start}, length={target.ref_mod_length}"
             )
-        )
-
-        # Evaluate target ref mod length (or use large sentinel for "to end")
-        if stmt.target.ref_mod_length is not None:
-            tgt_length_reg = eval_ref_mod_expr(
-                ctx, stmt.target.ref_mod_length, materialised
+            # Load current target field value as string (needed for SPLICE)
+            target_decoded = ctx.emit_decode_field(
+                target_rr, target_ref.fl, target_ref.offset_reg
             )
-        else:
-            tgt_length_reg = ctx.const_to_reg("999999")
+            target_str_reg = ctx.emit_to_string(target_decoded)
 
-        # Emit SPLICE: replace substring in target with source value
-        spliced_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=spliced_reg,
-                func_name=FuncName(BuiltinName.STRING_SPLICE),
-                args=(
-                    target_str_reg,
-                    tgt_start_0indexed_reg,
-                    tgt_length_reg,
-                    value_str_reg,
-                ),
+            # Evaluate target ref mod start; convert 1-indexed → 0-indexed
+            tgt_start_reg = eval_ref_mod_expr(ctx, target.ref_mod_start, materialised)
+            one_reg = ctx.const_to_reg("1")
+            tgt_start_0indexed_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    operator=BinopKind.SUB,
+                    left=tgt_start_reg,
+                    right=one_reg,
+                    result_reg=tgt_start_0indexed_reg,
+                )
             )
-        )
-        value_str_reg = spliced_reg
 
-    ctx.emit_encode_and_write(
-        target_rr, target_ref.fl, value_str_reg, target_ref.offset_reg
-    )
+            # Evaluate target ref mod length (or use large sentinel for "to end")
+            if target.ref_mod_length is not None:
+                tgt_length_reg = eval_ref_mod_expr(
+                    ctx, target.ref_mod_length, materialised
+                )
+            else:
+                tgt_length_reg = ctx.const_to_reg("999999")
+
+            # Emit SPLICE: replace substring in target with source value
+            spliced_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=spliced_reg,
+                    func_name=FuncName(BuiltinName.STRING_SPLICE),
+                    args=(
+                        target_str_reg,
+                        tgt_start_0indexed_reg,
+                        tgt_length_reg,
+                        source_value_reg,
+                    ),
+                )
+            )
+            target_value_reg = spliced_reg
+
+        ctx.emit_encode_and_write(
+            target_rr, target_ref.fl, target_value_reg, target_ref.offset_reg
+        )
 
 
 def lower_move_corresponding(

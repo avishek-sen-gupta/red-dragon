@@ -204,7 +204,7 @@ class TestLowerMoveWithMaterialised:
 
         stmt = MoveStatement(
             source=RefModOperand(name="HELLO"),
-            target=RefModOperand(name="WS-A"),
+            targets=[RefModOperand(name="WS-A")],
         )
         lower_move(ctx, stmt, materialised)
 
