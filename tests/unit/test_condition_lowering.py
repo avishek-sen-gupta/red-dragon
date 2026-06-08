@@ -237,11 +237,15 @@ class TestConditionNameExpansion:
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         assert len(eq_ops) == 1
-        # Verify the comparison value 'A' appears as a CONST
+        # Verify the comparison value 'A' appears as a CONST. The parent field is
+        # PIC X(1) (ALPHANUMERIC), so the 88 VALUE is emitted as a QUOTED string
+        # literal ('"A"') — it must compare as the character "A" against the
+        # parent's decoded character form, not be numerically coerced (the
+        # read-side counterpart of the SET <88> character write, red-dragon-xcm9).
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        assert "A" in const_vals
+        assert '"A"' in const_vals
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_multi_value_or_expansion(self):
@@ -312,12 +316,15 @@ class TestConditionNameExpansion:
         assert len(ge_ops) == 1
         assert len(le_ops) == 1
         assert len(and_ops) == 1
-        # Verify the range boundary values 'A' and 'Z' appear as CONSTs
+        # Verify the range boundary values 'A' and 'Z' appear as CONSTs. The
+        # parent is PIC X(1) (ALPHANUMERIC), so each boundary is emitted as a
+        # QUOTED string literal so it compares against the field's decoded
+        # character form (red-dragon-xcm9).
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        assert "A" in const_vals
-        assert "Z" in const_vals
+        assert '"A"' in const_vals
+        assert '"Z"' in const_vals
 
     @covers(CobolFeature.CONDITION_VALUES_THRU)
     def test_mixed_discrete_and_range(self):
@@ -356,13 +363,16 @@ class TestConditionNameExpansion:
         assert len(le_ops) == 1
         assert len(and_ops) == 1
         assert len(or_ops) == 1
-        # Verify discrete 'A' and range boundaries 'X', 'Z' appear as CONSTs
+        # Verify discrete 'A' and range boundaries 'X', 'Z' appear as CONSTs. The
+        # parent is PIC X(1) (ALPHANUMERIC), so each VALUE is emitted as a QUOTED
+        # string literal to compare as a character against the decoded field
+        # (red-dragon-xcm9).
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        assert "A" in const_vals
-        assert "X" in const_vals
-        assert "Z" in const_vals
+        assert '"A"' in const_vals
+        assert '"X"' in const_vals
+        assert '"Z"' in const_vals
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_unknown_condition_passes_through(self):
