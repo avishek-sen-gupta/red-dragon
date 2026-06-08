@@ -7,7 +7,10 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.figurative_constants import translate_cobol_figurative
+from interpreter.cobol.figurative_constants import (
+    COBOL_FIGURATIVE_CONSTANTS,
+    translate_cobol_figurative,
+)
 from interpreter.cobol.ref_mod import (
     RefModLiteral,
     RefModReference,
@@ -1106,8 +1109,20 @@ def _set_condition_name(
     # literal (VALUE '1', '0') is parsed as an int, which __string_to_bytes then
     # rejects as non-str and silently drops, leaving the byte unchanged
     # (red-dragon-0sq2). Numeric parents keep the parsed numeric literal.
+    #
+    # A figurative-constant VALUE (LOW-VALUES / SPACES / ZEROS / HIGH-VALUES) must
+    # expand to its fill character repeated to the parent's byte length — NOT be
+    # written as the literal text 'LOW-VALUES' (CardDemo COACTUPC
+    # ACUP-DETAILS-NOT-FETCHED VALUES LOW-VALUES, SPACES).
+    fig_fill = COBOL_FIGURATIVE_CONSTANTS.get(cv.from_val.upper())
     if parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC:
-        value_reg = ctx.const_to_reg(f'"{cv.from_val}"')
+        if fig_fill is not None:
+            filled = fig_fill * max(parent_ref.fl.byte_length, 1)
+            value_reg = ctx.const_to_reg('"' + filled + '"')
+        else:
+            value_reg = ctx.const_to_reg(f'"{cv.from_val}"')
+    elif fig_fill is not None and cv.from_val.upper() in ("ZERO", "ZEROS", "ZEROES"):
+        value_reg = ctx.const_to_reg(0)
     else:
         value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
     ctx.emit_encode_and_write(

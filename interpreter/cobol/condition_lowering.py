@@ -26,7 +26,9 @@ from interpreter.register import Register
 logger = logging.getLogger(__name__)
 
 
-def _emit_88_value_reg(ctx: EmitContext, raw: str, parent_is_alpha: bool) -> Register:
+def _emit_88_value_reg(
+    ctx: EmitContext, raw: str, parent_is_alpha: bool, parent_byte_length: int = 1
+) -> Register:
     """Build the comparison-value register for one side of an 88 VALUE.
 
     On a numeric parent the value is parsed (digit string -> int/float) so it
@@ -36,7 +38,20 @@ def _emit_88_value_reg(ctx: EmitContext, raw: str, parent_is_alpha: bool) -> Reg
     "1" (not be coerced to int 1, which never equals the decoded "1"). This is
     the read-side counterpart of the SET <88> TO TRUE character write
     (red-dragon-0sq2).
+
+    A figurative-constant VALUE (LOW-VALUES / SPACES / ZEROS / HIGH-VALUES) on an
+    alphanumeric parent must expand to its fill character repeated to the parent
+    field's byte length — NOT compared as the literal text 'LOW-VALUES'. This is
+    the read-side counterpart of SET <88-figurative> TO TRUE (CardDemo COACTUPC
+    ACUP-DETAILS-NOT-FETCHED VALUES LOW-VALUES, SPACES).
     """
+    fill = _FIGURATIVE_FILL.get(raw.upper())
+    if fill is not None:
+        # Numeric parent + ZEROS -> integer 0; otherwise build the fill string
+        # sized to the parent field so equality holds against the decoded field.
+        if not parent_is_alpha and raw.upper() in ("ZERO", "ZEROS", "ZEROES"):
+            return ctx.const_to_reg(0)
+        return ctx.const_to_reg('"' + fill * max(parent_byte_length, 1) + '"')
     if parent_is_alpha:
         return ctx.const_to_reg(f'"{raw}"')
     return ctx.const_to_reg(ctx.parse_literal(raw))
@@ -59,8 +74,10 @@ def _emit_single_value_test(
     )
     parent_reg = ctx.emit_decode_field(parent_rr, parent_ref.fl, parent_ref.offset_reg)
 
+    parent_len = parent_ref.fl.byte_length
+
     if cv.is_range:
-        from_reg = _emit_88_value_reg(ctx, cv.from_val, parent_is_alpha)
+        from_reg = _emit_88_value_reg(ctx, cv.from_val, parent_is_alpha, parent_len)
         ge_result = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -75,7 +92,7 @@ def _emit_single_value_test(
         parent_reg2 = ctx.emit_decode_field(
             parent_rr2, parent_ref2.fl, parent_ref2.offset_reg
         )
-        to_reg = _emit_88_value_reg(ctx, cv.to_val, parent_is_alpha)
+        to_reg = _emit_88_value_reg(ctx, cv.to_val, parent_is_alpha, parent_len)
         le_result = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -97,7 +114,7 @@ def _emit_single_value_test(
         )
         return and_result
 
-    value_reg = _emit_88_value_reg(ctx, cv.from_val, parent_is_alpha)
+    value_reg = _emit_88_value_reg(ctx, cv.from_val, parent_is_alpha, parent_len)
     eq_result = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
