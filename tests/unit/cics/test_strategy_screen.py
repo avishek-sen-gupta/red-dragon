@@ -26,7 +26,7 @@ def test_strategy_registers_screen_builtins():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_strategy_without_bms_still_constructs():
-    # No bms_loader -> screen builtins simply not registered, no error.
+    # No screen_queue/input_queue -> screen builtins simply not registered, no error.
     CicsLoweringStrategy(context_holder=[None], result_holder=[None])
 
 
