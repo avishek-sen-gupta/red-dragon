@@ -12,7 +12,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
-from interpreter.cobol.ref_mod import RefModOperand
+from interpreter.cobol.ref_mod import (
+    RefModOperand,
+    FunctionCallOperand,
+    is_function_operand,
+)
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict
 from interpreter.cics.cics_parser import parse_exec_cics_text
 
@@ -101,7 +105,7 @@ class MoveStatement:
       MOVE WS-FIELD(WS-A + 1:WS-B - 1) TO WS-OUT
     """
 
-    source: RefModOperand
+    source: RefModOperand | FunctionCallOperand
     targets: list[RefModOperand]
 
     @classmethod
@@ -112,7 +116,11 @@ class MoveStatement:
         # field; the bridge emits all of them as operands[1:].
         target_data = operands[1:]
 
-        source = RefModOperand.from_dict(source_data)
+        source: RefModOperand | FunctionCallOperand
+        if is_function_operand(source_data):
+            source = FunctionCallOperand.from_dict(source_data)
+        else:
+            source = RefModOperand.from_dict(source_data)
         targets = [RefModOperand.from_dict(t) for t in target_data]
 
         return cls(source=source, targets=targets)
@@ -126,7 +134,15 @@ class MoveStatement:
         return d
 
     def to_dict(self) -> dict:
-        operands = [self._operand_dict(self.source)]
+        if isinstance(self.source, FunctionCallOperand):
+            source_dict: dict = {
+                "kind": "function",
+                "name": self.source.name,
+                "args": list(self.source.args),
+            }
+        else:
+            source_dict = self._operand_dict(self.source)
+        operands = [source_dict]
         operands.extend(self._operand_dict(t) for t in self.targets)
         return {"type": "MOVE", "operands": operands}
 

@@ -231,7 +231,16 @@ public final class StatementSerializer {
                 if (vs instanceof CallValueStmt) {
                     sourceCall = ((CallValueStmt) vs).getCall();
                 }
-                if (sourceCall != null) {
+                JsonObject functionNode =
+                        (sourceCall != null) ? serializeFunctionNode(sourceCall) : null;
+                if (functionNode == null) {
+                    // ValueStmt's own ctx may carry the functionCall even when the
+                    // Call does not (e.g. CURRENT-DATE with no parenthesised args).
+                    functionNode = serializeFunctionNodeFromValueStmt(vs);
+                }
+                if (functionNode != null) {
+                    operands.add(functionNode);
+                } else if (sourceCall != null) {
                     operands.add(serializeMoveOperand(sourceCall));
                 } else {
                     // Literal or complex expression source: plain name object, no ref mod
@@ -1479,10 +1488,152 @@ public final class StatementSerializer {
      */
     private static JsonElement serializeArithSource(ValueStmt vs) {
         if (vs instanceof CallValueStmt) {
-            return serializeMoveOperand(((CallValueStmt) vs).getCall());
+            Call c = ((CallValueStmt) vs).getCall();
+            JsonObject fn = serializeFunctionNode(c);
+            if (fn != null) {
+                return fn;
+            }
+            return serializeMoveOperand(c);
         }
         // For literals and other operands, return as plain string
         return new JsonPrimitive(extractValueStmtText(vs));
+    }
+
+    /**
+     * Locates the {@link CobolParser.FunctionCallContext} reachable from a Call's
+     * grammar context, if any. COBOL intrinsic functions (FUNCTION UPPER-CASE(...))
+     * surface as a FUNCTION_CALL whose ctx is — or contains — a FunctionCallContext.
+     *
+     * @return the FunctionCallContext, or {@code null} when the call is not a function.
+     */
+    private static CobolParser.FunctionCallContext findFunctionCallCtx(Call call) {
+        if (call == null) {
+            return null;
+        }
+        Call unwrapped = call.unwrap();
+        if (!(unwrapped instanceof ASGElementImpl)) {
+            return null;
+        }
+        ParserRuleContext ctx = ((ASGElementImpl) unwrapped).getCtx();
+        return findFunctionCallCtx(ctx);
+    }
+
+    /**
+     * Walks a grammar context (and its ancestors/descendants) to find a
+     * FunctionCallContext. ProLeap may attach the call to an identifier-shaped
+     * context whose subtree (or parent) holds the actual functionCall rule.
+     */
+    private static CobolParser.FunctionCallContext findFunctionCallCtx(ParserRuleContext ctx) {
+        if (ctx == null) {
+            return null;
+        }
+        if (ctx instanceof CobolParser.FunctionCallContext) {
+            return (CobolParser.FunctionCallContext) ctx;
+        }
+        // Search ancestors (the Call ctx may be a child of the functionCall rule).
+        for (ParserRuleContext p = ctx.getParent(); p != null; p = p.getParent()) {
+            if (p instanceof CobolParser.FunctionCallContext) {
+                return (CobolParser.FunctionCallContext) p;
+            }
+        }
+        // Search descendants (the functionCall rule may be nested under ctx).
+        return ctx.getRuleContext(CobolParser.FunctionCallContext.class, 0) != null
+                ? ctx.getRuleContext(CobolParser.FunctionCallContext.class, 0)
+                : firstFunctionCallDescendant(ctx);
+    }
+
+    /** Depth-first search for the first FunctionCallContext descendant. */
+    private static CobolParser.FunctionCallContext firstFunctionCallDescendant(ParserRuleContext ctx) {
+        if (ctx == null) {
+            return null;
+        }
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            org.antlr.v4.runtime.tree.ParseTree child = ctx.getChild(i);
+            if (child instanceof CobolParser.FunctionCallContext) {
+                return (CobolParser.FunctionCallContext) child;
+            }
+            if (child instanceof ParserRuleContext) {
+                CobolParser.FunctionCallContext found =
+                        firstFunctionCallDescendant((ParserRuleContext) child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Serializes a COBOL intrinsic FUNCTION call to a structured node:
+     * {@code {"kind":"function","name":"UPPER-CASE","args":[<operand>, ...]}}.
+     *
+     * <p>The function name and arguments are read from the grammar context for
+     * fidelity (ProLeap models the call as a thin marker without structured args).
+     * Each argument is serialized with the existing operand/expression serializers.
+     *
+     * @return the function node, or {@code null} when {@code call} is not a function call.
+     */
+    /**
+     * Like {@link #serializeFunctionNode(Call)} but probes a ValueStmt's own
+     * grammar context. Some intrinsic forms (notably the no-argument
+     * FUNCTION CURRENT-DATE) do not surface as a CallValueStmt; the functionCall
+     * rule is reachable from the ValueStmt's ctx instead.
+     */
+    private static JsonObject serializeFunctionNodeFromValueStmt(ValueStmt vs) {
+        if (vs == null) {
+            return null;
+        }
+        ParserRuleContext ctx = vs.getCtx();
+        CobolParser.FunctionCallContext fc = findFunctionCallCtx(ctx);
+        return serializeFunctionNodeFromCtx(fc);
+    }
+
+    private static JsonObject serializeFunctionNode(Call call) {
+        CobolParser.FunctionCallContext fc = findFunctionCallCtx(call);
+        return serializeFunctionNodeFromCtx(fc);
+    }
+
+    private static JsonObject serializeFunctionNodeFromCtx(CobolParser.FunctionCallContext fc) {
+        if (fc == null) {
+            return null;
+        }
+        JsonObject obj = new JsonObject();
+        obj.addProperty("kind", "function");
+        String name = (fc.functionName() != null) ? fc.functionName().getText() : "";
+        obj.addProperty("name", name.toUpperCase());
+        JsonArray args = new JsonArray();
+        for (CobolParser.ArgumentContext arg : fc.argument()) {
+            args.add(serializeFunctionArg(arg));
+        }
+        obj.add("args", args);
+        return obj;
+    }
+
+    /**
+     * Serializes a single intrinsic-function argument to an expression node,
+     * reusing the arithmetic-expression serializer for fidelity. Falls back to a
+     * plain ref/literal node when no arithmeticExpression sub-rule is present.
+     */
+    private static JsonElement serializeFunctionArg(CobolParser.ArgumentContext arg) {
+        if (arg == null) {
+            return litNode("");
+        }
+        if (arg.arithmeticExpression() != null) {
+            return serializeArithExprCtx(arg.arithmeticExpression());
+        }
+        if (arg.identifier() != null) {
+            JsonObject ref = new JsonObject();
+            ref.addProperty("kind", "ref");
+            ref.addProperty("name", arg.identifier().getText());
+            return ref;
+        }
+        if (arg.qualifiedDataName() != null) {
+            JsonObject ref = new JsonObject();
+            ref.addProperty("kind", "ref");
+            ref.addProperty("name", arg.qualifiedDataName().getText());
+            return ref;
+        }
+        return litNode(arg.getText());
     }
 
     /**

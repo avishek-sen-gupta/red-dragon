@@ -84,6 +84,9 @@ class BuiltinName:
     COBOL_BLANK_WHEN_ZERO = "__cobol_blank_when_zero"
     STRING_SLICE = "__string_slice"
     STRING_SPLICE = "__string_splice"
+    UPPER_CASE = "__upper_case"
+    LOWER_CASE = "__lower_case"
+    CURRENT_DATE = "__current_date"
 
 
 class InspectType:

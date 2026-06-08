@@ -5161,3 +5161,102 @@ class TestIfOfQualifiedFigurative:
         region = _first_region(vm)
         # USERIDI is blank → IF fires → WS-R = 1. WS-R is at offset 8 (after X(8)).
         assert _decode_zoned_unsigned(region, 8, 4) == 1
+
+
+class TestIntrinsicFunctionUpperCase:
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.MOVE)
+    def test_upper_case_single_target(self):
+        """MOVE FUNCTION UPPER-CASE(WS-IN) TO WS-OUT uppercases the value."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-UC1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IN  PIC X(6) VALUE 'abc123'.",
+                "77 WS-OUT PIC X(6) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION UPPER-CASE(WS-IN) TO WS-OUT.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-OUT is at offset 6 (after WS-IN X(6)).
+        assert _decode_alpha(region, 6, 6) == "ABC123"
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.MOVE)
+    def test_upper_case_multiple_targets(self):
+        """MOVE FUNCTION UPPER-CASE(WS-IN) TO WS-A WS-B uppercases both."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-UC2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IN PIC X(3) VALUE 'abc'.",
+                "77 WS-A  PIC X(3) VALUE SPACES.",
+                "77 WS-B  PIC X(3) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION UPPER-CASE(WS-IN) TO WS-A WS-B.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 3, 3) == "ABC"
+        assert _decode_alpha(region, 6, 3) == "ABC"
+
+
+class TestIntrinsicFunctionLowerCase:
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.MOVE)
+    def test_lower_case_single_target(self):
+        """MOVE FUNCTION LOWER-CASE(WS-IN) TO WS-OUT lowercases the value."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-LC1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IN  PIC X(3) VALUE 'ABC'.",
+                "77 WS-OUT PIC X(3) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION LOWER-CASE(WS-IN) TO WS-OUT.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-OUT at offset 3. EBCDIC lowercase: a=0x81, b=0x82, c=0x83.
+        assert region[3] == 0x81
+        assert region[4] == 0x82
+        assert region[5] == 0x83
+
+
+class TestIntrinsicFunctionCurrentDate:
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.MOVE)
+    def test_current_date_format(self):
+        """MOVE FUNCTION CURRENT-DATE TO a PIC X(21) field yields a 21-char timestamp."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CD1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-DATE PIC X(21) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION CURRENT-DATE TO WS-DATE.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        decoded = _decode_alpha(region, 0, 21)
+        # First 8 chars are the YYYYMMDD date — all digits, plausible year.
+        assert decoded[:8].isdigit()
+        year = int(decoded[:4])
+        assert 2020 <= year <= 2100

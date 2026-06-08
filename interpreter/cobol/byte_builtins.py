@@ -529,6 +529,57 @@ def _builtin_string_splice(args: list[TypedValue], vm: VMState) -> BuiltinResult
     return BuiltinResult(value=value[:start] + replacement + value[start + length :])
 
 
+def _builtin_upper_case(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION UPPER-CASE: uppercase a string value.
+
+    Args: [value: str]
+    Returns: str
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value.upper())
+
+
+def _builtin_lower_case(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION LOWER-CASE: lowercase a string value.
+
+    Args: [value: str]
+    Returns: str
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value.lower())
+
+
+def _builtin_current_date(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION CURRENT-DATE: 21-char timestamp string.
+
+    Format (21 chars): YYYYMMDD HHMMSS hh ±hhmm
+      - 8 chars date (YYYYMMDD)
+      - 6 chars time (HHMMSS)
+      - 2 chars hundredths of a second (hh)
+      - 1 char GMT offset sign (+/-)
+      - 4 chars GMT offset magnitude (hhmm)
+
+    No arguments.
+    """
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    date_part = now.strftime("%Y%m%d")
+    time_part = now.strftime("%H%M%S")
+    hundredths = f"{now.microsecond // 10000:02d}"
+    # UTC: GMT offset is +00:00, encoded as sign (+) plus 4-char "hhmm" ("0000").
+    gmt_part = "+0000"
+    return BuiltinResult(value=date_part + time_part + hundredths + gmt_part)
+
+
 from typing import Any
 
 BYTE_BUILTINS: dict[FuncName, Any] = (
@@ -560,5 +611,8 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
+        FuncName(BuiltinName.UPPER_CASE): _builtin_upper_case,
+        FuncName(BuiltinName.LOWER_CASE): _builtin_lower_case,
+        FuncName(BuiltinName.CURRENT_DATE): _builtin_current_date,
     }
 )

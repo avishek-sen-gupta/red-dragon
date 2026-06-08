@@ -89,6 +89,32 @@ def _ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
 
 
 @dataclass(frozen=True)
+class FunctionCallOperand:
+    """COBOL intrinsic FUNCTION call used as a value source.
+
+    Serialized by the bridge as {"kind": "function", "name": "...", "args": [...]}.
+    Each arg is a structured expression dict (the same shape consumed by the
+    COBOL expression lowering): {"kind": "ref"|"lit"|"binop"|..., ...}.
+
+    Example: FUNCTION UPPER-CASE(WS-IN) → FunctionCallOperand(
+        name="UPPER-CASE", args=[{"kind": "ref", "name": "WS-IN"}])
+    """
+
+    name: str
+    args: tuple[dict, ...] = ()
+
+    @classmethod
+    def from_dict(cls, data: dict) -> FunctionCallOperand:
+        raw_args = data.get("args", []) or []
+        return cls(name=data.get("name", ""), args=tuple(raw_args))
+
+
+def is_function_operand(data: object) -> bool:
+    """True when an operand dict represents an intrinsic FUNCTION call node."""
+    return isinstance(data, dict) and data.get("kind") == "function"
+
+
+@dataclass(frozen=True)
 class RefModOperand:
     """MOVE statement operand with optional reference modification.
 
