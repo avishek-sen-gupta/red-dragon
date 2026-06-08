@@ -494,6 +494,34 @@ class EmitContext:
 
         return self.inline_ir(ir, {"%p_data": data_reg})
 
+    def emit_decode_zoned_display(
+        self, region_reg: Register, fl: FieldLayout, offset_reg: Register = NO_REGISTER
+    ) -> Register:
+        """Emit IR to read a zoned (USAGE DISPLAY) numeric field's raw character
+        representation, decoded as alphanumeric (its zoned digit characters).
+
+        Unlike emit_decode_field — which decodes a zoned field to a numeric value
+        and so loses leading zeros/width — this returns the sending field's actual
+        digit characters (e.g. PIC 9(11) value 11 -> "00000000011"). Used by MOVE
+        when a numeric-DISPLAY source feeds an alphanumeric receiver, where COBOL
+        moves the sending field's characters left-justified (red-dragon-0fqr).
+        """
+        if not offset_reg.is_present():
+            offset_reg = self.fresh_reg()
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+
+        data_reg = self.fresh_reg()
+        self.emit_inst(
+            LoadRegion(
+                result_reg=data_reg,
+                region_reg=region_reg,
+                offset_reg=offset_reg,
+                length=fl.byte_length,
+            ),
+        )
+        ir = build_decode_alphanumeric_ir(f"dec_zoned_disp_{fl.name}")
+        return self.inline_ir(ir, {"%p_data": data_reg})
+
     # ── String Conversion Helpers ─────────────────────────────────
 
     def emit_to_string(self, value_reg: Register) -> Register:
