@@ -141,3 +141,66 @@ def test_vsam_write_then_read_round_trips(cobol_parser):
     assert (
         result.commarea == expected
     ), f"VSAM read-back did not round-trip: {result.commarea!r} (expected {expected!r})"
+
+
+# DATASET(...) synonym for FILE(...), with the dataset name in a DATA-NAME
+# (PIC X(8) VALUE 'TESTDS') rather than a literal — the real CardDemo idiom.
+COBOL_VSAM_DATASET = """\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TESTDSN.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-DSN  PIC X(8) VALUE 'TESTDS'.
+       01 WS-KEY  PIC X(4) VALUE 'AA01'.
+       01 WS-REC.
+          05 WS-REC-KEY  PIC X(4).
+          05 WS-REC-BODY PIC X(6).
+       01 WS-REC2.
+          05 WS-REC2-KEY  PIC X(4).
+          05 WS-REC2-BODY PIC X(6).
+       01 WS-CA.
+          05 WS-CA-BODY PIC X(6).
+       PROCEDURE DIVISION.
+           MOVE 'AA01' TO WS-REC-KEY.
+           MOVE 'HELLO!' TO WS-REC-BODY.
+           EXEC CICS WRITE DATASET(WS-DSN) FROM(WS-REC)
+               RIDFLD(WS-KEY) END-EXEC.
+           EXEC CICS READ DATASET(WS-DSN) INTO(WS-REC2)
+               RIDFLD(WS-KEY) END-EXEC.
+           MOVE WS-REC2-BODY TO WS-CA-BODY.
+           EXEC CICS RETURN TRANSID('CC01') COMMAREA(WS-CA) END-EXEC.
+           STOP RUN.
+"""
+
+
+@covers(CobolFeature.EXEC_CICS)
+def test_vsam_dataset_keyword_and_dataname_resolution(cobol_parser):
+    """READ/WRITE DATASET(WS-DSN) resolves the synonym + data-name to its value."""
+    import queue
+
+    context_holder = [CicsContext(transid="CC00", commarea=b"", eibaid="\x7d")]
+    result_holder: list = [None]
+    strategy = CicsLoweringStrategy(
+        context_holder=context_holder,
+        result_holder=result_holder,
+        vsam_engine=_engine(),
+    )
+    source = apply_cics_prepass(COBOL_VSAM_DATASET).encode()
+    frontend = CobolFrontend(cobol_parser=cobol_parser, exec_cics_strategy=strategy)
+    program = _link_single_cobol(source, frontend)
+
+    result = run_cics(
+        program,
+        context_holder[0],
+        queue.Queue(),
+        queue.Queue(),
+        context_holder=context_holder,
+        result_holder=result_holder,
+    )
+
+    assert result.kind == DispatchKind.RETURN_TRANSID
+    expected = "HELLO!".encode("cp037")
+    assert result.commarea == expected, (
+        f"DATASET(WS-DSN) data-name not resolved: {result.commarea!r} "
+        f"(expected {expected!r})"
+    )
