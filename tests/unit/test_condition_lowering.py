@@ -40,6 +40,125 @@ def _setup_with_fields(cobol_fields: list[CobolField]):
     return ctx, materialised, condition_index
 
 
+class TestFigurativeConditions:
+    """Figurative-constant operands sized to the sibling field."""
+
+    @covers(CobolFeature.FIGURATIVE_SPACES)
+    def test_spaces_compares_against_field_length_string(self):
+        """WS-X = SPACES builds an N-space string literal sized to WS-X."""
+        fields = [
+            CobolField(name="WS-X", level=77, pic="X(8)", usage="DISPLAY", offset=0),
+        ]
+        ctx, materialised, idx = _setup_with_fields(fields)
+        lower_condition(
+            ctx,
+            {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-X"},
+                    "op": "==",
+                    "right": {"kind": "figurative", "value": "SPACES"},
+                },
+            },
+            materialised,
+            idx,
+        )
+        const_vals = [
+            i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
+        ]
+        # The figurative SPACES const must be exactly 8 spaces (quoted string).
+        assert '"' + " " * 8 + '"' in const_vals
+        binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
+        assert any(i.operands[0] == "==" for i in binop_insts)
+
+    @covers(CobolFeature.FIGURATIVE_SPACES)
+    def test_figurative_on_left_uses_right_field_length(self):
+        """SPACES = WS-X resolves the figurative length from the right operand."""
+        fields = [
+            CobolField(name="WS-X", level=77, pic="X(5)", usage="DISPLAY", offset=0),
+        ]
+        ctx, materialised, idx = _setup_with_fields(fields)
+        lower_condition(
+            ctx,
+            {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "figurative", "value": "SPACES"},
+                    "op": "==",
+                    "right": {"kind": "ref", "name": "WS-X"},
+                },
+            },
+            materialised,
+            idx,
+        )
+        const_vals = [
+            i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
+        ]
+        assert '"' + " " * 5 + '"' in const_vals
+
+    @covers(CobolFeature.FIGURATIVE_ZEROS)
+    def test_zeros_on_alphanumeric_field(self):
+        """WS-X = ZEROS builds an N-zero string literal sized to WS-X."""
+        fields = [
+            CobolField(name="WS-X", level=77, pic="X(4)", usage="DISPLAY", offset=0),
+        ]
+        ctx, materialised, idx = _setup_with_fields(fields)
+        lower_condition(
+            ctx,
+            {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-X"},
+                    "op": "==",
+                    "right": {"kind": "figurative", "value": "ZEROS"},
+                },
+            },
+            materialised,
+            idx,
+        )
+        const_vals = [
+            i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
+        ]
+        assert '"' + "0" * 4 + '"' in const_vals
+
+
+class TestAbbreviatedConditions:
+    """Abbreviated/combined relations expand to AND/OR trees."""
+
+    @covers(CobolFeature.FIGURATIVE_SPACES)
+    def test_combined_or_expands_to_disjunction(self):
+        """A = SPACES OR LOW-VALUES lowers to two relations joined by OR."""
+        fields = [
+            CobolField(name="WS-X", level=77, pic="X(3)", usage="DISPLAY", offset=0),
+        ]
+        ctx, materialised, idx = _setup_with_fields(fields)
+        node = {
+            "op": "OR",
+            "left": {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-X"},
+                    "op": "==",
+                    "right": {"kind": "figurative", "value": "SPACES"},
+                },
+            },
+            "right": {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-X"},
+                    "op": "==",
+                    "right": {"kind": "figurative", "value": "LOW-VALUES"},
+                },
+            },
+        }
+        lower_condition(ctx, node, materialised, idx)
+        binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
+        or_ops = [i for i in binop_insts if i.operands[0] == "or"]
+        eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
+        assert len(or_ops) == 1
+        assert len(eq_ops) == 2
+
+
 class TestConditionLoweringBasic:
     """Existing behavior: field OP value conditions."""
 
@@ -72,7 +191,8 @@ class TestConditionLoweringBasic:
         assert 10 in const_vals
 
     @covers(CobolFeature.IF_ELSE)
-    def test_unknown_condition_defaults_to_true(self):
+    def test_unknown_condition_never_matches(self):
+        """An unparseable text condition must NOT silently evaluate TRUE."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
@@ -82,7 +202,7 @@ class TestConditionLoweringBasic:
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
-        assert last_const.operands == ["True"]
+        assert last_const.operands == ["False"]
 
 
 class TestConditionNameExpansion:
@@ -246,7 +366,7 @@ class TestConditionNameExpansion:
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_unknown_condition_passes_through(self):
-        """A single token that is NOT a known condition name defaults to true
+        """A single token that is NOT a known condition name must never-match
         without any condition-name expansion (no or/and/== from expansion)."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
@@ -257,7 +377,7 @@ class TestConditionNameExpansion:
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
-        assert last_const.operands == ["True"]
+        assert last_const.operands == ["False"]
         # No expansion: no or/and BINOPs that condition-name expansion would produce
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         expansion_ops = [i for i in binop_insts if i.operands[0] in ("or", "and", "==")]

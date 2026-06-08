@@ -226,14 +226,81 @@ _OP_MAP: dict[str, str] = {
 }
 
 
+# Canonical figurative-constant fill characters. The value is built sized to the
+# *sibling* operand's field length so equality holds against the decoded field.
+_FIGURATIVE_FILL: dict[str, str] = {
+    "SPACE": " ",
+    "SPACES": " ",
+    "ZERO": "0",
+    "ZEROS": "0",
+    "ZEROES": "0",
+    "LOW-VALUE": "\x00",
+    "LOW-VALUES": "\x00",
+    "HIGH-VALUE": "\xff",
+    "HIGH-VALUES": "\xff",
+    "QUOTE": '"',
+    "QUOTES": '"',
+}
+
+_DEFAULT_FIGURATIVE_LEN = 1
+
+
+def _field_byte_length(
+    ctx: EmitContext,
+    expr: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> int | None:
+    """Return the byte length of a {"kind":"ref"} field operand, else None."""
+    if expr.get("kind") == "ref":
+        name = expr.get("name", "")
+        if ctx.has_field(name, materialised):
+            ref, _ = ctx.resolve_field_ref(name, materialised)
+            return ref.fl.byte_length
+    return None
+
+
+def _lower_figurative(
+    ctx: EmitContext,
+    fig: dict,
+    sibling: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Lower a {"kind":"figurative","value":...} operand.
+
+    The figurative is materialised as a string literal whose length matches the
+    *sibling* operand's field (so it equals the decoded field when the field
+    actually holds that figurative). Falls back to a single character when the
+    sibling is not a field.
+    """
+    value = str(fig.get("value", "")).upper()
+    fill = _FIGURATIVE_FILL.get(value, " ")
+    length = _field_byte_length(ctx, sibling, materialised)
+    if length is None:
+        length = _DEFAULT_FIGURATIVE_LEN
+    literal = fill * length
+    return ctx.const_to_reg(f'"{literal}"')
+
+
+def _lower_relation_operand(
+    ctx: EmitContext,
+    expr: dict,
+    sibling: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Lower one side of a relation, resolving figuratives against the sibling."""
+    if expr.get("kind") == "figurative":
+        return _lower_figurative(ctx, expr, sibling, materialised)
+    return _lower_expr_dict(ctx, expr, materialised)
+
+
 def _lower_relation_node(
     ctx: EmitContext,
     rel: dict,
     materialised: MaterialisedSectionedLayout,
 ) -> Register:
     """Lower a structured relation dict {"left": <expr>, "op": "...", "right": <expr>}."""
-    left_reg = _lower_expr_dict(ctx, rel["left"], materialised)
-    right_reg = _lower_expr_dict(ctx, rel["right"], materialised)
+    left_reg = _lower_relation_operand(ctx, rel["left"], rel["right"], materialised)
+    right_reg = _lower_relation_operand(ctx, rel["right"], rel["left"], materialised)
     op = _OP_MAP.get(rel.get("op", "=="), "==")
     result = ctx.fresh_reg()
     ctx.emit_inst(
@@ -359,8 +426,13 @@ def _lower_condition_str(
         )
         return result
 
+    # CLASS/SIGN conditions and other shapes are not yet structured here. An
+    # unparseable condition must NOT silently evaluate TRUE — doing so would make
+    # whole WHEN/IF branches fire unconditionally. Warn and never-match instead.
+    # (Full CLASS/SIGN structuring is deferred — see red-dragon-z31u.)
+    logger.warning("unparseable condition %r — never matching", condition)
     result = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=result, value="True"))
+    ctx.emit_inst(Const(result_reg=result, value="False"))
     return result
 
 

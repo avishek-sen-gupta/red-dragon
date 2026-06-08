@@ -1,11 +1,11 @@
-"""Integration: EVALUATE WHEN conditions are space-normalized by the bridge.
+"""Integration: EVALUATE WHEN conditions are structured by the bridge.
 
-Regression test for red-dragon-lu25. The ProLeap bridge's serializeEvaluate
-emitted WHEN conditions via raw getText() (token concatenation with no spaces),
-unlike the IF / SEARCH WHEN paths which apply insertSpaces. This produced
-conditions like "WS-X=SPACES..." which downstream condition lowering cannot
-parse. Assert at the parse/serialization layer that the relational operator in
-the WHEN condition is space-separated.
+Originally red-dragon-lu25 space-normalized a flat WHEN-condition string. That
+bandaid was superseded by red-dragon-z31u: the bridge now routes EVALUATE WHEN
+conditions through the SAME structured serializer the IF path uses, so a WHEN
+condition is a structured condition dict (op/left/right + relation/figurative),
+not a string. Assert the structured shape — including the abbreviated OR and the
+figurative operands that the flat-string path could not represent.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def _all_statements(asg):
     return stmts
 
 
-def _find_when_condition(asg) -> str:
+def _find_when_condition(asg):
     for stmt in _all_statements(asg):
         if isinstance(stmt, EvaluateStatement):
             for child in stmt.children:
@@ -64,14 +64,23 @@ def _find_when_condition(asg) -> str:
 
 
 @covers(CobolFeature.EVALUATE)
-def test_evaluate_when_condition_is_space_normalized():
-    """EVALUATE WHEN condition has its relational operator space-separated."""
+def test_evaluate_when_condition_is_structured():
+    """EVALUATE WHEN condition is a structured dict matching the IF path."""
     parser = ProLeapCobolParser(RealSubprocessRunner(), JAR_PATH)
     asg = parser.parse(EVALUATE_SOURCE.encode("utf-8"))
 
     condition = _find_when_condition(asg)
 
-    # Today (pre-fix): "WS-X=SPACESORLOW-VALUES" — operator glued to operands.
-    assert (
-        "WS-X = SPACES" in condition
-    ), f"WHEN condition not space-normalized: {condition!r}"
+    # Structured shape — the abbreviated "WS-X = SPACES OR LOW-VALUES" expands
+    # into an OR of two relations, with figurative operands sized downstream.
+    assert isinstance(condition, dict), f"expected structured dict, got {condition!r}"
+    assert condition.get("op") == "OR", condition
+    left = condition["left"]["relation"]
+    right = condition["right"]["relation"]
+    assert left["left"] == {"kind": "ref", "name": "WS-X"}
+    assert left["op"] == "=="
+    assert left["right"] == {"kind": "figurative", "value": "SPACES"}
+    # The trailing operand inherits the subject WS-X and operator "=".
+    assert right["left"] == {"kind": "ref", "name": "WS-X"}
+    assert right["op"] == "=="
+    assert right["right"] == {"kind": "figurative", "value": "LOW-VALUES"}
