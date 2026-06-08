@@ -405,18 +405,20 @@ def test_real_carddemo_signon_menu_and_option_select(tmp_path):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "VM gap (not the VSAM key-offset, which is verified by tests/unit/cics/"
-        "test_vsam_engine.py): COACTVWC's 2200-EDIT-MAP-INPUTS does "
-        "MOVE ACCTSIDI TO CC-ACCT-ID where the bms-tools-generated ACCTSIDI is "
-        "PIC 9(11) (ZONED_DECIMAL, faithful to PICIN='99999999999' in "
-        "COACTVW.bms) and CC-ACCT-ID is PIC X(11). The VM's numeric->alphanumeric "
-        "MOVE decodes the zoned field to the integer and reformats it "
-        "LEFT-justified ('11' + spaces) instead of preserving the zoned display "
-        "bytes ('00000000011'). CC-ACCT-ID then fails the blank/NUMERIC edit, so "
-        "INPUT-ERROR is set and 9000-READ-ACCT (the 3 chained reads) never runs. "
-        "Minimal repro: MOVE WS-NUM(PIC 9(11) VALUE 11) TO WS-ALPHA(PIC X(11)) "
-        "yields b'\\xf1\\xf1@@@@@@@@@' not b'\\xf0...\\xf1\\xf1'. Fix belongs in "
-        "the COBOL MOVE lowering / VM coercion layer (out of scope here)."
+        "Turn 5 advances past the prior numeric->alphanumeric MOVE gap "
+        "(red-dragon-0fqr, now fixed: MOVE ACCTSIDI PIC 9(11) TO CC-ACCT-ID "
+        "PIC X(11) preserves the zoned display bytes '00000000011') — COACTVWC "
+        "now renders the CACTVWA account-view map. It is blocked on a DIFFERENT, "
+        "upstream gap: the turn-5 ENTER input (ACCTSID='00000000011') is not "
+        "delivered to COACTVWC's RECEIVE MAP, so the program sees no input "
+        "(rendered ERRMSG='No input received', ACCTSID echoes the BMS placeholder "
+        "'*'). Because ACCTSIDI arrives empty, the NUMERIC edit still fails and "
+        "9000-READ-ACCT's three chained VSAM reads never run. This is a CICS "
+        "map-receive / input-event delivery gap on the second pseudo-conversational "
+        "turn into the same transaction, not a COBOL MOVE issue. The MOVE fix is "
+        "independently proven by "
+        "tests/integration/test_cobol_programs.py::"
+        "TestMoveNumericDisplayToAlphanumeric."
     ),
 )
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
