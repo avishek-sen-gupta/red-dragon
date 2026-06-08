@@ -1096,11 +1096,20 @@ def _set_condition_name(
         )
         return
 
-    # First discrete value / range-low is what makes the condition true. Mirror
-    # the read path's literal handling so SET-then-test round-trips.
+    # First discrete value / range-low is what makes the condition true.
     cv = entry.values[0]
     parent_ref, parent_rr = ctx.resolve_field_ref(entry.parent_field_name, materialised)
-    value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
+
+    # For an ALPHANUMERIC (PIC X) parent, the 88 VALUE is a character literal —
+    # write its characters verbatim. It must reach the alphanumeric encoder as a
+    # quoted string-literal Const so the VM keeps it a str; an unquoted digit
+    # literal (VALUE '1', '0') is parsed as an int, which __string_to_bytes then
+    # rejects as non-str and silently drops, leaving the byte unchanged
+    # (red-dragon-0sq2). Numeric parents keep the parsed numeric literal.
+    if parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC:
+        value_reg = ctx.const_to_reg(f'"{cv.from_val}"')
+    else:
+        value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
     ctx.emit_encode_and_write(
         parent_rr, parent_ref.fl, value_reg, parent_ref.offset_reg
     )
