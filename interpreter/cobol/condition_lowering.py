@@ -195,6 +195,9 @@ def _lower_condition_node(
     elif "relation" in node:
         # Structured relation: {"left": <expr>, "op": "...", "right": <expr>}
         inner = _lower_relation_node(ctx, node["relation"], materialised)
+    elif "class" in node:
+        # Class condition: {"class": "NUMERIC"|"ALPHABETIC"|..., "operand": <expr>}
+        inner = _lower_class_condition(ctx, node, materialised)
     else:
         # Fallback: flat text (CLASS/SIGN conditions, EVALUATE/SEARCH callers)
         inner = _lower_condition_str(
@@ -309,6 +312,46 @@ def _lower_relation_node(
             operator=resolve_binop(op),
             left=Register(str(left_reg)),
             right=Register(str(right_reg)),
+        )
+    )
+    return result
+
+
+_CLASS_BUILTIN: dict[str, str] = {
+    "NUMERIC": BuiltinName.IS_NUMERIC,
+    "ALPHABETIC": BuiltinName.IS_ALPHABETIC,
+    "ALPHABETIC-LOWER": BuiltinName.IS_ALPHABETIC_LOWER,
+    "ALPHABETIC-UPPER": BuiltinName.IS_ALPHABETIC_UPPER,
+}
+
+
+def _lower_class_condition(
+    ctx: EmitContext,
+    node: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Lower a class condition {"class": <NAME>, "operand": <expr>} to a boolean.
+
+    The operand's decoded value is converted to character data and passed to the
+    matching COBOL-layer class-test builtin (__is_numeric / __is_alphabetic / ...).
+    An unknown class never matches (rather than silently evaluating TRUE).
+    """
+    class_name = str(node.get("class", "")).upper()
+    builtin = _CLASS_BUILTIN.get(class_name)
+    if builtin is None:
+        logger.warning("unknown class condition %r — never matching", class_name)
+        result = ctx.fresh_reg()
+        ctx.emit_inst(Const(result_reg=result, value="False"))
+        return result
+
+    value_reg = _lower_expr_dict(ctx, node.get("operand", {}), materialised)
+    value_str_reg = ctx.emit_to_string(value_reg)
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result,
+            func_name=FuncName(builtin),
+            args=(Register(str(value_str_reg)),),
         )
     )
     return result

@@ -166,6 +166,7 @@ class CobolFeature(Enum):
     LOGICAL_AND = "AND logical conjunction in conditions"
     LOGICAL_OR = "OR logical disjunction in conditions"
     LOGICAL_NOT = "NOT logical negation in conditions"
+    CLASS_CONDITION = "IS [NOT] NUMERIC / ALPHABETIC / ALPHABETIC-LOWER / ALPHABETIC-UPPER class tests"
     PARENTHESIZED_EXPRESSION = "(expr) parenthesized condition and arithmetic grouping"
     SUBSCRIPT_ACCESS = "TABLE-FIELD(INDEX) subscript table element access"
     REFERENCE_MODIFICATION = (

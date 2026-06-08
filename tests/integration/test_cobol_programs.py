@@ -5365,3 +5365,115 @@ class TestSetConditionNameToTrue:
         region = _first_region(vm)
         # WS-R at offset 2 (WS-A byte 0, WS-B byte 1).
         assert _decode_zoned_unsigned(region, 2, 1) == 1
+
+
+class TestClassConditions:
+    """IS [NOT] NUMERIC / ALPHABETIC class tests (red-dragon-pz9g.20)."""
+
+    @covers(CobolFeature.CLASS_CONDITION, CobolFeature.IF_ELSE)
+    def test_numeric_true_for_digits(self):
+        """WS-X PIC X(2) = '01' IS NUMERIC → TRUE → WS-R == 1."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CLSNUM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC X(2) VALUE '01'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-X IS NUMERIC MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 2, 1) == 1
+
+    @covers(CobolFeature.CLASS_CONDITION, CobolFeature.IF_ELSE)
+    def test_numeric_false_for_letters(self):
+        """WS-X = 'AB' IS NUMERIC → FALSE → WS-R == 2."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CLSNUMF.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC X(2) VALUE 'AB'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-X IS NUMERIC MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 2, 1) == 2
+
+    @covers(CobolFeature.CLASS_CONDITION, CobolFeature.LOGICAL_NOT)
+    def test_not_numeric_inverts(self):
+        """WS-X = 'AB' IS NOT NUMERIC → TRUE → WS-R == 1."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CLSNNUM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC X(2) VALUE 'AB'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-X IS NOT NUMERIC",
+                "       MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 2, 1) == 1
+
+    @covers(CobolFeature.CLASS_CONDITION, CobolFeature.IF_ELSE)
+    def test_alphabetic_true_for_letters(self):
+        """WS-A = 'AB' IS ALPHABETIC → TRUE → WS-R == 1."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CLSALP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC X(2) VALUE 'AB'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-A IS ALPHABETIC",
+                "       MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 2, 1) == 1
+
+    @covers(CobolFeature.CLASS_CONDITION, CobolFeature.IF_ELSE)
+    def test_alphabetic_false_for_digits(self):
+        """WS-A = '01' IS ALPHABETIC → FALSE → WS-R == 2."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CLSALPF.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC X(2) VALUE '01'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-A IS ALPHABETIC",
+                "       MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 2, 1) == 2

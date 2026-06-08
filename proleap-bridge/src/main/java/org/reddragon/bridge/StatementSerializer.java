@@ -107,6 +107,7 @@ import io.proleap.cobol.asg.metamodel.valuestmt.arithmetic.PlusMinus;
 import io.proleap.cobol.asg.metamodel.valuestmt.arithmetic.Powers;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.AndOrCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.CombinableCondition;
+import io.proleap.cobol.asg.metamodel.valuestmt.condition.ClassCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.ConditionNameReference;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.SimpleCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt;
@@ -1830,12 +1831,62 @@ public final class StatementSerializer {
             } else {
                 obj.add("relation", serializeRelationCondition(rel));
             }
+        } else if (scType == SimpleCondition.SimpleConditionType.CLASS_CONDITION) {
+            serializeClassCondition(obj, sc, not);
         } else {
-            // CLASS_CONDITION or unknown — fall back to text
+            // Unknown — fall back to text
             obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
         }
 
         return obj;
+    }
+
+    /**
+     * Populates {@code obj} for a CLASS_CONDITION, emitting the structured
+     * {@code {"not": bool, "class": "NUMERIC"|..., "operand": <expr>}} shape.
+     *
+     * <p>COBOL {@code X IS NOT NUMERIC} may carry the negation on the enclosing
+     * CombinableCondition ({@code ccNot}) and/or the ClassCondition itself; the
+     * effective negation is their XOR. If the class type or operand is not
+     * supported, falls back to the existing text path for this node only.
+     */
+    private static void serializeClassCondition(JsonObject obj, SimpleCondition sc, boolean ccNot) {
+        ClassCondition cls = sc.getClassCondition();
+        if (cls == null) {
+            obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
+            return;
+        }
+        String className = classConditionTypeToString(cls.getClassConditionType());
+        if (className == null || cls.getIdentifierCall() == null) {
+            obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
+            return;
+        }
+        boolean effectiveNot = ccNot ^ cls.getNot();
+        obj.addProperty("not", effectiveNot);
+        obj.addProperty("class", className);
+        JsonObject operand = new JsonObject();
+        operand.addProperty("kind", "ref");
+        operand.addProperty("name", extractCallName(cls.getIdentifierCall()));
+        obj.add("operand", operand);
+    }
+
+    /** Maps a ProLeap class-condition type to its canonical condition string, or null if unsupported. */
+    private static String classConditionTypeToString(ClassCondition.ClassConditionType type) {
+        if (type == null) {
+            return null;
+        }
+        switch (type) {
+            case NUMERIC:
+                return "NUMERIC";
+            case ALPHABETIC:
+                return "ALPHABETIC";
+            case ALPHABETIC_LOWER:
+                return "ALPHABETIC-LOWER";
+            case ALPHABETIC_UPPER:
+                return "ALPHABETIC-UPPER";
+            default:
+                return null;
+        }
     }
 
     /**
