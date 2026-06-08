@@ -580,6 +580,68 @@ def _builtin_current_date(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=date_part + time_part + hundredths + gmt_part)
 
 
+def _builtin_is_numeric(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL `IS NUMERIC` class test for an alphanumeric operand.
+
+    Args: [value: str]
+    Returns: bool — True when the value is non-empty and all characters are
+    digits. Sign/decimal handling for signed display numerics is deferred; the
+    common all-digits case is covered (red-dragon-pz9g.20).
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=len(value) > 0 and value.isdigit())
+
+
+def _builtin_is_alphabetic(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL `IS ALPHABETIC` class test for an alphanumeric operand.
+
+    Args: [value: str]
+    Returns: bool — True when every character is a letter or a space.
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=all(ch.isalpha() or ch == " " for ch in value))
+
+
+def _builtin_is_alphabetic_lower(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL `IS ALPHABETIC-LOWER` class test.
+
+    Args: [value: str]
+    Returns: bool — True when every character is a lowercase letter or a space.
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(
+        value=all((ch.isalpha() and ch.islower()) or ch == " " for ch in value)
+    )
+
+
+def _builtin_is_alphabetic_upper(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL `IS ALPHABETIC-UPPER` class test.
+
+    Args: [value: str]
+    Returns: bool — True when every character is an uppercase letter or a space.
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(
+        value=all((ch.isalpha() and ch.isupper()) or ch == " " for ch in value)
+    )
+
+
 from typing import Any
 
 BYTE_BUILTINS: dict[FuncName, Any] = (
@@ -614,5 +676,9 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.UPPER_CASE): _builtin_upper_case,
         FuncName(BuiltinName.LOWER_CASE): _builtin_lower_case,
         FuncName(BuiltinName.CURRENT_DATE): _builtin_current_date,
+        FuncName(BuiltinName.IS_NUMERIC): _builtin_is_numeric,
+        FuncName(BuiltinName.IS_ALPHABETIC): _builtin_is_alphabetic,
+        FuncName(BuiltinName.IS_ALPHABETIC_LOWER): _builtin_is_alphabetic_lower,
+        FuncName(BuiltinName.IS_ALPHABETIC_UPPER): _builtin_is_alphabetic_upper,
     }
 )

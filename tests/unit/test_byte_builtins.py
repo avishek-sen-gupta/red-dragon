@@ -31,6 +31,10 @@ from interpreter.cobol.byte_builtins import (
     _builtin_string_splice,
     _builtin_upper_case,
     _builtin_lower_case,
+    _builtin_is_numeric,
+    _builtin_is_alphabetic,
+    _builtin_is_alphabetic_lower,
+    _builtin_is_alphabetic_upper,
     _builtin_current_date,
     BYTE_BUILTINS,
 )
@@ -379,6 +383,10 @@ class TestByteBuiltinsRegistration:
             "__upper_case",
             "__lower_case",
             "__current_date",
+            "__is_numeric",
+            "__is_alphabetic",
+            "__is_alphabetic_lower",
+            "__is_alphabetic_upper",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:
@@ -1578,3 +1586,90 @@ class TestCurrentDate:
 
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.CURRENT_DATE) in BYTE_BUILTINS
+
+
+class TestIsNumeric:
+    def test_all_digits_true(self):
+        result = _builtin_is_numeric([typed_from_runtime("01")], None)
+        assert result.value is True
+
+    def test_letters_false(self):
+        result = _builtin_is_numeric([typed_from_runtime("AB")], None)
+        assert result.value is False
+
+    def test_mixed_false(self):
+        result = _builtin_is_numeric([typed_from_runtime("A1")], None)
+        assert result.value is False
+
+    def test_trailing_spaces_false(self):
+        result = _builtin_is_numeric([typed_from_runtime("12 ")], None)
+        assert result.value is False
+
+    def test_empty_false(self):
+        result = _builtin_is_numeric([typed_from_runtime("")], None)
+        assert result.value is False
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_is_numeric([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.IS_NUMERIC) in BYTE_BUILTINS
+
+
+class TestIsAlphabetic:
+    def test_all_letters_true(self):
+        result = _builtin_is_alphabetic([typed_from_runtime("AB")], None)
+        assert result.value is True
+
+    def test_letters_and_spaces_true(self):
+        result = _builtin_is_alphabetic([typed_from_runtime("AB CD")], None)
+        assert result.value is True
+
+    def test_digits_false(self):
+        result = _builtin_is_alphabetic([typed_from_runtime("01")], None)
+        assert result.value is False
+
+    def test_mixed_false(self):
+        result = _builtin_is_alphabetic([typed_from_runtime("A1")], None)
+        assert result.value is False
+
+    def test_empty_true(self):
+        # An empty (all-space) string is alphabetic in COBOL.
+        result = _builtin_is_alphabetic([typed_from_runtime("   ")], None)
+        assert result.value is True
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_is_alphabetic([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.IS_ALPHABETIC) in BYTE_BUILTINS
+
+
+class TestIsAlphabeticLower:
+    def test_all_lower_true(self):
+        result = _builtin_is_alphabetic_lower([typed_from_runtime("ab cd")], None)
+        assert result.value is True
+
+    def test_upper_false(self):
+        result = _builtin_is_alphabetic_lower([typed_from_runtime("AB")], None)
+        assert result.value is False
+
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.IS_ALPHABETIC_LOWER) in BYTE_BUILTINS
+
+
+class TestIsAlphabeticUpper:
+    def test_all_upper_true(self):
+        result = _builtin_is_alphabetic_upper([typed_from_runtime("AB CD")], None)
+        assert result.value is True
+
+    def test_lower_false(self):
+        result = _builtin_is_alphabetic_upper([typed_from_runtime("ab")], None)
+        assert result.value is False
+
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.IS_ALPHABETIC_UPPER) in BYTE_BUILTINS
