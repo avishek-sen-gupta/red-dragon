@@ -50,7 +50,7 @@ class FakeCtx:
         offset_reg = self.fresh_reg()
         return ResolvedFieldRef(fl=fl, offset_reg=offset_reg), Register("%region")
 
-    def emit_decode_field(self, region_reg, fl):  # type: ignore[no-untyped-def]
+    def emit_decode_field(self, region_reg, fl, offset_reg=None):  # type: ignore[no-untyped-def]
         out = self.fresh_reg()
         self.decoded.append((region_reg, fl, out))
         return out

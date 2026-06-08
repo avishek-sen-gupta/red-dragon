@@ -102,7 +102,10 @@ def emit_operand_value(
     """
     if name and ctx.has_field(name, materialised):
         ref, region_reg = ctx.resolve_field_ref(name, materialised)
-        return ctx.emit_decode_field(region_reg, ref.fl)
+        # ref.offset_reg carries the resolved offset, including the element
+        # offset for a subscripted operand (e.g. TBL(IDX)); pass it so the
+        # decode reads the indexed element, not the base (element 1).
+        return ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
     literal = (name or "").strip("'\" ")
     r = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=r, value=literal))
