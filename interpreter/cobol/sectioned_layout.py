@@ -56,6 +56,22 @@ class MaterialisedSectionedLayout:
 
         raise KeyError(f"Field {name!r} not found in any DATA DIVISION section")
 
+    def subscript_stride(self, name: str) -> int:
+        """Return the subscript stride (enclosing OCCURS element_size) for a
+        leaf field, searched across sections with resolve()'s precedence.
+
+        A leaf nested inside an OCCURS group strides by the group's element_size,
+        not by the leaf's own byte_length. Returns 0 if not under an OCCURS table.
+        """
+        for layout, _reg in (
+            self.local_storage,
+            self.working_storage,
+            self.linkage,
+        ):
+            if layout.lookup_as_storage(name) is not None:
+                return layout.enclosing_occurs_element_size(name)
+        return 0
+
     def has_field(self, name: str) -> bool:
         ls_layout, _ = self.local_storage
         ws_layout, _ = self.working_storage
