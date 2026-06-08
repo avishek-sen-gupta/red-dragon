@@ -104,6 +104,7 @@ def _map_loader() -> BmsLoader:
                     "PGMNAME",
                     "CURDATE",
                     "ERRMSG",
+                    "OPTION",
                 )
             },
         ),
@@ -112,17 +113,18 @@ def _map_loader() -> BmsLoader:
 
 
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
-def test_real_carddemo_signon_then_menu_renders():
-    """Real two-program flow:
+def test_real_carddemo_signon_menu_and_option_select():
+    """Real three-turn flow through unmodified CardDemo source:
 
     Turn 1 (COSGN00C): valid credentials -> RECEIVE MAP -> UPPER-CASE ->
         READ USRSEC -> password check -> XCTL COMEN01C.
-    Turn 2 (COMEN01C): first display -> SEND MAP COMEN1A (the user menu) ->
-        RETURN TRANSID CM00.
+    Turn 2 (COMEN01C, first display): SET reenter -> SEND MAP COMEN1A (the user
+        menu) -> RETURN TRANSID CM00.
+    Turn 3 (COMEN01C, ENTER + option '01'): RECEIVE MAP -> parse option ->
+        option-table lookup -> XCTL COACTVWC (menu option 1's program).
 
-    Each program is the real, unmodified CardDemo source; they share one
-    CicsLoweringStrategy (and its USRSEC engine + BMS maps). Driven via the
-    single-execution run_cics entry (no unbounded dispatcher loop).
+    Both programs share one CicsLoweringStrategy (USRSEC engine + BMS maps).
+    Driven via the single-execution run_cics entry (no unbounded dispatcher loop).
     """
     from interpreter.cobol.cobol_parser import ProLeapCobolParser
     from interpreter.cobol.subprocess_runner import RealSubprocessRunner
@@ -209,3 +211,34 @@ def test_real_carddemo_signon_then_menu_renders():
     assert menu_screen["fields"].get("PGMNAME") == "COMEN01C"
     # COMEN01C parks for the next terminal action (pseudo-conversational).
     assert r2.kind == DispatchKind.RETURN_TRANSID
+
+    # --- Turn 3: ENTER on the menu with option '01' -> XCTL to its program ---
+    # The reenter flag set on turn 2 (SET CDEMO-PGM-REENTER TO TRUE) carries in
+    # r2.commarea, so COMEN01C now takes PROCESS-ENTER-KEY instead of redisplaying.
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    input_q.put(InputEvent(eibaid="\x7d", fields={"OPTION": "01"}))
+    r3 = run_cics(
+        menu,
+        CicsContext(
+            transid="CM00",
+            commarea=(r2.commarea or b"").ljust(300, b"\x00"),
+            eibaid="\x7d",
+        ),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=600_000,
+    )
+    assert r3.kind == DispatchKind.XCTL, (
+        f"menu option select did not XCTL (kind={r3.kind}); the menu likely "
+        f"redisplayed instead of processing the option (reenter gate / option parse)"
+    )
+    # Menu option 1 maps to COACTVWC in the option table (COMEN02Y); the
+    # subscripted XCTL PROGRAM(CDEMO-MENU-OPT-PGMNAME(WS-OPTION)) resolves it.
+    assert (
+        r3.program or ""
+    ).strip() == "COACTVWC", (
+        f"menu option 1 XCTL'd to {r3.program!r}, expected COACTVWC"
+    )
