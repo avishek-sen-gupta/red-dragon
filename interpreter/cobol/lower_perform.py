@@ -10,6 +10,7 @@ from interpreter.cobol.cobol_statements import (
     PerformUntilSpec,
     PerformVaryingSpec,
 )
+from interpreter.cobol.condition_lowering import _lower_expr_dict
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop
@@ -226,7 +227,8 @@ def lower_perform_varying(
 
     if ctx.has_field(spec.varying_var, materialised):
         varying_ref, varying_rr = ctx.resolve_field_ref(spec.varying_var, materialised)
-        from_str_reg = ctx.const_to_reg(str(spec.varying_from))
+        from_val_reg = _eval_varying_from(ctx, spec.varying_from, materialised)
+        from_str_reg = ctx.emit_to_string(from_val_reg)
         ctx.emit_encode_and_write(
             varying_rr, varying_ref.fl, from_str_reg, varying_ref.offset_reg
         )
@@ -257,6 +259,38 @@ def lower_perform_varying(
             )
         )
         ctx.emit_inst(Label_(label=exit_label))
+
+
+def _eval_varying_from(
+    ctx: EmitContext,
+    varying_from: "str | dict",
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Evaluate a PERFORM VARYING FROM value to a numeric register.
+
+    Handles the structured forms emitted by the bridge:
+    - {"kind": "length_of", "name": "WS-S"} → the field's byte length (a const)
+    - {"kind": "ref"/"lit"/"binop"/...}     → general expression lowering
+      (a bare field decodes to its value, a literal to its const).
+
+    A legacy flat-string FROM falls back to field-decode-or-literal.
+    """
+    if isinstance(varying_from, dict):
+        if varying_from.get("kind") == "length_of":
+            name = varying_from.get("name", "")
+            if ctx.has_field(name, materialised):
+                ref, _ = ctx.resolve_field_ref(name, materialised)
+                return ctx.const_to_reg(ref.fl.byte_length)
+            logger.warning("LENGTH OF unknown field %s — using 0", name)
+            return ctx.const_to_reg(0)
+        return _lower_expr_dict(ctx, varying_from, materialised)
+
+    # Legacy text form (no structured node available).
+    text = str(varying_from)
+    if ctx.has_field(text, materialised):
+        ref, rr = ctx.resolve_field_ref(text, materialised)
+        return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+    return ctx.const_to_reg(ctx.parse_literal(text))
 
 
 def emit_varying_increment(

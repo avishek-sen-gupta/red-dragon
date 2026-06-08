@@ -43,7 +43,7 @@ class PerformVaryingSpec:
     """PERFORM ... VARYING loop specification."""
 
     varying_var: str  # loop variable name
-    varying_from: str  # FROM value
+    varying_from: "str | dict"  # FROM value (structured expr dict, or legacy text)
     varying_by: str  # BY step value
     condition: dict
     test_before: bool = True
