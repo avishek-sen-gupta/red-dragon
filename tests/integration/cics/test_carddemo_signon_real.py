@@ -469,3 +469,408 @@ def test_real_carddemo_account_view_three_reads(tmp_path):
     # COACTVWC parks again pseudo-conversationally after rendering the view.
     assert r5.kind == DispatchKind.RETURN_TRANSID
     assert (r5.transid or "").strip() == "CAVW"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Account UPDATE flow (menu option '02' -> COACTUPC), with READ-for-UPDATE +
+# REWRITE writeback. Mirrors the account-VIEW driver but routes through the
+# update program. The update flow is pseudo-conversational across several turns:
+#   Turn A: XCTL COACTUPC -> first display renders CACTUPA (asks for acct id).
+#   Turn B: enter acct id -> 9000-READ-ACCT (3 chained reads) -> shows details.
+#   Turn C: submit full (valid) field set with ONE change + ENTER -> validation
+#           passes -> ACUP-CHANGES-OK-NOT-CONFIRMED -> redisplay asking confirm.
+#   Turn D: PF05 confirm -> 9600-WRITE-PROCESSING -> READ UPDATE + REWRITE.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_NEW_ACCT_STATUS = "N"  # change account status Y -> N (the modified field)
+_DFHENTER = "\x7d"
+_DFHPF5 = "\xf5"  # PF05 = confirm-and-save
+
+
+def _compile_update_programs(tmp_path):
+    """Compile COSGN00C + COMEN01C + COACTUPC sharing one strategy/engine.
+
+    Returns ``(signon, menu, acctupd, screen_q, input_q, context_holder,
+    result_holder, engine)``. The engine is returned so the test can read the
+    stored ACCTDAT/CUSTDAT records back after the REWRITE.
+    """
+    from interpreter.cobol.cobol_parser import ProLeapCobolParser
+    from interpreter.cobol.subprocess_runner import RealSubprocessRunner
+
+    app = Path(_CARDDEMO_HOME)
+    signon_path = app / "cbl" / "COSGN00C.cbl"
+    menu_path = app / "cbl" / "COMEN01C.cbl"
+    acctupd_path = app / "cbl" / "COACTUPC.cbl"
+    assert acctupd_path.is_file(), f"COACTUPC not found: {acctupd_path}"
+
+    sym_dir = tmp_path / "sym"
+    generate_symbolic_copybooks(
+        bms_dir=app / "bms",
+        out_dir=sym_dir,
+        hlasm_export_bin=HLASM_EXPORT_BIN,
+        bms_copybook_gen_src=BMS_COPYBOOK_GEN_SRC,
+    )
+    parser = ProLeapCobolParser(
+        RealSubprocessRunner(),
+        JAR_PATH,
+        copybook_dirs=[sym_dir, app / "cpy", app / "cpy-bms", _CICS_COPYBOOKS],
+    )
+
+    screen_q: queue.Queue = queue.Queue()
+    input_q: queue.Queue = queue.Queue()
+    context_holder = [None]
+    result_holder: list = [None]
+    engine = _usrsec_engine()
+    strategy = CicsLoweringStrategy(
+        context_holder=context_holder,
+        result_holder=result_holder,
+        vsam_engine=engine,
+        screen_queue=screen_q,
+        input_queue=input_q,
+    )
+
+    signon = compile_cics_program(
+        apply_cics_prepass(signon_path.read_text()).encode(), parser, strategy
+    )
+    menu = compile_cics_program(
+        apply_cics_prepass(menu_path.read_text()).encode(), parser, strategy
+    )
+    acctupd = compile_cics_program(
+        apply_cics_prepass(acctupd_path.read_text()).encode(), parser, strategy
+    )
+    return (
+        signon,
+        menu,
+        acctupd,
+        screen_q,
+        input_q,
+        context_holder,
+        result_holder,
+        engine,
+    )
+
+
+def _drive_to_coactupc(tmp_path):
+    """Sign-on -> menu -> option '02' -> XCTL COACTUPC -> first display (CACTUPA).
+
+    Returns ``(acctupd, r_first, screen_q, input_q, context_holder,
+    result_holder, engine)`` parked pseudo-conversationally on CAUP.
+    """
+    (
+        signon,
+        menu,
+        acctupd,
+        screen_q,
+        input_q,
+        context_holder,
+        result_holder,
+        engine,
+    ) = _compile_update_programs(tmp_path)
+
+    # Turn 1: sign-on -> XCTL COMEN01C
+    input_q.put(
+        InputEvent(
+            eibaid=_DFHENTER, fields={"USERID": "USER0001", "PASSWD": "PASS0001"}
+        )
+    )
+    r1 = run_cics(
+        signon,
+        CicsContext(transid="CC00", commarea=b"\x00" * 100, eibaid=_DFHENTER),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=200_000,
+    )
+    assert r1.kind == DispatchKind.XCTL and (r1.program or "").strip() == "COMEN01C"
+
+    # Turn 2: menu first display
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    r2 = run_cics(
+        menu,
+        CicsContext(
+            transid="CM00",
+            commarea=(r1.commarea or b"").ljust(300, b"\x00"),
+            eibaid=_DFHENTER,
+        ),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=400_000,
+    )
+    assert r2.kind == DispatchKind.RETURN_TRANSID
+
+    # Turn 3: menu ENTER option '02' -> XCTL COACTUPC
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    input_q.put(InputEvent(eibaid=_DFHENTER, fields={"OPTION": "02"}))
+    r3 = run_cics(
+        menu,
+        CicsContext(
+            transid="CM00",
+            commarea=(r2.commarea or b"").ljust(300, b"\x00"),
+            eibaid=_DFHENTER,
+        ),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=600_000,
+    )
+    assert (
+        r3.kind == DispatchKind.XCTL
+    ), f"menu option '02' did not XCTL (kind={r3.kind}); expected COACTUPC"
+    assert (
+        r3.program or ""
+    ).strip() == "COACTUPC", (
+        f"menu option '02' XCTL'd to {r3.program!r}, expected COACTUPC"
+    )
+
+    # Turn A: COACTUPC first display renders CACTUPA, asks for acct id.
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    r4 = run_cics(
+        acctupd,
+        CicsContext(
+            transid="CAUP",
+            commarea=(r3.commarea or b"").ljust(400, b"\x00"),
+            eibaid=_DFHENTER,
+        ),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=800_000,
+    )
+    screens = []
+    while not screen_q.empty():
+        screens.append(screen_q.get_nowait())
+    assert any(
+        s.get("map") == "CACTUPA" for s in screens
+    ), f"COACTUPC did not render CACTUPA; screens={[s.get('map') for s in screens]}"
+    first = next(s for s in screens if s.get("map") == "CACTUPA")
+    assert first["fields"].get("TRNNAME") == "CAUP"
+    assert first["fields"].get("PGMNAME") == "COACTUPC"
+    assert r4.kind == DispatchKind.RETURN_TRANSID
+    assert (r4.transid or "").strip() == "CAUP"
+    return acctupd, r4, screen_q, input_q, context_holder, result_holder, engine
+
+
+@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
+def test_real_carddemo_account_update_first_display(tmp_path):
+    """Account-update Turn A: menu option '02' -> XCTL COACTUPC -> CACTUPA."""
+    _drive_to_coactupc(tmp_path)
+
+
+def _drive_update_to_details(tmp_path):
+    """Continue past Turn A: enter the seeded acct id (Turn B) -> 9000-READ-ACCT
+    (3 chained VSAM reads) -> details rendered for edit.
+
+    Returns ``(acctupd, r_details, screen_q, input_q, context_holder,
+    result_holder, engine)`` parked on CAUP showing the fetched account.
+    """
+    acctupd, r4, screen_q, input_q, context_holder, result_holder, engine = (
+        _drive_to_coactupc(tmp_path)
+    )
+
+    # Turn B: enter acct id -> ACUP-DETAILS-NOT-FETCHED path reads + shows detail.
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    input_q.put(InputEvent(eibaid=_DFHENTER, fields={"ACCTSID": _ACCT_ID}))
+    rB = run_cics(
+        acctupd,
+        CicsContext(
+            transid="CAUP",
+            commarea=(r4.commarea or b"").ljust(400, b"\x00"),
+            eibaid=_DFHENTER,
+        ),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=1_500_000,
+    )
+    screens = []
+    while not screen_q.empty():
+        screens.append(screen_q.get_nowait())
+    assert any(
+        s.get("map") == "CACTUPA" for s in screens
+    ), f"Turn B did not render CACTUPA; screens={[s.get('map') for s in screens]}"
+    view = next(s for s in screens if s.get("map") == "CACTUPA")["fields"]
+    return acctupd, rB, view, screen_q, input_q, context_holder, result_holder, engine
+
+
+@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
+def test_real_carddemo_account_update_reads_and_shows_details(tmp_path):
+    """Account-update Turn B: enter acct id -> 9000-READ-ACCT (CXACAIX@25 ->
+    ACCTDAT@0 -> CUSTDAT@0) -> details render for edit (status + names echo)."""
+    (
+        acctupd,
+        rB,
+        view,
+        screen_q,
+        input_q,
+        context_holder,
+        result_holder,
+        engine,
+    ) = _drive_update_to_details(tmp_path)
+    # The entered account id echoes back.
+    assert (
+        view.get("ACCTSID") == _ACCT_ID
+    ), f"acct id not echoed: {view.get('ACCTSID')!r}"
+    # Read-through account status + customer names (proves the 3 chained reads).
+    assert view.get("ACSTTUS") == _ACCT_STATUS, f"status: {view.get('ACSTTUS')!r}"
+    assert view.get("ACSFNAM") == _CUST_FIRST, f"first name: {view.get('ACSFNAM')!r}"
+    assert view.get("ACSLNAM") == _CUST_LAST, f"last name: {view.get('ACSLNAM')!r}"
+    assert rB.kind == DispatchKind.RETURN_TRANSID
+    assert (rB.transid or "").strip() == "CAUP"
+
+
+def _resubmit_fields(view: dict, *, status: str) -> dict[str, str]:
+    """Build the Turn-C field set: echo back every displayed (valid) value, with
+    the account status changed. Phone is left blank (optional → valid) to avoid
+    the area-code lookup. Customer id is read but not editable."""
+    keys = [
+        "ACSTNUM",
+        "ACTSSN1",
+        "ACTSSN2",
+        "ACTSSN3",
+        "DOBYEAR",
+        "DOBMON",
+        "DOBDAY",
+        "ACSTFCO",
+        "ACSFNAM",
+        "ACSMNAM",
+        "ACSLNAM",
+        "ACSADL1",
+        "ACSADL2",
+        "ACSCITY",
+        "ACSSTTE",
+        "ACSZIPC",
+        "ACSCTRY",
+        "ACSGOVT",
+        "ACSEFTC",
+        "ACSPFLG",
+        "OPNYEAR",
+        "OPNMON",
+        "OPNDAY",
+        "EXPYEAR",
+        "EXPMON",
+        "EXPDAY",
+        "RISYEAR",
+        "RISMON",
+        "RISDAY",
+        "ACRDLIM",
+        "ACSHLIM",
+        "ACURBAL",
+        "ACRCYCR",
+        "ACRCYDB",
+        "AADDGRP",
+    ]
+    fields = {k: view.get(k, "") for k in keys if view.get(k, "")}
+    fields["ACCTSID"] = _ACCT_ID
+    fields["ACSTTUS"] = status  # the modified field
+    return fields
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "BLOCKED on red-dragon-ge72 (ProLeap bridge): intrinsic FUNCTION operands "
+        "are dropped inside IF relational conditions. COACTUPC 1205-COMPARE-OLD-NEW "
+        "(cbl line 1681) compares FUNCTION UPPER-CASE(ACUP-NEW-ACTIVE-STATUS) = "
+        "FUNCTION UPPER-CASE(ACUP-OLD-ACTIVE-STATUS); the bridge emits both sides as "
+        "the bare ref {'kind':'ref','name':'UPPER-CASE'}, so they always compare "
+        "EQUAL. Observed: status changed 'Y'->'N' is NOT detected, NO-CHANGES-FOUND, "
+        "Turn C stays ACUP-SHOW-DETAILS (INFOMSG 'Update account details presented "
+        "above.'), so the PF05 confirm -> 9600-WRITE-PROCESSING -> REWRITE path is "
+        "unreachable and ACCTDAT status stays 'Y'. Layer: proleap bridge (Java) + "
+        "condition_lowering. Turns A and B (read+detail-display) already pass; the "
+        "REWRITE engine path (red-dragon-g1bi) is fixed and ready once changes are "
+        "detected. FUNCTION TRIM is also unsupported (same issue blocks the rest of "
+        "the compound)."
+    ),
+)
+@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
+def test_real_carddemo_account_update_rewrite(tmp_path):
+    """Account-update Turns C + D: edit a field, confirm with PF05, and verify
+    the REWRITE persisted to the VsamEngine.
+
+    Turn C: resubmit the fetched (valid) field set with ACCT-ACTIVE-STATUS
+        changed Y -> N + ENTER. 1200-EDIT-MAP-INPUTS validates all fields ->
+        ACUP-CHANGES-OK-NOT-CONFIRMED -> redisplay asking for PF05 confirm.
+    Turn D: PF05 -> ACUP-CHANGES-OK-NOT-CONFIRMED AND CCARD-AID-PFK05 ->
+        9600-WRITE-PROCESSING -> READ ... UPDATE (lock) + REWRITE on ACCTDAT and
+        CUSTDAT. Assert the engine's stored ACCTDAT record now has status 'N'.
+    """
+    (
+        acctupd,
+        rB,
+        view,
+        screen_q,
+        input_q,
+        context_holder,
+        result_holder,
+        engine,
+    ) = _drive_update_to_details(tmp_path)
+
+    # --- Turn C: submit the change (status Y->N) + ENTER ---
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    input_q.put(
+        InputEvent(
+            eibaid=_DFHENTER, fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS)
+        )
+    )
+    rC = run_cics(
+        acctupd,
+        CicsContext(
+            transid="CAUP",
+            commarea=(rB.commarea or b"").ljust(400, b"\x00"),
+            eibaid=_DFHENTER,
+        ),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=2_000_000,
+    )
+    screensC = []
+    while not screen_q.empty():
+        screensC.append(screen_q.get_nowait())
+    viewC = next((s["fields"] for s in screensC if s.get("map") == "CACTUPA"), {})
+    # Turn C should ask for confirmation (no validation error). The info/error
+    # message tells us if validation rejected the input.
+    assert rC.kind == DispatchKind.RETURN_TRANSID, (
+        f"Turn C did not park (kind={rC.kind}); info={viewC.get('INFOMSG')!r} "
+        f"err={viewC.get('ERRMSG')!r}"
+    )
+
+    # --- Turn D: PF05 confirm -> 9600-WRITE-PROCESSING (READ UPDATE + REWRITE) ---
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    input_q.put(InputEvent(eibaid=_DFHPF5, fields={"ACCTSID": _ACCT_ID}))
+    rD = run_cics(
+        acctupd,
+        CicsContext(
+            transid="CAUP",
+            commarea=(rC.commarea or b"").ljust(400, b"\x00"),
+            eibaid=_DFHPF5,
+        ),
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=2_000_000,
+    )
+    # Verify the REWRITE persisted: read ACCTDAT back from the engine and check
+    # the active-status byte (offset 11, X(1)) is now 'N'.
+    record, resp = engine.read("ACCTDAT", _ACCT_ID.encode("cp037"), 11)
+    assert record is not None, f"ACCTDAT record vanished after REWRITE (resp={resp})"
+    status_byte = record[11:12].decode("cp037")
+    assert status_byte == _NEW_ACCT_STATUS, (
+        f"REWRITE did not persist status change: stored {status_byte!r}, "
+        f"expected {_NEW_ACCT_STATUS!r}"
+    )
