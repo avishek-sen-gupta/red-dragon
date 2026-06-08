@@ -321,7 +321,7 @@ class CicsLoweringStrategy:
             _register(
                 Builtins.TABLE,
                 "__cics_receive_map",
-                make_receive_map_builtin(bms_loader, input_queue),
+                make_receive_map_builtin(input_queue),
             )
             _register(
                 Builtins.TABLE,
