@@ -1,0 +1,6 @@
+         MACRO
+&NAME    DFHMSD &TYPE=,&MODE=,&LANG=,&STORAGE=,&CTRL=,&TIOAPFX=,       X
+               &EXTATT=,&MAPATTS=,&DSATTS=,&TERM=,&BASE=,&COLOR=,      X
+               &HILIGHT=,&PS=,&VALIDN=,&CASE=,&FLDSEP=,&HTAB=,&OBFMT=, X
+               &DATA=,&SUFFIX=,&CURSLOC=
+         MEND
