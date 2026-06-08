@@ -83,6 +83,189 @@ class TestBuildDataLayoutGroup:
         assert layout.lookup("WS-DAY").byte_length == 2  # type: ignore[union-attr]
 
 
+class TestGroupLengthFromPlacedExtent:
+    """A group's byte length is derived from its children's PLACED extents
+    (compiler-assigned offsets), not from summing our own length estimates.
+
+    When a child's own computed length over-reaches the next sibling's
+    compiler-assigned offset (e.g. an edited-PIC field our PIC parser sizes
+    differently than the real compiler), the group must not over-count and
+    overlap the following sibling. (CardDemo COACTUPC WS-MISC-STORAGE overlapped
+    WS-LITERALS by 9 bytes, clobbering LIT-THISPGM's VALUE.)"""
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_group_total_does_not_overlap_next_sibling(self):
+        # Two sibling 05 groups under a 01. The compiler placed the SECOND group
+        # at offset 20 (so the FIRST occupies exactly 20 bytes), but the first
+        # group's children, summed, would compute to 24 bytes (an edited-PIC
+        # over-estimate). The group total must clamp to the placed extent (20).
+        fields = [
+            CobolField(
+                name="REC",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="GRP-A",
+                        level=5,
+                        pic="",
+                        usage="DISPLAY",
+                        offset=0,
+                        children=[
+                            CobolField(
+                                name="A1",
+                                level=10,
+                                pic="X(10)",
+                                usage="DISPLAY",
+                                offset=0,
+                            ),
+                            # Compiler placed A2 at offset 10 within GRP-A but
+                            # GRP-B (next sibling) starts at 20, so A2 spans only
+                            # 10 bytes even though its PIC would parse to 14.
+                            CobolField(
+                                name="A2",
+                                level=10,
+                                pic="+ZZZ,ZZZ,ZZ9.99",
+                                usage="DISPLAY",
+                                offset=10,
+                            ),
+                        ],
+                    ),
+                    CobolField(
+                        name="GRP-B",
+                        level=5,
+                        pic="",
+                        usage="DISPLAY",
+                        offset=20,
+                        children=[
+                            CobolField(
+                                name="B1",
+                                level=10,
+                                pic="X(5)",
+                                usage="DISPLAY",
+                                offset=0,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        grp_b = layout.lookup_group("GRP-B")
+        rec = layout.lookup_group("REC")
+        # GRP-B is placed at 20 (so GRP-A spans exactly 20 bytes). REC's total
+        # must reflect the compiler-placed extent: GRP-A clamped to GRP-B's
+        # offset (20) + GRP-B (5) = 25 — NOT 21 (A2 over-reach) + 5 = 26. The
+        # parent total is what INITIALIZE/MOVE use, and what overlapped the next
+        # 01 in the CardDemo regression.
+        assert grp_b.offset == 20
+        assert rec.total_bytes == 25, (
+            f"REC total {rec.total_bytes} (expected 25); GRP-A over-reach was "
+            f"not clamped to GRP-B's placed offset"
+        )
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_simple_group_length_unchanged(self):
+        # No over-reach: a plain group still totals its children's bytes.
+        fields = [
+            CobolField(
+                name="G",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="X", level=5, pic="X(4)", usage="DISPLAY", offset=0
+                    ),
+                    CobolField(
+                        name="Y", level=5, pic="X(6)", usage="DISPLAY", offset=4
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        assert layout.lookup_group("G").total_bytes == 10
+
+
+class TestEnclosingOccursElementSize:
+    """A leaf nested inside an OCCURS group is subscripted with the GROUP's
+    element_size as the stride, not the leaf's own byte_length (CardDemo
+    CDEMO-MENU-OPT-PGMNAME(WS-OPTION) regression)."""
+
+    def _menu_layout(self):
+        # 01 TBL.  05 ENTRY OCCURS 3.  10 NUM 9(2). 10 PGM X(8). 10 USR X(1).
+        # element_size = 2 + 8 + 1 = 11
+        fields = [
+            CobolField(
+                name="TBL",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="ENTRY",
+                        level=5,
+                        pic="",
+                        usage="DISPLAY",
+                        offset=0,
+                        occurs=3,
+                        element_size=11,
+                        children=[
+                            CobolField(
+                                name="NUM",
+                                level=10,
+                                pic="9(2)",
+                                usage="DISPLAY",
+                                offset=0,
+                            ),
+                            CobolField(
+                                name="PGM",
+                                level=10,
+                                pic="X(8)",
+                                usage="DISPLAY",
+                                offset=2,
+                            ),
+                            CobolField(
+                                name="USR",
+                                level=10,
+                                pic="X(1)",
+                                usage="DISPLAY",
+                                offset=10,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ]
+        return build_data_layout(fields)
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_leaf_inside_occurs_group_returns_group_element_size(self):
+        layout = self._menu_layout()
+        # PGM lives inside ENTRY OCCURS (element_size 11), so subscripting PGM
+        # must stride by 11, not by PGM's own 8 bytes.
+        assert layout.enclosing_occurs_element_size("PGM") == 11
+        assert layout.enclosing_occurs_element_size("NUM") == 11
+        assert layout.enclosing_occurs_element_size("USR") == 11
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_field_not_in_occurs_returns_zero(self):
+        fields = [
+            CobolField(name="WS-A", level=77, pic="X(5)", usage="DISPLAY", offset=0),
+        ]
+        layout = build_data_layout(fields)
+        assert layout.enclosing_occurs_element_size("WS-A") == 0
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_occurs_group_itself_returns_its_element_size(self):
+        layout = self._menu_layout()
+        assert layout.enclosing_occurs_element_size("ENTRY") == 11
+
+
 class TestBuildDataLayoutRedefines:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_redefines_shares_offset(self):
