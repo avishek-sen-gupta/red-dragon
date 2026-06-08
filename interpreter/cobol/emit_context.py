@@ -271,6 +271,12 @@ class EmitContext:
         base_name, _ = parse_subscript_notation(name)
         return materialised.has_field(base_name)
 
+    def group_leaf_names(
+        self, group_name: str, materialised: MaterialisedSectionedLayout
+    ) -> list[str]:
+        """Leaf field names of a symbolic-map group (for SEND/RECEIVE MAP lowering)."""
+        return materialised.group_leaf_names(group_name)
+
     def resolve_field_ref_from(
         self, fl: FieldLayout, region_reg: Register
     ) -> ResolvedFieldRef:

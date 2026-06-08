@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
     from interpreter.cics.types import CicsContext
     from interpreter.cics.cics_parser import CicsOperand
-    from interpreter.cics.bms.loader import BmsLoader
     from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
@@ -248,7 +247,6 @@ class CicsLoweringStrategy:
         td_queue: list[str] | None = None,
         applid: str = "CARDDEMO",
         sysid: str = "SYS1",
-        bms_loader: "BmsLoader | None" = None,
         screen_queue: "queue.Queue | None" = None,  # type: ignore[type-arg]
         input_queue: "queue.Queue | None" = None,  # type: ignore[type-arg]
         vsam_engine: object = None,
@@ -302,11 +300,7 @@ class CicsLoweringStrategy:
             make_set_xctl_context_builtin(_holder),
         )
 
-        if (
-            bms_loader is not None
-            and screen_queue is not None
-            and input_queue is not None
-        ):
+        if screen_queue is not None and input_queue is not None:
             from interpreter.cics.builtins.screen import (  # noqa: PLC0415
                 make_send_map_builtin,
                 make_receive_map_builtin,
@@ -484,21 +478,28 @@ class CicsLoweringStrategy:
                     )
                 )
                 return
-            # MAP()/MAPSET() route through the uniform operand resolver: a quoted
-            # literal stays a Const, a data-name (the standard CardDemo idiom,
-            # e.g. MAP(CCARD-NEXT-MAP)) decodes to its runtime VALUE.
+            # MAP name (may be a dynamic data-name) -> runtime value via the resolver.
             r_map = emit_operand_value(
                 ctx, opts.get("MAP", opts.get("MAPNAME")), materialised
             )
-            r_set = emit_operand_value(ctx, opts.get("MAPSET"), materialised)
-            r_region = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=r_region, value=b""))
+            # The symbolic group is the STATIC FROM (SEND) / INTO (RECEIVE) operand.
+            if verb == "RECEIVE MAP":
+                group_op, suffix = opts.get("INTO"), "I"
+            else:  # SEND MAP
+                group_op, suffix = opts.get("FROM"), "O"
+            group_name = group_op.text if group_op is not None else ""
+            leaves = (
+                ctx.group_leaf_names(group_name, materialised) if group_name else []
+            )
+            base_names = [n[: -len(suffix)] for n in leaves if n.endswith(suffix)]
+            r_names = ctx.fresh_reg()
+            ctx.emit_inst(Const(result_reg=r_names, value=base_names))
             r_res = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
                     result_reg=r_res,
                     func_name=FuncName(bms_builtin),
-                    args=(r_map, r_set, r_region),
+                    args=(r_map, r_names),
                 )
             )
             return
