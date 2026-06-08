@@ -7,7 +7,6 @@ matched), so downstream consumers never have to re-sniff quote characters.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from lark import Lark, Transformer
@@ -36,8 +35,26 @@ class _Part:
     is_literal: bool
 
 
-# Grammar for the CICS command body (after stripping EXEC CICS / END-EXEC wrappers).
-# Each token is either KEYWORD(value) or a bare KEYWORD flag.
+# Internal transformer marker for a recognized verb. `word` is the (uppercased)
+# verb keyword, e.g. "SEND". For a compound-first keyword its optional trailing
+# option is carried in `second`; the transformer/post-step decides whether that
+# trailing option promotes the verb to a compound like "SEND MAP".
+@dataclass(frozen=True)
+class _Verb:
+    word: str
+    second: tuple[str, "CicsOperand | None"] | None
+
+
+# Grammar for the FULL EXEC CICS command text, envelope included.
+#
+# The `EXEC CICS ... END-EXEC` wrapper is matched as grammar keyword terminals
+# (case-insensitive via the `i` flag) — there is NO regex pre-surgery on the
+# input. The command's VERB is recognized as a grammar construct: either a single
+# word (READ/WRITE/XCTL/RETURN/...) or one of the small, known set of compound
+# verbs (SEND MAP, SEND TEXT, RECEIVE MAP, HANDLE ABEND/CONDITION/AID). The
+# compound second word may itself carry a value (e.g. SEND MAP('COSGN0A')); the
+# transformer routes such a value into opts under the second word's key, exactly
+# as the previous Python stitching did.
 #
 # An option value can itself contain balanced, nested parentheses — e.g. a
 # subscripted data-name PROGRAM(CDEMO-MENU-OPT-PGMNAME(WS-OPTION)) or a
@@ -48,8 +65,29 @@ class _Part:
 # The STRING vs CHARS distinction in the grammar is the SOLE source of the
 # literal-vs-data-name flag carried by CicsOperand; it is never re-derived by
 # inspecting quote characters downstream.
-_BODY_GRAMMAR = r"""
-    start: token+
+#
+# Compound second words are kept as the generic NAME terminal (so they remain
+# usable as ordinary option keys elsewhere); the compound first word is matched
+# by a dedicated case-insensitive keyword terminal so the LALR contextual lexer
+# can pick the compound verb alternatives at verb position.
+_GRAMMAR = r"""
+    start: EXEC_CICS command END_EXEC
+
+    command: verb token*
+           |                -> empty_command
+
+    verb: SEND_KW second_word    -> compound_verb
+        | RECEIVE_KW second_word -> compound_verb
+        | HANDLE_KW second_word  -> compound_verb
+        | SEND_KW                -> compound_verb_bare
+        | RECEIVE_KW             -> compound_verb_bare
+        | HANDLE_KW              -> compound_verb_bare
+        | NAME "(" value ")"     -> single_verb_valued
+        | NAME                   -> single_verb
+
+    // The word following a compound-first keyword, optionally carrying a value.
+    second_word: NAME "(" value ")" -> second_option
+               | NAME               -> second_flag
 
     token: NAME "(" value ")" -> option
          | NAME               -> flag
@@ -59,6 +97,18 @@ _BODY_GRAMMAR = r"""
               | CHARS            -> vchars
               | "(" value ")"    -> vnested
 
+    // The envelope is anchored, exactly like the previous regexes:
+    // EXEC_CICS only at the START, END_EXEC only at the END of the text. Any
+    // inner "EXEC"/"CICS"/"END-EXEC" words (e.g. two CICS commands captured as
+    // one block) therefore lex as ordinary NAME flags, preserving the historical
+    // first-envelope / last-envelope peeling behavior of the regex implementation.
+    EXEC_CICS.3: /\A\s*EXEC\s+CICS\s+/i
+    END_EXEC.3: /\s*END-EXEC\s*\Z/i
+
+    SEND_KW.2: "SEND"i
+    RECEIVE_KW.2: "RECEIVE"i
+    HANDLE_KW.2: "HANDLE"i
+
     STRING: /'[^']*'|"[^"]*"/
     CHARS: /[^()'"]+/
     NAME: /[A-Za-z][A-Za-z0-9-]*/
@@ -66,22 +116,68 @@ _BODY_GRAMMAR = r"""
     %ignore /\s+/
 """
 
-# Compound verbs: first word → valid second words
-_COMPOUND: dict[str, frozenset[str]] = {
+# Compound verbs: compound-first keyword → valid second words.
+_COMPOUND_SECONDS: dict[str, frozenset[str]] = {
     "SEND": frozenset({"MAP", "TEXT"}),
     "RECEIVE": frozenset({"MAP"}),
     "HANDLE": frozenset({"ABEND", "CONDITION", "AID"}),
 }
 
-_EXEC_CICS_RE = re.compile(r"^\s*EXEC\s+CICS\s+", re.IGNORECASE)
-_END_EXEC_RE = re.compile(r"\s*END-EXEC\s*$", re.IGNORECASE)
-
-_body_parser = Lark(_BODY_GRAMMAR, parser="lalr")
+_parser = Lark(_GRAMMAR, parser="lalr")
 
 
 class _Transformer(Transformer):
-    def start(self, items: list) -> list[tuple[str, CicsOperand | None]]:
-        return items
+    def start(self, items: list) -> tuple[str, dict[str, CicsOperand | None]]:
+        # items: [EXEC_CICS token, command_result, END_EXEC token]; the envelope
+        # terminals are kept (they are named), so pick out the command result.
+        return items[1]
+
+    def command(self, items: list) -> tuple[str, dict[str, CicsOperand | None]]:
+        verb: _Verb = items[0]
+        rest: list[tuple[str, CicsOperand | None]] = items[1:]
+
+        # A compound-first keyword (SEND/RECEIVE/HANDLE) promotes to a compound
+        # verb only when its trailing word is a recognized second word. Otherwise
+        # the trailing word is an ordinary option/flag of the single-word verb.
+        if verb.second is not None:
+            second_key, second_val = verb.second
+            if second_key in _COMPOUND_SECONDS.get(verb.word, frozenset()):
+                compound = f"{verb.word} {second_key}"
+                if second_val is not None:
+                    # Second word carried a value (e.g. MAP('name')) — keep it.
+                    return compound, {second_key: second_val, **dict(rest)}
+                # Bare second word — purely part of the verb name.
+                return compound, dict(rest)
+            # Not a compound: the trailing word is a normal option/flag.
+            return verb.word, dict([verb.second, *rest])
+
+        return verb.word, dict(rest)
+
+    def empty_command(self, items: list) -> tuple[str, dict[str, CicsOperand | None]]:
+        # `EXEC CICS END-EXEC` with no verb — matches the previous empty-body case.
+        return "", {}
+
+    def single_verb(self, items: list) -> _Verb:
+        return _Verb(word=str(items[0]).upper(), second=None)
+
+    def single_verb_valued(self, items: list) -> _Verb:
+        # First token carried a value (unusual). The previous implementation
+        # treated it as a single-word verb and DROPPED the value (it returned
+        # dict(tokens[1:])). Preserve that exactly.
+        return _Verb(word=str(items[0]).upper(), second=None)
+
+    def compound_verb(self, items: list) -> _Verb:
+        # items: [<keyword token>, (second_key, second_val)]
+        return _Verb(word=str(items[0]).upper(), second=items[1])
+
+    def compound_verb_bare(self, items: list) -> _Verb:
+        return _Verb(word=str(items[0]).upper(), second=None)
+
+    def second_option(self, items: list) -> tuple[str, CicsOperand | None]:
+        return (str(items[0]).upper(), items[1])
+
+    def second_flag(self, items: list) -> tuple[str, CicsOperand | None]:
+        return (str(items[0]).upper(), None)
 
     def option(self, items: list) -> tuple[str, CicsOperand | None]:
         key = str(items[0]).upper()
@@ -125,36 +221,16 @@ def parse_exec_cics_text(text: str) -> tuple[str, dict[str, CicsOperand | None]]
     When the second word carries a value (e.g. MAP('COSGN0A')), that value is
     included in opts under the second word's key.
     """
-    body = _EXEC_CICS_RE.sub("", text.strip())
-    body = _END_EXEC_RE.sub("", body).strip()
-
-    if not body:
+    # Empty / whitespace-only input has no command at all (not even an envelope).
+    # The previous implementation returned ("", {}) for this; preserve it. This is
+    # the absence-of-input case, not envelope stripping — the EXEC CICS / END-EXEC
+    # wrappers themselves are consumed by the grammar.
+    if not text.strip():
         return "", {}
 
     try:
-        tree = _body_parser.parse(body)
+        tree = _parser.parse(text)
     except UnexpectedInput as exc:
-        raise ValueError(f"Cannot parse EXEC CICS text: {body!r}") from exc
-    tokens: list[tuple[str, CicsOperand | None]] = _Transformer().transform(tree)
-
-    first_key, first_val = tokens[0]
-
-    # Single-word verb (first token has a value — unusual but safe)
-    if first_val is not None:
-        return first_key, dict(tokens[1:])
-
-    # Check for compound verb
-    if first_key in _COMPOUND and len(tokens) > 1:
-        second_key, second_val = tokens[1]
-        if second_key in _COMPOUND[first_key]:
-            verb = f"{first_key} {second_key}"
-            rest = list(tokens[2:])
-            if second_val is not None:
-                # Second word carried a value (e.g. MAP('name')) — include it
-                opts = {second_key: second_val, **dict(rest)}
-            else:
-                # Second word was bare — it is purely part of the verb name
-                opts = dict(rest)
-            return verb, opts
-
-    return first_key, dict(tokens[1:])
+        raise ValueError(f"Cannot parse EXEC CICS text: {text!r}") from exc
+    verb, opts = _Transformer().transform(tree)
+    return verb, opts
