@@ -25,6 +25,7 @@ from interpreter.cics.builtins.vsam import (
 )
 from interpreter.vm.vm_types import VMState, StackFrame, BuiltinResult
 from interpreter.func_name import FuncName
+from interpreter.cics.cics_parser import CicsOperand
 from interpreter.var_name import VarName
 from interpreter.address import Address
 from interpreter.types.typed_value import typed
@@ -272,7 +273,7 @@ class FakeCtx:
 
 
 class FakeStmt:
-    def __init__(self, verb: str, options: dict[str, str | None]) -> None:
+    def __init__(self, verb: str, options: dict[str, "CicsOperand | None"]) -> None:
         self.verb = verb
         self.options = options
 
@@ -304,7 +305,14 @@ def test_lower_read_emits_call_and_resp_writeback():
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("READ", {"FILE": "'TESTDS'", "INTO": "WS-REC", "RIDFLD": "WS-KEY"}),
+        FakeStmt(
+            "READ",
+            {
+                "FILE": CicsOperand("TESTDS", True),
+                "INTO": CicsOperand("WS-REC", False),
+                "RIDFLD": CicsOperand("WS-KEY", False),
+            },
+        ),
         MATERIALISED,
     )
     calls = _calls_to(ctx, "__cics_read")
@@ -321,7 +329,14 @@ def test_lower_write_emits_call_with_record_arg():
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("WRITE", {"FILE": "'TESTDS'", "FROM": "WS-REC", "RIDFLD": "WS-KEY"}),
+        FakeStmt(
+            "WRITE",
+            {
+                "FILE": CicsOperand("TESTDS", True),
+                "FROM": CicsOperand("WS-REC", False),
+                "RIDFLD": CicsOperand("WS-KEY", False),
+            },
+        ),
         MATERIALISED,
     )
     calls = _calls_to(ctx, "__cics_write")
@@ -336,7 +351,14 @@ def test_lower_rewrite_emits_call():
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("REWRITE", {"FILE": "'TESTDS'", "FROM": "WS-REC", "RIDFLD": "WS-KEY"}),
+        FakeStmt(
+            "REWRITE",
+            {
+                "FILE": CicsOperand("TESTDS", True),
+                "FROM": CicsOperand("WS-REC", False),
+                "RIDFLD": CicsOperand("WS-KEY", False),
+            },
+        ),
         MATERIALISED,
     )
     assert len(_calls_to(ctx, "__cics_rewrite")) == 1
@@ -348,7 +370,13 @@ def test_lower_delete_emits_call_with_three_args():
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("DELETE", {"FILE": "'TESTDS'", "RIDFLD": "WS-KEY"}),
+        FakeStmt(
+            "DELETE",
+            {
+                "FILE": CicsOperand("TESTDS", True),
+                "RIDFLD": CicsOperand("WS-KEY", False),
+            },
+        ),
         MATERIALISED,
     )
     calls = _calls_to(ctx, "__cics_delete")
@@ -363,7 +391,13 @@ def test_lower_startbr_emits_call_and_resp_writeback():
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("STARTBR", {"FILE": "'TESTDS'", "RIDFLD": "WS-KEY"}),
+        FakeStmt(
+            "STARTBR",
+            {
+                "FILE": CicsOperand("TESTDS", True),
+                "RIDFLD": CicsOperand("WS-KEY", False),
+            },
+        ),
         MATERIALISED,
     )
     calls = _calls_to(ctx, "__cics_startbr")
@@ -379,7 +413,10 @@ def test_lower_readnext_emits_call_and_resp_writeback():
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("READNEXT", {"FILE": "'TESTDS'", "INTO": "WS-REC"}),
+        FakeStmt(
+            "READNEXT",
+            {"FILE": CicsOperand("TESTDS", True), "INTO": CicsOperand("WS-REC", False)},
+        ),
         MATERIALISED,
     )
     calls = _calls_to(ctx, "__cics_readnext")
@@ -394,7 +431,10 @@ def test_lower_readprev_emits_call():
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("READPREV", {"FILE": "'TESTDS'", "INTO": "WS-REC"}),
+        FakeStmt(
+            "READPREV",
+            {"FILE": CicsOperand("TESTDS", True), "INTO": CicsOperand("WS-REC", False)},
+        ),
         MATERIALISED,
     )
     assert len(_calls_to(ctx, "__cics_readprev")) == 1
@@ -406,7 +446,7 @@ def test_lower_endbr_emits_call_with_one_arg():
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("ENDBR", {"FILE": "'TESTDS'"}),
+        FakeStmt("ENDBR", {"FILE": CicsOperand("TESTDS", True)}),
         MATERIALISED,
     )
     calls = _calls_to(ctx, "__cics_endbr")

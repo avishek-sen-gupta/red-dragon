@@ -18,7 +18,7 @@ from interpreter.cobol.ref_mod import (
     is_function_operand,
 )
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict
-from interpreter.cics.cics_parser import parse_exec_cics_text
+from interpreter.cics.cics_parser import parse_exec_cics_text, CicsOperand
 
 # ── PERFORM specs ────────────────────────────────────────────────
 
@@ -980,7 +980,7 @@ class ExecCicsStatement:
     """EXEC CICS verb-with-options block."""
 
     verb: str
-    options: dict[str, str | None]
+    options: dict[str, "CicsOperand | None"]
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExecCicsStatement":
@@ -989,7 +989,18 @@ class ExecCicsStatement:
         return cls(verb=verb, options=options)
 
     def to_dict(self) -> dict:
-        return {"type": "EXEC_CICS", "verb": self.verb, "options": self.options}
+        # Serialise each operand structurally so the ASG export stays JSON-safe;
+        # a bare flag (None) is preserved. (Roundtrip is via exec_cics_text, not
+        # this options view, so this is informational only.)
+        serialised = {
+            key: (
+                None
+                if operand is None
+                else {"text": operand.text, "is_literal": operand.is_literal}
+            )
+            for key, operand in self.options.items()
+        }
+        return {"type": "EXEC_CICS", "verb": self.verb, "options": serialised}
 
 
 def _parse_perform_spec(

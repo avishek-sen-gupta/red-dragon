@@ -37,6 +37,7 @@ def test_strategy_without_bms_still_constructs():
 def test_send_map_lowers_to_call_function():
     from interpreter.instructions import CallFunction
     from interpreter.cobol.cobol_statements import ExecCicsStatement
+    from interpreter.cics.cics_parser import CicsOperand
     from interpreter.register import Register
 
     class _Ctx:
@@ -53,7 +54,11 @@ def test_send_map_lowers_to_call_function():
 
     ctx = _Ctx()
     stmt = ExecCicsStatement(
-        verb="SEND MAP", options={"MAP": "COSGN0A", "MAPSET": "COSGN00"}
+        verb="SEND MAP",
+        options={
+            "MAP": CicsOperand("COSGN0A", True),
+            "MAPSET": CicsOperand("COSGN00", True),
+        },
     )
     strategy = CicsLoweringStrategy(context_holder=[None], result_holder=[None])
     strategy.lower(ctx, stmt, materialised=None)
