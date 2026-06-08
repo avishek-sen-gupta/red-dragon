@@ -500,9 +500,10 @@ class CicsLoweringStrategy:
 
         # ── VSAM point operations ─────────────────────────────────────────
         if verb in _VSAM_POINT_VERBS:
-            r_file = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=r_file, value=(opts.get("FILE") or "").strip("'\" "))
+            # FILE(...) and DATASET(...) are synonyms; the operand may be a
+            # literal or a data-name (resolved to its runtime value).
+            r_file = emit_operand_value(
+                ctx, opts.get("FILE") or opts.get("DATASET"), materialised
             )
             r_key = emit_copy_in(ctx, opts.get("RIDFLD"), materialised)
             if r_key is None:
@@ -554,9 +555,10 @@ class CicsLoweringStrategy:
 
         # ── VSAM browse operations (implicit single cursor per file) ───────
         if verb in _VSAM_BROWSE_VERBS:
-            r_file = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=r_file, value=(opts.get("FILE") or "").strip("'\" "))
+            # FILE(...) and DATASET(...) are synonyms; the operand may be a
+            # literal or a data-name (resolved to its runtime value).
+            r_file = emit_operand_value(
+                ctx, opts.get("FILE") or opts.get("DATASET"), materialised
             )
             if verb == "STARTBR":
                 r_key = emit_copy_in(ctx, opts.get("RIDFLD"), materialised)
