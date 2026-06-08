@@ -633,7 +633,7 @@ public final class StatementSerializer {
                             obj.addProperty("varying_var", extractValueStmtText(vp.getVaryingValueStmt()));
                         }
                         if (vp.getFrom() != null && vp.getFrom().getFromValueStmt() != null) {
-                            obj.addProperty("varying_from", extractValueStmtText(vp.getFrom().getFromValueStmt()));
+                            obj.add("varying_from", serializeFromValue(vp.getFrom().getFromValueStmt()));
                         }
                         if (vp.getBy() != null && vp.getBy().getByValueStmt() != null) {
                             obj.addProperty("varying_by", extractValueStmtText(vp.getBy().getByValueStmt()));
@@ -1444,6 +1444,72 @@ public final class StatementSerializer {
         }
         String name = call.getName();
         return (name != null) ? name : call.toString();
+    }
+
+    /**
+     * Serializes a PERFORM VARYING FROM value as a structured expression node so
+     * the Python frontend can evaluate it (rather than treating the flattened text
+     * as an opaque literal). Recognises {@code LENGTH OF <field>} structurally from
+     * the parse-tree special-register context, emitting
+     * {@code {"kind":"length_of","name":"<field>"}}. Otherwise serializes the
+     * underlying arithmetic expression (refs, literals, ref-mod, binops); failing
+     * that, falls back to a {@code {"kind":"lit","value":<text>}} node.
+     */
+    private static JsonElement serializeFromValue(ValueStmt vs) {
+        if (vs == null) {
+            return litNode("");
+        }
+        ParserRuleContext ctx = null;
+        try {
+            ctx = vs.getCtx();
+        } catch (Exception e) {
+            // fall through
+        }
+        if (ctx != null) {
+            CobolParser.SpecialRegisterContext sr = findLengthOfSpecialRegister(ctx);
+            if (sr != null) {
+                JsonObject obj = new JsonObject();
+                obj.addProperty("kind", "length_of");
+                CobolParser.IdentifierContext id = sr.identifier();
+                obj.addProperty("name", id != null ? id.getText() : "");
+                return obj;
+            }
+        }
+        if (vs instanceof ArithmeticValueStmt) {
+            return serializeArithmeticExpr((ArithmeticValueStmt) vs);
+        }
+        // Bare field reference / literal — keep structured so the Python side can
+        // decide between field decode and literal parse.
+        String text = (ctx != null) ? ctx.getText() : extractValueStmtText(vs);
+        JsonObject ref = new JsonObject();
+        ref.addProperty("kind", "ref");
+        ref.addProperty("name", text);
+        return ref;
+    }
+
+    /**
+     * Recursively searches a parse-tree context for a {@code LENGTH OF}
+     * specialRegister (a SpecialRegisterContext whose LENGTH() token is present),
+     * returning it or {@code null}. Structural — no text parsing.
+     */
+    private static CobolParser.SpecialRegisterContext findLengthOfSpecialRegister(
+            org.antlr.v4.runtime.tree.ParseTree node) {
+        if (node == null) {
+            return null;
+        }
+        if (node instanceof CobolParser.SpecialRegisterContext) {
+            CobolParser.SpecialRegisterContext sr = (CobolParser.SpecialRegisterContext) node;
+            if (sr.LENGTH() != null) {
+                return sr;
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            CobolParser.SpecialRegisterContext found = findLengthOfSpecialRegister(node.getChild(i));
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     /**

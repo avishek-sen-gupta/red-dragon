@@ -5477,3 +5477,94 @@ class TestClassConditions:
         )
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 2, 1) == 2
+
+
+class TestPerformVaryingLengthOfAndRefModCondition:
+    @covers(CobolFeature.PERFORM_VARYING)
+    def test_perform_varying_from_length_of(self):
+        """PERFORM VARYING I FROM LENGTH OF WS-S BY -1 UNTIL I < 1 iterates 4x.
+
+        FROM LENGTH OF WS-S (PIC X(4)) must evaluate to the byte length 4 and
+        the descending loop must run for I = 4,3,2,1 → WS-CNT == 4.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-PVLEN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-S PIC X(4) VALUE 'AB  '.",
+                "01 WS-I PIC 9(4) VALUE 0.",
+                "01 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    PERFORM VARYING WS-I FROM LENGTH OF WS-S BY -1",
+                "        UNTIL WS-I < 1",
+                "        ADD 1 TO WS-CNT",
+                "    END-PERFORM.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        # WS-CNT is the third field: offset 4 (WS-S) + 4 (WS-I) = 8
+        assert _decode_zoned_unsigned(region, 8, 4) == 4
+
+    @covers(CobolFeature.REFERENCE_MODIFICATION, CobolFeature.IF_ELSE)
+    def test_ref_mod_operand_in_condition(self):
+        """IF WS-S(2:1) = 'B' → TRUE for 'AB  ' → WS-R == 1.
+
+        A reference-modified operand inside a condition relation must be decoded
+        and sliced (the second character of 'AB  ' is 'B').
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-RMCOND.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-S PIC X(4) VALUE 'AB  '.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-S(2:1) = 'B'",
+                "       MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-R at offset 4 (after WS-S PIC X(4))
+        assert _decode_zoned_unsigned(region, 4, 1) == 1
+
+    @covers(
+        CobolFeature.PERFORM_VARYING,
+        CobolFeature.REFERENCE_MODIFICATION,
+    )
+    def test_perform_varying_length_of_with_ref_mod_until(self):
+        """Find position of last non-space char in 'AB  ' → WS-IDX == 2.
+
+        PERFORM VARYING WS-IDX FROM LENGTH OF WS-S BY -1
+            UNTIL WS-S(WS-IDX:1) NOT = SPACES OR WS-IDX = 1
+        scans backwards from byte 4: positions 4,3 are spaces, position 2 is 'B'
+        (non-space) so the loop stops with WS-IDX == 2.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-PVRM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-S PIC X(4) VALUE 'AB  '.",
+                "01 WS-IDX PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    PERFORM VARYING WS-IDX FROM LENGTH OF WS-S BY -1",
+                "        UNTIL WS-S(WS-IDX:1) NOT = SPACES OR WS-IDX = 1",
+                "    END-PERFORM.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 4, 4) == 2

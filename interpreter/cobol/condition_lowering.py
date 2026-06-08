@@ -253,8 +253,17 @@ def _field_byte_length(
     expr: dict,
     materialised: MaterialisedSectionedLayout,
 ) -> int | None:
-    """Return the byte length of a {"kind":"ref"} field operand, else None."""
+    """Return the byte length of a {"kind":"ref"} field operand, else None.
+
+    For a reference-modified operand WS-S(start:len) with a literal length, the
+    sliced length governs (so a figurative sibling is sized to the slice, not the
+    whole field). A non-literal ref-mod length falls back to the full field.
+    """
     if expr.get("kind") == "ref":
+        if "ref_mod_start" in expr:
+            slice_len = _ref_mod_slice_length(expr)
+            if slice_len is not None:
+                return slice_len
         name = expr.get("name", "")
         if ctx.has_field(name, materialised):
             ref, _ = ctx.resolve_field_ref(name, materialised)
@@ -357,6 +366,70 @@ def _lower_class_condition(
     return result
 
 
+def _ref_mod_slice_length(expr: dict) -> int | None:
+    """Return the static slice length of a ref-mod operand, if it is a literal."""
+    rm_len = expr.get("ref_mod_length")
+    if isinstance(rm_len, dict) and rm_len.get("kind") == "lit":
+        try:
+            return int(rm_len.get("value", ""))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _lower_ref_mod_operand(
+    ctx: EmitContext,
+    expr: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Lower a reference-modified field operand WS-S(start:length) in a condition.
+
+    Decodes the underlying field to its character string and slices it with the
+    1-based start (converted to 0-based) and optional length. The start and
+    length are themselves expression dicts (re-evaluated each call, so a loop
+    variable subscript reflects the current iteration). Returns a string-valued
+    register so it compares correctly against figurative/string siblings.
+    """
+    name = expr.get("name", "")
+    if not ctx.has_field(name, materialised):
+        return ctx.const_to_reg(ctx.parse_literal(name))
+
+    ref, rr = ctx.resolve_field_ref(name, materialised)
+    full_str_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+
+    start_1based_reg = _lower_expr_dict(ctx, expr["ref_mod_start"], materialised)
+    one_reg = ctx.const_to_reg(1)
+    start_0based_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=start_0based_reg,
+            operator=resolve_binop("-"),
+            left=Register(str(start_1based_reg)),
+            right=Register(str(one_reg)),
+        )
+    )
+
+    rm_len = expr.get("ref_mod_length")
+    if isinstance(rm_len, dict):
+        length_reg = _lower_expr_dict(ctx, rm_len, materialised)
+    else:
+        length_reg = ctx.const_to_reg(999999)
+
+    sliced_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=sliced_reg,
+            func_name=FuncName(BuiltinName.STRING_SLICE),
+            args=(
+                Register(str(full_str_reg)),
+                Register(str(start_0based_reg)),
+                Register(str(length_reg)),
+            ),
+        )
+    )
+    return sliced_reg
+
+
 def _lower_expr_dict(
     ctx: EmitContext,
     expr: dict,
@@ -374,6 +447,8 @@ def _lower_expr_dict(
 
     if kind == "ref":
         name = expr.get("name", "")
+        if "ref_mod_start" in expr:
+            return _lower_ref_mod_operand(ctx, expr, materialised)
         if ctx.has_field(name, materialised):
             ref, rr = ctx.resolve_field_ref(name, materialised)
             return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
