@@ -13,6 +13,7 @@ from interpreter.cobol.cobol_expression import (
     RefModNode,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
+from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.condition_name import ConditionValue
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -293,16 +294,120 @@ def _lower_figurative(
     return ctx.const_to_reg(f'"{literal}"')
 
 
+# Figuratives whose natural class is alphanumeric (character) rather than
+# numeric. ZERO/ZEROS is numeric and is intentionally excluded so a
+# numeric-DISPLAY field still compares to it by value.
+_ALPHANUMERIC_FIGURATIVES: frozenset[str] = frozenset(
+    {
+        "SPACE",
+        "SPACES",
+        "LOW-VALUE",
+        "LOW-VALUES",
+        "HIGH-VALUE",
+        "HIGH-VALUES",
+        "QUOTE",
+        "QUOTES",
+    }
+)
+
+
+def _is_alphanumeric_operand(expr: dict) -> bool:
+    """True if an operand is alphanumeric (character) data by its kind alone.
+
+    Covers an alphanumeric figurative (SPACES / LOW-VALUES / HIGH-VALUES /
+    QUOTES — not numeric ZEROS) and a quoted non-numeric character literal
+    (e.g. '*'). A numeric literal (e.g. 11) is NOT alphanumeric. Determined
+    structurally from the operand dict — no source-text sniffing.
+    """
+    kind = expr.get("kind")
+    if kind == "figurative":
+        return str(expr.get("value", "")).upper() in _ALPHANUMERIC_FIGURATIVES
+    if kind == "lit":
+        value = str(expr.get("value", ""))
+        return value[:1] in ("'", '"')
+    return False
+
+
+def _is_zoned_display_field(
+    ctx: EmitContext,
+    expr: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> bool:
+    """True if an operand is a reference to a USAGE DISPLAY numeric (zoned) field.
+
+    COMP-3 / binary numerics are a different category and are deliberately
+    excluded — only ZONED_DECIMAL carries a meaningful zoned character form.
+    A reference-modified operand is already character-sliced, so it is excluded.
+    """
+    if expr.get("kind") != "ref" or "ref_mod_start" in expr:
+        return False
+    name = expr.get("name", "")
+    if not ctx.has_field(name, materialised):
+        return False
+    ref, _ = ctx.resolve_field_ref(name, materialised)
+    return ref.fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
+
+
 def _lower_relation_operand(
     ctx: EmitContext,
     expr: dict,
     sibling: dict,
     materialised: MaterialisedSectionedLayout,
 ) -> Register:
-    """Lower one side of a relation, resolving figuratives against the sibling."""
+    """Lower one side of a relation, resolving figuratives against the sibling.
+
+    Special case (red-dragon-dmu8): when this operand is a numeric USAGE DISPLAY
+    (zoned) field and the *sibling* is alphanumeric (a non-numeric figurative or
+    a quoted character literal), COBOL compares the numeric operand by its zoned
+    CHARACTER (display) representation, not its decoded integer value. Decode it
+    to its display digit string so both sides compare as character data. This is
+    scoped to unsigned-effective values: the raw zoned bytes are used, so a
+    trailing-sign overpunch (if any) would be carried verbatim — acceptable for
+    the SPACES / LOW-VALUES / placeholder cases this targets.
+    """
     if expr.get("kind") == "figurative":
         return _lower_figurative(ctx, expr, sibling, materialised)
+    if _is_zoned_display_field(ctx, expr, materialised) and _is_alphanumeric_operand(
+        sibling
+    ):
+        name = expr.get("name", "")
+        ref, rr = ctx.resolve_field_ref(name, materialised)
+        return ctx.emit_decode_zoned_display(rr, ref.fl, ref.offset_reg)
+    if (
+        _is_alphanumeric_operand(expr)
+        and expr.get("kind") == "lit"
+        and _is_zoned_display_field(ctx, sibling, materialised)
+    ):
+        # A non-numeric char literal compared to a numeric-DISPLAY field: COBOL
+        # space-pads the (shorter) literal to the field width and compares
+        # characters. Size to the sibling field so it lines up with the field's
+        # zoned display string (red-dragon-dmu8).
+        return _lower_padded_char_literal(ctx, expr, sibling, materialised)
     return _lower_expr_dict(ctx, expr, materialised)
+
+
+def _lower_padded_char_literal(
+    ctx: EmitContext,
+    lit: dict,
+    sibling: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Lower a quoted char literal space-padded to the sibling field's width.
+
+    The literal text carries its surrounding quotes (e.g. "'*'"); they are
+    stripped, the content is right-padded with spaces to the sibling field's
+    byte length, and emitted as a string constant.
+    """
+    raw = str(lit.get("value", ""))
+    if len(raw) >= 2 and raw[0] in ("'", '"') and raw[-1] == raw[0]:
+        content = raw[1:-1]
+    else:
+        content = raw
+    width = _field_byte_length(ctx, sibling, materialised)
+    if width is None or width < len(content):
+        width = len(content)
+    padded = content.ljust(width)
+    return ctx.const_to_reg(f'"{padded}"')
 
 
 def _lower_relation_node(
