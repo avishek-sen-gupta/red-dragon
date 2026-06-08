@@ -776,13 +776,19 @@ def lower_evaluate(
 
     for child in stmt.children:
         if isinstance(child, WhenStatement) and child.condition:
-            if stmt.subject and stmt.subject.upper() != "TRUE":
-                full_condition = f"{stmt.subject} = {child.condition}"
+            if isinstance(child.condition, dict):
+                # Full conditional expression (EVALUATE TRUE WHEN ...): route through
+                # the same structured lowering the IF path uses.
+                cond_reg = ctx.lower_condition(child.condition, materialised)
             else:
-                full_condition = child.condition
-            cond_reg = _lower_condition_str(
-                ctx, full_condition, materialised, ctx._condition_index
-            )
+                # WHEN <value> against an EVALUATE subject — build "subject = value".
+                if stmt.subject and stmt.subject.upper() != "TRUE":
+                    full_condition = f"{stmt.subject} = {child.condition}"
+                else:
+                    full_condition = child.condition
+                cond_reg = _lower_condition_str(
+                    ctx, full_condition, materialised, ctx._condition_index
+                )
             when_true = ctx.fresh_label("when_true")
             when_false = ctx.fresh_label("when_false")
             ctx.emit_inst(

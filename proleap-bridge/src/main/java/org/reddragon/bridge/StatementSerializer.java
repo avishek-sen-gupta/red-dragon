@@ -109,7 +109,12 @@ import io.proleap.cobol.asg.metamodel.valuestmt.condition.AndOrCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.CombinableCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.ConditionNameReference;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.SimpleCondition;
+import io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt;
+import io.proleap.cobol.asg.metamodel.Literal;
+import io.proleap.cobol.asg.metamodel.FigurativeConstant;
 import io.proleap.cobol.asg.metamodel.valuestmt.relation.ArithmeticComparison;
+import io.proleap.cobol.asg.metamodel.valuestmt.relation.CombinedComparison;
+import io.proleap.cobol.asg.metamodel.valuestmt.relation.CombinedCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.relation.RelationalOperator;
 
 import io.proleap.cobol.asg.metamodel.impl.ASGElementImpl;
@@ -734,30 +739,34 @@ public final class StatementSerializer {
             for (WhenPhrase whenPhrase : stmt.getWhenPhrases()) {
                 // Extract the condition from the When objects
                 List<io.proleap.cobol.asg.metamodel.procedure.evaluate.When> whens = whenPhrase.getWhens();
-                String conditionText = "";
+                JsonObject whenObj = newStatement("WHEN");
+
                 if (whens != null && !whens.isEmpty()) {
                     io.proleap.cobol.asg.metamodel.procedure.evaluate.When firstWhen = whens.get(0);
                     io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition cond = firstWhen.getCondition();
                     if (cond != null) {
                         io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType ct = cond.getConditionType();
-                        if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.ANY) {
-                            conditionText = "ANY";
+                        ValueStmt cvs = cond.getConditionValueStmt();
+                        if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.CONDITION
+                                && cvs instanceof ConditionValueStmt) {
+                            // Full conditional expression (e.g. EVALUATE TRUE WHEN A = SPACES OR ...):
+                            // route through the SAME structured serializer the IF path uses so
+                            // figurative / OF-qualified / abbreviated conditions lower correctly.
+                            whenObj.add("condition", serializeConditionNode((ConditionValueStmt) cvs));
+                        } else if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.ANY) {
+                            // WHEN ANY — leave condition absent (always-match handled downstream).
+                            whenObj.addProperty("condition", "ANY");
                         } else if (cond.getValue() != null && cond.getValue().getValueStmt() != null) {
-                            conditionText = extractValueStmtText(cond.getValue().getValueStmt());
-                        } else if (cond.getConditionValueStmt() != null) {
-                            conditionText = extractValueStmtText(cond.getConditionValueStmt());
+                            // WHEN <value> against an EVALUATE subject — keep the value as text;
+                            // the Python side prefixes it with "subject = ".
+                            whenObj.addProperty("condition",
+                                    insertSpaces(extractValueStmtText(cond.getValue().getValueStmt())));
+                        } else if (cvs != null) {
+                            whenObj.addProperty("condition", insertSpaces(extractValueStmtText(cvs)));
                         } else if (cond.getCtx() != null) {
-                            conditionText = cond.getCtx().getText();
+                            whenObj.addProperty("condition", insertSpaces(cond.getCtx().getText()));
                         }
                     }
-                }
-
-                JsonObject whenObj = newStatement("WHEN");
-                if (!conditionText.isEmpty()) {
-                    // Mirror the IF / SEARCH WHEN paths: re-introduce token
-                    // spacing lost by raw getText() so downstream condition
-                    // lowering can parse it (red-dragon-lu25).
-                    whenObj.addProperty("condition", insertSpaces(conditionText));
                 }
 
                 // Nested statements
@@ -1016,9 +1025,9 @@ public final class StatementSerializer {
             JsonArray whens = new JsonArray();
             for (io.proleap.cobol.asg.metamodel.procedure.search.WhenPhrase when : stmt.getWhenPhrases()) {
                 JsonObject whenObj = new JsonObject();
-                // Extract condition text
-                if (when.getCondition() != null && when.getCondition().getCtx() != null) {
-                    whenObj.addProperty("condition", insertSpaces(when.getCondition().getCtx().getText()));
+                // Structured condition — same serializer the IF path uses.
+                if (when.getCondition() != null) {
+                    whenObj.add("condition", serializeConditionNode(when.getCondition()));
                 }
                 // Serialize child statements
                 if (when.getStatements() != null && !when.getStatements().isEmpty()) {
@@ -1501,14 +1510,112 @@ public final class StatementSerializer {
      * {@code {"op": "AND", "left": {...}, "right": {...}}}.
      */
     private static JsonObject serializeConditionNode(ConditionValueStmt cond) {
-        JsonObject current = serializeCombinableCondition(cond.getCombinableCondition());
+        CombinableCondition firstCc = cond.getCombinableCondition();
+        JsonObject current = serializeCombinableCondition(firstCc);
+
+        // Track the inherited subject + operator for abbreviated operands.
+        // In "A = X OR Y", the trailing "Y" inherits subject A and operator "=".
+        JsonElement subjectExpr = relationSubjectExpr(firstCc);
+        String subjectOp = relationSubjectOp(firstCc);
+
         for (AndOrCondition aoc : cond.getAndOrConditions()) {
+            String boolOp = (aoc.getAndOrConditionType() == AndOrCondition.AndOrConditionType.AND)
+                    ? "AND" : "OR";
+            JsonObject right;
+            CombinableCondition rightCc = aoc.getCombinableCondition();
+            if (rightCc != null) {
+                right = serializeCombinableCondition(rightCc);
+                JsonElement nextSubj = relationSubjectExpr(rightCc);
+                if (nextSubj != null) {
+                    subjectExpr = nextSubj;
+                    subjectOp = relationSubjectOp(rightCc);
+                }
+            } else {
+                // Abbreviated operand(s): inherit subject + operator.
+                right = serializeAbbreviations(aoc, subjectExpr, subjectOp, boolOp);
+            }
             JsonObject compound = new JsonObject();
-            String op = (aoc.getAndOrConditionType() == AndOrCondition.AndOrConditionType.AND) ? "AND" : "OR";
-            compound.addProperty("op", op);
+            compound.addProperty("op", boolOp);
             compound.add("left", current);
-            compound.add("right", serializeCombinableCondition(aoc.getCombinableCondition()));
+            compound.add("right", right);
             current = compound;
+        }
+        return current;
+    }
+
+    /**
+     * Returns the left-hand arithmetic expression of a combinable condition's
+     * ARITHMETIC relation (the abbreviation subject), or {@code null} if absent.
+     */
+    private static JsonElement relationSubjectExpr(CombinableCondition cc) {
+        ArithmeticComparison ac = arithmeticComparisonOf(cc);
+        if (ac == null || ac.getArithmeticExpressionLeft() == null) {
+            return null;
+        }
+        return serializeArithmeticExpr(ac.getArithmeticExpressionLeft());
+    }
+
+    /** Returns the relational operator of a combinable condition's ARITHMETIC relation. */
+    private static String relationSubjectOp(CombinableCondition cc) {
+        ArithmeticComparison ac = arithmeticComparisonOf(cc);
+        return ac != null ? relationalOpToString(ac.getOperator()) : "==";
+    }
+
+    private static ArithmeticComparison arithmeticComparisonOf(CombinableCondition cc) {
+        if (cc == null || cc.getSimpleCondition() == null) {
+            return null;
+        }
+        SimpleCondition sc = cc.getSimpleCondition();
+        if (sc.getSimpleConditionType() != SimpleCondition.SimpleConditionType.RELATION_CONDITION) {
+            return null;
+        }
+        RelationConditionValueStmt rel = sc.getRelationCondition();
+        if (rel == null
+                || rel.getRelationConditionType() != RelationConditionValueStmt.RelationConditionType.ARITHMETIC) {
+            return null;
+        }
+        return rel.getArithmeticComparison();
+    }
+
+    /**
+     * Builds the right-hand condition node for an abbreviated AndOrCondition whose
+     * operands inherit the subject expression and operator from the preceding
+     * relation. Each abbreviation may override the operator (e.g. {@code A = X OR > Y}).
+     */
+    private static JsonObject serializeAbbreviations(
+            AndOrCondition aoc, JsonElement subjectExpr, String inheritedOp, String boolOp) {
+        java.util.List<io.proleap.cobol.asg.metamodel.valuestmt.relation.Abbreviation> abbrevs =
+                aoc.getAbbreviations();
+        if (subjectExpr == null || abbrevs == null || abbrevs.isEmpty()) {
+            JsonObject obj = new JsonObject();
+            obj.addProperty("text", "");
+            return obj;
+        }
+        JsonObject current = null;
+        for (io.proleap.cobol.asg.metamodel.valuestmt.relation.Abbreviation abbr : abbrevs) {
+            String op = abbr.getOperator() != null
+                    ? relationalOpToString(abbr.getOperator()) : inheritedOp;
+            JsonElement operand = abbr.getArithmeticExpression() != null
+                    ? serializeArithmeticExpr(abbr.getArithmeticExpression()) : litNode("");
+
+            JsonObject relation = new JsonObject();
+            relation.add("left", subjectExpr);
+            relation.addProperty("op", op);
+            relation.add("right", operand);
+
+            JsonObject atom = new JsonObject();
+            atom.addProperty("not", false);
+            atom.add("relation", relation);
+
+            if (current == null) {
+                current = atom;
+            } else {
+                JsonObject compound = new JsonObject();
+                compound.addProperty("op", boolOp);
+                compound.add("left", current);
+                compound.add("right", atom);
+                current = compound;
+            }
         }
         return current;
     }
@@ -1526,6 +1633,10 @@ public final class StatementSerializer {
      */
     private static JsonObject serializeCombinableCondition(CombinableCondition cc) {
         JsonObject obj = new JsonObject();
+        if (cc == null) {
+            obj.addProperty("text", "");
+            return obj;
+        }
         boolean not = cc.isNot();
         obj.addProperty("not", not);
 
@@ -1552,10 +1663,21 @@ public final class StatementSerializer {
             }
         } else if (scType == SimpleCondition.SimpleConditionType.RELATION_CONDITION) {
             RelationConditionValueStmt rel = sc.getRelationCondition();
-            if (rel != null) {
-                obj.add("relation", serializeRelationCondition(rel));
-            } else {
+            if (rel == null) {
                 obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
+            } else if (rel.getRelationConditionType()
+                    == RelationConditionValueStmt.RelationConditionType.COMBINED) {
+                // Abbreviated comparison (A = X OR Y): expand into the AND/OR tree.
+                JsonObject expanded = serializeCombinedComparison(rel.getCombinedComparison());
+                if (expanded != null) {
+                    // Wrap the expanded tree as a nested condition so the surrounding
+                    // 'not' flag still applies via the {not, condition} shape.
+                    obj.add("condition", expanded);
+                } else {
+                    obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
+                }
+            } else {
+                obj.add("relation", serializeRelationCondition(rel));
             }
         } else {
             // CLASS_CONDITION or unknown — fall back to text
@@ -1584,9 +1706,63 @@ public final class StatementSerializer {
                 return obj;
             }
         }
-        // SIGN, COMBINED, or null ArithmeticComparison — fall back to text
+        // SIGN — not yet structured; fall back to text (deferred).
         obj.addProperty("text", rel.getCtx() != null ? insertSpaces(rel.getCtx().getText()) : "");
         return obj;
+    }
+
+    /**
+     * Serializes a COMBINED (abbreviated) relation into the incumbent AND/OR
+     * condition tree, returning a full condition-node object (NOT a relation).
+     *
+     * <p>An abbreviated comparison {@code A = X OR Y} carries a single subject
+     * {@code A} and operator {@code =}, with the trailing operands inheriting both.
+     * Each operand becomes {@code {"not":false,"relation":{left:A,op:=,right:operand}}},
+     * folded left into {@code {"op":"OR","left":...,"right":...}}.
+     *
+     * @return the condition node, or {@code null} if the shape is not a simple
+     *         abbreviated comparison (caller should fall back to text).
+     */
+    private static JsonObject serializeCombinedComparison(CombinedComparison cc) {
+        if (cc == null) {
+            return null;
+        }
+        ArithmeticValueStmt subject = cc.getArithmeticExpression();
+        CombinedCondition combined = cc.getCombinedCondition();
+        if (subject == null || combined == null) {
+            return null;
+        }
+        List<ArithmeticValueStmt> operands = combined.getArithmeticExpressions();
+        if (operands == null || operands.isEmpty()) {
+            return null;
+        }
+        String op = relationalOpToString(cc.getOperator());
+        String boolOp = (combined.getCombinedConditionType()
+                == CombinedCondition.CombinedConditionType.AND) ? "AND" : "OR";
+
+        JsonElement subjectExpr = serializeArithmeticExpr(subject);
+        JsonObject current = null;
+        for (ArithmeticValueStmt operand : operands) {
+            JsonObject relation = new JsonObject();
+            relation.add("left", subjectExpr);
+            relation.addProperty("op", op);
+            relation.add("right", serializeArithmeticExpr(operand));
+
+            JsonObject atom = new JsonObject();
+            atom.addProperty("not", false);
+            atom.add("relation", relation);
+
+            if (current == null) {
+                current = atom;
+            } else {
+                JsonObject compound = new JsonObject();
+                compound.addProperty("op", boolOp);
+                compound.add("left", current);
+                compound.add("right", atom);
+                current = compound;
+            }
+        }
+        return current;
     }
 
     private static String relationalOpToString(RelationalOperator op) {
@@ -1673,6 +1849,19 @@ public final class StatementSerializer {
         if (vs instanceof ArithmeticValueStmt) {
             // Parenthesised sub-expression
             return serializeArithmeticExpr((ArithmeticValueStmt) vs);
+        }
+        if (vs instanceof LiteralValueStmt) {
+            Literal lit = ((LiteralValueStmt) vs).getLiteral();
+            if (lit != null && lit.getLiteralType() == Literal.LiteralType.FIGURATIVE_CONSTANT
+                    && lit.getFigurativeConstant() != null) {
+                String canonical = canonicalFigurative(lit.getFigurativeConstant().getFigurativeConstantType());
+                if (canonical != null) {
+                    JsonObject fig = new JsonObject();
+                    fig.addProperty("kind", "figurative");
+                    fig.addProperty("value", canonical);
+                    return fig;
+                }
+            }
         }
         // Literals (LiteralValueStmt, IntegerLiteralValueStmt, etc.)
         String text = vs != null && vs.getCtx() != null ? vs.getCtx().getText()
@@ -1761,7 +1950,32 @@ public final class StatementSerializer {
             ref.addProperty("name", id.getText());
             return ref;
         }
-        return litNode(ctx.literal() != null ? ctx.literal().getText() : "");
+        CobolParser.LiteralContext lit = ctx.literal();
+        if (lit != null && lit.figurativeConstant() != null) {
+            String canonical = canonicalFigurativeCtx(lit.figurativeConstant());
+            if (canonical != null) {
+                JsonObject fig = new JsonObject();
+                fig.addProperty("kind", "figurative");
+                fig.addProperty("value", canonical);
+                return fig;
+            }
+        }
+        return litNode(lit != null ? lit.getText() : "");
+    }
+
+    /**
+     * Maps a figurative-constant grammar context to the canonical comparison string.
+     * Mirrors {@link #canonicalFigurative} but reads ANTLR terminal nodes directly,
+     * for the grammar-context fallback path used on abbreviated conditions.
+     */
+    private static String canonicalFigurativeCtx(CobolParser.FigurativeConstantContext fc) {
+        if (fc == null) return null;
+        if (fc.SPACE() != null || fc.SPACES() != null) return "SPACES";
+        if (fc.ZERO() != null || fc.ZEROS() != null || fc.ZEROES() != null) return "ZEROS";
+        if (fc.LOW_VALUE() != null || fc.LOW_VALUES() != null) return "LOW-VALUES";
+        if (fc.HIGH_VALUE() != null || fc.HIGH_VALUES() != null) return "HIGH-VALUES";
+        if (fc.QUOTE() != null || fc.QUOTES() != null) return "QUOTES";
+        return null;
     }
 
     private static JsonObject litNode(String value) {
@@ -1769,6 +1983,35 @@ public final class StatementSerializer {
         lit.addProperty("kind", "lit");
         lit.addProperty("value", value);
         return lit;
+    }
+
+    /**
+     * Maps a ProLeap figurative-constant type to the canonical string the Python
+     * condition lowering recognises. Returns {@code null} for figuratives without
+     * a meaningful comparison fill (e.g. ALL/NULL) so callers fall back to text.
+     */
+    private static String canonicalFigurative(FigurativeConstant.FigurativeConstantType type) {
+        if (type == null) return null;
+        switch (type) {
+            case SPACE:
+            case SPACES:
+                return "SPACES";
+            case ZERO:
+            case ZEROS:
+            case ZEROES:
+                return "ZEROS";
+            case LOW_VALUE:
+            case LOW_VALUES:
+                return "LOW-VALUES";
+            case HIGH_VALUE:
+            case HIGH_VALUES:
+                return "HIGH-VALUES";
+            case QUOTE:
+            case QUOTES:
+                return "QUOTES";
+            default:
+                return null;
+        }
     }
 
     /**

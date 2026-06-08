@@ -303,9 +303,15 @@ class IfStatement:
 
 @dataclass(frozen=True)
 class WhenStatement:
-    """EVALUATE WHEN branch."""
+    """EVALUATE / SEARCH WHEN branch.
 
-    condition: str
+    ``condition`` is a structured condition dict (from ``serializeConditionNode``)
+    for full conditional expressions (e.g. ``EVALUATE TRUE WHEN A = SPACES``), or a
+    plain string for ``EVALUATE <subject> WHEN <value>`` (the value is prefixed
+    with ``subject = `` during lowering) and ``WHEN ANY``.
+    """
+
+    condition: dict | str
     children: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
