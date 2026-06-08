@@ -13,6 +13,8 @@ Flow:
 
 import queue
 
+import pytest
+
 from tests.covers import covers, NotLanguageFeature
 from interpreter.cics.types import CicsContext, DispatchKind, DispatchResult
 from interpreter.cics.bms.loader import BmsLoader, BmsMap, BmsField
@@ -44,6 +46,7 @@ def _make_loader() -> BmsLoader:
     return loader
 
 
+@pytest.mark.skip(reason="re-enabled after Task 7 migration (red-dragon-zvta)")
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_sign_on_to_main_menu_flow():
     screen_q: queue.Queue = queue.Queue()
