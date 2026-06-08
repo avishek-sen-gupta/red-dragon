@@ -5455,6 +5455,77 @@ class TestSetConditionNameToTrue:
         # WS-R at offset 2 (WS-A byte 0, WS-B byte 1).
         assert _decode_zoned_unsigned(region, 2, 1) == 1
 
+    @covers(CobolFeature.SET_TO, CobolFeature.LEVEL_88_CONDITION)
+    def test_set_88_on_third_adjacent_flag_writes_at_correct_offset(self):
+        """SET <88-on-3rd-of-3-adjacent-X(1)-flags, multiple 88s, digit VALUEs>.
+
+        Regression for red-dragon-0sq2 (mirrors COACTVWC WS-EDIT-ACCT-FLAG):
+        three consecutive PIC X(1) flags in ONE group, each with several 88s whose
+        VALUEs are digit characters ('0'/'1'). SET F3-VALID TO TRUE must write the
+        character '1' into F3 (the 3rd byte), not the int 1 (which the alphanumeric
+        encoder silently dropped, leaving the byte unchanged).
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET88ADJ.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLAGS.",
+                "   05 F1 PIC X VALUE 'A'.",
+                "      88 F1-NOTOK VALUE '0'.",
+                "      88 F1-OK    VALUE '1'.",
+                "   05 F2 PIC X VALUE 'B'.",
+                "      88 F2-NOTOK VALUE '0'.",
+                "      88 F2-OK    VALUE '1'.",
+                "   05 F3 PIC X VALUE 'C'.",
+                "      88 F3-NOTOK VALUE '0'.",
+                "      88 F3-OK    VALUE '1'.",
+                "      88 F3-BLANK VALUE ' '.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET F3-OK TO TRUE.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # Group WS-FLAGS occupies bytes 0..2: F1=byte0, F2=byte1, F3=byte2.
+        assert _decode_alpha(region, 0, 1) == "A"
+        assert _decode_alpha(region, 1, 1) == "B"
+        assert _decode_alpha(region, 2, 1) == "1"
+
+    @covers(CobolFeature.SET_TO, CobolFeature.LEVEL_88_CONDITION)
+    def test_set_88_on_first_adjacent_flag_writes_at_offset_zero(self):
+        """SET <88-on-1st-flag> writes byte 0 only; siblings unchanged (regression)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET88ADJ1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLAGS.",
+                "   05 F1 PIC X VALUE 'A'.",
+                "      88 F1-NOTOK VALUE '0'.",
+                "      88 F1-OK    VALUE '1'.",
+                "   05 F2 PIC X VALUE 'B'.",
+                "      88 F2-NOTOK VALUE '0'.",
+                "      88 F2-OK    VALUE '1'.",
+                "   05 F3 PIC X VALUE 'C'.",
+                "      88 F3-NOTOK VALUE '0'.",
+                "      88 F3-OK    VALUE '1'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET F1-OK TO TRUE.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 1) == "1"
+        assert _decode_alpha(region, 1, 1) == "B"
+        assert _decode_alpha(region, 2, 1) == "C"
+
 
 class TestClassConditions:
     """IS [NOT] NUMERIC / ALPHABETIC class tests (red-dragon-pz9g.20)."""
