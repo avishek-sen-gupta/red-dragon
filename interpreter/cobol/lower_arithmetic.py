@@ -11,6 +11,7 @@ from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ref_mod import (
     RefModLiteral,
     RefModReference,
+    RefModLengthOf,
     RefModBinOp,
     RefModExpr,
     RefModOperand,
@@ -160,6 +161,17 @@ def eval_ref_mod_expr(
             # Unknown field: treat as literal numeric 0
             logging.debug(f"eval_ref_mod_expr: RefModReference {name} (unknown) → 0")
             return ctx.const_to_reg("0")
+
+    elif isinstance(expr, RefModLengthOf):
+        # LENGTH OF <field>: the field's byte length (a compile-time constant),
+        # NOT a decode of its value. Used in ref-mod start/length expressions
+        # such as DEST(LENGTH OF G + 1 : LENGTH OF H) (red-dragon-oq2c).
+        name = expr.name
+        if ctx.has_field(name, materialised):
+            field_ref, _ = ctx.resolve_field_ref(name, materialised)
+            return ctx.const_to_reg(field_ref.fl.byte_length)
+        logging.warning("eval_ref_mod_expr: LENGTH OF unknown field %s → 0", name)
+        return ctx.const_to_reg("0")
 
     elif isinstance(expr, RefModBinOp):
         # Binary operation: evaluate left and right, emit Binop

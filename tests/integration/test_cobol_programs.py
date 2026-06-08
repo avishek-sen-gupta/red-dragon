@@ -5568,3 +5568,94 @@ class TestPerformVaryingLengthOfAndRefModCondition:
         )
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 4, 4) == 2
+
+
+class TestRefModLengthOf:
+    """LENGTH OF <field> used inside a reference-modification start/length.
+
+    Regression for red-dragon-oq2c: the ProLeap bridge serialized
+    ``LENGTH OF X`` inside a ref-mod arithmetic expression as a bogus
+    ``{"kind":"ref","name":"LENGTHOFX"}`` node (the special register text
+    glued together). The frontend then resolved that unknown name to 0, so a
+    target write at ``DEST(LENGTH OF G + 1 : ...)`` spliced at position 0
+    instead of the intended offset and shifted every prior byte. This is the
+    silent ~12-byte commarea shift that broke pseudo-conversational reenter.
+    """
+
+    @covers(CobolFeature.REFERENCE_MODIFICATION, CobolFeature.MOVE)
+    def test_target_ref_mod_length_of_start_does_not_shift_prior_bytes(self):
+        """MOVE INTO DEST(LENGTH OF G + 1 : LENGTH OF H) writes at the right offset.
+
+        DEST is X(20). First MOVE G (a 10-byte group with a 'Z' marker at rel
+        offset 5) into DEST, so DEST byte 5 == 'Z'. Then a target ref-mod write
+        of H into DEST(LENGTH OF G + 1 : LENGTH OF H) must land at DEST bytes
+        11..14 (1-indexed 11) WITHOUT disturbing DEST byte 5. If LENGTH OF G
+        mis-resolves to 0 the start collapses to 1 and the splice shifts the
+        leading 'Z' rightward (the oq2c bug).
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-RMLEN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 G.",
+                "   05 G-A    PIC X(05) VALUE SPACES.",
+                "   05 G-MARK PIC X(01) VALUE 'Z'.",
+                "   05 G-B    PIC X(04) VALUE SPACES.",
+                "01 H        PIC X(04) VALUE 'HHHH'.",
+                "01 DEST     PIC X(20) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE G TO DEST.",
+                "    MOVE H TO DEST(LENGTH OF G + 1:LENGTH OF H).",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        # G occupies bytes 0..9, H 10..13, DEST 14..33.
+        dest_off = 14
+        assert _decode_alpha(region, dest_off + 5, 1) == "Z", (
+            "leading group marker shifted: target ref-mod start "
+            "LENGTH OF G + 1 mis-resolved (oq2c)"
+        )
+        assert (
+            _decode_alpha(region, dest_off + 10, 4) == "HHHH"
+        ), "H not written at byte 11 (1-indexed) of DEST"
+
+    @covers(CobolFeature.REFERENCE_MODIFICATION, CobolFeature.MOVE)
+    def test_source_ref_mod_length_of_slice_copies_correct_bytes(self):
+        """MOVE SRC(1:LENGTH OF G) TO G slices the right length from the source.
+
+        SRC is X(20) with a marker 'Z' at byte 6 (1-indexed) i.e. rel offset 5.
+        Slicing SRC(1:LENGTH OF G) where G is a 10-byte group must copy bytes
+        1..10, placing the 'Z' at G rel offset 5. If LENGTH OF G resolves to 0
+        the slice length collapses and the marker is lost / misplaced.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-RMSRC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 G.",
+                "   05 G-A    PIC X(05).",
+                "   05 G-MARK PIC X(01).",
+                "   05 G-B    PIC X(04).",
+                "01 SRC.",
+                "   05 S-A    PIC X(05) VALUE SPACES.",
+                "   05 S-MARK PIC X(01) VALUE 'Z'.",
+                "   05 S-REST PIC X(14) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE SRC(1:LENGTH OF G) TO G.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        # G occupies bytes 0..9; the marker must land at G rel offset 5.
+        assert (
+            _decode_alpha(region, 5, 1) == "Z"
+        ), "group-slice source length LENGTH OF G mis-resolved (oq2c)"
