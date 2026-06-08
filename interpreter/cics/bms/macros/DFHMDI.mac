@@ -1,0 +1,5 @@
+         MACRO
+&NAME    DFHMDI &SIZE=,&LINE=,&COLUMN=,&CTRL=,&MAPATTS=,&DSATTS=,      X
+               &JUSTIFY=,&HEADER=,&TRAILER=,&FLDSEP=,&COLOR=,&HILIGHT=,X
+               &PS=,&VALIDN=,&DATA=,&PARTN=,&OBFMT=,&TIOAPFX=
+         MEND
