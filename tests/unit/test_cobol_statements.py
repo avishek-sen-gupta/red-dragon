@@ -99,7 +99,17 @@ class TestParseStatementDispatch:
         stmt = parse_statement({"type": "MOVE", "operands": ["123", "WS-A"]})
         assert isinstance(stmt, MoveStatement)
         assert stmt.source.name == "123"
-        assert stmt.target.name == "WS-A"
+        assert stmt.targets[0].name == "WS-A"
+
+    @covers(CobolFeature.MOVE)
+    def test_move_multi_target(self):
+        # MOVE X TO A B C distributes the source to every receiving field.
+        stmt = parse_statement(
+            {"type": "MOVE", "operands": ["WS-X", "WS-A", "WS-B", "WS-C"]}
+        )
+        assert isinstance(stmt, MoveStatement)
+        assert stmt.source.name == "WS-X"
+        assert [t.name for t in stmt.targets] == ["WS-A", "WS-B", "WS-C"]
 
     @covers(CobolFeature.ADD)
     def test_add(self):

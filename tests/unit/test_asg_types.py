@@ -341,7 +341,7 @@ class TestCobolStatement:
         stmt = parse_statement(data)
         assert isinstance(stmt, MoveStatement)
         assert stmt.source.name == "WS-A"
-        assert stmt.target.name == "WS-B"
+        assert stmt.targets[0].name == "WS-B"
         assert parse_statement(stmt.to_dict()) == stmt
 
     def test_if_statement_with_children(self):
