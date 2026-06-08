@@ -102,46 +102,33 @@ class MoveStatement:
     """
 
     source: RefModOperand
-    target: RefModOperand
+    targets: list[RefModOperand]
 
     @classmethod
     def from_dict(cls, data: dict) -> MoveStatement:
         operands = data.get("operands", [])
         source_data = operands[0] if len(operands) > 0 else {}
-        target_data = operands[1] if len(operands) > 1 else {}
+        # COBOL `MOVE src TO a b c` distributes the source to every receiving
+        # field; the bridge emits all of them as operands[1:].
+        target_data = operands[1:]
 
         source = RefModOperand.from_dict(source_data)
-        target = RefModOperand.from_dict(target_data)
+        targets = [RefModOperand.from_dict(t) for t in target_data]
 
-        return cls(source=source, target=target)
+        return cls(source=source, targets=targets)
+
+    def _operand_dict(self, operand: RefModOperand) -> dict:
+        d: dict = {"name": operand.name}
+        if operand.ref_mod_start is not None:
+            d["ref_mod_start"] = self._serialize_ref_mod_expr(operand.ref_mod_start)
+        if operand.ref_mod_length is not None:
+            d["ref_mod_length"] = self._serialize_ref_mod_expr(operand.ref_mod_length)
+        return d
 
     def to_dict(self) -> dict:
-        # Reconstruct operand dicts for serialization
-        source_dict = {
-            "name": self.source.name,
-        }
-        if self.source.ref_mod_start is not None:
-            source_dict["ref_mod_start"] = self._serialize_ref_mod_expr(
-                self.source.ref_mod_start
-            )
-        if self.source.ref_mod_length is not None:
-            source_dict["ref_mod_length"] = self._serialize_ref_mod_expr(
-                self.source.ref_mod_length
-            )
-
-        target_dict = {
-            "name": self.target.name,
-        }
-        if self.target.ref_mod_start is not None:
-            target_dict["ref_mod_start"] = self._serialize_ref_mod_expr(
-                self.target.ref_mod_start
-            )
-        if self.target.ref_mod_length is not None:
-            target_dict["ref_mod_length"] = self._serialize_ref_mod_expr(
-                self.target.ref_mod_length
-            )
-
-        return {"type": "MOVE", "operands": [source_dict, target_dict]}
+        operands = [self._operand_dict(self.source)]
+        operands.extend(self._operand_dict(t) for t in self.targets)
+        return {"type": "MOVE", "operands": operands}
 
     @staticmethod
     def _serialize_ref_mod_expr(expr) -> dict:
