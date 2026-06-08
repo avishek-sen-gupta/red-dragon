@@ -232,7 +232,21 @@ class EmitContext:
             ),
         )
 
-        elem_size = fl.element_size if fl.element_size > 0 else fl.byte_length
+        # Subscript stride vs. accessed-element width.
+        #  * stride: how far apart successive occurrences sit.
+        #  * access_len: how many bytes one occurrence of THIS field spans.
+        # A field that itself carries OCCURS strides by (and accesses) its own
+        # element_size. A leaf nested inside an OCCURS group strides by the
+        # group's element_size (e.g. CDEMO-MENU-OPT-PGMNAME(idx) strides by the
+        # whole CDEMO-MENU-OPT entry, 46 bytes) but accesses only the leaf's own
+        # width (8 bytes for PGMNAME X(8)).
+        if fl.occurs_count > 0 and fl.element_size > 0:
+            elem_size = fl.element_size
+            access_len = fl.element_size
+        else:
+            group_stride = materialised.subscript_stride(base_name)
+            access_len = fl.byte_length
+            elem_size = group_stride if group_stride > 0 else fl.byte_length
         elem_size_reg = self.const_to_reg(elem_size)
         displacement = self.fresh_reg()
         self.emit_inst(
@@ -260,7 +274,7 @@ class EmitContext:
             name=fl.name,
             type_descriptor=fl.type_descriptor,
             offset=fl.offset,
-            byte_length=elem_size,
+            byte_length=access_len,
             redefines=fl.redefines,
             value=fl.value,
         )

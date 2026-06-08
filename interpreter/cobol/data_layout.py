@@ -135,6 +135,40 @@ class DataLayout:
             # Recurse into group's children
             yield from grp.all_fields()
 
+    def enclosing_occurs_element_size(self, name: str) -> int:
+        """Return the subscript stride for ``name``: the element_size of the
+        nearest ancestor (or self) OCCURS group/field.
+
+        When a leaf is nested inside an OCCURS group, COBOL subscripting strides
+        by the OCCURS *element* size, not by the leaf's own byte_length. Returns
+        0 if ``name`` is not under (and is not itself) an OCCURS table.
+        """
+        result = self._enclosing_occurs_element_size(name, enclosing=0)
+        return result if result is not None else 0
+
+    def _enclosing_occurs_element_size(self, name: str, enclosing: int) -> int | None:
+        """Walk the tree tracking the nearest enclosing OCCURS element_size.
+
+        ``enclosing`` is the element_size of the closest OCCURS ancestor seen so
+        far (0 if none). Returns the stride for ``name`` once found, else None.
+        """
+        if name in self.fields:
+            leaf = self.fields[name]
+            # A leaf that itself has OCCURS strides by its own element_size;
+            # otherwise it inherits the enclosing OCCURS group's element_size.
+            if leaf.occurs_count > 0 and leaf.element_size > 0:
+                return leaf.element_size
+            return enclosing
+        if name in self.groups:
+            grp = self.groups[name]
+            return grp.element_size if grp.occurs_count > 0 else enclosing
+        for grp in self.groups.values():
+            next_enclosing = grp.element_size if grp.occurs_count > 0 else enclosing
+            found = grp._enclosing_occurs_element_size(name, next_enclosing)
+            if found is not None:
+                return found
+        return None
+
     def lookup_as_storage(self, name: str) -> FieldLayout | None:
         """Return a FieldLayout for name, synthesizing one for groups.
 
@@ -163,6 +197,50 @@ class DataLayout:
             occurs_count=grp.occurs_count,
             element_size=elem_size,
         )
+
+
+def _placed_child_extent(
+    cobol_field: CobolField,
+    sub_fields: dict[str, FieldLayout],
+    sub_groups: dict[str, "DataLayout"],
+    group_offset: int,
+) -> int | None:
+    """Return the group's byte length from its children's PLACED extents.
+
+    The extent is ``max(child.offset + child.length) - group_offset`` over
+    NON-REDEFINES children (REDEFINES children — leaf or group — overlay the
+    same storage and do not extend the group). For an OCCURS group the caller
+    multiplies the returned single-occurrence extent by the occurrence count.
+
+    Returns None if the group has no non-REDEFINES children (caller falls back
+    to the summed length so an all-REDEFINES group still gets a size).
+    """
+    # Collect non-REDEFINES children with their placed (offset, length).
+    placed: list[tuple[int, int]] = []
+    for child in cobol_field.children:
+        if child.redefines:
+            continue
+        built = sub_fields.get(child.name) or sub_groups.get(child.name)
+        if built is None:
+            continue
+        if isinstance(built, DataLayout):
+            placed.append((built.offset, built.total_bytes))
+        else:
+            placed.append((built.offset, built.byte_length))
+    if not placed:
+        return None
+    placed.sort()
+    # Each child's end is bounded by the NEXT non-REDEFINES child's placed
+    # offset: the real compiler lays siblings out contiguously, so a child
+    # whose PIC our parser over-sizes (e.g. an edited PIC) cannot extend past
+    # where the compiler placed its successor. The last child uses its own end.
+    end = group_offset
+    for i, (off, length) in enumerate(placed):
+        child_end = off + length
+        if i + 1 < len(placed):
+            child_end = min(child_end, placed[i + 1][0])
+        end = max(end, child_end)
+    return end - group_offset
 
 
 def _flatten_field(
@@ -196,7 +274,23 @@ def _flatten_field(
                 sub_groups[child_name] = child_result
             else:
                 sub_fields[child_name] = child_result
-        group_length = _compute_group_length(cobol_field)
+        # Group length from PLACED child extents (compiler-assigned offsets),
+        # not from summing our own per-field length estimates. This is robust
+        # against a child whose PIC our parser sizes differently than the real
+        # compiler (e.g. an edited PIC like +ZZZ,ZZZ,ZZ9.99): summing would
+        # over-reach and overlap the next sibling, whereas the compiler-placed
+        # offset of that sibling bounds this group correctly. REDEFINES children
+        # overlay the same storage, so only non-REDEFINES children extend the
+        # group. OCCURS multiplies the single-occurrence extent by the count.
+        single_extent = _placed_child_extent(
+            cobol_field, sub_fields, sub_groups, absolute_offset
+        )
+        if single_extent is None:
+            group_length = _compute_group_length(cobol_field)
+        elif cobol_field.occurs > 0:
+            group_length = single_extent * cobol_field.occurs
+        else:
+            group_length = single_extent
         elem_size = cobol_field.element_size if cobol_field.element_size > 0 else 0
         group_layout = DataLayout(
             fields=sub_fields,
