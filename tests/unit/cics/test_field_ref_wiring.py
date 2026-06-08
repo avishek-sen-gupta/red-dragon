@@ -7,6 +7,7 @@ from interpreter.cics.strategy import (
     emit_copy_back_str,
     emit_resp_writeback,
 )
+from interpreter.cics.cics_parser import CicsOperand
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef
@@ -82,7 +83,7 @@ MATERIALISED = object()  # opaque to the fake; helpers only pass it through
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_copy_in_emits_loadregion_for_field() -> None:
     ctx = _ctx()
-    out = emit_copy_in(ctx, "WS-FIELD", MATERIALISED)
+    out = emit_copy_in(ctx, CicsOperand("WS-FIELD", False), MATERIALISED)
     assert isinstance(out, Register)
     load_regions = [i for i in ctx.emitted if isinstance(i, LoadRegion)]
     assert len(load_regions) == 1
@@ -94,7 +95,7 @@ def test_copy_in_emits_loadregion_for_field() -> None:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_copy_in_returns_none_for_literal() -> None:
     ctx = _ctx()
-    out = emit_copy_in(ctx, "'CC01'", MATERIALISED)
+    out = emit_copy_in(ctx, CicsOperand("CC01", True), MATERIALISED)
     assert out is None
     assert not any(isinstance(i, LoadRegion) for i in ctx.emitted)
 
@@ -122,7 +123,7 @@ def test_copy_back_str_writes_for_field() -> None:
 def test_copy_back_str_noop_for_literal_or_none() -> None:
     ctx = _ctx()
     value_reg = ctx.fresh_reg()
-    emit_copy_back_str(ctx, "'CC01'", value_reg, MATERIALISED)
+    emit_copy_back_str(ctx, CicsOperand("CC01", True), value_reg, MATERIALISED)
     emit_copy_back_str(ctx, None, value_reg, MATERIALISED)
     assert ctx.encode_writes == []
 
@@ -137,7 +138,9 @@ def test_resp_writeback_writes_eibresp_and_resp_field() -> None:
     """INQUIRE-style resp write-back targets BOTH EIBRESP and the RESP(name) field."""
     ctx = _resp_ctx()
     r_resp = ctx.fresh_reg()
-    emit_resp_writeback(ctx, r_resp, {"RESP": "WS-RC"}, MATERIALISED)
+    emit_resp_writeback(
+        ctx, r_resp, {"RESP": CicsOperand("WS-RC", False)}, MATERIALISED
+    )
 
     assert len(ctx.encode_writes) == 2
     written_offsets = sorted(fl.offset for (_, fl, _, _) in ctx.encode_writes)
@@ -165,7 +168,7 @@ def test_resp_writeback_writes_eibresp_only_when_no_resp_option() -> None:
 
 
 class FakeStmt:
-    def __init__(self, verb: str, options: dict[str, str | None]) -> None:
+    def __init__(self, verb: str, options: dict[str, "CicsOperand | None"]) -> None:
         self.verb = verb
         self.options = options
 
@@ -184,7 +187,11 @@ def test_lower_assign_applid_emits_copy_back_to_field() -> None:
 
     ctx = FakeCtx({"WS-APPLID": (0, 8)})
     strategy = _make_strategy()
-    strategy.lower(ctx, FakeStmt("ASSIGN", {"APPLID": "WS-APPLID"}), MATERIALISED)
+    strategy.lower(
+        ctx,
+        FakeStmt("ASSIGN", {"APPLID": CicsOperand("WS-APPLID", False)}),
+        MATERIALISED,
+    )
 
     # A __cics_assign call was emitted for the APPLID sub-option ...
     calls = [
@@ -204,7 +211,11 @@ def test_lower_assign_skips_absent_suboptions() -> None:
     ctx = FakeCtx({"WS-APPLID": (0, 8), "WS-SYSID": (8, 4)})
     strategy = _make_strategy()
     # Only SYSID requested — APPLID should not be written.
-    strategy.lower(ctx, FakeStmt("ASSIGN", {"SYSID": "WS-SYSID"}), MATERIALISED)
+    strategy.lower(
+        ctx,
+        FakeStmt("ASSIGN", {"SYSID": CicsOperand("WS-SYSID", False)}),
+        MATERIALISED,
+    )
 
     assert len(ctx.encode_writes) == 1
     _, fl, _, _ = ctx.encode_writes[0]
@@ -219,7 +230,13 @@ def test_lower_formattime_yyyymmdd_emits_copy_back_to_field() -> None:
     strategy = _make_strategy()
     strategy.lower(
         ctx,
-        FakeStmt("FORMATTIME", {"ABSTIME": "WS-T", "YYYYMMDD": "WS-D"}),
+        FakeStmt(
+            "FORMATTIME",
+            {
+                "ABSTIME": CicsOperand("WS-T", False),
+                "YYYYMMDD": CicsOperand("WS-D", False),
+            },
+        ),
         MATERIALISED,
     )
 

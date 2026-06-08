@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from interpreter.cobol.cobol_statements import ExecCicsStatement
     from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
     from interpreter.cics.types import CicsContext
+    from interpreter.cics.cics_parser import CicsOperand
     from interpreter.cics.bms.loader import BmsLoader
     from interpreter.register import Register
 
@@ -68,16 +69,21 @@ _BMS_VERBS: dict[str, str] = {
 
 def emit_copy_in(
     ctx: "EmitContext",
-    name: str | None,
+    operand: "CicsOperand | None",
     materialised: "MaterialisedSectionedLayout",
 ) -> "Register | None":
-    """If ``name`` is a data item, LoadRegion its bytes into a fresh register and return it.
+    """If ``operand`` is a data item, LoadRegion its bytes into a fresh register and return it.
 
-    Returns ``None`` when ``name`` is ``None`` or a literal (caller falls back to Const).
+    Returns ``None`` when ``operand`` is ``None`` or a literal/unresolved name
+    (caller falls back to Const).
     """
-    if name is None or not ctx.has_field(name, materialised):
+    if (
+        operand is None
+        or operand.is_literal
+        or not ctx.has_field(operand.text, materialised)
+    ):
         return None
-    ref, region_reg = ctx.resolve_field_ref(name, materialised)
+    ref, region_reg = ctx.resolve_field_ref(operand.text, materialised)
     out = ctx.fresh_reg()
     ctx.emit_inst(
         LoadRegion(
@@ -92,37 +98,53 @@ def emit_copy_in(
 
 def emit_operand_value(
     ctx: "EmitContext",
-    name: str | None,
+    operand: "CicsOperand | None",
     materialised: "MaterialisedSectionedLayout",
 ) -> "Register":
     """Resolve a CICS operand to a register holding its runtime VALUE.
 
-    If ``name`` is a data item, decode the field to a register; otherwise treat it
-    as a literal (strip COBOL quotes) and emit a Const. Returns a Register.
+    Branches on the STRUCTURAL operand kind carried by ``CicsOperand``:
+    a bare data-name that resolves to a field is decoded to a register; a quoted
+    literal (or an unresolved bare name / numeric) emits a Const. A quoted literal
+    NEVER consults ``has_field`` — that fixes the BMS symbolic-map name collision
+    (e.g. MAP('SGNMAP') must not decode a same-named WS group). Returns a Register.
     """
-    if name and ctx.has_field(name, materialised):
-        ref, region_reg = ctx.resolve_field_ref(name, materialised)
+    if operand is None:
+        r = ctx.fresh_reg()
+        ctx.emit_inst(Const(result_reg=r, value=""))
+        return r
+    if not operand.is_literal and ctx.has_field(operand.text, materialised):
+        ref, region_reg = ctx.resolve_field_ref(operand.text, materialised)
         # ref.offset_reg carries the resolved offset, including the element
         # offset for a subscripted operand (e.g. TBL(IDX)); pass it so the
         # decode reads the indexed element, not the base (element 1).
         return ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
-    literal = (name or "").strip("'\" ")
     r = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=r, value=literal))
+    ctx.emit_inst(Const(result_reg=r, value=operand.text))
     return r
 
 
 def emit_copy_back_str(
     ctx: "EmitContext",
-    name: str | None,
+    target: "CicsOperand | str | None",
     value_str_reg: "Register",
     materialised: "MaterialisedSectionedLayout",
 ) -> None:
     """Encode a string-valued result into the named field, if it is a data item.
 
-    No-op for ``None`` or literal names.
+    ``target`` may be a bare field name (str — for internally-known fields like
+    EIBRESP) or a parsed ``CicsOperand``. A write-back target must be a data-name,
+    so a quoted literal operand is a no-op (along with ``None`` and unknown names).
     """
-    if name is None or not ctx.has_field(name, materialised):
+    if target is None:
+        return
+    if isinstance(target, str):
+        name = target
+    elif target.is_literal:
+        return
+    else:
+        name = target.text
+    if not ctx.has_field(name, materialised):
         return
     ref, region_reg = ctx.resolve_field_ref(name, materialised)
     ctx.emit_encode_and_write(region_reg, ref.fl, value_str_reg, ref.offset_reg)
@@ -131,7 +153,7 @@ def emit_copy_back_str(
 def emit_resp_writeback(
     ctx: "EmitContext",
     r_resp_result: "Register",
-    opts: dict[str, str | None],
+    opts: dict[str, "CicsOperand | None"],
     materialised: "MaterialisedSectionedLayout",
 ) -> None:
     """Write a builtin's returned resp code into EIBRESP (always) and RESP(name) if present.
@@ -149,7 +171,7 @@ def emit_resp_writeback(
 
 def _resolve_keylen(
     ctx: "EmitContext",
-    opts: dict[str, str | None],
+    opts: dict[str, "CicsOperand | None"],
     materialised: "MaterialisedSectionedLayout",
 ) -> int:
     """Key length for a VSAM verb.
@@ -158,23 +180,31 @@ def _resolve_keylen(
     length, else 0.
     """
     keylength = opts.get("KEYLENGTH")
-    if keylength is not None and str(keylength).strip().isdigit():
-        return int(str(keylength).strip())
+    if keylength is not None and keylength.text.strip().isdigit():
+        return int(keylength.text.strip())
     ridfld = opts.get("RIDFLD")
-    if ridfld is not None and ctx.has_field(ridfld, materialised):
-        ref, _ = ctx.resolve_field_ref(ridfld, materialised)
+    if (
+        ridfld is not None
+        and not ridfld.is_literal
+        and ctx.has_field(ridfld.text, materialised)
+    ):
+        ref, _ = ctx.resolve_field_ref(ridfld.text, materialised)
         return ref.fl.byte_length
     return 0
 
 
 def _resolve_into(
     ctx: "EmitContext",
-    name: str | None,
+    operand: "CicsOperand | None",
     materialised: "MaterialisedSectionedLayout",
 ) -> tuple[int, int]:
     """(offset, byte_length) of the INTO field, or (0, 0) if it is not a field."""
-    if name is not None and ctx.has_field(name, materialised):
-        ref, _ = ctx.resolve_field_ref(name, materialised)
+    if (
+        operand is not None
+        and not operand.is_literal
+        and ctx.has_field(operand.text, materialised)
+    ):
+        ref, _ = ctx.resolve_field_ref(operand.text, materialised)
         return ref.fl.offset, ref.fl.byte_length
     return 0, 0
 
@@ -414,8 +444,14 @@ class CicsLoweringStrategy:
             return
 
         if verb == "ABEND":
+            abcode = opts.get("ABCODE")
             r_code = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=r_code, value=opts.get("ABCODE", "UNKN")))
+            ctx.emit_inst(
+                Const(
+                    result_reg=r_code,
+                    value=abcode.text if abcode is not None else "UNKN",
+                )
+            )
             r_res = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
@@ -431,8 +467,14 @@ class CicsLoweringStrategy:
         bms_builtin = _BMS_VERBS.get(verb)
         if bms_builtin:
             if verb == "SEND TEXT":
+                text_op = opts.get("TEXT")
                 r_text = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=r_text, value=opts.get("TEXT", "")))
+                ctx.emit_inst(
+                    Const(
+                        result_reg=r_text,
+                        value=text_op.text if text_op is not None else "",
+                    )
+                )
                 r_res = ctx.fresh_reg()
                 ctx.emit_inst(
                     CallFunction(
@@ -442,12 +484,13 @@ class CicsLoweringStrategy:
                     )
                 )
                 return
-            r_map = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=r_map, value=opts.get("MAP", opts.get("MAPNAME", "")))
+            # MAP()/MAPSET() route through the uniform operand resolver: a quoted
+            # literal stays a Const, a data-name (the standard CardDemo idiom,
+            # e.g. MAP(CCARD-NEXT-MAP)) decodes to its runtime VALUE.
+            r_map = emit_operand_value(
+                ctx, opts.get("MAP", opts.get("MAPNAME")), materialised
             )
-            r_set = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=r_set, value=opts.get("MAPSET", "")))
+            r_set = emit_operand_value(ctx, opts.get("MAPSET"), materialised)
             r_region = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=r_region, value=b""))
             r_res = ctx.fresh_reg()
