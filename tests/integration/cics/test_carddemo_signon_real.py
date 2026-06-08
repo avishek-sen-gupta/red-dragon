@@ -24,8 +24,10 @@ bms-tools-generated BMS maps; gated on BMS_TOOLS_HOME), driven through ``run_cic
       re-render CACTVWA with the read-through account/customer fields.
 
 Turns 1-4 are ``test_real_carddemo_signon_menu_and_option_select``; turn 5 is
-``test_real_carddemo_account_view_three_reads`` (currently xfail-strict on a
-numeric->alphanumeric MOVE gap, see that test's marker).
+``test_real_carddemo_account_view_three_reads``. Both pass: the full
+account-view flow runs end to end (the entered account id echoes back and the
+read-through account status + customer first/last names render from the three
+chained VSAM reads).
 """
 
 from __future__ import annotations
@@ -402,38 +404,6 @@ def test_real_carddemo_signon_menu_and_option_select(tmp_path):
     _drive_through_turn4(tmp_path)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Turn 5 now advances PAST the input-edit phase. Fixed gaps: the MOVE gap "
-        "(red-dragon-0fqr), the relation-compare gap (red-dragon-dmu8: "
-        "numeric-DISPLAY vs alphanumeric figurative/char-literal compares by zoned "
-        "display representation), and the SET-88 writeback gap (red-dragon-0sq2: "
-        "SET <88> TO TRUE on a PIC X parent whose 88 VALUE is a digit character "
-        "like '0'/'1' emitted an UNQUOTED Const that the VM parsed as an int, so "
-        "__string_to_bytes rejected it as non-str and silently dropped the byte). "
-        "With 0sq2 fixed, 2210-EDIT-ACCOUNT's SET FLG-ACCTFILTER-ISVALID TO TRUE "
-        "('1') now lands, FLG-ACCTFILTER-BLANK is correctly FALSE, the input is "
-        "accepted (verified: turn-5 ACCTSID echoes back as the entered account id, "
-        "NOT '*'), and 9000-READ-ACCT's chained VSAM reads ARE now reached.\n\n"
-        "It is now blocked on a NEW, DIFFERENT gap in the VSAM READ chain: "
-        "ACSTTUS renders EMPTY ('') instead of 'Y'. 9300-GETACCTDATA-BYACCT does "
-        "EXEC CICS READ DATASET(LIT-ACCTFILENAME) RIDFLD(WS-CARD-RID-ACCT-ID-X) "
-        "KEYLENGTH(...) INTO(ACCOUNT-RECORD) RESP(WS-RESP-CD) and gates "
-        "MOVE ACCT-ACTIVE-STATUS TO ACSTTUSO behind EVALUATE WS-RESP-CD "
-        "WHEN DFHRESP(NORMAL) SET FOUND-ACCT-IN-MASTER TO TRUE. The status "
-        "field is empty because either (a) the chained READs (9200-GETCARDXREF "
-        "alt-index CXACAIX@key-offset-25 -> 9300-GETACCTDATA ACCTDAT -> "
-        "9400-GETCUSTDATA CUSTDAT) do not return WS-RESP-CD == DFHRESP(NORMAL), "
-        "so FOUND-ACCT-IN-MASTER / FOUND-CUST-IN-MASTER are never SET and the "
-        "field MOVEs are skipped, or (b) the READ data is not decoded INTO the "
-        "record so ACCT-ACTIVE-STATUS is blank. COACTVWC.cbl:727-842. This is a "
-        "COBOL/CICS EXEC CICS READ-with-RIDFLD-key + DFHRESP(NORMAL/NOTFND) "
-        "EVALUATE gap, NOT a SET-88 / relation-compare / input-delivery issue. "
-        "The 0sq2 fix is independently proven by "
-        "tests/integration/test_cobol_programs.py::TestSetConditionNameToTrue."
-    ),
-)
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
 def test_real_carddemo_account_view_three_reads(tmp_path):
     """Turn 5: account-id entry into COACTVWC -> 9000-READ-ACCT's three chained
@@ -444,14 +414,11 @@ def test_real_carddemo_account_view_three_reads(tmp_path):
          (CVACT03Y) so this exercises the new VSAM key-offset support. Yields CUST-ID.
       2) READ ACCTDAT RIDFLD=ACCT-ID(11) -> account master (key @0).
       3) READ CUSTDAT RIDFLD=CUST-ID(9)  -> customer master (key @0).
-    1200-SETUP-SCREEN-VARS then moves the read-through values into CACTVWAO and
-    1000-SEND-MAP re-renders CACTVWA.
-
-    XFAIL (strict): blocked by a numeric->alphanumeric MOVE gap in the VM/COBOL
-    layer (see the marker reason). The VSAM key-offset feature this test was
-    written to exercise is independently proven by the engine unit tests. The
-    assertions below state the correct expected behavior and must NOT be
-    weakened; when the MOVE gap is fixed this test flips to passing.
+    1200-SETUP-SCREEN-VARS then moves the read-through values (gated by the
+    FOUND-ACCT-IN-MASTER / FOUND-CUST-IN-MASTER level-88 flags) into CACTVWAO and
+    1000-SEND-MAP re-renders CACTVWA. This completes the account-view flow: the
+    entered account id echoes back, the account status renders 'Y', and the
+    customer first/last names render from the chained reads.
     """
     acct, r4, screen_q, input_q, context_holder, result_holder = _drive_through_turn4(
         tmp_path
