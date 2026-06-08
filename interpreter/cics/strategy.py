@@ -316,7 +316,7 @@ class CicsLoweringStrategy:
             _register(
                 Builtins.TABLE,
                 "__cics_send_map",
-                make_send_map_builtin(bms_loader, screen_queue),
+                make_send_map_builtin(screen_queue),
             )
             _register(
                 Builtins.TABLE,

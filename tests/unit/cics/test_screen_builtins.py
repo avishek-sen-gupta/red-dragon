@@ -33,34 +33,39 @@ def _make_loader() -> BmsLoader:
     return loader
 
 
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_send_map_enqueues_screen():
-    screen_q: queue.Queue = queue.Queue()
-    loader = _make_loader()
-    builtin = make_send_map_builtin(loader, screen_q)
-    args = [
-        typed("COSGN0A", UNKNOWN),
-        typed("COSGN0", UNKNOWN),
-        typed(b" " * 16, UNKNOWN),
-    ]
-    result = builtin(args, VMState())
-    assert isinstance(result, BuiltinResult)
-    assert not screen_q.empty()
-    screen = screen_q.get_nowait()
-    assert screen["map"] == "COSGN0A"
-    assert "fields" in screen
+class _FakeVM:
+    def __init__(self, region, layout, addr=1):
+        self._region = region
+        self.data_layout = layout
+        self._addr = addr
+
+    def region_get(self, addr):
+        return self._region if addr == self._addr else None
+
+
+def _tv(v):
+    return typed(v, UNKNOWN)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_send_map_unknown_map_enqueues_empty_fields():
-    screen_q: queue.Queue = queue.Queue()
-    loader = _make_loader()
-    builtin = make_send_map_builtin(loader, screen_q)
-    args = [typed("NOPE", UNKNOWN), typed("SET", UNKNOWN), typed(b" " * 8, UNKNOWN)]
-    builtin(args, VMState())
-    screen = screen_q.get_nowait()
-    assert screen["map"] == "NOPE"
-    assert screen["fields"] == {}
+def test_send_map_reads_named_output_fields_from_ws(monkeypatch):
+    layout = {
+        "USERIDO": {"offset": 0, "length": 8},
+        "ERRMSGO": {"offset": 8, "length": 78},
+    }
+    region = bytearray(b"\x40" * 86)
+    region[0:8] = "USER0001".encode("cp037")
+    vm = _FakeVM(region, layout)
+    monkeypatch.setattr(
+        "interpreter.cics.builtins.system._get_ws_region_addr", lambda _vm: 1
+    )
+    sq: queue.Queue = queue.Queue()
+    builtin = make_send_map_builtin(sq)
+    builtin([_tv("COSGN0A"), _tv(["USERID", "ERRMSG"])], vm)
+    item = sq.get_nowait()
+    assert item["map"] == "COSGN0A"
+    assert item["fields"]["USERID"] == "USER0001"
+    assert item["fields"]["ERRMSG"] == ""
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -193,30 +198,6 @@ def _make_vm_with_symbolic_layout(
     vm.call_stack.append(frame)
     vm.data_layout = layout
     return vm, addr
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_send_map_reads_output_subfields_from_ws():
-    screen_q: queue.Queue = queue.Queue()
-    loader = _make_loader()
-    builtin = make_send_map_builtin(loader, screen_q)
-    # USERIDO at offset 0, length 8 in the WS region, holding "BOB" (cp037).
-    region = bytearray(" ".encode("cp037") * 16)
-    value = "BOB".encode("cp037").ljust(8, " ".encode("cp037"))
-    region[0:8] = value
-    vm, _addr = _make_vm_with_symbolic_layout(
-        region,
-        {"USERIDO": {"offset": 0, "length": 8, "category": "ALPHANUMERIC"}},
-    )
-    args = [
-        typed("COSGN0A", UNKNOWN),
-        typed("COSGN0", UNKNOWN),
-        typed(b" " * 16, UNKNOWN),
-    ]
-    builtin(args, vm)
-    screen = screen_q.get_nowait()
-    assert screen["map"] == "COSGN0A"
-    assert screen["fields"]["USERID"] == "BOB"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

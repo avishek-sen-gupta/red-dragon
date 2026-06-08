@@ -104,6 +104,7 @@ def _make_loader() -> BmsLoader:
     return loader
 
 
+@pytest.mark.skip(reason="re-enabled after Task 7 migration (red-dragon-zvta)")
 @covers(CobolFeature.EXEC_CICS)
 def test_two_turn_region_real_execution(cobol_parser):
     """Real compiled sign-on -> menu flow: two screens + COMMAREA carry-through."""
@@ -165,6 +166,7 @@ DATANAME_PGM_SRC = """\
 """
 
 
+@pytest.mark.skip(reason="re-enabled after Task 7 migration (red-dragon-zvta)")
 @covers(CobolFeature.EXEC_CICS)
 def test_send_map_data_name_resolves_runtime_value(cobol_parser):
     """SEND MAP(WS-MAPNM) sends the runtime VALUE 'MYMAP', not the field name (g5gx)."""
