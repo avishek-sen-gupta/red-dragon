@@ -49,6 +49,9 @@ def test_send_map_lowers_to_call_function():
         def emit_inst(self, inst):
             self.emitted.append(inst)
 
+        def group_leaf_names(self, group_name, materialised):
+            return []
+
     ctx = _Ctx()
     stmt = ExecCicsStatement(
         verb="SEND MAP",
@@ -138,3 +141,77 @@ def test_send_map_lowering_passes_base_field_names():
     names_reg = call.args[1]
     consts = {i.result_reg: i.value for i in ctx.emitted if isinstance(i, Const)}
     assert consts[names_reg] == ["USERID", "ERRMSG"]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_receive_map_without_into_derives_group_from_literal_map_name():
+    """RECEIVE MAP('COSGN0A') with no INTO -> group COSGN0AI (map name + 'I')."""
+    from interpreter.instructions import Const, CallFunction
+    from interpreter.cobol.cobol_statements import ExecCicsStatement
+    from interpreter.cics.cics_parser import CicsOperand
+    from interpreter.cobol.data_layout import DataLayout, FieldLayout
+    from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
+    from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+    from interpreter.register import Register
+
+    def _alpha(n):
+        return CobolTypeDescriptor(
+            category=CobolDataCategory.ALPHANUMERIC, total_digits=n
+        )
+
+    grp = DataLayout(
+        fields={
+            "USERIDI": FieldLayout(
+                name="USERIDI", type_descriptor=_alpha(8), offset=12, byte_length=8
+            ),
+            "PASSWDI": FieldLayout(
+                name="PASSWDI", type_descriptor=_alpha(8), offset=20, byte_length=8
+            ),
+        },
+        offset=0,
+        total_bytes=28,
+    )
+    ws = DataLayout(groups={"COSGN0AI": grp}, offset=0, total_bytes=28)
+    empty = DataLayout()
+    materialised = MaterialisedSectionedLayout(
+        working_storage=(ws, Register("%ws")),
+        linkage=(empty, Register("%lk")),
+        local_storage=(empty, Register("%ls")),
+    )
+
+    class _Ctx:
+        def __init__(self):
+            self.emitted = []
+            self._n = 0
+
+        def fresh_reg(self):
+            self._n += 1
+            return Register(f"%r{self._n}")
+
+        def emit_inst(self, inst):
+            self.emitted.append(inst)
+            return inst
+
+        def group_leaf_names(self, group_name, mat):
+            return mat.group_leaf_names(group_name)
+
+    ctx = _Ctx()
+    stmt = ExecCicsStatement(
+        verb="RECEIVE MAP",
+        options={
+            "MAP": CicsOperand("COSGN0A", True),
+            "MAPSET": CicsOperand("COSGN00", True),
+        },  # no INTO -> derive COSGN0AI from the literal map name
+    )
+    strategy = CicsLoweringStrategy(context_holder=[None], result_holder=[None])
+    strategy.lower(ctx, stmt, materialised=materialised)
+
+    recv = [
+        i
+        for i in ctx.emitted
+        if isinstance(i, CallFunction) and i.func_name == FuncName("__cics_receive_map")
+    ]
+    assert len(recv) == 1
+    names_reg = recv[0].args[1]
+    consts = {i.result_reg: i.value for i in ctx.emitted if isinstance(i, Const)}
+    assert consts[names_reg] == ["USERID", "PASSWD"]

@@ -479,15 +479,22 @@ class CicsLoweringStrategy:
                 )
                 return
             # MAP name (may be a dynamic data-name) -> runtime value via the resolver.
-            r_map = emit_operand_value(
-                ctx, opts.get("MAP", opts.get("MAPNAME")), materialised
-            )
+            map_op = opts.get("MAP", opts.get("MAPNAME"))
+            r_map = emit_operand_value(ctx, map_op, materialised)
             # The symbolic group is the STATIC FROM (SEND) / INTO (RECEIVE) operand.
+            # When omitted, BMS uses the map's own DSECT, named <mapname><suffix>
+            # (e.g. RECEIVE MAP('COSGN0A') with no INTO -> COSGN0AI); derivable
+            # only for a literal map name (a dynamic map always supplies FROM/INTO).
             if verb == "RECEIVE MAP":
                 group_op, suffix = opts.get("INTO"), "I"
             else:  # SEND MAP
                 group_op, suffix = opts.get("FROM"), "O"
-            group_name = group_op.text if group_op is not None else ""
+            if group_op is not None:
+                group_name = group_op.text
+            elif map_op is not None and map_op.is_literal:
+                group_name = map_op.text + suffix
+            else:
+                group_name = ""
             leaves = (
                 ctx.group_leaf_names(group_name, materialised) if group_name else []
             )
