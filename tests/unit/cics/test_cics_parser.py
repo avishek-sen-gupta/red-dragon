@@ -139,3 +139,24 @@ def test_parse_multiline():
     assert verb == "READ"
     assert opts["FILE"] == "ACCTDAT"
     assert opts["RESP"] == "WS-RESP"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_subscripted_option_value_and_nohandle():
+    """Option value may be a subscripted data-name (nested parens); NOHANDLE flag."""
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS INQUIRE PROGRAM(CDEMO-MENU-OPT-PGMNAME(WS-OPTION)) "
+        "NOHANDLE END-EXEC"
+    )
+    assert verb == "INQUIRE"
+    # Full subscripted operand text preserved (balanced nested parens).
+    assert opts["PROGRAM"] == "CDEMO-MENU-OPT-PGMNAME(WS-OPTION)"
+    assert "NOHANDLE" in opts and opts["NOHANDLE"] is None
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_reference_modified_option_value():
+    """Option value with reference modification (subscript-style nested parens)."""
+    verb, opts = parse_exec_cics_text("EXEC CICS SEND TEXT FROM(WS-MSG(1:8)) END-EXEC")
+    assert verb == "SEND TEXT"
+    assert opts["FROM"] == "WS-MSG(1:8)"
