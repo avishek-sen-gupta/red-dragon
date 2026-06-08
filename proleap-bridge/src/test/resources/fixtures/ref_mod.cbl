@@ -17,4 +17,5 @@
            MOVE WS-FIELD(WS-A + WS-B * WS-C:) TO WS-OUT.
            MOVE WS-FIELD((WS-A + WS-B) * (WS-C - WS-A):3) TO WS-OUT.
            MOVE WS-A TO WS-OUT.
+           MOVE WS-FIELD TO WS-OUT(LENGTH OF WS-A + 1:LENGTH OF WS-B).
            STOP RUN.

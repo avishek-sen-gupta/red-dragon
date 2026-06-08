@@ -144,6 +144,34 @@ public class RefModSerializerTest {
         assertFalse("plain MOVE source has no ref_mod_length", src.has("ref_mod_length"));
     }
 
+    @Test
+    public void testRefMod_lengthOfInTargetExpr() throws Exception {
+        // MOVE #9 is MOVE WS-FIELD TO WS-OUT(LENGTH OF WS-A + 1:LENGTH OF WS-B).
+        // LENGTH OF must serialize as a structured length_of node — NOT a bogus
+        // ref node named "LENGTHOFWS-A" (which the frontend resolves to 0,
+        // collapsing the ref-mod offset and shifting bytes). (red-dragon-oq2c)
+        JsonObject asg = parseFixture("ref_mod.cbl");
+        List<JsonObject> moves = getMoveStatements(asg);
+        JsonObject tgt = moves.get(8).getAsJsonArray("operands").get(1).getAsJsonObject();
+        assertEquals("WS-OUT", tgt.get("name").getAsString());
+
+        // start = LENGTH OF WS-A + 1
+        JsonObject start = tgt.getAsJsonObject("ref_mod_start");
+        assertEquals("binop", start.get("kind").getAsString());
+        assertEquals("+", start.get("op").getAsString());
+        JsonObject startLeft = start.getAsJsonObject("left");
+        assertEquals("length_of", startLeft.get("kind").getAsString());
+        assertEquals("WS-A", startLeft.get("name").getAsString());
+        JsonObject startRight = start.getAsJsonObject("right");
+        assertEquals("lit", startRight.get("kind").getAsString());
+        assertEquals("1", startRight.get("value").getAsString());
+
+        // length = LENGTH OF WS-B
+        JsonObject len = tgt.getAsJsonObject("ref_mod_length");
+        assertEquals("length_of", len.get("kind").getAsString());
+        assertEquals("WS-B", len.get("name").getAsString());
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private JsonObject getMoveSourceOperand(int moveIndex) throws Exception {
