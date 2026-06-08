@@ -365,6 +365,52 @@ class TestLevel88ConditionNames:
         assert _decode(region, 14, 4) == 2  # WS-R3
 
 
+class TestLevel88FigurativeValues:
+    """A level-88 whose VALUES are figurative constants (LOW-VALUES / SPACES):
+    SET <88> TO TRUE writes the first figurative, and IF <88> must compare the
+    field against the figurative *fill character*, not the literal text
+    'LOW-VALUES'. (CardDemo COACTUPC ACUP-DETAILS-NOT-FETCHED regression.)"""
+
+    @covers(CobolFeature.LEVEL_88_CONDITION, CobolFeature.SET_TO, CobolFeature.IF_ELSE)
+    def test_set_and_test_88_figurative_low_values(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-LVL88-FIG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-FLAG PIC X(1) VALUE SPACE.",
+                "   88 FLAG-UNSET VALUE LOW-VALUES SPACES.",
+                "   88 FLAG-SET   VALUE 'S'.",
+                "77 WS-R1 PIC 9(4) VALUE 0.",
+                "77 WS-R2 PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "* SET the 88 to its first figurative VALUE (LOW-VALUES)",
+                "    SET FLAG-UNSET TO TRUE.",
+                "* IF must match the figurative LOW-VALUES, not the text",
+                "    IF FLAG-UNSET",
+                "        MOVE 1 TO WS-R1",
+                "    ELSE",
+                "        MOVE 2 TO WS-R1",
+                "    END-IF.",
+                "* Now flip to FLAG-SET and re-test FLAG-UNSET (should be false)",
+                "    SET FLAG-SET TO TRUE.",
+                "    IF FLAG-UNSET",
+                "        MOVE 1 TO WS-R2",
+                "    ELSE",
+                "        MOVE 2 TO WS-R2",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # FLAG-UNSET after SET LOW-VALUES -> true -> 1
+        assert _decode(region, 1, 4) == 1  # WS-R1
+        # After SET FLAG-SET ('S'), FLAG-UNSET is false -> 2
+        assert _decode(region, 5, 4) == 2  # WS-R2
+
+
 class TestPerformAndParagraphs:
     """Multi-paragraph PERFORM calls with VARYING using field-based limit."""
 
