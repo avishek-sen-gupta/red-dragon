@@ -126,3 +126,32 @@ def test_xctl_program_field_resolves_to_runtime_value(cobol_parser):
     assert (
         result.program.strip() == "COMEN01C"
     ), f"program should be the decoded field value, got {result.program!r}"
+
+
+COBOL_XCTL_SUBSCRIPTED = """\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TESTXSB.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-PGMS.
+          05 WS-PGM OCCURS 3 TIMES PIC X(8).
+       01 WS-IDX PIC 9(4) VALUE 2.
+       PROCEDURE DIVISION.
+           MOVE 'PROG0001' TO WS-PGM(1).
+           MOVE 'COADM01C' TO WS-PGM(2).
+           MOVE 'PROG0003' TO WS-PGM(3).
+           EXEC CICS XCTL PROGRAM(WS-PGM(WS-IDX)) END-EXEC.
+           STOP RUN.
+"""
+
+
+@covers(CobolFeature.EXEC_CICS)
+def test_xctl_program_subscripted_operand_resolves_indexed_element(cobol_parser):
+    """XCTL PROGRAM(WS-PGM(WS-IDX)) resolves the INDEXED element (element 2)."""
+    result = _run(COBOL_XCTL_SUBSCRIPTED, cobol_parser)
+    assert result.kind == DispatchKind.XCTL
+    assert result.program is not None
+    assert result.program.strip() == "COADM01C", (
+        f"subscripted operand should resolve element 2 ('COADM01C'), "
+        f"got {result.program!r} (element 1 means the subscript offset was dropped)"
+    )
