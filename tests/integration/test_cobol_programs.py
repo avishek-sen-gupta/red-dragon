@@ -5209,6 +5209,33 @@ class TestIntrinsicFunctionUpperCase:
         assert _decode_alpha(region, 3, 3) == "ABC"
         assert _decode_alpha(region, 6, 3) == "ABC"
 
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.MOVE)
+    def test_upper_case_of_qualified_argument(self):
+        """FUNCTION UPPER-CASE(FLD OF GRP) resolves the qualified field's VALUE.
+
+        The OF-qualified argument must be resolved to the leaf field (FLD-A),
+        not flattened to the qualified-name text.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-UCQ.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 GRP-B.",
+                "   05 FLD-A PIC X(6) VALUE 'abc123'.",
+                "77 WS-OUT PIC X(6) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION UPPER-CASE(FLD-A OF GRP-B) TO WS-OUT.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-OUT is at offset 6 (after GRP-B/FLD-A X(6)).
+        assert _decode_alpha(region, 6, 6) == "ABC123"
+
 
 class TestIntrinsicFunctionLowerCase:
     @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.MOVE)

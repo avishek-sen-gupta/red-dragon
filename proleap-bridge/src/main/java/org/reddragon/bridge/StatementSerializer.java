@@ -1624,7 +1624,7 @@ public final class StatementSerializer {
         if (arg.identifier() != null) {
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
-            ref.addProperty("name", arg.identifier().getText());
+            ref.addProperty("name", leafDataName(arg.identifier()));
             return ref;
         }
         if (arg.qualifiedDataName() != null) {
@@ -2086,6 +2086,29 @@ public final class StatementSerializer {
     }
 
     /**
+     * Returns the LEAF data-name of an identifier, dropping OF/IN qualification.
+     *
+     * COBOL `FLD-A OF GRP-B` is one field named the qualified way; red-dragon
+     * resolves data items by leaf name, so we emit "FLD-A" (the first dataName of
+     * qualifiedDataNameFormat1) rather than the flattened parse-tree text
+     * "FLD-AOFGRP-B" that getText() would produce. Falls back to getText() for
+     * non-qualifiedDataName identifiers (tableCall / functionCall / specialRegister).
+     */
+    private static String leafDataName(CobolParser.IdentifierContext id) {
+        if (id == null) {
+            return "";
+        }
+        CobolParser.QualifiedDataNameContext qdn = id.qualifiedDataName();
+        if (qdn != null) {
+            CobolParser.QualifiedDataNameFormat1Context f1 = qdn.qualifiedDataNameFormat1();
+            if (f1 != null && f1.dataName() != null) {
+                return f1.dataName().getText();
+            }
+        }
+        return id.getText();
+    }
+
+    /**
      * Grammar: basis : LPARENCHAR arithmeticExpression RPARENCHAR | identifier | literal
      * Note: ctx.arithmeticExpression() is non-null for parenthesised sub-expressions.
      */
@@ -2098,7 +2121,7 @@ public final class StatementSerializer {
         if (id != null) {
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
-            ref.addProperty("name", id.getText());
+            ref.addProperty("name", leafDataName(id));
             return ref;
         }
         CobolParser.LiteralContext lit = ctx.literal();
