@@ -14,6 +14,7 @@ from interpreter.cobol.ref_mod import (
     RefModBinOp,
     RefModExpr,
     RefModOperand,
+    FunctionCallOperand,
 )
 from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
@@ -184,6 +185,77 @@ def eval_ref_mod_expr(
         return ctx.const_to_reg('"0"')
 
 
+# Maps canonical COBOL intrinsic function names to COBOL-layer builtin names.
+_INTRINSIC_FUNCTIONS = {
+    "UPPER-CASE": BuiltinName.UPPER_CASE,
+    "LOWER-CASE": BuiltinName.LOWER_CASE,
+    "CURRENT-DATE": BuiltinName.CURRENT_DATE,
+}
+
+
+def _lower_function_arg_to_string(
+    ctx: EmitContext,
+    arg: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Lower one intrinsic-function argument dict to a string-valued register.
+
+    Field references are decoded then stringified (intrinsics like UPPER-CASE
+    operate on character data); literals are parsed as constants.
+    """
+    kind = arg.get("kind", "lit")
+    if kind == "ref":
+        name = arg.get("name", "")
+        if ctx.has_field(name, materialised):
+            ref, rr = ctx.resolve_field_ref(name, materialised)
+            decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+            return ctx.emit_to_string(decoded)
+        return ctx.const_to_reg(ctx.parse_literal(name))
+    if kind == "lit":
+        return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")))
+    # Arithmetic / other expression args: lower via the expression path, then
+    # stringify so the builtin (e.g. UPPER-CASE) receives character data.
+    from interpreter.cobol.condition_lowering import _lower_expr_dict
+
+    value_reg = _lower_expr_dict(ctx, arg, materialised)
+    return ctx.emit_to_string(value_reg)
+
+
+def lower_function_operand(
+    ctx: EmitContext,
+    operand: FunctionCallOperand,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Lower an intrinsic FUNCTION call operand to a value register.
+
+    Recognised functions (UPPER-CASE, LOWER-CASE, CURRENT-DATE) are emitted as a
+    CallFunction against the COBOL-layer builtins. Unknown functions log a warning
+    and fall back to their first argument (or empty string) — never silent wrong data.
+    """
+    builtin = _INTRINSIC_FUNCTIONS.get(operand.name.upper())
+    if builtin is None:
+        logger.warning(
+            "Unsupported COBOL intrinsic FUNCTION %r — falling back to first argument",
+            operand.name,
+        )
+        if operand.args:
+            return _lower_function_arg_to_string(ctx, operand.args[0], materialised)
+        return ctx.const_to_reg('""')
+
+    arg_regs = tuple(
+        _lower_function_arg_to_string(ctx, arg, materialised) for arg in operand.args
+    )
+    result_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name=FuncName(builtin),
+            args=arg_regs,
+        )
+    )
+    return result_reg
+
+
 def lower_move(
     ctx: EmitContext,
     stmt: MoveStatement,
@@ -194,6 +266,15 @@ def lower_move(
     The source is evaluated ONCE and stored into every receiving field, each with
     its own reference modification and PICTURE conversion (COBOL semantics).
     """
+
+    # Intrinsic FUNCTION source (e.g. FUNCTION UPPER-CASE(...)): evaluate to a
+    # value register, then distribute to every receiving field. Functions carry
+    # no source-side reference modification, so the ref-mod block is skipped.
+    if isinstance(stmt.source, FunctionCallOperand):
+        source_value_reg = lower_function_operand(ctx, stmt.source, materialised)
+        for target in stmt.targets:
+            _store_move_value(ctx, target, source_value_reg, materialised)
+        return
 
     # Get the source value (decode field or literal) — evaluated ONCE.
     if ctx.has_field(stmt.source.name, materialised):
@@ -274,61 +355,73 @@ def lower_move(
     # base source value (source_value_reg) is never clobbered across targets.
     source_value_reg = value_str_reg
     for target in stmt.targets:
-        target_ref, target_rr = ctx.resolve_field_ref(target.name, materialised)
-        target_value_reg = source_value_reg
+        _store_move_value(ctx, target, source_value_reg, materialised)
 
-        # Handle target reference modification (write path): MOVE X TO Y(start:length)
-        if target.ref_mod_start is not None:
-            logging.debug(
-                f"lower_move: Detected reference modification on target {target.name}: "
-                f"start={target.ref_mod_start}, length={target.ref_mod_length}"
-            )
-            # Load current target field value as string (needed for SPLICE)
-            target_decoded = ctx.emit_decode_field(
-                target_rr, target_ref.fl, target_ref.offset_reg
-            )
-            target_str_reg = ctx.emit_to_string(target_decoded)
 
-            # Evaluate target ref mod start; convert 1-indexed → 0-indexed
-            tgt_start_reg = eval_ref_mod_expr(ctx, target.ref_mod_start, materialised)
-            one_reg = ctx.const_to_reg("1")
-            tgt_start_0indexed_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Binop(
-                    operator=BinopKind.SUB,
-                    left=tgt_start_reg,
-                    right=one_reg,
-                    result_reg=tgt_start_0indexed_reg,
-                )
-            )
+def _store_move_value(
+    ctx: EmitContext,
+    target: RefModOperand,
+    source_value_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """Store an already-evaluated MOVE source value into one receiving field.
 
-            # Evaluate target ref mod length (or use large sentinel for "to end")
-            if target.ref_mod_length is not None:
-                tgt_length_reg = eval_ref_mod_expr(
-                    ctx, target.ref_mod_length, materialised
-                )
-            else:
-                tgt_length_reg = ctx.const_to_reg("999999")
+    Applies the target's own reference modification (SPLICE write path) and
+    PICTURE conversion. The source value register is never clobbered.
+    """
+    target_ref, target_rr = ctx.resolve_field_ref(target.name, materialised)
+    target_value_reg = source_value_reg
 
-            # Emit SPLICE: replace substring in target with source value
-            spliced_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=spliced_reg,
-                    func_name=FuncName(BuiltinName.STRING_SPLICE),
-                    args=(
-                        target_str_reg,
-                        tgt_start_0indexed_reg,
-                        tgt_length_reg,
-                        source_value_reg,
-                    ),
-                )
-            )
-            target_value_reg = spliced_reg
-
-        ctx.emit_encode_and_write(
-            target_rr, target_ref.fl, target_value_reg, target_ref.offset_reg
+    # Handle target reference modification (write path): MOVE X TO Y(start:length)
+    if target.ref_mod_start is not None:
+        logging.debug(
+            f"lower_move: Detected reference modification on target {target.name}: "
+            f"start={target.ref_mod_start}, length={target.ref_mod_length}"
         )
+        # Load current target field value as string (needed for SPLICE)
+        target_decoded = ctx.emit_decode_field(
+            target_rr, target_ref.fl, target_ref.offset_reg
+        )
+        target_str_reg = ctx.emit_to_string(target_decoded)
+
+        # Evaluate target ref mod start; convert 1-indexed → 0-indexed
+        tgt_start_reg = eval_ref_mod_expr(ctx, target.ref_mod_start, materialised)
+        one_reg = ctx.const_to_reg("1")
+        tgt_start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                operator=BinopKind.SUB,
+                left=tgt_start_reg,
+                right=one_reg,
+                result_reg=tgt_start_0indexed_reg,
+            )
+        )
+
+        # Evaluate target ref mod length (or use large sentinel for "to end")
+        if target.ref_mod_length is not None:
+            tgt_length_reg = eval_ref_mod_expr(ctx, target.ref_mod_length, materialised)
+        else:
+            tgt_length_reg = ctx.const_to_reg("999999")
+
+        # Emit SPLICE: replace substring in target with source value
+        spliced_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=spliced_reg,
+                func_name=FuncName(BuiltinName.STRING_SPLICE),
+                args=(
+                    target_str_reg,
+                    tgt_start_0indexed_reg,
+                    tgt_length_reg,
+                    source_value_reg,
+                ),
+            )
+        )
+        target_value_reg = spliced_reg
+
+    ctx.emit_encode_and_write(
+        target_rr, target_ref.fl, target_value_reg, target_ref.offset_reg
+    )
 
 
 def lower_move_corresponding(

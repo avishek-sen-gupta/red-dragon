@@ -29,8 +29,12 @@ from interpreter.cobol.byte_builtins import (
     _builtin_string_concat_pair,
     _builtin_string_slice,
     _builtin_string_splice,
+    _builtin_upper_case,
+    _builtin_lower_case,
+    _builtin_current_date,
     BYTE_BUILTINS,
 )
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators
 from interpreter.vm.vm_types import SymbolicValue
@@ -372,6 +376,9 @@ class TestByteBuiltinsRegistration:
             "__cobol_blank_when_zero",
             "__string_slice",
             "__string_splice",
+            "__upper_case",
+            "__lower_case",
+            "__current_date",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:
@@ -1507,3 +1514,67 @@ class TestStringSplice:
             None,
         )
         assert result.value is _UNCOMPUTABLE
+
+
+class TestUpperCase:
+    def test_lowercase_to_uppercase(self):
+        result = _builtin_upper_case([typed_from_runtime("abc123")], None)
+        assert result.value == "ABC123"
+
+    def test_already_uppercase_unchanged(self):
+        result = _builtin_upper_case([typed_from_runtime("ABC")], None)
+        assert result.value == "ABC"
+
+    def test_mixed_case(self):
+        result = _builtin_upper_case([typed_from_runtime("AbCdEf")], None)
+        assert result.value == "ABCDEF"
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_upper_case([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    def test_non_string_returns_uncomputable(self):
+        result = _builtin_upper_case([typed_from_runtime(42)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.UPPER_CASE) in BYTE_BUILTINS
+
+
+class TestLowerCase:
+    def test_uppercase_to_lowercase(self):
+        result = _builtin_lower_case([typed_from_runtime("ABC123")], None)
+        assert result.value == "abc123"
+
+    def test_mixed_case(self):
+        result = _builtin_lower_case([typed_from_runtime("AbCdEf")], None)
+        assert result.value == "abcdef"
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_lower_case([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.LOWER_CASE) in BYTE_BUILTINS
+
+
+class TestCurrentDate:
+    def test_returns_21_char_string(self):
+        result = _builtin_current_date([], None)
+        assert isinstance(result.value, str)
+        assert len(result.value) == 21
+
+    def test_date_time_portion_is_digits(self):
+        result = _builtin_current_date([], None)
+        # First 16 chars: YYYYMMDDHHMMSShh — all digits.
+        assert result.value[:16].isdigit()
+
+    def test_year_is_plausible(self):
+        result = _builtin_current_date([], None)
+        year = int(result.value[:4])
+        assert 2020 <= year <= 2100
+
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.CURRENT_DATE) in BYTE_BUILTINS
