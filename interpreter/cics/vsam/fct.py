@@ -10,10 +10,23 @@ from pathlib import Path
 class DatasetConfig:
     path: Path
     record_length: int
+    # Offset (bytes) of the key within each record. 0 for a primary KSDS whose
+    # key is at the record start; non-zero for alternate-index paths where the
+    # key field sits inside the record (e.g. CARD-XREF ACCT-ID at offset 25).
+    key_offset: int = 0
+    # Declared key length in bytes. 0 means "use the length supplied at the
+    # operation" (back-compat); a positive value pins the slice width so the
+    # engine matches record[key_offset : key_offset + key_length].
+    key_length: int = 0
 
     @classmethod
     def from_dict(cls, data: dict) -> DatasetConfig:
-        return cls(path=Path(data["path"]), record_length=int(data["record_length"]))
+        return cls(
+            path=Path(data["path"]),
+            record_length=int(data["record_length"]),
+            key_offset=int(data.get("key_offset", 0)),
+            key_length=int(data.get("key_length", 0)),
+        )
 
 
 @dataclass

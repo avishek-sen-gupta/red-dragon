@@ -155,3 +155,51 @@ def test_browse_reverse():
     engine.readnext("TESTDS", cursor)
     rec, resp = engine.readprev("TESTDS", cursor)
     assert resp == RESP_NORMAL and rec[:4] == b"AA01"
+
+
+# ── Key-offset (red-dragon-7kgb) ─────────────────────────────────────
+
+
+def _engine_offset(records: list[bytes], rec_len: int, key_offset: int) -> VsamEngine:
+    """Engine over a single dataset whose key sits at ``key_offset``."""
+    td = tempfile.mkdtemp()
+    p = Path(td) / "data.txt"
+    _write_fixed_records(p, records)
+    config = FctConfig(
+        datasets={
+            "OFFDS": DatasetConfig(path=p, record_length=rec_len, key_offset=key_offset)
+        }
+    )
+    engine = VsamEngine(config)
+    engine.load_all()
+    return engine
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_read_matches_key_at_nonzero_offset():
+    # Mirror the CARD-XREF layout: card-num(16) cust-id(9) acct-id(11) = 36 here.
+    rec = b"C" * 16 + b"000000001" + b"00000000011" + b"\x00" * 4
+    engine = _engine_offset([rec], len(rec), key_offset=25)
+    record, resp = engine.read("OFFDS", b"00000000011", 11)
+    assert resp == RESP_NORMAL
+    assert record is not None
+    assert record[25:36] == b"00000000011"
+    # The yielded record carries the cust-id at offset 16 (the read-through value).
+    assert record[16:25] == b"000000001"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_read_offset_nonmatching_key_notfnd():
+    rec = b"C" * 16 + b"000000001" + b"00000000011" + b"\x00" * 4
+    engine = _engine_offset([rec], len(rec), key_offset=25)
+    _, resp = engine.read("OFFDS", b"99999999999", 11)
+    assert resp == RESP_NOTFND
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_read_default_offset_zero_unchanged():
+    # key_offset defaulting to 0 must preserve offset-0 matching.
+    engine = _engine_with_records([_rec("AA01", "DATA")], REC_LEN)
+    record, resp = engine.read("TESTDS", b"AA01", KEY_LEN)
+    assert resp == RESP_NORMAL
+    assert record is not None and record[:KEY_LEN] == b"AA01"
