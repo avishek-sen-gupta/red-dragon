@@ -72,45 +72,22 @@ def _region_bytes(args: list[TypedValue], idx: int = 2) -> bytes:
     return str(v).encode("cp037", errors="replace")
 
 
-def make_send_map_builtin(
-    loader: BmsLoader, screen_queue: "queue.Queue[Any]"
-) -> object:
+def make_send_map_builtin(screen_queue: "queue.Queue[Any]") -> object:
     def __cics_send_map(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         map_name = _map_name(args, 0)
-        region = _region_bytes(args, 2)
-        bms_map = loader.get(map_name)
-        if bms_map is None:
-            logger.warning("SEND MAP: unknown map %s", map_name)
-            screen_queue.put({"map": map_name, "fields": {}, "raw": region})
-            return BuiltinResult(value=None)
-
-        # Preferred path: read each <base>O symbolic output subfield from the
-        # WS region via vm.data_layout (mirrors EIB-init). Used when a WS region
-        # is locatable and at least one output subfield is in the layout.
+        base_names = (
+            list(args[1].value)
+            if len(args) > 1 and isinstance(args[1].value, list)
+            else []
+        )
         _addr, ws = _ws_region(vm)
         symbolic: dict[str, str] = {}
         if ws is not None:
-            for base in bms_map.fields:
-                _inp, out_name, _length = bms_map.symbolic_names(base)
-                raw = _read_ws_field(vm, ws, out_name)
+            for base in base_names:
+                raw = _read_ws_field(vm, ws, base + "O")
                 if raw is not None:
                     symbolic[base] = raw.decode("cp037", errors="replace").rstrip()
-        if symbolic:
-            screen_queue.put({"map": map_name, "fields": symbolic, "raw": region})
-            return BuiltinResult(value=None)
-
-        # Fallback: flat region byte-slice model.
-        fields = bms_map.extract_fields(region)
-        screen_queue.put(
-            {
-                "map": map_name,
-                "fields": {
-                    k: v.decode("cp037", errors="replace").rstrip()
-                    for k, v in fields.items()
-                },
-                "raw": region,
-            }
-        )
+        screen_queue.put({"map": map_name, "fields": symbolic})
         return BuiltinResult(value=None)
 
     return __cics_send_map
