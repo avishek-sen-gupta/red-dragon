@@ -124,6 +124,18 @@ def test_rewrite_updates_record():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_rewrite_without_key_extracts_key_from_record():
+    """EXEC CICS REWRITE supplies FROM but no RIDFLD — the key must be taken
+    from the FROM record itself (its key field), not from the passed key arg
+    (which the lowering leaves empty). (CardDemo COACTUPC 9600-WRITE-PROCESSING.)"""
+    engine = _engine_with_records([_rec("AA01", "OLD")], REC_LEN)
+    # Empty key arg, as the REWRITE lowering passes when there is no RIDFLD.
+    assert engine.rewrite("TESTDS", b"", KEY_LEN, _rec("AA01", "UPD")) == RESP_NORMAL
+    record, _ = engine.read("TESTDS", b"AA01", KEY_LEN)
+    assert b"UPD" in record
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_delete_removes_record():
     engine = _engine_with_records([_rec("AA01", "DATA")], REC_LEN)
     assert engine.delete("TESTDS", b"AA01", KEY_LEN) == RESP_NORMAL
