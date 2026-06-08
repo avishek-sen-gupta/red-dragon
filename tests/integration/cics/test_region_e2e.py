@@ -142,3 +142,57 @@ def test_two_turn_region_real_execution(cobol_parser):
 
     # Screen 2 reflects the COMMAREA value carried from SGNPGM into MENUPGM.
     assert screens[1]["fields"].get("MENMSG") == "WELCOME!"
+
+
+# Data-name map program (the standard CardDemo idiom, e.g. MAP(CCARD-NEXT-MAP)):
+# the map NAME is held in a WS field, set at runtime, then SEND MAP(WS-MAPNM).
+# Before the structural fix this rendered nothing because WS-MAPNM (the field
+# NAME) was passed to the loader instead of its runtime VALUE 'MYMAP'.
+DATANAME_PGM_SRC = """\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. DNPGM.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-MAPNM PIC X(7).
+       01 MYMAP.
+          05 GREETO PIC X(8).
+       PROCEDURE DIVISION.
+           MOVE 'MYMAP' TO WS-MAPNM.
+           MOVE 'HELLO!' TO GREETO.
+           EXEC CICS SEND MAP(WS-MAPNM) END-EXEC.
+           EXEC CICS RETURN END-EXEC.
+           STOP RUN.
+"""
+
+
+@covers(CobolFeature.EXEC_CICS)
+def test_send_map_data_name_resolves_runtime_value(cobol_parser):
+    """SEND MAP(WS-MAPNM) sends the runtime VALUE 'MYMAP', not the field name (g5gx)."""
+    screen_q: queue.Queue = queue.Queue()
+    input_q: queue.Queue = queue.Queue()
+
+    loader = BmsLoader(maps_dir=None)
+    loader.register_stub(
+        "MYMAP", BmsMap(name="MYMAP", fields={"GREET": BmsField(offset=0, length=8)})
+    )
+
+    result = run_carddemo_region(
+        transid_to_program={"CC00": "DNPGM"},
+        program_sources={"DNPGM": apply_cics_prepass(DATANAME_PGM_SRC).encode()},
+        parser=cobol_parser,
+        entry_transid="CC00",
+        screen_queue=screen_q,
+        input_queue=input_q,
+        bms_loader=loader,
+    )
+
+    assert result.kind == DispatchKind.RETURN
+
+    screens = []
+    while not screen_q.empty():
+        screens.append(screen_q.get_nowait())
+
+    assert len(screens) == 1
+    # The map name is the DECODED field value 'MYMAP' (not 'WS-MAPNM').
+    assert screens[0]["map"] == "MYMAP"
+    assert screens[0]["fields"].get("GREET") == "HELLO!"
