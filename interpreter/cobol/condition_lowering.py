@@ -717,7 +717,9 @@ def lower_expr_node(
         return ctx.const_to_reg(ctx.parse_literal(node.value))
     if isinstance(node, FieldRefNode):
         if ctx.has_field(node.name, materialised):
-            ref, rr = ctx.resolve_field_ref(node.name, materialised)
+            ref, rr = ctx.resolve_field_ref(
+                node.name, materialised, subscripts=node.subscripts
+            )
             return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         return ctx.const_to_reg(ctx.parse_literal(node.name))
     if isinstance(node, BinOpNode):
@@ -734,7 +736,9 @@ def lower_expr_node(
         )
         return result_reg
     if isinstance(node, RefModNode):
-        ref, rr = ctx.resolve_field_ref(node.name, materialised)
+        ref, rr = ctx.resolve_field_ref(
+            node.name, materialised, subscripts=node.subscripts
+        )
         full_str_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         start_1based_reg = lower_expr_node(ctx, node.ref_mod_start, materialised)
         one_reg = ctx.const_to_reg(1)
