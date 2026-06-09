@@ -801,3 +801,303 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
         f"REWRITE did not persist status change: stored {status_byte!r}, "
         f"expected {_NEW_ACCT_STATUS!r}"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Transaction ADD (create) flow: menu option '08' -> COTRN02C, with the
+# STARTBR + READPREV TRAN-ID generation and EXEC CICS WRITE create.
+#
+# COTRN02C is option 8 in COMEN02Y (the regular-user main menu; "Admin Only" is
+# commented out and the usertype byte is 'U'), so a regular USRSEC user reaches
+# it via sign-on -> COMEN01C -> option '08' -> XCTL COTRN02C (transid CT02). It
+# is pseudo-conversational:
+#   Turn A: XCTL COTRN02C -> first display renders COTRN2A (asks for the new
+#           transaction's fields).
+#   Turn B: enter account id + all required fields + CONFIRM='Y' + ENTER ->
+#           PROCESS-ENTER-KEY -> VALIDATE-INPUT-KEY-FIELDS reads CXACAIX (acct
+#           -> card num), VALIDATE-INPUT-DATA-FIELDS passes, CONFIRM='Y' ->
+#           ADD-TRANSACTION: MOVE HIGH-VALUES TO TRAN-ID; STARTBR + READPREV +
+#           ENDBR on TRANSACT to find the highest existing id; ADD 1; build
+#           TRAN-RECORD; WRITE-TRANSACT-FILE -> EXEC CICS WRITE on TRANSACT.
+# The new record is read back from the engine by its generated key.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# CVTRA05Y TRAN-RECORD field layout (RECLN 350): TRAN-ID X(16)@0 (the key),
+# TRAN-TYPE-CD X(2)@16, TRAN-CAT-CD 9(4)@18, TRAN-SOURCE X(10)@22,
+# TRAN-DESC X(100)@32, TRAN-AMT S9(9)V99@132 (11 display bytes), ...
+_TRAN_RECLN = 350
+_TRAN_KEYLEN = 16
+# One pre-existing transaction so STARTBR(HIGH-VALUES)+READPREV finds a "last"
+# id; ADD-TRANSACTION then generates the next one (id 1 -> id 2).
+_SEED_TRAN_ID = "0000000000000001"
+_EXPECTED_NEW_TRAN_ID = "0000000000000002"
+# Field values entered on the add screen (per COTRN2A map / CVTRA05Y).
+_ADD_TYPE_CD = "01"  # TTYPCD  -> TRAN-TYPE-CD  X(2)
+_ADD_CAT_CD = "0005"  # TCATCD  -> TRAN-CAT-CD   9(4)
+_ADD_SOURCE = "POS"  # TRNSRC  -> TRAN-SOURCE   X(10)
+_ADD_DESC = "GROCERIES"  # TDESC   -> TRAN-DESC     X(100)
+_ADD_AMT = "+00000123.45"  # TRNAMT (PIC X(12), -99999999.99 form)
+_ADD_MID = "000000789"  # MID     -> TRAN-MERCHANT-ID 9(9)
+_ADD_MNAME = "ACME STORE"  # MNAME   -> TRAN-MERCHANT-NAME
+_ADD_MCITY = "ANYTOWN"  # MCITY   -> TRAN-MERCHANT-CITY
+_ADD_MZIP = "90001"  # MZIP    -> TRAN-MERCHANT-ZIP
+_ADD_ORIG_DT = "2024-01-15"  # TORIGDT -> TRAN-ORIG-TS
+_ADD_PROC_DT = "2024-01-16"  # TPROCDT -> TRAN-PROC-TS
+
+
+def _transact_seed_record() -> bytes:
+    """CVTRA05Y TRAN-RECORD with TRAN-ID '0000000000000001' (key @0), the rest
+    zero/space-filled. Seeds one record so READPREV can find the highest id."""
+    rec = _ebcdic(_SEED_TRAN_ID, _TRAN_KEYLEN)
+    return rec.ljust(_TRAN_RECLN, b"\x00")[:_TRAN_RECLN]
+
+
+def _add_engine() -> VsamEngine:
+    """Engine seeded with USRSEC (sign-on), CXACAIX (acct->card xref the add
+    flow validates the account against) and TRANSACT (browse for last id +
+    target of the WRITE). Reuses the USRSEC + xref records from the view flow."""
+    usrsec_rec = (
+        _ebcdic("USER0001", 8)
+        + _ebcdic("First", 20)
+        + _ebcdic("Last", 20)
+        + _ebcdic("PASS0001", 8)
+        + _ebcdic("U", 1)  # regular user -> XCTL COMEN01C
+        + _ebcdic("", 23)
+    )
+    td = Path(tempfile.mkdtemp())
+    (td / "usrsec.txt").write_bytes(usrsec_rec)
+    (td / "cxacaix.txt").write_bytes(_xref_record())
+    (td / "transact.txt").write_bytes(_transact_seed_record())
+
+    engine = VsamEngine(
+        FctConfig(
+            datasets={
+                "USRSEC": DatasetConfig(path=td / "usrsec.txt", record_length=80),
+                "CXACAIX": DatasetConfig(
+                    path=td / "cxacaix.txt",
+                    record_length=50,
+                    key_offset=25,
+                    key_length=11,
+                ),
+                "TRANSACT": DatasetConfig(
+                    path=td / "transact.txt",
+                    record_length=_TRAN_RECLN,
+                    key_length=_TRAN_KEYLEN,
+                ),
+            }
+        )
+    )
+    engine.load_all()
+    return engine
+
+
+def _drive_to_cotrn02c(tmp_path):
+    """Sign-on -> menu -> option '08' -> XCTL COTRN02C -> first display (COTRN2A).
+
+    Returns ``(region, screen_q, input_q, engine)`` parked pseudo-conversationally
+    on CT02 showing the empty transaction-add screen.
+    """
+    from interpreter.cobol.cobol_parser import ProLeapCobolParser
+    from interpreter.cobol.subprocess_runner import RealSubprocessRunner
+
+    app = Path(_CARDDEMO_HOME)
+    signon_path = app / "cbl" / "COSGN00C.cbl"
+    menu_path = app / "cbl" / "COMEN01C.cbl"
+    tranadd_path = app / "cbl" / "COTRN02C.cbl"
+    assert tranadd_path.is_file(), f"COTRN02C not found: {tranadd_path}"
+
+    sym_dir = tmp_path / "sym"
+    generate_symbolic_copybooks(
+        bms_dir=app / "bms",
+        out_dir=sym_dir,
+        hlasm_export_bin=HLASM_EXPORT_BIN,
+        bms_copybook_gen_src=BMS_COPYBOOK_GEN_SRC,
+    )
+    parser = ProLeapCobolParser(
+        RealSubprocessRunner(),
+        JAR_PATH,
+        copybook_dirs=[sym_dir, app / "cpy", app / "cpy-bms", _CICS_COPYBOOKS],
+    )
+
+    screen_q: queue.Queue = queue.Queue()
+    input_q: queue.Queue = queue.Queue()
+    context_holder = [None]
+    result_holder: list = [None]
+    engine = _add_engine()
+    strategy = CicsLoweringStrategy(
+        context_holder=context_holder,
+        result_holder=result_holder,
+        vsam_engine=engine,
+        screen_queue=screen_q,
+        input_queue=input_q,
+    )
+
+    signon = compile_cics_program(
+        apply_cics_prepass(signon_path.read_text()).encode(), parser, strategy
+    )
+    menu = compile_cics_program(
+        apply_cics_prepass(menu_path.read_text()).encode(), parser, strategy
+    )
+    tranadd = compile_cics_program(
+        apply_cics_prepass(tranadd_path.read_text()).encode(), parser, strategy
+    )
+
+    program_cache = {
+        "COSGN00C": signon,
+        "COMEN01C": menu,
+        "COTRN02C": tranadd,
+    }
+    transid_to_program = {"CC00": "COSGN00C", "CM00": "COMEN01C", "CT02": "COTRN02C"}
+    region = CicsRegion(
+        program_cache,
+        transid_to_program,
+        screen_q,
+        input_q,
+        context_holder=context_holder,
+        result_holder=result_holder,
+        max_steps=2_000_000,
+        min_commarea_len=400,
+    )
+
+    # Turn 1: sign-on -> XCTL COMEN01C (transid carries; no input after XCTL)
+    r1 = region.start(
+        "CC00",
+        commarea=b"\x00" * 100,
+        input_event=InputEvent(
+            eibaid=_DFHENTER, fields={"USERID": "USER0001", "PASSWD": "PASS0001"}
+        ),
+    )
+    assert r1.kind == DispatchKind.XCTL and (r1.program or "").strip() == "COMEN01C"
+
+    # Turn 2: menu first display (XCTL'd in -> no fresh input)
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    r2 = region.step()
+    assert r2.kind == DispatchKind.RETURN_TRANSID
+
+    # Turn 3: menu ENTER option '08' -> XCTL COTRN02C (fresh input after RETURN)
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    r3 = region.step(input_event=InputEvent(eibaid=_DFHENTER, fields={"OPTION": "08"}))
+    assert (
+        r3.kind == DispatchKind.XCTL
+    ), f"menu option '08' did not XCTL (kind={r3.kind}); expected COTRN02C"
+    assert (
+        r3.program or ""
+    ).strip() == "COTRN02C", (
+        f"menu option '08' XCTL'd to {r3.program!r}, expected COTRN02C"
+    )
+
+    # Turn A: COTRN02C first display renders COTRN2A (XCTL'd in -> no fresh input).
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    rA = region.step()
+    screens = []
+    while not screen_q.empty():
+        screens.append(screen_q.get_nowait())
+    assert any(
+        s.get("map") == "COTRN2A" for s in screens
+    ), f"COTRN02C did not render COTRN2A; screens={[s.get('map') for s in screens]}"
+    first = next(s for s in screens if s.get("map") == "COTRN2A")
+    assert first["fields"].get("TRNNAME") == "CT02"
+    assert first["fields"].get("PGMNAME") == "COTRN02C"
+    assert rA.kind == DispatchKind.RETURN_TRANSID
+    assert (rA.transid or "").strip() == "CT02"
+    return region, screen_q, input_q, engine
+
+
+@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
+def test_real_carddemo_transaction_add_first_display(tmp_path):
+    """Transaction-add Turn A: menu option '08' -> XCTL COTRN02C -> COTRN2A."""
+    _drive_to_cotrn02c(tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "BLOCKED on red-dragon-1bp2: cross-program COBOL CALL is not linked. "
+        "COTRN02C VALIDATE-INPUT-DATA-FIELDS does CALL 'CSUTLDTC' (COTRN02C.cbl:393) "
+        "to validate the Orig/Proc dates; compile_cics_program compiles one source, "
+        "so the CALL has no callee IR and CallWithMemory leaves CSUTLDTC-RESULT "
+        "symbolic (SPACES). SEV-CD != '0000' AND MSG-NUM != '2513' (COTRN02C.cbl:397-407) "
+        "-> 'Orig Date - Not a valid date...' -> SEND-TRNADD-SCREEN -> RETURN, so "
+        "ADD-TRANSACTION (STARTBR/READPREV id-gen + EXEC CICS WRITE) never runs. "
+        "Everything UP TO the date CALL works: sign-on -> menu opt 08 -> XCTL COTRN02C "
+        "-> first display -> CONFIRM='Y' -> CXACAIX acct->card validation -> amount + "
+        "key-field + date-FORMAT checks all pass. Next gap: link a CSUTLDTC stub "
+        "(itself depends on the LE service CEEDAYS) via cross-program COBOL CALL "
+        "support wired through the CICS region/bootstrap."
+    ),
+)
+@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
+def test_real_carddemo_transaction_add_write(tmp_path):
+    """Transaction-add Turn B: enter a full new transaction + CONFIRM='Y' ->
+    ADD-TRANSACTION (STARTBR/READPREV/ENDBR id-generation + EXEC CICS WRITE) ->
+    verify the new TRANSACT record persisted to the VsamEngine.
+
+    The account id is validated against CXACAIX (acct -> card num) by
+    VALIDATE-INPUT-KEY-FIELDS; the id-generation browses the seeded TRANSACT
+    record (id ...0001) for the highest key and writes the next (id ...0002).
+    The created record's key + selected fields are read back and asserted.
+
+    Currently xfail(strict): the date-validation CALL 'CSUTLDTC' is unlinked
+    (red-dragon-1bp2). The assertions below are the intended end state and will
+    pass once cross-program COBOL CALL linking lands.
+    """
+    region, screen_q, input_q, engine = _drive_to_cotrn02c(tmp_path)
+
+    # --- Turn B: submit the new transaction with CONFIRM='Y' + ENTER ---
+    # Following Turn A's RETURN TRANSID CT02 -> a fresh terminal input.
+    while not screen_q.empty():
+        screen_q.get_nowait()
+    rB = region.step(
+        input_event=InputEvent(
+            eibaid=_DFHENTER,
+            fields={
+                "ACTIDIN": _ACCT_ID,  # account id -> CXACAIX lookup -> card num
+                "TTYPCD": _ADD_TYPE_CD,
+                "TCATCD": _ADD_CAT_CD,
+                "TRNSRC": _ADD_SOURCE,
+                "TDESC": _ADD_DESC,
+                "TRNAMT": _ADD_AMT,
+                "TORIGDT": _ADD_ORIG_DT,
+                "TPROCDT": _ADD_PROC_DT,
+                "MID": _ADD_MID,
+                "MNAME": _ADD_MNAME,
+                "MCITY": _ADD_MCITY,
+                "MZIP": _ADD_MZIP,
+                "CONFIRM": "Y",
+            },
+        )
+    )
+    screensB = []
+    while not screen_q.empty():
+        screensB.append(screen_q.get_nowait())
+    viewB = next((s["fields"] for s in screensB if s.get("map") == "COTRN2A"), {})
+
+    # The created record must exist in TRANSACT under the generated key.
+    record, resp = engine.read(
+        "TRANSACT", _EXPECTED_NEW_TRAN_ID.encode("cp037"), _TRAN_KEYLEN
+    )
+    assert record is not None, (
+        f"new TRANSACT record not written (resp={resp}); "
+        f"screen err={viewB.get('ERRMSG')!r}"
+    )
+    # TRAN-ID X(16)@0 — the generated next id.
+    assert (
+        record[0:16].decode("cp037") == _EXPECTED_NEW_TRAN_ID
+    ), f"TRAN-ID wrong: {record[0:16].decode('cp037')!r}"
+    # TRAN-TYPE-CD X(2)@16, TRAN-CAT-CD 9(4)@18, TRAN-SOURCE X(10)@22.
+    assert record[16:18].decode("cp037") == _ADD_TYPE_CD
+    assert record[18:22].decode("cp037") == _ADD_CAT_CD
+    assert record[22:32].decode("cp037").rstrip() == _ADD_SOURCE
+    # TRAN-DESC X(100)@32.
+    assert record[32:132].decode("cp037").rstrip() == _ADD_DESC
+    # TRAN-CARD-NUM X(16)@262 came from the CXACAIX xref (XREF-CARD-NUM).
+    # Offsets: TRAN-ID 16, TYPE 2, CAT 4, SOURCE 10, DESC 100, AMT 11,
+    # MERCH-ID 9, MERCH-NAME 50, MERCH-CITY 50, MERCH-ZIP 10 => card num @262.
+    # XREF-CARD-NUM seeded as 'CARD000000000001' (16 bytes).
+    assert record[262:278].decode("cp037").rstrip() == "CARD000000000001"
+    # COTRN02C parks pseudo-conversationally after the successful WRITE.
+    assert rB.kind == DispatchKind.RETURN_TRANSID
+    assert (rB.transid or "").strip() == "CT02"
