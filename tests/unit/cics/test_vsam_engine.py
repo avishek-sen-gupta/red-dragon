@@ -169,6 +169,38 @@ def test_browse_reverse():
     assert resp == RESP_NORMAL and rec[:4] == b"AA01"
 
 
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_startbr_high_values_then_readprev_returns_last_record():
+    """CardDemo COTRN02C id-generation idiom: MOVE HIGH-VALUES TO key, STARTBR,
+    then READPREV (no intervening READNEXT) must return the LAST (highest-key)
+    record so the program can derive the next id. The STARTBR positions past
+    end-of-file; the first READPREV walks back to the final record."""
+    engine = _engine_with_records([_rec("AA01"), _rec("BB02"), _rec("CC03")], REC_LEN)
+    cursor = ("task0", "TESTDS", "cur0")
+    high = b"\xff" * KEY_LEN
+    assert engine.startbr("TESTDS", high, KEY_LEN, cursor) == RESP_NORMAL
+    rec, resp = engine.readprev("TESTDS", cursor)
+    assert resp == RESP_NORMAL, f"first READPREV after STARTBR(HIGH) gave resp {resp}"
+    assert rec[:4] == b"CC03", f"expected last record CC03, got {rec[:4]!r}"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_startbr_then_readprev_walks_backwards_to_first():
+    """A fresh STARTBR(HIGH) then repeated READPREV walks every record in
+    descending key order, ending at ENDFILE past the first record."""
+    engine = _engine_with_records([_rec("AA01"), _rec("BB02"), _rec("CC03")], REC_LEN)
+    cursor = ("task0", "TESTDS", "cur0")
+    engine.startbr("TESTDS", b"\xff" * KEY_LEN, KEY_LEN, cursor)
+    r1, p1 = engine.readprev("TESTDS", cursor)
+    r2, p2 = engine.readprev("TESTDS", cursor)
+    r3, p3 = engine.readprev("TESTDS", cursor)
+    _, p4 = engine.readprev("TESTDS", cursor)
+    assert (p1, r1[:4]) == (RESP_NORMAL, b"CC03")
+    assert (p2, r2[:4]) == (RESP_NORMAL, b"BB02")
+    assert (p3, r3[:4]) == (RESP_NORMAL, b"AA01")
+    assert p4 == RESP_ENDFILE
+
+
 # ── Key-offset (red-dragon-7kgb) ─────────────────────────────────────
 
 
