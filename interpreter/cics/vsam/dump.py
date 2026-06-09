@@ -23,7 +23,7 @@ from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
 from interpreter.cobol.ebcdic_table import EbcdicTable
-from interpreter.cobol.subprocess_runner import SubprocessRunner
+from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 from interpreter.cobol.zoned_decimal import decode_zoned
 
 
@@ -182,7 +182,9 @@ def load_record_layout(
     member = copybook.stem
     source = (_SKELETON_HEAD + f"       COPY {member}.\n").encode("ascii")
     copybook_dirs = [copybook.parent, *extra_dirs]
-    parser = ProLeapCobolParser(SubprocessRunner(), jar, copybook_dirs=copybook_dirs)
+    parser = ProLeapCobolParser(
+        RealSubprocessRunner(), jar, copybook_dirs=copybook_dirs
+    )
     asg = parser.parse(source)
     root = build_data_layout(asg.data_fields)
     return select_record_layout(root, record_name)
