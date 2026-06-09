@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from typing import TypeVar
 
 from interpreter.cobol.asg_types import CobolField
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
@@ -19,6 +20,28 @@ from interpreter.cobol.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.pic_parser import parse_pic
 
 logger = logging.getLogger(__name__)
+
+# Generic value type for the case-insensitive dict lookup helper.
+_V = TypeVar("_V")
+
+
+def _ci_get(mapping: dict[str, _V], name: str) -> _V | None:
+    """Look up ``name`` in ``mapping`` case-insensitively.
+
+    COBOL identifiers are case-insensitive, but the layout preserves the
+    verbatim declared name as the dict key (e.g. ``Vstring-length`` from
+    CardDemo CSUTLDTC). A direct hit is preferred; otherwise the first key
+    whose upper-case form matches ``name`` upper-cased is returned. Field names
+    are unique within a record, so at most one case-insensitive match exists.
+    """
+    direct = mapping.get(name)
+    if direct is not None:
+        return direct
+    upper = name.upper()
+    for key, value in mapping.items():
+        if key.upper() == upper:
+            return value
+    return None
 
 
 @dataclass(frozen=True)
@@ -79,9 +102,15 @@ class DataLayout:
 
         Returns the first match found. Field names should be unique across
         the record; duplicate names at different levels are a program error.
+
+        COBOL identifiers are case-insensitive: a field declared ``Vstring-length``
+        (e.g. CardDemo CSUTLDTC) is referenced as ``VSTRING-LENGTH`` from the
+        PROCEDURE DIVISION, so the match is done case-insensitively while the
+        verbatim declared name is preserved on the FieldLayout.
         """
-        if name in self.fields:
-            return self.fields[name]
+        direct = _ci_get(self.fields, name)
+        if direct is not None:
+            return direct
         for sub in self.groups.values():
             found = sub.lookup(name)
             if found is not None:
@@ -94,10 +123,65 @@ class DataLayout:
             raise KeyError(f"Field not found in layout: {name!r}")
         return result
 
+    def lookup_qualified(
+        self, name: str, qualifiers: tuple[str, ...]
+    ) -> FieldLayout | None:
+        """Resolve a leaf ``name`` qualified by ``OF``/``IN`` ancestor groups.
+
+        ``qualifiers`` lists the enclosing group names in the order written
+        (immediate parent first), e.g. ``VSTRING-LENGTH OF WS-DATE-TO-TEST`` ->
+        ``("WS-DATE-TO-TEST",)``. COBOL allows duplicate elementary names
+        disambiguated by qualification (CardDemo CSUTLDTC's two Vstring groups).
+        The OUTERMOST qualifier is resolved first (case-insensitively), then the
+        leaf is looked up WITHIN that group's subtree, so the right occurrence of
+        a duplicated name is selected. Falls back to a plain (first-match) lookup
+        when no qualifier resolves. red-dragon-p7qe.
+        """
+        if not qualifiers:
+            return self.lookup(name)
+        # The outermost qualifier names the largest enclosing group; resolve it,
+        # then descend to the leaf within that group's subtree. (Intermediate
+        # qualifiers are honoured implicitly: the leaf name is unique within the
+        # outermost group in well-formed COBOL.)
+        for qualifier in reversed(qualifiers):
+            try:
+                group = self.lookup_group(qualifier)
+            except KeyError:
+                continue
+            found = group.lookup(name)
+            if found is not None:
+                return found
+        return self.lookup(name)
+
+    def lookup_group_qualified(
+        self, name: str, qualifiers: tuple[str, ...]
+    ) -> "DataLayout | None":
+        """Like :meth:`lookup_qualified` but for a group ``name``.
+
+        Returns the nested group ``name`` within the resolved qualifier group, or
+        falls back to a plain group lookup. Returns None if neither resolves."""
+        if qualifiers:
+            for qualifier in reversed(qualifiers):
+                try:
+                    outer = self.lookup_group(qualifier)
+                except KeyError:
+                    continue
+                try:
+                    return outer.lookup_group(name)
+                except KeyError:
+                    continue
+        try:
+            return self.lookup_group(name)
+        except KeyError:
+            return None
+
     def lookup_group(self, name: str) -> "DataLayout":
-        """Return a nested DataLayout by group name; raises KeyError if not found."""
-        if name in self.groups:
-            return self.groups[name]
+        """Return a nested DataLayout by group name; raises KeyError if not found.
+
+        Matched case-insensitively (COBOL identifiers are case-insensitive)."""
+        direct = _ci_get(self.groups, name)
+        if direct is not None:
+            return direct
         for sub in self.groups.values():
             try:
                 return sub.lookup_group(name)
@@ -153,15 +237,15 @@ class DataLayout:
         ``enclosing`` is the element_size of the closest OCCURS ancestor seen so
         far (0 if none). Returns the stride for ``name`` once found, else None.
         """
-        if name in self.fields:
-            leaf = self.fields[name]
+        leaf = _ci_get(self.fields, name)
+        if leaf is not None:
             # A leaf that itself has OCCURS strides by its own element_size;
             # otherwise it inherits the enclosing OCCURS group's element_size.
             if leaf.occurs_count > 0 and leaf.element_size > 0:
                 return leaf.element_size
             return enclosing
-        if name in self.groups:
-            grp = self.groups[name]
+        grp = _ci_get(self.groups, name)
+        if grp is not None:
             return grp.element_size if grp.occurs_count > 0 else enclosing
         for grp in self.groups.values():
             next_enclosing = grp.element_size if grp.occurs_count > 0 else enclosing
@@ -170,20 +254,24 @@ class DataLayout:
                 return found
         return None
 
-    def lookup_as_storage(self, name: str) -> FieldLayout | None:
+    def lookup_as_storage(
+        self, name: str, qualifiers: tuple[str, ...] = ()
+    ) -> FieldLayout | None:
         """Return a FieldLayout for name, synthesizing one for groups.
 
         For elementary fields, returns the real FieldLayout.
         For group names, synthesizes an alphanumeric FieldLayout whose
         byte_length, offset, occurs_count, and element_size match the group.
         Returns None if name is not found anywhere in the layout.
+
+        ``qualifiers`` (``OF``/``IN`` ancestor group names) disambiguate a
+        duplicated name; an empty tuple is a plain first-match lookup.
         """
-        leaf = self.lookup(name)
+        leaf = self.lookup_qualified(name, qualifiers)
         if leaf is not None:
             return leaf
-        try:
-            grp = self.lookup_group(name)
-        except KeyError:
+        grp = self.lookup_group_qualified(name, qualifiers)
+        if grp is None:
             return None
         type_desc = CobolTypeDescriptor(
             category=CobolDataCategory.ALPHANUMERIC,

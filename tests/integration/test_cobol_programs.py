@@ -6341,3 +6341,47 @@ class TestStringFunctionSource:
         region = _first_region(vm)
         # WS-M at offset 5 (after WS-N X(5)).
         assert _decode_alpha(region, 5, 5) == "AB OK"
+
+
+class TestOccursDependingOn:
+    """OCCURS 0 TO n DEPENDING ON variable-length subordinate fields (the
+    CardDemo CSUTLDTC Vstring pattern: a S9(4) length field followed by a
+    PIC X char that OCCURS 0 TO 256 DEPENDING ON that length). The fields are
+    declared in mixed case (Vstring-length / Vstring-char) but referenced in
+    upper case from the PROCEDURE DIVISION — COBOL identifiers are
+    case-insensitive, so the upper-case references must resolve. red-dragon-p7qe."""
+
+    @covers(CobolFeature.OCCURS_DEPENDING_ON)
+    def test_odo_length_and_subscripted_element_resolve(self):
+        """A mixed-case ODO group lowers cleanly; the length field and a
+        subscripted element resolve and round-trip through MOVE.
+
+        Layout: Vstring-length S9(4) BINARY @0 (2 bytes), then Vstring-text
+        whose Vstring-char PIC X OCCURS 0 TO 256 lays out at MAX (256 bytes)
+        @2. A trailing field (WS-AFTER) therefore sits at offset 2+256 = 258."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. ODOTEST.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-DATE-TO-TEST.",
+                "   02 Vstring-length PIC S9(4) BINARY.",
+                "   02 Vstring-text.",
+                "      03 Vstring-char PIC X OCCURS 0 TO 256 TIMES",
+                "         DEPENDING ON Vstring-length OF WS-DATE-TO-TEST.",
+                "01 WS-AFTER PIC X(4) VALUE 'ZZZZ'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 5 TO VSTRING-LENGTH OF WS-DATE-TO-TEST",
+                "    MOVE 'A' TO VSTRING-CHAR OF WS-DATE-TO-TEST (1)",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # Vstring-length S9(4) BINARY @0 holds 5 (big-endian 2-byte binary).
+        assert int.from_bytes(region[0:2], "big", signed=True) == 5
+        # Vstring-char(1) @2 (the ODO element laid out at MAX) holds 'A' (EBCDIC).
+        assert _decode_alpha(region, 2, 1) == "A"
+        # The trailing field sits AFTER the max-length ODO array: 2 + 256 = 258.
+        assert _decode_alpha(region, 258, 4) == "ZZZZ"

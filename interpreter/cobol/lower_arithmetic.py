@@ -316,13 +316,32 @@ def lower_move(
             _store_move_value(ctx, target, source_value_reg, materialised)
         return
 
+    # LENGTH OF <field> source: the field's byte length (a compile-time constant
+    # numeric value), distributed to every receiver. CardDemo CSUTLDTC uses
+    # `MOVE LENGTH OF LS-DATE TO VSTRING-LENGTH` to set the ODO length before the
+    # CEEDAYS CALL (red-dragon). Mirrors the ref-mod LENGTH OF handling above.
+    if stmt.source.length_of:
+        name = stmt.source.length_of
+        if ctx.has_field(name, materialised):
+            field_ref, _ = ctx.resolve_field_ref(name, materialised)
+            length_value = field_ref.fl.byte_length
+        else:
+            logger.warning("MOVE LENGTH OF unknown field %r — using 0", name)
+            length_value = 0
+        source_value_reg = ctx.const_to_reg(length_value)
+        for target in stmt.targets:
+            _store_move_value(ctx, target, source_value_reg, materialised)
+        return
+
     # Resolve the source field once (when it is a field). A numeric-DISPLAY
     # (zoned) source carries an extra character representation, picked per target
     # by category-pair in _store_move_value (red-dragon-0fqr).
     source_fl: FieldLayout | None = None
     # Get the source value (decode field or literal) — evaluated ONCE.
     if ctx.has_field(stmt.source.name, materialised):
-        source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        source_ref, source_rr = ctx.resolve_field_ref(
+            stmt.source.name, materialised, stmt.source.qualifiers
+        )
         source_fl = source_ref.fl
         decoded_reg = ctx.emit_decode_field(
             source_rr, source_ref.fl, source_ref.offset_reg
@@ -452,7 +471,9 @@ def _store_move_value(
     value. zoned_display_reg carries that character form; it is used only for
     alphanumeric receivers without target reference modification (red-dragon-0fqr).
     """
-    target_ref, target_rr = ctx.resolve_field_ref(target.name, materialised)
+    target_ref, target_rr = ctx.resolve_field_ref(
+        target.name, materialised, target.qualifiers
+    )
 
     if (
         zoned_display_reg is not None
