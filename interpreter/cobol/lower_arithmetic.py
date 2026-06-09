@@ -613,7 +613,12 @@ def lower_arithmetic(
         lower_arithmetic_giving(ctx, stmt, materialised)
         return
 
-    target_ref, target_rr = ctx.resolve_field_ref(stmt.target, materialised)
+    target_ref, target_rr = ctx.resolve_field_ref(
+        stmt.target.name,
+        materialised,
+        stmt.target.qualifiers,
+        subscripts=stmt.target.subscripts,
+    )
 
     # Decode source operand
     if ctx.has_field(stmt.source.name, materialised):
@@ -816,15 +821,8 @@ def lower_arithmetic_giving(
             return decoded
         return ctx.const_to_reg(float(field_name))
 
-    def _decode_field(name: str) -> Register:
-        """Decode a plain string field name (for target operand)."""
-        if ctx.has_field(name, materialised):
-            ref, rr = ctx.resolve_field_ref(name, materialised)
-            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
-        return ctx.const_to_reg(float(name))
-
     left_reg = _decode_operand(stmt.source)
-    right_reg = _decode_field(stmt.target)
+    right_reg = _decode_operand(stmt.target)
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 
@@ -867,8 +865,13 @@ def lower_arithmetic_giving(
     )
 
     if not has_clause:
-        for giving_name in stmt.giving:
-            giving_ref, giving_rr = ctx.resolve_field_ref(giving_name, materialised)
+        for giving_op in stmt.giving:
+            giving_ref, giving_rr = ctx.resolve_field_ref(
+                giving_op.name,
+                materialised,
+                giving_op.qualifiers,
+                subscripts=giving_op.subscripts,
+            )
             result_str_reg = ctx.emit_to_string(result_reg)
             ctx.emit_encode_and_write(
                 giving_rr, giving_ref.fl, result_str_reg, giving_ref.offset_reg
@@ -876,7 +879,12 @@ def lower_arithmetic_giving(
         return
 
     # Compute combined overflow flag across all GIVING fields
-    giving_pairs = [ctx.resolve_field_ref(n, materialised) for n in stmt.giving]
+    giving_pairs = [
+        ctx.resolve_field_ref(
+            g.name, materialised, g.qualifiers, subscripts=g.subscripts
+        )
+        for g in stmt.giving
+    ]
     overflow_flags = [
         _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
         for ref, _ in giving_pairs

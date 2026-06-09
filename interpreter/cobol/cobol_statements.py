@@ -203,8 +203,8 @@ class ArithmeticStatement:
 
     op: str  # "ADD" | "SUBTRACT" | "MULTIPLY" | "DIVIDE"
     source: RefModOperand
-    target: str
-    giving: list[str] = field(default_factory=list)
+    target: RefModOperand
+    giving: list[RefModOperand] = field(default_factory=list)
     on_size_error: list[CobolStatementType] = field(default_factory=list)
     not_on_size_error: list[CobolStatementType] = field(default_factory=list)
 
@@ -219,19 +219,30 @@ class ArithmeticStatement:
         else:
             source = RefModOperand.from_dict(source_data)
 
-        # Target operand: can be a dict with name key or a plain string
+        # Target operand: a structured ref object (name + subscripts + ref-mod)
+        # from the bridge, or a plain string from legacy/test fixtures. Carrying
+        # the full operand keeps subscripts for in-place targets like
+        # `ADD X TO WS-TBL(I)` (red-dragon-6ddr).
         target_data = operands[1] if len(operands) > 1 else ""
         if isinstance(target_data, str):
-            target = target_data
+            target = RefModOperand(name=target_data)
         else:
-            # If it's a dict, extract the name field (for compatibility with Java bridge)
-            target = target_data.get("name", "")
+            target = RefModOperand.from_dict(target_data)
+
+        # GIVING targets: each may be a structured ref object (carrying its own
+        # subscripts, e.g. `... GIVING WS-TBL(I)`) or a plain name string.
+        giving: list[RefModOperand] = []
+        for g in data.get("giving", []):
+            if isinstance(g, str):
+                giving.append(RefModOperand(name=g))
+            else:
+                giving.append(RefModOperand.from_dict(g))
 
         return cls(
             op=data["type"],
             source=source,
             target=target,
-            giving=data.get("giving", []),
+            giving=giving,
             on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
             not_on_size_error=[
                 parse_statement(c) for c in data.get("not_on_size_error", [])
@@ -241,10 +252,10 @@ class ArithmeticStatement:
     def to_dict(self) -> dict:
         result: dict = {
             "type": self.op,
-            "operands": [self.source.to_dict(), {"name": self.target}],
+            "operands": [self.source.to_dict(), self.target.to_dict()],
         }
         if self.giving:
-            result["giving"] = list(self.giving)
+            result["giving"] = [g.to_dict() for g in self.giving]
         if self.on_size_error:
             result["on_size_error"] = [c.to_dict() for c in self.on_size_error]
         if self.not_on_size_error:
