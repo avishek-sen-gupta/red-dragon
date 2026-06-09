@@ -22,10 +22,7 @@ from interpreter.cobol.sectioned_layout import (
     build_sectioned_layout,
 )
 from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.cobol.field_resolution import (
-    ResolvedFieldRef,
-    parse_subscript_notation,
-)
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.cobol_parser import CobolParser
 from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
@@ -47,9 +44,6 @@ from interpreter.ir import CodeLabel
 from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
-
-# Re-export for backward compatibility (used by test_occurs_frontend.py)
-_parse_subscript_notation = parse_subscript_notation
 
 
 class CobolFrontend(Frontend):

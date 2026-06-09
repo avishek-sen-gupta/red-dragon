@@ -3,24 +3,10 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.register import Register
-
-_SUBSCRIPT_RE = re.compile(r"^([A-Za-z][A-Za-z0-9-]*)\((.+)\)$")
-
-
-def parse_subscript_notation(name: str) -> tuple[str, str]:
-    """Parse 'FIELD(SUBSCRIPT)' notation into (base_name, subscript).
-
-    Returns (name, "") for bare names without subscripts.
-    """
-    match = _SUBSCRIPT_RE.match(name)
-    if match:
-        return match.group(1), match.group(2)
-    return name, ""
 
 
 @dataclass(frozen=True)
