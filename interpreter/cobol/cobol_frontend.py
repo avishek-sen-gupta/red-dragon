@@ -101,9 +101,15 @@ class CobolFrontend(Frontend):
         self._ctx._instructions = value
 
     def _resolve_field_ref(
-        self, name: str, materialised: MaterialisedSectionedLayout
+        self,
+        name: str,
+        materialised: MaterialisedSectionedLayout,
+        qualifiers: tuple[str, ...] = (),
+        subscripts: tuple[str, ...] = (),
     ) -> tuple[ResolvedFieldRef, Register]:
-        return self._ctx.resolve_field_ref(name, materialised)
+        return self._ctx.resolve_field_ref(
+            name, materialised, qualifiers=qualifiers, subscripts=subscripts
+        )
 
     def _has_field(self, name: str, materialised: MaterialisedSectionedLayout) -> bool:
         return self._ctx.has_field(name, materialised)

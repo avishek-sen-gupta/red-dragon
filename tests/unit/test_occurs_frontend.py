@@ -105,12 +105,12 @@ class TestResolveFieldRef:
         assert len(const_insts) == 1
         assert const_insts[0].operands == [20]
 
-    @pytest.mark.xfail(
-        reason="COMPUTE-string subscript structuring pending red-dragon-ovzi",
-        strict=True,
-    )
     def test_literal_subscript_resolve(self):
-        """Literal subscript emits correct offset arithmetic."""
+        """A structured literal subscript emits correct offset arithmetic.
+
+        The legacy ``"NAME(SUB)"`` string path is retired (red-dragon-6ddr); the
+        subscript is now passed structurally via ``subscripts=``.
+        """
         frontend = self._make_frontend()
         layout = self._make_layout_with_occurs()
         frontend._reg_counter = 0
@@ -118,7 +118,7 @@ class TestResolveFieldRef:
         frontend._instructions = []
 
         materialised = _materialise(layout)
-        ref, _ = frontend._resolve_field_ref("WS-TBL(3)", materialised)
+        ref, _ = frontend._resolve_field_ref("WS-TBL", materialised, subscripts=("3",))
         assert ref.fl.name == "WS-TBL"
         # Element size should be 4 (single element), not 20 (total)
         assert ref.fl.byte_length == 4
@@ -129,17 +129,15 @@ class TestResolveFieldRef:
         # Verify the three operations: (idx-1), *(elem_size), +(base)
         assert [i.operands[0] for i in binop_insts] == ["-", "*", "+"]
 
-    @pytest.mark.xfail(
-        reason="COMPUTE-string subscript structuring pending red-dragon-ovzi",
-        strict=True,
-    )
     def test_has_field_with_subscript(self):
-        """_has_field correctly identifies subscripted field references."""
+        """_has_field identifies base field names (subscripts are structural now).
+
+        Post red-dragon-6ddr, ``has_field`` takes a BARE name; the subscript is
+        carried separately and handled by ``resolve_field_ref``.
+        """
         frontend = self._make_frontend()
         layout = self._make_layout_with_occurs()
         materialised = _materialise(layout)
-        assert frontend._has_field("WS-TBL(3)", materialised)
         assert frontend._has_field("WS-TBL", materialised)
         assert frontend._has_field("WS-IDX", materialised)
         assert not frontend._has_field("WS-NONEXISTENT", materialised)
-        assert not frontend._has_field("WS-NONEXISTENT(1)", materialised)
