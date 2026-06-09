@@ -3,7 +3,7 @@
 **Date:** 2026-06-09
 **Status:** Approved (design); pending implementation plan
 **Implements:** `red-dragon-6ddr` (P0) — partial close (subscripts only; ref-mod is the remaining slice)
-**Related (out of scope, filed):** `red-dragon-ovzi` (COMPUTE arithmetic string round-trip), `red-dragon-cqwx` (multi-dimensional OCCURS offset arithmetic), `red-dragon-kieo` (DFHRESP pre-pass literal-awareness)
+**Related (out of scope, filed):** `red-dragon-ovzi` (COMPUTE arithmetic string round-trip), `red-dragon-cqwx` (multi-dimensional OCCURS offset arithmetic), `red-dragon-kieo` (DFHRESP pre-pass literal-awareness), `red-dragon-l445` (structure subscript *interiors* — recursive subscript expression nodes)
 
 ## Goal
 
@@ -36,7 +36,7 @@ A reference operand in the bridge JSON gains a `subscripts` array (extending the
 ```
 
 - `name` is the **bare base name** (no parentheses).
-- `subscripts` is a list of subscript **strings**, in source order, each carrying ALL subscripts (no truncation). Each element is a subscript expression as text — `"WS-IDX"`, `"5"`, `"WS-I + 1"`, or the rare nested `"B(C)"`. Each is resolved exactly as the single subscript is resolved today. (Subscript *elements* are deliberately kept as strings, not recursively structured — the nested `A(B(C))` case is preserved as the element string `"B(C)"`; this is YAGNI per 6ddr's "structured subscript list" without over-modeling subscript interiors. `_SUBSCRIPT_RE` is still retired because the *outer* base/subscript split is now structural.)
+- `subscripts` is a list of subscript **strings**, in source order, each carrying ALL subscripts (no truncation). Each element is a subscript expression as text — `"WS-IDX"`, `"5"`, `"WS-I + 1"`, or the rare nested `"B(C)"`. Each is resolved exactly as the single subscript is resolved today. (Subscript *elements* are deliberately kept as strings, not recursively structured — the nested `A(B(C))` case is preserved as the element string `"B(C)"`; structuring the subscript *interiors* recursively is the explicit follow-on `red-dragon-l445`. `_SUBSCRIPT_RE` is still retired here because the *outer* base/subscript split is now structural.)
 - Absent/empty `subscripts` ⇒ a plain (non-subscripted) reference.
 
 On the CICS side, `CicsOperand` gains a structured subscript carrier:
@@ -103,6 +103,7 @@ The **full existing COBOL suite is the primary regression oracle** — every tes
 ## Out of scope (tracked elsewhere)
 
 - Reference-modification structuring (the remaining half of `red-dragon-6ddr`).
+- Subscript *interior* structuring (recursive subscript expression nodes) — `red-dragon-l445`.
 - COMPUTE arithmetic string round-trip — `red-dragon-ovzi`.
 - Multi-dimensional OCCURS offset arithmetic — `red-dragon-cqwx`.
 - DFHRESP pre-pass literal-awareness — `red-dragon-kieo`.
