@@ -43,7 +43,7 @@ def test_run_region_builds_program_cache_keyed_by_program_name(monkeypatch):
     """Each distinct CSD program is compiled into the cache keyed by program name."""
     compiled: dict[str, object] = {}
 
-    def _fake_compile(source, parser, strategy):
+    def _fake_compile(source, parser, strategy, **kwargs):
         sentinel = object()
         compiled[source] = sentinel
         return sentinel
@@ -90,7 +90,9 @@ def test_run_region_from_csd_wires_transid_mapping(monkeypatch, tmp_path):
     )
 
     monkeypatch.setattr(
-        bootstrap, "compile_cics_program", lambda source, parser, strategy: object()
+        bootstrap,
+        "compile_cics_program",
+        lambda source, parser, strategy, **kwargs: object(),
     )
 
     captured: dict[str, object] = {}
