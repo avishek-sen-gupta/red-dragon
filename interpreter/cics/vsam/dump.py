@@ -53,7 +53,7 @@ def _as_number(value: float, decimal_digits: int) -> int | float:
 
 def decode_record(
     layout: DataLayout, record: bytes, base_offset: int | None = None
-) -> dict:
+) -> dict[str, object]:
     """Decode one record's bytes into a nested dict, per the DataLayout.
 
     Leaf fields decode via _decode_leaf; group children recurse into nested dicts.
@@ -63,7 +63,7 @@ def decode_record(
     added in a later task.
     """
     base = layout.offset if base_offset is None else base_offset
-    out: dict = {}
+    out: dict[str, object] = {}
     for name, fl in layout.fields.items():
         start = fl.offset - base
         out[name] = _decode_leaf(fl, record[start : start + fl.byte_length])
