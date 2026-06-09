@@ -42,14 +42,17 @@ def _occurs_ctx():
 
 
 @covers(CobolFeature.OCCURS_FIXED)
-def test_structured_subscript_matches_legacy_name():
+def test_structured_subscript_yields_element_layout():
+    """A structured single subscript resolves to the element-level FieldLayout:
+    base offset, element-sized byte_length (4, not the whole-table 20). The
+    legacy "NAME(SUB)" string path is retired (red-dragon-6ddr), so this asserts
+    the structured result directly rather than comparing against it."""
     ctx, materialised = _occurs_ctx()
     ref_struct, _ = ctx.resolve_field_ref(
         "WS-ELEM", materialised, subscripts=("WS-IDX",)
     )
-    ref_legacy, _ = ctx.resolve_field_ref("WS-ELEM(WS-IDX)", materialised)
-    assert ref_struct.fl.byte_length == ref_legacy.fl.byte_length
-    assert ref_struct.fl.offset == ref_legacy.fl.offset
+    assert ref_struct.fl.byte_length == 4
+    assert ref_struct.fl.offset == 0
 
 
 @covers(CobolFeature.OCCURS_FIXED)
@@ -90,14 +93,12 @@ def test_lower_expr_node_threads_single_subscript_happy_path():
     # IR was actually emitted for the element-offset computation.
     assert len(ctx.instructions) > n_before
 
-    # The threaded single-subscript path matches the legacy "NAME(SUB)" result:
-    # element-level FieldLayout whose byte_length is the element size (4), not
-    # the whole-table size.
+    # The threaded single-subscript path yields an element-level FieldLayout
+    # whose byte_length is the element size (4), not the whole-table size.
     ref_struct, _ = ctx.resolve_field_ref(
         "WS-ELEM", materialised, subscripts=("WS-IDX",)
     )
-    ref_legacy, _ = ctx.resolve_field_ref("WS-ELEM(WS-IDX)", materialised)
-    assert ref_struct.fl.byte_length == ref_legacy.fl.byte_length == 4
+    assert ref_struct.fl.byte_length == 4
 
 
 @covers(CobolFeature.OCCURS_FIXED)
