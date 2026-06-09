@@ -23,6 +23,18 @@ def test_cics_plain_name_has_no_subscripts():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_cics_two_subscript_operand_carries_all_subscripts():
+    # The parser carries ALL subscripts structurally; the multi-dimensional
+    # NotImplementedError is raised later at resolve time (resolve_field_ref's
+    # concern), so assert the PARSER output here, not any raise.
+    verb, opts = parse_exec_cics_text("EXEC CICS XCTL PROGRAM(TBL(I)(J)) END-EXEC")
+    op = opts["PROGRAM"]
+    assert op.is_literal is False
+    assert op.text == "TBL"
+    assert op.subscripts == ("I", "J")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_cics_literal_unaffected():
     verb, opts = parse_exec_cics_text("EXEC CICS SEND MAP('SGNMAP') END-EXEC")
     assert opts["MAP"].is_literal is True

@@ -199,6 +199,7 @@ class _Transformer(Transformer):
         if (
             all(not p.is_literal for p in items)
             and len(items) >= 2
+            # items[0] is a bare CHARS base (from vchars), not a nested group (vnested)
             and not items[0].text.startswith("(")
             and all(p.text.startswith("(") and p.text.endswith(")") for p in items[1:])
         ):
