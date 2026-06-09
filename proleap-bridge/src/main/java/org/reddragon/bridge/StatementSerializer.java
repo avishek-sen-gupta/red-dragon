@@ -239,8 +239,15 @@ public final class StatementSerializer {
                     // Call does not (e.g. CURRENT-DATE with no parenthesised args).
                     functionNode = serializeFunctionNodeFromValueStmt(vs);
                 }
+                JsonObject lengthOfNode = serializeMoveLengthOfSource(vs);
                 if (functionNode != null) {
                     operands.add(functionNode);
+                } else if (lengthOfNode != null) {
+                    // `MOVE LENGTH OF <field> TO ...` — emit a structured
+                    // length_of node (the field's byte length) rather than a
+                    // null-name literal. Mirrors serializeFromValue's handling
+                    // (used by PERFORM VARYING FROM). (red-dragon)
+                    operands.add(lengthOfNode);
                 } else if (sourceCall != null) {
                     operands.add(serializeMoveOperand(sourceCall));
                 } else {
@@ -741,8 +748,16 @@ public final class StatementSerializer {
             // Extract the EVALUATE subject (e.g., WS-A in EVALUATE WS-A)
             io.proleap.cobol.asg.metamodel.procedure.evaluate.Select select = stmt.getSelect();
             if (select != null && select.getSelectValueStmt() != null) {
-                obj.addProperty(
-                        "subject", insertSpaces(extractValueStmtText(select.getSelectValueStmt())));
+                // For a qualified subject (e.g. CONFIRMI OF COTRN2AI) the flat
+                // text glues to "CONFIRMIOFCOTRN2AI"; insertSpaces only spaces
+                // operators, not OF/IN. Use the LEAF data name so the frontend
+                // resolves the field (it is unique within its scope here). Falls
+                // back to the spaced flat text for non-qualified subjects. (red-dragon)
+                String subject = qualifiedSubjectLeaf(select.getSelectValueStmt());
+                if (subject == null) {
+                    subject = insertSpaces(extractValueStmtText(select.getSelectValueStmt()));
+                }
+                obj.addProperty("subject", subject);
             }
 
             // Each WhenPhrase maps to a WHEN branch with condition + statements
@@ -1510,6 +1525,43 @@ public final class StatementSerializer {
      * underlying arithmetic expression (refs, literals, ref-mod, binops); failing
      * that, falls back to a {@code {"kind":"lit","value":<text>}} node.
      */
+    /**
+     * If a MOVE sending-area ValueStmt is a {@code LENGTH OF <field>} special
+     * register, returns a structured {@code {"kind":"length_of","name":"<field>"}}
+     * node (the leaf data-name); otherwise returns {@code null}. Structural — no
+     * text parsing. Mirrors {@link #serializeFromValue}'s length_of handling.
+     */
+    private static JsonObject serializeMoveLengthOfSource(ValueStmt vs) {
+        if (vs == null) {
+            return null;
+        }
+        ParserRuleContext ctx;
+        try {
+            ctx = vs.getCtx();
+        } catch (Exception e) {
+            return null;
+        }
+        if (ctx == null) {
+            return null;
+        }
+        // A `LENGTH OF G` appearing INSIDE a reference modifier (e.g.
+        // MOVE SRC(1:LENGTH OF G) TO ...) is the slice length, not the sending
+        // operand — leave it for the ref-mod path. Only treat the source as a
+        // LENGTH OF value when no referenceModifier wraps it. (red-dragon)
+        if (firstReferenceModifierDescendant(ctx) != null) {
+            return null;
+        }
+        CobolParser.SpecialRegisterContext sr = findLengthOfSpecialRegister(ctx);
+        if (sr == null) {
+            return null;
+        }
+        JsonObject obj = new JsonObject();
+        obj.addProperty("kind", "length_of");
+        CobolParser.IdentifierContext id = sr.identifier();
+        obj.addProperty("name", id != null ? leafDataName(id) : "");
+        return obj;
+    }
+
     private static JsonElement serializeFromValue(ValueStmt vs) {
         if (vs == null) {
             return litNode("");
@@ -1603,7 +1655,53 @@ public final class StatementSerializer {
                 obj.add("ref_mod_length", rm.get("ref_mod_length"));
             }
         }
+        JsonArray qualifiers = extractQualifiers(call);
+        if (qualifiers.size() > 0) {
+            obj.add("qualifiers", qualifiers);
+        }
         return obj;
+    }
+
+    /**
+     * Extracts the {@code OF}/{@code IN} qualifier data names for a Call (e.g.
+     * {@code VSTRING-LENGTH OF WS-DATE-TO-TEST} -> ["WS-DATE-TO-TEST"]), in the
+     * order written (immediate enclosing group first). COBOL allows duplicate
+     * elementary names disambiguated by qualification (CardDemo CSUTLDTC's two
+     * Vstring groups), and {@code extractCallName} returns only the leaf, so the
+     * qualifiers are carried separately for the frontend to resolve against the
+     * named ancestor group. Structural walk of the parse tree — no text parsing.
+     */
+    private static JsonArray extractQualifiers(Call call) {
+        JsonArray qualifiers = new JsonArray();
+        if (call == null) {
+            return qualifiers;
+        }
+        Call unwrapped = call.unwrap();
+        if (!(unwrapped instanceof ASGElementImpl)) {
+            return qualifiers;
+        }
+        ParserRuleContext ctx = ((ASGElementImpl) unwrapped).getCtx();
+        if (ctx == null) {
+            return qualifiers;
+        }
+        collectInDataQualifiers(ctx, qualifiers);
+        return qualifiers;
+    }
+
+    private static void collectInDataQualifiers(
+            org.antlr.v4.runtime.tree.ParseTree node, JsonArray out) {
+        if (node == null) {
+            return;
+        }
+        if (node instanceof CobolParser.InDataContext) {
+            CobolParser.DataNameContext dn = ((CobolParser.InDataContext) node).dataName();
+            if (dn != null) {
+                out.add(dn.getText());
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectInDataQualifiers(node.getChild(i), out);
+        }
     }
 
 
@@ -2314,6 +2412,60 @@ public final class StatementSerializer {
      * "FLD-AOFGRP-B" that getText() would produce. Falls back to getText() for
      * non-qualifiedDataName identifiers (tableCall / functionCall / specialRegister).
      */
+    /**
+     * If the EVALUATE select ValueStmt is a QUALIFIED data name (carries an
+     * {@code OF}/{@code IN} qualifier), returns its LEAF data name; otherwise
+     * returns {@code null} so the caller keeps the existing flat-text subject.
+     * The leaf alone resolves the field here because the qualified subject names
+     * a unique field (CardDemo COTRN02C: {@code CONFIRMI OF COTRN2AI}). Structural
+     * — walks the parse tree, no text parsing. (red-dragon)
+     */
+    private static String qualifiedSubjectLeaf(ValueStmt vs) {
+        if (vs == null) {
+            return null;
+        }
+        ParserRuleContext ctx;
+        try {
+            ctx = vs.getCtx();
+        } catch (Exception e) {
+            return null;
+        }
+        if (ctx == null) {
+            return null;
+        }
+        // Only rewrite when an OF/IN qualifier is actually present, so simple
+        // subjects keep their existing serialization untouched.
+        JsonArray quals = new JsonArray();
+        collectInDataQualifiers(ctx, quals);
+        if (quals.size() == 0) {
+            return null;
+        }
+        CobolParser.QualifiedDataNameFormat1Context f1 =
+                findQualifiedDataNameFormat1(ctx);
+        if (f1 != null && f1.dataName() != null) {
+            return f1.dataName().getText();
+        }
+        return null;
+    }
+
+    private static CobolParser.QualifiedDataNameFormat1Context
+            findQualifiedDataNameFormat1(org.antlr.v4.runtime.tree.ParseTree node) {
+        if (node == null) {
+            return null;
+        }
+        if (node instanceof CobolParser.QualifiedDataNameFormat1Context) {
+            return (CobolParser.QualifiedDataNameFormat1Context) node;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            CobolParser.QualifiedDataNameFormat1Context found =
+                    findQualifiedDataNameFormat1(node.getChild(i));
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
     private static String leafDataName(CobolParser.IdentifierContext id) {
         if (id == null) {
             return "";
