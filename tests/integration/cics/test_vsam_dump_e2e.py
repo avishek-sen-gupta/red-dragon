@@ -22,20 +22,27 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Reuse the persistence test's gate (CARDDEMO_HOME + bms-tools + ProLeap JAR).
-from tests.integration.cics.test_vsam_persistence import (  # noqa: F401
-    pytestmark,  # the skipif gate
-)
+import pytest
+
 from tests.integration.cics.test_carddemo_signon_real import (
     _ACCT_ID,
     _NEW_ACCT_STATUS,
     _drive_rewrite,
 )
-from tests.integration.cobol_helpers import JAR_PATH
+from tests.integration.cics.bms_tools_helpers import BMS_TOOLS_AVAILABLE
+from tests.integration.cobol_helpers import JAR_AVAILABLE, JAR_PATH
 from interpreter.cics.vsam.backend import FileBackend
 from interpreter.cics.vsam.dump import decode_record, load_record_layout
 from interpreter.cics.vsam.format import read_flat_file
 from tests.covers import covers, NotLanguageFeature
+
+_CARDDEMO_HOME = os.environ.get("CARDDEMO_HOME")
+
+# Gate exactly like the other CICS e2e tests: CARDDEMO_HOME + ProLeap JAR + bms-tools.
+pytestmark = pytest.mark.skipif(
+    not _CARDDEMO_HOME or not JAR_AVAILABLE or not BMS_TOOLS_AVAILABLE,
+    reason="manual: set CARDDEMO_HOME + BMS_TOOLS_HOME (built hlasm_export) + ProLeap JAR",
+)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -52,7 +59,11 @@ def test_dump_decodes_rewritten_acctdat_status_n(tmp_path):
 
     # Locate the real CardDemo ACCOUNT copybook (the one ACCTDAT records use).
     carddemo = Path(os.environ["CARDDEMO_HOME"])
-    copybook = next(carddemo.rglob("CVACT01Y.cpy"))
+    matches = list(carddemo.rglob("CVACT01Y.cpy"))
+    assert (
+        len(matches) == 1
+    ), f"expected 1 CVACT01Y.cpy under CARDDEMO_HOME, found {len(matches)}: {matches}"
+    copybook = matches[0]
     # The ProLeap bridge JAR (the gate's JAR_AVAILABLE keys off this same path,
     # defaulting to the in-tree build when PROLEAP_BRIDGE_JAR is unset).
     layout = load_record_layout(copybook, None, JAR_PATH, [])
@@ -67,6 +78,11 @@ def test_dump_decodes_rewritten_acctdat_status_n(tmp_path):
         f"rewritten account {_ACCT_ID!r} not found in dumped records "
         f"({len(decoded)} records decoded off disk)"
     )
+    assert (
+        len(target) == 1
+    ), f"expected exactly 1 record for account {_ACCT_ID!r}, found {len(target)}"
+    # PIC 9(11) decodes to a Python int — this test is the canonical witness.
+    assert isinstance(target[0]["ACCT-ID"], int)
     assert target[0]["ACCT-ACTIVE-STATUS"] == _NEW_ACCT_STATUS, (
         f"REWRITE not reflected in dumped record: ACCT-ACTIVE-STATUS is "
         f"{target[0]['ACCT-ACTIVE-STATUS']!r}, expected {_NEW_ACCT_STATUS!r}"
