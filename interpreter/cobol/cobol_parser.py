@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -62,13 +61,18 @@ class ProLeapCobolParser(CobolParser):
         return asg
 
     def _enrich_copybook_error(self, error: CobolParseError) -> CobolParseError:
-        """Turn ProLeap's raw 'Could not find copy book X' into a clean message."""
+        """Add the searched copybook directories to a 'copy book not found' error.
+
+        The underlying ProLeap message (which names the missing copybook) is
+        surfaced verbatim rather than regex-scraped for the name — we don't parse
+        a message we don't own. The original error is chained as ``__cause__`` by
+        the caller's ``raise ... from`` (red-dragon-vgm5).
+        """
         msg = str(error)
         if "Could not find copy book" not in msg:
             return error
-        match = re.search(r"Could not find copy book (\S+)", msg)
-        name = match.group(1) if match else "<unknown>"
         searched = [str(d) for d in self._copybook_dirs] or ["(none configured)"]
         return CobolParseError(
-            f"Copybook {name!r} not found. Searched directories: {searched}"
+            f"Copybook not found (searched directories: {searched}). "
+            f"Underlying parser error: {msg}"
         )
