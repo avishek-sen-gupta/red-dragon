@@ -76,21 +76,30 @@ def decode_record(
     return out
 
 
-def _live_count(node, record: bytes, base: int, root: DataLayout) -> int:
-    """Resolve the occurrence count for an OCCURS node, honoring ODO."""
-    if not node.occurs_depending_on:
+def _live_count(
+    node: FieldLayout | DataLayout, record: bytes, base: int, root: DataLayout
+) -> int:
+    """Resolve the occurrence count for an OCCURS node, honoring ODO.
+
+    Group nodes (DataLayout) carry no occurs_depending_on attribute, so a
+    fixed-OCCURS group simply uses its declared occurs_count.
+    """
+    odo = getattr(node, "occurs_depending_on", "")
+    if not odo:
         return node.occurs_count
-    counter = root.lookup(node.occurs_depending_on)
+    counter = root.lookup(odo)
     if counter is None:
         return node.occurs_count  # unresolved counter: fall back to declared max
     start = counter.offset - base
     raw = _decode_leaf(counter, record[start : start + counter.byte_length])
     n = int(raw)
-    low = node.occurs_min or 1
+    low = getattr(node, "occurs_min", 0) or 1
     return max(low, min(n, node.occurs_count))
 
 
-def _decode_field(fl: FieldLayout, record: bytes, base: int, root: DataLayout):
+def _decode_field(
+    fl: FieldLayout, record: bytes, base: int, root: DataLayout
+) -> list[int | float | str] | int | float | str:
     if fl.occurs_count > 0:
         n = _live_count(fl, record, base, root)
         result = []
@@ -102,7 +111,9 @@ def _decode_field(fl: FieldLayout, record: bytes, base: int, root: DataLayout):
     return _decode_leaf(fl, record[start : start + fl.byte_length])
 
 
-def _decode_group(sub: DataLayout, record: bytes, base: int, root: DataLayout):
+def _decode_group(
+    sub: DataLayout, record: bytes, base: int, root: DataLayout
+) -> list[dict[str, object]] | dict[str, object]:
     if sub.occurs_count > 0:
         n = _live_count(sub, record, base, root)
         return [_decode_group_element(sub, record, base, root, i) for i in range(n)]
@@ -111,7 +122,10 @@ def _decode_group(sub: DataLayout, record: bytes, base: int, root: DataLayout):
 
 def _decode_group_element(
     sub: DataLayout, record: bytes, base: int, root: DataLayout, index: int
-) -> dict:
+) -> dict[str, object]:
     """Decode the index-th element of an OCCURS group (shift base by stride)."""
+    # Subtracting from base is equivalent to adding index*element_size to every
+    # child's (offset - base) in the recursive call; children store the
+    # first-element absolute offset, so this maps them to element #index.
     shifted_base = base - index * sub.element_size
     return decode_record(sub, record, shifted_base, root)
