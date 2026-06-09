@@ -60,6 +60,24 @@ from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
+# COBOL special registers the ProLeap bridge does not model as DATA DIVISION
+# fields. A MOVE into one of these surfaces with an unresolved/null operand name
+# (the bridge's placeholder), so we recognise both forms here.
+_SPECIAL_REGISTER_NAMES = frozenset(
+    {
+        "RETURN-CODE",
+        "SORT-RETURN",
+        "TALLY",
+        "name=[null]",  # bridge placeholder for an unmodelled register operand
+    }
+)
+
+
+def _is_special_register(name: str) -> bool:
+    """True if ``name`` is an unmodelled COBOL special register (MOVE target)."""
+    return str(name).upper() in {n.upper() for n in _SPECIAL_REGISTER_NAMES}
+
+
 ARITHMETIC_OPS = {
     "ADD": "+",
     "SUBTRACT": "-",
@@ -398,6 +416,19 @@ def lower_move(
     # base source value (source_value_reg) is never clobbered across targets.
     source_value_reg = value_str_reg
     for target in stmt.targets:
+        # The ProLeap bridge does not model COBOL special registers (e.g.
+        # RETURN-CODE); a MOVE into one surfaces here with an unresolved/null
+        # operand name. There is no DATA DIVISION field to write, so skip it
+        # rather than crashing. (e.g. CSUTLDTC's `MOVE WS-SEVERITY-N TO
+        # RETURN-CODE` — its callers read the program's LINKAGE result, not the
+        # RETURN-CODE register, so dropping this write is behaviour-preserving.)
+        if not ctx.has_field(target.name, materialised) and _is_special_register(
+            target.name
+        ):
+            logger.warning(
+                "MOVE into special register %r is not modelled — skipping", target.name
+            )
+            continue
         _store_move_value(
             ctx, target, source_value_reg, materialised, zoned_display_reg
         )
