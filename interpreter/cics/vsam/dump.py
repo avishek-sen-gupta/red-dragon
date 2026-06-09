@@ -6,6 +6,14 @@ copybook, emitting JSON-lines (default) or a human-readable block format.
 
 Pure orchestration over existing primitives: build_data_layout (copybook ->
 DataLayout) and the COBOL pure decoders. No new decode logic, no new format.
+
+CLI entrypoint::
+
+    python -m interpreter.cics.vsam.dump \\
+        --data <flat-file> --copybook <copybook> \\
+        [--record NAME] [--format jsonl|block] [--jar PATH]
+
+``--jar`` defaults to ``$PROLEAP_BRIDGE_JAR`` when the env var is set.
 """
 
 from __future__ import annotations
@@ -180,7 +188,7 @@ def load_record_layout(
 ) -> DataLayout:
     """Parse a copybook (wrapped in a minimal program) into the selected layout."""
     member = copybook.stem
-    source = (_SKELETON_HEAD + f"       COPY {member}.\n").encode("ascii")
+    source = (_SKELETON_HEAD + f"       COPY {member}.\n").encode("utf-8")
     copybook_dirs = [copybook.parent, *extra_dirs]
     parser = ProLeapCobolParser(
         RealSubprocessRunner(), jar, copybook_dirs=copybook_dirs
@@ -191,13 +199,18 @@ def load_record_layout(
 
 
 def render_jsonl(layout: DataLayout, records: list[bytes]) -> str:
-    """One compact JSON object per record, newline-terminated."""
+    """One compact JSON object per record, each newline-terminated; empty input yields an empty string."""
     lines = [json.dumps(decode_record(layout, rec)) for rec in records]
     return "\n".join(lines) + ("\n" if lines else "")
 
 
 def render_block(layout: DataLayout, records: list[bytes]) -> str:
-    """Human-readable per-field block: @offset NAME value 0xRAW, for each record."""
+    """Human-readable per-field block: @offset NAME value 0xRAW, for each record.
+
+    Note: OCCURS fields show the first element's raw bytes with a ``<occurs>``
+    value placeholder; block format does not expand arrays. Use jsonl to see
+    decoded arrays.
+    """
     chunks: list[str] = []
     for idx, rec in enumerate(records, start=1):
         chunks.append(f"=== record {idx} ===")
@@ -223,6 +236,7 @@ def _block_lines(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point: parse args, decode the flat file via the copybook, write to stdout. Returns an exit code."""
     parser = argparse.ArgumentParser(
         prog="python -m interpreter.cics.vsam.dump",
         description="Decode a VSAM flat-file dataset via a COBOL copybook.",
