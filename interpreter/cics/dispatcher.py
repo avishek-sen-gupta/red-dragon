@@ -86,6 +86,43 @@ RunCicsFn = Callable[
 ]
 
 
+def _advance_routing(
+    result: DispatchResult,
+    current_transid: str,
+    program_cache: dict[str, Any],
+    transid_to_program: dict[str, str],
+) -> "tuple[str, Any, bytes] | DispatchResult":
+    """The single copy of the "which program/transid runs next" rule.
+
+    Given a program's DispatchResult and the current transid, decide how routing
+    proceeds. Returns either a ``(next_transid, next_program, next_commarea)``
+    tuple (continue) or a terminal ``DispatchResult`` (RETURN / ABEND — stop).
+
+      * RETURN_TRANSID: resolve the next program via ``transid_to_program``; the
+        transid becomes the (stripped) returned transid. Unknown transid -> ABEND
+        TRNI.
+      * XCTL: switch to the named program; the transid CARRIES (same task).
+        Unknown program -> ABEND PGMI.
+      * anything else (RETURN / ABEND): terminal — returned unchanged.
+    """
+    if result.kind == DispatchKind.RETURN_TRANSID:
+        next_transid = (result.transid or "").strip()
+        next_prog_name = transid_to_program.get(next_transid)
+        if not next_prog_name:
+            logger.error("Unknown transid %r from RETURN TRANSID", result.transid)
+            return DispatchResult(kind=DispatchKind.ABEND, abcode="TRNI")
+        return (next_transid, program_cache[next_prog_name], result.commarea or b"")
+
+    if result.kind == DispatchKind.XCTL:
+        prog_name = (result.program or "").strip()
+        if prog_name not in program_cache:
+            logger.error("XCTL to unknown program %r", prog_name)
+            return DispatchResult(kind=DispatchKind.ABEND, abcode="PGMI")
+        return (current_transid, program_cache[prog_name], result.commarea or b"")
+
+    return result
+
+
 def _run_dispatcher_with_runner(
     run_fn: RunCicsFn,
     program_cache: dict[str, Any],
@@ -101,33 +138,152 @@ def _run_dispatcher_with_runner(
     while True:
         result = run_fn(program, context, screen_queue, input_queue)
 
+        # On a pseudo-conversational RETURN TRANSID, the next turn's terminal
+        # input arrives here (blocks). Its attention key seeds the next EIBAID.
+        # (This input_queue.get() is the loop's own quirk; CicsRegion does not
+        # replicate it — see CicsRegion.dispatch.)
+        eibaid = context.eibaid
         if result.kind == DispatchKind.RETURN_TRANSID:
             event = input_queue.get()  # blocks
-            next_prog_name = transid_to_program.get(result.transid or "")
-            if not next_prog_name:
-                logger.error("Unknown transid %r from RETURN TRANSID", result.transid)
-                return DispatchResult(kind=DispatchKind.ABEND, abcode="TRNI")
-            program = program_cache[next_prog_name]
-            context = CicsContext(
-                transid=result.transid or "",
-                commarea=result.commarea or b"",
-                eibaid=event.eibaid,
-            )
+            eibaid = event.eibaid
 
-        elif result.kind == DispatchKind.XCTL:
-            prog_name = (result.program or "").strip()
-            if prog_name not in program_cache:
-                logger.error("XCTL to unknown program %r", prog_name)
-                return DispatchResult(kind=DispatchKind.ABEND, abcode="PGMI")
-            program = program_cache[prog_name]
-            context = CicsContext(
-                transid=context.transid,
-                commarea=result.commarea or b"",
-                eibaid=context.eibaid,
-            )
+        routing = _advance_routing(
+            result, context.transid, program_cache, transid_to_program
+        )
+        if isinstance(routing, DispatchResult):
+            return routing
 
+        next_transid, program, next_commarea = routing
+        context = CicsContext(
+            transid=next_transid, commarea=next_commarea, eibaid=eibaid
+        )
+
+
+class CicsRegion:
+    """Turn-by-turn CICS dispatch API.
+
+    Models a running CICS region as an explicit state machine over the same
+    routing rule the dispatcher loop uses (`_advance_routing`). Instead of an
+    unbounded blocking loop, the caller drives one turn at a time:
+
+      * ``start(entry_transid, ...)`` — begin a task on ``entry_transid`` and run
+        its first program.
+      * ``step(...)`` — run the CURRENT (program, transid, commarea) again.
+
+    The caller supplies an ``input_event`` on the entry turn and on each turn
+    that follows a RETURN_TRANSID (a fresh terminal input), and OMITS it after an
+    XCTL (same task, no new terminal input — the XCTL'd program runs immediately).
+    This mirrors CICS pseudo-conversational reality.
+
+    Unlike ``_run_dispatcher_with_runner``, this does NOT do a separate
+    ``input_queue.get()`` for the EIBAID: the supplied ``input_event`` is both put
+    on the queue (for RECEIVE MAP) AND used directly to seed the context's eibaid.
+    """
+
+    def __init__(
+        self,
+        program_cache: dict[str, Any],
+        transid_to_program: dict[str, str],
+        screen_queue: "queue.Queue[Any]",
+        input_queue: "queue.Queue[InputEvent]",
+        *,
+        context_holder: list,
+        result_holder: list,
+        max_steps: int = 50_000,
+        min_commarea_len: int = 0,
+    ) -> None:
+        self._program_cache = program_cache
+        self._transid_to_program = transid_to_program
+        self._screen_queue = screen_queue
+        self._input_queue = input_queue
+        self._context_holder = context_holder
+        self._result_holder = result_holder
+        self._max_steps = max_steps
+        # Optional minimum commarea length applied to the commarea handed to each
+        # FOLLOW-ON turn (after start). A program that XCTLs/RETURNs with a short
+        # commarea but whose successor indexes a larger CARDDEMO-COMMAREA needs
+        # EIBCALEN to cover those fields; pad to this length so the successor's
+        # field reads land in-bounds. The entry commarea passed to start() is
+        # used as-is (the entry program's own EIBCALEN is authoritative).
+        self._min_commarea_len = min_commarea_len
+
+        self._transid: str = ""
+        self._program: Any = None
+        self._commarea: bytes = b""
+        self._last_eibaid: str = _DFHENTER
+        self._done: bool = False
+
+    @property
+    def transid(self) -> str:
+        """The current transid (for assertions if wanted)."""
+        return self._transid
+
+    @property
+    def done(self) -> bool:
+        """True once a terminal (RETURN / ABEND) result has been produced."""
+        return self._done
+
+    def start(
+        self,
+        entry_transid: str,
+        *,
+        commarea: bytes = b"",
+        input_event: "InputEvent | None" = None,
+        max_steps: int | None = None,
+    ) -> DispatchResult:
+        """Begin a task on ``entry_transid`` and dispatch its first program."""
+        self._transid = entry_transid
+        self._commarea = commarea
+        self._program = self._program_cache[self._transid_to_program[entry_transid]]
+        self._done = False
+        return self._dispatch(input_event=input_event, max_steps=max_steps)
+
+    def step(
+        self,
+        *,
+        input_event: "InputEvent | None" = None,
+        max_steps: int | None = None,
+    ) -> DispatchResult:
+        """Dispatch the CURRENT (program, transid, commarea). Requires not done."""
+        if self._done:
+            raise RuntimeError("step() called on a region that has terminated")
+        return self._dispatch(input_event=input_event, max_steps=max_steps)
+
+    def _dispatch(
+        self,
+        *,
+        input_event: "InputEvent | None",
+        max_steps: int | None,
+    ) -> DispatchResult:
+        eibaid = input_event.eibaid if input_event is not None else self._last_eibaid
+        ctx = CicsContext(transid=self._transid, commarea=self._commarea, eibaid=eibaid)
+        if input_event is not None:
+            # The program's RECEIVE MAP consumes this (fields + eibaid). We do NOT
+            # do a separate get() for eibaid — the context already carries it.
+            self._input_queue.put(input_event)
+        self._last_eibaid = eibaid
+
+        result = run_cics(
+            self._program,
+            ctx,
+            self._screen_queue,
+            self._input_queue,
+            context_holder=self._context_holder,
+            result_holder=self._result_holder,
+            max_steps=self._max_steps if max_steps is None else max_steps,
+        )
+
+        routing = _advance_routing(
+            result, self._transid, self._program_cache, self._transid_to_program
+        )
+        if isinstance(routing, DispatchResult):
+            self._done = True
         else:
-            return result
+            self._transid, self._program, next_commarea = routing
+            if len(next_commarea) < self._min_commarea_len:
+                next_commarea = next_commarea.ljust(self._min_commarea_len, b"\x00")
+            self._commarea = next_commarea
+        return result
 
 
 _CSD_PATTERN = re.compile(
