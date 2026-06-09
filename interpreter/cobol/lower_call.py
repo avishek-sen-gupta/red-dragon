@@ -95,6 +95,18 @@ def lower_call(
         )
     )
 
+    # Restore the caller's __ws_region binding. CallWithMemory dispatches into the
+    # callee's func_init_params, whose body re-binds the shared __ws_region var to
+    # the CALLEE's WS region. When the callee frame is popped on EXIT PROGRAM the
+    # caller's __ws_region binding does not reliably survive, so consumers that
+    # read __ws_region directly (e.g. CICS SEND/RECEIVE MAP via
+    # _get_ws_region_addr) would otherwise see the callee's region after the CALL.
+    # ws_reg already holds the caller's WS region (loaded at function entry), so
+    # re-binding __ws_region to it is a no-op for field access but repairs the var
+    # for direct readers. (Field access reloads via the singleton, so it was never
+    # affected; this only matters for the shared __ws_region var.)
+    ctx.emit_inst(StoreVar(name=VarName("__ws_region"), value_reg=ws_reg))
+
     # Copy-back: for BY REFERENCE params, write updated bytes from params region back to WS.
     if stmt.using:
         cumulative = 0

@@ -65,12 +65,25 @@ def run_cics(
         )
     )
 
-    run_linked(
-        program,
-        EntryPoint.function(
+    # When the program links subprograms (CALL targets), several namespaced
+    # func_* labels exist; the bootstrap records the main program's entry label
+    # so dispatch is unambiguous. A standalone program leaves it None and falls
+    # back to the bare func_* predicate (exactly one match).
+    entry_label = getattr(program, "entry_func_label", None)
+    if entry_label is not None:
+        entry_label_str = str(entry_label)
+        entry_point = EntryPoint.function(
+            lambda ref, _lbl=entry_label_str: str(ref.label) == _lbl
+        )
+    else:
+        entry_point = EntryPoint.function(
             lambda ref: str(ref.label).startswith("func_")
             and not str(ref.label).startswith("func_init_params_")
-        ),
+        )
+
+    run_linked(
+        program,
+        entry_point,
         max_steps=max_steps,
         initial_vm=initial_vm,
     )
