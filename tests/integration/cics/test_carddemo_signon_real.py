@@ -1021,31 +1021,6 @@ def test_real_carddemo_transaction_add_first_display(tmp_path):
     _drive_to_cotrn02c(tmp_path)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "CSUTLDTC now lowers and the date validation PASSES end to end. Fixed since the "
-        "previous reason (red-dragon-p7qe): (1) case-insensitive COBOL field/group lookup "
-        "in data_layout (CSUTLDTC declares mixed-case Vstring-length / Vstring-char but "
-        "references them upper-cased — its OCCURS DEPENDING ON layout already materialised "
-        "correctly, the KeyError was a case mismatch); (2) MOVE LENGTH OF <field> source "
-        "(bridge now emits a structured length_of node; lower_move sets the field byte "
-        "length) so VSTRING-LENGTH gets 10; (3) OF/IN qualified-name resolution for MOVE "
-        "operands and the EVALUATE subject (bridge emits operand `qualifiers`; the layout "
-        "resolves the leaf within the named ancestor group) so CSUTLDTC's two duplicate "
-        "Vstring groups no longer collide and COTRN02C's EVALUATE CONFIRMI OF COTRN2AI "
-        "matches 'Y'. The flow now reaches ADD-TRANSACTION and runs EXEC CICS WRITE. "
-        "NEW BLOCKER: the STARTBR(HIGH-VALUES)+READPREV TRAN-ID id-generation does not "
-        "produce the next id. `MOVE HIGH-VALUES TO TRAN-ID` stores EBCDIC-translated bytes "
-        "(0x6F...) instead of the raw 0xFF figurative fill, so STARTBR's search key is "
-        "below the seeded digit keys, READPREV returns ENDFILE, TRAN-ID becomes ZEROS+1 = "
-        "the seed id, and the WRITE returns DUPREC. Next gap: HIGH-VALUES/LOW-VALUES must "
-        "store raw 0xFF/0x00 bytes (no ASCII->EBCDIC translation of the figurative fill) "
-        "so the descending browse positions past end-of-file (red-dragon-raxa). Region "
-        "subprogram linking (test_region_subprogram_link.py) + CEEDAYS stub "
-        "(test_ceedays_stub.py) green."
-    ),
-)
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
 def test_real_carddemo_transaction_add_write(tmp_path):
     """Transaction-add Turn B: enter a full new transaction + CONFIRM='Y' ->
@@ -1057,9 +1032,13 @@ def test_real_carddemo_transaction_add_write(tmp_path):
     record (id ...0001) for the highest key and writes the next (id ...0002).
     The created record's key + selected fields are read back and asserted.
 
-    Currently xfail(strict): the date-validation CALL 'CSUTLDTC' is unlinked
-    (red-dragon-1bp2). The assertions below are the intended end state and will
-    pass once cross-program COBOL CALL linking lands.
+    This is the third real CardDemo flow proven end to end (sign-on, account
+    view/update, and now transaction CREATE). The final blocker — MOVE
+    HIGH-VALUES storing EBCDIC-translated bytes instead of the raw 0xFF
+    figurative fill, which collapsed the STARTBR+READPREV id-generation — was
+    fixed in red-dragon-raxa, so STARTBR(HIGH-VALUES)+READPREV now positions past
+    end-of-file, finds the highest seeded id, and the EXEC CICS WRITE persists
+    the next id.
     """
     region, screen_q, input_q, engine = _drive_to_cotrn02c(tmp_path)
 
