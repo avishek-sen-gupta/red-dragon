@@ -143,6 +143,8 @@ class RefModOperand:
     name: str
     ref_mod_start: RefModExpr | None = None
     ref_mod_length: RefModExpr | None = None
+    length_of: str = ""
+    qualifiers: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, data: dict) -> RefModOperand:
@@ -151,10 +153,19 @@ class RefModOperand:
         Expected formats:
           {"name": "WS-FIELD"}
           {"name": "WS-FIELD", "ref_mod_start": {...}, "ref_mod_length": {...}}
+          {"kind": "length_of", "name": "WS-FIELD"}  (a ``LENGTH OF`` source)
+
+        A ``LENGTH OF X`` source operand carries ``length_of="X"`` (the data
+        name whose byte length is the source value), with ``name`` left empty so
+        it never resolves as a field. This mirrors the bridge's structured
+        ``length_of`` node already used for PERFORM VARYING FROM (red-dragon).
         """
         if isinstance(data, str):
             # Fallback for legacy string format
             return cls(name=data)
+
+        if data.get("kind") == "length_of":
+            return cls(name="", length_of=data.get("name", ""))
 
         name = data.get("name", "")
         ref_mod_start_data = data.get("ref_mod_start")
@@ -168,17 +179,24 @@ class RefModOperand:
         if ref_mod_length_data is not None:
             ref_mod_length = ref_mod_expr_from_dict(ref_mod_length_data)
 
+        qualifiers = tuple(data.get("qualifiers", ()))
+
         return cls(
             name=name,
             ref_mod_start=ref_mod_start,
             ref_mod_length=ref_mod_length,
+            qualifiers=qualifiers,
         )
 
     def to_dict(self) -> dict:
         """Serialize RefModOperand to JSON dict format."""
+        if self.length_of:
+            return {"kind": "length_of", "name": self.length_of}
         result: dict = {"name": self.name}
         if self.ref_mod_start is not None:
             result["ref_mod_start"] = _ref_mod_expr_to_dict(self.ref_mod_start)
         if self.ref_mod_length is not None:
             result["ref_mod_length"] = _ref_mod_expr_to_dict(self.ref_mod_length)
+        if self.qualifiers:
+            result["qualifiers"] = list(self.qualifiers)
         return result

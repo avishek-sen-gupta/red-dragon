@@ -31,13 +31,19 @@ class MaterialisedSectionedLayout:
     linkage: tuple[DataLayout, Register]
     local_storage: tuple[DataLayout, Register]
 
-    def resolve(self, name: str) -> tuple[FieldLayout, Register]:
-        """Return (FieldLayout, region_register). Precedence: LOCAL-STORAGE > WORKING-STORAGE > LINKAGE."""
+    def resolve(
+        self, name: str, qualifiers: tuple[str, ...] = ()
+    ) -> tuple[FieldLayout, Register]:
+        """Return (FieldLayout, region_register). Precedence: LOCAL-STORAGE > WORKING-STORAGE > LINKAGE.
+
+        ``qualifiers`` (``OF``/``IN`` ancestor group names) disambiguate a
+        duplicated elementary name within the owning group (CardDemo CSUTLDTC's
+        two Vstring groups share leaf names). red-dragon-p7qe."""
         ls_layout, ls_reg = self.local_storage
-        ls_fl = ls_layout.lookup_as_storage(name)
+        ls_fl = ls_layout.lookup_as_storage(name, qualifiers)
         if ls_fl is not None:
             ws_layout, _ = self.working_storage
-            if ws_layout.lookup_as_storage(name) is not None:
+            if ws_layout.lookup_as_storage(name, qualifiers) is not None:
                 logger.warning(
                     "Field %r found in both LOCAL-STORAGE and WORKING-STORAGE — LOCAL-STORAGE wins (collision)",
                     name,
@@ -45,12 +51,12 @@ class MaterialisedSectionedLayout:
             return ls_fl, ls_reg
 
         ws_layout, ws_reg = self.working_storage
-        ws_fl = ws_layout.lookup_as_storage(name)
+        ws_fl = ws_layout.lookup_as_storage(name, qualifiers)
         if ws_fl is not None:
             return ws_fl, ws_reg
 
         lk_layout, lk_reg = self.linkage
-        lk_fl = lk_layout.lookup_as_storage(name)
+        lk_fl = lk_layout.lookup_as_storage(name, qualifiers)
         if lk_fl is not None:
             return lk_fl, lk_reg
 
