@@ -147,7 +147,7 @@ def _cust_record() -> bytes:
     return rec.ljust(500, b"\x00")[:500]
 
 
-def _usrsec_engine() -> VsamEngine:
+def _usrsec_engine(backend=None) -> VsamEngine:
     """In-memory engine seeded with FOUR datasets used across all five turns:
 
       * USRSEC  — sign-on user (turn 1), key@0, 80-byte CSUSR01Y record.
@@ -196,7 +196,8 @@ def _usrsec_engine() -> VsamEngine:
                     path=cust_path, record_length=500, key_length=9
                 ),
             }
-        )
+        ),
+        backend=backend,
     )
     engine.load_all()
     return engine
@@ -464,12 +465,13 @@ _DFHENTER = "\x7d"
 _DFHPF5 = "\xf5"  # PF05 = confirm-and-save
 
 
-def _compile_update_programs(tmp_path):
+def _compile_update_programs(tmp_path, backend=None):
     """Compile COSGN00C + COMEN01C + COACTUPC sharing one strategy/engine.
 
     Returns ``(signon, menu, acctupd, screen_q, input_q, context_holder,
     result_holder, engine)``. The engine is returned so the test can read the
-    stored ACCTDAT/CUSTDAT records back after the REWRITE.
+    stored ACCTDAT/CUSTDAT records back after the REWRITE. Pass ``backend`` to
+    construct the shared VsamEngine with a durable persistence backend.
     """
     from interpreter.cobol.cobol_parser import ProLeapCobolParser
     from interpreter.cobol.subprocess_runner import RealSubprocessRunner
@@ -497,7 +499,7 @@ def _compile_update_programs(tmp_path):
     input_q: queue.Queue = queue.Queue()
     context_holder = [None]
     result_holder: list = [None]
-    engine = _usrsec_engine()
+    engine = _usrsec_engine(backend=backend)
     strategy = CicsLoweringStrategy(
         context_holder=context_holder,
         result_holder=result_holder,
@@ -527,11 +529,12 @@ def _compile_update_programs(tmp_path):
     )
 
 
-def _drive_to_coactupc(tmp_path):
+def _drive_to_coactupc(tmp_path, backend=None):
     """Sign-on -> menu -> option '02' -> XCTL COACTUPC -> first display (CACTUPA).
 
     Returns ``(acctupd, r_first, screen_q, input_q, context_holder,
-    result_holder, engine)`` parked pseudo-conversationally on CAUP.
+    result_holder, engine)`` parked pseudo-conversationally on CAUP. Pass
+    ``backend`` to make the shared VsamEngine write through to durable storage.
     """
     (
         signon,
@@ -542,7 +545,7 @@ def _drive_to_coactupc(tmp_path):
         context_holder,
         result_holder,
         engine,
-    ) = _compile_update_programs(tmp_path)
+    ) = _compile_update_programs(tmp_path, backend=backend)
 
     # Region config: this run routes the menu's option '02' to COACTUPC.
     program_cache = {
@@ -610,15 +613,16 @@ def test_real_carddemo_account_update_first_display(tmp_path):
     _drive_to_coactupc(tmp_path)
 
 
-def _drive_update_to_details(tmp_path):
+def _drive_update_to_details(tmp_path, backend=None):
     """Continue past Turn A: enter the seeded acct id (Turn B) -> 9000-READ-ACCT
     (3 chained VSAM reads) -> details rendered for edit.
 
     Returns ``(acctupd, r_details, screen_q, input_q, context_holder,
-    result_holder, engine)`` parked on CAUP showing the fetched account.
+    result_holder, engine)`` parked on CAUP showing the fetched account. Pass
+    ``backend`` to make the shared VsamEngine write through to durable storage.
     """
     acctupd, region, r4, screen_q, input_q, context_holder, result_holder, engine = (
-        _drive_to_coactupc(tmp_path)
+        _drive_to_coactupc(tmp_path, backend=backend)
     )
 
     # Turn B: enter acct id -> ACUP-DETAILS-NOT-FETCHED path reads + shows detail.
@@ -719,17 +723,19 @@ def _resubmit_fields(view: dict, *, status: str) -> dict[str, str]:
     return fields
 
 
-@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
-def test_real_carddemo_account_update_rewrite(tmp_path):
-    """Account-update Turns C + D: edit a field, confirm with PF05, and verify
-    the REWRITE persisted to the VsamEngine.
+def _drive_rewrite(tmp_path, backend=None):
+    """Drive the full account-update REWRITE flow (sign-on .. Turn D) and return
+    the shared ``engine`` after the REWRITE has run.
 
     Turn C: resubmit the fetched (valid) field set with ACCT-ACTIVE-STATUS
         changed Y -> N + ENTER. 1200-EDIT-MAP-INPUTS validates all fields ->
         ACUP-CHANGES-OK-NOT-CONFIRMED -> redisplay asking for PF05 confirm.
     Turn D: PF05 -> ACUP-CHANGES-OK-NOT-CONFIRMED AND CCARD-AID-PFK05 ->
         9600-WRITE-PROCESSING -> READ ... UPDATE (lock) + REWRITE on ACCTDAT and
-        CUSTDAT. Assert the engine's stored ACCTDAT record now has status 'N'.
+        CUSTDAT.
+
+    Pass ``backend`` to make the shared VsamEngine write the REWRITE through to
+    durable storage (so the persistence demo can read it off disk).
     """
     (
         acctupd,
@@ -741,7 +747,7 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
         context_holder,
         result_holder,
         engine,
-    ) = _drive_update_to_details(tmp_path)
+    ) = _drive_update_to_details(tmp_path, backend=backend)
 
     # --- Turn C: submit the change (status Y->N) + ENTER ---
     # Following Turn B's RETURN TRANSID CAUP -> a fresh terminal input.
@@ -772,6 +778,18 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
             eibaid=_DFHPF5, fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS)
         )
     )
+    return engine
+
+
+@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
+def test_real_carddemo_account_update_rewrite(tmp_path):
+    """Account-update Turns C + D: edit a field, confirm with PF05, and verify
+    the REWRITE persisted to the VsamEngine. See ``_drive_rewrite``.
+
+    Assert the engine's stored ACCTDAT record now has status 'N'.
+    """
+    engine = _drive_rewrite(tmp_path)
+
     # Verify the REWRITE persisted: read ACCTDAT back from the engine and check
     # the active-status byte (offset 11, X(1)) is now 'N'.
     record, resp = engine.read("ACCTDAT", _ACCT_ID.encode("cp037"), 11)
@@ -832,7 +850,7 @@ def _transact_seed_record() -> bytes:
     return rec.ljust(_TRAN_RECLN, b"\x00")[:_TRAN_RECLN]
 
 
-def _add_engine() -> VsamEngine:
+def _add_engine(backend=None) -> VsamEngine:
     """Engine seeded with USRSEC (sign-on), CXACAIX (acct->card xref the add
     flow validates the account against) and TRANSACT (browse for last id +
     target of the WRITE). Reuses the USRSEC + xref records from the view flow."""
@@ -865,17 +883,19 @@ def _add_engine() -> VsamEngine:
                     key_length=_TRAN_KEYLEN,
                 ),
             }
-        )
+        ),
+        backend=backend,
     )
     engine.load_all()
     return engine
 
 
-def _drive_to_cotrn02c(tmp_path):
+def _drive_to_cotrn02c(tmp_path, backend=None):
     """Sign-on -> menu -> option '08' -> XCTL COTRN02C -> first display (COTRN2A).
 
     Returns ``(region, screen_q, input_q, engine)`` parked pseudo-conversationally
-    on CT02 showing the empty transaction-add screen.
+    on CT02 showing the empty transaction-add screen. Pass ``backend`` to make the
+    shared VsamEngine write the WRITE through to durable storage.
     """
     from interpreter.cobol.cobol_parser import ProLeapCobolParser
     from interpreter.cobol.subprocess_runner import RealSubprocessRunner
@@ -903,7 +923,7 @@ def _drive_to_cotrn02c(tmp_path):
     input_q: queue.Queue = queue.Queue()
     context_holder = [None]
     result_holder: list = [None]
-    engine = _add_engine()
+    engine = _add_engine(backend=backend)
     strategy = CicsLoweringStrategy(
         context_holder=context_holder,
         result_holder=result_holder,
@@ -995,26 +1015,16 @@ def test_real_carddemo_transaction_add_first_display(tmp_path):
     _drive_to_cotrn02c(tmp_path)
 
 
-@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
-def test_real_carddemo_transaction_add_write(tmp_path):
-    """Transaction-add Turn B: enter a full new transaction + CONFIRM='Y' ->
-    ADD-TRANSACTION (STARTBR/READPREV/ENDBR id-generation + EXEC CICS WRITE) ->
-    verify the new TRANSACT record persisted to the VsamEngine.
+def _drive_transaction_add(tmp_path, backend=None):
+    """Drive the full transaction-ADD flow (sign-on .. Turn B) and return
+    ``(rB, viewB, engine)`` after the EXEC CICS WRITE has run.
 
-    The account id is validated against CXACAIX (acct -> card num) by
-    VALIDATE-INPUT-KEY-FIELDS; the id-generation browses the seeded TRANSACT
-    record (id ...0001) for the highest key and writes the next (id ...0002).
-    The created record's key + selected fields are read back and asserted.
-
-    This is the third real CardDemo flow proven end to end (sign-on, account
-    view/update, and now transaction CREATE). The final blocker — MOVE
-    HIGH-VALUES storing EBCDIC-translated bytes instead of the raw 0xFF
-    figurative fill, which collapsed the STARTBR+READPREV id-generation — was
-    fixed in red-dragon-raxa, so STARTBR(HIGH-VALUES)+READPREV now positions past
-    end-of-file, finds the highest seeded id, and the EXEC CICS WRITE persists
-    the next id.
+    Turn B: enter a full new transaction + CONFIRM='Y' + ENTER ->
+    ADD-TRANSACTION (STARTBR/READPREV/ENDBR id-generation + EXEC CICS WRITE).
+    Pass ``backend`` to make the shared VsamEngine write the new record through
+    to durable storage (so the persistence demo can read it off disk).
     """
-    region, screen_q, input_q, engine = _drive_to_cotrn02c(tmp_path)
+    region, screen_q, input_q, engine = _drive_to_cotrn02c(tmp_path, backend=backend)
 
     # --- Turn B: submit the new transaction with CONFIRM='Y' + ENTER ---
     # Following Turn A's RETURN TRANSID CT02 -> a fresh terminal input.
@@ -1041,6 +1051,29 @@ def test_real_carddemo_transaction_add_write(tmp_path):
     )
     screensB = drain(screen_q)
     viewB = next((s["fields"] for s in screensB if s.get("map") == "COTRN2A"), {})
+    return rB, viewB, engine
+
+
+@covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
+def test_real_carddemo_transaction_add_write(tmp_path):
+    """Transaction-add Turn B: enter a full new transaction + CONFIRM='Y' ->
+    ADD-TRANSACTION (STARTBR/READPREV/ENDBR id-generation + EXEC CICS WRITE) ->
+    verify the new TRANSACT record persisted to the VsamEngine.
+
+    The account id is validated against CXACAIX (acct -> card num) by
+    VALIDATE-INPUT-KEY-FIELDS; the id-generation browses the seeded TRANSACT
+    record (id ...0001) for the highest key and writes the next (id ...0002).
+    The created record's key + selected fields are read back and asserted.
+
+    This is the third real CardDemo flow proven end to end (sign-on, account
+    view/update, and now transaction CREATE). The final blocker — MOVE
+    HIGH-VALUES storing EBCDIC-translated bytes instead of the raw 0xFF
+    figurative fill, which collapsed the STARTBR+READPREV id-generation — was
+    fixed in red-dragon-raxa, so STARTBR(HIGH-VALUES)+READPREV now positions past
+    end-of-file, finds the highest seeded id, and the EXEC CICS WRITE persists
+    the next id.
+    """
+    rB, viewB, engine = _drive_transaction_add(tmp_path)
 
     # The created record must exist in TRANSACT under the generated key.
     record, resp = engine.read(
