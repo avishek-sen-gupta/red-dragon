@@ -200,11 +200,11 @@ class EmitContext:
         ``qualifiers`` (``OF``/``IN`` ancestor group names) disambiguate a
         duplicated elementary name (CardDemo CSUTLDTC's two Vstring groups).
 
-        ``subscripts`` carries structured subscripts. When supplied, ``name`` is
-        the bare base name and ``subscripts`` holds the index expressions. When
-        empty (the default), fall back to parsing legacy ``"NAME(SUB)"`` notation
-        from ``name`` (transitional — removed once all feeders emit structured
-        subscripts; see red-dragon-6ddr).
+        ``name`` is always the bare base name (both feeders — the ProLeap bridge
+        and the CICS parser — emit structured subscripts, never ``"NAME(SUB)"``
+        strings). ``subscripts`` carries the index expressions; a single subscript
+        is supported, two or more raise ``NotImplementedError`` (multi-dimensional
+        offset arithmetic is red-dragon-cqwx). See red-dragon-6ddr.
         """
         if subscripts:
             if len(subscripts) > 1:
