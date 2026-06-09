@@ -37,7 +37,7 @@ class FakeCtx:
     def has_field(self, name, materialised) -> bool:  # type: ignore[no-untyped-def]
         return name in self._fields
 
-    def resolve_field_ref(self, name, materialised):  # type: ignore[no-untyped-def]
+    def resolve_field_ref(self, name, materialised, qualifiers=(), subscripts=()):  # type: ignore[no-untyped-def]
         offset, byte_length = self._fields[name]
         fl = FieldLayout(
             name=name,
