@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-import queue
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from interpreter.cics.terminal import InputChannel, ScreenChannel
 from interpreter.cics.types import CicsContext, DispatchKind, DispatchResult
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import typed
@@ -31,8 +31,8 @@ class InputEvent:
 def run_cics(
     program: Any,  # LinkedProgram — avoid circular import
     context: CicsContext,
-    screen_queue: "queue.Queue[Any]",
-    input_queue: "queue.Queue[InputEvent]",
+    screen_queue: ScreenChannel,
+    input_queue: InputChannel,
     *,
     context_holder: list[CicsContext],
     result_holder: list,
@@ -94,7 +94,7 @@ def run_cics(
 
 
 RunCicsFn = Callable[
-    [Any, CicsContext, "queue.Queue[Any]", "queue.Queue[InputEvent]"],
+    [Any, CicsContext, ScreenChannel, InputChannel],
     DispatchResult,
 ]
 
@@ -141,8 +141,8 @@ def _run_dispatcher_with_runner(
     program_cache: dict[str, Any],
     transid_to_program: dict[str, str],
     initial_context: CicsContext,
-    screen_queue: "queue.Queue[Any]",
-    input_queue: "queue.Queue[InputEvent]",
+    screen_queue: ScreenChannel,
+    input_queue: InputChannel,
 ) -> DispatchResult:
     """Core dispatcher loop — separated for testability."""
     context = initial_context
@@ -197,8 +197,8 @@ class CicsRegion:
         self,
         program_cache: dict[str, Any],
         transid_to_program: dict[str, str],
-        screen_queue: "queue.Queue[Any]",
-        input_queue: "queue.Queue[InputEvent]",
+        screen_queue: ScreenChannel,
+        input_queue: InputChannel,
         *,
         context_holder: list,
         result_holder: list,
