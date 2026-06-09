@@ -31,6 +31,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_string_splice,
     _builtin_upper_case,
     _builtin_lower_case,
+    _builtin_cobol_trim,
     _builtin_is_numeric,
     _builtin_is_alphabetic,
     _builtin_is_alphabetic_lower,
@@ -382,6 +383,7 @@ class TestByteBuiltinsRegistration:
             "__string_splice",
             "__upper_case",
             "__lower_case",
+            "__cobol_trim",
             "__current_date",
             "__is_numeric",
             "__is_alphabetic",
@@ -1548,6 +1550,38 @@ class TestUpperCase:
 
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.UPPER_CASE) in BYTE_BUILTINS
+
+
+class TestCobolTrim:
+    """FUNCTION TRIM strips leading + trailing spaces (red-dragon-ge72)."""
+
+    def test_strips_both_ends(self):
+        result = _builtin_cobol_trim([typed_from_runtime(" AB ")], None)
+        assert result.value == "AB"
+
+    def test_strips_only_spaces_not_inner(self):
+        result = _builtin_cobol_trim([typed_from_runtime("  A B  ")], None)
+        assert result.value == "A B"
+
+    def test_no_padding_unchanged(self):
+        result = _builtin_cobol_trim([typed_from_runtime("ABC")], None)
+        assert result.value == "ABC"
+
+    def test_all_spaces_to_empty(self):
+        result = _builtin_cobol_trim([typed_from_runtime("    ")], None)
+        assert result.value == ""
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_cobol_trim([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    def test_non_string_returns_uncomputable(self):
+        result = _builtin_cobol_trim([typed_from_runtime(42)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.TRIM) in BYTE_BUILTINS
 
 
 class TestLowerCase:

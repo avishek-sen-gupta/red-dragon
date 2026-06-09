@@ -557,6 +557,24 @@ def _builtin_lower_case(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=value.lower())
 
 
+def _builtin_cobol_trim(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION TRIM: strip leading and trailing spaces from a string.
+
+    COBOL FUNCTION TRIM defaults to removing spaces from BOTH ends (the
+    LEADING/TRAILING qualifiers are optional). CardDemo's 1205-COMPARE-OLD-NEW
+    uses it to normalise fields before comparison.
+
+    Args: [value: str]
+    Returns: str
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value.strip(" "))
+
+
 def _builtin_current_date(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION CURRENT-DATE: 21-char timestamp string.
 
@@ -675,6 +693,7 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
         FuncName(BuiltinName.UPPER_CASE): _builtin_upper_case,
         FuncName(BuiltinName.LOWER_CASE): _builtin_lower_case,
+        FuncName(BuiltinName.TRIM): _builtin_cobol_trim,
         FuncName(BuiltinName.CURRENT_DATE): _builtin_current_date,
         FuncName(BuiltinName.IS_NUMERIC): _builtin_is_numeric,
         FuncName(BuiltinName.IS_ALPHABETIC): _builtin_is_alphabetic,

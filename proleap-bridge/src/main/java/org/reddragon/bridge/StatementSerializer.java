@@ -1609,6 +1609,22 @@ public final class StatementSerializer {
                 : firstFunctionCallDescendant(ctx);
     }
 
+    /**
+     * Finds a FunctionCallContext at {@code ctx} itself or among its descendants
+     * ONLY (never ancestors). Used when serializing a basis operand: a basis that
+     * IS a function call must serialize structurally, but a basis that is a plain
+     * ref nested inside a larger function call must NOT be mistaken for one.
+     */
+    private static CobolParser.FunctionCallContext findFunctionCallCtxInSubtree(ParserRuleContext ctx) {
+        if (ctx == null) {
+            return null;
+        }
+        if (ctx instanceof CobolParser.FunctionCallContext) {
+            return (CobolParser.FunctionCallContext) ctx;
+        }
+        return firstFunctionCallDescendant(ctx);
+    }
+
     /** Depth-first search for the first FunctionCallContext descendant. */
     private static CobolParser.FunctionCallContext firstFunctionCallDescendant(ParserRuleContext ctx) {
         if (ctx == null) {
@@ -1684,6 +1700,16 @@ public final class StatementSerializer {
     private static JsonElement serializeFunctionArg(CobolParser.ArgumentContext arg) {
         if (arg == null) {
             return litNode("");
+        }
+        // Nested intrinsic FUNCTION argument (e.g. UPPER-CASE(TRIM(x))): probe the
+        // argument subtree for a functionCall rule before treating it as a plain
+        // ref/arith expression (red-dragon-ge72).
+        CobolParser.FunctionCallContext nestedFn = findFunctionCallCtxInSubtree(arg);
+        if (nestedFn != null) {
+            JsonObject fn = serializeFunctionNodeFromCtx(nestedFn);
+            if (fn != null) {
+                return fn;
+            }
         }
         if (arg.arithmeticExpression() != null) {
             return serializeArithExprCtx(arg.arithmeticExpression());
@@ -2098,6 +2124,21 @@ public final class StatementSerializer {
 
     private static JsonElement serializeBasis(Basis b) {
         if (b == null) return litNode("");
+        // Intrinsic FUNCTION call as a basis (e.g. inside an IF relation:
+        // FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B)). ProLeap surfaces the
+        // basis as a CallValueStmt whose extractCallName collapses to just the
+        // function NAME (dropping the call + args). Probe the basis's own grammar
+        // subtree (self + descendants, NOT ancestors) for a functionCall rule and
+        // emit the structured {"kind":"function","name":..,"args":[..]} node — the
+        // same shape MOVE/arithmetic already produce (red-dragon-ge72).
+        CobolParser.FunctionCallContext fnCtx =
+                findFunctionCallCtxInSubtree(b.getCtx());
+        if (fnCtx != null) {
+            JsonObject fn = serializeFunctionNodeFromCtx(fnCtx);
+            if (fn != null) {
+                return fn;
+            }
+        }
         ValueStmt vs = b.getBasisValueStmt();
         if (vs instanceof CallValueStmt) {
             Call call = ((CallValueStmt) vs).getCall();
@@ -2235,6 +2276,18 @@ public final class StatementSerializer {
             return serializeArithExprCtx(ctx.arithmeticExpression());
         }
         CobolParser.IdentifierContext id = ctx.identifier();
+        // Nested intrinsic FUNCTION as a basis (e.g. FUNCTION UPPER-CASE(FUNCTION
+        // TRIM(x))). ProLeap surfaces the inner function as an identifier whose
+        // subtree holds the functionCall rule; without this probe it serializes
+        // as the bare function NAME ref ("TRIM"). Emit the structured function
+        // node so the call + args survive (red-dragon-ge72).
+        CobolParser.FunctionCallContext fnCtx = findFunctionCallCtxInSubtree(id);
+        if (fnCtx != null) {
+            JsonObject fn = serializeFunctionNodeFromCtx(fnCtx);
+            if (fn != null) {
+                return fn;
+            }
+        }
         if (id != null) {
             // LENGTH OF <field> surfaces as an identifier wrapping a
             // specialRegister; getText() would glue it into "LENGTHOF<field>"

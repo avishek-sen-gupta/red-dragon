@@ -778,19 +778,25 @@ def _resubmit_fields(view: dict, *, status: str) -> dict[str, str]:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "BLOCKED on red-dragon-ge72 (ProLeap bridge): intrinsic FUNCTION operands "
-        "are dropped inside IF relational conditions. COACTUPC 1205-COMPARE-OLD-NEW "
-        "(cbl line 1681) compares FUNCTION UPPER-CASE(ACUP-NEW-ACTIVE-STATUS) = "
-        "FUNCTION UPPER-CASE(ACUP-OLD-ACTIVE-STATUS); the bridge emits both sides as "
-        "the bare ref {'kind':'ref','name':'UPPER-CASE'}, so they always compare "
-        "EQUAL. Observed: status changed 'Y'->'N' is NOT detected, NO-CHANGES-FOUND, "
-        "Turn C stays ACUP-SHOW-DETAILS (INFOMSG 'Update account details presented "
-        "above.'), so the PF05 confirm -> 9600-WRITE-PROCESSING -> REWRITE path is "
-        "unreachable and ACCTDAT status stays 'Y'. Layer: proleap bridge (Java) + "
-        "condition_lowering. Turns A and B (read+detail-display) already pass; the "
-        "REWRITE engine path (red-dragon-g1bi) is fixed and ready once changes are "
-        "detected. FUNCTION TRIM is also unsupported (same issue blocks the rest of "
-        "the compound)."
+        "red-dragon-ge72 (intrinsic FUNCTION operands dropped in IF relations) is "
+        "FIXED: COACTUPC 1205-COMPARE-OLD-NEW now correctly detects the status "
+        "change (verified: UPPER-CASE('N') vs UPPER-CASE('Y') compares unequal, "
+        "FUNCTION TRIM works). The change IS detected. But the confirm/REWRITE "
+        "path is now blocked by a DISTINCT new gap: COACTUPC 1200-EDIT-MAP-INPUTS "
+        "field validation (1250-EDIT-SIGNED-9V2, EDIT-DATE-CCYYMMDD, 1100-RECEIVE-"
+        "MAP credit-limit checks at cbl ~1078-1136) depends on unimplemented COBOL "
+        "intrinsics FUNCTION NUMVAL / NUMVAL-C / TEST-NUMVAL / TEST-NUMVAL-C / "
+        "LENGTH / INTEGER-OF-DATE, which lower_function_operand stubs to their first "
+        "argument (warns 'Unsupported COBOL intrinsic FUNCTION'). A signed-number / "
+        "date validation therefore spuriously sets INPUT-ERROR, so 2000-DECIDE-ACTION "
+        "WHEN ACUP-SHOW-DETAILS sees INPUT-ERROR and stays in SHOW-DETAILS instead of "
+        "setting ACUP-CHANGES-OK-NOT-CONFIRMED, so PF05 -> 9600-WRITE-PROCESSING -> "
+        "REWRITE is never reached. Secondary: STRING 'X must be supplied' message "
+        "(cbl ~1840) serializes its FUNCTION TRIM source via serializeMoveOperand, "
+        "which still drops the function (ERRMSG shows bare 'TRIM'). Next loop input: "
+        "implement NUMVAL/NUMVAL-C/TEST-NUMVAL/TEST-NUMVAL-C/LENGTH/INTEGER-OF-DATE "
+        "byte_builtins + map in _INTRINSIC_FUNCTIONS, and route STRING/MOVE function "
+        "sources through serializeFunctionNode. Layer: interpreter/cobol + bridge."
     ),
 )
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)

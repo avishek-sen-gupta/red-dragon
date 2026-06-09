@@ -204,6 +204,7 @@ def eval_ref_mod_expr(
 _INTRINSIC_FUNCTIONS = {
     "UPPER-CASE": BuiltinName.UPPER_CASE,
     "LOWER-CASE": BuiltinName.LOWER_CASE,
+    "TRIM": BuiltinName.TRIM,
     "CURRENT-DATE": BuiltinName.CURRENT_DATE,
 }
 

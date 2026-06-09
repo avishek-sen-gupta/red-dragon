@@ -86,6 +86,7 @@ class BuiltinName:
     STRING_SPLICE = "__string_splice"
     UPPER_CASE = "__upper_case"
     LOWER_CASE = "__lower_case"
+    TRIM = "__cobol_trim"
     CURRENT_DATE = "__current_date"
     IS_NUMERIC = "__is_numeric"
     IS_ALPHABETIC = "__is_alphabetic"
