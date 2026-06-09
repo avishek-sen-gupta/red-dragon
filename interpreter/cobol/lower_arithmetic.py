@@ -362,7 +362,10 @@ def lower_move(
                     _store_move_value(ctx, target, src_reg, materialised)
                     continue
                 target_ref, target_rr = ctx.resolve_field_ref(
-                    target.name, materialised, target.qualifiers
+                    target.name,
+                    materialised,
+                    target.qualifiers,
+                    subscripts=target.subscripts,
                 )
                 ctx.emit_fill_raw_byte(
                     target_rr, target_ref.fl, fill_byte, target_ref.offset_reg
@@ -376,7 +379,10 @@ def lower_move(
     # Get the source value (decode field or literal) — evaluated ONCE.
     if ctx.has_field(stmt.source.name, materialised):
         source_ref, source_rr = ctx.resolve_field_ref(
-            stmt.source.name, materialised, stmt.source.qualifiers
+            stmt.source.name,
+            materialised,
+            stmt.source.qualifiers,
+            subscripts=stmt.source.subscripts,
         )
         source_fl = source_ref.fl
         decoded_reg = ctx.emit_decode_field(
@@ -508,7 +514,7 @@ def _store_move_value(
     alphanumeric receivers without target reference modification (red-dragon-0fqr).
     """
     target_ref, target_rr = ctx.resolve_field_ref(
-        target.name, materialised, target.qualifiers
+        target.name, materialised, target.qualifiers, subscripts=target.subscripts
     )
 
     if (
@@ -611,7 +617,9 @@ def lower_arithmetic(
 
     # Decode source operand
     if ctx.has_field(stmt.source.name, materialised):
-        source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        source_ref, source_rr = ctx.resolve_field_ref(
+            stmt.source.name, materialised, subscripts=stmt.source.subscripts
+        )
         src_decoded = ctx.emit_decode_field(
             source_rr, source_ref.fl, source_ref.offset_reg
         )
@@ -757,7 +765,9 @@ def lower_arithmetic_giving(
     def _decode_operand(operand: RefModOperand) -> Register:
         field_name = operand.name
         if ctx.has_field(field_name, materialised):
-            ref, rr = ctx.resolve_field_ref(field_name, materialised)
+            ref, rr = ctx.resolve_field_ref(
+                field_name, materialised, subscripts=operand.subscripts
+            )
             decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
 
             # Apply ref_mod if present
@@ -1288,7 +1298,9 @@ def lower_display(
     operand = stmt.operand
 
     if ctx.has_field(operand.name, materialised):
-        ref, rr = ctx.resolve_field_ref(operand.name, materialised)
+        ref, rr = ctx.resolve_field_ref(
+            operand.name, materialised, subscripts=operand.subscripts
+        )
         decoded_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         display_reg = ctx.emit_to_string(decoded_reg)
     else:
