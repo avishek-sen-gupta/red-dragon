@@ -196,3 +196,52 @@ def test_decode_record_odo_counter_clamped_to_max():
     record = b"\xf9" + EbcdicTable.ascii_to_ebcdic(b"AABBCC")
     out = decode_record(layout, record)
     assert out["ITEM"] == ["AA", "BB", "CC"]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_decode_record_group_occurs_array():
+    # PAIR OCCURS 2 — each element is a 4-byte group of two 2-char leaves.
+    # Element #0 lives at bytes 0-3, element #1 at bytes 4-7. Distinct values
+    # per element prove _decode_group_element applies the element_size stride.
+    inner = DataLayout(
+        fields={
+            "A": _fl(CobolDataCategory.ALPHANUMERIC, 0, 2, 2),
+            "B": _fl(CobolDataCategory.ALPHANUMERIC, 2, 2, 2),
+        },
+        offset=0,
+        total_bytes=4,
+        occurs_count=2,
+        element_size=4,
+    )
+    layout = DataLayout(groups={"PAIR": inner}, total_bytes=8)
+    # element #0 -> A="P1", B="Q1"; element #1 -> A="P2", B="Q2"
+    record = EbcdicTable.ascii_to_ebcdic(b"P1Q1P2Q2")
+    assert decode_record(layout, record) == {
+        "PAIR": [
+            {"A": "P1", "B": "Q1"},
+            {"A": "P2", "B": "Q2"},
+        ]
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_decode_record_odo_counter_clamped_to_min():
+    counter = _fl(CobolDataCategory.ZONED_DECIMAL, 0, 1, 1, decimal_digits=0)
+    item = FieldLayout(
+        name="ITEM",
+        type_descriptor=CobolTypeDescriptor(
+            category=CobolDataCategory.ALPHANUMERIC, total_digits=2
+        ),
+        offset=1,
+        byte_length=2,
+        occurs_count=3,
+        element_size=2,
+        occurs_depending_on="N",
+        occurs_min=1,
+    )
+    layout = DataLayout(fields={"N": counter, "ITEM": item}, total_bytes=7)
+    # N=0 (< min 1) -> clamp UP to 1 item, not 0.
+    record = b"\xf0" + EbcdicTable.ascii_to_ebcdic(b"AABBCC")
+    out = decode_record(layout, record)
+    assert out["N"] == 0
+    assert out["ITEM"] == ["AA"]
