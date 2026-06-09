@@ -25,6 +25,7 @@ class CicsOperand:
 
     text: str
     is_literal: bool
+    subscripts: tuple[str, ...] = ()
 
 
 # Internal transformer markers for value parts. They carry whether the part came
@@ -191,9 +192,22 @@ class _Transformer(Transformer):
         # A string literal is the case of exactly ONE quoted-string part.
         if len(items) == 1 and items[0].is_literal:
             return CicsOperand(text=items[0].text, is_literal=True)
-        # Any other shape (a bare data-name, subscripted/ref-mod operand built
-        # from CHARS + nested parts, or a numeric) is a non-literal operand whose
-        # verbatim text is the concatenation of its parts.
+        # Subscripted reference: a leading CHARS base followed by one or more
+        # nested groups. The first part is the bare base (text does NOT start
+        # with "("); each subsequent nested part (its text is "(...)")
+        # contributes one subscript (inner text, parens stripped).
+        if (
+            all(not p.is_literal for p in items)
+            and len(items) >= 2
+            and not items[0].text.startswith("(")
+            and all(p.text.startswith("(") and p.text.endswith(")") for p in items[1:])
+        ):
+            base = items[0].text
+            subs = tuple(p.text[1:-1] for p in items[1:])
+            return CicsOperand(text=base, is_literal=False, subscripts=subs)
+        # Any other shape (a bare data-name, ref-mod operand built from CHARS +
+        # nested parts, or a numeric) is a non-literal operand whose verbatim
+        # text is the concatenation of its parts.
         return CicsOperand(text="".join(p.text for p in items), is_literal=False)
 
     def vstring(self, items: list) -> _Part:
