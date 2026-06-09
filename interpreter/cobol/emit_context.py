@@ -25,10 +25,7 @@ from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.frontend_observer import FrontendObserver
-from interpreter.cobol.field_resolution import (
-    ResolvedFieldRef,
-    parse_subscript_notation,
-)
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
     build_decode_comp3_ir,
@@ -215,9 +212,10 @@ class EmitContext:
                     f"multi-dimensional subscript not supported for {name!r} "
                     f"({len(subscripts)} subscripts); see red-dragon-cqwx"
                 )
-            base_name, subscript = name, next(iter(subscripts))
+            subscript = next(iter(subscripts))
         else:
-            base_name, subscript = parse_subscript_notation(name)
+            subscript = ""
+        base_name = name
         fl, region_reg = materialised.resolve(base_name, qualifiers)
 
         if not subscript:
@@ -231,7 +229,7 @@ class EmitContext:
             idx_reg = self.const_to_reg(idx_val)
         except ValueError:
             # Subscript is a field reference — decode it
-            sub_base, _ = parse_subscript_notation(subscript)
+            sub_base = subscript
             if materialised.has_field(sub_base):
                 sub_fl, sub_rr = materialised.resolve(sub_base)
                 idx_reg = self.emit_decode_field(sub_rr, sub_fl)
@@ -304,8 +302,7 @@ class EmitContext:
 
     def has_field(self, name: str, materialised: MaterialisedSectionedLayout) -> bool:
         """Check if a name (possibly subscripted) refers to a known field."""
-        base_name, _ = parse_subscript_notation(name)
-        return materialised.has_field(base_name)
+        return materialised.has_field(name)
 
     def group_leaf_names(
         self, group_name: str, materialised: MaterialisedSectionedLayout
