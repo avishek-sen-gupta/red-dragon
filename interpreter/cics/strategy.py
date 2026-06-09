@@ -20,8 +20,7 @@ from interpreter.func_name import FuncName
 from interpreter.instructions import CallFunction, Const, LoadRegion, Return_
 
 if TYPE_CHECKING:
-    import queue
-
+    from interpreter.cics.terminal import InputChannel, ScreenChannel
     from interpreter.cobol.emit_context import EmitContext
     from interpreter.cobol.cobol_statements import ExecCicsStatement
     from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -247,8 +246,8 @@ class CicsLoweringStrategy:
         td_queue: list[str] | None = None,
         applid: str = "CARDDEMO",
         sysid: str = "SYS1",
-        screen_queue: "queue.Queue | None" = None,  # type: ignore[type-arg]
-        input_queue: "queue.Queue | None" = None,  # type: ignore[type-arg]
+        screen_queue: "ScreenChannel | None" = None,
+        input_queue: "InputChannel | None" = None,
         vsam_engine: object = None,
     ) -> None:
         self._context_holder = context_holder

@@ -7,6 +7,7 @@ import queue
 import struct
 from typing import Any
 
+from interpreter.cics.terminal import InputChannel, ScreenChannel
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import BuiltinResult, VMState
 
@@ -62,7 +63,7 @@ def _write_ws_field(
     return True
 
 
-def make_send_map_builtin(screen_queue: "queue.Queue[Any]") -> object:
+def make_send_map_builtin(screen_queue: ScreenChannel) -> object:
     def __cics_send_map(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         map_name = _map_name(args, 0)
         base_names = (
@@ -105,7 +106,7 @@ def _write_eibaid(vm: VMState, aid: str) -> None:
 
 
 def make_receive_map_builtin(
-    input_queue: "queue.Queue[Any]", timeout: float = 30.0
+    input_queue: InputChannel, timeout: float = 30.0
 ) -> object:
     def __cics_receive_map(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         base_names = (
@@ -140,7 +141,7 @@ def make_receive_map_builtin(
     return __cics_receive_map
 
 
-def make_send_text_builtin(screen_queue: "queue.Queue[Any]") -> object:
+def make_send_text_builtin(screen_queue: ScreenChannel) -> object:
     def __cics_send_text(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         text = str(args[0].value) if args else ""
         screen_queue.put({"type": "text", "text": text})
