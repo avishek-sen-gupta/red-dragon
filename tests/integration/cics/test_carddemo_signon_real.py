@@ -44,6 +44,7 @@ from interpreter.cics.strategy import CicsLoweringStrategy
 from interpreter.cics.types import DispatchKind
 from interpreter.cics.dispatcher import InputEvent, CicsRegion
 from interpreter.cics.bootstrap import compile_cics_program
+from interpreter.cics.le_stubs import le_service_stub_sources
 from interpreter.cics.vsam.engine import VsamEngine
 from interpreter.cics.vsam.fct import FctConfig, DatasetConfig
 from interpreter.cics.bms.generate import generate_symbolic_copybooks
@@ -938,8 +939,16 @@ def _drive_to_cotrn02c(tmp_path):
     menu = compile_cics_program(
         apply_cics_prepass(menu_path.read_text()).encode(), parser, strategy
     )
+    # COTRN02C CALLs 'CSUTLDTC' to validate the Orig/Proc dates; CSUTLDTC in turn
+    # CALLs the LE service "CEEDAYS" (no COBOL source). Link CSUTLDTC (resolved
+    # from the CardDemo cbl/ dir) plus the CEEDAYS LE-service stub so the date
+    # validation completes and the ADD-TRANSACTION WRITE path runs.
     tranadd = compile_cics_program(
-        apply_cics_prepass(tranadd_path.read_text()).encode(), parser, strategy
+        apply_cics_prepass(tranadd_path.read_text()).encode(),
+        parser,
+        strategy,
+        program_source_dir=app / "cbl",
+        extra_subprogram_sources=le_service_stub_sources(),
     )
 
     program_cache = {
@@ -1015,18 +1024,22 @@ def test_real_carddemo_transaction_add_first_display(tmp_path):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "BLOCKED on red-dragon-1bp2: cross-program COBOL CALL is not linked. "
-        "COTRN02C VALIDATE-INPUT-DATA-FIELDS does CALL 'CSUTLDTC' (COTRN02C.cbl:393) "
-        "to validate the Orig/Proc dates; compile_cics_program compiles one source, "
-        "so the CALL has no callee IR and CallWithMemory leaves CSUTLDTC-RESULT "
-        "symbolic (SPACES). SEV-CD != '0000' AND MSG-NUM != '2513' (COTRN02C.cbl:397-407) "
-        "-> 'Orig Date - Not a valid date...' -> SEND-TRNADD-SCREEN -> RETURN, so "
-        "ADD-TRANSACTION (STARTBR/READPREV id-gen + EXEC CICS WRITE) never runs. "
-        "Everything UP TO the date CALL works: sign-on -> menu opt 08 -> XCTL COTRN02C "
-        "-> first display -> CONFIRM='Y' -> CXACAIX acct->card validation -> amount + "
-        "key-field + date-FORMAT checks all pass. Next gap: link a CSUTLDTC stub "
-        "(itself depends on the LE service CEEDAYS) via cross-program COBOL CALL "
-        "support wired through the CICS region/bootstrap."
+        "Cross-program COBOL CALL linking (red-dragon-1bp2) is now wired through the "
+        "CICS bootstrap: compile_cics_program(program_source_dir=app/'cbl', "
+        "extra_subprogram_sources=le_service_stub_sources()) links CSUTLDTC and a "
+        "CEEDAYS LE-service stub into COTRN02C via the project linker. NEW BLOCKER: "
+        "CSUTLDTC.cbl itself fails to lower — its WS-DATE-TO-TEST / WS-DATE-FORMAT "
+        "use a variable-length group: 02 Vstring-text > 03 Vstring-char PIC X OCCURS "
+        "0 TO 256 DEPENDING ON Vstring-length (CSUTLDTC.cbl:25-39). build_sectioned_"
+        "layout materialises the GROUP but not its OCCURS-DEPENDING-ON subordinate "
+        "fields (Vstring-length / Vstring-text), so the very first paragraph statement "
+        "MOVE LENGTH OF LS-DATE TO VSTRING-LENGTH OF WS-DATE-TO-TEST (CSUTLDTC.cbl:105) "
+        "raises KeyError: \"Field 'VSTRING-LENGTH' not found in any DATA DIVISION "
+        'section" during lowering. Everything ELSE is proven: region subprogram '
+        "linking (test_region_subprogram_link.py) and the CEEDAYS date-validation stub "
+        "(test_ceedays_stub.py) are green; MOVE into the RETURN-CODE special register "
+        "no longer crashes. Next gap: support OCCURS ... DEPENDING ON variable-length "
+        "subordinate fields in the COBOL data-division layout (build_sectioned_layout)."
     ),
 )
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
