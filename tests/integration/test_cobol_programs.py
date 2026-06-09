@@ -6182,3 +6182,162 @@ class TestIntrinsicFunctionInRelation:
         region = _first_region(vm)
         # R is at offset 12 (after WS-A X(6) + WS-B X(6)).
         assert _decode_zoned_unsigned(region, 12, 1) == 2
+
+
+class TestInspectConverting:
+    """INSPECT ... CONVERTING from TO to — positional per-character translate,
+    with the from/to operands resolved as runtime data items (red-dragon-zuhj).
+    """
+
+    @covers(CobolFeature.INSPECT_CONVERTING)
+    def test_converting_letters_to_spaces(self):
+        """INSPECT WS-T CONVERTING WS-FROM TO WS-TO turns letters into spaces."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. CONV1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FROM PIC X(26) VALUE 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.",
+                "01 WS-TO   PIC X(26) VALUE SPACES.",
+                "01 WS-T    PIC X(5)  VALUE 'AB1CD'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-T CONVERTING WS-FROM TO WS-TO",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-T at offset 52 (26 + 26): only the digit '1' (pos 3) survives.
+        assert _decode_alpha(region, 52, 5) == "  1  "
+
+
+class TestStringMultiOperandRefMod:
+    """STRING with several sending operands sharing one DELIMITED BY phrase, one
+    of them reference-modified — every operand must contribute (red-dragon-zuhj).
+    """
+
+    @covers(
+        CobolFeature.STRING_VERB,
+        CobolFeature.STRING_DELIMITED_BY,
+        CobolFeature.STRING_REF_MOD,
+    )
+    def test_string_two_operands_one_ref_modded(self):
+        """STRING WS-ST WS-ZIP(1:2) DELIMITED BY SIZE INTO WS-COMBO -> 'CA90'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. STRMRM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-ST    PIC X(2)  VALUE 'CA'.",
+                "01 WS-ZIP   PIC X(10) VALUE '90001'.",
+                "01 WS-COMBO PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STRING WS-ST WS-ZIP(1:2)",
+                "      DELIMITED BY SIZE INTO WS-COMBO",
+                "    END-STRING",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 12, 4) == "CA90"
+
+
+class TestFigurativeValueFill:
+    """A figurative VALUE (e.g. PIC X(n) VALUE SPACES) fills the WHOLE field with
+    its fill character, not the literal keyword text (red-dragon-zuhj)."""
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_value_spaces_fills_field_with_spaces(self):
+        """01 WS-S PIC X(6) VALUE SPACES is six spaces, not 'SPACES'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FIGVAL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-S PIC X(6) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 6) == "      "
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_quoted_literal_value_left_verbatim(self):
+        """01 WS-S PIC X(6) VALUE 'SPACE' keeps the quoted literal text."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FIGVAL2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-S PIC X(6) VALUE 'SPACE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 6) == "SPACE "
+
+
+class TestClassConditionRefMod:
+    """A class condition on a reference-modified operand tests only the slice,
+    not the whole space-padded field (red-dragon-zuhj)."""
+
+    @covers(CobolFeature.CLASS_CONDITION, CobolFeature.REFERENCE_MODIFICATION)
+    def test_is_numeric_on_ref_mod_slice(self):
+        """WS-F(1:3) IS NUMERIC is true for '750' even though WS-F is padded."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. CLSRM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-F PIC X(10) VALUE '750'.",
+                "01 WS-R PIC X(3)  VALUE 'NO'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-F(1:3) IS NUMERIC",
+                "       MOVE 'YES' TO WS-R",
+                "    ELSE",
+                "       MOVE 'BAD' TO WS-R",
+                "    END-IF",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 10, 3) == "YES"
+
+
+class TestStringFunctionSource:
+    """STRING with a FUNCTION sending operand evaluates the call, not the literal
+    function name (red-dragon-zuhj)."""
+
+    @covers(CobolFeature.STRING_VERB, CobolFeature.INTRINSIC_FUNCTION)
+    def test_string_function_trim_source(self):
+        """STRING FUNCTION TRIM(WS-N) ' OK' INTO WS-M -> 'AB OK'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. STRFN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-N PIC X(5) VALUE 'AB'.",
+                "01 WS-M PIC X(8) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STRING FUNCTION TRIM(WS-N) ' OK'",
+                "      DELIMITED BY SIZE INTO WS-M",
+                "    END-STRING",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-M at offset 5 (after WS-N X(5)).
+        assert _decode_alpha(region, 5, 5) == "AB OK"

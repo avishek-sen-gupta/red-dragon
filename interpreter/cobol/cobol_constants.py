@@ -92,6 +92,13 @@ class BuiltinName:
     IS_ALPHABETIC = "__is_alphabetic"
     IS_ALPHABETIC_LOWER = "__is_alphabetic_lower"
     IS_ALPHABETIC_UPPER = "__is_alphabetic_upper"
+    LENGTH = "__length"
+    NUMVAL = "__numval"
+    NUMVAL_C = "__numval_c"
+    TEST_NUMVAL = "__test_numval"
+    TEST_NUMVAL_C = "__test_numval_c"
+    INTEGER_OF_DATE = "__integer_of_date"
+    STRING_CONVERT = "__string_convert"
 
 
 class InspectType:
@@ -99,6 +106,7 @@ class InspectType:
 
     TALLYING = "TALLYING"
     REPLACING = "REPLACING"
+    CONVERTING = "CONVERTING"
 
 
 class DelimiterMode:

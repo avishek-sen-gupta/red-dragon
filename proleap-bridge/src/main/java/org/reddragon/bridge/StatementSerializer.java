@@ -888,30 +888,40 @@ public final class StatementSerializer {
         try {
             JsonArray sendings = new JsonArray();
             for (Sendings sending : stmt.getSendings()) {
-                JsonObject sendingObj = new JsonObject();
-                List<ValueStmt> valueStmts = sending.getSendingValueStmts();
-                if (!valueStmts.isEmpty()) {
-                    ValueStmt vs = valueStmts.get(0);
+                // One Sendings group may list several source operands sharing the
+                // same DELIMITED BY phrase, e.g. STRING A B(1:2) DELIMITED BY SIZE.
+                // Each operand must produce its own sending entry — taking only the
+                // first dropped the rest (red-dragon-zuhj).
+                DelimitedByPhrase dbp = sending.getDelimitedByPhrase();
+                String delim = null;
+                if (dbp != null) {
+                    if (dbp.getDelimitedByType() == DelimitedByPhrase.DelimitedByType.SIZE) {
+                        delim = "SIZE";
+                    } else if (dbp.getCharactersValueStmt() != null) {
+                        delim = extractValueStmtText(dbp.getCharactersValueStmt());
+                    }
+                }
+                for (ValueStmt vs : sending.getSendingValueStmts()) {
+                    JsonObject sendingObj = new JsonObject();
                     if (vs instanceof CallValueStmt) {
                         Call sendingCall = ((CallValueStmt) vs).getCall();
-                        sendingObj.add("value", serializeMoveOperand(sendingCall));
+                        // A sending operand may itself be an intrinsic FUNCTION call,
+                        // e.g. STRING FUNCTION TRIM(WS-VAR) ' ...' INTO WS-MSG. Serialize
+                        // it structurally (function node) so the call is evaluated, not
+                        // mistaken for a literal named "TRIM" (red-dragon-zuhj).
+                        JsonObject fn = serializeFunctionNode(sendingCall);
+                        sendingObj.add("value",
+                                (fn != null) ? fn : serializeMoveOperand(sendingCall));
                     } else {
                         JsonObject litObj = new JsonObject();
                         litObj.addProperty("name", extractValueStmtText(vs));
                         sendingObj.add("value", litObj);
                     }
-                }
-                DelimitedByPhrase dbp = sending.getDelimitedByPhrase();
-                if (dbp != null) {
-                    DelimitedByPhrase.DelimitedByType dbType = dbp.getDelimitedByType();
-                    if (dbType == DelimitedByPhrase.DelimitedByType.SIZE) {
-                        sendingObj.addProperty("delimited_by", "SIZE");
-                    } else if (dbp.getCharactersValueStmt() != null) {
-                        sendingObj.addProperty("delimited_by",
-                                extractValueStmtText(dbp.getCharactersValueStmt()));
+                    if (delim != null) {
+                        sendingObj.addProperty("delimited_by", delim);
                     }
+                    sendings.add(sendingObj);
                 }
-                sendings.add(sendingObj);
             }
             obj.add("sendings", sendings);
             if (stmt.getIntoPhrase() != null && stmt.getIntoPhrase().getIntoCall() != null) {
@@ -1010,6 +1020,20 @@ public final class StatementSerializer {
                         }
                     }
                     obj.add("replacings", replacings);
+                }
+            } else if (inspType == InspectStatement.InspectType.CONVERTING) {
+                obj.addProperty("inspect_type", "CONVERTING");
+                io.proleap.cobol.asg.metamodel.procedure.inspect.Converting conv =
+                        stmt.getConverting();
+                if (conv != null) {
+                    if (conv.getFromValueStmt() != null) {
+                        obj.addProperty("converting_from",
+                                extractValueStmtText(conv.getFromValueStmt()));
+                    }
+                    if (conv.getTo() != null && conv.getTo().getToValueStmt() != null) {
+                        obj.addProperty("converting_to",
+                                extractValueStmtText(conv.getTo().getToValueStmt()));
+                    }
                 }
             }
         } catch (Exception e) {
@@ -1956,9 +1980,12 @@ public final class StatementSerializer {
         boolean effectiveNot = ccNot ^ cls.getNot();
         obj.addProperty("not", effectiveNot);
         obj.addProperty("class", className);
-        JsonObject operand = new JsonObject();
+        // The operand may be reference-modified, e.g.
+        // WS-FIELD(1:WS-LEN) IS NUMERIC. serializeMoveOperand captures both the
+        // name and any ref_mod_start/ref_mod_length so the class test runs over
+        // the slice, not the whole space-padded field (red-dragon-zuhj).
+        JsonObject operand = serializeMoveOperand(cls.getIdentifierCall());
         operand.addProperty("kind", "ref");
-        operand.addProperty("name", extractCallName(cls.getIdentifierCall()));
         obj.add("operand", operand);
     }
 

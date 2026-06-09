@@ -37,12 +37,21 @@ from interpreter.cobol.byte_builtins import (
     _builtin_is_alphabetic_lower,
     _builtin_is_alphabetic_upper,
     _builtin_current_date,
+    _builtin_length,
+    _builtin_string_convert,
+    _builtin_numval,
+    _builtin_numval_c,
+    _builtin_test_numval,
+    _builtin_test_numval_c,
+    _builtin_integer_of_date,
     BYTE_BUILTINS,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
+from interpreter.cobol.features import CobolFeature
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators
 from interpreter.vm.vm_types import SymbolicValue
+from tests.covers import covers
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
@@ -389,6 +398,13 @@ class TestByteBuiltinsRegistration:
             "__is_alphabetic",
             "__is_alphabetic_lower",
             "__is_alphabetic_upper",
+            "__length",
+            "__numval",
+            "__numval_c",
+            "__test_numval",
+            "__test_numval_c",
+            "__integer_of_date",
+            "__string_convert",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:
@@ -1707,3 +1723,273 @@ class TestIsAlphabeticUpper:
 
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.IS_ALPHABETIC_UPPER) in BYTE_BUILTINS
+
+
+class TestLength:
+    """FUNCTION LENGTH(x) -> byte length of the argument (red-dragon-zuhj)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_string_length(self):
+        result = _builtin_length([typed_from_runtime("ABC")], None)
+        assert result.value == 3
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_pic_x10_field_length(self):
+        # A PIC X(10) field arrives as a 10-char (space-padded) string.
+        result = _builtin_length([typed_from_runtime("ABC       ")], None)
+        assert result.value == 10
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_empty_string(self):
+        result = _builtin_length([typed_from_runtime("")], None)
+        assert result.value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_length([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.LENGTH) in BYTE_BUILTINS
+
+
+class TestStringConvert:
+    """INSPECT ... CONVERTING from TO to: positional per-character translate."""
+
+    @covers(CobolFeature.INSPECT_CONVERTING)
+    def test_alpha_to_spaces(self):
+        # Convert every uppercase letter to a space (CardDemo's alpha-only edit).
+        upper = "".join(chr(c) for c in range(ord("A"), ord("Z") + 1))
+        result = _builtin_string_convert(
+            [
+                typed_from_runtime("JOHN"),
+                typed_from_runtime(upper),
+                typed_from_runtime(" " * 26),
+            ],
+            None,
+        )
+        assert result.value == "    "
+
+    @covers(CobolFeature.INSPECT_CONVERTING)
+    def test_positional_mapping(self):
+        # 'abc' -> 'xyz' positionally; unmatched chars untouched.
+        result = _builtin_string_convert(
+            [
+                typed_from_runtime("cab1"),
+                typed_from_runtime("abc"),
+                typed_from_runtime("xyz"),
+            ],
+            None,
+        )
+        assert result.value == "zxy1"
+
+    @covers(CobolFeature.INSPECT_CONVERTING)
+    def test_last_mapping_wins_on_duplicate_from(self):
+        # COBOL maps each FROM char to the same-position TO char; for a duplicate
+        # FROM char the first occurrence's mapping applies.
+        result = _builtin_string_convert(
+            [
+                typed_from_runtime("aa"),
+                typed_from_runtime("aa"),
+                typed_from_runtime("xy"),
+            ],
+            None,
+        )
+        assert result.value == "xx"
+
+    @covers(CobolFeature.INSPECT_CONVERTING)
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_string_convert(
+            [typed_from_runtime(sym), typed_from_runtime("a"), typed_from_runtime("b")],
+            None,
+        )
+        assert result.value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INSPECT_CONVERTING)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.STRING_CONVERT) in BYTE_BUILTINS
+
+
+class TestNumval:
+    """FUNCTION NUMVAL(s) -> numeric value of a numeric string (red-dragon-zuhj)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_spaced_decimal(self):
+        result = _builtin_numval([typed_from_runtime(" 1234.56 ")], None)
+        assert float(result.value) == 1234.56
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_leading_minus(self):
+        result = _builtin_numval([typed_from_runtime("-12")], None)
+        assert result.value == -12
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_leading_plus(self):
+        result = _builtin_numval([typed_from_runtime("+12")], None)
+        assert result.value == 12
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_trailing_sign(self):
+        result = _builtin_numval([typed_from_runtime("12-")], None)
+        assert result.value == -12
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_trailing_cr(self):
+        result = _builtin_numval([typed_from_runtime("100CR")], None)
+        assert result.value == -100
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_trailing_db(self):
+        result = _builtin_numval([typed_from_runtime("100DB")], None)
+        assert result.value == -100
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_plain_integer_is_int(self):
+        result = _builtin_numval([typed_from_runtime("42")], None)
+        assert result.value == 42
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_all_blank_is_zero(self):
+        result = _builtin_numval([typed_from_runtime("   ")], None)
+        assert result.value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_numval([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.NUMVAL) in BYTE_BUILTINS
+
+
+class TestNumvalC:
+    """FUNCTION NUMVAL-C(s) -> currency/grouping-aware numeric (red-dragon-zuhj)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_currency_and_grouping(self):
+        result = _builtin_numval_c([typed_from_runtime("$1,234.56")], None)
+        assert float(result.value) == 1234.56
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_grouping_only(self):
+        result = _builtin_numval_c([typed_from_runtime("1,000")], None)
+        assert result.value == 1000
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_with_currency(self):
+        result = _builtin_numval_c([typed_from_runtime("-$50.00")], None)
+        assert float(result.value) == -50.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_plain_number(self):
+        result = _builtin_numval_c([typed_from_runtime("99")], None)
+        assert result.value == 99
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_numval_c([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.NUMVAL_C) in BYTE_BUILTINS
+
+
+class TestTestNumval:
+    """FUNCTION TEST-NUMVAL(s) -> 0 if valid else 1-based bad-char pos."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_valid_digits(self):
+        result = _builtin_test_numval([typed_from_runtime("1234")], None)
+        assert result.value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_valid_signed_decimal(self):
+        result = _builtin_test_numval([typed_from_runtime(" -12.50 ")], None)
+        assert result.value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_bad_char_position(self):
+        result = _builtin_test_numval([typed_from_runtime("12A4")], None)
+        assert result.value == 3
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_all_blank_valid(self):
+        result = _builtin_test_numval([typed_from_runtime("   ")], None)
+        assert result.value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_test_numval([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.TEST_NUMVAL) in BYTE_BUILTINS
+
+
+class TestTestNumvalC:
+    """FUNCTION TEST-NUMVAL-C(s) -> 0 if valid NUMVAL-C arg else bad-char pos."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_valid_currency_grouping(self):
+        result = _builtin_test_numval_c([typed_from_runtime("$1,234")], None)
+        assert result.value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_valid_plain(self):
+        result = _builtin_test_numval_c([typed_from_runtime("1234")], None)
+        assert result.value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_bad_char(self):
+        result = _builtin_test_numval_c([typed_from_runtime("12X4")], None)
+        assert result.value == 3
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_test_numval_c([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.TEST_NUMVAL_C) in BYTE_BUILTINS
+
+
+class TestIntegerOfDate:
+    """FUNCTION INTEGER-OF-DATE(yyyymmdd) -> days since 1600-12-31."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_known_reference(self):
+        # 2024-01-01 is 154498 days after the 1600-12-31 COBOL epoch.
+        result = _builtin_integer_of_date([typed_from_runtime(20240101)], None)
+        assert result.value == 154498
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_epoch_plus_one(self):
+        # 1601-01-01 is day 1.
+        result = _builtin_integer_of_date([typed_from_runtime(16010101)], None)
+        assert result.value == 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_string_arg(self):
+        result = _builtin_integer_of_date([typed_from_runtime("20240101")], None)
+        assert result.value == 154498
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue("s0")
+        result = _builtin_integer_of_date([typed_from_runtime(sym)], None)
+        assert result.value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.INTEGER_OF_DATE) in BYTE_BUILTINS

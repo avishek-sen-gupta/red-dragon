@@ -36,6 +36,16 @@ def lower_string(
     """STRING ... DELIMITED BY ... INTO target."""
     part_regs: list[Register] = []
     for sending in stmt.sendings:
+        # An intrinsic FUNCTION sending (e.g. FUNCTION TRIM(WS-VAR)) is evaluated
+        # by the shared function-operand lowering so its computed string — not the
+        # literal function name — is concatenated (red-dragon-zuhj).
+        if sending.function is not None:
+            from interpreter.cobol.lower_arithmetic import lower_function_operand
+
+            func_reg = lower_function_operand(ctx, sending.function, materialised)
+            part_regs.append(ctx.emit_to_string(func_reg))
+            continue
+
         operand_name = sending.value.name
         if ctx.has_field(operand_name, materialised):
             source_ref, source_rr = ctx.resolve_field_ref(operand_name, materialised)
@@ -249,6 +259,57 @@ def lower_inspect(
         lower_inspect_tallying(ctx, stmt, src_str_reg, materialised)
     elif stmt.inspect_type == InspectType.REPLACING:
         lower_inspect_replacing(ctx, stmt, src_str_reg, source_fl, materialised)
+    elif stmt.inspect_type == InspectType.CONVERTING:
+        lower_inspect_converting(ctx, stmt, src_str_reg, source_fl, materialised)
+
+
+def _resolve_convert_operand(
+    ctx: EmitContext,
+    operand: str,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Resolve a CONVERTING from/to operand: a data-item name is decoded at
+    runtime; otherwise it is a figurative / quoted-literal constant."""
+    if ctx.has_field(operand, materialised):
+        ref, rr = ctx.resolve_field_ref(operand, materialised)
+        decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+        return ctx.emit_to_string(decoded)
+    if operand in ("SPACES", "SPACE", "ZEROS", "ZEROES", "ZERO", "LOW-VALUES"):
+        return ctx.const_to_reg(translate_cobol_figurative(operand))
+    return ctx.const_to_reg(ctx.parse_literal(operand))
+
+
+def lower_inspect_converting(
+    ctx: EmitContext,
+    stmt: InspectStatement,
+    src_str_reg: Register,
+    source_fl: FieldLayout,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """INSPECT source CONVERTING <from> TO <to>: positional character translate.
+
+    Builds the converted string via the STRING_CONVERT builtin and writes it back
+    to the source field (red-dragon-zuhj — unblocks CardDemo's alphabetic edits).
+    """
+    from_reg = _resolve_convert_operand(ctx, str(stmt.converting_from), materialised)
+    to_reg = _resolve_convert_operand(ctx, str(stmt.converting_to), materialised)
+    converted_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=converted_reg,
+            func_name=FuncName(BuiltinName.STRING_CONVERT),
+            args=(src_str_reg, from_reg, to_reg),
+        )
+    )
+    if ctx.has_field(stmt.source.name, materialised):
+        _, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        ctx.emit_encode_and_write(source_rr, source_fl, converted_reg)
+    else:
+        logger.warning(
+            "INSPECT CONVERTING: source field %s not found in materialised layout;"
+            " skipping write-back",
+            stmt.source.name,
+        )
 
 
 def lower_inspect_tallying(
