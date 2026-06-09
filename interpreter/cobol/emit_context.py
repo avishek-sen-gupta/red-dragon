@@ -215,7 +215,7 @@ class EmitContext:
                     f"multi-dimensional subscript not supported for {name!r} "
                     f"({len(subscripts)} subscripts); see red-dragon-cqwx"
                 )
-            base_name, subscript = name, subscripts[0]
+            base_name, subscript = name, next(iter(subscripts))
         else:
             base_name, subscript = parse_subscript_notation(name)
         fl, region_reg = materialised.resolve(base_name, qualifiers)
