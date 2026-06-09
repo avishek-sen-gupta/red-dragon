@@ -70,7 +70,21 @@ class BinOpNode:
     right: "ExprNode"
 
 
-ExprNode = LiteralNode | FieldRefNode | RefModNode | BinOpNode
+@dataclass(frozen=True)
+class FunctionNode:
+    """Intrinsic FUNCTION call used as an expression operand.
+
+    Appears in COMPUTE expressions and IF relation operands, e.g.
+    COMPUTE X = FUNCTION TRIM(WS-A) or
+    IF FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B). The bridge serializes
+    it as {"kind":"function","name":..,"args":[<expr>, ...]} (red-dragon-ge72).
+    """
+
+    name: str
+    args: tuple["ExprNode", ...] = ()
+
+
+ExprNode = LiteralNode | FieldRefNode | RefModNode | BinOpNode | FunctionNode
 
 
 def expr_from_dict(d: dict) -> ExprNode:
@@ -109,6 +123,11 @@ def expr_from_dict(d: dict) -> ExprNode:
             op="*",
             left=LiteralNode(value="-1"),
             right=expr_from_dict(d["expr"]),
+        )
+    if kind == "function":
+        return FunctionNode(
+            name=d.get("name", ""),
+            args=tuple(expr_from_dict(a) for a in d.get("args", []) or []),
         )
     raise ValueError(f"Unknown expression node kind: {kind!r}")
 

@@ -172,9 +172,7 @@ class CobolFeature(Enum):
     REFERENCE_MODIFICATION = (
         "FIELD(start:length) reference modification substring access"
     )
-    INTRINSIC_FUNCTION = (
-        "FUNCTION UPPER-CASE / LOWER-CASE / CURRENT-DATE intrinsic function calls"
-    )
+    INTRINSIC_FUNCTION = "FUNCTION UPPER-CASE / LOWER-CASE / TRIM / CURRENT-DATE intrinsic function calls"
 
     # ---------------------------------------------------------------------------
     # Infrastructure / runtime
