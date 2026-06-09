@@ -145,6 +145,7 @@ class RefModOperand:
     ref_mod_length: RefModExpr | None = None
     length_of: str = ""
     qualifiers: tuple[str, ...] = ()
+    subscripts: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, data: dict) -> RefModOperand:
@@ -180,12 +181,14 @@ class RefModOperand:
             ref_mod_length = ref_mod_expr_from_dict(ref_mod_length_data)
 
         qualifiers = tuple(data.get("qualifiers", ()))
+        subscripts = tuple(data.get("subscripts", ()))
 
         return cls(
             name=name,
             ref_mod_start=ref_mod_start,
             ref_mod_length=ref_mod_length,
             qualifiers=qualifiers,
+            subscripts=subscripts,
         )
 
     def to_dict(self) -> dict:
@@ -199,4 +202,6 @@ class RefModOperand:
             result["ref_mod_length"] = _ref_mod_expr_to_dict(self.ref_mod_length)
         if self.qualifiers:
             result["qualifiers"] = list(self.qualifiers)
+        if self.subscripts:
+            result["subscripts"] = list(self.subscripts)
         return result
