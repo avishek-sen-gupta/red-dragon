@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from interpreter.cics.vsam.dump import _decode_leaf
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.data_layout import FieldLayout
@@ -41,6 +43,7 @@ def test_decode_leaf_zoned_integer_is_int():
 def test_decode_leaf_zoned_decimal_is_float():
     fl = _fl(CobolDataCategory.ZONED_DECIMAL, 0, 4, 4, decimal_digits=2)
     assert _decode_leaf(fl, b"\xf1\xf2\xf3\xf4") == 12.34
+    assert isinstance(_decode_leaf(fl, b"\xf1\xf2\xf3\xf4"), float)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -60,8 +63,6 @@ def test_decode_leaf_binary_integer_is_int():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_decode_leaf_comp1_comp2_unsupported():
-    import pytest
-
     fl = _fl(CobolDataCategory.COMP1, 0, 4, 0)
     with pytest.raises(NotImplementedError):
         _decode_leaf(fl, b"\x00\x00\x00\x00")
