@@ -24,4 +24,7 @@
            PERFORM VARYING WS-A FROM LENGTH OF WS-SUB OF WS-GRP BY -1
                UNTIL WS-A = 1
            END-PERFORM.
+           IF FUNCTION LENGTH(FUNCTION TRIM(WS-FIELD(1:WS-A))) = 0
+               CONTINUE
+           END-IF.
            STOP RUN.

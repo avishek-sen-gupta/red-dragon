@@ -1905,6 +1905,12 @@ public final class StatementSerializer {
             return serializeArithExprCtx(arg.arithmeticExpression());
         }
         if (arg.identifier() != null) {
+            // Preserve a reference modifier (WS-FLD(1:LEN)) structurally rather
+            // than gluing the slice into the name. (red-dragon-74qu)
+            JsonObject refMod = serializeRefModIdentifier(arg.identifier());
+            if (refMod != null) {
+                return refMod;
+            }
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
             ref.addProperty("name", leafDataName(arg.identifier()));
@@ -2515,6 +2521,53 @@ public final class StatementSerializer {
     }
 
     /**
+     * Bare base data-name of an identifier, with any reference-modifier suffix
+     * stripped. {@link #leafDataName} falls back to {@code id.getText()} when the
+     * qualifiedDataName carries a referenceModifier (its {@code dataName()} is then
+     * null), which would glue the {@code (start:len)} slice into the name — an
+     * unresolvable field. This searches structurally for the underlying
+     * qualifiedDataNameFormat1's dataName instead. (red-dragon-74qu)
+     */
+    private static String baseDataName(CobolParser.IdentifierContext id) {
+        if (id == null) {
+            return "";
+        }
+        CobolParser.QualifiedDataNameFormat1Context f1 = findQualifiedDataNameFormat1(id);
+        if (f1 != null && f1.dataName() != null) {
+            return f1.dataName().getText();
+        }
+        return leafDataName(id);
+    }
+
+    /**
+     * Serializes an identifier that MAY carry a reference modifier into a
+     * structured ref node: {@code {kind:ref, name:<bare base>, ref_mod_start,
+     * ref_mod_length?}}. Mirrors {@link #serializeRef}'s ref-mod handling for the
+     * grammar-context paths (function args, arithmetic basis) that operate on an
+     * IdentifierContext rather than a Call. Returns {@code null} when the
+     * identifier carries no reference modifier (caller emits a plain ref).
+     * (red-dragon-74qu)
+     */
+    private static JsonObject serializeRefModIdentifier(CobolParser.IdentifierContext id) {
+        if (id == null) {
+            return null;
+        }
+        CobolParser.ReferenceModifierContext refMod = firstReferenceModifierDescendant(id);
+        if (refMod == null) {
+            return null;
+        }
+        JsonObject ref = new JsonObject();
+        ref.addProperty("kind", "ref");
+        ref.addProperty("name", baseDataName(id));
+        JsonObject rm = serializeRefMod(refMod);
+        ref.add("ref_mod_start", rm.get("ref_mod_start"));
+        if (rm.has("ref_mod_length")) {
+            ref.add("ref_mod_length", rm.get("ref_mod_length"));
+        }
+        return ref;
+    }
+
+    /**
      * Grammar: basis : LPARENCHAR arithmeticExpression RPARENCHAR | identifier | literal
      * Note: ctx.arithmeticExpression() is non-null for parenthesised sub-expressions.
      */
@@ -2549,6 +2602,14 @@ public final class StatementSerializer {
                 CobolParser.IdentifierContext inner = sr.identifier();
                 obj.addProperty("name", inner != null ? leafDataName(inner) : "");
                 return obj;
+            }
+            // A reference-modified identifier (e.g. WS-FLD(1:LEN)) must keep its
+            // slice structured so the frontend resolves the base field and the
+            // start/length, rather than gluing them into an unresolvable name.
+            // (red-dragon-74qu)
+            JsonObject refMod = serializeRefModIdentifier(id);
+            if (refMod != null) {
+                return refMod;
             }
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
