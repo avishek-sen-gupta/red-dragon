@@ -1435,20 +1435,51 @@ public final class StatementSerializer {
 
         // If ctx is already a TableCallContext, call referenceModifier() directly
         if (ctx instanceof CobolParser.TableCallContext) {
-            return ((CobolParser.TableCallContext) ctx).referenceModifier();
+            CobolParser.ReferenceModifierContext direct =
+                    ((CobolParser.TableCallContext) ctx).referenceModifier();
+            if (direct != null) return direct;
         }
 
         // Otherwise, try to find tableCall() method (e.g. for IdentifierContext)
         try {
             java.lang.reflect.Method m = ctx.getClass().getMethod("tableCall");
             CobolParser.TableCallContext tc = (CobolParser.TableCallContext) m.invoke(ctx);
-            if (tc == null) return null;
-            return tc.referenceModifier();
+            if (tc != null) {
+                CobolParser.ReferenceModifierContext rm = tc.referenceModifier();
+                if (rm != null) return rm;
+            }
         } catch (Exception e) {
             // ctx may not have a tableCall() method (e.g. if it's not an identifierContext);
-            // reflection lets us probe without a compile-time cast
+            // reflection lets us probe without a compile-time cast — fall through.
+        }
+
+        // A QUALIFIED data reference (X OF Y(2:8)) wraps the tableCall +
+        // referenceModifier deeper in the parse tree (qualifiedDataName), so the
+        // direct/tableCall() lookups above miss it. Search the subtree for the
+        // first ReferenceModifierContext. (CardDemo COTRN02C: TRNAMTI OF COTRN2AI.)
+        return firstReferenceModifierDescendant(ctx);
+    }
+
+    /** Depth-first search for the first ReferenceModifierContext descendant. */
+    private static CobolParser.ReferenceModifierContext firstReferenceModifierDescendant(
+            ParserRuleContext ctx) {
+        if (ctx == null) {
             return null;
         }
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            org.antlr.v4.runtime.tree.ParseTree child = ctx.getChild(i);
+            if (child instanceof CobolParser.ReferenceModifierContext) {
+                return (CobolParser.ReferenceModifierContext) child;
+            }
+            if (child instanceof ParserRuleContext) {
+                CobolParser.ReferenceModifierContext found =
+                        firstReferenceModifierDescendant((ParserRuleContext) child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -1495,7 +1526,11 @@ public final class StatementSerializer {
                 JsonObject obj = new JsonObject();
                 obj.addProperty("kind", "length_of");
                 CobolParser.IdentifierContext id = sr.identifier();
-                obj.addProperty("name", id != null ? id.getText() : "");
+                // Use the LEAF data-name for a qualified operand (WS-SUB OF
+                // WS-GRP -> "WS-SUB"); getText() would glue it to
+                // "WS-SUBOFWS-GRP", which the frontend can't resolve (length 0).
+                // Mirrors serializeBasisCtx's length_of handling. (red-dragon)
+                obj.addProperty("name", id != null ? leafDataName(id) : "");
                 return obj;
             }
         }
