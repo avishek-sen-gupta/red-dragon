@@ -176,8 +176,10 @@ def test_parse_subscripted_option_value_and_nohandle():
         "NOHANDLE END-EXEC"
     )
     assert verb == "INQUIRE"
-    # Full subscripted operand text preserved (balanced nested parens).
-    assert opts["PROGRAM"] == CicsOperand("CDEMO-MENU-OPT-PGMNAME(WS-OPTION)", False)
+    # Subscripted operand is structural: bare base + structured subscripts.
+    assert opts["PROGRAM"] == CicsOperand(
+        "CDEMO-MENU-OPT-PGMNAME", False, subscripts=("WS-OPTION",)
+    )
     assert "NOHANDLE" in opts and opts["NOHANDLE"] is None
 
 
@@ -186,7 +188,10 @@ def test_parse_reference_modified_option_value():
     """Option value with reference modification (subscript-style nested parens)."""
     verb, opts = parse_exec_cics_text("EXEC CICS SEND TEXT FROM(WS-MSG(1:8)) END-EXEC")
     assert verb == "SEND TEXT"
-    assert opts["FROM"] == CicsOperand("WS-MSG(1:8)", False)
+    # The nested group is captured structurally (parens stripped); ref-mod
+    # interior structuring is a later task (red-dragon-6ddr), so for now the
+    # raw "1:8" rides in the subscripts tuple.
+    assert opts["FROM"] == CicsOperand("WS-MSG", False, subscripts=("1:8",))
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -261,7 +266,9 @@ def test_parse_xctl_subscripted_program():
         "EXEC CICS XCTL PROGRAM(CDEMO-MENU-OPT-PGMNAME(WS-OPTION)) END-EXEC"
     )
     assert verb == "XCTL"
-    assert opts["PROGRAM"] == CicsOperand("CDEMO-MENU-OPT-PGMNAME(WS-OPTION)", False)
+    assert opts["PROGRAM"] == CicsOperand(
+        "CDEMO-MENU-OPT-PGMNAME", False, subscripts=("WS-OPTION",)
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

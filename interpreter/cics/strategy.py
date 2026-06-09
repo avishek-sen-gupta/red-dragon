@@ -81,7 +81,9 @@ def emit_copy_in(
         or not ctx.has_field(operand.text, materialised)
     ):
         return None
-    ref, region_reg = ctx.resolve_field_ref(operand.text, materialised)
+    ref, region_reg = ctx.resolve_field_ref(
+        operand.text, materialised, subscripts=operand.subscripts
+    )
     out = ctx.fresh_reg()
     ctx.emit_inst(
         LoadRegion(
@@ -112,7 +114,9 @@ def emit_operand_value(
         ctx.emit_inst(Const(result_reg=r, value=""))
         return r
     if not operand.is_literal and ctx.has_field(operand.text, materialised):
-        ref, region_reg = ctx.resolve_field_ref(operand.text, materialised)
+        ref, region_reg = ctx.resolve_field_ref(
+            operand.text, materialised, subscripts=operand.subscripts
+        )
         # ref.offset_reg carries the resolved offset, including the element
         # offset for a subscripted operand (e.g. TBL(IDX)); pass it so the
         # decode reads the indexed element, not the base (element 1).
@@ -186,7 +190,9 @@ def _resolve_keylen(
         and not ridfld.is_literal
         and ctx.has_field(ridfld.text, materialised)
     ):
-        ref, _ = ctx.resolve_field_ref(ridfld.text, materialised)
+        ref, _ = ctx.resolve_field_ref(
+            ridfld.text, materialised, subscripts=ridfld.subscripts
+        )
         return ref.fl.byte_length
     return 0
 
@@ -202,7 +208,9 @@ def _resolve_into(
         and not operand.is_literal
         and ctx.has_field(operand.text, materialised)
     ):
-        ref, _ = ctx.resolve_field_ref(operand.text, materialised)
+        ref, _ = ctx.resolve_field_ref(
+            operand.text, materialised, subscripts=operand.subscripts
+        )
         return ref.fl.offset, ref.fl.byte_length
     return 0, 0
 
