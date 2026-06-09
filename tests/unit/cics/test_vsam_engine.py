@@ -247,3 +247,51 @@ def test_read_default_offset_zero_unchanged():
     record, resp = engine.read("TESTDS", b"AA01", KEY_LEN)
     assert resp == RESP_NORMAL
     assert record is not None and record[:KEY_LEN] == b"AA01"
+
+
+# ── Backend wiring + write-through + flush_to ────────────────────────
+
+from interpreter.cics.vsam.backend import FileBackend
+from interpreter.cics.vsam.format import read_flat_file
+
+
+def _cfg(seed: Path) -> FctConfig:
+    return FctConfig(datasets={"DS": DatasetConfig(path=seed, record_length=4)})
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_write_through_persists_and_survives_new_engine(tmp_path: Path) -> None:
+    seed = tmp_path / "seed.dat"
+    seed.write_bytes(b"AAAA")  # one record, key "AAAA"
+    backing = tmp_path / "store"
+    eng = VsamEngine(_cfg(seed), backend=FileBackend(backing))
+    eng.load_all()
+    assert eng.write("DS", b"ZZZZ", 4, b"ZZZZ") == 0  # RESP_NORMAL
+    assert read_flat_file(backing / "DS.dat", 4) == [b"AAAA", b"ZZZZ"]
+    eng2 = VsamEngine(_cfg(seed), backend=FileBackend(backing))
+    eng2.load_all()
+    rec, resp = eng2.read("DS", b"ZZZZ", 4)
+    assert resp == 0 and rec == b"ZZZZ"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_default_engine_writes_no_files(tmp_path: Path) -> None:
+    seed = tmp_path / "seed.dat"
+    seed.write_bytes(b"AAAA")
+    eng = VsamEngine(_cfg(seed))  # default InMemoryBackend
+    eng.load_all()
+    eng.write("DS", b"ZZZZ", 4, b"ZZZZ")
+    assert seed.read_bytes() == b"AAAA"
+    assert [f.name for f in tmp_path.iterdir()] == ["seed.dat"]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_flush_to_snapshot_in_memory_engine(tmp_path: Path) -> None:
+    seed = tmp_path / "seed.dat"
+    seed.write_bytes(b"AAAA")
+    out = tmp_path / "snap"
+    eng = VsamEngine(_cfg(seed))  # in-memory
+    eng.load_all()
+    eng.write("DS", b"ZZZZ", 4, b"ZZZZ")
+    eng.flush_to(out)
+    assert read_flat_file(out / "DS.dat", 4) == [b"AAAA", b"ZZZZ"]
