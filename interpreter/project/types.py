@@ -179,6 +179,16 @@ class LinkedProgram:
     unresolved_imports: list[ImportRef] = field(default_factory=list)
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
+    entry_func_label: CodeLabel | None = None
+    """Explicit entry function label.
+
+    When several modules are linked (e.g. a COBOL main program plus the
+    subprograms it CALLs), multiple ``func_*`` labels exist and a bare
+    ``func_*`` entry predicate would be ambiguous. Callers that know which
+    module is the entry point (the CICS region bootstrap) set this to the
+    namespaced label of the main program's procedure-division function so
+    execution dispatches into it rather than a linked-in callee.
+    """
 
     def entry_points(
         self,
