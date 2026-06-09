@@ -47,12 +47,15 @@ def cobol_parser():
 
 # Record layout: 4-byte key + 6-byte body = 10 bytes. Two records written;
 # browse forward returns them in key order, so the 2nd READNEXT yields BB02.
+# WS-KEY is LOW-VALUES so STARTBR positions before the first record: in EBCDIC
+# the letter keys (0xC1..) sort BELOW digit keys (0xF0..), so a numeric RIDFLD
+# like '0000' would sort ABOVE 'AA01' and (correctly) position past end-of-file.
 COBOL_BROWSE = """\
        IDENTIFICATION DIVISION.
        PROGRAM-ID. TESTBRWS.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
-       01 WS-KEY  PIC X(4) VALUE '0000'.
+       01 WS-KEY  PIC X(4) VALUE LOW-VALUES.
        01 WS-REC.
           05 WS-REC-KEY  PIC X(4).
           05 WS-REC-BODY PIC X(6).

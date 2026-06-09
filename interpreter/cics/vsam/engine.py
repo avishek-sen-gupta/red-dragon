@@ -48,7 +48,12 @@ class VsamEngine:
     def __init__(self, config: FctConfig) -> None:
         self._config = config
         self._datasets: dict[str, VsamDataset] = {}
+        # Browse position cursor: a "between-records" index ``p`` in [0, len].
+        # READNEXT returns keys[p] then advances; READPREV returns keys[p-1]
+        # then retreats. ``_cursor_dir`` records the last browse direction so a
+        # READNEXT→READPREV reversal skips back over the just-read record.
         self._cursors: dict[_CursorKey, int] = {}
+        self._cursor_dir: dict[_CursorKey, str] = {}
 
     def load_all(self) -> None:
         """Load all configured datasets from their ASCII flat files."""
@@ -162,13 +167,17 @@ class VsamEngine:
         keys = list(ds.store.keys())
         klen = ds.key_length or key_length
         prefix = key[:klen]
-        # Find first key >= prefix (compared on the dataset's key slice)
-        idx = 0
+        # Position at the first key >= prefix (GTEQ). When no key qualifies
+        # (e.g. RIDFLD = HIGH-VALUES, the CardDemo "seek last record" idiom),
+        # position PAST end-of-file so the first READPREV walks back to the
+        # final record. The previous code left idx=0 here, breaking that path.
+        idx = len(keys)
         for i, k in enumerate(keys):
             if self._record_key(ds, k, key_length) >= prefix:
                 idx = i
                 break
         self._cursors[cursor_key] = idx
+        self._cursor_dir.pop(cursor_key, None)
         return RESP_NORMAL
 
     def readnext(
@@ -184,6 +193,7 @@ class VsamEngine:
             return None, RESP_ENDFILE
         record = keys[idx]
         self._cursors[cursor_key] = idx + 1
+        self._cursor_dir[cursor_key] = "next"
         return bytes(record), RESP_NORMAL
 
     def readprev(
@@ -191,21 +201,32 @@ class VsamEngine:
     ) -> tuple[bytes | None, int]:
         """READPREV FILE. Returns (record, eibresp).
 
-        The cursor points one past the last-returned record (READNEXT
-        semantics), so the previous record is two positions back from it.
+        The cursor ``p`` is a "between-records" position: READPREV returns
+        keys[p-1] then retreats to p-1. On a READNEXT→READPREV reversal the
+        cursor sits one past the just-read record, so we first skip back over
+        it (matching the IBM direction-switch behaviour) before returning the
+        prior record. A STARTBR→READPREV (no intervening READNEXT) walks
+        straight back from the positioned point — the CardDemo "seek last
+        record" idiom (STARTBR with HIGH-VALUES then READPREV).
         """
         ds = self._get_ds(file_name)
         if ds is None:
             return None, RESP_DISABLED
         keys = list(ds.store.keys())
-        idx = self._cursors.get(cursor_key, 0) - 2
+        p = self._cursors.get(cursor_key, 0)
+        if self._cursor_dir.get(cursor_key) == "next":
+            # Reverse direction: step back over the record READNEXT just read.
+            p -= 1
+        idx = p - 1
         if idx < 0:
             return None, RESP_ENDFILE
         record = keys[idx]
-        self._cursors[cursor_key] = idx + 1
+        self._cursors[cursor_key] = idx
+        self._cursor_dir[cursor_key] = "prev"
         return bytes(record), RESP_NORMAL
 
     def endbr(self, file_name: str, cursor_key: _CursorKey) -> int:
         """ENDBR FILE. Releases cursor. Returns eibresp."""
         self._cursors.pop(cursor_key, None)
+        self._cursor_dir.pop(cursor_key, None)
         return RESP_NORMAL
