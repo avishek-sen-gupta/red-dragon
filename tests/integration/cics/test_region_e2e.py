@@ -29,6 +29,7 @@ from interpreter.cics.bootstrap import run_carddemo_region
 from interpreter.cics.dispatcher import InputEvent
 from interpreter.cics.preprocessor import apply_cics_prepass
 from interpreter.cics.types import DispatchKind
+from tests.integration.cics.channel_drain import drain
 from tests.covers import covers
 from tests.integration.cobol_helpers import JAR_AVAILABLE, JAR_PATH, bridge_jar_env
 
@@ -115,9 +116,7 @@ def test_two_turn_region_real_execution(cobol_parser):
     # Loop terminated on MENUPGM's RETURN.
     assert result.kind == DispatchKind.RETURN
 
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
 
     # Two screens, in order: sign-on then menu.
     assert [s["map"] for s in screens] == ["SGNMAP", "MENMAP"]
@@ -167,9 +166,7 @@ def test_send_map_data_name_resolves_runtime_value(cobol_parser):
 
     assert result.kind == DispatchKind.RETURN
 
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
 
     assert len(screens) == 1
     # The map name is the DECODED field value 'MYMAP' (not 'WS-MAPNM').

@@ -8,9 +8,11 @@ websocket, multiprocessing) can plug in by implementing put/get without
 touching program/VM/strategy logic.
 """
 
+import queue
 import struct
 
 from tests.covers import covers, NotLanguageFeature
+from tests.integration.cics.channel_drain import drain
 from interpreter.cics.builtins.screen import (
     make_send_map_builtin,
     make_receive_map_builtin,
@@ -23,21 +25,16 @@ from interpreter.types.type_expr import UNKNOWN
 from interpreter.vm.vm_types import VMState
 
 
-class _ListScreenChannel:
-    """A non-queue ScreenChannel backed by a plain list (e.g. a stand-in for
-    an external transport that would serialise+send each rendered screen)."""
+class _ListChannel:
+    """A non-queue terminal channel backed by a plain list (a stand-in for an
+    external transport that would serialise+send each item over a wire).
 
-    def __init__(self):
-        self.items = []
-
-    def put(self, item):
-        self.items.append(item)
-
-
-class _ListInputChannel:
-    """A non-queue InputChannel backed by a list. Mirrors queue.Queue.get's
-    signature (block=True, timeout=None) so the region's .get()/.get(timeout=)
-    calls work over an arbitrary transport."""
+    Implements the full put/get channel surface — ``put`` for producers and
+    ``get(block, timeout)`` for consumers — mirroring ``queue.Queue`` so the
+    region's ``.get()`` / ``.get(timeout=)`` calls and the driver's drain
+    (``get(block=False)``) both work over an arbitrary transport. A non-blocking
+    ``get`` on an empty channel raises :class:`queue.Empty`, exactly as the
+    protocol requires."""
 
     def __init__(self):
         self.items = []
@@ -46,7 +43,14 @@ class _ListInputChannel:
         self.items.append(item)
 
     def get(self, block=True, timeout=None):
+        if not self.items:
+            raise queue.Empty
         return self.items.pop(0)
+
+
+# Readable aliases: the single put/get surface serves both directions.
+_ListScreenChannel = _ListChannel
+_ListInputChannel = _ListChannel
 
 
 class _FakeVM:
@@ -103,6 +107,28 @@ def test_send_text_drives_a_custom_non_queue_channel():
     builtin([_tv("Hello")], VMState())
     assert len(ch.items) == 1
     assert ch.items[0] == {"type": "text", "text": "Hello"}
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_non_queue_channel_drives_both_producer_and_consumer_via_put_get():
+    """BOTH ends use only put/get on a non-queue.Queue channel.
+
+    SEND TEXT (the producer/region side) ``put``s screens onto a list-backed
+    channel; the driver/test side drains them through the protocol's
+    ``get(block=False)`` (via the shared ``drain`` helper, which stops on
+    ``queue.Empty``). No ``get_nowait`` / ``empty`` / ``qsize`` anywhere — proving
+    the whole seam rides the single put/get surface end to end."""
+    ch = _ListChannel()
+    assert isinstance(ch, ScreenChannel) and isinstance(ch, InputChannel)
+
+    producer = make_send_text_builtin(ch)  # region side: only put()s
+    producer([_tv("Alpha")], VMState())
+    producer([_tv("Beta")], VMState())
+
+    drained = drain(ch)  # driver side: only get(block=False)s
+    assert [item["text"] for item in drained] == ["Alpha", "Beta"]
+    # Drain consumed everything; a second drain yields nothing (channel empty).
+    assert drain(ch) == []
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
