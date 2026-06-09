@@ -22,6 +22,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cobol.field_resolution import (
@@ -334,6 +335,13 @@ class EmitContext:
             raw = parse_hex_literal(value)
             if raw is not None:
                 return self._emit_hex_literal_bytes(raw, fl.byte_length)
+            # A figurative VALUE (SPACES / ZEROS / LOW-VALUES / ...) fills the
+            # WHOLE field with its fill character, not the literal keyword text
+            # (e.g. PIC X(52) VALUE SPACES is 52 spaces, not "SPACES" + padding).
+            # Gated on value_is_figurative so a quoted literal VALUE 'SPACE' is
+            # left verbatim. red-dragon-zuhj: surfaced via INSPECT CONVERTING.
+            if fl.value_is_figurative and value in COBOL_FIGURATIVE_CONSTANTS:
+                value = COBOL_FIGURATIVE_CONSTANTS[value] * fl.byte_length
             return self.emit_encode_alphanumeric(
                 fl.name, value, td.total_digits, justified_right=td.justified_right
             )

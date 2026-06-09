@@ -35,6 +35,7 @@ class CobolField:
     usage: str
     offset: int
     value: str = ""
+    value_is_figurative: bool = False
     redefines: str = ""
     children: list[CobolField] = field(default_factory=list)
     occurs: int = 0
@@ -61,6 +62,7 @@ class CobolField:
             usage=data.get("usage", "DISPLAY"),
             offset=data.get("offset", 0),
             value=data.get("value", ""),
+            value_is_figurative=data.get("value_is_figurative", False),
             redefines=data.get("redefines", ""),
             children=[CobolField.from_dict(c) for c in data.get("children", [])],
             occurs=data.get("occurs", 0),
@@ -88,6 +90,8 @@ class CobolField:
         }
         if self.value:
             result["value"] = self.value
+        if self.value_is_figurative:
+            result["value_is_figurative"] = True
         if self.redefines:
             result["redefines"] = self.redefines
         if self.children:

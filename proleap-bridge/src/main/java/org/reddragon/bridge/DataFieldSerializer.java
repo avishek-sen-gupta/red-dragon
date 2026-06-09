@@ -87,6 +87,13 @@ public final class DataFieldSerializer {
         if (!value.isEmpty()) {
             obj.addProperty("value", value);
         }
+        // Distinguish a figurative VALUE (SPACES, ZEROS, ...) — which fills the
+        // whole field with its fill character — from a quoted literal that merely
+        // looks like one (VALUE 'SPACE'). The figurative keyword is never quoted
+        // in source (red-dragon-zuhj).
+        if (isFigurativeValue(group)) {
+            obj.addProperty("value_is_figurative", true);
+        }
 
         JsonArray valuesArray = extractAllValues(group);
         if (valuesArray.size() > 0) {
@@ -475,6 +482,35 @@ public final class DataFieldSerializer {
             LOG.fine("No VALUE clause for " + group.getName());
         }
         return "";
+    }
+
+    private static final java.util.Set<String> FIGURATIVE_KEYWORDS = java.util.Set.of(
+            "SPACE", "SPACES", "ZERO", "ZEROS", "ZEROES", "QUOTE", "QUOTES",
+            "LOW-VALUE", "LOW-VALUES", "HIGH-VALUE", "HIGH-VALUES");
+
+    /**
+     * True when the group's VALUE clause is an (unquoted) figurative constant,
+     * as opposed to a quoted literal. The raw source text is inspected before
+     * quote stripping so VALUE 'SPACE' is NOT treated as figurative.
+     */
+    private static boolean isFigurativeValue(DataDescriptionEntryGroup group) {
+        try {
+            if (group.getValueClause() != null
+                    && !group.getValueClause().getValueIntervals().isEmpty()) {
+                ValueInterval interval = group.getValueClause().getValueIntervals().get(0);
+                ValueStmt fromVs = interval.getFromValueStmt();
+                if (fromVs != null && fromVs.getCtx() != null) {
+                    String raw = fromVs.getCtx().getText();
+                    boolean quoted = raw.length() >= 2
+                            && ((raw.startsWith("'") && raw.endsWith("'"))
+                            || (raw.startsWith("\"") && raw.endsWith("\"")));
+                    return !quoted && FIGURATIVE_KEYWORDS.contains(raw.toUpperCase());
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not determine figurative VALUE for " + group.getName());
+        }
+        return false;
     }
 
     /**

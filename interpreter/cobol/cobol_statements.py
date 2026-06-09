@@ -521,20 +521,41 @@ class SetStatement:
 
 @dataclass(frozen=True)
 class StringSending:
-    """A single sending phrase in a STRING statement."""
+    """A single sending phrase in a STRING statement.
+
+    The sending operand is usually a field reference / literal (``value``), but
+    it may also be an intrinsic ``FUNCTION`` call — e.g.
+    ``STRING FUNCTION TRIM(WS-VAR) ' ...' INTO WS-MSG`` — in which case
+    ``function`` is populated and lowering evaluates the call (red-dragon-zuhj).
+    """
 
     value: RefModOperand
     delimited_by: str  # e.g. "SIZE", "SPACES", or a literal
+    function: FunctionCallOperand | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> StringSending:
+        raw_value = data.get("value", {})
+        function = (
+            FunctionCallOperand.from_dict(raw_value)
+            if is_function_operand(raw_value)
+            else None
+        )
         return cls(
-            value=RefModOperand.from_dict(data.get("value", {})),
+            value=RefModOperand.from_dict(raw_value),
             delimited_by=data.get("delimited_by", "SIZE"),
+            function=function,
         )
 
     def to_dict(self) -> dict:
-        return {"value": self.value.to_dict(), "delimited_by": self.delimited_by}
+        result = {"value": self.value.to_dict(), "delimited_by": self.delimited_by}
+        if self.function is not None:
+            result["value"] = {
+                "kind": "function",
+                "name": self.function.name,
+                "args": list(self.function.args),
+            }
+        return result
 
 
 @dataclass(frozen=True)
@@ -623,11 +644,13 @@ class Replacing:
 class InspectStatement:
     """INSPECT source TALLYING|REPLACING ..."""
 
-    inspect_type: str = ""  # "TALLYING" or "REPLACING"
+    inspect_type: str = ""  # "TALLYING", "REPLACING", or "CONVERTING"
     source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     tallying_target: str = ""
     tallying_for: list[TallyingFor] = field(default_factory=list)
     replacings: list[Replacing] = field(default_factory=list)
+    converting_from: str = ""  # INSPECT ... CONVERTING <from> TO <to>
+    converting_to: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> InspectStatement:
@@ -639,6 +662,8 @@ class InspectStatement:
                 TallyingFor.from_dict(t) for t in data.get("tallying_for", [])
             ],
             replacings=[Replacing.from_dict(r) for r in data.get("replacings", [])],
+            converting_from=data.get("converting_from", ""),
+            converting_to=data.get("converting_to", ""),
         )
 
     def to_dict(self) -> dict:
@@ -652,6 +677,9 @@ class InspectStatement:
             result["tallying_for"] = [t.to_dict() for t in self.tallying_for]
         elif self.inspect_type == "REPLACING":
             result["replacings"] = [r.to_dict() for r in self.replacings]
+        elif self.inspect_type == "CONVERTING":
+            result["converting_from"] = self.converting_from
+            result["converting_to"] = self.converting_to
         return result
 
 
