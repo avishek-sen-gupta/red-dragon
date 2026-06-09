@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from sortedcontainers import SortedDict
 
+from interpreter.cics.vsam.backend import InMemoryBackend, VsamBackend
 from interpreter.cics.vsam.fct import FctConfig
 
 logger = logging.getLogger(__name__)
@@ -45,8 +47,11 @@ class VsamEngine:
     CARD-XREF ACCT-ID at offset 25).
     """
 
-    def __init__(self, config: FctConfig) -> None:
+    def __init__(self, config: FctConfig, backend: VsamBackend | None = None) -> None:
         self._config = config
+        self._backend: VsamBackend = (
+            backend if backend is not None else InMemoryBackend()
+        )
         self._datasets: dict[str, VsamDataset] = {}
         # Browse position cursor: a "between-records" index ``p`` in [0, len].
         # READNEXT returns keys[p] then advances; READPREV returns keys[p-1]
@@ -56,22 +61,16 @@ class VsamEngine:
         self._cursor_dir: dict[_CursorKey, str] = {}
 
     def load_all(self) -> None:
-        """Load all configured datasets from their ASCII flat files."""
+        """Load all configured datasets via the backend (seed or persisted state)."""
         for name, cfg in self._config.datasets.items():
             ds = VsamDataset(
                 record_length=cfg.record_length,
                 key_offset=cfg.key_offset,
                 key_length=cfg.key_length,
             )
-            if cfg.path.exists():
-                data = cfg.path.read_bytes()
-                rec_len = cfg.record_length
-                for i in range(0, len(data), rec_len):
-                    record = data[i : i + rec_len]
-                    if len(record) == rec_len:
-                        # Key is the first N bytes — caller specifies key at operation time
-                        # Store with full record as key for now; keyed operations use slice
-                        ds.store[record] = record
+            for record in self._backend.load(name, cfg):
+                if len(record) == cfg.record_length:
+                    ds.store[record] = record
             self._datasets[name.upper()] = ds
             logger.info("VSAM: loaded %s (%d records)", name, len(ds.store))
 
@@ -80,6 +79,15 @@ class VsamEngine:
 
     def _get_ds(self, file_name: str) -> VsamDataset | None:
         return self._datasets.get(file_name.upper().strip("'\""))
+
+    def _persist(self, file_name: str) -> None:
+        """Write-through the dataset's current records via the backend."""
+        canonical = file_name.upper().strip("'\"")
+        cfg = self._config.datasets.get(canonical)
+        ds = self._datasets.get(canonical)
+        if cfg is None or ds is None:
+            return
+        self._backend.persist(canonical, cfg, list(ds.store.keys()))
 
     @staticmethod
     def _record_key(ds: VsamDataset, record: bytes, key_length: int) -> bytes:
@@ -120,6 +128,7 @@ class VsamEngine:
             if self._record_key(ds, existing, key_length) == key_prefix:
                 return RESP_DUPREC
         ds.store[bytes(record)] = bytes(record)
+        self._persist(file_name)
         return RESP_NORMAL
 
     def rewrite(
@@ -139,6 +148,7 @@ class VsamEngine:
             if self._record_key(ds, existing, key_length) == key_prefix:
                 del ds.store[existing]
                 ds.store[bytes(record)] = bytes(record)
+                self._persist(file_name)
                 return RESP_NORMAL
         return RESP_NOTFND
 
@@ -152,6 +162,7 @@ class VsamEngine:
         for existing in list(ds.store.keys()):
             if self._record_key(ds, existing, key_length) == key_prefix:
                 del ds.store[existing]
+                self._persist(file_name)
                 return RESP_NORMAL
         return RESP_NOTFND
 
@@ -230,3 +241,18 @@ class VsamEngine:
         self._cursors.pop(cursor_key, None)
         self._cursor_dir.pop(cursor_key, None)
         return RESP_NORMAL
+
+    def flush_to(self, directory: Path) -> None:
+        """Snapshot every dataset's current records to <directory>/<NAME>.dat
+        via the raw codec, regardless of the configured backend."""
+        from interpreter.cics.vsam.format import write_flat_file
+
+        for name, ds in self._datasets.items():
+            cfg = self._config.datasets.get(name)
+            if cfg is None:
+                continue
+            write_flat_file(
+                Path(directory) / f"{name}.dat",
+                list(ds.store.keys()),
+                cfg.record_length,
+            )
