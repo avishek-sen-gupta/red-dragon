@@ -172,6 +172,48 @@ public class RefModSerializerTest {
         assertEquals("WS-B", len.get("name").getAsString());
     }
 
+    @Test
+    public void testRefMod_qualifiedNameKeepsRefMod() throws Exception {
+        // MOVE #10 is MOVE WS-SUB OF WS-GRP(2:8) TO WS-OUT. The reference
+        // modification (2:8) must survive even though the data reference is
+        // qualified with OF — ProLeap models the refmod deeper in the parse
+        // tree for qualified names, so getRefMod must search the subtree.
+        // Regressed CardDemo COTRN02C amount validation (TRNAMTI OF COTRN2AI).
+        JsonObject src = getMoveSourceOperand(9);
+        assertEquals("WS-SUB", src.get("name").getAsString());
+        assertTrue("qualified ref-mod must keep ref_mod_start", src.has("ref_mod_start"));
+        assertTrue("qualified ref-mod must keep ref_mod_length", src.has("ref_mod_length"));
+        JsonObject start = src.getAsJsonObject("ref_mod_start");
+        assertEquals("lit", start.get("kind").getAsString());
+        assertEquals("2", start.get("value").getAsString());
+        JsonObject len = src.getAsJsonObject("ref_mod_length");
+        assertEquals("lit", len.get("kind").getAsString());
+        assertEquals("8", len.get("value").getAsString());
+    }
+
+    @Test
+    public void testLengthOf_qualifiedNameUsesLeafName() throws Exception {
+        // PERFORM VARYING WS-A FROM LENGTH OF WS-SUB OF WS-GRP BY -1. The
+        // LENGTH OF special register's operand is qualified (WS-SUB OF WS-GRP);
+        // the emitted length_of node must carry the LEAF name "WS-SUB", not the
+        // glued "WS-SUBOFWS-GRP" (which the frontend can't resolve -> length 0).
+        // Regressed CardDemo COMEN01C option parse (LENGTH OF OPTIONI OF COMEN1AI).
+        JsonObject asg = parseFixture("ref_mod.cbl");
+        JsonObject para = findParagraph(asg.getAsJsonArray("paragraphs"), "MAIN-PARA");
+        JsonObject perform = null;
+        for (JsonElement e : para.getAsJsonArray("statements")) {
+            JsonObject s = e.getAsJsonObject();
+            if ("PERFORM".equals(s.get("type").getAsString())) {
+                perform = s;
+                break;
+            }
+        }
+        assertNotNull("PERFORM VARYING must exist", perform);
+        JsonObject from = perform.getAsJsonObject("varying_from");
+        assertEquals("length_of", from.get("kind").getAsString());
+        assertEquals("WS-SUB", from.get("name").getAsString());
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private JsonObject getMoveSourceOperand(int moveIndex) throws Exception {
