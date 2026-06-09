@@ -193,6 +193,7 @@ class EmitContext:
         name: str,
         materialised: MaterialisedSectionedLayout,
         qualifiers: tuple[str, ...] = (),
+        subscripts: tuple[str, ...] = (),
     ) -> tuple[ResolvedFieldRef, Register]:
         """Resolve a field reference that may contain subscript notation.
 
@@ -201,8 +202,22 @@ class EmitContext:
 
         ``qualifiers`` (``OF``/``IN`` ancestor group names) disambiguate a
         duplicated elementary name (CardDemo CSUTLDTC's two Vstring groups).
+
+        ``subscripts`` carries structured subscripts. When supplied, ``name`` is
+        the bare base name and ``subscripts`` holds the index expressions. When
+        empty (the default), fall back to parsing legacy ``"NAME(SUB)"`` notation
+        from ``name`` (transitional — removed once all feeders emit structured
+        subscripts; see red-dragon-6ddr).
         """
-        base_name, subscript = parse_subscript_notation(name)
+        if subscripts:
+            if len(subscripts) > 1:
+                raise NotImplementedError(
+                    f"multi-dimensional subscript not supported for {name!r} "
+                    f"({len(subscripts)} subscripts); see red-dragon-cqwx"
+                )
+            base_name, subscript = name, subscripts[0]
+        else:
+            base_name, subscript = parse_subscript_notation(name)
         fl, region_reg = materialised.resolve(base_name, qualifiers)
 
         if not subscript:
