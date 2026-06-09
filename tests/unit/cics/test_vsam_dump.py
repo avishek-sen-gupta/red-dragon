@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from interpreter.cics.vsam.dump import _decode_leaf, decode_record
+from interpreter.cics.vsam.dump import (
+    _decode_leaf,
+    decode_record,
+    render_block,
+    render_jsonl,
+    select_record_layout,
+)
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.ebcdic_table import EbcdicTable
@@ -245,3 +253,58 @@ def test_decode_record_odo_counter_clamped_to_min():
     out = decode_record(layout, record)
     assert out["N"] == 0
     assert out["ITEM"] == ["AA"]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_render_jsonl_one_object_per_record():
+    layout = DataLayout(
+        fields={"S": _fl(CobolDataCategory.ALPHANUMERIC, 0, 1, 1)}, total_bytes=1
+    )
+    records = [EbcdicTable.ascii_to_ebcdic(b"Y"), EbcdicTable.ascii_to_ebcdic(b"N")]
+    out = render_jsonl(layout, records)
+    lines = out.splitlines()
+    assert json.loads(lines[0]) == {"S": "Y"}
+    assert json.loads(lines[1]) == {"S": "N"}
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_render_block_shows_offset_name_value_hex():
+    layout = DataLayout(
+        fields={"S": _fl(CobolDataCategory.ALPHANUMERIC, 0, 1, 1)}, total_bytes=1
+    )
+    out = render_block(layout, [EbcdicTable.ascii_to_ebcdic(b"Y")])
+    assert "S" in out
+    assert "Y" in out
+    assert "@0" in out
+    assert EbcdicTable.ascii_to_ebcdic(b"Y").hex() in out  # raw hex present
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_select_record_layout_single_group_is_default():
+    inner = DataLayout(
+        fields={"X": _fl(CobolDataCategory.ALPHANUMERIC, 0, 1, 1)},
+        offset=0,
+        total_bytes=1,
+    )
+    root = DataLayout(groups={"REC-A": inner}, total_bytes=1)
+    assert select_record_layout(root, None) is inner
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_select_record_layout_multiple_groups_requires_name():
+    a = DataLayout(offset=0, total_bytes=1)
+    b = DataLayout(offset=1, total_bytes=1)
+    root = DataLayout(groups={"REC-A": a, "REC-B": b}, total_bytes=2)
+    with pytest.raises(ValueError) as exc:
+        select_record_layout(root, None)
+    assert "REC-A" in str(exc.value) and "REC-B" in str(exc.value)
+    assert select_record_layout(root, "REC-B") is b
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_select_record_layout_no_groups_uses_root():
+    # A copybook whose 01 is elementary: decode the root itself.
+    root = DataLayout(
+        fields={"X": _fl(CobolDataCategory.ALPHANUMERIC, 0, 1, 1)}, total_bytes=1
+    )
+    assert select_record_layout(root, None) is root
