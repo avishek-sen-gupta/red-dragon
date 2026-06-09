@@ -69,7 +69,11 @@ def test_missing_copybook_raises_clean_error():
     text = str(excinfo.value)
     assert "MYBOOK" in text
     assert "/x/cpy" in text
-    assert "Could not find copy book" not in text  # raw Java message not leaked
+    # Wrap-and-raise (red-dragon-vgm5): the underlying parser error is surfaced
+    # verbatim — we no longer regex-scrape the copybook name out of it.
+    assert "Could not find copy book" in text
+    # And the original error is chained as the cause.
+    assert excinfo.value.__cause__ is raw
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
