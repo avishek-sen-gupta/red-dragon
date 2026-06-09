@@ -214,6 +214,49 @@ public class RefModSerializerTest {
         assertEquals("WS-SUB", from.get("name").getAsString());
     }
 
+    @Test
+    public void testRefMod_insideFunctionArgKeepsStructured() throws Exception {
+        // IF FUNCTION LENGTH(FUNCTION TRIM(WS-FIELD(1:WS-A))) = 0 ...
+        // The reference-modified field WS-FIELD(1:WS-A) sits inside a nested
+        // intrinsic-function argument. It must serialize as a structured ref
+        // node — bare name "WS-FIELD" + ref_mod_start/ref_mod_length — NOT as a
+        // flat name "WS-FIELD(1:WS-A)". A flattened name resolves to the wrong
+        // (literal) offset once parse_subscript_notation was retired
+        // (red-dragon-6ddr), which broke CardDemo COACTUPC account-update
+        // validation and blocked the status-change REWRITE. (red-dragon-74qu)
+        JsonObject asg = parseFixture("ref_mod.cbl");
+        JsonObject para = findParagraph(asg.getAsJsonArray("paragraphs"), "MAIN-PARA");
+        JsonObject ifStmt = null;
+        for (JsonElement e : para.getAsJsonArray("statements")) {
+            JsonObject s = e.getAsJsonObject();
+            if ("IF".equals(s.get("type").getAsString())) {
+                ifStmt = s;
+                break;
+            }
+        }
+        assertNotNull("IF statement must exist", ifStmt);
+        // condition.relation.left = FUNCTION LENGTH( FUNCTION TRIM( ref ) )
+        JsonObject left = ifStmt.getAsJsonObject("condition")
+                .getAsJsonObject("relation").getAsJsonObject("left");
+        assertEquals("function", left.get("kind").getAsString());
+        assertEquals("LENGTH", left.get("name").getAsString());
+        JsonObject trim = left.getAsJsonArray("args").get(0).getAsJsonObject();
+        assertEquals("function", trim.get("kind").getAsString());
+        assertEquals("TRIM", trim.get("name").getAsString());
+        JsonObject ref = trim.getAsJsonArray("args").get(0).getAsJsonObject();
+        assertEquals("ref", ref.get("kind").getAsString());
+        assertEquals("WS-FIELD", ref.get("name").getAsString());
+        assertFalse("name must not glue the ref-mod slice",
+                ref.get("name").getAsString().contains("("));
+        assertTrue("function-arg ref-mod must keep ref_mod_start",
+                ref.has("ref_mod_start"));
+        assertEquals("1", ref.getAsJsonObject("ref_mod_start").get("value").getAsString());
+        assertTrue("function-arg ref-mod must keep ref_mod_length",
+                ref.has("ref_mod_length"));
+        assertEquals("WS-A",
+                ref.getAsJsonObject("ref_mod_length").get("name").getAsString());
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private JsonObject getMoveSourceOperand(int moveIndex) throws Exception {
