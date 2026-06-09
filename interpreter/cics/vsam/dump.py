@@ -29,7 +29,11 @@ def _decode_leaf(field: FieldLayout, data: bytes) -> int | float | str:
     td = field.type_descriptor
     cat = td.category
     if cat == CobolDataCategory.ALPHANUMERIC:
-        return EbcdicTable.ebcdic_to_ascii(data).decode("latin-1").rstrip(" ")
+        return (
+            EbcdicTable.ebcdic_to_ascii(data)
+            .decode("ascii", errors="replace")
+            .rstrip(" ")
+        )
     if cat == CobolDataCategory.ZONED_DECIMAL:
         return _as_number(decode_zoned(data, td.decimal_digits), td.decimal_digits)
     if cat == CobolDataCategory.COMP3:
