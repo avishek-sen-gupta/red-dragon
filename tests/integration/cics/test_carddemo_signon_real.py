@@ -138,7 +138,7 @@ def _cust_record() -> bytes:
         + _num("123456789", 9)  # CUST-SSN 9(9)
         + _ebcdic("GID12345", 20)  # CUST-GOVT-ISSUED-ID
         + _ebcdic("1980-01-01", 10)  # CUST-DOB-YYYY-MM-DD
-        + _ebcdic("", 10)  # CUST-EFT-ACCOUNT-ID
+        + _ebcdic("0000000099", 10)  # CUST-EFT-ACCOUNT-ID (numeric, required by 1245)
         + _ebcdic("Y", 1)  # CUST-PRI-CARD-HOLDER-IND
         + _num("750", 3)  # CUST-FICO-CREDIT-SCORE 9(3)
     )
@@ -735,30 +735,6 @@ def _resubmit_fields(view: dict, *, status: str) -> dict[str, str]:
     return fields
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "red-dragon-ge72 (intrinsic FUNCTION operands dropped in IF relations) is "
-        "FIXED: COACTUPC 1205-COMPARE-OLD-NEW now correctly detects the status "
-        "change (verified: UPPER-CASE('N') vs UPPER-CASE('Y') compares unequal, "
-        "FUNCTION TRIM works). The change IS detected. But the confirm/REWRITE "
-        "path is now blocked by a DISTINCT new gap: COACTUPC 1200-EDIT-MAP-INPUTS "
-        "field validation (1250-EDIT-SIGNED-9V2, EDIT-DATE-CCYYMMDD, 1100-RECEIVE-"
-        "MAP credit-limit checks at cbl ~1078-1136) depends on unimplemented COBOL "
-        "intrinsics FUNCTION NUMVAL / NUMVAL-C / TEST-NUMVAL / TEST-NUMVAL-C / "
-        "LENGTH / INTEGER-OF-DATE, which lower_function_operand stubs to their first "
-        "argument (warns 'Unsupported COBOL intrinsic FUNCTION'). A signed-number / "
-        "date validation therefore spuriously sets INPUT-ERROR, so 2000-DECIDE-ACTION "
-        "WHEN ACUP-SHOW-DETAILS sees INPUT-ERROR and stays in SHOW-DETAILS instead of "
-        "setting ACUP-CHANGES-OK-NOT-CONFIRMED, so PF05 -> 9600-WRITE-PROCESSING -> "
-        "REWRITE is never reached. Secondary: STRING 'X must be supplied' message "
-        "(cbl ~1840) serializes its FUNCTION TRIM source via serializeMoveOperand, "
-        "which still drops the function (ERRMSG shows bare 'TRIM'). Next loop input: "
-        "implement NUMVAL/NUMVAL-C/TEST-NUMVAL/TEST-NUMVAL-C/LENGTH/INTEGER-OF-DATE "
-        "byte_builtins + map in _INTRINSIC_FUNCTIONS, and route STRING/MOVE function "
-        "sources through serializeFunctionNode. Layer: interpreter/cobol + bridge."
-    ),
-)
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
 def test_real_carddemo_account_update_rewrite(tmp_path):
     """Account-update Turns C + D: edit a field, confirm with PF05, and verify
@@ -805,10 +781,16 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
 
     # --- Turn D: PF05 confirm -> 9600-WRITE-PROCESSING (READ UPDATE + REWRITE) ---
     # Following Turn C's RETURN TRANSID CAUP -> a fresh terminal input (PF05).
+    # COACTUPC re-RECEIVEs and re-validates the map on the confirm turn too
+    # (1000-PROCESS-INPUTS runs before 2000-DECIDE-ACTION), so a real 3270 resends
+    # the full screen buffer. Resend the same modified field set with PF05 — sending
+    # only ACCTSID would blank ACUP-NEW-ACTIVE-STATUS and lose the change.
     while not screen_q.empty():
         screen_q.get_nowait()
     rD = region.step(
-        input_event=InputEvent(eibaid=_DFHPF5, fields={"ACCTSID": _ACCT_ID})
+        input_event=InputEvent(
+            eibaid=_DFHPF5, fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS)
+        )
     )
     # Verify the REWRITE persisted: read ACCTDAT back from the engine and check
     # the active-status byte (offset 11, X(1)) is now 'N'.
