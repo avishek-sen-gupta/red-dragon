@@ -50,7 +50,7 @@ Wrap the copybook in a minimal program skeleton (IDENTIFICATION DIVISION / PROGR
   - COMP-3 packed → `decode_comp3(slice, decimal_digits)`.
   - COMP binary → `decode_binary(slice, decimal_digits, signed)`.
 - **Group** (`DataLayout` child): nested `dict` mirroring the record tree.
-- **OCCURS** group/field: a JSON array of the element shape, one entry per occurrence. OCCURS DEPENDING ON decodes the maximum count (the raw image is fixed-width).
+- **OCCURS** group/field: a JSON array of the element shape, one entry per occurrence. **OCCURS DEPENDING ON honors the counter:** decode the counter field (named by `FieldLayout.occurs_depending_on`) from the same record bytes, then emit exactly that many occurrences, clamped to `[occurs_min, occurs_count]`. This yields the logical view the program sees — decoding the fixed max width would present leftover bytes in the unused trailing slots as if they were real data and could trigger spurious decode errors on non-conforming garbage. If the decoded counter falls outside `[occurs_min, occurs_count]` it is clamped, and the raw out-of-range counter value is surfaced (in `block` format as a note; it remains visible as the counter field's own value in `jsonl`) since that signals record corruption.
 - **REDEFINES**: both the base field and the redefining field are emitted (alternate readings of the same bytes — informative).
 
 Numeric values decode to `int`/`float` per PIC scale; the decoders already return the correctly-scaled value.
@@ -82,7 +82,8 @@ Numeric values decode to `int`/`float` per PIC scale; the decoders already retur
   - COMP-3 packed decimal.
   - COMP binary.
   - a nested group → nested dict.
-  - an OCCURS field → JSON array.
+  - a fixed OCCURS field → JSON array of the declared count.
+  - an OCCURS DEPENDING ON field → array length equals the decoded counter (not max); trailing junk bytes are not decoded; an out-of-range counter clamps to `[occurs_min, occurs_count]`.
   - a REDEFINES pair → both views present.
 - Renderers: `jsonl` emits one JSON object per record in order; `block` emits offset/name/value/hex lines.
 - Record-length mismatch → the CLI path raises/reports the `ValueError`.
