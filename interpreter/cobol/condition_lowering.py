@@ -9,6 +9,7 @@ from interpreter.cobol.cobol_expression import (
     BinOpNode,
     ExprNode,
     FieldRefNode,
+    FunctionNode,
     LiteralNode,
     RefModNode,
 )
@@ -613,6 +614,17 @@ def _lower_expr_dict(
         )
         return result
 
+    if kind == "function":
+        # Intrinsic FUNCTION call as a relation operand (red-dragon-ge72), e.g.
+        # FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B). Delegate to the shared
+        # function-operand lowering so the call + args produce a computed value
+        # register that compares normally.
+        from interpreter.cobol.ref_mod import FunctionCallOperand
+        from interpreter.cobol.lower_arithmetic import lower_function_operand
+
+        operand = FunctionCallOperand.from_dict(expr)
+        return lower_function_operand(ctx, operand, materialised)
+
     if kind == "neg":
         inner = _lower_expr_dict(ctx, expr["expr"], materialised)
         zero_reg = ctx.const_to_reg(0)
@@ -761,5 +773,66 @@ def lower_expr_node(
             )
         )
         return result_reg
+    if isinstance(node, FunctionNode):
+        # Intrinsic FUNCTION call as an expression/relation operand (e.g.
+        # FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B), or COMPUTE X =
+        # FUNCTION TRIM(WS-A)). Each arg is lowered to a string-valued register
+        # then passed to the COBOL-layer builtin (red-dragon-ge72).
+        from interpreter.cobol.lower_arithmetic import (
+            _INTRINSIC_FUNCTIONS,
+            _lower_function_arg_to_string,
+        )
+
+        builtin = _INTRINSIC_FUNCTIONS.get(node.name.upper())
+        arg_regs = tuple(
+            _lower_function_arg_to_string(
+                ctx, _expr_node_to_arg_dict(arg), materialised
+            )
+            for arg in node.args
+        )
+        if builtin is None:
+            logger.warning(
+                "Unsupported COBOL intrinsic FUNCTION %r — falling back to first argument",
+                node.name,
+            )
+            return arg_regs[0] if arg_regs else ctx.const_to_reg('""')
+        result_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=result_reg,
+                func_name=FuncName(builtin),
+                args=arg_regs,
+            )
+        )
+        return result_reg
     logger.warning("Unknown expression node type: %s", type(node).__name__)
     return ctx.const_to_reg(0)
+
+
+def _expr_node_to_arg_dict(node: ExprNode) -> dict:
+    """Convert an ExprNode argument back into the operand-dict shape consumed by
+    ``_lower_function_arg_to_string`` (ref/lit/binop/neg).
+
+    Intrinsic-function arguments are simple operands (a field ref or literal in
+    CardDemo's usage); richer arithmetic args round-trip through the generic
+    expression kinds.
+    """
+    if isinstance(node, LiteralNode):
+        return {"kind": "lit", "value": node.value}
+    if isinstance(node, FieldRefNode):
+        return {"kind": "ref", "name": node.name}
+    if isinstance(node, BinOpNode):
+        return {
+            "kind": "binop",
+            "op": node.op,
+            "left": _expr_node_to_arg_dict(node.left),
+            "right": _expr_node_to_arg_dict(node.right),
+        }
+    if isinstance(node, FunctionNode):
+        return {
+            "kind": "function",
+            "name": node.name,
+            "args": [_expr_node_to_arg_dict(a) for a in node.args],
+        }
+    # RefModNode and any other shape: stringify via the ref name as a fallback.
+    return {"kind": "ref", "name": getattr(node, "name", "")}

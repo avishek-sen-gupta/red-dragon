@@ -6068,3 +6068,117 @@ class TestNumericDisplayVsAlphanumericRelation:
         assert (
             _decode_zoned_unsigned(region, 5, 1) == 1
         ), "alphanumeric char-literal comparison regressed (dmu8 over-reach)"
+
+
+class TestIntrinsicFunctionInRelation:
+    """FUNCTION intrinsic calls as operands of an IF relation (red-dragon-ge72).
+
+    Before the bridge fix both relation operands collapsed to a bare
+    {"kind":"ref","name":"UPPER-CASE"} and always compared EQUAL. The fix
+    serializes a structured {"kind":"function",...} node so the call + args
+    survive and lower to the computed value.
+    """
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.COMPARISON_OPERATORS)
+    def test_upper_case_relation_unequal(self):
+        """IF UPPER-CASE('n') = UPPER-CASE('Y') is FALSE (N != Y) -> ELSE, R=2."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-UCR1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF FUNCTION UPPER-CASE('n') = FUNCTION UPPER-CASE('Y')",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 2
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.COMPARISON_OPERATORS)
+    def test_upper_case_relation_equal(self):
+        """IF UPPER-CASE('n') = UPPER-CASE('y') is TRUE (N == N... 'n'->'N', 'y'->'Y').
+
+        Use 'n' vs 'N' so the uppercased forms match -> THEN branch, R=1.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-UCR2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF FUNCTION UPPER-CASE('n') = FUNCTION UPPER-CASE('N')",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.COMPARISON_OPERATORS)
+    def test_trim_relation_equal(self):
+        """IF FUNCTION TRIM(' AB ') = 'AB' strips both ends -> TRUE, R=1."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-TRIM1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF FUNCTION TRIM(' AB ') = 'AB'",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 1) == 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.COMPARISON_OPERATORS)
+    def test_function_vs_ref_relation_changed_field(self):
+        """Two WS fields, one differing: UPPER-CASE(A) = UPPER-CASE(B) reflects
+        inequality (A='Active', B='active' uppercase equal -> equal; but here
+        A='Active' B='Closed' differ -> ELSE, R=2)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-FVR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC X(6) VALUE 'Active'.",
+                "01 WS-B PIC X(6) VALUE 'Closed'.",
+                "01 R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF FUNCTION UPPER-CASE(WS-A) = FUNCTION UPPER-CASE(WS-B)",
+                "        MOVE 1 TO R",
+                "    ELSE",
+                "        MOVE 2 TO R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        )
+        region = _first_region(vm)
+        # R is at offset 12 (after WS-A X(6) + WS-B X(6)).
+        assert _decode_zoned_unsigned(region, 12, 1) == 2

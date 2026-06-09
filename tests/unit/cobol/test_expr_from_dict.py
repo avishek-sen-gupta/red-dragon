@@ -3,6 +3,7 @@ from interpreter.cobol.cobol_expression import (
     BinOpNode,
     ExprNode,
     FieldRefNode,
+    FunctionNode,
     LiteralNode,
     RefModNode,
     expr_from_dict,
@@ -95,3 +96,42 @@ class TestExprFromDict:
         assert result.left.ref_mod_start == LiteralNode(value="1")
         assert result.left.ref_mod_length == LiteralNode(value="3")
         assert result.right == LiteralNode(value="5")
+
+    @covers(CobolFeature.COMPUTE, CobolFeature.INTRINSIC_FUNCTION)
+    def test_function_node_with_ref_arg(self) -> None:
+        """An intrinsic FUNCTION operand (red-dragon-ge72) deserializes to a
+        FunctionNode carrying its name + structured args, not a bare ref."""
+        result = expr_from_dict(
+            {
+                "kind": "function",
+                "name": "UPPER-CASE",
+                "args": [{"kind": "ref", "name": "WS-A"}],
+            }
+        )
+        assert isinstance(result, FunctionNode)
+        assert result.name == "UPPER-CASE"
+        assert result.args == (FieldRefNode(name="WS-A"),)
+
+    @covers(CobolFeature.COMPUTE, CobolFeature.INTRINSIC_FUNCTION)
+    def test_nested_function_node(self) -> None:
+        """FUNCTION UPPER-CASE(FUNCTION TRIM(WS-A)) deserializes to nested
+        FunctionNodes — the inner call + arg survive (red-dragon-ge72)."""
+        result = expr_from_dict(
+            {
+                "kind": "function",
+                "name": "UPPER-CASE",
+                "args": [
+                    {
+                        "kind": "function",
+                        "name": "TRIM",
+                        "args": [{"kind": "ref", "name": "WS-A"}],
+                    }
+                ],
+            }
+        )
+        assert isinstance(result, FunctionNode)
+        assert result.name == "UPPER-CASE"
+        inner = result.args[0]
+        assert isinstance(inner, FunctionNode)
+        assert inner.name == "TRIM"
+        assert inner.args == (FieldRefNode(name="WS-A"),)
