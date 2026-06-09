@@ -315,7 +315,11 @@ class TestProcedureDivisionLowering:
             ),
         ]
         stmts = [
-            ArithmeticStatement(op="ADD", source=RefModOperand(name="5"), target="WS-A")
+            ArithmeticStatement(
+                op="ADD",
+                source=RefModOperand(name="5"),
+                target=RefModOperand(name="WS-A"),
+            )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
@@ -343,7 +347,9 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             ArithmeticStatement(
-                op="SUBTRACT", source=RefModOperand(name="3"), target="WS-A"
+                op="SUBTRACT",
+                source=RefModOperand(name="3"),
+                target=RefModOperand(name="WS-A"),
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)

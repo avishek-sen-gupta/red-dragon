@@ -278,7 +278,7 @@ public final class StatementSerializer {
                 operands.add(serializeArithSource(vs));
             }
             for (To to : addTo.getTos()) {
-                operands.add(extractCallName(to.getToCall()));
+                operands.add(serializeRef(to.getToCall()));
             }
         } else {
             AddToGivingStatement addGiving = stmt.getAddToGivingStatement();
@@ -291,7 +291,7 @@ public final class StatementSerializer {
                 }
                 JsonArray givingTargets = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.add.Giving g : addGiving.getGivings()) {
-                    givingTargets.add(extractCallName(g.getGivingCall()));
+                    givingTargets.add(serializeRef(g.getGivingCall()));
                 }
                 if (givingTargets.size() > 0) {
                     obj.add("giving", givingTargets);
@@ -320,7 +320,7 @@ public final class StatementSerializer {
                 operands.add(serializeArithSource(vs));
             }
             for (Minuend min : subtractFrom.getMinuends()) {
-                operands.add(extractCallName(min.getMinuendCall()));
+                operands.add(serializeRef(min.getMinuendCall()));
             }
         } else {
             SubtractFromGivingStatement subtractGiving = stmt.getSubtractFromGivingStatement();
@@ -337,7 +337,7 @@ public final class StatementSerializer {
                 }
                 JsonArray givingTargets = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.subtract.Giving g : subtractGiving.getGivings()) {
-                    givingTargets.add(extractCallName(g.getGivingCall()));
+                    givingTargets.add(serializeRef(g.getGivingCall()));
                 }
                 if (givingTargets.size() > 0) {
                     obj.add("giving", givingTargets);
@@ -381,7 +381,7 @@ public final class StatementSerializer {
                     for (io.proleap.cobol.asg.metamodel.procedure.multiply.GivingResult gr : givingPhrase.getGivingResults()) {
                         Call resultCall = gr.getResultCall();
                         if (resultCall != null) {
-                            givingTargets.add(extractCallName(resultCall));
+                            givingTargets.add(serializeRef(resultCall));
                         }
                     }
                     if (givingTargets.size() > 0) {
@@ -395,7 +395,7 @@ public final class StatementSerializer {
                     for (ByOperand byOp : byPhrase.getByOperands()) {
                         Call targetCall = byOp.getOperandCall();
                         if (targetCall != null) {
-                            operands.add(extractCallName(targetCall));
+                            operands.add(serializeRef(targetCall));
                         }
                     }
                 }
@@ -438,7 +438,7 @@ public final class StatementSerializer {
                         for (Giving g : gp.getGivings()) {
                             Call givingCall = g.getGivingCall();
                             if (givingCall != null) {
-                                givingTargets.add(extractCallName(givingCall));
+                                givingTargets.add(serializeRef(givingCall));
                             }
                         }
                         if (givingTargets.size() > 0) {
@@ -459,7 +459,7 @@ public final class StatementSerializer {
                         for (Giving g : gp.getGivings()) {
                             Call givingCall = g.getGivingCall();
                             if (givingCall != null) {
-                                givingTargets.add(extractCallName(givingCall));
+                                givingTargets.add(serializeRef(givingCall));
                             }
                         }
                         if (givingTargets.size() > 0) {
@@ -474,7 +474,7 @@ public final class StatementSerializer {
                     for (Into into : intoStmt.getIntos()) {
                         Call targetCall = into.getGivingCall();
                         if (targetCall != null) {
-                            operands.add(extractCallName(targetCall));
+                            operands.add(serializeRef(targetCall));
                         }
                     }
                 }
@@ -1420,21 +1420,66 @@ public final class StatementSerializer {
         // Unwrap delegate calls to reach the actual underlying call
         Call unwrapped = call.unwrap();
 
-        // Detect TABLE_CALL and append subscript notation
+        // A TABLE_CALL is a subscripted reference; emit the BARE base name. The
+        // subscripts travel separately (see extractSubscripts / serializeRef);
+        // they are no longer flattened into the name string. (red-dragon-6ddr)
         if (unwrapped.getCallType() == Call.CallType.TABLE_CALL && unwrapped instanceof TableCall tableCall) {
             String baseName = tableCall.getName();
-            List<Subscript> subscripts = tableCall.getSubscripts();
-            if (subscripts != null && !subscripts.isEmpty()) {
-                // Single-dimension OCCURS: use first subscript only
-                Subscript sub = subscripts.get(0);
-                String subText = extractValueStmtText(sub.getSubscriptValueStmt());
-                return baseName + "(" + subText + ")";
-            }
             return (baseName != null) ? baseName : unwrapped.toString();
         }
 
         String name = call.getName();
         return (name != null) ? name : call.toString();
+    }
+
+    /**
+     * All subscripts of a (possibly delegated) TABLE_CALL, in source order, each
+     * as its source text; an empty array for any non-table call. Fixes the prior
+     * single-dimension truncation (only {@code get(0)} was kept). (red-dragon-6ddr)
+     */
+    private static JsonArray extractSubscripts(Call call) {
+        JsonArray arr = new JsonArray();
+        if (call == null) {
+            return arr;
+        }
+        Call unwrapped = call.unwrap();
+        if (unwrapped.getCallType() == Call.CallType.TABLE_CALL && unwrapped instanceof TableCall tableCall) {
+            List<Subscript> subscripts = tableCall.getSubscripts();
+            if (subscripts != null) {
+                for (Subscript sub : subscripts) {
+                    arr.add(extractValueStmtText(sub.getSubscriptValueStmt()));
+                }
+            }
+        }
+        return arr;
+    }
+
+    /**
+     * Structured reference operand: {@code {name: <bare base>, subscripts:[...],
+     * ref_mod_start?, ref_mod_length?, qualifiers?}}. Subscripts and ref-mod keys
+     * are present only when non-empty. The single serializer for any subscriptable
+     * data reference. (red-dragon-6ddr)
+     */
+    private static JsonObject serializeRef(Call call) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("name", extractCallName(call));
+        JsonArray subs = extractSubscripts(call);
+        if (subs.size() > 0) {
+            obj.add("subscripts", subs);
+        }
+        CobolParser.ReferenceModifierContext refMod = getRefMod(call);
+        if (refMod != null) {
+            JsonObject rm = serializeRefMod(refMod);
+            obj.add("ref_mod_start", rm.get("ref_mod_start"));
+            if (rm.has("ref_mod_length")) {
+                obj.add("ref_mod_length", rm.get("ref_mod_length"));
+            }
+        }
+        JsonArray qualifiers = extractQualifiers(call);
+        if (qualifiers.size() > 0) {
+            obj.add("qualifiers", qualifiers);
+        }
+        return obj;
     }
 
     /**
@@ -1645,21 +1690,9 @@ public final class StatementSerializer {
      * ref_mod keys are absent (not null) when no reference modification is present.
      */
     private static JsonObject serializeMoveOperand(Call call) {
-        JsonObject obj = new JsonObject();
-        obj.addProperty("name", extractCallName(call));
-        CobolParser.ReferenceModifierContext refMod = getRefMod(call);
-        if (refMod != null) {
-            JsonObject rm = serializeRefMod(refMod);
-            obj.add("ref_mod_start", rm.get("ref_mod_start"));
-            if (rm.has("ref_mod_length")) {
-                obj.add("ref_mod_length", rm.get("ref_mod_length"));
-            }
-        }
-        JsonArray qualifiers = extractQualifiers(call);
-        if (qualifiers.size() > 0) {
-            obj.add("qualifiers", qualifiers);
-        }
-        return obj;
+        // Unified structured-reference serializer (name + subscripts + ref-mod +
+        // qualifiers). (red-dragon-6ddr)
+        return serializeRef(call);
     }
 
     /**
@@ -2304,14 +2337,15 @@ public final class StatementSerializer {
             Call call = ((CallValueStmt) vs).getCall();
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
-            ref.addProperty("name", call != null ? extractCallName(call) : b.getCtx().getText());
-            CobolParser.ReferenceModifierContext refMod = call != null ? getRefMod(call) : null;
-            if (refMod != null) {
-                JsonObject rm = serializeRefMod(refMod);
-                ref.add("ref_mod_start", rm.get("ref_mod_start"));
-                if (rm.has("ref_mod_length")) {
-                    ref.add("ref_mod_length", rm.get("ref_mod_length"));
+            if (call != null) {
+                // Structured subscriptable reference (name + subscripts + ref-mod
+                // + qualifiers). (red-dragon-6ddr)
+                JsonObject struct = serializeRef(call);
+                for (String key : struct.keySet()) {
+                    ref.add(key, struct.get(key));
                 }
+            } else {
+                ref.addProperty("name", b.getCtx().getText());
             }
             return ref;
         }

@@ -117,7 +117,7 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "ADD"
         assert stmt.source.name == "5"
-        assert stmt.target == "WS-A"
+        assert stmt.target.name == "WS-A"
 
     @covers(CobolFeature.ADD, CobolFeature.GIVING_CLAUSE)
     def test_add_giving(self):
@@ -127,8 +127,8 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "ADD"
         assert stmt.source.name == "5"
-        assert stmt.target == "WS-A"
-        assert stmt.giving == ["WS-R"]
+        assert stmt.target.name == "WS-A"
+        assert [g.name for g in stmt.giving] == ["WS-R"]
 
     @covers(CobolFeature.SUBTRACT)
     def test_subtract(self):
@@ -144,8 +144,8 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "SUBTRACT"
         assert stmt.source.name == "WS-B"
-        assert stmt.target == "WS-A"
-        assert stmt.giving == ["WS-R"]
+        assert stmt.target.name == "WS-A"
+        assert [g.name for g in stmt.giving] == ["WS-R"]
 
     @covers(CobolFeature.MULTIPLY)
     def test_multiply(self):
@@ -787,7 +787,7 @@ class TestRoundTrip:
         data = {
             "type": "ADD",
             "operands": [{"name": "5"}, {"name": "WS-A"}],
-            "giving": ["WS-R"],
+            "giving": [{"name": "WS-R"}],
         }
         assert self._round_trip(data) == data
 
@@ -796,7 +796,7 @@ class TestRoundTrip:
         data = {
             "type": "SUBTRACT",
             "operands": [{"name": "WS-B"}, {"name": "WS-A"}],
-            "giving": ["WS-R"],
+            "giving": [{"name": "WS-R"}],
         }
         assert self._round_trip(data) == data
 
