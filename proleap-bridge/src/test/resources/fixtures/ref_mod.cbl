@@ -7,6 +7,8 @@
        01 WS-A     PIC 9 VALUE 2.
        01 WS-B     PIC 9 VALUE 3.
        01 WS-C     PIC 9 VALUE 4.
+       01 WS-GRP.
+          05 WS-SUB PIC X(12).
        PROCEDURE DIVISION.
        MAIN-PARA.
            MOVE WS-FIELD(2:3) TO WS-OUT.
@@ -18,4 +20,8 @@
            MOVE WS-FIELD((WS-A + WS-B) * (WS-C - WS-A):3) TO WS-OUT.
            MOVE WS-A TO WS-OUT.
            MOVE WS-FIELD TO WS-OUT(LENGTH OF WS-A + 1:LENGTH OF WS-B).
+           MOVE WS-SUB OF WS-GRP(2:8) TO WS-OUT.
+           PERFORM VARYING WS-A FROM LENGTH OF WS-SUB OF WS-GRP BY -1
+               UNTIL WS-A = 1
+           END-PERFORM.
            STOP RUN.
