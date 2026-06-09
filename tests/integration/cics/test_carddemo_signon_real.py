@@ -49,6 +49,7 @@ from interpreter.cics.vsam.engine import VsamEngine
 from interpreter.cics.vsam.fct import FctConfig, DatasetConfig
 from interpreter.cics.bms.generate import generate_symbolic_copybooks
 from interpreter.cobol.features import CobolFeature
+from tests.integration.cics.channel_drain import drain
 from tests.covers import covers
 from tests.integration.cics.bms_tools_helpers import (
     BMS_TOOLS_AVAILABLE,
@@ -327,13 +328,10 @@ def _drive_through_turn4(tmp_path):
 
     # --- Turn 2: the menu program's first display renders the menu map ---
     # XCTL'd in from sign-on (same task) -> no fresh terminal input.
-    while not screen_q.empty():  # drain any sign-on screen output
-        screen_q.get_nowait()
+    drain(screen_q)
     r2 = region.step()
 
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
 
     assert any(
         s.get("map") == "COMEN1A" for s in screens
@@ -351,8 +349,7 @@ def _drive_through_turn4(tmp_path):
     # The reenter flag set on turn 2 (SET CDEMO-PGM-REENTER TO TRUE) carries in
     # the commarea, so COMEN01C now takes PROCESS-ENTER-KEY instead of redisplaying.
     # Following a RETURN TRANSID -> a fresh terminal input (the menu selection).
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     r3 = region.step(input_event=InputEvent(eibaid="\x7d", fields={"OPTION": "01"}))
     assert r3.kind == DispatchKind.XCTL, (
         f"menu option select did not XCTL (kind={r3.kind}); the menu likely "
@@ -373,12 +370,9 @@ def _drive_through_turn4(tmp_path):
     # in -> no fresh terminal input.
     # CACTVWA uses extended attributes (DFHMDI DSATTS/MAPATTS) — the generated
     # symbolic map must carry the <field>C/P/H/V subfields the program moves into.
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     r4 = region.step()
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
     assert any(
         s.get("map") == "CACTVWA" for s in screens
     ), f"COACTVWC did not render CACTVWA; screens={[s.get('map') for s in screens]}"
@@ -422,14 +416,11 @@ def test_real_carddemo_account_view_three_reads(tmp_path):
     # --- Turn 5: account-id entry -> 9000-READ-ACCT (3 chained VSAM reads) ---
     # Following COACTVWC's RETURN TRANSID CAVW -> a fresh terminal input (the
     # account id). The region re-dispatches COACTVWC (CAVW -> COACTVWC via map).
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     r5 = region.step(
         input_event=InputEvent(eibaid="\x7d", fields={"ACCTSID": _ACCT_ID})
     )
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
     assert any(
         s.get("map") == "CACTVWA" for s in screens
     ), f"turn 5 did not render CACTVWA; screens={[s.get('map') for s in screens]}"
@@ -582,14 +573,12 @@ def _drive_to_coactupc(tmp_path):
     assert r1.kind == DispatchKind.XCTL and (r1.program or "").strip() == "COMEN01C"
 
     # Turn 2: menu first display (XCTL'd in -> no fresh input)
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     r2 = region.step()
     assert r2.kind == DispatchKind.RETURN_TRANSID
 
     # Turn 3: menu ENTER option '02' -> XCTL COACTUPC (fresh input after RETURN)
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     r3 = region.step(input_event=InputEvent(eibaid=_DFHENTER, fields={"OPTION": "02"}))
     assert (
         r3.kind == DispatchKind.XCTL
@@ -601,12 +590,9 @@ def _drive_to_coactupc(tmp_path):
     )
 
     # Turn A: COACTUPC first display renders CACTUPA, asks for acct id (XCTL'd in).
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     r4 = region.step()
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
     assert any(
         s.get("map") == "CACTUPA" for s in screens
     ), f"COACTUPC did not render CACTUPA; screens={[s.get('map') for s in screens]}"
@@ -637,14 +623,11 @@ def _drive_update_to_details(tmp_path):
 
     # Turn B: enter acct id -> ACUP-DETAILS-NOT-FETCHED path reads + shows detail.
     # Following the Turn-A RETURN TRANSID CAUP -> a fresh terminal input.
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     rB = region.step(
         input_event=InputEvent(eibaid=_DFHENTER, fields={"ACCTSID": _ACCT_ID})
     )
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
     assert any(
         s.get("map") == "CACTUPA" for s in screens
     ), f"Turn B did not render CACTUPA; screens={[s.get('map') for s in screens]}"
@@ -762,16 +745,13 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
 
     # --- Turn C: submit the change (status Y->N) + ENTER ---
     # Following Turn B's RETURN TRANSID CAUP -> a fresh terminal input.
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     rC = region.step(
         input_event=InputEvent(
             eibaid=_DFHENTER, fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS)
         )
     )
-    screensC = []
-    while not screen_q.empty():
-        screensC.append(screen_q.get_nowait())
+    screensC = drain(screen_q)
     viewC = next((s["fields"] for s in screensC if s.get("map") == "CACTUPA"), {})
     # Turn C should ask for confirmation (no validation error). The info/error
     # message tells us if validation rejected the input.
@@ -786,8 +766,7 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
     # (1000-PROCESS-INPUTS runs before 2000-DECIDE-ACTION), so a real 3270 resends
     # the full screen buffer. Resend the same modified field set with PF05 — sending
     # only ACCTSID would blank ACUP-NEW-ACTIVE-STATUS and lose the change.
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     rD = region.step(
         input_event=InputEvent(
             eibaid=_DFHPF5, fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS)
@@ -979,14 +958,12 @@ def _drive_to_cotrn02c(tmp_path):
     assert r1.kind == DispatchKind.XCTL and (r1.program or "").strip() == "COMEN01C"
 
     # Turn 2: menu first display (XCTL'd in -> no fresh input)
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     r2 = region.step()
     assert r2.kind == DispatchKind.RETURN_TRANSID
 
     # Turn 3: menu ENTER option '08' -> XCTL COTRN02C (fresh input after RETURN)
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     r3 = region.step(input_event=InputEvent(eibaid=_DFHENTER, fields={"OPTION": "08"}))
     assert (
         r3.kind == DispatchKind.XCTL
@@ -998,12 +975,9 @@ def _drive_to_cotrn02c(tmp_path):
     )
 
     # Turn A: COTRN02C first display renders COTRN2A (XCTL'd in -> no fresh input).
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     rA = region.step()
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
     assert any(
         s.get("map") == "COTRN2A" for s in screens
     ), f"COTRN02C did not render COTRN2A; screens={[s.get('map') for s in screens]}"
@@ -1044,8 +1018,7 @@ def test_real_carddemo_transaction_add_write(tmp_path):
 
     # --- Turn B: submit the new transaction with CONFIRM='Y' + ENTER ---
     # Following Turn A's RETURN TRANSID CT02 -> a fresh terminal input.
-    while not screen_q.empty():
-        screen_q.get_nowait()
+    drain(screen_q)
     rB = region.step(
         input_event=InputEvent(
             eibaid=_DFHENTER,
@@ -1066,9 +1039,7 @@ def test_real_carddemo_transaction_add_write(tmp_path):
             },
         )
     )
-    screensB = []
-    while not screen_q.empty():
-        screensB.append(screen_q.get_nowait())
+    screensB = drain(screen_q)
     viewB = next((s["fields"] for s in screensB if s.get("map") == "COTRN2A"), {})
 
     # The created record must exist in TRANSACT under the generated key.

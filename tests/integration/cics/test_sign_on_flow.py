@@ -23,6 +23,7 @@ from interpreter.cics.builtins.screen import (
     make_receive_map_builtin,
 )
 from interpreter.cics.dispatcher import _run_dispatcher_with_runner, InputEvent
+from tests.integration.cics.channel_drain import drain
 from interpreter.types.typed_value import typed
 from interpreter.types.type_expr import UNKNOWN
 
@@ -120,9 +121,7 @@ def test_sign_on_to_main_menu_flow(monkeypatch):
     assert result.kind == DispatchKind.RETURN
 
     # Two screens were sent, in order: sign-on then menu.
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
     assert [s["map"] for s in screens] == ["COSGN0A", "COMEN0A"]
 
     # The sign-on screen exposed the symbolic output field value from WS.
