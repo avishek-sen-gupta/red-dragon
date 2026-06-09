@@ -50,6 +50,7 @@ class FieldRefNode:
     """Reference to a COBOL data field by name."""
 
     name: str
+    subscripts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,8 @@ class RefModNode:
 
     name: str
     ref_mod_start: "ExprNode"
-    ref_mod_length: "ExprNode | None"
+    ref_mod_length: "ExprNode | None" = None
+    subscripts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -101,6 +103,7 @@ def expr_from_dict(d: dict) -> ExprNode:
     if kind == "lit":
         return LiteralNode(value=d["value"])
     if kind == "ref":
+        subscripts = tuple(d.get("subscripts", ()))
         if "ref_mod_start" in d:
             return RefModNode(
                 name=d["name"],
@@ -110,8 +113,9 @@ def expr_from_dict(d: dict) -> ExprNode:
                     if "ref_mod_length" in d
                     else None
                 ),
+                subscripts=subscripts,
             )
-        return FieldRefNode(name=d["name"])
+        return FieldRefNode(name=d["name"], subscripts=subscripts)
     if kind == "binop":
         return BinOpNode(
             op=d["op"],
