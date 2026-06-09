@@ -308,3 +308,31 @@ def test_select_record_layout_no_groups_uses_root():
         fields={"X": _fl(CobolDataCategory.ALPHANUMERIC, 0, 1, 1)}, total_bytes=1
     )
     assert select_record_layout(root, None) is root
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_select_record_layout_unknown_name_raises():
+    a = DataLayout(offset=0, total_bytes=1)
+    b = DataLayout(offset=1, total_bytes=1)
+    root = DataLayout(groups={"REC-A": a, "REC-B": b}, total_bytes=2)
+    with pytest.raises(ValueError) as exc:
+        select_record_layout(root, "NO-SUCH-REC")
+    msg = str(exc.value)
+    assert "NO-SUCH-REC" in msg
+    assert "REC-A" in msg and "REC-B" in msg
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_render_jsonl_empty_records_is_empty_string():
+    layout = DataLayout(
+        fields={"S": _fl(CobolDataCategory.ALPHANUMERIC, 0, 1, 1)}, total_bytes=1
+    )
+    assert render_jsonl(layout, []) == ""
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_render_block_empty_records_is_empty_string():
+    layout = DataLayout(
+        fields={"S": _fl(CobolDataCategory.ALPHANUMERIC, 0, 1, 1)}, total_bytes=1
+    )
+    assert render_block(layout, []) == ""
