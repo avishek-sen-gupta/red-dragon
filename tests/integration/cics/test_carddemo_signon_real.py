@@ -41,8 +41,8 @@ import pytest
 
 from interpreter.cics.preprocessor import apply_cics_prepass
 from interpreter.cics.strategy import CicsLoweringStrategy
-from interpreter.cics.types import CicsContext, DispatchKind
-from interpreter.cics.dispatcher import run_cics, InputEvent
+from interpreter.cics.types import DispatchKind
+from interpreter.cics.dispatcher import InputEvent, CicsRegion
 from interpreter.cics.bootstrap import compile_cics_program
 from interpreter.cics.vsam.engine import VsamEngine
 from interpreter.cics.vsam.fct import FctConfig, DatasetConfig
@@ -213,11 +213,13 @@ def _drive_through_turn4(tmp_path):
         renders the account-view map CACTVWA -> RETURN TRANSID CAVW.
 
     All three programs share one CicsLoweringStrategy (one VsamEngine seeded with
-    USRSEC + the three account-view datasets, plus BMS maps). Driven via the
-    single-execution run_cics entry (no unbounded dispatcher loop).
+    USRSEC + the three account-view datasets, plus BMS maps). Driven through a
+    ``CicsRegion`` one turn at a time: routing (which program/transid runs next)
+    is DEDUCED from each DispatchResult, not hardcoded per turn.
 
     Returns the live drive context so a caller can continue into turn 5:
-    ``(acct_program, r4, screen_q, input_q, context_holder, result_holder)``.
+    ``(acct_program, region, r4, screen_q, input_q, context_holder,
+    result_holder)``.
     """
     from interpreter.cobol.cobol_parser import ProLeapCobolParser
     from interpreter.cobol.subprocess_runner import RealSubprocessRunner
@@ -278,18 +280,37 @@ def _drive_through_turn4(tmp_path):
         apply_cics_prepass(acct_path.read_text()).encode(), parser, strategy
     )
 
-    # --- Turn 1: sign-on ENTER turn -> XCTL COMEN01C ---
-    input_q.put(
-        InputEvent(eibaid="\x7d", fields={"USERID": "USER0001", "PASSWD": "PASS0001"})
-    )
-    r1 = run_cics(
-        signon,
-        CicsContext(transid="CC00", commarea=b"\x00" * 100, eibaid="\x7d"),
+    # The CSD/region configuration: which program backs each transid. This is the
+    # static config the system is set up with (NOT per-turn hardcoding). The
+    # region deduces the next (program, transid) from each DispatchResult.
+    program_cache = {
+        "COSGN00C": signon,
+        "COMEN01C": menu,
+        "COACTVWC": acct,
+    }
+    transid_to_program = {"CC00": "COSGN00C", "CM00": "COMEN01C", "CAVW": "COACTVWC"}
+    # COMEN01C/COACTVWC index a commarea (CARDDEMO-COMMAREA) larger than the 100
+    # bytes sign-on starts with; pad to 400 so EIBCALEN covers the menu/view
+    # CDEMO-* fields the programs read. This is a genuine EIBCALEN minimum, set
+    # once at the region level rather than re-padded per turn.
+    region = CicsRegion(
+        program_cache,
+        transid_to_program,
         screen_q,
         input_q,
         context_holder=context_holder,
         result_holder=result_holder,
-        max_steps=200_000,
+        max_steps=1_000_000,
+        min_commarea_len=400,
+    )
+
+    # --- Turn 1: sign-on ENTER turn -> XCTL COMEN01C ---
+    r1 = region.start(
+        "CC00",
+        commarea=b"\x00" * 100,
+        input_event=InputEvent(
+            eibaid="\x7d", fields={"USERID": "USER0001", "PASSWD": "PASS0001"}
+        ),
     )
     assert r1.kind == DispatchKind.XCTL, (
         f"sign-on did not XCTL (kind={r1.kind}); it likely re-sent the sign-on "
@@ -300,20 +321,14 @@ def _drive_through_turn4(tmp_path):
     ).strip() == "COMEN01C", (
         f"sign-on XCTL'd to {r1.program!r}, expected COMEN01C (the user menu)"
     )
+    # After the XCTL, the transid CARRIES (same task): COMEN01C runs under CC00.
+    assert region.transid == "CC00"
 
     # --- Turn 2: the menu program's first display renders the menu map ---
+    # XCTL'd in from sign-on (same task) -> no fresh terminal input.
     while not screen_q.empty():  # drain any sign-on screen output
         screen_q.get_nowait()
-    menu_commarea = (r1.commarea or b"").ljust(300, b"\x00")
-    r2 = run_cics(
-        menu,
-        CicsContext(transid="CM00", commarea=menu_commarea, eibaid="\x7d"),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=400_000,
-    )
+    r2 = region.step()
 
     screens = []
     while not screen_q.empty():
@@ -324,6 +339,8 @@ def _drive_through_turn4(tmp_path):
     ), f"menu program did not render COMEN1A; screens={[s.get('map') for s in screens]}"
     menu_screen = next(s for s in screens if s.get("map") == "COMEN1A")
     # The menu header reflects the running transid/program (proves real execution).
+    # TRNNAME comes from COMEN01C's own LIT-THISTRANID literal ("CM00"), NOT the
+    # carried EIBTRNID (which is still CC00 from the XCTL) — so this still holds.
     assert menu_screen["fields"].get("TRNNAME") == "CM00"
     assert menu_screen["fields"].get("PGMNAME") == "COMEN01C"
     # COMEN01C parks for the next terminal action (pseudo-conversational).
@@ -331,23 +348,11 @@ def _drive_through_turn4(tmp_path):
 
     # --- Turn 3: ENTER on the menu with option '01' -> XCTL to its program ---
     # The reenter flag set on turn 2 (SET CDEMO-PGM-REENTER TO TRUE) carries in
-    # r2.commarea, so COMEN01C now takes PROCESS-ENTER-KEY instead of redisplaying.
+    # the commarea, so COMEN01C now takes PROCESS-ENTER-KEY instead of redisplaying.
+    # Following a RETURN TRANSID -> a fresh terminal input (the menu selection).
     while not screen_q.empty():
         screen_q.get_nowait()
-    input_q.put(InputEvent(eibaid="\x7d", fields={"OPTION": "01"}))
-    r3 = run_cics(
-        menu,
-        CicsContext(
-            transid="CM00",
-            commarea=(r2.commarea or b"").ljust(300, b"\x00"),
-            eibaid="\x7d",
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=600_000,
-    )
+    r3 = region.step(input_event=InputEvent(eibaid="\x7d", fields={"OPTION": "01"}))
     assert r3.kind == DispatchKind.XCTL, (
         f"menu option select did not XCTL (kind={r3.kind}); the menu likely "
         f"redisplayed instead of processing the option (reenter gate / option parse)"
@@ -363,24 +368,13 @@ def _drive_through_turn4(tmp_path):
     # --- Turn 4: COACTVWC first display (XCTL'd in from the menu) ---
     # Entered via the menu XCTL (CDEMO-PGM-ENTER), COACTVWC gathers selection
     # criteria: PERFORM 1000-SEND-MAP renders the account-view map CACTVWA (asking
-    # for an account id) then RETURN TRANSID CAVW. No VSAM read on this turn.
+    # for an account id) then RETURN TRANSID CAVW. No VSAM read on this turn. XCTL'd
+    # in -> no fresh terminal input.
     # CACTVWA uses extended attributes (DFHMDI DSATTS/MAPATTS) — the generated
     # symbolic map must carry the <field>C/P/H/V subfields the program moves into.
     while not screen_q.empty():
         screen_q.get_nowait()
-    r4 = run_cics(
-        acct,
-        CicsContext(
-            transid="CAVW",
-            commarea=(r3.commarea or b"").ljust(400, b"\x00"),
-            eibaid="\x7d",
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=800_000,
-    )
+    r4 = region.step()
     screens = []
     while not screen_q.empty():
         screens.append(screen_q.get_nowait())
@@ -394,7 +388,7 @@ def _drive_through_turn4(tmp_path):
     assert r4.kind == DispatchKind.RETURN_TRANSID
     assert (r4.transid or "").strip() == "CAVW"
 
-    return acct, r4, screen_q, input_q, context_holder, result_holder
+    return acct, region, r4, screen_q, input_q, context_holder, result_holder
 
 
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
@@ -420,26 +414,17 @@ def test_real_carddemo_account_view_three_reads(tmp_path):
     entered account id echoes back, the account status renders 'Y', and the
     customer first/last names render from the chained reads.
     """
-    acct, r4, screen_q, input_q, context_holder, result_holder = _drive_through_turn4(
-        tmp_path
+    acct, region, r4, screen_q, input_q, context_holder, result_holder = (
+        _drive_through_turn4(tmp_path)
     )
 
     # --- Turn 5: account-id entry -> 9000-READ-ACCT (3 chained VSAM reads) ---
+    # Following COACTVWC's RETURN TRANSID CAVW -> a fresh terminal input (the
+    # account id). The region re-dispatches COACTVWC (CAVW -> COACTVWC via map).
     while not screen_q.empty():
         screen_q.get_nowait()
-    input_q.put(InputEvent(eibaid="\x7d", fields={"ACCTSID": _ACCT_ID}))
-    r5 = run_cics(
-        acct,
-        CicsContext(
-            transid="CAVW",
-            commarea=(r4.commarea or b"").ljust(400, b"\x00"),
-            eibaid="\x7d",
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=1_000_000,
+    r5 = region.step(
+        input_event=InputEvent(eibaid="\x7d", fields={"ACCTSID": _ACCT_ID})
     )
     screens = []
     while not screen_q.empty():
@@ -567,58 +552,44 @@ def _drive_to_coactupc(tmp_path):
         engine,
     ) = _compile_update_programs(tmp_path)
 
-    # Turn 1: sign-on -> XCTL COMEN01C
-    input_q.put(
-        InputEvent(
-            eibaid=_DFHENTER, fields={"USERID": "USER0001", "PASSWD": "PASS0001"}
-        )
-    )
-    r1 = run_cics(
-        signon,
-        CicsContext(transid="CC00", commarea=b"\x00" * 100, eibaid=_DFHENTER),
+    # Region config: this run routes the menu's option '02' to COACTUPC.
+    program_cache = {
+        "COSGN00C": signon,
+        "COMEN01C": menu,
+        "COACTUPC": acctupd,
+    }
+    transid_to_program = {"CC00": "COSGN00C", "CM00": "COMEN01C", "CAUP": "COACTUPC"}
+    region = CicsRegion(
+        program_cache,
+        transid_to_program,
         screen_q,
         input_q,
         context_holder=context_holder,
         result_holder=result_holder,
-        max_steps=200_000,
+        max_steps=2_000_000,
+        min_commarea_len=400,  # menu/update programs index a 400-byte commarea
+    )
+
+    # Turn 1: sign-on -> XCTL COMEN01C (transid carries; no input after XCTL)
+    r1 = region.start(
+        "CC00",
+        commarea=b"\x00" * 100,
+        input_event=InputEvent(
+            eibaid=_DFHENTER, fields={"USERID": "USER0001", "PASSWD": "PASS0001"}
+        ),
     )
     assert r1.kind == DispatchKind.XCTL and (r1.program or "").strip() == "COMEN01C"
 
-    # Turn 2: menu first display
+    # Turn 2: menu first display (XCTL'd in -> no fresh input)
     while not screen_q.empty():
         screen_q.get_nowait()
-    r2 = run_cics(
-        menu,
-        CicsContext(
-            transid="CM00",
-            commarea=(r1.commarea or b"").ljust(300, b"\x00"),
-            eibaid=_DFHENTER,
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=400_000,
-    )
+    r2 = region.step()
     assert r2.kind == DispatchKind.RETURN_TRANSID
 
-    # Turn 3: menu ENTER option '02' -> XCTL COACTUPC
+    # Turn 3: menu ENTER option '02' -> XCTL COACTUPC (fresh input after RETURN)
     while not screen_q.empty():
         screen_q.get_nowait()
-    input_q.put(InputEvent(eibaid=_DFHENTER, fields={"OPTION": "02"}))
-    r3 = run_cics(
-        menu,
-        CicsContext(
-            transid="CM00",
-            commarea=(r2.commarea or b"").ljust(300, b"\x00"),
-            eibaid=_DFHENTER,
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=600_000,
-    )
+    r3 = region.step(input_event=InputEvent(eibaid=_DFHENTER, fields={"OPTION": "02"}))
     assert (
         r3.kind == DispatchKind.XCTL
     ), f"menu option '02' did not XCTL (kind={r3.kind}); expected COACTUPC"
@@ -628,22 +599,10 @@ def _drive_to_coactupc(tmp_path):
         f"menu option '02' XCTL'd to {r3.program!r}, expected COACTUPC"
     )
 
-    # Turn A: COACTUPC first display renders CACTUPA, asks for acct id.
+    # Turn A: COACTUPC first display renders CACTUPA, asks for acct id (XCTL'd in).
     while not screen_q.empty():
         screen_q.get_nowait()
-    r4 = run_cics(
-        acctupd,
-        CicsContext(
-            transid="CAUP",
-            commarea=(r3.commarea or b"").ljust(400, b"\x00"),
-            eibaid=_DFHENTER,
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=800_000,
-    )
+    r4 = region.step()
     screens = []
     while not screen_q.empty():
         screens.append(screen_q.get_nowait())
@@ -655,7 +614,7 @@ def _drive_to_coactupc(tmp_path):
     assert first["fields"].get("PGMNAME") == "COACTUPC"
     assert r4.kind == DispatchKind.RETURN_TRANSID
     assert (r4.transid or "").strip() == "CAUP"
-    return acctupd, r4, screen_q, input_q, context_holder, result_holder, engine
+    return acctupd, region, r4, screen_q, input_q, context_holder, result_holder, engine
 
 
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
@@ -671,26 +630,16 @@ def _drive_update_to_details(tmp_path):
     Returns ``(acctupd, r_details, screen_q, input_q, context_holder,
     result_holder, engine)`` parked on CAUP showing the fetched account.
     """
-    acctupd, r4, screen_q, input_q, context_holder, result_holder, engine = (
+    acctupd, region, r4, screen_q, input_q, context_holder, result_holder, engine = (
         _drive_to_coactupc(tmp_path)
     )
 
     # Turn B: enter acct id -> ACUP-DETAILS-NOT-FETCHED path reads + shows detail.
+    # Following the Turn-A RETURN TRANSID CAUP -> a fresh terminal input.
     while not screen_q.empty():
         screen_q.get_nowait()
-    input_q.put(InputEvent(eibaid=_DFHENTER, fields={"ACCTSID": _ACCT_ID}))
-    rB = run_cics(
-        acctupd,
-        CicsContext(
-            transid="CAUP",
-            commarea=(r4.commarea or b"").ljust(400, b"\x00"),
-            eibaid=_DFHENTER,
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=1_500_000,
+    rB = region.step(
+        input_event=InputEvent(eibaid=_DFHENTER, fields={"ACCTSID": _ACCT_ID})
     )
     screens = []
     while not screen_q.empty():
@@ -699,7 +648,17 @@ def _drive_update_to_details(tmp_path):
         s.get("map") == "CACTUPA" for s in screens
     ), f"Turn B did not render CACTUPA; screens={[s.get('map') for s in screens]}"
     view = next(s for s in screens if s.get("map") == "CACTUPA")["fields"]
-    return acctupd, rB, view, screen_q, input_q, context_holder, result_holder, engine
+    return (
+        acctupd,
+        region,
+        rB,
+        view,
+        screen_q,
+        input_q,
+        context_holder,
+        result_holder,
+        engine,
+    )
 
 
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)
@@ -708,6 +667,7 @@ def test_real_carddemo_account_update_reads_and_shows_details(tmp_path):
     ACCTDAT@0 -> CUSTDAT@0) -> details render for edit (status + names echo)."""
     (
         acctupd,
+        region,
         rB,
         view,
         screen_q,
@@ -813,6 +773,7 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
     """
     (
         acctupd,
+        region,
         rB,
         view,
         screen_q,
@@ -823,25 +784,13 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
     ) = _drive_update_to_details(tmp_path)
 
     # --- Turn C: submit the change (status Y->N) + ENTER ---
+    # Following Turn B's RETURN TRANSID CAUP -> a fresh terminal input.
     while not screen_q.empty():
         screen_q.get_nowait()
-    input_q.put(
-        InputEvent(
+    rC = region.step(
+        input_event=InputEvent(
             eibaid=_DFHENTER, fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS)
         )
-    )
-    rC = run_cics(
-        acctupd,
-        CicsContext(
-            transid="CAUP",
-            commarea=(rB.commarea or b"").ljust(400, b"\x00"),
-            eibaid=_DFHENTER,
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=2_000_000,
     )
     screensC = []
     while not screen_q.empty():
@@ -855,21 +804,11 @@ def test_real_carddemo_account_update_rewrite(tmp_path):
     )
 
     # --- Turn D: PF05 confirm -> 9600-WRITE-PROCESSING (READ UPDATE + REWRITE) ---
+    # Following Turn C's RETURN TRANSID CAUP -> a fresh terminal input (PF05).
     while not screen_q.empty():
         screen_q.get_nowait()
-    input_q.put(InputEvent(eibaid=_DFHPF5, fields={"ACCTSID": _ACCT_ID}))
-    rD = run_cics(
-        acctupd,
-        CicsContext(
-            transid="CAUP",
-            commarea=(rC.commarea or b"").ljust(400, b"\x00"),
-            eibaid=_DFHPF5,
-        ),
-        screen_q,
-        input_q,
-        context_holder=context_holder,
-        result_holder=result_holder,
-        max_steps=2_000_000,
+    rD = region.step(
+        input_event=InputEvent(eibaid=_DFHPF5, fields={"ACCTSID": _ACCT_ID})
     )
     # Verify the REWRITE persisted: read ACCTDAT back from the engine and check
     # the active-status byte (offset 11, X(1)) is now 'N'.
