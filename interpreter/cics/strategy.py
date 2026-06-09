@@ -148,6 +148,7 @@ def emit_copy_back_str(
         name = target.text
     if not ctx.has_field(name, materialised):
         return
+    # write-back targets are plain data-names (RESP/APPLID/...), never subscripted; no subscripts to thread
     ref, region_reg = ctx.resolve_field_ref(name, materialised)
     ctx.emit_encode_and_write(region_reg, ref.fl, value_str_reg, ref.offset_reg)
 
