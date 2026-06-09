@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.cics.vsam.dump import _decode_leaf
+from interpreter.cics.vsam.dump import _decode_leaf, decode_record
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.data_layout import FieldLayout
+from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.comp3 import encode_comp3
 from interpreter.cobol.binary import encode_binary
@@ -68,10 +68,6 @@ def test_decode_leaf_comp1_comp2_unsupported():
         _decode_leaf(fl, b"\x00\x00\x00\x00")
 
 
-from interpreter.cics.vsam.dump import decode_record
-from interpreter.cobol.data_layout import DataLayout
-
-
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_decode_record_flat_fields():
     layout = DataLayout(
@@ -111,7 +107,7 @@ def test_decode_record_redefines_both_views():
     base = _fl(CobolDataCategory.ALPHANUMERIC, 0, 4, 4)
     redef = FieldLayout(
         name="AS-NUM",
-        type_descriptor=base.type_descriptor.__class__(
+        type_descriptor=CobolTypeDescriptor(
             category=CobolDataCategory.ZONED_DECIMAL, total_digits=4
         ),
         offset=0,
@@ -123,6 +119,7 @@ def test_decode_record_redefines_both_views():
     out = decode_record(layout, record)
     assert out["AS-NUM"] == 1234  # zoned int view
     assert "AS-TEXT" in out  # both views present
+    assert out["AS-TEXT"] == "1234"  # \xf1\xf2\xf3\xf4 is EBCDIC "1234"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
