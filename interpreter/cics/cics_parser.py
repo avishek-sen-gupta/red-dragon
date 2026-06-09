@@ -7,6 +7,7 @@ matched), so downstream consumers never have to re-sniff quote characters.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from lark import Lark, Transformer
@@ -210,6 +211,29 @@ class _Transformer(Transformer):
         return _Part(text=f"({inner})", is_literal=False)
 
 
+_END_EXEC_RE = re.compile(r"\s*END-EXEC\s*\Z", re.IGNORECASE)
+
+
+def _strip_inline_comments(text: str) -> str:
+    """Drop ``*>`` inline COBOL comments from EXEC CICS text, per physical line.
+
+    A ``*>`` comments to end-of-line. The bridge joins an EXEC block's
+    continuation lines, so a commented-out option line collapses onto the same
+    logical line as the trailing ``END-EXEC`` envelope. For each line we drop
+    everything from ``*>`` onward, then re-append ``END-EXEC`` if the original
+    text ended with it (the grammar anchors END-EXEC at end-of-text). Lines
+    without ``*>`` are unchanged.
+    """
+    if "*>" not in text:
+        return text
+    had_end_exec = bool(_END_EXEC_RE.search(text))
+    cleaned_lines = [line.split("*>", 1)[0] for line in text.splitlines()]
+    cleaned = "\n".join(cleaned_lines).strip()
+    if had_end_exec and not _END_EXEC_RE.search(cleaned):
+        cleaned = cleaned + " END-EXEC"
+    return cleaned
+
+
 def parse_exec_cics_text(text: str) -> tuple[str, dict[str, CicsOperand | None]]:
     """Parse 'EXEC CICS VERB OPT(val) FLAG END-EXEC' → (verb, {OPT: CicsOperand, FLAG: None}).
 
@@ -221,6 +245,16 @@ def parse_exec_cics_text(text: str) -> tuple[str, dict[str, CicsOperand | None]]
     When the second word carries a value (e.g. MAP('COSGN0A')), that value is
     included in opts under the second word's key.
     """
+    # Strip inline COBOL comments that fall INSIDE the EXEC block. A commented-out
+    # option line (a column-7 '*' comment between EXEC CICS and END-EXEC) is
+    # surfaced by ProLeap as a free-format '*>' inline comment, e.g. CardDemo
+    # COTRN02C's SEND-TRNADD-SCREEN has a commented-out LENGTH(...) line. '*>'
+    # comments to physical end-of-line; since the bridge joins continuation lines
+    # the trailing END-EXEC envelope ends up on the same logical line, so we strip
+    # the '*>'..comment-body but keep the END-EXEC terminator (the grammar anchors
+    # it at end-of-text). Comments carry no semantics, so this is a clean drop.
+    text = _strip_inline_comments(text)
+
     # Empty / whitespace-only input has no command at all (not even an envelope).
     # The previous implementation returned ("", {}) for this; preserve it. This is
     # the absence-of-input case, not envelope stripping — the EXEC CICS / END-EXEC
