@@ -40,6 +40,7 @@ class FieldLayout:
     byte_length: int
     redefines: str = ""
     value: str = ""
+    value_is_figurative: bool = False
     occurs_count: int = 0
     element_size: int = 0
     conditions: list[ConditionName] = field(default_factory=list)
@@ -324,6 +325,7 @@ def _flatten_field(
         byte_length=total_byte_length,
         redefines=cobol_field.redefines,
         value=cobol_field.value,
+        value_is_figurative=cobol_field.value_is_figurative,
         occurs_count=cobol_field.occurs,
         element_size=(
             cobol_field.element_size

@@ -660,6 +660,265 @@ def _builtin_is_alphabetic_upper(args: list[TypedValue], vm: VMState) -> Builtin
     )
 
 
+def _numval_to_number(text: str):
+    """Parse a NUMVAL/NUMVAL-C cleaned numeric string to int or Decimal.
+
+    `text` must already have currency/grouping stripped (NUMVAL-C) or be a raw
+    NUMVAL argument. Recognises a leading or trailing `+`/`-` sign and the
+    trailing credit/debit markers `CR`/`DB` (both negative). Surrounding spaces
+    are ignored. An all-blank/empty argument is zero. Returns an int when the
+    value has no fractional part, otherwise a Decimal (mirrors how other COBOL
+    numeric builtins keep exact decimals).
+    """
+    from decimal import Decimal, InvalidOperation
+
+    s = text.strip().upper()
+    if not s:
+        return 0
+    negative = False
+    # Trailing credit/debit markers -> negative.
+    if s.endswith("CR") or s.endswith("DB"):
+        negative = True
+        s = s[:-2].strip()
+    # Leading sign.
+    if s and s[0] in "+-":
+        negative = negative ^ (s[0] == "-")
+        s = s[1:].strip()
+    # Trailing sign.
+    if s and s[-1] in "+-":
+        negative = negative ^ (s[-1] == "-")
+        s = s[:-1].strip()
+    s = s.replace(" ", "")
+    if not s:
+        return 0
+    try:
+        dec = Decimal(s)
+    except InvalidOperation:
+        return None
+    if negative:
+        dec = -dec
+    # Collapse to int when integral so callers comparing against 0 see ints.
+    if dec == dec.to_integral_value():
+        return int(dec)
+    return dec
+
+
+def _numval_c_clean(text: str) -> str:
+    """Strip currency symbol and grouping commas for the NUMVAL-C grammar."""
+    out = []
+    for ch in text:
+        if ch in "$,":
+            continue
+        out.append(ch)
+    return "".join(out)
+
+
+def _builtin_length(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION LENGTH(x): byte length of the argument.
+
+    Args: [value: str]
+    Returns: int — len(value). The argument is the character data of the
+    operand; a PIC X(n) field arrives space-padded to width n, so LENGTH yields
+    that width. (Distinct from the `LENGTH OF` ref-mod special register.)
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=len(value))
+
+
+def _builtin_numval(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION NUMVAL(s): numeric value of a numeric string.
+
+    Supports surrounding spaces, a decimal point, a leading or trailing
+    `+`/`-` sign and trailing `CR`/`DB` markers. Returns int when integral else
+    Decimal. An all-blank argument is 0.
+
+    Deferred edge cases: locale decimal-comma, embedded blanks between digits,
+    and explicit `E` exponents are not handled (not used by COACTUPC).
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    result = _numval_to_number(value)
+    if result is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=result)
+
+
+def _builtin_numval_c(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION NUMVAL-C(s): like NUMVAL but tolerant of a currency
+    symbol (`$`) and grouping commas (e.g. "$1,234.56" -> 1234.56).
+
+    Deferred edge cases: non-`$` currency symbols and locale grouping/decimal
+    conventions are not handled (COACTUPC uses `$`/`,`/`.`).
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    result = _numval_to_number(_numval_c_clean(value))
+    if result is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=result)
+
+
+def _test_numval_offset(text: str, *, currency: bool) -> int:
+    """Validate a NUMVAL[-C] argument; 0 if valid else 1-based bad-char pos.
+
+    Per ISO COBOL the result is the character position of the first character
+    that violates the NUMVAL grammar. We implement the common grammar:
+    optional leading spaces, an optional leading sign, digits with at most one
+    decimal point, optional trailing sign or CR/DB, optional trailing spaces.
+    For NUMVAL-C a `$` (leading, after spaces/sign) and grouping `,` are also
+    permitted. An all-blank/empty argument is valid (0).
+
+    Deferred: exact ISO positional rules for malformed sign/decimal ordering are
+    simplified to "first character not consumable by the grammar".
+    """
+    if text.strip() == "":
+        return 0
+    seen_digit = False
+    seen_dot = False
+    seen_sign = False
+    i = 0
+    n = len(text)
+    # Leading spaces.
+    while i < n and text[i] == " ":
+        i += 1
+    # Optional leading sign.
+    if i < n and text[i] in "+-":
+        seen_sign = True
+        i += 1
+        while i < n and text[i] == " ":
+            i += 1
+    # Optional leading currency.
+    if currency and i < n and text[i] == "$":
+        i += 1
+    while i < n:
+        ch = text[i]
+        if ch.isdigit():
+            seen_digit = True
+            i += 1
+        elif ch == "." and not seen_dot:
+            seen_dot = True
+            i += 1
+        elif currency and ch == ",":
+            i += 1
+        elif ch == " ":
+            break
+        else:
+            break
+    # Optional trailing sign or CR/DB.
+    rest = text[i:]
+    stripped = rest.strip()
+    if stripped in ("+", "-") and not seen_sign:
+        i = n
+        stripped = ""
+    elif stripped.upper() in ("CR", "DB"):
+        i = n
+        stripped = ""
+    # Remaining must be only trailing spaces.
+    while i < n and text[i] == " ":
+        i += 1
+    if i < n:
+        return i + 1
+    if not seen_digit:
+        return 1
+    return 0
+
+
+def _builtin_test_numval(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION TEST-NUMVAL(s): 0 if s is a valid NUMVAL argument else the
+    1-based position of the first offending character (red-dragon-zuhj).
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=_test_numval_offset(value, currency=False))
+
+
+def _builtin_test_numval_c(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION TEST-NUMVAL-C(s): 0 if s is a valid NUMVAL-C argument else
+    the 1-based position of the first offending character (red-dragon-zuhj).
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=_test_numval_offset(value, currency=True))
+
+
+def _builtin_integer_of_date(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION INTEGER-OF-DATE(yyyymmdd): integer date.
+
+    Returns the number of days from the COBOL standard epoch (1600-12-31) to the
+    given Gregorian date, so 1601-01-01 is day 1 (verified: 2024-01-01 = 154498).
+    The argument may be an int or a numeric string of the form CCYYMMDD.
+
+    Deferred: invalid dates (bad month/day) raise via the date constructor and
+    yield UNCOMPUTABLE rather than an ISO-defined error code.
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from datetime import date
+
+    raw = args[0].value
+    if isinstance(raw, float):
+        raw = int(raw)
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw.isdigit():
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        raw = int(raw)
+    if not isinstance(raw, int):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    year, month, day = raw // 10000, (raw // 100) % 100, raw % 100
+    try:
+        target = date(year, month, day)
+    except ValueError:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    epoch = date(1600, 12, 31)
+    return BuiltinResult(value=(target - epoch).days)
+
+
+def _builtin_string_convert(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """INSPECT ... CONVERTING from TO to: positional per-character translate.
+
+    Args: [source: str, from_chars: str, to_chars: str]
+    Returns: str — every character of `source` that appears in `from_chars` is
+    replaced by the character at the same position in `to_chars`; other
+    characters are left unchanged. When a character occurs more than once in
+    `from_chars`, its first position determines the mapping (COBOL semantics).
+
+    Deferred edge cases: the optional BEFORE/AFTER delimiter phrase is not
+    handled (CardDemo's alpha edits convert the whole reference-modified slice).
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source, from_chars, to_chars = args[0].value, args[1].value, args[2].value
+    if (
+        not isinstance(source, str)
+        or not isinstance(from_chars, str)
+        or not isinstance(to_chars, str)
+    ):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    table: dict[str, str] = {}
+    for i, ch in enumerate(from_chars):
+        if ch in table:
+            continue  # first occurrence wins
+        table[ch] = to_chars[i] if i < len(to_chars) else ch
+    return BuiltinResult(value="".join(table.get(ch, ch) for ch in source))
+
+
 from typing import Any
 
 BYTE_BUILTINS: dict[FuncName, Any] = (
@@ -699,5 +958,12 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.IS_ALPHABETIC): _builtin_is_alphabetic,
         FuncName(BuiltinName.IS_ALPHABETIC_LOWER): _builtin_is_alphabetic_lower,
         FuncName(BuiltinName.IS_ALPHABETIC_UPPER): _builtin_is_alphabetic_upper,
+        FuncName(BuiltinName.LENGTH): _builtin_length,
+        FuncName(BuiltinName.NUMVAL): _builtin_numval,
+        FuncName(BuiltinName.NUMVAL_C): _builtin_numval_c,
+        FuncName(BuiltinName.TEST_NUMVAL): _builtin_test_numval,
+        FuncName(BuiltinName.TEST_NUMVAL_C): _builtin_test_numval_c,
+        FuncName(BuiltinName.INTEGER_OF_DATE): _builtin_integer_of_date,
+        FuncName(BuiltinName.STRING_CONVERT): _builtin_string_convert,
     }
 )

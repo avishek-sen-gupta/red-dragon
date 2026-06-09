@@ -206,6 +206,12 @@ _INTRINSIC_FUNCTIONS = {
     "LOWER-CASE": BuiltinName.LOWER_CASE,
     "TRIM": BuiltinName.TRIM,
     "CURRENT-DATE": BuiltinName.CURRENT_DATE,
+    "LENGTH": BuiltinName.LENGTH,
+    "NUMVAL": BuiltinName.NUMVAL,
+    "NUMVAL-C": BuiltinName.NUMVAL_C,
+    "TEST-NUMVAL": BuiltinName.TEST_NUMVAL,
+    "TEST-NUMVAL-C": BuiltinName.TEST_NUMVAL_C,
+    "INTEGER-OF-DATE": BuiltinName.INTEGER_OF_DATE,
 }
 
 
