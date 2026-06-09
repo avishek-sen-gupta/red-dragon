@@ -133,3 +133,66 @@ def test_decode_record_rebases_subgroup_offset():
     )
     record = EbcdicTable.ascii_to_ebcdic(b"HI")
     assert decode_record(inner, record) == {"X": "HI"}
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_decode_record_fixed_occurs_leaf_array():
+    item = FieldLayout(
+        name="CODE",
+        type_descriptor=CobolTypeDescriptor(
+            category=CobolDataCategory.ALPHANUMERIC, total_digits=2
+        ),
+        offset=0,
+        byte_length=2,
+        occurs_count=3,
+        element_size=2,
+    )
+    layout = DataLayout(fields={"CODE": item}, total_bytes=6)
+    record = EbcdicTable.ascii_to_ebcdic(b"AABBCC")
+    assert decode_record(layout, record) == {"CODE": ["AA", "BB", "CC"]}
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_decode_record_odo_honors_counter_not_max():
+    # N (zoned, offset 0, 1 digit) controls ITEM OCCURS 1 TO 3 DEPENDING ON N.
+    counter = _fl(CobolDataCategory.ZONED_DECIMAL, 0, 1, 1, decimal_digits=0)
+    item = FieldLayout(
+        name="ITEM",
+        type_descriptor=CobolTypeDescriptor(
+            category=CobolDataCategory.ALPHANUMERIC, total_digits=2
+        ),
+        offset=1,
+        byte_length=2,
+        occurs_count=3,
+        element_size=2,
+        occurs_depending_on="N",
+        occurs_min=1,
+    )
+    layout = DataLayout(fields={"N": counter, "ITEM": item}, total_bytes=7)
+    # N=2 -> two live items "AA","BB"; trailing "ZZ" is junk and must NOT appear.
+    record = b"\xf2" + EbcdicTable.ascii_to_ebcdic(b"AABBZZ")
+    out = decode_record(layout, record)
+    assert out["N"] == 2
+    assert out["ITEM"] == ["AA", "BB"]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_decode_record_odo_counter_clamped_to_max():
+    counter = _fl(CobolDataCategory.ZONED_DECIMAL, 0, 1, 1, decimal_digits=0)
+    item = FieldLayout(
+        name="ITEM",
+        type_descriptor=CobolTypeDescriptor(
+            category=CobolDataCategory.ALPHANUMERIC, total_digits=2
+        ),
+        offset=1,
+        byte_length=2,
+        occurs_count=3,
+        element_size=2,
+        occurs_depending_on="N",
+        occurs_min=1,
+    )
+    layout = DataLayout(fields={"N": counter, "ITEM": item}, total_bytes=7)
+    # N=9 (corrupt, > max 3) -> clamp to 3 items.
+    record = b"\xf9" + EbcdicTable.ascii_to_ebcdic(b"AABBCC")
+    out = decode_record(layout, record)
+    assert out["ITEM"] == ["AA", "BB", "CC"]
