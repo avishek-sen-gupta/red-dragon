@@ -74,6 +74,33 @@ def test_lower_expr_node_threads_field_ref_subscripts():
 
 
 @covers(CobolFeature.OCCURS_FIXED)
+def test_lower_expr_node_threads_single_subscript_happy_path():
+    """A FieldRefNode with a SINGLE structured subscript lowers cleanly to IR
+    (no exception) and yields a result register — proving the single subscript
+    is threaded through to resolve_field_ref's element-offset path rather than
+    being silently dropped. Guards red-dragon-6ddr regression."""
+    from interpreter.cobol.cobol_expression import FieldRefNode
+    from interpreter.cobol.condition_lowering import lower_expr_node
+
+    ctx, materialised = _occurs_ctx()
+    node = FieldRefNode(name="WS-ELEM", subscripts=("WS-IDX",))
+    n_before = len(ctx.instructions)
+    result_reg = lower_expr_node(ctx, node, materialised)
+    assert result_reg is not None
+    # IR was actually emitted for the element-offset computation.
+    assert len(ctx.instructions) > n_before
+
+    # The threaded single-subscript path matches the legacy "NAME(SUB)" result:
+    # element-level FieldLayout whose byte_length is the element size (4), not
+    # the whole-table size.
+    ref_struct, _ = ctx.resolve_field_ref(
+        "WS-ELEM", materialised, subscripts=("WS-IDX",)
+    )
+    ref_legacy, _ = ctx.resolve_field_ref("WS-ELEM(WS-IDX)", materialised)
+    assert ref_struct.fl.byte_length == ref_legacy.fl.byte_length == 4
+
+
+@covers(CobolFeature.OCCURS_FIXED)
 def test_lower_display_threads_operand_subscripts():
     """DISPLAY of a subscripted operand threads operand.subscripts to the
     resolver (multi-dim subscripts raise, proving threading from
@@ -88,3 +115,21 @@ def test_lower_display_threads_operand_subscripts():
     )
     with pytest.raises(NotImplementedError):
         lower_display(ctx, stmt, materialised)
+
+
+@covers(CobolFeature.OCCURS_FIXED)
+def test_lower_display_threads_single_subscript_happy_path():
+    """DISPLAY of an operand with a SINGLE valid subscript lowers cleanly to IR
+    (no exception), proving lower_display threads the single subscript through
+    to resolve_field_ref's element-offset path rather than dropping it."""
+    from interpreter.cobol.cobol_statements import DisplayStatement
+    from interpreter.cobol.lower_arithmetic import lower_display
+    from interpreter.cobol.ref_mod import RefModOperand
+
+    ctx, materialised = _occurs_ctx()
+    stmt = DisplayStatement(
+        operand=RefModOperand(name="WS-ELEM", subscripts=("WS-IDX",))
+    )
+    n_before = len(ctx.instructions)
+    lower_display(ctx, stmt, materialised)  # must not raise
+    assert len(ctx.instructions) > n_before
