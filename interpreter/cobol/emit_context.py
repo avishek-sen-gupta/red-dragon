@@ -189,15 +189,21 @@ class EmitContext:
     # ── Field Reference Resolution ────────────────────────────────
 
     def resolve_field_ref(
-        self, name: str, materialised: MaterialisedSectionedLayout
+        self,
+        name: str,
+        materialised: MaterialisedSectionedLayout,
+        qualifiers: tuple[str, ...] = (),
     ) -> tuple[ResolvedFieldRef, Register]:
         """Resolve a field reference that may contain subscript notation.
 
         Returns (ResolvedFieldRef, region_register) — the region register is
         determined by which DATA DIVISION section owns the field.
+
+        ``qualifiers`` (``OF``/``IN`` ancestor group names) disambiguate a
+        duplicated elementary name (CardDemo CSUTLDTC's two Vstring groups).
         """
         base_name, subscript = parse_subscript_notation(name)
-        fl, region_reg = materialised.resolve(base_name)
+        fl, region_reg = materialised.resolve(base_name, qualifiers)
 
         if not subscript:
             offset_reg = self.fresh_reg()

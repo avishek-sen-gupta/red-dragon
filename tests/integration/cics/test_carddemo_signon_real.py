@@ -1024,22 +1024,26 @@ def test_real_carddemo_transaction_add_first_display(tmp_path):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Cross-program COBOL CALL linking (red-dragon-1bp2) is now wired through the "
-        "CICS bootstrap: compile_cics_program(program_source_dir=app/'cbl', "
-        "extra_subprogram_sources=le_service_stub_sources()) links CSUTLDTC and a "
-        "CEEDAYS LE-service stub into COTRN02C via the project linker. NEW BLOCKER: "
-        "CSUTLDTC.cbl itself fails to lower — its WS-DATE-TO-TEST / WS-DATE-FORMAT "
-        "use a variable-length group: 02 Vstring-text > 03 Vstring-char PIC X OCCURS "
-        "0 TO 256 DEPENDING ON Vstring-length (CSUTLDTC.cbl:25-39). build_sectioned_"
-        "layout materialises the GROUP but not its OCCURS-DEPENDING-ON subordinate "
-        "fields (Vstring-length / Vstring-text), so the very first paragraph statement "
-        "MOVE LENGTH OF LS-DATE TO VSTRING-LENGTH OF WS-DATE-TO-TEST (CSUTLDTC.cbl:105) "
-        "raises KeyError: \"Field 'VSTRING-LENGTH' not found in any DATA DIVISION "
-        'section" during lowering. Everything ELSE is proven: region subprogram '
-        "linking (test_region_subprogram_link.py) and the CEEDAYS date-validation stub "
-        "(test_ceedays_stub.py) are green; MOVE into the RETURN-CODE special register "
-        "no longer crashes. Next gap: support OCCURS ... DEPENDING ON variable-length "
-        "subordinate fields in the COBOL data-division layout (build_sectioned_layout)."
+        "CSUTLDTC now lowers and the date validation PASSES end to end. Fixed since the "
+        "previous reason (red-dragon-p7qe): (1) case-insensitive COBOL field/group lookup "
+        "in data_layout (CSUTLDTC declares mixed-case Vstring-length / Vstring-char but "
+        "references them upper-cased — its OCCURS DEPENDING ON layout already materialised "
+        "correctly, the KeyError was a case mismatch); (2) MOVE LENGTH OF <field> source "
+        "(bridge now emits a structured length_of node; lower_move sets the field byte "
+        "length) so VSTRING-LENGTH gets 10; (3) OF/IN qualified-name resolution for MOVE "
+        "operands and the EVALUATE subject (bridge emits operand `qualifiers`; the layout "
+        "resolves the leaf within the named ancestor group) so CSUTLDTC's two duplicate "
+        "Vstring groups no longer collide and COTRN02C's EVALUATE CONFIRMI OF COTRN2AI "
+        "matches 'Y'. The flow now reaches ADD-TRANSACTION and runs EXEC CICS WRITE. "
+        "NEW BLOCKER: the STARTBR(HIGH-VALUES)+READPREV TRAN-ID id-generation does not "
+        "produce the next id. `MOVE HIGH-VALUES TO TRAN-ID` stores EBCDIC-translated bytes "
+        "(0x6F...) instead of the raw 0xFF figurative fill, so STARTBR's search key is "
+        "below the seeded digit keys, READPREV returns ENDFILE, TRAN-ID becomes ZEROS+1 = "
+        "the seed id, and the WRITE returns DUPREC. Next gap: HIGH-VALUES/LOW-VALUES must "
+        "store raw 0xFF/0x00 bytes (no ASCII->EBCDIC translation of the figurative fill) "
+        "so the descending browse positions past end-of-file (red-dragon-raxa). Region "
+        "subprogram linking (test_region_subprogram_link.py) + CEEDAYS stub "
+        "(test_ceedays_stub.py) green."
     ),
 )
 @covers(CobolFeature.EXEC_CICS, CobolFeature.INTRINSIC_FUNCTION)

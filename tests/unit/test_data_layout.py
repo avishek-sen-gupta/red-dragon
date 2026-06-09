@@ -3,6 +3,7 @@
 from interpreter.cobol.asg_types import CobolField
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import build_data_layout
+from interpreter.cobol.features import CobolFeature
 from tests.covers import covers, NotLanguageFeature
 
 
@@ -264,6 +265,93 @@ class TestEnclosingOccursElementSize:
     def test_occurs_group_itself_returns_its_element_size(self):
         layout = self._menu_layout()
         assert layout.enclosing_occurs_element_size("ENTRY") == 11
+
+
+class TestBuildDataLayoutOccursDependingOnMixedCase:
+    """OCCURS 0 TO n DEPENDING ON variable-length subordinate fields, declared
+    in mixed case (the CardDemo CSUTLDTC Vstring pattern). COBOL identifiers are
+    case-insensitive, so the upper-case PROCEDURE references must resolve against
+    the mixed-case layout keys. red-dragon-p7qe."""
+
+    def _vstring_layout(self):
+        # 01 WS-DATE-TO-TEST.
+        #   02 Vstring-length S9(4) BINARY @0 (2 bytes).
+        #   02 Vstring-text @2.
+        #      03 Vstring-char X OCCURS 0 TO 256 DEPENDING ON Vstring-length @0.
+        # 01 WS-AFTER X(4) @258 (after the MAX-length ODO array).
+        return build_data_layout(
+            [
+                CobolField(
+                    name="WS-DATE-TO-TEST",
+                    level=1,
+                    pic="",
+                    usage="DISPLAY",
+                    offset=0,
+                    children=[
+                        CobolField(
+                            name="Vstring-length",
+                            level=2,
+                            pic="S9(4)",
+                            usage="COMP",
+                            offset=0,
+                        ),
+                        CobolField(
+                            name="Vstring-text",
+                            level=2,
+                            pic="",
+                            usage="DISPLAY",
+                            offset=2,
+                            children=[
+                                CobolField(
+                                    name="Vstring-char",
+                                    level=3,
+                                    pic="X",
+                                    usage="DISPLAY",
+                                    offset=0,
+                                    occurs=256,
+                                    element_size=1,
+                                    occurs_depending_on="Vstring-length",
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+                CobolField(
+                    name="WS-AFTER", level=1, pic="X(4)", usage="DISPLAY", offset=258
+                ),
+            ]
+        )
+
+    @covers(CobolFeature.OCCURS_DEPENDING_ON)
+    def test_odo_fields_resolve_case_insensitively(self):
+        """The mixed-case length + ODO element resolve under upper-case names."""
+        layout = self._vstring_layout()
+        length = layout.lookup("VSTRING-LENGTH")
+        assert length is not None
+        assert length.offset == 0
+        char = layout.lookup("VSTRING-CHAR")
+        assert char is not None
+        # The ODO element is laid out at MAX (256 elements) starting at offset 2.
+        assert char.offset == 2
+        assert char.occurs_count == 256
+        assert char.element_size == 1
+        assert char.occurs_depending_on == "Vstring-length"
+
+    @covers(CobolFeature.OCCURS_DEPENDING_ON)
+    def test_trailing_field_offset_is_past_max_odo_array(self):
+        """A field following the ODO item sits past the MAX-length array."""
+        layout = self._vstring_layout()
+        after = layout.lookup("WS-AFTER")
+        assert after is not None
+        # 2 (length) + 256 (Vstring-char OCCURS at max) = 258.
+        assert after.offset == 258
+
+    @covers(CobolFeature.OCCURS_DEPENDING_ON)
+    def test_odo_group_lookup_case_insensitive(self):
+        """The enclosing ODO group resolves under an upper-case query too."""
+        layout = self._vstring_layout()
+        grp = layout.lookup_group("VSTRING-TEXT")
+        assert grp.offset == 2
 
 
 class TestBuildDataLayoutRedefines:
