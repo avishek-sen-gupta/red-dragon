@@ -373,6 +373,34 @@ class EmitContext:
         self.emit_inst(Const(result_reg=result, value=list(padded)))
         return result
 
+    def emit_fill_raw_byte(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        fill_byte: int,
+        offset_reg: Register = NO_REGISTER,
+    ) -> None:
+        """Fill a field's whole region slot with a single raw byte, verbatim.
+
+        Used for MOVE HIGH-VALUES / LOW-VALUES, whose semantics are raw 0xFF /
+        0x00 in every receiver position — they must bypass the ASCII→EBCDIC
+        alphanumeric encoder (which would corrupt \\xff into 0x6F). The byte is
+        written as a literal list of ``byte_length`` copies (red-dragon-raxa).
+        """
+        result = self.fresh_reg()
+        self.emit_inst(Const(result_reg=result, value=[fill_byte] * fl.byte_length))
+        if not offset_reg.is_present():
+            offset_reg = self.fresh_reg()
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+        self.emit_inst(
+            WriteRegion(
+                region_reg=region_reg,
+                offset_reg=offset_reg,
+                length=fl.byte_length,
+                value_reg=result,
+            ),
+        )
+
     def _emit_ebcdic_spaces(self, byte_length: int) -> Register:
         """Emit IR to create a list of EBCDIC spaces (0x40). Returns result register."""
         length_reg = self.const_to_reg(byte_length)

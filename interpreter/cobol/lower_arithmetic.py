@@ -9,6 +9,7 @@ import logging
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.figurative_constants import (
     COBOL_FIGURATIVE_CONSTANTS,
+    raw_figurative_byte,
     translate_cobol_figurative,
 )
 from interpreter.cobol.ref_mod import (
@@ -332,6 +333,41 @@ def lower_move(
         for target in stmt.targets:
             _store_move_value(ctx, target, source_value_reg, materialised)
         return
+
+    # Raw figurative source (HIGH-VALUES / LOW-VALUES): these denote raw bytes —
+    # 0xFF / 0x00 in every receiver position — and must bypass the ASCII→EBCDIC
+    # alphanumeric encoder, which would corrupt \xff into 0x6F (red-dragon-raxa).
+    # Each receiver's whole width is filled with the raw byte. A reference-modified
+    # source slice still selects bytes, so it keeps the character path below; a
+    # reference-modified TARGET likewise needs the splice path and is excluded here.
+    if (
+        not ctx.has_field(stmt.source.name, materialised)
+        and stmt.source.ref_mod_start is None
+    ):
+        fill_byte = raw_figurative_byte(stmt.source.name)
+        if fill_byte is not None:
+            for target in stmt.targets:
+                if not ctx.has_field(target.name, materialised):
+                    if _is_special_register(target.name):
+                        logger.warning(
+                            "MOVE into special register %r is not modelled — skipping",
+                            target.name,
+                        )
+                    continue
+                if target.ref_mod_start is not None:
+                    # Ref-modified receiver: fall back to the character path so the
+                    # SPLICE write still works (rare combination).
+                    raw_str = chr(fill_byte)
+                    src_reg = ctx.const_to_reg(f'"{raw_str}"')
+                    _store_move_value(ctx, target, src_reg, materialised)
+                    continue
+                target_ref, target_rr = ctx.resolve_field_ref(
+                    target.name, materialised, target.qualifiers
+                )
+                ctx.emit_fill_raw_byte(
+                    target_rr, target_ref.fl, fill_byte, target_ref.offset_reg
+                )
+            return
 
     # Resolve the source field once (when it is a field). A numeric-DISPLAY
     # (zoned) source carries an extra character representation, picked per target

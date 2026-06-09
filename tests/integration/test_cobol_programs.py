@@ -179,6 +179,89 @@ class TestValueClauseHexLiteralInit:
         assert region[0] == 0x7D
 
 
+class TestMoveFigurativeRawBytes:
+    """MOVE HIGH-VALUES / LOW-VALUES store RAW 0xFF / 0x00, not EBCDIC-translated chars.
+
+    HIGH-VALUES is the highest collating byte (0xFF) and LOW-VALUES the lowest
+    (0x00) in every position of the receiver — they must NOT pass through the
+    ASCII→EBCDIC alphanumeric encoder (which would turn \\xff into 0x6F). CardDemo
+    COTRN02C ADD-TRANSACTION relies on MOVE HIGH-VALUES TO TRAN-ID + STARTBR +
+    READPREV to find the highest existing key (red-dragon-raxa).
+    """
+
+    @covers(CobolFeature.FIGURATIVE_HIGH_VALUES, CobolFeature.MOVE)
+    def test_move_high_values_stores_raw_ff(self):
+        """01 F PIC X(4); MOVE HIGH-VALUES TO F — bytes 0-3 must be raw 0xFF."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. HIVAL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 F PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "    MOVE HIGH-VALUES TO F.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert bytes(region[0:4]) == b"\xff\xff\xff\xff"
+
+    @covers(CobolFeature.FIGURATIVE_LOW_VALUES, CobolFeature.MOVE)
+    def test_move_low_values_stores_raw_00(self):
+        """01 F PIC X(4); MOVE LOW-VALUES TO F — bytes 0-3 must be raw 0x00."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. LOVAL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 F PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "    MOVE LOW-VALUES TO F.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert bytes(region[0:4]) == b"\x00\x00\x00\x00"
+
+    @covers(CobolFeature.FIGURATIVE_SPACES, CobolFeature.MOVE)
+    def test_move_spaces_stores_ebcdic_space(self):
+        """01 F PIC X(4); MOVE SPACES TO F — bytes 0-3 must be EBCDIC space 0x40."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. SPVAL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 F PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "    MOVE SPACES TO F.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert bytes(region[0:4]) == b"\x40\x40\x40\x40"
+
+    @covers(CobolFeature.FIGURATIVE_ZEROS, CobolFeature.MOVE)
+    def test_move_zeros_to_numeric_unchanged(self):
+        """01 N PIC 9(4); MOVE ZEROS TO N — decodes to numeric 0 (zoned 0xF0)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. ZEROVAL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 N PIC 9(4).",
+                "PROCEDURE DIVISION.",
+                "    MOVE ZEROS TO N.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 0
+
+
 class TestValueClauseDefaultZeroFill:
     """AC3 (4q25.9.3): PIC 9 field without VALUE is zero-filled at startup."""
 
@@ -3116,11 +3199,12 @@ class TestFigurativeConstants:
             max_steps=500,
         )
         region = _first_region(vm)
-        # HIGH-VALUES translates to "\xff" (U+00FF), which EBCDIC-encodes to 0x6F.
-        # True COBOL HIGH-VALUES should be 0xFF; tracked as a known limitation.
+        # HIGH-VALUES is the raw highest byte (0xFF) in every receiver position —
+        # it bypasses ASCII→EBCDIC translation of the figurative fill
+        # (red-dragon-raxa).
         assert (
-            region[0] == 0x6F
-        ), f"Expected 0x6F (EBCDIC encoding of \\xff), got {hex(region[0])}"
+            region[0] == 0xFF
+        ), f"Expected raw HIGH-VALUES byte (0xFF), got {hex(region[0])}"
 
 
 class TestOnSizeError:
