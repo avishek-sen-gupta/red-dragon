@@ -299,7 +299,7 @@ def test_region_input_event_is_put_on_queue_for_receive_map(monkeypatch):
     drained = []
 
     def fake_run(program, ctx, sq, iq, **kw):
-        drained.append(iq.get_nowait())
+        drained.append(iq.get(block=False))
         return DispatchResult(kind=DispatchKind.RETURN)
 
     monkeypatch.setattr(dispatcher_mod, "run_cics", fake_run)

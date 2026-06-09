@@ -43,7 +43,7 @@ def test_send_map_reads_named_output_fields_from_ws(monkeypatch):
     sq: queue.Queue = queue.Queue()
     builtin = make_send_map_builtin(sq)
     builtin([_tv("COSGN0A"), _tv(["USERID", "ERRMSG"])], vm)
-    item = sq.get_nowait()
+    item = sq.get(block=False)
     assert item["map"] == "COSGN0A"
     assert item["fields"]["USERID"] == "USER0001"
     assert item["fields"]["ERRMSG"] == ""
@@ -131,6 +131,6 @@ def test_send_text_enqueues_text():
     args = [typed("Hello, world!", UNKNOWN)]
     result = builtin(args, VMState())
     assert isinstance(result, BuiltinResult)
-    item = screen_q.get_nowait()
+    item = screen_q.get(block=False)
     assert item["type"] == "text"
     assert "Hello" in item["text"]

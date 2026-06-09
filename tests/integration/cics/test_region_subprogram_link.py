@@ -26,6 +26,7 @@ from interpreter.cics.bootstrap import run_carddemo_region
 from interpreter.cics.dispatcher import InputEvent
 from interpreter.cics.preprocessor import apply_cics_prepass
 from interpreter.cics.types import DispatchKind
+from tests.integration.cics.channel_drain import drain
 from tests.covers import covers
 from tests.integration.cobol_helpers import JAR_AVAILABLE, JAR_PATH, bridge_jar_env
 
@@ -104,9 +105,7 @@ def test_region_program_links_called_subprogram(tmp_path):
 
     assert result.kind == DispatchKind.RETURN
 
-    screens = []
-    while not screen_q.empty():
-        screens.append(screen_q.get_nowait())
+    screens = drain(screen_q)
     assert [s["map"] for s in screens] == ["LNKMAP"]
     # The value the callee wrote through BY REFERENCE surfaces — proves it ran.
     assert (

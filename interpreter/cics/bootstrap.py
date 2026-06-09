@@ -23,11 +23,14 @@ module stays cheap to import and side-steps any import-linter coupling concerns.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from interpreter.cics.dispatcher import _run_dispatcher_with_runner, parse_csd, run_cics
 from interpreter.cics.strategy import CicsLoweringStrategy
 from interpreter.cics.types import CicsContext, DispatchResult
+
+if TYPE_CHECKING:
+    from interpreter.cics.terminal import InputChannel, ScreenChannel
 
 
 def _compile_cics_module(source: bytes, parser: Any, strategy: Any, path: Path) -> Any:
@@ -269,8 +272,8 @@ def run_carddemo_region(
     program_sources: dict[str, bytes],
     parser: Any,
     entry_transid: str,
-    screen_queue: Any,
-    input_queue: Any,
+    screen_queue: ScreenChannel,
+    input_queue: InputChannel,
     transid_to_program: dict[str, str] | None = None,
     csd_path: Path | None = None,
     vsam_engine: Any = None,
@@ -334,7 +337,12 @@ def run_carddemo_region(
             extra_subprogram_sources=extra_subprogram_sources,
         )
 
-    def run_fn(program: Any, context: CicsContext, sq: Any, iq: Any) -> DispatchResult:
+    def run_fn(
+        program: Any,
+        context: CicsContext,
+        sq: ScreenChannel,
+        iq: InputChannel,
+    ) -> DispatchResult:
         return run_cics(
             program,
             context,
