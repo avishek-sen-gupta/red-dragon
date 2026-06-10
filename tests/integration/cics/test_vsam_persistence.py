@@ -23,15 +23,11 @@ the ProLeap JAR are present). Run explicitly:
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from interpreter.cics.vsam.backend import FileBackend
 from interpreter.cics.vsam.format import read_flat_file
 from tests.covers import covers, NotLanguageFeature
-from tests.integration.cics.bms_tools_helpers import BMS_TOOLS_AVAILABLE
-from tests.integration.cobol_helpers import JAR_AVAILABLE
 from tests.integration.cics.test_carddemo_signon_real import (
     _ACCT_ID,
     _NEW_ACCT_STATUS,
@@ -45,12 +41,9 @@ from tests.integration.cics.test_carddemo_signon_real import (
     _drive_transaction_add,
 )
 
-_CARDDEMO_HOME = os.environ.get("CARDDEMO_HOME")
-
-pytestmark = pytest.mark.skipif(
-    not _CARDDEMO_HOME or not JAR_AVAILABLE or not BMS_TOOLS_AVAILABLE,
-    reason="manual: set CARDDEMO_HOME + BMS_TOOLS_HOME (built hlasm_export) + ProLeap JAR",
-)
+# Mandatory locally, skipped in CI — via the shared carddemo_e2e marker
+# (see tests/integration/cics/conftest.py).
+pytestmark = pytest.mark.carddemo_e2e
 
 # ACCTDAT record layout (CVACT01Y, RECLN 300): ACCT-ID 9(11)@0 (key),
 # ACCT-ACTIVE-STATUS X(1)@11. Matches _acct_record() in the durable harness.
