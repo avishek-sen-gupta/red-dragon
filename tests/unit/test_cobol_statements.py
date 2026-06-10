@@ -49,48 +49,19 @@ from interpreter.cobol.cobol_statements import (
 from interpreter.cobol.ref_mod import RefModOperand
 
 
-def _expr_dict(expr_str: str) -> dict:
-    """Convert an expression string to a structured expression dict.
-
-    This parses the string and converts it to the structured format that the Java bridge emits.
-    """
-    from interpreter.cobol.cobol_expression import parse_expression
-
-    expr_node = parse_expression(expr_str)
-    return _expr_node_to_dict(expr_node)
+def _ref(name: str) -> dict:
+    """Structured field-reference dict, as the Java bridge serializes it."""
+    return {"kind": "ref", "name": name}
 
 
-def _expr_node_to_dict(node) -> dict:
-    """Convert an ExprNode to a dict (replicating the serialization from cobol_statements)."""
-    from interpreter.cobol.cobol_expression import (
-        LiteralNode,
-        FieldRefNode,
-        RefModNode,
-        BinOpNode,
-    )
+def _lit(value: str) -> dict:
+    """Structured numeric-literal dict, as the Java bridge serializes it."""
+    return {"kind": "lit", "value": value}
 
-    if isinstance(node, LiteralNode):
-        return {"kind": "lit", "value": node.value}
-    elif isinstance(node, FieldRefNode):
-        return {"kind": "ref", "name": node.name}
-    elif isinstance(node, RefModNode):
-        result = {
-            "kind": "ref",
-            "name": node.name,
-            "ref_mod_start": _expr_node_to_dict(node.ref_mod_start),
-        }
-        if node.ref_mod_length is not None:
-            result["ref_mod_length"] = _expr_node_to_dict(node.ref_mod_length)
-        return result
-    elif isinstance(node, BinOpNode):
-        return {
-            "kind": "binop",
-            "op": node.op,
-            "left": _expr_node_to_dict(node.left),
-            "right": _expr_node_to_dict(node.right),
-        }
-    else:
-        return {}
+
+def _binop(op: str, left: dict, right: dict) -> dict:
+    """Structured binary-operation dict, as the Java bridge serializes it."""
+    return {"kind": "binop", "op": op, "left": left, "right": right}
 
 
 class TestParseStatementDispatch:
@@ -164,7 +135,9 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "COMPUTE",
-                "expression": _expr_dict("WS-A + WS-B * 2"),
+                "expression": _binop(
+                    "+", _ref("WS-A"), _binop("*", _ref("WS-B"), _lit("2"))
+                ),
                 "targets": ["WS-RESULT"],
             }
         )
@@ -180,7 +153,7 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "COMPUTE",
-                "expression": _expr_dict("100 - WS-A"),
+                "expression": _binop("-", _lit("100"), _ref("WS-A")),
                 "targets": ["WS-C", "WS-D"],
             }
         )
@@ -852,7 +825,9 @@ class TestRoundTrip:
     def test_compute_round_trip(self):
         data = {
             "type": "COMPUTE",
-            "expression": _expr_dict("WS-A + WS-B * 2"),
+            "expression": _binop(
+                "+", _ref("WS-A"), _binop("*", _ref("WS-B"), _lit("2"))
+            ),
             "targets": ["WS-RESULT"],
         }
         # to_dict() only returns type and targets (expression is not serialized)
@@ -863,7 +838,9 @@ class TestRoundTrip:
     def test_compute_multiple_targets_round_trip(self):
         data = {
             "type": "COMPUTE",
-            "expression": _expr_dict("(WS-A + WS-B) * 100"),
+            "expression": _binop(
+                "*", _binop("+", _ref("WS-A"), _ref("WS-B")), _lit("100")
+            ),
             "targets": ["WS-C", "WS-D"],
         }
         # to_dict() only returns type and targets (expression is not serialized)
