@@ -126,6 +126,28 @@ def test_copy_in_ref_mod_reads_sliced_bytes() -> None:
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_copy_in_ref_mod_data_name_length_raises_not_implemented() -> None:
+    """A ref-mod copy-in with a data-name LENGTH (e.g. WS-FIELD(1:WS-LEN)) cannot
+    size a static LoadRegion, so it raises loudly rather than silently reading the
+    full field (which would clobber adjacent fields)."""
+    import pytest
+    from interpreter.cobol.ref_mod import RefModLiteral, RefModReference
+
+    ctx = _ctx()
+    with pytest.raises(NotImplementedError):
+        emit_copy_in(
+            ctx,
+            CicsOperand(
+                "WS-FIELD",
+                False,
+                ref_mod_start=RefModLiteral("1"),
+                ref_mod_length=RefModReference("WS-LEN"),
+            ),
+            MATERIALISED,
+        )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_copy_in_returns_none_for_literal() -> None:
     ctx = _ctx()
     out = emit_copy_in(ctx, CicsOperand("CC01", True), MATERIALISED)
