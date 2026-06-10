@@ -13,6 +13,7 @@ for backward compatibility.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout
@@ -42,6 +43,9 @@ from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
+
+if TYPE_CHECKING:
+    from interpreter.cobol.cobol_expression import ExprNode
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +109,7 @@ class CobolFrontend(Frontend):
         name: str,
         materialised: MaterialisedSectionedLayout,
         qualifiers: tuple[str, ...] = (),
-        subscripts: tuple[str, ...] = (),
+        subscripts: tuple["ExprNode", ...] = (),
     ) -> tuple[ResolvedFieldRef, Register]:
         return self._ctx.resolve_field_ref(
             name, materialised, qualifiers=qualifiers, subscripts=subscripts
