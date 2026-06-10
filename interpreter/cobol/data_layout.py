@@ -21,6 +21,9 @@ from interpreter.cobol.pic_parser import parse_pic
 
 logger = logging.getLogger(__name__)
 
+# RENAMES (level-66) is always treated as ALPHANUMERIC; its descriptor is fixed.
+_RENAMES_TYPE_DESCRIPTOR = parse_pic("X")
+
 # Generic value type for the case-insensitive dict lookup helper.
 _V = TypeVar("_V")
 
@@ -391,15 +394,8 @@ def _flatten_field(
         )
         return cobol_field.name, group_layout
 
-    # Elementary leaf
-    type_desc = parse_pic(
-        cobol_field.pic,
-        cobol_field.usage,
-        sign_leading=cobol_field.sign_leading,
-        sign_separate=cobol_field.sign_separate,
-        justified_right=cobol_field.justified_right,
-        blank_when_zero=cobol_field.blank_when_zero,
-    )
+    # Elementary leaf — PIC was parsed once at ingestion.
+    type_desc = cobol_field.type_descriptor
     element_byte_length = type_desc.byte_length
     total_byte_length = (
         element_byte_length * cobol_field.occurs
@@ -446,7 +442,7 @@ def _compute_group_length(cobol_field: CobolField) -> int:
     size by the occurrence count.
     """
     if not cobol_field.children:
-        element_length = parse_pic(cobol_field.pic, cobol_field.usage).byte_length
+        element_length = cobol_field.type_descriptor.byte_length
         return (
             element_length * cobol_field.occurs
             if cobol_field.occurs > 0
@@ -485,7 +481,7 @@ def _resolve_renames(
     offset = from_layout.offset
     byte_length = (thru_layout.offset + thru_layout.byte_length) - from_layout.offset
 
-    type_desc = parse_pic("X")  # RENAMES is always treated as ALPHANUMERIC
+    type_desc = _RENAMES_TYPE_DESCRIPTOR  # RENAMES is always ALPHANUMERIC
 
     logger.debug(
         "RENAMES %s: from=%s thru=%s offset=%d length=%d",

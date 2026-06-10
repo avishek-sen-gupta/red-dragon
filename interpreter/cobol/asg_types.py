@@ -11,7 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from interpreter.cobol.cobol_statements import CobolStatementType, parse_statement
+from interpreter.cobol.cobol_types import CobolTypeDescriptor
 from interpreter.cobol.condition_name import ConditionName, ConditionValue
+from interpreter.cobol.pic_parser import parse_pic
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,23 @@ class CobolField:
     renames_from: str = ""
     renames_thru: str = ""
     blank_when_zero: bool = False
+    type_descriptor: CobolTypeDescriptor = field(init=False)
+
+    def __post_init__(self) -> None:
+        # Parse the PIC clause exactly ONCE, at ingestion, into the canonical
+        # type descriptor. Frozen dataclass -> set via object.__setattr__.
+        object.__setattr__(
+            self,
+            "type_descriptor",
+            parse_pic(
+                self.pic,
+                self.usage,
+                sign_leading=self.sign_leading,
+                sign_separate=self.sign_separate,
+                justified_right=self.justified_right,
+                blank_when_zero=self.blank_when_zero,
+            ),
+        )
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
