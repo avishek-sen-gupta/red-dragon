@@ -50,7 +50,7 @@ class FieldRefNode:
     """Reference to a COBOL data field by name."""
 
     name: str
-    subscripts: tuple[str, ...] = ()
+    subscripts: tuple["ExprNode", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,7 @@ class RefModNode:
     name: str
     ref_mod_start: "ExprNode"
     ref_mod_length: "ExprNode | None" = None
-    subscripts: tuple[str, ...] = ()
+    subscripts: tuple["ExprNode", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -103,7 +103,7 @@ def expr_from_dict(d: dict) -> ExprNode:
     if kind == "lit":
         return LiteralNode(value=d["value"])
     if kind == "ref":
-        subscripts = tuple(d.get("subscripts", ()))
+        subscripts = tuple(expr_from_dict(s) for s in d.get("subscripts", []))
         if "ref_mod_start" in d:
             return RefModNode(
                 name=d["name"],
@@ -134,6 +134,44 @@ def expr_from_dict(d: dict) -> ExprNode:
             args=tuple(expr_from_dict(a) for a in d.get("args", []) or []),
         )
     raise ValueError(f"Unknown expression node kind: {kind!r}")
+
+
+def expr_to_dict(node: ExprNode) -> dict:
+    """Serialize an ExprNode back to its structured JSON dict form.
+
+    Inverse of :func:`expr_from_dict`. Used to round-trip subscript interiors
+    (red-dragon-l445). ``neg`` is not re-emitted — a folded negation already
+    lives as a ``binop`` after deserialization.
+    """
+    if isinstance(node, LiteralNode):
+        return {"kind": "lit", "value": node.value}
+    if isinstance(node, FieldRefNode):
+        d: dict = {"kind": "ref", "name": node.name}
+        if node.subscripts:
+            d["subscripts"] = [expr_to_dict(s) for s in node.subscripts]
+        return d
+    if isinstance(node, RefModNode):
+        d = {"kind": "ref", "name": node.name}
+        d["ref_mod_start"] = expr_to_dict(node.ref_mod_start)
+        if node.ref_mod_length is not None:
+            d["ref_mod_length"] = expr_to_dict(node.ref_mod_length)
+        if node.subscripts:
+            d["subscripts"] = [expr_to_dict(s) for s in node.subscripts]
+        return d
+    if isinstance(node, BinOpNode):
+        return {
+            "kind": "binop",
+            "op": node.op,
+            "left": expr_to_dict(node.left),
+            "right": expr_to_dict(node.right),
+        }
+    if isinstance(node, FunctionNode):
+        return {
+            "kind": "function",
+            "name": node.name,
+            "args": [expr_to_dict(a) for a in node.args],
+        }
+    raise ValueError(f"Unknown expression node type: {type(node).__name__}")
 
 
 # ── Tokenizer ────────────────────────────────────────────────────

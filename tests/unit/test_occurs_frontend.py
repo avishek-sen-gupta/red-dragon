@@ -11,7 +11,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
 from interpreter.cobol.pic_parser import parse_pic
 from interpreter.cobol.cobol_expression import tokenize_expression, parse_expression
-from interpreter.cobol.cobol_expression import FieldRefNode
+from interpreter.cobol.cobol_expression import FieldRefNode, LiteralNode
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.ir import Opcode
 from interpreter.register import Register
@@ -118,7 +118,9 @@ class TestResolveFieldRef:
         frontend._instructions = []
 
         materialised = _materialise(layout)
-        ref, _ = frontend._resolve_field_ref("WS-TBL", materialised, subscripts=("3",))
+        ref, _ = frontend._resolve_field_ref(
+            "WS-TBL", materialised, subscripts=(LiteralNode("3"),)
+        )
         assert ref.fl.name == "WS-TBL"
         # Element size should be 4 (single element), not 20 (total)
         assert ref.fl.byte_length == 4
