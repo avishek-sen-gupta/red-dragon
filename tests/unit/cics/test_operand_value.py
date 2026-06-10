@@ -11,7 +11,10 @@ from interpreter.cics.cics_parser import CicsOperand
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef
-from interpreter.instructions import Const
+from interpreter.cobol.ref_mod import RefModLiteral
+from interpreter.cobol.cobol_constants import BuiltinName
+from interpreter.func_name import FuncName
+from interpreter.instructions import CallFunction, Const
 from interpreter.register import Register
 from tests.covers import covers, NotLanguageFeature
 
@@ -55,6 +58,11 @@ class FakeCtx:
         out = self.fresh_reg()
         self.decoded.append((region_reg, fl, out))
         return out
+
+    def const_to_reg(self, value):  # type: ignore[no-untyped-def]
+        reg = self.fresh_reg()
+        self.emit_inst(Const(result_reg=reg, value=value))
+        return reg
 
 
 MATERIALISED = object()
@@ -100,6 +108,36 @@ def test_literal_never_consults_has_field_on_name_collision() -> None:
     assert len(consts) == 1
     assert consts[0].value == "SGNMAP"
     assert consts[0].result_reg == out
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_ref_mod_operand_emits_string_slice() -> None:
+    """A ref-mod operand WS-MSG(1:8) decodes the base field, then STRING_SLICEs
+    it at start-1 (0-based) for `length` bytes — it must NOT return the whole
+    field value."""
+    ctx = FakeCtx({"WS-MSG": (0, 40)})
+    out = emit_operand_value(
+        ctx,
+        CicsOperand(
+            "WS-MSG",
+            False,
+            ref_mod_start=RefModLiteral("1"),
+            ref_mod_length=RefModLiteral("8"),
+        ),
+        MATERIALISED,
+    )
+    assert isinstance(out, Register)
+    # The base field was decoded ...
+    assert len(ctx.decoded) == 1
+    # ... and a STRING_SLICE produced the returned (sliced) register.
+    slices = [
+        i
+        for i in ctx.emitted
+        if isinstance(i, CallFunction)
+        and i.func_name == FuncName(BuiltinName.STRING_SLICE)
+    ]
+    assert len(slices) == 1
+    assert slices[0].result_reg == out
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

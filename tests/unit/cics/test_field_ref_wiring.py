@@ -67,6 +67,13 @@ class FakeCtx:
         self.emit_inst(("to_string", out, value_reg))
         return out
 
+    def const_to_reg(self, value):  # type: ignore[no-untyped-def]
+        from interpreter.instructions import Const
+
+        reg = self.fresh_reg()
+        self.emit_inst(Const(result_reg=reg, value=value))
+        return reg
+
 
 def Region_for(name: str) -> Register:
     return Register("%region")
@@ -90,6 +97,32 @@ def test_copy_in_emits_loadregion_for_field() -> None:
     lr = load_regions[0]
     assert lr.result_reg == out
     assert lr.length == 4
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_copy_in_ref_mod_reads_sliced_bytes() -> None:
+    """A ref-mod copy-in WS-FIELD(2:1) reads `length` bytes (1) at an offset
+    advanced by start-1, NOT the full field."""
+    from interpreter.cobol.ref_mod import RefModLiteral
+    from interpreter.instructions import Binop
+
+    ctx = _ctx()
+    out = emit_copy_in(
+        ctx,
+        CicsOperand(
+            "WS-FIELD",
+            False,
+            ref_mod_start=RefModLiteral("2"),
+            ref_mod_length=RefModLiteral("1"),
+        ),
+        MATERIALISED,
+    )
+    assert isinstance(out, Register)
+    load_regions = [i for i in ctx.emitted if isinstance(i, LoadRegion)]
+    assert len(load_regions) == 1
+    assert load_regions[0].length == 1
+    # The offset register was advanced (start-1) via a Binop before the read.
+    assert any(isinstance(i, Binop) for i in ctx.emitted)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
