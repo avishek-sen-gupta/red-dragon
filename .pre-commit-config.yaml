@@ -42,8 +42,13 @@ repos:
         always_run: true
 
       - id: tests
-        name: Full test suite
-        entry: poetry run python -m pytest tests/ -x -q
+        name: Full test suite (incl. mandatory CardDemo CICS e2e)
+        # `make test` wires the CardDemo toolchain env (CARDDEMO_HOME +
+        # BMS_TOOLS_HOME + PROLEAP_BRIDGE_JAR) and builds the JAR if missing, so
+        # the now-mandatory-locally CardDemo e2e RUN here instead of hard-failing.
+        # (A bare `pytest tests/` would error those ~3 modules — see
+        # tests/integration/cics/conftest.py.)
+        entry: make test PYTEST_ARGS="-x -q"
         language: system
         pass_filenames: false
         always_run: true
