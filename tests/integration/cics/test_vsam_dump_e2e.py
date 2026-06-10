@@ -29,20 +29,15 @@ from tests.integration.cics.test_carddemo_signon_real import (
     _NEW_ACCT_STATUS,
     _drive_rewrite,
 )
-from tests.integration.cics.bms_tools_helpers import BMS_TOOLS_AVAILABLE
-from tests.integration.cobol_helpers import JAR_AVAILABLE, JAR_PATH
+from tests.integration.cobol_helpers import JAR_PATH
 from interpreter.cics.vsam.backend import FileBackend
 from interpreter.cics.vsam.dump import decode_record, load_record_layout
 from interpreter.cics.vsam.format import read_flat_file
 from tests.covers import covers, NotLanguageFeature
 
-_CARDDEMO_HOME = os.environ.get("CARDDEMO_HOME")
-
-# Gate exactly like the other CICS e2e tests: CARDDEMO_HOME + ProLeap JAR + bms-tools.
-pytestmark = pytest.mark.skipif(
-    not _CARDDEMO_HOME or not JAR_AVAILABLE or not BMS_TOOLS_AVAILABLE,
-    reason="manual: set CARDDEMO_HOME + BMS_TOOLS_HOME (built hlasm_export) + ProLeap JAR",
-)
+# Mandatory locally, skipped in CI — via the shared carddemo_e2e marker
+# (see tests/integration/cics/conftest.py).
+pytestmark = pytest.mark.carddemo_e2e
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
