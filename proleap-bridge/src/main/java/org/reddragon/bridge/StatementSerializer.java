@@ -1434,8 +1434,12 @@ public final class StatementSerializer {
 
     /**
      * All subscripts of a (possibly delegated) TABLE_CALL, in source order, each
-     * as its source text; an empty array for any non-table call. Fixes the prior
-     * single-dimension truncation (only {@code get(0)} was kept). (red-dragon-6ddr)
+     * as a STRUCTURED expression node ({@code {kind:"ref"/"lit"/"binop"/...}}) —
+     * the same shape the COMPUTE/IF value-stmt serializer emits and that the
+     * Python {@code expr_from_dict} consumes. Reuses {@link #serializeFromValue}
+     * so an arithmetic or nested subscript (e.g. {@code TBL(WS-I + 1)}) is carried
+     * as a real expression tree, not a string (red-dragon-l445). Empty array for
+     * any non-table call.
      */
     private static JsonArray extractSubscripts(Call call) {
         JsonArray arr = new JsonArray();
@@ -1447,7 +1451,7 @@ public final class StatementSerializer {
             List<Subscript> subscripts = tableCall.getSubscripts();
             if (subscripts != null) {
                 for (Subscript sub : subscripts) {
-                    arr.add(extractValueStmtText(sub.getSubscriptValueStmt()));
+                    arr.add(serializeFromValue(sub.getSubscriptValueStmt()));
                 }
             }
         }
