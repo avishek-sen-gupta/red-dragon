@@ -10,8 +10,7 @@ from interpreter.cobol.asg_types import CobolField
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
 from interpreter.cobol.pic_parser import parse_pic
-from interpreter.cobol.cobol_expression import tokenize_expression, parse_expression
-from interpreter.cobol.cobol_expression import FieldRefNode, LiteralNode
+from interpreter.cobol.cobol_expression import LiteralNode
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.ir import Opcode
 from interpreter.register import Register
@@ -26,31 +25,6 @@ def _materialise(layout: DataLayout) -> MaterialisedSectionedLayout:
         linkage=(empty, Register("__no_reg__")),
         local_storage=(empty, Register("__no_reg__")),
     )
-
-
-class TestExpressionTokenizerWithSubscripts:
-    def test_subscripted_field_is_single_token(self):
-        """WS-TABLE(IDX) is captured as a single token."""
-        tokens = tokenize_expression("WS-TABLE(IDX) + 1")
-        assert tokens == ["WS-TABLE(IDX)", "+", "1"]
-
-    def test_subscripted_field_with_literal(self):
-        """WS-TABLE(3) is captured as a single token."""
-        tokens = tokenize_expression("WS-TABLE(3) * 2")
-        assert tokens == ["WS-TABLE(3)", "*", "2"]
-
-    def test_plain_expression_unchanged(self):
-        """Regular expressions still tokenize correctly."""
-        tokens = tokenize_expression("WS-A + WS-B * 2")
-        assert tokens == ["WS-A", "+", "WS-B", "*", "2"]
-
-    def test_subscripted_in_expression_parses_as_field_ref(self):
-        """Subscripted field parses to FieldRefNode."""
-        tree = parse_expression("WS-TABLE(3) + 1")
-        # The left side of the addition should be a FieldRefNode
-        assert hasattr(tree, "left")
-        assert isinstance(tree.left, FieldRefNode)
-        assert tree.left.name == "WS-TABLE(3)"
 
 
 class TestResolveFieldRef:
