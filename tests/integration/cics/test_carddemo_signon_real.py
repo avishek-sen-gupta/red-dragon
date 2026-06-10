@@ -52,20 +52,16 @@ from interpreter.cobol.features import CobolFeature
 from tests.integration.cics.channel_drain import drain
 from tests.covers import covers
 from tests.integration.cics.bms_tools_helpers import (
-    BMS_TOOLS_AVAILABLE,
     BMS_COPYBOOK_GEN_SRC,
     HLASM_EXPORT_BIN,
 )
-from tests.integration.cobol_helpers import JAR_AVAILABLE, JAR_PATH
+from tests.integration.cobol_helpers import JAR_PATH
 
-# CARDDEMO_HOME is unset in normal/CI runs, so this whole module is skipped by
-# default. Set it (to the CardDemo `app` directory) to run the test explicitly.
 _CARDDEMO_HOME = os.environ.get("CARDDEMO_HOME")
 
-pytestmark = pytest.mark.skipif(
-    not _CARDDEMO_HOME or not JAR_AVAILABLE or not BMS_TOOLS_AVAILABLE,
-    reason="manual: set CARDDEMO_HOME + BMS_TOOLS_HOME (built hlasm_export) + ProLeap JAR",
-)
+# Mandatory locally, skipped in CI — via the shared carddemo_e2e marker
+# (see tests/integration/cics/conftest.py).
+pytestmark = pytest.mark.carddemo_e2e
 
 _CICS_COPYBOOKS = Path(__file__).parents[3] / "interpreter" / "cics" / "copybooks"
 
