@@ -91,9 +91,10 @@ def emit_copy_in(
     # Reference modification (e.g. WS-FIELD(2:1)) reads a byte-slice: advance the
     # offset by start-1 and read `length` bytes. The offset is adjusted at
     # runtime via a Binop (start may be a data-name); the LoadRegion length field
-    # is a compile-time int, so a literal length is honoured exactly. A non-literal
-    # (data-name) ref-mod LENGTH cannot size a static LoadRegion, so it falls back
-    # to the full field length (rare; CardDemo CICS ref-mod uses literal lengths).
+    # is a compile-time int, so a literal length is honoured exactly. An omitted
+    # LENGTH reads to the end of the field; a non-literal (data-name) ref-mod
+    # LENGTH cannot size a static LoadRegion and raises NotImplementedError (rare;
+    # CardDemo CICS ref-mod uses literal lengths).
     if operand.ref_mod_start is not None:
         from interpreter.cobol.lower_arithmetic import (  # noqa: PLC0415
             eval_ref_mod_expr,
@@ -124,6 +125,20 @@ def emit_copy_in(
         offset_reg = adj_offset
         if isinstance(operand.ref_mod_length, RefModLiteral):
             length = int(operand.ref_mod_length.value)
+        elif operand.ref_mod_length is None:
+            # No explicit LENGTH: read from the start offset to the end of the
+            # field (existing behavior — `length` is already the full byte length).
+            pass
+        else:
+            # A data-name (or other non-literal) ref-mod LENGTH cannot size a
+            # static LoadRegion: silently reading the full field is observably
+            # wrong (it reads more bytes than the ref-mod asked for and can
+            # clobber adjacent fields), so make the unsupported case loud.
+            raise NotImplementedError(
+                f"CICS ref-mod with a data-name LENGTH in copy_in is not supported "
+                f"(LoadRegion needs a compile-time int length): {operand.text!r}; "
+                f"see red-dragon-6ddr"
+            )
     out = ctx.fresh_reg()
     ctx.emit_inst(
         LoadRegion(

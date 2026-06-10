@@ -135,6 +135,7 @@ _GRAMMAR = r"""
 
     STRING: /'[^']*'|"[^"]*"/
     COLON: ":"
+    // INT.2 > NAME.1 so a numeric ref-mod side (e.g. (1:8)) lexes as INT, not NAME.
     INT.2: /[0-9]+/
     NAME.1: /[A-Za-z][A-Za-z0-9-]*/
     CHARS: /[^():'"]+/
@@ -276,6 +277,7 @@ class _Transformer(Transformer):
     def vrefmod(self, items: list) -> _RefModPart:
         # items: [start_expr, COLON token, length_expr]; the COLON terminal is
         # named, so the two structured sides are at indices 0 and 2.
+        assert len(items) == 3
         return _RefModPart(start=items[0], length=items[2])
 
     def refmod_int(self, items: list) -> RefModExpr:
