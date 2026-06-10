@@ -49,3 +49,17 @@ def test_cics_literal_unaffected():
     assert opts["MAP"].is_literal is True
     assert opts["MAP"].text == "SGNMAP"
     assert opts["MAP"].subscripts == ()
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_cics_arithmetic_subscript_raises_value_error():
+    """An arithmetic CICS subscript like TBL(I + 1) is out of scope for the grammar.
+
+    The LALR grammar only accepts bare NAME or INT inside a single-level subscript
+    group; ``I + 1`` introduces CHARS tokens (spaces and '+') that the grammar does
+    not admit, so parse_exec_cics_text raises ValueError.
+    """
+    import pytest
+
+    with pytest.raises(ValueError):
+        parse_exec_cics_text("EXEC CICS XCTL PROGRAM(TBL(I + 1)) END-EXEC")
