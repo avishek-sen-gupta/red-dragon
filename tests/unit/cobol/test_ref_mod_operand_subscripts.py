@@ -1,5 +1,5 @@
 from __future__ import annotations
-from interpreter.cobol.ref_mod import RefModOperand
+from interpreter.cobol.ref_mod import RefModOperand, RefModLiteral, RefModReference
 from interpreter.cobol.cobol_expression import FieldRefNode, LiteralNode
 from tests.covers import covers
 from interpreter.cobol.features import CobolFeature
@@ -37,3 +37,29 @@ def test_refmodoperand_roundtrips_subscripts():
         {"kind": "ref", "name": "I"},
         {"kind": "lit", "value": "2"},
     ]
+
+
+@covers(CobolFeature.OCCURS_FIXED)
+def test_refmodoperand_combined_subscript_and_refmod_roundtrip():
+    """A subscripted reference-modified field round-trips from_dict→to_dict exactly.
+
+    Legal COBOL: WS-TABLE(I)(2:3) — subscript selects the element, ref-mod
+    slices bytes within it. Both subscripts (via expr_to_dict) and ref-mod
+    (via _ref_mod_expr_to_dict) must survive the round-trip unchanged.
+    """
+    raw = {
+        "name": "WS-TABLE",
+        "subscripts": [{"kind": "ref", "name": "WS-IDX"}],
+        "ref_mod_start": {"kind": "lit", "value": "2"},
+        "ref_mod_length": {"kind": "ref", "name": "WS-LEN"},
+    }
+    op = RefModOperand.from_dict(raw)
+
+    # Structural assertions
+    assert op.name == "WS-TABLE"
+    assert op.subscripts == (FieldRefNode("WS-IDX"),)
+    assert op.ref_mod_start == RefModLiteral("2")
+    assert op.ref_mod_length == RefModReference("WS-LEN")
+
+    # Round-trip: to_dict must reproduce the original dict exactly
+    assert op.to_dict() == raw
