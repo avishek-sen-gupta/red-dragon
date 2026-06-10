@@ -16,8 +16,10 @@ from interpreter.cics.builtins.system import (
     make_handle_noop_builtin,
     make_abend_builtin,
 )
+from interpreter.cobol.cobol_constants import BuiltinName
+from interpreter.cobol.ref_mod import RefModLiteral
 from interpreter.func_name import FuncName
-from interpreter.instructions import CallFunction, Const, LoadRegion, Return_
+from interpreter.instructions import Binop, CallFunction, Const, LoadRegion, Return_
 
 if TYPE_CHECKING:
     from interpreter.cics.terminal import InputChannel, ScreenChannel
@@ -84,16 +86,103 @@ def emit_copy_in(
     ref, region_reg = ctx.resolve_field_ref(
         operand.text, materialised, subscripts=operand.subscripts
     )
+    offset_reg = ref.offset_reg
+    length = ref.fl.byte_length
+    # Reference modification (e.g. WS-FIELD(2:1)) reads a byte-slice: advance the
+    # offset by start-1 and read `length` bytes. The offset is adjusted at
+    # runtime via a Binop (start may be a data-name); the LoadRegion length field
+    # is a compile-time int, so a literal length is honoured exactly. A non-literal
+    # (data-name) ref-mod LENGTH cannot size a static LoadRegion, so it falls back
+    # to the full field length (rare; CardDemo CICS ref-mod uses literal lengths).
+    if operand.ref_mod_start is not None:
+        from interpreter.cobol.lower_arithmetic import (  # noqa: PLC0415
+            eval_ref_mod_expr,
+        )
+        from interpreter.operator_kind import resolve_binop  # noqa: PLC0415
+        from interpreter.register import Register  # noqa: PLC0415
+
+        start_1based = eval_ref_mod_expr(ctx, operand.ref_mod_start, materialised)
+        one_reg = ctx.const_to_reg(1)
+        delta_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=delta_reg,
+                operator=resolve_binop("-"),
+                left=Register(str(start_1based)),
+                right=Register(str(one_reg)),
+            )
+        )
+        adj_offset = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=adj_offset,
+                operator=resolve_binop("+"),
+                left=Register(str(offset_reg)),
+                right=Register(str(delta_reg)),
+            )
+        )
+        offset_reg = adj_offset
+        if isinstance(operand.ref_mod_length, RefModLiteral):
+            length = int(operand.ref_mod_length.value)
     out = ctx.fresh_reg()
     ctx.emit_inst(
         LoadRegion(
             result_reg=out,
             region_reg=region_reg,
-            offset_reg=ref.offset_reg,
-            length=ref.fl.byte_length,
+            offset_reg=offset_reg,
+            length=length,
         )
     )
     return out
+
+
+def _emit_ref_mod_slice(
+    ctx: "EmitContext",
+    operand: "CicsOperand",
+    value_reg: "Register",
+    materialised: "MaterialisedSectionedLayout",
+) -> "Register":
+    """Slice ``value_reg`` per ``operand``'s reference modification (start:length).
+
+    Mirrors the COBOL RefModNode lowering (condition_lowering.lower_expr_node):
+    convert the 1-based start to 0-based (``start - 1``), then
+    ``STRING_SLICE(value, start0, length)``. ``length`` defaults to a large
+    sentinel when omitted. Reuses ``eval_ref_mod_expr`` for the start/length
+    expressions so the COBOL machinery is the single source of truth.
+    """
+    from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr  # noqa: PLC0415
+    from interpreter.operator_kind import resolve_binop  # noqa: PLC0415
+    from interpreter.register import Register  # noqa: PLC0415
+
+    assert operand.ref_mod_start is not None
+    start_1based = eval_ref_mod_expr(ctx, operand.ref_mod_start, materialised)
+    one_reg = ctx.const_to_reg(1)
+    start_0based = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=start_0based,
+            operator=resolve_binop("-"),
+            left=Register(str(start_1based)),
+            right=Register(str(one_reg)),
+        )
+    )
+    if operand.ref_mod_length is not None:
+        length_reg = eval_ref_mod_expr(ctx, operand.ref_mod_length, materialised)
+    else:
+        length_reg = ctx.const_to_reg(999999)
+    sliced = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=sliced,
+            func_name=FuncName(BuiltinName.STRING_SLICE),
+            args=(
+                Register(str(value_reg)),
+                Register(str(start_0based)),
+                Register(str(length_reg)),
+            ),
+        )
+    )
+    return sliced
 
 
 def emit_operand_value(
@@ -120,7 +209,11 @@ def emit_operand_value(
         # ref.offset_reg carries the resolved offset, including the element
         # offset for a subscripted operand (e.g. TBL(IDX)); pass it so the
         # decode reads the indexed element, not the base (element 1).
-        return ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+        value_reg = ctx.emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+        # Reference modification (e.g. WS-MSG(1:8)) byte-slices the decoded value.
+        if operand.ref_mod_start is not None:
+            return _emit_ref_mod_slice(ctx, operand, value_reg, materialised)
+        return value_reg
     r = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=r, value=operand.text))
     return r
