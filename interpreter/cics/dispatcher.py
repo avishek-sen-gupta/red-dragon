@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+
+from lark import Lark, Transformer
 
 from interpreter.cics.terminal import InputChannel, ScreenChannel
 from interpreter.cics.types import CicsContext, DispatchKind, DispatchResult
@@ -299,16 +300,56 @@ class CicsRegion:
         return result
 
 
-_CSD_PATTERN = re.compile(
-    r"DEFINE\s+TRANSACTION\((\w+)\)\s+PROGRAM\((\w+)\)", re.IGNORECASE
-)
+# CSD grammar: a file is a sequence of DEFINE statements, each a kind followed by
+# attribute(value) pairs (TRANSACTION(CC00) PROGRAM(COSGN00C) GROUP(CARDDEMO) ...).
+# Attributes are order-independent and may span continuation lines (whitespace is
+# ignored), so TRANSACTION and PROGRAM need not be adjacent — unlike the old regex.
+# An attribute value is anything up to the closing paren (it may contain spaces,
+# slashes, dots — e.g. DSNAME(AWS.M2...) or DEFINETIME(22/05/13 12:56:44)).
+_CSD_GRAMMAR = r"""
+    start: define*
+    define: DEFINE_KW attr+
+    attr: NAME "(" VALUE? ")"
+
+    DEFINE_KW.2: "DEFINE"i
+    NAME: /[A-Za-z][A-Za-z0-9-]*/
+    VALUE: /[^()]+/
+
+    %ignore /\s+/
+"""
+
+_csd_parser = Lark(_CSD_GRAMMAR, parser="lalr")
+
+
+class _CsdTransformer(Transformer):
+    """Turn the CSD parse tree into a list of {ATTR_NAME: value} dicts, one per DEFINE."""
+
+    def attr(self, items: list) -> tuple[str, str]:
+        name = str(items[0]).upper()
+        value = str(items[1]).strip() if len(items) > 1 else ""
+        return (name, value)
+
+    def define(self, items: list) -> dict[str, str]:
+        # items[0] is the DEFINE keyword token; the rest are (name, value) pairs.
+        return dict(items[1:])
+
+    def start(self, items: list) -> list[dict[str, str]]:
+        return list(items)
 
 
 def parse_csd(csd_path: Path) -> dict[str, str]:
-    """Parse a CSD file to produce {transid: program_name} mapping."""
+    """Parse a CSD file to produce a {transid: program_name} mapping.
+
+    Each ``DEFINE`` is parsed structurally into its attribute(value) pairs; a
+    ``DEFINE TRANSACTION(t) ... PROGRAM(p)`` (attributes in any order) contributes
+    ``{t: p}``. DEFINEs without both TRANSACTION and PROGRAM (e.g. FILE/PROGRAM
+    definitions, or a TRANSACTION whose program is defined elsewhere) are skipped.
+    """
     content = csd_path.read_text(encoding="utf-8", errors="replace")
+    defines = _CsdTransformer().transform(_csd_parser.parse(content))
     result = {}
-    for m in _CSD_PATTERN.finditer(content):
-        result[m.group(1).upper()] = m.group(2).upper()
+    for attrs in defines:
+        if "TRANSACTION" in attrs and "PROGRAM" in attrs:
+            result[attrs["TRANSACTION"].upper()] = attrs["PROGRAM"].upper()
     logger.info("CSD parsed: %d transid→program mappings", len(result))
     return result
