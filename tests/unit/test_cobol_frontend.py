@@ -53,12 +53,7 @@ from interpreter.cobol.cobol_statements import (
     WriteStatement,
 )
 from interpreter.cobol.ref_mod import RefModOperand
-from interpreter.cobol.cobol_expression import (
-    expr_from_dict,
-    FieldRefNode,
-    BinOpNode,
-    LiteralNode,
-)
+from interpreter.cobol.cobol_expression import expr_from_dict
 from interpreter.ir import Opcode
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -80,20 +75,28 @@ def _find_opcodes(
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
-def _parse_expr_string(expr_str: str):
-    """Parse an expression string like 'WS-A + WS-B' and return an ExprNode.
+def _ref(name: str) -> dict:
+    """Structured field-reference dict, as the bridge serializes it."""
+    return {"kind": "ref", "name": name}
 
-    For now, handles simple cases:
-    - Literals: "10", "5"
-    - Field refs: "WS-A"
-    - Binary ops: "WS-A + WS-B", "WS-A * 5"
 
-    For complex expressions, wrap dicts directly.
+def _lit(value: str) -> dict:
+    """Structured numeric-literal dict, as the bridge serializes it."""
+    return {"kind": "lit", "value": value}
+
+
+def _binop(op: str, left: dict, right: dict) -> dict:
+    """Structured binary-operation dict, as the bridge serializes it."""
+    return {"kind": "binop", "op": op, "left": left, "right": right}
+
+
+def _build_expr(expr_dict: dict):
+    """Build an ExprNode from a structured expression dict (production bridge shape).
+
+    Mirrors how production deserializes COMPUTE expressions via
+    ``ComputeStatement.from_dict`` → ``expr_from_dict``.
     """
-    from interpreter.cobol.cobol_expression import parse_expression
-
-    expr_tree = parse_expression(expr_str)
-    return expr_tree
+    return expr_from_dict(expr_dict)
 
 
 class TestDataDivisionLowering:
@@ -666,7 +669,8 @@ class TestComputeLowering:
         ]
         stmts = [
             ComputeStatement(
-                expression=_parse_expr_string("WS-A + WS-B"), targets=["WS-RESULT"]
+                expression=_build_expr(_binop("+", _ref("WS-A"), _ref("WS-B"))),
+                targets=["WS-RESULT"],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -711,7 +715,10 @@ class TestComputeLowering:
         ]
         stmts = [
             ComputeStatement(
-                expression=_parse_expr_string("WS-A + WS-B * 2"), targets=["WS-RESULT"]
+                expression=_build_expr(
+                    _binop("+", _ref("WS-A"), _binop("*", _ref("WS-B"), _lit("2")))
+                ),
+                targets=["WS-RESULT"],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -755,7 +762,9 @@ class TestComputeLowering:
         ]
         stmts = [
             ComputeStatement(
-                expression=_parse_expr_string("(WS-A + WS-B) * 3"),
+                expression=_build_expr(
+                    _binop("*", _binop("+", _ref("WS-A"), _ref("WS-B")), _lit("3"))
+                ),
                 targets=["WS-RESULT"],
             )
         ]
@@ -792,7 +801,8 @@ class TestComputeLowering:
         ]
         stmts = [
             ComputeStatement(
-                expression=_parse_expr_string("WS-A * 5"), targets=["WS-C", "WS-D"]
+                expression=_build_expr(_binop("*", _ref("WS-A"), _lit("5"))),
+                targets=["WS-C", "WS-D"],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -836,7 +846,8 @@ class TestComputeLowering:
         ]
         stmts = [
             ComputeStatement(
-                expression=_parse_expr_string("10 + 5"), targets=["WS-RESULT"]
+                expression=_build_expr(_binop("+", _lit("10"), _lit("5"))),
+                targets=["WS-RESULT"],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -2236,7 +2247,8 @@ class TestBareStatements:
             data_fields=fields,
             statements=[
                 ComputeStatement(
-                    targets=["WS-A"], expression=_parse_expr_string("WS-A + 50")
+                    targets=["WS-A"],
+                    expression=_build_expr(_binop("+", _ref("WS-A"), _lit("50"))),
                 ),
                 DisplayStatement(operand=RefModOperand(name="WS-A")),
             ],
