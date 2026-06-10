@@ -87,6 +87,9 @@ _GRAMMAR = r"""
     %ignore /[ \t\f\r\n]+/
     %ignore ","
     %ignore "."
+    // Ignoring '-'/'+' over-accepts malformed edited PIC strings; that is
+    // intentional. Edited (currency/sign) PICs are sized by the bridge, not this
+    // parser, so dropping these chars mirrors the old hidden-channel behavior.
     %ignore "-"
     %ignore "+"
 """
@@ -122,8 +125,9 @@ class _PicTransformer(Transformer):
 
     # body alternatives -> (integer_digits, decimal_digits)
     def both_sides(self, items: list) -> tuple[int, int]:
-        # items: [integer_digits, DECPOINT, fraction_digits]
-        return (items[0], items[2])
+        # items: [integer_digits, DECPOINT, fraction_digits]. Index by ends, not
+        # by the middle, so we don't break if Lark stops passing the DECPOINT token.
+        return (items[0], items[-1])
 
     def only_left(self, items: list) -> tuple[int, int]:
         return (items[0], 0)
@@ -155,17 +159,20 @@ class _PicTransformer(Transformer):
         return 1  # bare ALPHA_X
 
     def alphanumeric(self, items: list) -> dict:
-        # items are a mix of: ints (each a reduced alnum_pos / digit), the central
-        # ALPHA_X token, and a _Count (only when that central X carried `(N)`).
+        # items are a mix of: ints (each a reduced alnum_pos / digit, already its
+        # own length), the central ALPHA_X token, and a _Count (present only when
+        # that central X carried `(N)`). The central X contributes its count if a
+        # _Count follows it, else 1 — computed directly, with no cross-iteration
+        # arithmetic between the bare X and its trailing count.
         length = 0
         for item in items:
             if isinstance(item, int):
                 length += item
             elif isinstance(item, _Count):
-                # A bare X counts 1; its trailing count replaces that 1.
-                length += item.n - 1
-            else:  # the central ALPHA_X token
-                length += 1
+                continue  # folded into the preceding central ALPHA_X below
+        # The central X: its trailing _Count (if any) gives the length, else 1.
+        central_count = next((i for i in items if isinstance(i, _Count)), None)
+        length += central_count.n if central_count is not None else 1
         return {
             "alphanumeric": True,
             "alphanumeric_length": length,
