@@ -13,7 +13,10 @@ from __future__ import annotations
 import dataclasses
 import logging
 from collections.abc import Sequence
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from interpreter.cobol.cobol_expression import ExprNode
 
 from interpreter.cics.strategy import CatchAllLoweringStrategy, ExecCicsStrategy
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
@@ -190,7 +193,7 @@ class EmitContext:
         name: str,
         materialised: MaterialisedSectionedLayout,
         qualifiers: tuple[str, ...] = (),
-        subscripts: tuple[str, ...] = (),
+        subscripts: tuple["ExprNode", ...] = (),
     ) -> tuple[ResolvedFieldRef, Register]:
         """Resolve a field reference that may contain subscript notation.
 
@@ -202,43 +205,37 @@ class EmitContext:
 
         ``name`` is always the bare base name (both feeders — the ProLeap bridge
         and the CICS parser — emit structured subscripts, never ``"NAME(SUB)"``
-        strings). ``subscripts`` carries the index expressions; a single subscript
-        is supported, two or more raise ``NotImplementedError`` (multi-dimensional
-        offset arithmetic is red-dragon-cqwx). See red-dragon-6ddr.
+        strings). ``subscripts`` carries the index expressions as structured
+        ``ExprNode``s (literal / field-ref / binop / ...); each is evaluated by the
+        expression lowerer, so arithmetic and nested subscripts resolve to their
+        real value rather than the old default-1 string-parse fallback
+        (red-dragon-l445). A single subscript is supported; two or more raise
+        ``NotImplementedError`` (multi-dimensional offset arithmetic is
+        red-dragon-cqwx). See red-dragon-6ddr.
         """
+        # Deferred import: condition_lowering imports EmitContext, so a top-level
+        # import would cycle.
+        from interpreter.cobol.condition_lowering import lower_expr_node
+
         if subscripts:
             if len(subscripts) > 1:
                 raise NotImplementedError(
                     f"multi-dimensional subscript not supported for {name!r} "
                     f"({len(subscripts)} subscripts); see red-dragon-cqwx"
                 )
-            subscript = next(iter(subscripts))
+            subscript_node = subscripts[0]
         else:
-            subscript = ""
+            subscript_node = None
         base_name = name
         fl, region_reg = materialised.resolve(base_name, qualifiers)
 
-        if not subscript:
+        if subscript_node is None:
             offset_reg = self.fresh_reg()
             self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
             return ResolvedFieldRef(fl=fl, offset_reg=offset_reg), region_reg
 
-        # Resolve subscript value: literal or field
-        try:
-            idx_val = int(subscript)
-            idx_reg = self.const_to_reg(idx_val)
-        except ValueError:
-            # Subscript is a field reference — decode it
-            sub_base = subscript
-            if materialised.has_field(sub_base):
-                sub_fl, sub_rr = materialised.resolve(sub_base)
-                idx_reg = self.emit_decode_field(sub_rr, sub_fl)
-            else:
-                idx_reg = self.const_to_reg(1)
-                logger.warning(
-                    "Subscript field %s not found in layout, defaulting to 1",
-                    subscript,
-                )
+        # Evaluate the structured subscript expression to a 1-based index register.
+        idx_reg = lower_expr_node(self, subscript_node, materialised)
 
         # Compute offset: fl.offset + (idx - 1) * element_size
         one_reg = self.const_to_reg(1)

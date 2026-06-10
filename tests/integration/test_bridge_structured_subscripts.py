@@ -22,7 +22,9 @@ def _parse(src: list[str]) -> dict:
 
 
 @covers(CobolFeature.OCCURS_FIXED)
-def test_bridge_emits_bare_name_and_subscripts():
+def test_bridge_emits_bare_name_and_structured_subscript_node():
+    """A subscript is a STRUCTURED expression node ({"kind":...}), not a string —
+    the bridge reuses the value-stmt expression serializer (red-dragon-l445)."""
     obj = _parse(
         [
             "IDENTIFICATION DIVISION.",
@@ -40,11 +42,16 @@ def test_bridge_emits_bare_name_and_subscripts():
     move = obj["statements"][0]
     src = move["operands"][0]
     assert src["name"] == "WS-ELEM"  # bare base, no "(WS-IDX)"
-    assert src["subscripts"] == ["WS-IDX"]  # structured
+    subs = src["subscripts"]
+    assert len(subs) == 1
+    sub = subs[0]
+    assert isinstance(sub, dict)  # structured node, NOT a string
+    assert sub["kind"] == "ref"
+    assert sub["name"] == "WS-IDX"
 
 
 @covers(CobolFeature.OCCURS_FIXED)
-def test_bridge_keeps_all_subscripts_2d():
+def test_bridge_keeps_all_structured_subscripts_2d():
     obj = _parse(
         [
             "IDENTIFICATION DIVISION.",
@@ -62,4 +69,7 @@ def test_bridge_keeps_all_subscripts_2d():
         ]
     )
     src = obj["statements"][0]["operands"][0]
-    assert src["subscripts"] == ["I", "J"]  # BOTH kept (no get(0) truncation)
+    subs = src["subscripts"]
+    assert len(subs) == 2  # BOTH kept (no get(0) truncation)
+    assert all(isinstance(s, dict) and s["kind"] == "ref" for s in subs)
+    assert [s["name"] for s in subs] == ["I", "J"]

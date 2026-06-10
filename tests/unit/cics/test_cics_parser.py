@@ -3,6 +3,7 @@
 from tests.covers import covers, NotLanguageFeature
 from interpreter.cics.cics_parser import parse_exec_cics_text, CicsOperand
 from interpreter.cobol.ref_mod import RefModLiteral, RefModReference
+from interpreter.cobol.cobol_expression import FieldRefNode
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -179,7 +180,7 @@ def test_parse_subscripted_option_value_and_nohandle():
     assert verb == "INQUIRE"
     # Subscripted operand is structural: bare base + structured subscripts.
     assert opts["PROGRAM"] == CicsOperand(
-        "CDEMO-MENU-OPT-PGMNAME", False, subscripts=("WS-OPTION",)
+        "CDEMO-MENU-OPT-PGMNAME", False, subscripts=(FieldRefNode("WS-OPTION"),)
     )
     assert "NOHANDLE" in opts and opts["NOHANDLE"] is None
 
@@ -292,7 +293,7 @@ def test_parse_xctl_subscripted_program():
     )
     assert verb == "XCTL"
     assert opts["PROGRAM"] == CicsOperand(
-        "CDEMO-MENU-OPT-PGMNAME", False, subscripts=("WS-OPTION",)
+        "CDEMO-MENU-OPT-PGMNAME", False, subscripts=(FieldRefNode("WS-OPTION"),)
     )
 
 

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedInput
 
+from interpreter.cobol.cobol_expression import ExprNode, FieldRefNode, LiteralNode
 from interpreter.cobol.ref_mod import RefModExpr, RefModLiteral, RefModReference
 
 
@@ -23,11 +24,16 @@ class CicsOperand:
     is_literal=True  -> a quoted string literal (text is the inner content, no quotes).
     is_literal=False -> a bare operand: data-name, subscripted/reference-modified ref,
                         or numeric literal (text preserved verbatim, incl. nested parens).
+
+    ``subscripts`` carries each index as a structured :class:`ExprNode`
+    (red-dragon-l445): a bare data-name becomes a ``FieldRefNode``, an unsigned
+    integer becomes a ``LiteralNode``. Arithmetic CICS subscripts are out of
+    scope for the CICS grammar.
     """
 
     text: str
     is_literal: bool
-    subscripts: tuple[str, ...] = ()
+    subscripts: tuple[ExprNode, ...] = ()
     ref_mod_start: RefModExpr | None = None
     ref_mod_length: RefModExpr | None = None
 
@@ -39,6 +45,14 @@ class CicsOperand:
 class _Part:
     text: str
     is_literal: bool
+
+
+# Internal marker for a single subscript nested group (no COLON), e.g. TBL(I) or
+# TBL(3). Carries the structured index ExprNode (red-dragon-l445). The `value`
+# rule collects these into CicsOperand.subscripts.
+@dataclass(frozen=True)
+class _SubscriptPart:
+    expr: ExprNode
 
 
 # Internal marker for a reference-modification nested group: a base data-name
@@ -112,6 +126,7 @@ _GRAMMAR = r"""
               | CHARS                        -> vchars
               | "(" refmod_side COLON refmod_side ")" -> vrefmod
               | "(" NAME ")"                 -> vnested_name
+              | "(" INT ")"                  -> vnested_int
               | "(" value ")"                -> vnested
 
     // A reference-modification side is an unsigned integer (→ RefModLiteral) or a
@@ -234,19 +249,18 @@ class _Transformer(Transformer):
         # A string literal is the case of exactly ONE quoted-string part.
         if len(items) == 1 and items[0].is_literal:
             return CicsOperand(text=items[0].text, is_literal=True)
-        # Subscripted reference: a leading CHARS base followed by one or more
-        # nested groups. The first part is the bare base (text does NOT start
-        # with "("); each subsequent nested part (its text is "(...)")
-        # contributes one subscript (inner text, parens stripped).
+        # Subscripted reference: a leading CHARS base (a _Part, not literal, not a
+        # nested group) followed by one or more _SubscriptPart nested groups. Each
+        # _SubscriptPart carries a structured index ExprNode (red-dragon-l445).
         if (
-            all(not p.is_literal for p in items)
-            and len(items) >= 2
-            # items[0] is a bare CHARS base (from vchars), not a nested group (vnested)
+            len(items) >= 2
+            and isinstance(items[0], _Part)
+            and not items[0].is_literal
             and not items[0].text.startswith("(")
-            and all(p.text.startswith("(") and p.text.endswith(")") for p in items[1:])
+            and all(isinstance(p, _SubscriptPart) for p in items[1:])
         ):
             base = items[0].text
-            subs = tuple(p.text[1:-1] for p in items[1:])
+            subs = tuple(p.expr for p in items[1:])
             return CicsOperand(text=base, is_literal=False, subscripts=subs)
         # Any other shape (a bare data-name, ref-mod operand built from CHARS +
         # nested parts, or a numeric) is a non-literal operand whose verbatim
@@ -267,12 +281,17 @@ class _Transformer(Transformer):
         inner = items[0].text if items else ""
         return _Part(text=f"({inner})", is_literal=False)
 
-    def vnested_name(self, items: list) -> _Part:
+    def vnested_name(self, items: list) -> _SubscriptPart:
         # A nested group holding a single bare NAME (no COLON) — an ordinary
-        # subscript like TBL(I) or PGM(WS-OPTION). The NAME now lexes as its own
-        # terminal (it shares the value-position lexer with refmod sides), so it
-        # is re-wrapped here exactly as a CHARS-based nested group would be.
-        return _Part(text=f"({items[0]})", is_literal=False)
+        # data-name subscript like TBL(I) or PGM(WS-OPTION). The NAME lexes as its
+        # own terminal (it shares the value-position lexer with refmod sides), so
+        # the index is a structured FieldRefNode (red-dragon-l445).
+        return _SubscriptPart(expr=FieldRefNode(name=str(items[0])))
+
+    def vnested_int(self, items: list) -> _SubscriptPart:
+        # A nested group holding a single unsigned integer (no COLON) — a numeric
+        # subscript like TBL(3). The index is a structured LiteralNode.
+        return _SubscriptPart(expr=LiteralNode(value=str(items[0])))
 
     def vrefmod(self, items: list) -> _RefModPart:
         # items: [start_expr, COLON token, length_expr]; the COLON terminal is

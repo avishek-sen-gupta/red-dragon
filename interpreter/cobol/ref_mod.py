@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
 
+from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
+
 
 @dataclass(frozen=True)
 class RefModLiteral:
@@ -145,7 +147,7 @@ class RefModOperand:
     ref_mod_length: RefModExpr | None = None
     length_of: str = ""
     qualifiers: tuple[str, ...] = ()
-    subscripts: tuple[str, ...] = ()
+    subscripts: tuple[ExprNode, ...] = ()
 
     @classmethod
     def from_dict(cls, data: dict) -> RefModOperand:
@@ -181,7 +183,7 @@ class RefModOperand:
             ref_mod_length = ref_mod_expr_from_dict(ref_mod_length_data)
 
         qualifiers = tuple(data.get("qualifiers", ()))
-        subscripts = tuple(data.get("subscripts", ()))
+        subscripts = tuple(expr_from_dict(s) for s in data.get("subscripts", []))
 
         return cls(
             name=name,
@@ -203,5 +205,5 @@ class RefModOperand:
         if self.qualifiers:
             result["qualifiers"] = list(self.qualifiers)
         if self.subscripts:
-            result["subscripts"] = list(self.subscripts)
+            result["subscripts"] = [expr_to_dict(s) for s in self.subscripts]
         return result
