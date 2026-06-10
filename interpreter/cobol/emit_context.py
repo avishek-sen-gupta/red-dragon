@@ -223,7 +223,7 @@ class EmitContext:
                     f"multi-dimensional subscript not supported for {name!r} "
                     f"({len(subscripts)} subscripts); see red-dragon-cqwx"
                 )
-            subscript_node = subscripts[0]
+            subscript_node = next(iter(subscripts))
         else:
             subscript_node = None
         base_name = name
