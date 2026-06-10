@@ -335,3 +335,34 @@ def test_parse_csd(tmp_path):
     mapping = parse_csd(csd)
     assert mapping["CC00"] == "COSGN00C"
     assert mapping["CC01"] == "COMEN01C"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_csd_attribute_order_independent(tmp_path):
+    # Real CSD: TRANSACTION and PROGRAM are not adjacent — other attributes sit
+    # between them, possibly on continuation lines. The structural parse extracts
+    # the pair regardless of order/position (the old regex required adjacency).
+    csd = tmp_path / "region.csd"
+    csd.write_text(
+        "DEFINE TRANSACTION(CC00) GROUP(CARDDEMO)\n"
+        "       PROGRAM(COSGN00C) TASKDATALOC(ANY)\n"
+    )
+    mapping = parse_csd(csd)
+    assert mapping["CC00"] == "COSGN00C"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_csd_ignores_unrelated_defines(tmp_path):
+    # A fuller CSD interleaves FILE/PROGRAM definitions (many attributes, values
+    # with spaces/slashes) and TRANSACTION definitions without a PROGRAM. Only
+    # TRANSACTION-with-PROGRAM yields a mapping; the rest are skipped.
+    csd = tmp_path / "full.csd"
+    csd.write_text(
+        " DEFINE FILE(ACCTDAT) GROUP(CARDDEMO)\n"
+        "        DSNAME(AWS.M2.CARDDEMO.ACCTDATA) DEFINETIME(22/05/13 12:56:44)\n"
+        " DEFINE PROGRAM(COMEN01C) GROUP(CARDDEMO)\n"
+        " DEFINE TRANSACTION(CAVW) GROUP(CARDDEMO)\n"
+        " DEFINE TRANSACTION(CM00) PROGRAM(COMEN01C) GROUP(CARDDEMO)\n"
+    )
+    mapping = parse_csd(csd)
+    assert mapping == {"CM00": "COMEN01C"}  # CAVW (no PROGRAM), FILE, PROGRAM skipped
