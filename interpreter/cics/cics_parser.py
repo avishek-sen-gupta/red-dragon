@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedInput
 
+from interpreter.cobol.ref_mod import RefModExpr, RefModLiteral, RefModReference
+
 
 @dataclass(frozen=True)
 class CicsOperand:
@@ -26,6 +28,8 @@ class CicsOperand:
     text: str
     is_literal: bool
     subscripts: tuple[str, ...] = ()
+    ref_mod_start: RefModExpr | None = None
+    ref_mod_length: RefModExpr | None = None
 
 
 # Internal transformer markers for value parts. They carry whether the part came
@@ -35,6 +39,15 @@ class CicsOperand:
 class _Part:
     text: str
     is_literal: bool
+
+
+# Internal marker for a reference-modification nested group: a base data-name
+# followed by ``(start:length)``. Carries the structured start/length so the
+# `value` rule can attach them to the resulting CicsOperand.
+@dataclass(frozen=True)
+class _RefModPart:
+    start: RefModExpr
+    length: RefModExpr
 
 
 # Internal transformer marker for a recognized verb. `word` is the (uppercased)
@@ -95,9 +108,18 @@ _GRAMMAR = r"""
          | NAME               -> flag
 
     value: value_part*
-    value_part: STRING           -> vstring
-              | CHARS            -> vchars
-              | "(" value ")"    -> vnested
+    value_part: STRING                       -> vstring
+              | CHARS                        -> vchars
+              | "(" refmod_side COLON refmod_side ")" -> vrefmod
+              | "(" NAME ")"                 -> vnested_name
+              | "(" value ")"                -> vnested
+
+    // A reference-modification side is an unsigned integer (→ RefModLiteral) or a
+    // data-name (→ RefModReference). Anything more complex (arithmetic, LENGTH OF)
+    // is out of scope here and will not match this production, leaving the old
+    // subscript shape (no COLON ⇒ vnested) untouched.
+    refmod_side: INT  -> refmod_int
+               | NAME -> refmod_name
 
     // The envelope is anchored, exactly like the previous regexes:
     // EXEC_CICS only at the START, END_EXEC only at the END of the text. Any
@@ -112,8 +134,10 @@ _GRAMMAR = r"""
     HANDLE_KW.2: "HANDLE"i
 
     STRING: /'[^']*'|"[^"]*"/
-    CHARS: /[^()'"]+/
-    NAME: /[A-Za-z][A-Za-z0-9-]*/
+    COLON: ":"
+    INT.2: /[0-9]+/
+    NAME.1: /[A-Za-z][A-Za-z0-9-]*/
+    CHARS: /[^():'"]+/
 
     %ignore /\s+/
 """
@@ -188,7 +212,24 @@ class _Transformer(Transformer):
     def flag(self, items: list) -> tuple[str, CicsOperand | None]:
         return (str(items[0]).upper(), None)
 
-    def value(self, items: list[_Part]) -> CicsOperand:
+    def value(self, items: list) -> CicsOperand:
+        # Reference modification: a bare CHARS base followed by a single
+        # (start:length) nested group, e.g. WS-MSG(1:8). The base part is the
+        # data-name; the _RefModPart carries the structured start/length. This
+        # is distinct from a subscript (a nested group WITHOUT a ':').
+        if (
+            len(items) == 2
+            and isinstance(items[0], _Part)
+            and not items[0].is_literal
+            and not items[0].text.startswith("(")
+            and isinstance(items[1], _RefModPart)
+        ):
+            return CicsOperand(
+                text=items[0].text,
+                is_literal=False,
+                ref_mod_start=items[1].start,
+                ref_mod_length=items[1].length,
+            )
         # A string literal is the case of exactly ONE quoted-string part.
         if len(items) == 1 and items[0].is_literal:
             return CicsOperand(text=items[0].text, is_literal=True)
@@ -224,6 +265,24 @@ class _Transformer(Transformer):
     def vnested(self, items: list) -> _Part:
         inner = items[0].text if items else ""
         return _Part(text=f"({inner})", is_literal=False)
+
+    def vnested_name(self, items: list) -> _Part:
+        # A nested group holding a single bare NAME (no COLON) — an ordinary
+        # subscript like TBL(I) or PGM(WS-OPTION). The NAME now lexes as its own
+        # terminal (it shares the value-position lexer with refmod sides), so it
+        # is re-wrapped here exactly as a CHARS-based nested group would be.
+        return _Part(text=f"({items[0]})", is_literal=False)
+
+    def vrefmod(self, items: list) -> _RefModPart:
+        # items: [start_expr, COLON token, length_expr]; the COLON terminal is
+        # named, so the two structured sides are at indices 0 and 2.
+        return _RefModPart(start=items[0], length=items[2])
+
+    def refmod_int(self, items: list) -> RefModExpr:
+        return RefModLiteral(value=str(items[0]))
+
+    def refmod_name(self, items: list) -> RefModExpr:
+        return RefModReference(name=str(items[0]))
 
 
 _END_EXEC_RE = re.compile(r"\s*END-EXEC\s*\Z", re.IGNORECASE)

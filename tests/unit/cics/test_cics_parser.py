@@ -2,6 +2,7 @@
 
 from tests.covers import covers, NotLanguageFeature
 from interpreter.cics.cics_parser import parse_exec_cics_text, CicsOperand
+from interpreter.cobol.ref_mod import RefModLiteral, RefModReference
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -185,13 +186,37 @@ def test_parse_subscripted_option_value_and_nohandle():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_parse_reference_modified_option_value():
-    """Option value with reference modification (subscript-style nested parens)."""
+    """Option value with reference modification (start:length byte-slice).
+
+    A nested group containing a ``:`` is reference modification, NOT a
+    subscript: ``WS-MSG(1:8)`` is ``start=1, length=8``. It parses
+    structurally into ref_mod_start/ref_mod_length (RefModLiteral) with an
+    EMPTY subscripts tuple (red-dragon-6ddr ref-mod)."""
     verb, opts = parse_exec_cics_text("EXEC CICS SEND TEXT FROM(WS-MSG(1:8)) END-EXEC")
     assert verb == "SEND TEXT"
-    # The nested group is captured structurally (parens stripped); ref-mod
-    # interior structuring is a later task (red-dragon-6ddr), so for now the
-    # raw "1:8" rides in the subscripts tuple.
-    assert opts["FROM"] == CicsOperand("WS-MSG", False, subscripts=("1:8",))
+    assert opts["FROM"] == CicsOperand(
+        "WS-MSG",
+        False,
+        ref_mod_start=RefModLiteral("1"),
+        ref_mod_length=RefModLiteral("8"),
+    )
+    assert opts["FROM"].subscripts == ()
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_reference_modified_with_data_names():
+    """Ref-mod start/length may themselves be data-names (NAME → RefModReference)."""
+    verb, opts = parse_exec_cics_text(
+        "EXEC CICS SEND TEXT FROM(WS-MSG(WS-A:WS-B)) END-EXEC"
+    )
+    assert verb == "SEND TEXT"
+    assert opts["FROM"] == CicsOperand(
+        "WS-MSG",
+        False,
+        ref_mod_start=RefModReference("WS-A"),
+        ref_mod_length=RefModReference("WS-B"),
+    )
+    assert opts["FROM"].subscripts == ()
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
