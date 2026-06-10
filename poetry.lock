@@ -196,18 +196,6 @@ files = [
 ]
 
 [[package]]
-name = "antlr4-python3-runtime"
-version = "4.13.2"
-description = "ANTLR 4.13.2 runtime for Python 3"
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "antlr4_python3_runtime-4.13.2-py3-none-any.whl", hash = "sha256:fe3835eb8d33daece0e799090eda89719dbccee7aa39ef94eed3818cafa5a7e8"},
-    {file = "antlr4_python3_runtime-4.13.2.tar.gz", hash = "sha256:909b647e1d2fc2b70180ac586df3933e38919c85f98ccc656a96cd3f25ef3916"},
-]
-
-[[package]]
 name = "anyio"
 version = "4.13.0"
 description = "High-level concurrency and networking framework on top of asyncio or Trio"
@@ -4418,4 +4406,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "095ad0399b9f599838ed377f2a0bc531e45e6539b018394ec0e6bc0ae65fd598"
+content-hash = "3d40ade9f0fa6061aebe35839d4c85ee910906d683ef81353570717e8cd48f85"
