@@ -15,9 +15,10 @@ E2E_ENV = CARDDEMO_HOME=$(CARDDEMO_HOME) BMS_TOOLS_HOME=$(BMS_TOOLS_HOME) PROLEA
 PYTEST  = uv run python -m pytest
 PYTEST_ARGS ?=
 
-.PHONY: help test test-cics jar jar-force fmt lint
+.PHONY: help setup test test-cics jar jar-force fmt lint
 
 help:
+	@echo "make setup      - initialise submodules + build the ProLeap JAR (run once after clone)"
 	@echo "make test       - full suite locally WITH the CardDemo toolchain (builds the JAR if missing)"
 	@echo "make test-cics  - just the gated CardDemo CICS e2e (+ CICS integration tests)"
 	@echo "make jar        - build the ProLeap bridge JAR if it is missing"
@@ -28,6 +29,11 @@ help:
 	@echo "Toolchain (override via env): CARDDEMO_HOME=$(CARDDEMO_HOME)"
 	@echo "                              BMS_TOOLS_HOME=$(BMS_TOOLS_HOME)"
 	@echo "                              PROLEAP_BRIDGE_JAR=$(PROLEAP_BRIDGE_JAR)"
+
+# One-time setup from a fresh clone: pull submodules then build the JAR.
+setup:
+	git submodule update --init --recursive
+	$(MAKE) jar
 
 # Build the shaded JAR only when it is missing (file target).
 $(PROLEAP_BRIDGE_JAR):
