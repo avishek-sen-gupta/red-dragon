@@ -38,7 +38,10 @@ from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
-from interpreter.cics.strategy import CatchAllLoweringStrategy, ExecCicsStrategy
+from interpreter.cobol.exec_cics_strategy import (
+    CatchAllLoweringStrategy,
+    ExecCicsStrategy,
+)
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import CodeLabel
