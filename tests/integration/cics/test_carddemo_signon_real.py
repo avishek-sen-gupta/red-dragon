@@ -456,7 +456,25 @@ def test_real_carddemo_account_view_three_reads(tmp_path):
 #   Turn D: PF05 confirm -> 9600-WRITE-PROCESSING -> READ UPDATE + REWRITE.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_NEW_ACCT_STATUS = "N"  # change account status Y -> N (the modified field)
+_NEW_ACCT_STATUS = "N"  # change account status Y -> N
+_NEW_GROUP_ID = "GRP9"  # change account group GRP1 -> GRP9
+# All other modifiable ACCTDAT fields (BMS field name → new value)
+_NEW_CREDIT_LIMIT = "5000.00"  # ACRDLIM → ACCT-CREDIT-LIMIT @24
+_NEW_CASH_LIMIT = "2000.00"  # ACSHLIM → ACCT-CASH-CREDIT-LIMIT @36
+_NEW_CURR_BAL = "1234.56"  # ACURBAL → ACCT-CURR-BAL @12
+_NEW_CYC_CREDIT = "100.00"  # ACRCYCR → ACCT-CURR-CYC-CREDIT @78
+_NEW_CYC_DEBIT = "200.00"  # ACRCYDB → ACCT-CURR-CYC-DEBIT @90
+# Dates: BMS sends YEAR/MON/DAY as separate 4/2/2-char fields; COACTUPC
+# STRINGs them as "YYYY-MM-DD" into the 10-byte date field.
+_NEW_OPEN_YEAR = "2020"
+_NEW_OPEN_MON = "01"
+_NEW_OPEN_DAY = "01"
+_NEW_EXP_YEAR = "2025"
+_NEW_EXP_MON = "12"
+_NEW_EXP_DAY = "31"
+_NEW_REISSUE_YEAR = "2023"
+_NEW_REISSUE_MON = "06"
+_NEW_REISSUE_DAY = "15"
 _DFHENTER = "\x7d"
 _DFHPF5 = "\xf5"  # PF05 = confirm-and-save
 
@@ -672,7 +690,7 @@ def test_real_carddemo_account_update_reads_and_shows_details(tmp_path):
     assert (rB.transid or "").strip() == "CAUP"
 
 
-def _resubmit_fields(view: dict, *, status: str) -> dict[str, str]:
+def _resubmit_fields(view: dict, *, status: str, **overrides: str) -> dict[str, str]:
     """Build the Turn-C field set: echo back every displayed (valid) value, with
     the account status changed. Phone is left blank (optional → valid) to avoid
     the area-code lookup. Customer id is read but not editable."""
@@ -715,11 +733,12 @@ def _resubmit_fields(view: dict, *, status: str) -> dict[str, str]:
     ]
     fields = {k: view.get(k, "") for k in keys if view.get(k, "")}
     fields["ACCTSID"] = _ACCT_ID
-    fields["ACSTTUS"] = status  # the modified field
+    fields["ACSTTUS"] = status
+    fields.update(overrides)
     return fields
 
 
-def _drive_rewrite(tmp_path, backend=None):
+def _drive_rewrite(tmp_path, backend=None, **field_overrides: str):
     """Drive the full account-update REWRITE flow (sign-on .. Turn D) and return
     the shared ``engine`` after the REWRITE has run.
 
@@ -731,7 +750,8 @@ def _drive_rewrite(tmp_path, backend=None):
         CUSTDAT.
 
     Pass ``backend`` to make the shared VsamEngine write the REWRITE through to
-    durable storage (so the persistence demo can read it off disk).
+    durable storage. Pass ``**field_overrides`` to override individual BMS map
+    fields in the submitted screen (e.g. ``AADDGRP="GRP9"``).
     """
     (
         acctupd,
@@ -746,32 +766,26 @@ def _drive_rewrite(tmp_path, backend=None):
     ) = _drive_update_to_details(tmp_path, backend=backend)
 
     # --- Turn C: submit the change (status Y->N) + ENTER ---
-    # Following Turn B's RETURN TRANSID CAUP -> a fresh terminal input.
     drain(screen_q)
     rC = region.step(
         input_event=InputEvent(
-            eibaid=_DFHENTER, fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS)
+            eibaid=_DFHENTER,
+            fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS, **field_overrides),
         )
     )
     screensC = drain(screen_q)
     viewC = next((s["fields"] for s in screensC if s.get("map") == "CACTUPA"), {})
-    # Turn C should ask for confirmation (no validation error). The info/error
-    # message tells us if validation rejected the input.
     assert rC.kind == DispatchKind.RETURN_TRANSID, (
         f"Turn C did not park (kind={rC.kind}); info={viewC.get('INFOMSG')!r} "
         f"err={viewC.get('ERRMSG')!r}"
     )
 
     # --- Turn D: PF05 confirm -> 9600-WRITE-PROCESSING (READ UPDATE + REWRITE) ---
-    # Following Turn C's RETURN TRANSID CAUP -> a fresh terminal input (PF05).
-    # COACTUPC re-RECEIVEs and re-validates the map on the confirm turn too
-    # (1000-PROCESS-INPUTS runs before 2000-DECIDE-ACTION), so a real 3270 resends
-    # the full screen buffer. Resend the same modified field set with PF05 — sending
-    # only ACCTSID would blank ACUP-NEW-ACTIVE-STATUS and lose the change.
     drain(screen_q)
     rD = region.step(
         input_event=InputEvent(
-            eibaid=_DFHPF5, fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS)
+            eibaid=_DFHPF5,
+            fields=_resubmit_fields(view, status=_NEW_ACCT_STATUS, **field_overrides),
         )
     )
     return engine
