@@ -18,7 +18,7 @@ from interpreter.cobol.ref_mod import (
     is_function_operand,
 )
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict
-from interpreter.cics.cics_parser import parse_exec_cics_text, CicsOperand
+from interpreter.cobol.cics_parser import parse_exec_cics_text, CicsOperand
 
 # ── PERFORM specs ────────────────────────────────────────────────
 
