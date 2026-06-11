@@ -1,6 +1,0 @@
-         MACRO
-&NAME    DFHMDF &POS=,&LENGTH=,&JUSTIFY=,&ATTRB=,&COLOR=,&PS=,         X
-               &HILIGHT=,&VALIDN=,&OCCURS=,&PICIN=,&PICOUT=,&INITIAL=, X
-               &XINIT=,&GINIT=,&GRPNAME=,&CASE=,&OUTLINE=,&SOSI=,      X
-               &TRANSP=
-         MEND
