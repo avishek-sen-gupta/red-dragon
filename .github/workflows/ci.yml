@@ -42,23 +42,11 @@ jobs:
       - name: Build ProLeap bridge JAR
         working-directory: proleap-bridge
         run: ./build.sh
-      - name: Download hlasm_export binary
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download --repo avishek-sen-gupta/bms-tools \
-            --pattern hlasm_export-linux \
-            --dir third-party/bms-tools/che-che4z-lsp-for-hlasm-fork/build/bin/
-          chmod +x third-party/bms-tools/che-che4z-lsp-for-hlasm-fork/build/bin/hlasm_export-linux
-          mv third-party/bms-tools/che-che4z-lsp-for-hlasm-fork/build/bin/hlasm_export-linux \
-             third-party/bms-tools/che-che4z-lsp-for-hlasm-fork/build/bin/hlasm_export
       - name: Install Python dependencies
         run: uv sync
       - name: Run tests
         env:
           PROLEAP_BRIDGE_JAR: ${{ github.workspace }}/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
-          CARDDEMO_HOME: ${{ github.workspace }}/third-party/carddemo/app
-          BMS_TOOLS_HOME: ${{ github.workspace }}/third-party/bms-tools
         run: uv run python -m pytest tests/ --cov --cov-report=term-missing --cov-fail-under=85 -q
 
   analysis:
