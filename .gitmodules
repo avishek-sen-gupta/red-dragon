@@ -1,9 +1,3 @@
 [submodule "proleap-bridge/proleap-cobol-parser"]
 	path = proleap-bridge/proleap-cobol-parser
 	url = git@github.com:avishek-sen-gupta/proleap-cobol-parser.git
-[submodule "third-party/carddemo"]
-	path = third-party/carddemo
-	url = git@github.com:avishek-sen-gupta/aws-mainframe-modernization-carddemo.git
-[submodule "third-party/bms-tools"]
-	path = third-party/bms-tools
-	url = git@github.com:avishek-sen-gupta/bms-tools.git
