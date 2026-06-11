@@ -18,13 +18,33 @@ dependencies = [
     "sortedcontainers (>=2.4.0,<3.0.0)"
 ]
 
-
-[[tool.poetry.packages]]
-include = "interpreter"
+[dependency-groups]
+dev = [
+    "black>=26.1.0",
+    "pytest>=8.0.0",
+    "pytest-xdist>=3.8.0",
+    "radon>=6.0",
+    "pylint>=3.0",
+    "import-linter>=2.0",
+    "grimp>=3.0",
+    "pydeps>=1.12",
+    "textual>=8.1.0",
+    "pyright>=1.1.408",
+    "tdd-guard-pytest>=0.1.2",
+    "pytest-cov>=7.1.0",
+    "pytest-timeout>=2.4.0",
+    "mutmut>=3.5",
+]
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["interpreter"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -34,22 +54,6 @@ markers = [
     "carddemo_e2e: AWS CardDemo end-to-end CICS tests; mandatory locally, skipped in CI (see tests/integration/cics/conftest.py)",
 ]
 tdd_guard_project_root = "/Users/asgupta/code/red-dragon"
-
-[tool.poetry.group.dev.dependencies]
-black = "^26.1.0"
-pytest = "^8.0.0"
-pytest-xdist = "^3.8.0"
-radon = "^6.0"
-pylint = "^3.0"
-import-linter = "^2.0"
-grimp = "^3.0"
-pydeps = "^1.12"
-textual = "^8.1.0"
-pyright = "^1.1.408"
-tdd-guard-pytest = "^0.1.2"
-pytest-cov = "^7.1.0"
-pytest-timeout = "^2.4.0"
-mutmut = "^3.5"
 
 [tool.radon]
 exclude = "tests/*"
@@ -63,6 +67,5 @@ omit = ["tests/*"]
 fail_under = 85
 
 [tool.mutmut]
-runner = "poetry run python -m pytest tests/ -x -q --tb=no -p no:xdist"
+runner = "uv run python -m pytest tests/ -x -q --tb=no -p no:xdist"
 tests_dir = "tests/"
-
