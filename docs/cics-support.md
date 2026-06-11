@@ -51,28 +51,26 @@ a **lowering strategy** (during frontend lowering) that turns each opaque block 
 
 ### 1.2 The pre-pass — `interpreter/cics/preprocessor.py`
 
-`apply_cics_prepass(source: str) -> str` runs **before** ProLeap sees the source and does two
-purely textual things that ProLeap/COBOL cannot do for themselves:
+`apply_cics_prepass(source: str) -> str` runs **before** ProLeap sees the source and performs one
+purely textual transform that ProLeap cannot do for itself:
 
 - **`inject_dfheiblk`** — inserts `COPY DFHEIBLK.` immediately after `WORKING-STORAGE SECTION.`
   so the program's references to the Execute Interface Block (`EIBRESP`, `EIBCALEN`, `EIBAID`,
   `EIBTRNID`, …) resolve to a real copybook-defined layout. This mirrors what the IBM CICS
-  translator does.
-- **`substitute_dfhresp`** — replaces every `DFHRESP(name)` with its numeric EIBRESP code (e.g.
-  `DFHRESP(NOTFND)` → `13`). The code table is the standard contiguous IBM 0–44 set plus the
-  higher named codes the workload references; each is unique so two distinct conditions can
-  never compare-equal after substitution. An unknown/typo'd condition substitutes a sentinel
-  (`9999`) that can never match a real response, rather than `0` (= NORMAL) which would let a
-  bogus condition masquerade as the happy path.
+  translator does. Detection of the section header uses a word-split (`line.strip().upper().split()`)
+  rather than a regex: `WORKING-STORAGE` is a COBOL reserved word, so the phrase
+  `WORKING-STORAGE SECTION.` has exactly one valid placement in a fixed-format source file,
+  making a pattern match unnecessary.
 
 The pre-pass is a deliberate, single, explicit step **at the boundary**: callers run
 `apply_cics_prepass(...).encode()` once and hand the result to the compiler. `compile_cics_program`
 and `run_carddemo_region` both document that their `source` arguments are already pre-passed, so
 there is no double-prepassing.
 
-> These two transforms are the *only* regex/text surgery in the CICS path. Everything else — the
-> CICS verb, its options, literal-vs-data-name — is recovered **structurally** (see §1.3). The
-> EXEC envelope itself is *not* peeled by regex; it is matched inside the Lark grammar.
+> There is **no regex/text surgery** in the pre-pass or anywhere else in the CICS path. The EXEC
+> envelope is not peeled by regex; it is matched inside the Lark grammar. DFHRESP lowering is
+> structural (see §1.3). The pre-pass exists only because ProLeap cannot inject the DFHEIBLK copybook
+> itself; everything else is structural.
 
 ### 1.3 EXEC CICS as a structured statement — `cics_parser.py`
 
@@ -94,10 +92,49 @@ pile of regexes:
   working-storage group.
 - Nested/balanced parentheses (subscripts `PROGRAM(PGM(WS-OPT))`, reference-mod `FROM(WS-MSG(1:8))`)
   are handled by the recursive `value`/`value_part` rules, not by regex paren-balancing.
-- Inline `*>` COBOL comments that the bridge folds into the joined EXEC text are stripped (a clean
-  drop — comments carry no semantics) while preserving the trailing `END-EXEC` anchor.
 
-### 1.4 The lowering strategy — `strategy.py`
+**Comment lines inside EXEC CICS blocks.** ProLeap treats the content of an `EXEC CICS … END-EXEC`
+block as an opaque token stream. Fixed-format comment lines (column-7 `*`) are normalised to `*>`
+by the ProLeap preprocessor but are still included as `EXECCICSLINE` tokens — ProLeap does not parse
+inside the envelope and therefore makes no attempt to filter them. This is handled in our fork of
+`TagUtils.getUntaggedText` (the ProLeap helper that assembles the `exec_cics_text` string): any token
+whose untagged text starts with `*>` is skipped before the string is handed to the Python CICS parser.
+
+> **Design note.** The ideal fix would be for ProLeap to not emit comment tokens in its semantic
+> model — they have no semantic content and `getExecCicsText()` ought to reflect the semantic body of
+> the statement, not its syntactic form. In practice ProLeap's contract is to treat the envelope
+> content as opaque, so it has no awareness of what a "comment line" inside an EXEC CICS block means.
+> The fix lives in `TagUtils` because that is where the token-to-string assembly happens; it touches
+> three lines and makes no other change to ProLeap's behaviour.
+
+### 1.4 DFHRESP structural lowering — `dfhresp_prepass.py` + bridge grammar
+
+`DFHRESP(condition)` is a CICS-specific literal syntax (e.g. `IF WS-RC = DFHRESP(PGMIDERR)`,
+`EVALUATE WS-RESP WHEN DFHRESP(NORMAL)`) that maps a symbolic condition name to a numeric EIBRESP
+code. Getting this from source text to IR involves two cooperating pieces.
+
+**Bridge side — grammar fix.** The ProLeap ANTLR grammar previously ordered `identifier | literal`
+in the `basis` and `evaluateValue` rules. Because `DFHRESP` is in the `cobolWord` list, ANTLR's
+LL(*) parser always matched it as an `identifier`, never reaching the `cicsDfhRespLiteral` rule.
+Our fork reorders to `literal | identifier`, so `DFHRESP(X)` is tried as `cicsDfhRespLiteral` first
+and correctly emitted as a `LiteralValueStmt` with `LiteralType.CICS_DFH_RESP`. The bridge
+serialises it as `{"kind": "dfhresp", "condition": "PGMIDERR"}`.
+
+**Python side — ASG prepass.** `CicsLoweringStrategy.preprocess_program_dict` is called by
+`ProLeapCobolParser.parse()` on the raw ASG dict **before** `CobolASG.from_dict`. It delegates to
+`resolve_dfhresp_nodes` (`interpreter/cics/dfhresp_prepass.py`), a recursive walker that replaces
+every `{"kind": "dfhresp", "condition": "X"}` node with `{"kind": "lit", "value": "N"}` using the
+`_DFHRESP_TABLE` in `preprocessor.py`. The result is that the generic COBOL lowering sees a plain
+numeric literal — no CICS-specific node type is needed.
+
+The code table is the standard IBM 0–44 contiguous EIBRESP set plus higher named codes the workload
+references. An unknown/typo'd condition substitutes a sentinel (`9999`) that can never equal a real
+response (using `0` = NORMAL would let a bogus condition silently pass as the happy path).
+
+`CobolParser.parse()` accepts a `preprocessor: Callable[[dict], dict]` parameter defaulting to an
+identity function, so non-CICS compiles are unaffected.
+
+### 1.5 The lowering strategy — `strategy.py`
 
 `CobolFrontend` accepts an injected **`ExecCicsStrategy`** (a `Protocol`). When the statement
 dispatcher (`statement_dispatch.py`) meets an `ExecCicsStatement`, it calls
@@ -145,7 +182,7 @@ Operand handling helpers make the verb code small and uniform:
 machinery is a deferred follow-up
 (`docs/superpowers/plans/2026-06-07-cics-handle-condition-machinery.md`).
 
-### 1.5 Compiling a region program — `bootstrap.py`
+### 1.6 Compiling a region program — `bootstrap.py`
 
 `compile_cics_program(source, parser, strategy, …)` produces a `LinkedProgram` ready for `run_cics`.
 It compiles the main program as a module with the shared `CicsLoweringStrategy` injected, then —
@@ -158,8 +195,9 @@ Language Environment service `CEEDAYS`) are supplied as `extra_subprogram_source
 (`interpreter/cics/le_stubs.py`).
 
 So the CICS additions reuse the normal compilation phases wholesale — pre-pass feeds ProLeap, the
-strategy plugs into the existing statement-dispatch lowering, and subprogram linking is the stock
-project linker. The only genuinely new compile-time artifacts are the pre-pass, the EXEC-CICS
+DFHRESP prepass resolves condition codes before the ASG is materialised, the strategy plugs into
+the existing statement-dispatch lowering, and subprogram linking is the stock project linker. The
+only genuinely new compile-time artifacts are the pre-pass, the DFHRESP prepass, the EXEC-CICS
 grammar, and the lowering strategy.
 
 ---
@@ -388,9 +426,13 @@ It is pure orchestration of existing parts — no new decode logic:
 - **No core-engine edits.** Nothing under `interpreter/vm/**`, `ir.py`, `run.py`, `executor.py`,
   `cfg.py` is modified for CICS. CICS verbs reach the VM only as `CallFunction` IR to registered
   builtins.
-- **Structure over text.** Aside from the two deliberate pre-pass transforms (DFHEIBLK inject,
-  DFHRESP substitute) and inline-comment stripping, CICS parsing is a grammar — the verb, options,
-  and literal-vs-data-name distinction are recovered structurally, never re-sniffed.
+- **Structure over text.** The only textual transform in the CICS path is `inject_dfheiblk` (a
+  word-split match, not a regex). DFHRESP lowering is structural: the bridge emits a typed node,
+  the Python prepass resolves it to a literal before ASG materialisation. CICS verb parsing is a
+  grammar — verb, options, and literal-vs-data-name are recovered structurally, never re-sniffed.
+  Comment line filtering is the one concession to ugliness: it lives in the ProLeap fork's
+  `TagUtils` because ProLeap treats the EXEC CICS envelope as opaque and has no concept of
+  "comment line inside an EXEC block" (see §1.3).
 - **One routing rule.** `_advance_routing` is the sole definition of inter-program routing, shared by
   the autonomous loop and the turn-by-turn API.
 - **Pure VSAM engine.** The engine is a bytes/int store that never interprets record internals;
@@ -405,6 +447,7 @@ It is pure orchestration of existing parts — no new decode logic:
 | Concern | Files |
 |---|---|
 | Pre-pass | `interpreter/cics/preprocessor.py` |
+| DFHRESP structural lowering | `interpreter/cics/dfhresp_prepass.py`; `_DFHRESP_TABLE` in `preprocessor.py`; grammar fix in `proleap-cobol-parser` fork (`Cobol.g4`, `TagUtils.java`) |
 | EXEC CICS grammar | `interpreter/cics/cics_parser.py`; `ExecCicsStatement` in `interpreter/cobol/cobol_statements.py` |
 | Lowering strategy | `interpreter/cics/strategy.py`; dispatch in `interpreter/cobol/statement_dispatch.py`, entry in `interpreter/cobol/lower_procedure.py` |
 | Service builtins | `interpreter/cics/builtins/{flow,screen,system,vsam}.py` |
