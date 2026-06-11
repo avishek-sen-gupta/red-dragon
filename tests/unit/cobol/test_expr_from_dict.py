@@ -1,7 +1,6 @@
 # pyright: standard
 from interpreter.cobol.cobol_expression import (
     BinOpNode,
-    ExprNode,
     FieldRefNode,
     FunctionNode,
     LiteralNode,
@@ -135,3 +134,11 @@ class TestExprFromDict:
         assert isinstance(inner, FunctionNode)
         assert inner.name == "TRIM"
         assert inner.args == (FieldRefNode(name="WS-A"),)
+
+    @covers(CobolFeature.EXEC_CICS)
+    def test_unknown_kind_raises(self) -> None:
+        """An unrecognised kind tag raises ValueError."""
+        import pytest
+
+        with pytest.raises(ValueError, match="dfhresp"):
+            expr_from_dict({"kind": "dfhresp", "condition": "NOTFND"})

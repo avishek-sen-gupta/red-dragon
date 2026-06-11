@@ -334,6 +334,14 @@ def _register(table: dict, name: str, fn: object) -> None:  # type: ignore[type-
 class ExecCicsStrategy(Protocol):
     """Injectable strategy for lowering EXEC CICS statements to IR."""
 
+    def preprocess_program_dict(self, data: dict) -> dict:  # type: ignore[return]
+        """Pre-process the raw bridge JSON dict before generic COBOL parsing.
+
+        Default no-op. Override to transform CICS-specific expression nodes
+        (e.g. DFHRESP) into generic ones before ``CobolASG.from_dict`` runs.
+        """
+        return data
+
     def on_procedure_entry(
         self,
         ctx: "EmitContext",
@@ -485,6 +493,13 @@ class CicsLoweringStrategy:
                 "__cics_endbr",
                 make_vsam_endbr_builtin(vsam_engine),
             )
+
+    def preprocess_program_dict(self, data: dict) -> dict:
+        from interpreter.cics.dfhresp_prepass import (
+            resolve_dfhresp_nodes,
+        )  # noqa: PLC0415
+
+        return resolve_dfhresp_nodes(data)  # type: ignore[return-value]
 
     def on_procedure_entry(
         self,
@@ -795,6 +810,9 @@ class CicsLoweringStrategy:
 
 class CatchAllLoweringStrategy:
     """Default no-op strategy. Logs a warning for every EXEC CICS statement."""
+
+    def preprocess_program_dict(self, data: dict) -> dict:
+        return data
 
     def on_procedure_entry(
         self,
