@@ -176,6 +176,12 @@ class CobolFrontend(Frontend):
         )
         sectioned = build_sectioned_layout(asg)
         self._program_id = asg.program_id or "MAIN"
+        logger.info(
+            "lowering %s: %d sections, %d paragraphs",
+            self._program_id,
+            len(asg.sections),
+            len(asg.paragraphs),
+        )
         self._layout = sectioned.working_storage
         self._symbol_table = SymbolTable.from_data_layout(sectioned.working_storage)
         condition_index = build_condition_index(sectioned.working_storage)

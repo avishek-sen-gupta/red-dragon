@@ -96,6 +96,10 @@ def inject_dfheiblk(source: str) -> str:
             ending = "\r\n" if line.endswith("\r\n") else "\n"
             result.append(_DFHEIBLK_COPY + ending)
             injected = True
+    if injected:
+        logger.debug("DFHEIBLK injected after WORKING-STORAGE SECTION")
+    else:
+        logger.debug("no WORKING-STORAGE SECTION found; DFHEIBLK not injected")
     return "".join(result)
 
 
@@ -105,4 +109,5 @@ def apply_cics_prepass(source: str) -> str:
     DFHRESP(condition) literals are now lowered structurally by the ProLeap
     bridge (red-dragon-kieo) — no text substitution needed here.
     """
+    logger.debug("CICS pre-pass: %d bytes", len(source))
     return inject_dfheiblk(source)
