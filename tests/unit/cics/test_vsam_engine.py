@@ -1,9 +1,9 @@
 """Unit tests for VSAM file engine."""
 
-import tempfile
 from pathlib import Path
 
 from tests.covers import covers, NotLanguageFeature
+from interpreter.cics.vsam.backend import FileBackend, InMemoryBackend
 from interpreter.cics.vsam.engine import (
     VsamEngine,
     RESP_NORMAL,
@@ -12,6 +12,7 @@ from interpreter.cics.vsam.engine import (
     RESP_ENDFILE,
 )
 from interpreter.cics.vsam.fct import FctConfig, DatasetConfig
+from interpreter.cics.vsam.format import read_flat_file, write_flat_file
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -21,46 +22,16 @@ def test_fct_config_from_yaml():
     data = yaml.safe_load(
         "datasets:\n"
         "  ACCTDAT:\n"
-        "    path: data/acctdata.txt\n"
+        "    file: acctdata.dat\n"
         "    record_length: 300\n"
         "  CARDDAT:\n"
-        "    path: data/carddata.txt\n"
+        "    file: carddata.dat\n"
         "    record_length: 150\n"
     )
     config = FctConfig.from_dict(data)
     assert "ACCTDAT" in config.datasets
     assert config.datasets["ACCTDAT"].record_length == 300
-    assert config.datasets["CARDDAT"].path == Path("data/carddata.txt")
-
-
-def _write_fixed_records(path: Path, records: list[bytes]) -> None:
-    with path.open("wb") as f:
-        for r in records:
-            f.write(r)
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_vsam_engine_loads_dataset():
-    with tempfile.TemporaryDirectory() as td:
-        p = Path(td) / "acctdata.txt"
-        _write_fixed_records(p, [b"A" * 20 + b"B" * 10])
-        config = FctConfig(
-            datasets={"ACCTDAT": DatasetConfig(path=p, record_length=30)}
-        )
-        engine = VsamEngine(config)
-        engine.load_all()
-        assert engine.dataset_count() == 1
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_vsam_engine_empty_file_is_ok():
-    with tempfile.TemporaryDirectory() as td:
-        p = Path(td) / "empty.txt"
-        p.write_bytes(b"")
-        config = FctConfig(datasets={"EMPTY": DatasetConfig(path=p, record_length=10)})
-        engine = VsamEngine(config)
-        engine.load_all()
-        assert engine.dataset_count() == 1
+    assert config.datasets["CARDDAT"].file == "carddata.dat"
 
 
 REC_LEN = 10
@@ -72,21 +43,30 @@ def _rec(key: str, rest: str = "") -> bytes:
     return (key.ljust(KEY_LEN)[:KEY_LEN] + body).encode()
 
 
-def _engine_with_records(records: list[bytes], rec_len: int) -> VsamEngine:
-    td = tempfile.mkdtemp()
-    p = Path(td) / "data.txt"
-    _write_fixed_records(p, records)
-    config = FctConfig(
-        datasets={"TESTDS": DatasetConfig(path=p, record_length=rec_len)}
-    )
-    engine = VsamEngine(config)
+def _engine_with_records(records: list[bytes], rec_len: int = REC_LEN) -> VsamEngine:
+    config = FctConfig(datasets={"TESTDS": DatasetConfig(record_length=rec_len)})
+    engine = VsamEngine(config, backend=InMemoryBackend(seed={"TESTDS": records}))
     engine.load_all()
     return engine
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_vsam_engine_loads_dataset() -> None:
+    engine = _engine_with_records([b"A" * 20 + b"B" * 10], rec_len=30)
+    assert engine.dataset_count() == 1
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_vsam_engine_empty_seed_is_ok() -> None:
+    config = FctConfig(datasets={"EMPTY": DatasetConfig(record_length=10)})
+    engine = VsamEngine(config)
+    engine.load_all()
+    assert engine.dataset_count() == 1
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_read_existing_record():
-    engine = _engine_with_records([_rec("AA01", "DATA")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01", "DATA")])
     record, resp = engine.read("TESTDS", b"AA01", KEY_LEN)
     assert resp == RESP_NORMAL
     assert record is not None and record[:KEY_LEN] == b"AA01"
@@ -94,14 +74,14 @@ def test_read_existing_record():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_read_not_found():
-    engine = _engine_with_records([_rec("AA01", "DATA")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01", "DATA")])
     _, resp = engine.read("TESTDS", b"ZZ99", KEY_LEN)
     assert resp == RESP_NOTFND
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_write_new_record():
-    engine = _engine_with_records([], REC_LEN)
+    engine = _engine_with_records([])
     assert engine.write("TESTDS", b"AA01", KEY_LEN, _rec("AA01", "NEW")) == RESP_NORMAL
     _, resp2 = engine.read("TESTDS", b"AA01", KEY_LEN)
     assert resp2 == RESP_NORMAL
@@ -109,13 +89,13 @@ def test_write_new_record():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_write_duplicate_returns_duprec():
-    engine = _engine_with_records([_rec("AA01", "OLD")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01", "OLD")])
     assert engine.write("TESTDS", b"AA01", KEY_LEN, _rec("AA01", "NEW")) == RESP_DUPREC
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_rewrite_updates_record():
-    engine = _engine_with_records([_rec("AA01", "OLD")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01", "OLD")])
     assert (
         engine.rewrite("TESTDS", b"AA01", KEY_LEN, _rec("AA01", "UPD")) == RESP_NORMAL
     )
@@ -128,8 +108,7 @@ def test_rewrite_without_key_extracts_key_from_record():
     """EXEC CICS REWRITE supplies FROM but no RIDFLD — the key must be taken
     from the FROM record itself (its key field), not from the passed key arg
     (which the lowering leaves empty). (CardDemo COACTUPC 9600-WRITE-PROCESSING.)"""
-    engine = _engine_with_records([_rec("AA01", "OLD")], REC_LEN)
-    # Empty key arg, as the REWRITE lowering passes when there is no RIDFLD.
+    engine = _engine_with_records([_rec("AA01", "OLD")])
     assert engine.rewrite("TESTDS", b"", KEY_LEN, _rec("AA01", "UPD")) == RESP_NORMAL
     record, _ = engine.read("TESTDS", b"AA01", KEY_LEN)
     assert b"UPD" in record
@@ -137,7 +116,7 @@ def test_rewrite_without_key_extracts_key_from_record():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_delete_removes_record():
-    engine = _engine_with_records([_rec("AA01", "DATA")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01", "DATA")])
     assert engine.delete("TESTDS", b"AA01", KEY_LEN) == RESP_NORMAL
     _, resp2 = engine.read("TESTDS", b"AA01", KEY_LEN)
     assert resp2 == RESP_NOTFND
@@ -145,7 +124,7 @@ def test_delete_removes_record():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_browse_forward():
-    engine = _engine_with_records([_rec("AA01"), _rec("BB02"), _rec("CC03")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01"), _rec("BB02"), _rec("CC03")])
     cursor = ("task0", "TESTDS", "cur0")
     engine.startbr("TESTDS", b"AA01", KEY_LEN, cursor)
     rec1, r1 = engine.readnext("TESTDS", cursor)
@@ -161,7 +140,7 @@ def test_browse_forward():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_browse_reverse():
-    engine = _engine_with_records([_rec("AA01"), _rec("BB02")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01"), _rec("BB02")])
     cursor = ("task0", "TESTDS", "cur0")
     engine.startbr("TESTDS", b"BB02", KEY_LEN, cursor)
     engine.readnext("TESTDS", cursor)
@@ -175,7 +154,7 @@ def test_startbr_high_values_then_readprev_returns_last_record():
     then READPREV (no intervening READNEXT) must return the LAST (highest-key)
     record so the program can derive the next id. The STARTBR positions past
     end-of-file; the first READPREV walks back to the final record."""
-    engine = _engine_with_records([_rec("AA01"), _rec("BB02"), _rec("CC03")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01"), _rec("BB02"), _rec("CC03")])
     cursor = ("task0", "TESTDS", "cur0")
     high = b"\xff" * KEY_LEN
     assert engine.startbr("TESTDS", high, KEY_LEN, cursor) == RESP_NORMAL
@@ -188,7 +167,7 @@ def test_startbr_high_values_then_readprev_returns_last_record():
 def test_startbr_then_readprev_walks_backwards_to_first():
     """A fresh STARTBR(HIGH) then repeated READPREV walks every record in
     descending key order, ending at ENDFILE past the first record."""
-    engine = _engine_with_records([_rec("AA01"), _rec("BB02"), _rec("CC03")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01"), _rec("BB02"), _rec("CC03")])
     cursor = ("task0", "TESTDS", "cur0")
     engine.startbr("TESTDS", b"\xff" * KEY_LEN, KEY_LEN, cursor)
     r1, p1 = engine.readprev("TESTDS", cursor)
@@ -205,30 +184,22 @@ def test_startbr_then_readprev_walks_backwards_to_first():
 
 
 def _engine_offset(records: list[bytes], rec_len: int, key_offset: int) -> VsamEngine:
-    """Engine over a single dataset whose key sits at ``key_offset``."""
-    td = tempfile.mkdtemp()
-    p = Path(td) / "data.txt"
-    _write_fixed_records(p, records)
     config = FctConfig(
-        datasets={
-            "OFFDS": DatasetConfig(path=p, record_length=rec_len, key_offset=key_offset)
-        }
+        datasets={"OFFDS": DatasetConfig(record_length=rec_len, key_offset=key_offset)}
     )
-    engine = VsamEngine(config)
+    engine = VsamEngine(config, backend=InMemoryBackend(seed={"OFFDS": records}))
     engine.load_all()
     return engine
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_read_matches_key_at_nonzero_offset():
-    # Mirror the CARD-XREF layout: card-num(16) cust-id(9) acct-id(11) = 36 here.
     rec = b"C" * 16 + b"000000001" + b"00000000011" + b"\x00" * 4
     engine = _engine_offset([rec], len(rec), key_offset=25)
     record, resp = engine.read("OFFDS", b"00000000011", 11)
     assert resp == RESP_NORMAL
     assert record is not None
     assert record[25:36] == b"00000000011"
-    # The yielded record carries the cust-id at offset 16 (the read-through value).
     assert record[16:25] == b"000000001"
 
 
@@ -242,8 +213,7 @@ def test_read_offset_nonmatching_key_notfnd():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_read_default_offset_zero_unchanged():
-    # key_offset defaulting to 0 must preserve offset-0 matching.
-    engine = _engine_with_records([_rec("AA01", "DATA")], REC_LEN)
+    engine = _engine_with_records([_rec("AA01", "DATA")])
     record, resp = engine.read("TESTDS", b"AA01", KEY_LEN)
     assert resp == RESP_NORMAL
     assert record is not None and record[:KEY_LEN] == b"AA01"
@@ -251,24 +221,20 @@ def test_read_default_offset_zero_unchanged():
 
 # ── Backend wiring + write-through + flush_to ────────────────────────
 
-from interpreter.cics.vsam.backend import FileBackend
-from interpreter.cics.vsam.format import read_flat_file
 
-
-def _cfg(seed: Path) -> FctConfig:
-    return FctConfig(datasets={"DS": DatasetConfig(path=seed, record_length=4)})
+def _fct() -> FctConfig:
+    return FctConfig(datasets={"DS": DatasetConfig(record_length=4)})
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_write_through_persists_and_survives_new_engine(tmp_path: Path) -> None:
-    seed = tmp_path / "seed.dat"
-    seed.write_bytes(b"AAAA")  # one record, key "AAAA"
     backing = tmp_path / "store"
-    eng = VsamEngine(_cfg(seed), backend=FileBackend(backing))
+    write_flat_file(backing / "DS.dat", [b"AAAA"], 4)
+    eng = VsamEngine(_fct(), backend=FileBackend(backing))
     eng.load_all()
-    assert eng.write("DS", b"ZZZZ", 4, b"ZZZZ") == 0  # RESP_NORMAL
+    assert eng.write("DS", b"ZZZZ", 4, b"ZZZZ") == 0
     assert read_flat_file(backing / "DS.dat", 4) == [b"AAAA", b"ZZZZ"]
-    eng2 = VsamEngine(_cfg(seed), backend=FileBackend(backing))
+    eng2 = VsamEngine(_fct(), backend=FileBackend(backing))
     eng2.load_all()
     rec, resp = eng2.read("DS", b"ZZZZ", 4)
     assert resp == 0 and rec == b"ZZZZ"
@@ -276,21 +242,16 @@ def test_write_through_persists_and_survives_new_engine(tmp_path: Path) -> None:
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_default_engine_writes_no_files(tmp_path: Path) -> None:
-    seed = tmp_path / "seed.dat"
-    seed.write_bytes(b"AAAA")
-    eng = VsamEngine(_cfg(seed))  # default InMemoryBackend
+    eng = VsamEngine(_fct(), backend=InMemoryBackend(seed={"DS": [b"AAAA"]}))
     eng.load_all()
     eng.write("DS", b"ZZZZ", 4, b"ZZZZ")
-    assert seed.read_bytes() == b"AAAA"
-    assert [f.name for f in tmp_path.iterdir()] == ["seed.dat"]
+    assert list(tmp_path.iterdir()) == []
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_flush_to_snapshot_in_memory_engine(tmp_path: Path) -> None:
-    seed = tmp_path / "seed.dat"
-    seed.write_bytes(b"AAAA")
     out = tmp_path / "snap"
-    eng = VsamEngine(_cfg(seed))  # in-memory
+    eng = VsamEngine(_fct(), backend=InMemoryBackend(seed={"DS": [b"AAAA"]}))
     eng.load_all()
     eng.write("DS", b"ZZZZ", 4, b"ZZZZ")
     eng.flush_to(out)

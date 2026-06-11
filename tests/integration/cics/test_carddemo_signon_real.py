@@ -45,8 +45,10 @@ from interpreter.cics.types import DispatchKind
 from interpreter.cics.dispatcher import InputEvent, CicsRegion
 from interpreter.cics.bootstrap import compile_cics_program
 from interpreter.cics.le_stubs import le_service_stub_sources
+from interpreter.cics.vsam.backend import FileBackend, InMemoryBackend
 from interpreter.cics.vsam.engine import VsamEngine
 from interpreter.cics.vsam.fct import FctConfig, DatasetConfig
+from interpreter.cics.vsam.format import write_flat_file
 from interpreter.cics.bms.generate import generate_symbolic_copybooks
 from interpreter.cobol.features import CobolFeature
 from tests.integration.cics.channel_drain import drain
@@ -164,37 +166,29 @@ def _usrsec_engine(backend=None) -> VsamEngine:
         + _ebcdic("U", 1)  # regular user -> XCTL COMEN01C
         + _ebcdic("", 23)
     )
-    td = Path(tempfile.mkdtemp())
-    usrsec_path = td / "usrsec.txt"
-    usrsec_path.write_bytes(usrsec_rec)
-    xref_path = td / "cxacaix.txt"
-    xref_path.write_bytes(_xref_record())
-    acct_path = td / "acctdat.txt"
-    acct_path.write_bytes(_acct_record())
-    cust_path = td / "custdat.txt"
-    cust_path.write_bytes(_cust_record())
-
-    engine = VsamEngine(
-        FctConfig(
-            datasets={
-                "USRSEC": DatasetConfig(path=usrsec_path, record_length=80),
-                # Alt-index path: key is the 11-digit ACCT-ID at offset 25.
-                "CXACAIX": DatasetConfig(
-                    path=xref_path,
-                    record_length=50,
-                    key_offset=25,
-                    key_length=11,
-                ),
-                "ACCTDAT": DatasetConfig(
-                    path=acct_path, record_length=300, key_length=11
-                ),
-                "CUSTDAT": DatasetConfig(
-                    path=cust_path, record_length=500, key_length=9
-                ),
-            }
-        ),
-        backend=backend,
+    seed = {
+        "USRSEC": (80, [usrsec_rec]),
+        "CXACAIX": (50, [_xref_record()]),
+        "ACCTDAT": (300, [_acct_record()]),
+        "CUSTDAT": (500, [_cust_record()]),
+    }
+    fct = FctConfig(
+        datasets={
+            "USRSEC": DatasetConfig(record_length=80),
+            "CXACAIX": DatasetConfig(record_length=50, key_offset=25, key_length=11),
+            "ACCTDAT": DatasetConfig(record_length=300, key_length=11),
+            "CUSTDAT": DatasetConfig(record_length=500, key_length=9),
+        }
     )
+    if isinstance(backend, FileBackend):
+        for name, (reclen, records) in seed.items():
+            backend.persist(name, DatasetConfig(record_length=reclen), records)
+        engine = VsamEngine(fct, backend=backend)
+    else:
+        engine = VsamEngine(
+            fct,
+            backend=InMemoryBackend(seed={n: r for n, (_, r) in seed.items()}),
+        )
     engine.load_all()
     return engine
 
@@ -872,30 +866,29 @@ def _add_engine(backend=None) -> VsamEngine:
         + _ebcdic("U", 1)  # regular user -> XCTL COMEN01C
         + _ebcdic("", 23)
     )
-    td = Path(tempfile.mkdtemp())
-    (td / "usrsec.txt").write_bytes(usrsec_rec)
-    (td / "cxacaix.txt").write_bytes(_xref_record())
-    (td / "transact.txt").write_bytes(_transact_seed_record())
-
-    engine = VsamEngine(
-        FctConfig(
-            datasets={
-                "USRSEC": DatasetConfig(path=td / "usrsec.txt", record_length=80),
-                "CXACAIX": DatasetConfig(
-                    path=td / "cxacaix.txt",
-                    record_length=50,
-                    key_offset=25,
-                    key_length=11,
-                ),
-                "TRANSACT": DatasetConfig(
-                    path=td / "transact.txt",
-                    record_length=_TRAN_RECLN,
-                    key_length=_TRAN_KEYLEN,
-                ),
-            }
-        ),
-        backend=backend,
+    seed = {
+        "USRSEC": (80, [usrsec_rec]),
+        "CXACAIX": (50, [_xref_record()]),
+        "TRANSACT": (_TRAN_RECLN, [_transact_seed_record()]),
+    }
+    fct = FctConfig(
+        datasets={
+            "USRSEC": DatasetConfig(record_length=80),
+            "CXACAIX": DatasetConfig(record_length=50, key_offset=25, key_length=11),
+            "TRANSACT": DatasetConfig(
+                record_length=_TRAN_RECLN, key_length=_TRAN_KEYLEN
+            ),
+        }
     )
+    if isinstance(backend, FileBackend):
+        for name, (reclen, records) in seed.items():
+            backend.persist(name, DatasetConfig(record_length=reclen), records)
+        engine = VsamEngine(fct, backend=backend)
+    else:
+        engine = VsamEngine(
+            fct,
+            backend=InMemoryBackend(seed={n: r for n, (_, r) in seed.items()}),
+        )
     engine.load_all()
     return engine
 

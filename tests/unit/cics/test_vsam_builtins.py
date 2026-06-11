@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 from tests.covers import covers, NotLanguageFeature
+from interpreter.cics.vsam.backend import InMemoryBackend
 from interpreter.cics.vsam.engine import (
     VsamEngine,
     RESP_NORMAL,
@@ -41,15 +39,8 @@ def _rec(key: str, rest: str = "") -> bytes:
 
 
 def _engine_with_records(records: list[bytes]) -> VsamEngine:
-    td = tempfile.mkdtemp()
-    p = Path(td) / "data.txt"
-    with p.open("wb") as f:
-        for r in records:
-            f.write(r)
-    config = FctConfig(
-        datasets={"TESTDS": DatasetConfig(path=p, record_length=REC_LEN)}
-    )
-    engine = VsamEngine(config)
+    config = FctConfig(datasets={"TESTDS": DatasetConfig(record_length=REC_LEN)})
+    engine = VsamEngine(config, backend=InMemoryBackend(seed={"TESTDS": records}))
     engine.load_all()
     return engine
 

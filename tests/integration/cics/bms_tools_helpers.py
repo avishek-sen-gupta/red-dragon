@@ -1,8 +1,9 @@
-"""Gating + path constants for the external bms-tools pipeline.
+"""Gating + path constants for the bms-tools pipeline.
 
-Mirrors tests/integration/cobol_helpers.py (JAR_PATH/JAR_AVAILABLE). The pipeline
-is an EXTERNAL, locally-built toolchain; everything that needs it skips when
-BMS_TOOLS_HOME is unset or the hlasm_export binary is absent.
+Resolution order for BMS_TOOLS_HOME:
+  1. BMS_TOOLS_HOME env var (explicit override)
+  2. third-party/bms-tools submodule (relative to repo root)
+  3. ~/code/bms-tools (legacy local convention)
 """
 
 from __future__ import annotations
@@ -10,11 +11,22 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-BMS_TOOLS_HOME: str | None = os.environ.get("BMS_TOOLS_HOME") or (
-    os.path.expanduser("~/code/bms-tools")
-    if os.path.isdir(os.path.expanduser("~/code/bms-tools"))
-    else None
-)
+_REPO_ROOT = Path(__file__).parents[3]
+_SUBMODULE = _REPO_ROOT / "third-party" / "bms-tools"
+
+
+def _resolve_bms_tools_home() -> str | None:
+    if env := os.environ.get("BMS_TOOLS_HOME"):
+        return env
+    if _SUBMODULE.is_dir():
+        return str(_SUBMODULE)
+    legacy = Path(os.path.expanduser("~/code/bms-tools"))
+    if legacy.is_dir():
+        return str(legacy)
+    return None
+
+
+BMS_TOOLS_HOME: str | None = _resolve_bms_tools_home()
 
 HLASM_EXPORT_BIN: str | None = (
     str(

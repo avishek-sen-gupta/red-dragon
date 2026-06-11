@@ -1,44 +1,58 @@
-"""Gate for the AWS CardDemo end-to-end CICS tests.
+"""Gate for the CardDemo end-to-end CICS tests.
 
-These exercise the *real* unmodified CardDemo COBOL through the full toolchain
-(``CARDDEMO_HOME`` + ``BMS_TOOLS_HOME`` + a built ProLeap JAR) — the only tests
-that drive the bridge + CSD + PIC + VSAM path end-to-end. Modules opt in with
-``pytestmark = pytest.mark.carddemo_e2e``. Policy:
+These exercise the real unmodified CardDemo COBOL through the full toolchain
+(CardDemo submodule + bms-tools submodule + a built ProLeap JAR). Modules opt in
+with ``pytestmark = pytest.mark.carddemo_e2e``.
 
-  * **CI** (``CI`` env var set, as GitHub Actions does): SKIP — the heavy
-    toolchain (CardDemo checkout, bms-tools, JAR) is not provisioned there.
-  * **Local** (not CI): MANDATORY — RUN when the toolchain is set up, else
-    **FAIL** with setup guidance. A missing JAR/env can therefore never let the
-    CardDemo e2e *silently skip* on a dev machine (which is exactly what once
-    hid a REWRITE regression that only this suite catches).
+Policy: run everywhere (CI and local) when the toolchain is available, fail with
+setup guidance when it is not. No silent skips — a missing tool must never hide
+a regression.
+
+Resolution order for CARDDEMO_HOME:
+  1. CARDDEMO_HOME env var (explicit override, set by CI workflow)
+  2. third-party/carddemo/app submodule (auto-detected from repo root)
 """
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
 from tests.integration.cics.bms_tools_helpers import BMS_TOOLS_AVAILABLE
 from tests.integration.cobol_helpers import JAR_AVAILABLE
 
-_IN_CI = bool(os.environ.get("CI"))
-_TOOLCHAIN_OK = (
-    bool(os.environ.get("CARDDEMO_HOME")) and JAR_AVAILABLE and BMS_TOOLS_AVAILABLE
-)
+_REPO_ROOT = Path(__file__).parents[3]
+_SUBMODULE_CARDDEMO = _REPO_ROOT / "third-party" / "carddemo" / "app"
+
+
+def _resolve_carddemo_home() -> str | None:
+    if env := os.environ.get("CARDDEMO_HOME"):
+        return env
+    if _SUBMODULE_CARDDEMO.is_dir():
+        return str(_SUBMODULE_CARDDEMO)
+    return None
+
+
+_CARDDEMO_HOME = _resolve_carddemo_home()
+
+if _CARDDEMO_HOME:
+    os.environ.setdefault("CARDDEMO_HOME", _CARDDEMO_HOME)
+
+_TOOLCHAIN_OK = bool(_CARDDEMO_HOME) and JAR_AVAILABLE and BMS_TOOLS_AVAILABLE
+
 _SETUP_MSG = (
-    "CardDemo e2e is MANDATORY locally but the toolchain is not set up. "
-    "Set CARDDEMO_HOME (the CardDemo `app` dir) and BMS_TOOLS_HOME, and build the "
-    "ProLeap JAR (cd proleap-bridge && mvn -DskipTests package). "
-    "(These tests run locally and are skipped only in CI.)"
+    "CardDemo e2e toolchain not available. Ensure:\n"
+    "  • git submodule update --init third-party/carddemo third-party/bms-tools\n"
+    "  • ProLeap JAR built: cd proleap-bridge && mvn -DskipTests package\n"
+    "  • hlasm_export built or downloaded into "
+    "third-party/bms-tools/che-che4z-lsp-for-hlasm-fork/build/bin/"
 )
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
-    """Skip ``carddemo_e2e`` tests in CI; require the toolchain locally."""
     if item.get_closest_marker("carddemo_e2e") is None:
         return
-    if _IN_CI:
-        pytest.skip("CardDemo e2e skipped in CI (heavy toolchain not provisioned)")
     if not _TOOLCHAIN_OK:
         pytest.fail(_SETUP_MSG, pytrace=False)
