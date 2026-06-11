@@ -499,7 +499,10 @@ class CicsLoweringStrategy:
             resolve_dfhresp_nodes,
         )  # noqa: PLC0415
 
-        return resolve_dfhresp_nodes(data)  # type: ignore[return-value]
+        logger.debug("DFHRESP prepass on program dict")
+        result = resolve_dfhresp_nodes(data)  # type: ignore[return-value]
+        logger.debug("DFHRESP prepass done")
+        return result
 
     def on_procedure_entry(
         self,
