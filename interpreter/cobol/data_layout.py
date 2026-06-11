@@ -99,6 +99,7 @@ class DataLayout:
     total_bytes: int = 0
     occurs_count: int = 0
     element_size: int = 0
+    conditions: list[ConditionName] = field(default_factory=list)
 
     def lookup(self, name: str) -> FieldLayout | None:
         """Depth-first search for a leaf field by bare name.
@@ -197,6 +198,13 @@ class DataLayout:
         yield from self.fields.values()
         for sub in self.groups.values():
             yield from sub.all_leaves()
+
+    def all_group_conditions(self) -> Iterator[tuple[str, ConditionName]]:
+        """Yield (group_name, condition) for every group node that carries 88-level conditions."""
+        for name, grp in self.groups.items():
+            for cond in grp.conditions:
+                yield name, cond
+            yield from grp.all_group_conditions()
 
     def all_fields(self) -> Iterator[FieldLayout]:
         """Yield all FieldLayouts (leaf and synthesized group storage) depth-first.
@@ -391,6 +399,7 @@ def _flatten_field(
             total_bytes=group_length,
             occurs_count=cobol_field.occurs,
             element_size=elem_size,
+            conditions=list(cobol_field.conditions),
         )
         return cobol_field.name, group_layout
 
@@ -423,13 +432,6 @@ def _flatten_field(
         justified_right=cobol_field.justified_right,
         occurs_depending_on=cobol_field.occurs_depending_on,
         occurs_min=cobol_field.occurs_min,
-    )
-    logger.debug(
-        "Field %s: offset=%d, length=%d, type=%s",
-        cobol_field.name,
-        absolute_offset,
-        type_desc.byte_length,
-        type_desc.category,
     )
     return cobol_field.name, fl
 
@@ -531,7 +533,7 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
     non_redefines_top = [f for f in non_renames_fields if not f.redefines]
     total = sum(_compute_group_length(f) for f in non_redefines_top)
 
-    logger.info(
+    logger.debug(
         "Data layout: %d top-level fields, %d top-level groups, %d total bytes",
         len(top_fields),
         len(top_groups),

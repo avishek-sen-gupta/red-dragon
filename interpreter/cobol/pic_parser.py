@@ -19,7 +19,6 @@ hidden-channel treatment of the old grammar.
 
 from __future__ import annotations
 
-import logging
 
 from dataclasses import dataclass
 
@@ -27,8 +26,6 @@ from lark import Lark, Transformer
 from lark.exceptions import UnexpectedInput
 
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-
-logger = logging.getLogger(__name__)
 
 _USAGE_TO_CATEGORY = {
     "COMP-3": CobolDataCategory.COMP3,
@@ -247,16 +244,6 @@ def parse_pic(
         )
 
     total_digits = facts["integer_digits"] + facts["decimal_digits"]
-
-    logger.debug(
-        "parse_pic(%r, %r) -> category=%s, total=%d, dec=%d, signed=%s",
-        pic,
-        usage,
-        category,
-        total_digits,
-        facts["decimal_digits"],
-        facts["signed"],
-    )
 
     return CobolTypeDescriptor(
         category=category,

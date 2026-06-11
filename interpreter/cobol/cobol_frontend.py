@@ -176,7 +176,7 @@ class CobolFrontend(Frontend):
         )
         sectioned = build_sectioned_layout(asg)
         self._program_id = asg.program_id or "MAIN"
-        logger.info(
+        logger.debug(
             "lowering %s: %d sections, %d paragraphs",
             self._program_id,
             len(asg.sections),
@@ -214,7 +214,7 @@ class CobolFrontend(Frontend):
         # Skip target — init block branches here to skip past procedure body
         self._ctx.emit_inst(Label_(label=after_label))
 
-        logger.info(
+        logger.debug(
             "COBOL frontend produced %d IR instructions",
             len(self._ctx.instructions),
         )
