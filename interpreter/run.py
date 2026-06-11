@@ -973,7 +973,7 @@ def run(
     instructions = frontend.lower(source.encode("utf-8"))
 
     stats.ir_instruction_count = len(instructions)
-    logger.info(
+    logger.debug(
         "Frontend produced %d IR instructions in %.1fms",
         stats.ir_instruction_count,
         (stats.parse_time + stats.lower_time) * 1000,
