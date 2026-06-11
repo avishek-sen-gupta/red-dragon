@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Callable
 
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
@@ -13,8 +12,6 @@ from interpreter.types.coercion.conversion_result import (
     _identity,
 )
 from interpreter.types.type_expr import TypeExpr
-
-logger = logging.getLogger(__name__)
 
 
 class TypeResolver:
@@ -42,12 +39,6 @@ class TypeResolver:
         effective_left = left_hint or right_hint
         effective_right = right_hint or left_hint
 
-        logger.debug(
-            "resolve_binop: %s %s %s → delegating to rules",
-            effective_left,
-            operator,
-            effective_right,
-        )
         return self._conversion_rules.resolve(operator, effective_left, effective_right)
 
     def resolve_assignment(
@@ -58,9 +49,4 @@ class TypeResolver:
         if not value_hint or not target_hint:
             return _identity
 
-        logger.debug(
-            "resolve_assignment: %s → %s, delegating to rules",
-            value_hint,
-            target_hint,
-        )
         return self._conversion_rules.coerce_assignment(value_hint, target_hint)

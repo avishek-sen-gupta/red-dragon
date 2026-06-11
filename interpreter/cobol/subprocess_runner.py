@@ -26,7 +26,7 @@ class RealSubprocessRunner(SubprocessRunner):
     """Production subprocess runner using subprocess.run."""
 
     def run(self, command: list[str], input_data: str) -> str:
-        logger.info("Running subprocess: %s", " ".join(command))
+        logger.debug("Running subprocess: %s", " ".join(command))
         result = subprocess.run(
             command,
             input=input_data,

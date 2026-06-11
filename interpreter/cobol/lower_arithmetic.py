@@ -175,14 +175,10 @@ def eval_ref_mod_expr(
         if ctx.has_field(name, materialised):
             field_ref, rr = ctx.resolve_field_ref(name, materialised)
             decoded_reg = ctx.emit_decode_field(rr, field_ref.fl, field_ref.offset_reg)
-            logging.debug(
-                f"eval_ref_mod_expr: RefModReference {name} → decoded_reg={decoded_reg}"
-            )
             # Return the decoded numeric value directly
             return decoded_reg
         else:
             # Unknown field: treat as literal numeric 0
-            logging.debug(f"eval_ref_mod_expr: RefModReference {name} (unknown) → 0")
             return ctx.const_to_reg("0")
 
     elif isinstance(expr, RefModLengthOf):
@@ -401,14 +397,7 @@ def lower_move(
         value_str_reg = ctx.const_to_reg(literal)
 
     # Handle reference modification if present
-    logging.debug(
-        f"lower_move: {stmt.source.name} ref_mod_start={stmt.source.ref_mod_start}, ref_mod_length={stmt.source.ref_mod_length}"
-    )
     if stmt.source.ref_mod_start is not None:
-        logging.debug(
-            f"lower_move: Detected reference modification on {stmt.source.name}: "
-            f"start={stmt.source.ref_mod_start}, length={stmt.source.ref_mod_length}"
-        )
         # Evaluate start and length expressions
         start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
         # COBOL uses 1-indexed positions, but SLICE uses 0-indexed.
@@ -430,10 +419,6 @@ def lower_move(
                 ctx, stmt.source.ref_mod_length, materialised
             )
             result_reg = ctx.fresh_reg()
-            logging.debug(
-                f"lower_move: Emitting SLICE with value_reg={value_str_reg}, "
-                f"start_reg={start_0indexed_reg}, length_reg={length_reg}, result_reg={result_reg}"
-            )
             ctx.emit_inst(
                 CallFunction(
                     result_reg=result_reg,
@@ -529,10 +514,6 @@ def _store_move_value(
 
     # Handle target reference modification (write path): MOVE X TO Y(start:length)
     if target.ref_mod_start is not None:
-        logging.debug(
-            f"lower_move: Detected reference modification on target {target.name}: "
-            f"start={target.ref_mod_start}, length={target.ref_mod_length}"
-        )
         # Load current target field value as string (needed for SPLICE)
         target_decoded = ctx.emit_decode_field(
             target_rr, target_ref.fl, target_ref.offset_reg

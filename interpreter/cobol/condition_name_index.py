@@ -74,12 +74,12 @@ def build_condition_index(layout: DataLayout) -> ConditionNameIndex:
                 parent_field_name=fl.name,
                 values=condition.values,
             )
-            logger.debug(
-                "Indexed condition %s -> parent %s with %d values",
-                condition.name,
-                fl.name,
-                len(condition.values),
-            )
 
-    logger.info("Condition name index: %d entries", len(entries))
+    for group_name, condition in layout.all_group_conditions():
+        entries[condition.name] = ConditionEntry(
+            parent_field_name=group_name,
+            values=condition.values,
+        )
+
+    logger.debug("Condition name index: %d entries", len(entries))
     return ConditionNameIndex(entries)

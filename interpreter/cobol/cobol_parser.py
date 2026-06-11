@@ -58,7 +58,7 @@ class ProLeapCobolParser(CobolParser):
         source: bytes,
         preprocessor: Callable[[dict], dict] = _IDENTITY,
     ) -> CobolASG:
-        logger.info("Parsing COBOL source (%d bytes) via ProLeap bridge", len(source))
+        logger.debug("Parsing COBOL source (%d bytes) via ProLeap bridge", len(source))
         command = ["java", "-jar", self._bridge_jar]
         for d in self._copybook_dirs:
             command += ["-copybook-dir", str(d)]
@@ -69,7 +69,7 @@ class ProLeapCobolParser(CobolParser):
         data: dict = json.loads(json_str)
         data = preprocessor(data)
         asg = CobolASG.from_dict(data)
-        logger.info(
+        logger.debug(
             "Parsed ASG: %d data fields, %d sections, %d paragraphs",
             len(asg.data_fields),
             len(asg.sections),
