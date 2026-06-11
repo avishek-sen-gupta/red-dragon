@@ -154,7 +154,6 @@ _GRAMMAR = r"""
     NAME.1: /[A-Za-z][A-Za-z0-9-]*/
     CHARS: /[^():'"]+/
 
-    %ignore /\*>[^\n]*/
     %ignore /\s+/
 """
 
