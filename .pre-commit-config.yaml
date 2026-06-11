@@ -15,28 +15,28 @@ repos:
 
       - id: black
         name: Black (auto-fix)
-        entry: bash -c 'poetry run python -m black . && git add -u'
+        entry: bash -c 'uv run python -m black . && git add -u'
         language: system
         pass_filenames: false
         always_run: true
 
       - id: python-fp-lint
         name: Python FP lint (warnings only)
-        entry: bash -c 'poetry run python -m python_fp_lint check interpreter/ || true'
+        entry: bash -c 'uv run python -m python_fp_lint check interpreter/ || true'
         language: system
         pass_filenames: false
         always_run: true
 
       - id: pyright
         name: Pyright type check (warnings only)
-        entry: bash -c 'poetry run pyright || true'
+        entry: bash -c 'uv run pyright || true'
         language: system
         pass_filenames: false
         always_run: true
 
       - id: import-linter
         name: import-linter architectural contracts
-        entry: poetry run lint-imports
+        entry: uv run lint-imports
         language: system
         pass_filenames: false
         always_run: true

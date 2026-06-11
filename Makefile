@@ -12,7 +12,7 @@ BMS_TOOLS_HOME     ?= $(HOME)/code/bms-tools
 PROLEAP_BRIDGE_JAR ?= $(CURDIR)/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
 
 E2E_ENV = CARDDEMO_HOME=$(CARDDEMO_HOME) BMS_TOOLS_HOME=$(BMS_TOOLS_HOME) PROLEAP_BRIDGE_JAR=$(PROLEAP_BRIDGE_JAR)
-PYTEST  = poetry run python -m pytest
+PYTEST  = uv run python -m pytest
 PYTEST_ARGS ?=
 
 .PHONY: help test test-cics jar jar-force fmt lint
@@ -47,7 +47,7 @@ test-cics: jar
 	$(E2E_ENV) $(PYTEST) tests/integration/cics/ $(PYTEST_ARGS)
 
 fmt:
-	poetry run python -m black .
+	uv run python -m black .
 
 lint:
-	poetry run lint-imports
+	uv run lint-imports

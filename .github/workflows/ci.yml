@@ -15,14 +15,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: |
-          pip install poetry
-          poetry install --only dev
+        run: uv sync --only-group dev
       - name: Check formatting with Black
-        run: poetry run black --check interpreter/ tests/
+        run: uv run black --check interpreter/ tests/
       - name: Check architectural contracts
-        run: poetry run lint-imports
+        run: uv run lint-imports
 
   test:
     name: Unit and integration tests
@@ -34,6 +33,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -43,13 +43,11 @@ jobs:
         working-directory: proleap-bridge
         run: ./build.sh
       - name: Install Python dependencies
-        run: |
-          pip install poetry
-          poetry install
+        run: uv sync
       - name: Run tests
         env:
           PROLEAP_BRIDGE_JAR: ${{ github.workspace }}/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
-        run: poetry run python -m pytest tests/ --cov --cov-report=term-missing --cov-fail-under=85 -q
+        run: uv run python -m pytest tests/ --cov --cov-report=term-missing --cov-fail-under=85 -q
 
   analysis:
     name: Code quality analysis
@@ -60,20 +58,19 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: |
-          pip install poetry
-          poetry install
+        run: uv sync
       - name: Radon cyclomatic complexity
-        run: poetry run radon cc interpreter/ -s -n C
+        run: uv run radon cc interpreter/ -s -n C
       - name: Radon maintainability index
-        run: poetry run radon mi interpreter/ -s -n B
+        run: uv run radon mi interpreter/ -s -n B
       - name: Pylint (report only)
-        run: poetry run pylint interpreter/ --exit-zero
+        run: uv run pylint interpreter/ --exit-zero
       - name: Pyright type check (report only)
-        run: poetry run pyright || true
+        run: uv run pyright || true
       - name: Pydeps (dry run)
-        run: poetry run pydeps interpreter --no-show --no-output -T png 2>&1 || true
+        run: uv run pydeps interpreter --no-show --no-output -T png 2>&1 || true
 
   bridge:
     name: ProLeap COBOL Bridge
