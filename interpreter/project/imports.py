@@ -7,9 +7,10 @@ a pure function that walks the tree-sitter AST to find import nodes.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any, Callable
+
+from lark import Lark, Transformer as LarkTransformer
 
 from interpreter.constants import Language
 from interpreter.parser import TreeSitterParserFactory
@@ -922,55 +923,97 @@ def _pascal_uses(node: Any, source: bytes, source_file: Path) -> list[ImportRef]
     return refs
 
 
-# ── COBOL import extraction (regex-based, no tree-sitter) ────────
+# ── COBOL import extraction (light grammar, no tree-sitter) ──────
+#
+# STRING is a first-class terminal so any COPY or CALL keyword inside a
+# quoted literal is consumed opaquely and never reaches the grammar rules.
+# Column-7 comment lines are stripped before the grammar runs because
+# %ignore /\s+/ erases positional whitespace, making column-7 anchoring
+# impossible inside the tokeniser.
+#
+# COPY_STMT / CALL_STMT are full-pattern terminals (keyword + horizontal
+# whitespace + name/literal) so a bare CALL without a string argument
+# (e.g. CALL WS-VAR) falls through to WORD noise instead of causing a
+# parse error.
 
-# COPY copybook-name [OF|IN library-name].
-_COBOL_COPY_RE = re.compile(
-    r"\bCOPY\s+([A-Za-z0-9][\w-]*)",
-    re.IGNORECASE,
-)
+_COBOL_IMPORT_GRAMMAR = r"""
+    start: item*
+    item: copy_stmt | call_stmt | noise
 
-# CALL 'program-name' or CALL "program-name"
-# Dynamic CALL (CALL variable-name) is intentionally not matched.
-_COBOL_CALL_RE = re.compile(
-    r'\bCALL\s+["\']([A-Za-z0-9][\w-]*)["\']',
-    re.IGNORECASE,
-)
+    copy_stmt: COPY_STMT
+    call_stmt: CALL_STMT
+    noise:     STRING | WORD | PUNCT
+
+    COPY_STMT.3: /COPY[ \t]+[A-Za-z0-9][\w-]*/i
+    CALL_STMT.3: /CALL[ \t]+(?:'[^']*'|"[^"]*")/i
+    STRING.2:    /'[^']*'|"[^"]*"/
+    WORD.1:      /[A-Za-z0-9][\w-]*/
+    PUNCT:       /[^\s'"A-Za-z0-9]+/
+
+    %ignore /\s+/
+"""
+
+_cobol_import_parser = Lark(_COBOL_IMPORT_GRAMMAR, parser="lalr")
+
+
+class _CobolImportTransformer(LarkTransformer):
+    def start(self, items: list) -> list[tuple[str, str]]:
+        return [item for item in items if item is not None]
+
+    def item(self, items: list) -> tuple[str, str] | None:
+        return items[0]
+
+    def copy_stmt(self, items: list) -> tuple[str, str]:
+        # COPY_STMT token is e.g. "COPY CUSTOMER-RECORD" — name is the last word
+        return ("COPY", str(items[0]).split()[-1])
+
+    def call_stmt(self, items: list) -> tuple[str, str]:
+        # CALL_STMT token is e.g. "CALL 'SUBPROG'" — extract between quotes
+        raw = str(items[0])
+        q = "'" if "'" in raw else '"'
+        return ("CALL", raw[raw.index(q) + 1 : raw.rindex(q)])
+
+    def noise(self, _: list) -> None:
+        return None
+
+
+def _strip_cobol_comment_lines(text: str) -> str:
+    """Remove COBOL comment lines before grammar tokenisation.
+
+    - Fixed-format: column-7 indicator '*' or '/' (index 6).
+    - Free-format: trimmed line starts with '*>'.
+
+    Must run before the grammar because %ignore /\\s+/ strips positional
+    whitespace, making column-7 anchoring impossible inside the tokeniser.
+    """
+    clean: list[str] = []
+    for line in text.splitlines():
+        if len(line) > 6 and line[6] in ("*", "/"):
+            continue
+        if line.lstrip().startswith("*>"):
+            continue
+        clean.append(line)
+    return "\n".join(clean)
 
 
 def _extract_cobol_imports(source: bytes, source_file: Path) -> list[ImportRef]:
-    """Extract COPY and CALL statements from COBOL source via regex.
+    """Extract COPY and CALL statements from COBOL source.
 
-    COBOL doesn't use tree-sitter — the ProLeap bridge handles parsing.
-    For import discovery, we use simple regex patterns on the raw source
-    to find COPY (copybook inclusion) and CALL (subprogram invocation).
+    Uses a light Lark grammar so keywords inside string literals are
+    consumed as opaque STRING tokens and never produce false imports.
     """
-    text = source.decode("utf-8", errors="replace")
-    refs: list[ImportRef] = []
-
-    # COPY statements → include kind (like #include)
-    for m in _COBOL_COPY_RE.finditer(text):
-        copybook_name = m.group(1)
-        refs.append(
-            ImportRef(
-                source_file=source_file,
-                module_path=copybook_name,
-                kind=ImportKind.INCLUDE,
-            )
+    text = _strip_cobol_comment_lines(source.decode("utf-8", errors="replace"))
+    pairs: list[tuple[str, str]] = _CobolImportTransformer().transform(
+        _cobol_import_parser.parse(text)
+    )
+    return [
+        ImportRef(
+            source_file=source_file,
+            module_path=name,
+            kind=ImportKind.INCLUDE if kind == "COPY" else ImportKind.REQUIRE,
         )
-
-    # CALL 'literal' statements → require kind (runtime linkage)
-    for m in _COBOL_CALL_RE.finditer(text):
-        program_name = m.group(1)
-        refs.append(
-            ImportRef(
-                source_file=source_file,
-                module_path=program_name,
-                kind=ImportKind.REQUIRE,
-            )
-        )
-
-    return refs
+        for kind, name in pairs
+    ]
 
 
 # ── Shared helpers ───────────────────────────────────────────────
