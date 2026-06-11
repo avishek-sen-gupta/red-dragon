@@ -250,8 +250,17 @@ public final class StatementSerializer {
                     operands.add(lengthOfNode);
                 } else if (sourceCall != null) {
                     operands.add(serializeMoveOperand(sourceCall));
+                } else if (vs instanceof LiteralValueStmt) {
+                    JsonObject dfh = serializeDfhrespLit((LiteralValueStmt) vs);
+                    if (dfh != null) {
+                        operands.add(dfh);
+                    } else {
+                        JsonObject srcObj = new JsonObject();
+                        srcObj.addProperty("name", extractValueStmtText(vs));
+                        operands.add(srcObj);
+                    }
                 } else {
-                    // Literal or complex expression source: plain name object, no ref mod
+                    // Complex expression source: plain name object, no ref mod
                     JsonObject srcObj = new JsonObject();
                     srcObj.addProperty("name", extractValueStmtText(vs));
                     operands.add(srcObj);
@@ -782,10 +791,18 @@ public final class StatementSerializer {
                             // WHEN ANY — leave condition absent (always-match handled downstream).
                             whenObj.addProperty("condition", "ANY");
                         } else if (cond.getValue() != null && cond.getValue().getValueStmt() != null) {
-                            // WHEN <value> against an EVALUATE subject — keep the value as text;
-                            // the Python side prefixes it with "subject = ".
-                            whenObj.addProperty("condition",
-                                    insertSpaces(extractValueStmtText(cond.getValue().getValueStmt())));
+                            ValueStmt whenVs = cond.getValue().getValueStmt();
+                            JsonObject dfh = serializeDfhrespFromVS(whenVs);
+                            if (dfh != null) {
+                                // WHEN DFHRESP(X) — emit structured node; Python lower_evaluate
+                                // detects kind=dfhresp and builds the subject comparison.
+                                whenObj.add("condition", dfh);
+                            } else {
+                                // WHEN <value> against an EVALUATE subject — keep the value as text;
+                                // the Python side prefixes it with "subject = ".
+                                whenObj.addProperty("condition",
+                                        insertSpaces(extractValueStmtText(whenVs)));
+                            }
                         } else if (cvs != null) {
                             whenObj.addProperty("condition", insertSpaces(extractValueStmtText(cvs)));
                         } else if (cond.getCtx() != null) {
@@ -1756,6 +1773,10 @@ public final class StatementSerializer {
             }
             return serializeMoveOperand(c);
         }
+        if (vs instanceof LiteralValueStmt) {
+            JsonObject dfh = serializeDfhrespLit((LiteralValueStmt) vs);
+            if (dfh != null) return dfh;
+        }
         // For literals and other operands, return as plain string
         return new JsonPrimitive(extractValueStmtText(vs));
     }
@@ -1839,6 +1860,7 @@ public final class StatementSerializer {
         }
         return null;
     }
+
 
     /**
      * Serializes a COBOL intrinsic FUNCTION call to a structured node:
@@ -2364,6 +2386,8 @@ public final class StatementSerializer {
             return serializeArithmeticExpr((ArithmeticValueStmt) vs);
         }
         if (vs instanceof LiteralValueStmt) {
+            JsonObject dfh = serializeDfhrespLit((LiteralValueStmt) vs);
+            if (dfh != null) return dfh;
             Literal lit = ((LiteralValueStmt) vs).getLiteral();
             if (lit != null && lit.getLiteralType() == Literal.LiteralType.FIGURATIVE_CONSTANT
                     && lit.getFigurativeConstant() != null) {
@@ -2380,6 +2404,41 @@ public final class StatementSerializer {
         String text = vs != null && vs.getCtx() != null ? vs.getCtx().getText()
                     : (b.getCtx() != null ? b.getCtx().getText() : "");
         return litNode(text);
+    }
+
+    /**
+     * If {@code lvs} carries a {@code CICS_DFH_RESP} literal, returns a structured
+     * {@code {"kind":"dfhresp","condition":"<NAME>"}} node; otherwise returns null.
+     * Used by serializeBasis, serializeArithSource, serializeMove, and serializeEvaluate
+     * so DFHRESP(X) is never emitted as a raw text string (red-dragon-kieo).
+     */
+    private static JsonObject serializeDfhrespLit(LiteralValueStmt lvs) {
+        if (lvs == null) return null;
+        Literal lit = lvs.getLiteral();
+        if (lit == null || lit.getLiteralType() != Literal.LiteralType.CICS_DFH_RESP) return null;
+        if (!(lit.getCtx() instanceof CobolParser.LiteralContext)) return null;
+        CobolParser.CicsDfhRespLiteralContext dfhCtx =
+            ((CobolParser.LiteralContext) lit.getCtx()).cicsDfhRespLiteral();
+        String cond = (dfhCtx != null && dfhCtx.cobolWord() != null)
+            ? dfhCtx.cobolWord().getText().toUpperCase() : "";
+        JsonObject obj = new JsonObject();
+        obj.addProperty("kind", "dfhresp");
+        obj.addProperty("condition", cond);
+        return obj;
+    }
+
+    /**
+     * Emit a dfhresp node when vs is a LiteralValueStmt with CICS_DFH_RESP type.
+     *
+     * With the grammar fix (literal before identifier in basis and evaluateValue),
+     * DFHRESP(X) always parses as LiteralValueStmt in every context (red-dragon-kieo).
+     * Returns null when vs is not a DFHRESP literal.
+     */
+    private static JsonObject serializeDfhrespFromVS(ValueStmt vs) {
+        if (vs instanceof LiteralValueStmt) {
+            return serializeDfhrespLit((LiteralValueStmt) vs);
+        }
+        return null;
     }
 
     // ── Grammar-context arithmetic serializers (for referenceModifier) ──────────

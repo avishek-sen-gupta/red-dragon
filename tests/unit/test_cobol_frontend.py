@@ -9,6 +9,7 @@ from interpreter.cobol.asg_types import (
     CobolSection,
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
+from interpreter.cobol.cobol_parser import CobolParser
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import InstructionBase, AllocRegion, Const
 from interpreter.cobol.cobol_statements import (
@@ -59,13 +60,13 @@ from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 
-class _FakeParser:
+class _FakeParser(CobolParser):
     """Fake parser that returns a pre-built CobolASG."""
 
     def __init__(self, asg: CobolASG):
         self._asg = asg
 
-    def parse(self, source: bytes) -> CobolASG:
+    def parse(self, source: bytes, preprocessor=None) -> CobolASG:  # type: ignore[override]
         return self._asg
 
 
@@ -2401,11 +2402,11 @@ class TestDataLayout:
 class TestMoveCorrespondingLowering:
     """Tests for MOVE CORRESPONDING statement lowering."""
 
-    class _FakeParserWithStmts:
+    class _FakeParserWithStmts(CobolParser):
         def __init__(self, asg: CobolASG):
             self._asg = asg
 
-        def parse(self, source: bytes) -> CobolASG:
+        def parse(self, source: bytes, preprocessor=None) -> CobolASG:  # type: ignore[override]
             return self._asg
 
     def _lower_with_field_and_stmts(
