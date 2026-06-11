@@ -12,19 +12,31 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Callable
 
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.subprocess_runner import SubprocessRunner, CobolParseError
 
 logger = logging.getLogger(__name__)
 
+_IDENTITY: Callable[[dict], dict] = lambda d: d  # noqa: E731
+
 
 class CobolParser(ABC):
     """Abstract COBOL parser interface."""
 
     @abstractmethod
-    def parse(self, source: bytes) -> CobolASG:
-        """Parse COBOL source bytes into an ASG."""
+    def parse(
+        self,
+        source: bytes,
+        preprocessor: Callable[[dict], dict] = _IDENTITY,
+    ) -> CobolASG:
+        """Parse COBOL source bytes into an ASG.
+
+        *preprocessor* is called on the raw bridge JSON dict before
+        :func:`CobolASG.from_dict` runs — used by the CICS strategy to
+        resolve CICS-specific expression nodes into generic ones.
+        """
         ...
 
 
@@ -41,7 +53,11 @@ class ProLeapCobolParser(CobolParser):
         self._bridge_jar = bridge_jar
         self._copybook_dirs: list[Path] = list(copybook_dirs or [])
 
-    def parse(self, source: bytes) -> CobolASG:
+    def parse(
+        self,
+        source: bytes,
+        preprocessor: Callable[[dict], dict] = _IDENTITY,
+    ) -> CobolASG:
         logger.info("Parsing COBOL source (%d bytes) via ProLeap bridge", len(source))
         command = ["java", "-jar", self._bridge_jar]
         for d in self._copybook_dirs:
@@ -50,7 +66,8 @@ class ProLeapCobolParser(CobolParser):
             json_str = self._runner.run(command, source.decode("utf-8"))
         except CobolParseError as e:
             raise self._enrich_copybook_error(e) from e
-        data = json.loads(json_str)
+        data: dict = json.loads(json_str)
+        data = preprocessor(data)
         asg = CobolASG.from_dict(data)
         logger.info(
             "Parsed ASG: %d data fields, %d sections, %d paragraphs",

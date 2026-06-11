@@ -170,7 +170,10 @@ class CobolFrontend(Frontend):
         resolved_imports: dict[str, PathName] | None = None,
     ) -> list[InstructionBase]:
         """Lower COBOL source to IR via the ProLeap bridge."""
-        asg = self._parser.parse(source)
+        asg = self._parser.parse(
+            source,
+            preprocessor=self._exec_cics_strategy.preprocess_program_dict,
+        )
         sectioned = build_sectioned_layout(asg)
         self._program_id = asg.program_id or "MAIN"
         self._layout = sectioned.working_storage
