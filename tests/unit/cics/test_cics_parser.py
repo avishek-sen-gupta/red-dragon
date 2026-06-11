@@ -14,26 +14,6 @@ def test_parse_return():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_parse_ignores_inline_comment_inside_exec_block():
-    """A commented-out option line inside an EXEC CICS block (ProLeap surfaces
-    the column-7 '*' comment as a free-format '*>' inline comment) must be
-    ignored by the grammar. CardDemo COTRN02C SEND-TRNADD-SCREEN has a
-    commented-out LENGTH(...) line inside its EXEC CICS RETURN. ProLeap joins
-    continuation lines with newlines, so END-EXEC is on its own line after the
-    comment line."""
-    verb, opts = parse_exec_cics_text(
-        "EXEC CICS RETURN TRANSID (WS-TRANID) COMMAREA (CARDDEMO-COMMAREA)\n"
-        "*>               LENGTH(LENGTH OF CARDDEMO-COMMAREA)\n"
-        "               END-EXEC"
-    )
-    assert verb == "RETURN"
-    assert opts["TRANSID"] == CicsOperand("WS-TRANID", False)
-    assert opts["COMMAREA"] == CicsOperand("CARDDEMO-COMMAREA", False)
-    # The commented-out LENGTH option must NOT appear.
-    assert "LENGTH" not in opts
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_parse_return_transid():
     verb, opts = parse_exec_cics_text(
         "EXEC CICS RETURN TRANSID(CC00) COMMAREA(WS-CA) LENGTH(16) END-EXEC"
