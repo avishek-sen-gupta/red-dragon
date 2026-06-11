@@ -1,4 +1,4 @@
-"""FCT (File Control Table) config — maps dataset names to file paths and metadata."""
+"""FCT (File Control Table) config — dataset schema metadata only (no paths)."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ from pathlib import Path
 
 @dataclass
 class DatasetConfig:
-    path: Path
     record_length: int
+    # Filename within the data directory (for seed_vsam / load_vsam_seed).
+    file: str = ""
     # Offset (bytes) of the key within each record. 0 for a primary KSDS whose
     # key is at the record start; non-zero for alternate-index paths where the
     # key field sits inside the record (e.g. CARD-XREF ACCT-ID at offset 25).
@@ -22,8 +23,8 @@ class DatasetConfig:
     @classmethod
     def from_dict(cls, data: dict) -> DatasetConfig:
         return cls(
-            path=Path(data["path"]),
             record_length=int(data["record_length"]),
+            file=str(data.get("file", "")),
             key_offset=int(data.get("key_offset", 0)),
             key_length=int(data.get("key_length", 0)),
         )

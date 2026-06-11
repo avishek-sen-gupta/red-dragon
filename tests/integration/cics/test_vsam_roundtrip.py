@@ -8,7 +8,6 @@ field into the COMMAREA, and RETURNs — asserting the read-back bytes round-tri
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -73,11 +72,10 @@ COBOL_VSAM = """\
 
 
 def _engine() -> VsamEngine:
-    td = tempfile.mkdtemp()
-    p = Path(td) / "testds.txt"
-    p.write_bytes(b"")
-    config = FctConfig(datasets={"TESTDS": DatasetConfig(path=p, record_length=10)})
-    engine = VsamEngine(config)
+    from interpreter.cics.vsam.backend import InMemoryBackend
+
+    config = FctConfig(datasets={"TESTDS": DatasetConfig(record_length=10)})
+    engine = VsamEngine(config, backend=InMemoryBackend())
     engine.load_all()
     return engine
 
