@@ -84,6 +84,55 @@ class TestCobolCallExtraction:
         assert ImportKind.REQUIRE in kinds
 
 
+class TestCobolImportFalsePositiveGuards:
+    """False-positive suppression: comments and string literals must not yield imports."""
+
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
+    def test_fixed_format_star_comment_line_not_matched(self):
+        """Column-7 '*' indicator marks a comment — COPY inside must be ignored."""
+        source = b"      * COPY PHANTOM.\n       COPY REAL-REC.\n"
+        refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
+        modules = {r.module_path for r in refs}
+        assert "PHANTOM" not in modules
+        assert "REAL-REC" in modules
+
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
+    def test_fixed_format_slash_comment_line_not_matched(self):
+        """Column-7 '/' (page-eject comment) — COPY inside must be ignored."""
+        source = b"      / COPY PHANTOM.\n       COPY REAL-REC.\n"
+        refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
+        modules = {r.module_path for r in refs}
+        assert "PHANTOM" not in modules
+        assert "REAL-REC" in modules
+
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
+    def test_free_format_inline_comment_line_not_matched(self):
+        """*> comment lines must be ignored."""
+        source = b"*> COPY PHANTOM.\n       COPY REAL-REC.\n"
+        refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
+        modules = {r.module_path for r in refs}
+        assert "PHANTOM" not in modules
+        assert "REAL-REC" in modules
+
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
+    def test_copy_inside_string_literal_not_matched(self):
+        """'COPY FOO' inside a string literal must not yield an import."""
+        source = b"       MOVE 'COPY PHANTOM' TO WS-MSG.\n       COPY REAL-REC.\n"
+        refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
+        modules = {r.module_path for r in refs}
+        assert "PHANTOM" not in modules
+        assert "REAL-REC" in modules
+
+    @covers(CobolFeature.MULTI_FILE_IMPORTS)
+    def test_call_inside_string_literal_not_matched(self):
+        """CALL target embedded in a larger string literal must not yield an import."""
+        source = b"       MOVE \"CALL 'PHANTOM'\" TO WS-MSG.\n       CALL 'REAL'.\n"
+        refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
+        modules = {r.module_path for r in refs}
+        assert "PHANTOM" not in modules
+        assert "REAL" in modules
+
+
 class TestCobolResolver:
     """Test COBOL import resolution with real tmp directories."""
 
