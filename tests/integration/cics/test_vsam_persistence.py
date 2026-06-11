@@ -23,6 +23,8 @@ the ProLeap JAR are present). Run explicitly:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from interpreter.cics.vsam.backend import FileBackend
@@ -30,7 +32,23 @@ from interpreter.cics.vsam.format import read_flat_file
 from tests.covers import covers, NotLanguageFeature
 from tests.integration.cics.test_carddemo_signon_real import (
     _ACCT_ID,
+    _CARDDEMO_HOME,
     _NEW_ACCT_STATUS,
+    _NEW_GROUP_ID,
+    _NEW_CREDIT_LIMIT,
+    _NEW_CASH_LIMIT,
+    _NEW_CURR_BAL,
+    _NEW_CYC_CREDIT,
+    _NEW_CYC_DEBIT,
+    _NEW_OPEN_YEAR,
+    _NEW_OPEN_MON,
+    _NEW_OPEN_DAY,
+    _NEW_EXP_YEAR,
+    _NEW_EXP_MON,
+    _NEW_EXP_DAY,
+    _NEW_REISSUE_YEAR,
+    _NEW_REISSUE_MON,
+    _NEW_REISSUE_DAY,
     _EXPECTED_NEW_TRAN_ID,
     _ADD_TYPE_CD,
     _ADD_CAT_CD,
@@ -39,7 +57,9 @@ from tests.integration.cics.test_carddemo_signon_real import (
     _TRAN_RECLN,
     _drive_rewrite,
     _drive_transaction_add,
+    _usrsec_engine,
 )
+from tests.integration.cobol_helpers import JAR_PATH
 
 # Mandatory locally, skipped in CI — via the shared carddemo_e2e marker
 # (see tests/integration/cics/conftest.py).
@@ -127,3 +147,98 @@ def test_transaction_add_write_persists_to_flat_file(tmp_path):
     assert match[18:22].decode("cp037") == _ADD_CAT_CD
     assert match[22:32].decode("cp037").rstrip() == _ADD_SOURCE
     assert match[32:132].decode("cp037").rstrip() == _ADD_DESC
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_account_update_dump_before_after(tmp_path):
+    """Dump ACCTDAT before and after the account-update REWRITE.
+
+    Reads the seeded ACCOUNT-RECORD, prints a human-readable block dump, drives
+    the update flow (status 'Y'->'N'), then prints the block dump of the same
+    record read back from the FileBackend-persisted flat file.
+    """
+    from interpreter.cics.vsam.dump import load_record_layout, render_block
+
+    assert _CARDDEMO_HOME, "CARDDEMO_HOME must be set for this test"
+    app = Path(_CARDDEMO_HOME)
+    layout = load_record_layout(
+        app / "cpy" / "CVACT01Y.cpy",
+        "ACCOUNT-RECORD",
+        JAR_PATH,
+        [app / "cpy"],
+    )
+
+    acct_key = _ACCT_ID.encode("cp037")
+
+    engine_before = _usrsec_engine()
+    record_before, _ = engine_before.read("ACCTDAT", acct_key, 11)
+    assert record_before is not None, "seeded ACCTDAT record not found before update"
+
+    print("\n=== ACCTDAT before update ===")
+    print(render_block(layout, [record_before]))
+
+    engine_after = _drive_rewrite(
+        tmp_path,
+        # Account group
+        AADDGRP=_NEW_GROUP_ID,
+        # Numeric fields (display format accepted by NUMVAL-C)
+        ACRDLIM=_NEW_CREDIT_LIMIT,
+        ACSHLIM=_NEW_CASH_LIMIT,
+        ACURBAL=_NEW_CURR_BAL,
+        ACRCYCR=_NEW_CYC_CREDIT,
+        ACRCYDB=_NEW_CYC_DEBIT,
+        # Dates: COACTUPC receives YEAR/MON/DAY as separate BMS fields and
+        # STRINGs them as "YYYY-MM-DD" into the X(10) date slot.
+        OPNYEAR=_NEW_OPEN_YEAR,
+        OPNMON=_NEW_OPEN_MON,
+        OPNDAY=_NEW_OPEN_DAY,
+        EXPYEAR=_NEW_EXP_YEAR,
+        EXPMON=_NEW_EXP_MON,
+        EXPDAY=_NEW_EXP_DAY,
+        RISYEAR=_NEW_REISSUE_YEAR,
+        RISMON=_NEW_REISSUE_MON,
+        RISDAY=_NEW_REISSUE_DAY,
+    )
+    record_after, _ = engine_after.read("ACCTDAT", acct_key, 11)
+    assert record_after is not None, "ACCTDAT record missing from engine after update"
+
+    print("\n=== ACCTDAT after update ===")
+    print(render_block(layout, [record_after]))
+
+    # CVACT01Y offsets (confirmed from layout):
+    # @11  ACCT-ACTIVE-STATUS X(1)
+    # @48  ACCT-OPEN-DATE X(10)
+    # @58  ACCT-EXPIRAION-DATE X(10)
+    # @68  ACCT-REISSUE-DATE X(10)
+    # @102 ACCT-ADDR-ZIP X(10)  — not screen-editable; COACTUPC carries from old record
+    # @112 ACCT-GROUP-ID X(10)
+
+    status_after = record_after[_ACCT_STATUS_OFFSET : _ACCT_STATUS_OFFSET + 1].decode(
+        "cp037"
+    )
+    assert status_after == _NEW_ACCT_STATUS
+
+    open_date_after = record_after[48:58].decode("cp037")
+    assert (
+        open_date_after == f"{_NEW_OPEN_YEAR}-{_NEW_OPEN_MON}-{_NEW_OPEN_DAY}"
+    ), f"ACCT-OPEN-DATE not updated: got {open_date_after!r}"
+
+    exp_date_after = record_after[58:68].decode("cp037")
+    assert (
+        exp_date_after == f"{_NEW_EXP_YEAR}-{_NEW_EXP_MON}-{_NEW_EXP_DAY}"
+    ), f"ACCT-EXPIRAION-DATE not updated: got {exp_date_after!r}"
+
+    reissue_date_after = record_after[68:78].decode("cp037")
+    assert reissue_date_after == (
+        f"{_NEW_REISSUE_YEAR}-{_NEW_REISSUE_MON}-{_NEW_REISSUE_DAY}"
+    ), f"ACCT-REISSUE-DATE not updated: got {reissue_date_after!r}"
+
+    addr_zip_after = record_after[102:112].decode("cp037").rstrip()
+    assert (
+        addr_zip_after == "12345"
+    ), f"ACCT-ADDR-ZIP should be carried from seeded record, got {addr_zip_after!r}"
+
+    group_id_after = record_after[112:122].decode("cp037").rstrip()
+    assert (
+        group_id_after == _NEW_GROUP_ID
+    ), f"ACCT-GROUP-ID not updated: expected {_NEW_GROUP_ID!r}, got {group_id_after!r}"
