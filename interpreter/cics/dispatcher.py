@@ -44,6 +44,14 @@ def run_cics(
     from interpreter.vm.vm_types import VMState, StackFrame
     from interpreter.address import Address
 
+    _prog_label = getattr(program, "entry_func_label", None)
+    logger.info(
+        "run_cics: program=%s transid=%s commarea=%d B",
+        _prog_label or "?",
+        context.transid,
+        len(context.commarea),
+    )
+
     context_holder[0] = context
     result_holder[0] = None
 
@@ -89,9 +97,13 @@ def run_cics(
         initial_vm=initial_vm,
     )
 
-    if result_holder[0] is not None:
-        return result_holder[0]
-    return DispatchResult(kind=DispatchKind.RETURN)
+    result = (
+        result_holder[0]
+        if result_holder[0] is not None
+        else DispatchResult(kind=DispatchKind.RETURN)
+    )
+    logger.info("run_cics done: %s", result.kind.name)
+    return result
 
 
 RunCicsFn = Callable[
@@ -246,6 +258,9 @@ class CicsRegion:
         max_steps: int | None = None,
     ) -> DispatchResult:
         """Begin a task on ``entry_transid`` and dispatch its first program."""
+        logger.info(
+            "region.start: transid=%s commarea=%d B", entry_transid, len(commarea)
+        )
         self._transid = entry_transid
         self._commarea = commarea
         self._program = self._program_cache[self._transid_to_program[entry_transid]]
@@ -261,6 +276,14 @@ class CicsRegion:
         """Dispatch the CURRENT (program, transid, commarea). Requires not done."""
         if self._done:
             raise RuntimeError("step() called on a region that has terminated")
+        _nfields = len(input_event.fields) if input_event is not None else 0
+        _eibaid = repr(input_event.eibaid) if input_event is not None else "(none)"
+        logger.info(
+            "region.step: transid=%s eibaid=%s fields=%d",
+            self._transid,
+            _eibaid,
+            _nfields,
+        )
         return self._dispatch(input_event=input_event, max_steps=max_steps)
 
     def _dispatch(
@@ -291,12 +314,18 @@ class CicsRegion:
             result, self._transid, self._program_cache, self._transid_to_program
         )
         if isinstance(routing, DispatchResult):
+            logger.info("dispatch → terminal %s", routing.kind.name)
             self._done = True
         else:
             self._transid, self._program, next_commarea = routing
             if len(next_commarea) < self._min_commarea_len:
                 next_commarea = next_commarea.ljust(self._min_commarea_len, b"\x00")
             self._commarea = next_commarea
+            logger.info(
+                "dispatch → transid=%s commarea=%d B",
+                self._transid,
+                len(self._commarea),
+            )
         return result
 
 

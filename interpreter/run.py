@@ -342,6 +342,7 @@ def execute_cfg(
         Tuple of (final VMState, ExecutionStats).
     """
     entry = _find_entry_point(cfg, entry_point)
+    logger.debug("execute_cfg: entry=%s max_steps=%d", entry, config.max_steps)
 
     if vm is None:
         vm = VMState()
@@ -467,6 +468,9 @@ def execute_cfg(
         closures_captured=len(vm.closures),
     )
 
+    logger.debug(
+        "execute_cfg done: %d steps, %d LLM calls", stats.steps, stats.llm_calls
+    )
     if config.verbose:
         logger.info("(%d steps, %d LLM calls)", stats.steps, stats.llm_calls)
 
