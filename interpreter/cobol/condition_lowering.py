@@ -658,7 +658,6 @@ def _lower_condition_str(
     parts = condition.split()
 
     if len(parts) == 1 and condition_index.has_condition(parts[0]):
-        logger.debug("Expanding condition name: %s", parts[0])
         return _expand_condition_name(ctx, parts[0], condition_index, materialised)
 
     if len(parts) >= 3:

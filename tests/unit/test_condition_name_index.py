@@ -130,6 +130,41 @@ class TestBuildConditionIndex:
         assert index.entries == {}
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
+    def test_group_level_conditions_are_indexed(self):
+        """Group nodes (no PIC, has children) can carry 88-level conditions.
+
+        Example: 10 WS-PHONE-FLGS. / 88 WS-PHONE-IS-VALID VALUE LOW-VALUES.
+        The group has no PIC so it is a DataLayout node, not a FieldLayout leaf.
+        build_condition_index must still find and index these conditions.
+        """
+        child_fl = FieldLayout(
+            name="WS-PHONE-AREA",
+            type_descriptor=CobolTypeDescriptor(
+                category=CobolDataCategory.ALPHANUMERIC, total_digits=3
+            ),
+            offset=0,
+            byte_length=3,
+        )
+        group_layout = DataLayout(
+            fields={"WS-PHONE-AREA": child_fl},
+            groups={},
+            offset=0,
+            total_bytes=3,
+            conditions=[
+                ConditionName(
+                    "WS-PHONE-IS-VALID", values=[ConditionValue("LOW-VALUES")]
+                ),
+                ConditionName("WS-PHONE-IS-INVALID", values=[ConditionValue("000")]),
+            ],
+        )
+        layout = DataLayout(fields={}, groups={"WS-PHONE-FLGS": group_layout})
+        index = build_condition_index(layout)
+        assert index.has_condition("WS-PHONE-IS-VALID")
+        assert index.has_condition("WS-PHONE-IS-INVALID")
+        assert index.lookup("WS-PHONE-IS-VALID").parent_field_name == "WS-PHONE-FLGS"
+        assert index.lookup("WS-PHONE-IS-INVALID").parent_field_name == "WS-PHONE-FLGS"
+
+    @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_preserves_multi_values(self):
         fields = {
             "WS-CODE": _make_field_layout(
