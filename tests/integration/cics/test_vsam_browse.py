@@ -9,7 +9,6 @@ read-back bytes round-trip.
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -22,6 +21,7 @@ from interpreter.cics.preprocessor import apply_cics_prepass
 from interpreter.cics.strategy import CicsLoweringStrategy
 from interpreter.cics.types import CicsContext, DispatchKind
 from interpreter.cics.dispatcher import run_cics
+from interpreter.cics.vsam.backend import InMemoryBackend
 from interpreter.cics.vsam.engine import VsamEngine
 from interpreter.cics.vsam.fct import FctConfig, DatasetConfig
 from tests.covers import covers
@@ -86,11 +86,8 @@ COBOL_BROWSE = """\
 
 
 def _engine() -> VsamEngine:
-    td = tempfile.mkdtemp()
-    p = Path(td) / "testds.txt"
-    p.write_bytes(b"")
-    config = FctConfig(datasets={"TESTDS": DatasetConfig(path=p, record_length=10)})
-    engine = VsamEngine(config)
+    config = FctConfig(datasets={"TESTDS": DatasetConfig(record_length=10)})
+    engine = VsamEngine(config, backend=InMemoryBackend())
     engine.load_all()
     return engine
 
