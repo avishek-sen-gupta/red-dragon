@@ -18,7 +18,10 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     from interpreter.cobol.cobol_expression import ExprNode
 
-from interpreter.cics.strategy import CatchAllLoweringStrategy, ExecCicsStrategy
+from interpreter.cobol.exec_cics_strategy import (
+    CatchAllLoweringStrategy,
+    ExecCicsStrategy,
+)
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor

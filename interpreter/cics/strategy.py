@@ -1,9 +1,18 @@
-"""ExecCicsStrategy protocol and null-object implementation."""
+"""ExecCicsStrategy protocol and null-object implementation.
+
+The protocol and no-op now live in interpreter.cobol.exec_cics_strategy;
+re-exported here for backward compatibility.
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
+
+from interpreter.cobol.exec_cics_strategy import (  # noqa: F401
+    CatchAllLoweringStrategy,
+    ExecCicsStrategy,
+)
 
 from interpreter.cics.builtins.system import (
     make_init_eib_builtin,
@@ -329,35 +338,6 @@ def _register(table: dict, name: str, fn: object) -> None:  # type: ignore[type-
     if key in table:
         logger.warning("Builtins.TABLE already contains %s — overwriting.", key)
     table[key] = fn
-
-
-class ExecCicsStrategy(Protocol):
-    """Injectable strategy for lowering EXEC CICS statements to IR."""
-
-    def preprocess_program_dict(self, data: dict) -> dict:  # type: ignore[return]
-        """Pre-process the raw bridge JSON dict before generic COBOL parsing.
-
-        Default no-op. Override to transform CICS-specific expression nodes
-        (e.g. DFHRESP) into generic ones before ``CobolASG.from_dict`` runs.
-        """
-        return data
-
-    def on_procedure_entry(
-        self,
-        ctx: "EmitContext",
-        materialised: "MaterialisedSectionedLayout",
-    ) -> None:
-        """Called once at the start of the procedure division."""
-        ...
-
-    def lower(
-        self,
-        ctx: "EmitContext",
-        stmt: "ExecCicsStatement",
-        materialised: "MaterialisedSectionedLayout",
-    ) -> None:
-        """Lower one EXEC CICS statement to IR."""
-        ...
 
 
 class CicsLoweringStrategy:
@@ -809,25 +789,3 @@ class CicsLoweringStrategy:
         logger.warning(
             "CicsLoweringStrategy: unimplemented verb %r — no IR emitted", verb
         )
-
-
-class CatchAllLoweringStrategy:
-    """Default no-op strategy. Logs a warning for every EXEC CICS statement."""
-
-    def preprocess_program_dict(self, data: dict) -> dict:
-        return data
-
-    def on_procedure_entry(
-        self,
-        ctx: "EmitContext",
-        materialised: "MaterialisedSectionedLayout",
-    ) -> None:
-        logger.debug("on_procedure_entry: no-op (CatchAllLoweringStrategy)")
-
-    def lower(
-        self,
-        ctx: "EmitContext",
-        stmt: "ExecCicsStatement",
-        materialised: "MaterialisedSectionedLayout",
-    ) -> None:
-        logger.warning("EXEC CICS %s ignored (no CICS strategy injected)", stmt.verb)
