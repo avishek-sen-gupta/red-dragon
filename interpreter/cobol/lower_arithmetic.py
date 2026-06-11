@@ -41,6 +41,7 @@ from interpreter.cobol.cobol_statements import (
     WhenStatement,
 )
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from interpreter.cobol.cobol_expression import expr_from_dict
 from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext
@@ -1047,9 +1048,41 @@ def lower_evaluate(
     for child in stmt.children:
         if isinstance(child, WhenStatement) and child.condition:
             if isinstance(child.condition, dict):
-                # Full conditional expression (EVALUATE TRUE WHEN ...): route through
-                # the same structured lowering the IF path uses.
-                cond_reg = ctx.lower_condition(child.condition, materialised)
+                cond_dict = child.condition
+                if "kind" in cond_dict:
+                    # Expression-kind dict (e.g. lit, ref, binop) — the CICS prepass
+                    # has already resolved DFHRESP nodes to lit nodes before we get here.
+                    # Compare the evaluated value against the EVALUATE subject.
+                    val_reg = lower_expr_node(
+                        ctx, expr_from_dict(cond_dict), materialised
+                    )
+                    if stmt.subject and stmt.subject.upper() != "TRUE":
+                        if ctx.has_field(stmt.subject, materialised):
+                            subject_ref, subject_rr = ctx.resolve_field_ref(
+                                stmt.subject, materialised
+                            )
+                            subject_reg = ctx.emit_decode_field(
+                                subject_rr, subject_ref.fl, subject_ref.offset_reg
+                            )
+                        else:
+                            subject_reg = ctx.const_to_reg(
+                                ctx.parse_literal(stmt.subject)
+                            )
+                        cond_reg = ctx.fresh_reg()
+                        ctx.emit_inst(
+                            Binop(
+                                result_reg=cond_reg,
+                                operator=resolve_binop("=="),
+                                left=Register(str(subject_reg)),
+                                right=Register(str(val_reg)),
+                            )
+                        )
+                    else:
+                        cond_reg = val_reg
+                else:
+                    # Full conditional expression (EVALUATE TRUE WHEN ...): route through
+                    # the same structured lowering the IF path uses.
+                    cond_reg = ctx.lower_condition(cond_dict, materialised)
             else:
                 # WHEN <value> against an EVALUATE subject — build "subject = value".
                 if stmt.subject and stmt.subject.upper() != "TRUE":

@@ -25,19 +25,20 @@ from interpreter.vm.executor import (
     HandlerContext,
     _default_handler_context,
 )
+from interpreter.cobol.cobol_parser import CobolParser
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "cobol"
 
 
-class _FakeParser:
+class _FakeParser(CobolParser):
     """Returns a pre-built CobolASG."""
 
     def __init__(self, asg: CobolASG):
         self._asg = asg
 
-    def parse(self, source: bytes) -> CobolASG:
+    def parse(self, source: bytes, preprocessor=None) -> CobolASG:  # type: ignore[override]
         return self._asg
 
 

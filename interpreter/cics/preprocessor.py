@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +74,9 @@ _DFHRESP_TABLE: dict[str, int] = {
 # condition silently masquerade as the normal path.
 _DFHRESP_UNKNOWN = 9999
 
-_WS_SECTION_RE = re.compile(r"^(\s*)WORKING-STORAGE\s+SECTION\s*\.", re.IGNORECASE)
-_DFHRESP_RE = re.compile(r"DFHRESP\((\w+)\)", re.IGNORECASE)
+import re as _re
+
+_WS_SECTION_RE = _re.compile(r"^(\s*)WORKING-STORAGE\s+SECTION\s*\.", _re.IGNORECASE)
 
 # 7 spaces = Area A (column 8); valid for COPY, matches IBM CICS translator output
 _DFHEIBLK_COPY = "       COPY DFHEIBLK."
@@ -96,26 +96,10 @@ def inject_dfheiblk(source: str) -> str:
     return "".join(result)
 
 
-def substitute_dfhresp(source: str) -> str:
-    """Replace DFHRESP(name) with its numeric response code."""
-
-    def _replace(m: re.Match) -> str:
-        name = m.group(1).upper()
-        if name not in _DFHRESP_TABLE:
-            logger.warning(
-                "Unknown DFHRESP condition %r — substituting sentinel %d "
-                "(will never match a real response)",
-                name,
-                _DFHRESP_UNKNOWN,
-            )
-            return str(_DFHRESP_UNKNOWN)
-        return str(_DFHRESP_TABLE[name])
-
-    return _DFHRESP_RE.sub(_replace, source)
-
-
 def apply_cics_prepass(source: str) -> str:
-    """Apply all CICS pre-pass transformations to COBOL source."""
-    source = inject_dfheiblk(source)
-    source = substitute_dfhresp(source)
-    return source
+    """Apply all CICS pre-pass transformations to COBOL source.
+
+    DFHRESP(condition) literals are now lowered structurally by the ProLeap
+    bridge (red-dragon-kieo) — no text substitution needed here.
+    """
+    return inject_dfheiblk(source)
