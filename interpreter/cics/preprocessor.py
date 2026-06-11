@@ -74,12 +74,15 @@ _DFHRESP_TABLE: dict[str, int] = {
 # condition silently masquerade as the normal path.
 _DFHRESP_UNKNOWN = 9999
 
-import re as _re
-
-_WS_SECTION_RE = _re.compile(r"^(\s*)WORKING-STORAGE\s+SECTION\s*\.", _re.IGNORECASE)
-
 # 7 spaces = Area A (column 8); valid for COPY, matches IBM CICS translator output
 _DFHEIBLK_COPY = "       COPY DFHEIBLK."
+
+
+def _is_ws_section(line: str) -> bool:
+    tokens = line.strip().upper().split()
+    return (
+        len(tokens) >= 2 and tokens[0] == "WORKING-STORAGE" and tokens[1] == "SECTION."
+    )
 
 
 def inject_dfheiblk(source: str) -> str:
@@ -89,7 +92,7 @@ def inject_dfheiblk(source: str) -> str:
     injected = False
     for line in lines:
         result.append(line)
-        if not injected and _WS_SECTION_RE.match(line):
+        if not injected and _is_ws_section(line):
             ending = "\r\n" if line.endswith("\r\n") else "\n"
             result.append(_DFHEIBLK_COPY + ending)
             injected = True
