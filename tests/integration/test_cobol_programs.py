@@ -6369,6 +6369,78 @@ class TestFigurativeValueFill:
         region = _first_region(vm)
         assert _decode_alpha(region, 0, 6) == "SPACE "
 
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_value_zeros_on_zoned_decimal_initialises_to_zero(self):
+        """01 WS-N PIC 9(4) VALUE ZEROS initialises field to numeric 0, not 'ZERO'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FIGVZ.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-N PIC 9(4) VALUE ZEROS.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 0
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_value_zeros_on_comp3_initialises_to_zero(self):
+        """01 WS-N PIC 9(5) COMP-3 VALUE ZEROS initialises field to numeric 0."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FIGVC3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-N PIC 9(5) COMP-3 VALUE ZEROS.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_comp3(region, 0, 3) == 0
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_value_low_values_on_alphanumeric_fills_null_bytes(self):
+        """01 WS-X PIC X(4) VALUE LOW-VALUES initialises field to 4 null bytes."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FIGLV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC X(4) VALUE LOW-VALUES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert list(region[0:4]) == [0x00, 0x00, 0x00, 0x00]
+
+    @covers(CobolFeature.VALUE_CLAUSE)
+    def test_value_high_values_on_alphanumeric_fills_xff_bytes(self):
+        """01 WS-X PIC X(4) VALUE HIGH-VALUES initialises field to 4 0xFF bytes."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FIGHV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC X(4) VALUE HIGH-VALUES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert list(region[0:4]) == [0xFF, 0xFF, 0xFF, 0xFF]
+
 
 class TestClassConditionRefMod:
     """A class condition on a reference-modified operand tests only the slice,

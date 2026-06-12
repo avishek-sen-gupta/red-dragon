@@ -28,7 +28,10 @@ from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
-from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
+from interpreter.cobol.figurative_constants import (
+    COBOL_FIGURATIVE_CONSTANTS,
+    COBOL_RAW_FIGURATIVE_BYTES,
+)
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cobol.field_resolution import ResolvedFieldRef
@@ -359,7 +362,21 @@ class EmitContext:
             # Gated on value_is_figurative so a quoted literal VALUE 'SPACE' is
             # left verbatim. red-dragon-zuhj: surfaced via INSPECT CONVERTING.
             if fl.value_is_figurative and value in COBOL_FIGURATIVE_CONSTANTS:
-                value = COBOL_FIGURATIVE_CONSTANTS[value] * fl.byte_length
+                if value in COBOL_RAW_FIGURATIVE_BYTES:
+                    result = self.fresh_reg()
+                    self.emit_inst(
+                        Const(
+                            result_reg=result,
+                            value=[COBOL_RAW_FIGURATIVE_BYTES[value]] * fl.byte_length,
+                        )
+                    )
+                    return result
+                return self.emit_encode_alphanumeric(
+                    fl.name,
+                    COBOL_FIGURATIVE_CONSTANTS[value] * fl.byte_length,
+                    td.total_digits,
+                    justified_right=td.justified_right,
+                )
             return self.emit_encode_alphanumeric(
                 fl.name, value, td.total_digits, justified_right=td.justified_right
             )
