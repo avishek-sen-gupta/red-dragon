@@ -637,6 +637,14 @@ def _lower_expr_dict(
         if ctx.has_field(name, materialised):
             ref, rr = ctx.resolve_field_ref(name, materialised)
             return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+        # The bridge sometimes tags a numeric literal as a ref (e.g. an
+        # abbreviated-condition operand "1"); parse it as the literal it is.
+        parsed = ctx.parse_literal(name)
+        if isinstance(parsed, (int, float)):
+            return ctx.const_to_reg(parsed)
+        # A genuinely unresolvable data-name: emit an obviously-wrong sentinel
+        # (rather than silently coercing the name to a string literal) so the
+        # failure is visible in logs and in the IR.
         logger.warning("unresolvable field reference %r — emitting sentinel", name)
         return ctx.const_to_reg(f"UNRESOLVABLE__{name}")
 
