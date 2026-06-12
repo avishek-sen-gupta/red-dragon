@@ -366,6 +366,13 @@ def _lower_figurative(
     sibling is not a field.
     """
     value = str(fig.get("value", "")).upper()
+    # ZERO / ZEROS against a NUMERIC field compares by value (integer 0), not as
+    # a zero-filled character string — otherwise "1000.00" <= "0000000000.00"
+    # would be a (broken) number-vs-string comparison (red-dragon-z6ad family).
+    if value in ("ZERO", "ZEROS", "ZEROES") and _is_numeric_field(
+        ctx, sibling, materialised
+    ):
+        return ctx.const_to_reg(0)
     fill = _FIGURATIVE_FILL.get(value, " ")
     length = _field_byte_length(ctx, sibling, materialised)
     if length is None:
@@ -426,6 +433,34 @@ def _is_zoned_display_field(
         return False
     ref, _ = ctx.resolve_field_ref(name, materialised)
     return ref.fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
+
+
+_NUMERIC_CATEGORIES: frozenset[CobolDataCategory] = frozenset(
+    {
+        CobolDataCategory.ZONED_DECIMAL,
+        CobolDataCategory.COMP3,
+        CobolDataCategory.BINARY,
+        CobolDataCategory.COMP1,
+        CobolDataCategory.COMP2,
+    }
+)
+
+
+def _is_numeric_field(
+    ctx: EmitContext,
+    expr: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> bool:
+    """True if an operand is a reference to a numeric field (zoned / COMP-3 /
+    binary / float). A reference-modified operand is a character slice, excluded.
+    """
+    if expr.get("kind") != "ref" or "ref_mod_start" in expr:
+        return False
+    name = expr.get("name", "")
+    if not ctx.has_field(name, materialised):
+        return False
+    ref, _ = ctx.resolve_field_ref(name, materialised)
+    return ref.fl.type_descriptor.category in _NUMERIC_CATEGORIES
 
 
 def _lower_relation_operand(
