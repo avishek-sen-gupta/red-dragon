@@ -82,6 +82,7 @@ class BuiltinName:
     FLOAT_TO_BYTES = "__float_to_bytes"
     BYTES_TO_FLOAT = "__bytes_to_float"
     COBOL_BLANK_WHEN_ZERO = "__cobol_blank_when_zero"
+    COBOL_APPLY_EDIT_PICTURE = "__cobol_apply_edit_picture"
     STRING_SLICE = "__string_slice"
     STRING_SPLICE = "__string_splice"
     UPPER_CASE = "__upper_case"

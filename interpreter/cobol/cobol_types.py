@@ -16,6 +16,7 @@ class CobolDataCategory(str, Enum):
     COMP1 = "COMP1"
     COMP2 = "COMP2"
     ALPHANUMERIC = "ALPHANUMERIC"
+    NUMERIC_EDITED = "NUMERIC_EDITED"
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,9 @@ class CobolTypeDescriptor:
     sign_leading: bool = False
     justified_right: bool = False
     blank_when_zero: bool = False
+    # For NUMERIC_EDITED: the original PIC string carrying the edit mask
+    # (sign/Z/comma/decimal positions) needed to format on MOVE. Empty otherwise.
+    pic_string: str = ""
 
     @property
     def byte_length(self) -> int:
@@ -65,5 +69,9 @@ class CobolTypeDescriptor:
         if self.category == CobolDataCategory.COMP2:
             return 8
         if self.category == CobolDataCategory.ALPHANUMERIC:
+            return self.total_digits
+        if self.category == CobolDataCategory.NUMERIC_EDITED:
+            # Storage is the formatted character string: total_digits carries
+            # the picture's character-position count (its width), not digits.
             return self.total_digits
         return self.total_digits  # fallback

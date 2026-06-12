@@ -496,6 +496,22 @@ def _builtin_cobol_blank_when_zero(
     )
 
 
+def _builtin_cobol_apply_edit_picture(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Apply a COBOL numeric edit picture to a numeric value string.
+
+    Args: [value_str: str, pic_string: str]
+    Returns: str — the edited display string, exactly the picture's width.
+    """
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from interpreter.cobol.edit_picture import format_edited
+
+    value_str, pic_string = str(args[0].value), str(args[1].value)
+    return BuiltinResult(value=format_edited(value_str, pic_string))
+
+
 def _builtin_string_slice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Extract substring: value[start : start + length].
 
@@ -948,6 +964,9 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.FLOAT_TO_BYTES): _builtin_float_to_bytes,
         FuncName(BuiltinName.BYTES_TO_FLOAT): _builtin_bytes_to_float,
         FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,
+        FuncName(
+            BuiltinName.COBOL_APPLY_EDIT_PICTURE
+        ): _builtin_cobol_apply_edit_picture,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
         FuncName(BuiltinName.UPPER_CASE): _builtin_upper_case,
