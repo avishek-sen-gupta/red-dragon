@@ -691,6 +691,40 @@ class EmitContext:
                 )
             return encoded
 
+        if td.category == CobolDataCategory.BINARY:
+            # BINARY stores as a raw big-endian integer whose range is determined
+            # by byte width (2/4/8), not decimal digit count. Decimal truncation
+            # via COBOL_PREPARE_DIGITS would zero out values that exceed the digit
+            # count (e.g. 50000 in PIC 9(4) → "0000" → 0). Convert the string
+            # directly to int and pack as bytes instead.
+            float_reg = self.fresh_reg()
+            self.emit_inst(
+                CallFunction(
+                    result_reg=float_reg,
+                    func_name=FuncName("float"),
+                    args=(value_str_reg,),
+                ),
+            )
+            int_reg = self.fresh_reg()
+            self.emit_inst(
+                CallFunction(
+                    result_reg=int_reg,
+                    func_name=FuncName("int"),
+                    args=(float_reg,),
+                ),
+            )
+            byte_count_reg = self.const_to_reg(td.byte_length)
+            signed_reg = self.const_to_reg(td.signed)
+            result = self.fresh_reg()
+            self.emit_inst(
+                CallFunction(
+                    result_reg=result,
+                    func_name=FuncName(BuiltinName.INT_TO_BINARY_BYTES),
+                    args=(int_reg, byte_count_reg, signed_reg),
+                ),
+            )
+            return result
+
         encoded = self.emit_numeric_encode_from_string(fl, value_str_reg)
         if td.blank_when_zero:
             return self._emit_blank_when_zero_wrap(

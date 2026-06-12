@@ -2869,6 +2869,27 @@ class TestUsageComp:
         flag_offset = bin_len
         assert _decode_zoned_unsigned(region, flag_offset, 1) == 1
 
+    @covers(CobolFeature.USAGE_COMP)
+    def test_comp_binary_unsigned_stores_value_above_signed_max(self):
+        """PIC 9(4) COMP can store 50000 (> signed 2-byte max 32767) without corruption."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-U.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-UBIN  PIC 9(4) COMP VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 50000 TO WS-UBIN.",
+                "    STOP RUN.",
+            ],
+            max_steps=1500,
+        )
+        region = _first_region(vm)
+        raw = int.from_bytes(region[0:2], "big", signed=False)
+        assert raw == 50000
+
 
 class TestUsageComp3:
     @covers(CobolFeature.USAGE_COMP_3, CobolFeature.ADD)
