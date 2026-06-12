@@ -954,6 +954,46 @@ class TestEvaluateWhen:
         assert bytes(_first_region(vm)[1:5]).decode("cp037") == "HIT "
 
 
+class TestNumericFigurativeComparison:
+    """A numeric field compared to the ZERO/ZEROS figurative must compare by
+    VALUE (integer 0), not as a zero-filled character string."""
+
+    def _cmp(self, relation: str) -> str:
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-NUMFIG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-BAL PIC S9(10)V99 VALUE 1000.00.",
+                "77 WS-R   PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                f"    IF {relation}",
+                "        MOVE 'YES ' TO WS-R",
+                "    ELSE",
+                "        MOVE 'NO  ' TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        return bytes(_first_region(vm)[12:16]).decode("cp037")
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_positive_not_le_zeros(self):
+        # 1000.00 <= ZEROS must be false (matches <= 0 literal behaviour).
+        assert self._cmp("WS-BAL <= ZEROS") == "NO  "
+        assert self._cmp("WS-BAL <= ZERO") == "NO  "
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_positive_gt_zeros(self):
+        assert self._cmp("WS-BAL > ZEROS") == "YES "
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_equal_zeros(self):
+        assert self._cmp("WS-BAL = ZEROS") == "NO  "
+
+
 class TestPerformVarying:
     @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_VARYING, CobolFeature.ADD)
     def test_perform_varying(self):
