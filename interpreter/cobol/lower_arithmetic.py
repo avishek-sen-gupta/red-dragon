@@ -1018,6 +1018,24 @@ def lower_if(
     ctx.emit_inst(Label_(label=end_label))
 
 
+def _when_operand_node(value: str) -> dict:
+    """Classify an ``EVALUATE <subject> WHEN <value>`` value into a structured
+    relation-operand dict, so it lowers through the same path the IF relation
+    lowering uses (figuratives sized to the sibling, quoted literals intact).
+
+    - figurative constant (SPACES / LOW-VALUES / ZEROS / ...) -> figurative node
+    - quoted literal ('Y', ' ') -> lit node (quotes preserved)
+    - anything else (a field name or bare number) -> ref node, which the operand
+      lowering resolves as field-or-literal.
+    """
+    v = value.strip()
+    if v.upper() in COBOL_FIGURATIVE_CONSTANTS:
+        return {"kind": "figurative", "value": v.upper()}
+    if len(v) >= 2 and v[0] in ("'", '"') and v[-1] == v[0]:
+        return {"kind": "lit", "value": v}
+    return {"kind": "ref", "name": v}
+
+
 def lower_evaluate(
     ctx: EmitContext,
     stmt: EvaluateStatement,
@@ -1064,14 +1082,24 @@ def lower_evaluate(
                     # Full conditional expression (EVALUATE TRUE WHEN ...): route through
                     # the same structured lowering the IF path uses.
                     cond_reg = ctx.lower_condition(cond_dict, materialised)
+            elif stmt.subject and stmt.subject.upper() != "TRUE":
+                # WHEN <value> against an EVALUATE subject: lower "subject = value"
+                # through the SAME structured relation path the IF lowering uses,
+                # rather than re-parsing a "subject = value" string. The string
+                # path split on whitespace (destroying quoted spaces) and treated
+                # figuratives (SPACES / LOW-VALUES) as the literal text, so
+                # WHEN SPACES / WHEN ' ' never matched a blank field (red-dragon-z6ad).
+                relation = {
+                    "left": {"kind": "ref", "name": stmt.subject},
+                    "op": "==",
+                    "right": _when_operand_node(child.condition),
+                }
+                cond_reg = ctx.lower_condition({"relation": relation}, materialised)
             else:
-                # WHEN <value> against an EVALUATE subject — build "subject = value".
-                if stmt.subject and stmt.subject.upper() != "TRUE":
-                    full_condition = f"{stmt.subject} = {child.condition}"
-                else:
-                    full_condition = child.condition
+                # subject is TRUE with a flat string condition (e.g. a level-88
+                # name): keep the text-condition path.
                 cond_reg = _lower_condition_str(
-                    ctx, full_condition, materialised, ctx._condition_index
+                    ctx, child.condition, materialised, ctx._condition_index
                 )
             when_true = ctx.fresh_label("when_true")
             when_false = ctx.fresh_label("when_false")
