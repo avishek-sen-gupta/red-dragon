@@ -838,6 +838,73 @@ class TestEvaluateWhen:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 4, 4) == 20
 
+    def _eval_blank(self, when_clause: str) -> str:
+        """Run EVALUATE over a space-valued X(1) field with the given WHEN
+        clause; return the 4-char WS-R result (HIT if the clause matched)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVALBLANK.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-C PIC X(1) VALUE SPACE.",
+                "77 WS-R PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    EVALUATE WS-C",
+                f"        WHEN {when_clause}",
+                "            MOVE 'HIT ' TO WS-R",
+                "        WHEN OTHER",
+                "            MOVE 'OTH ' TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        return bytes(_first_region(vm)[1:5]).decode("cp037")
+
+    @covers(CobolFeature.EVALUATE)
+    def test_evaluate_when_spaces_matches_blank_field(self):
+        """EVALUATE <alpha> WHEN SPACES matches a space-valued field. The old
+        string-based WHEN lowering treated SPACES as literal text, so it never
+        matched a blank field (red-dragon-z6ad)."""
+        assert self._eval_blank("SPACES") == "HIT "
+
+    @covers(CobolFeature.EVALUATE)
+    def test_evaluate_when_low_values_matches_blank_field(self):
+        # A space field is not LOW-VALUES, so this must NOT match (control).
+        assert self._eval_blank("LOW-VALUES") == "OTH "
+
+    @covers(CobolFeature.EVALUATE)
+    def test_evaluate_when_literal_space_matches_blank_field(self):
+        """A quoted-space WHEN must match a space field; the old split() path
+        destroyed the quoted space token."""
+        assert self._eval_blank("' '") == "HIT "
+
+    @covers(CobolFeature.EVALUATE)
+    def test_evaluate_when_literal_char_still_matches(self):
+        """Regression guard: a normal char WHEN still matches (the value path
+        was already working for non-blank literals)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVALCHAR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-C PIC X(1) VALUE 'Y'.",
+                "77 WS-R PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    EVALUATE WS-C",
+                "        WHEN 'Y'",
+                "            MOVE 'HIT ' TO WS-R",
+                "        WHEN OTHER",
+                "            MOVE 'OTH ' TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        assert bytes(_first_region(vm)[1:5]).decode("cp037") == "HIT "
+
 
 class TestPerformVarying:
     @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_VARYING, CobolFeature.ADD)
