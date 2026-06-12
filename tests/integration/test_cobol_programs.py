@@ -2972,7 +2972,80 @@ class TestUsageDisplay:
 # ---------------------------------------------------------------------------
 
 
-class TestSignSeparate:
+class TestSignClause:
+    @covers(CobolFeature.SIGN_CLAUSE)
+    def test_sign_leading_embedded_places_sign_nibble_in_first_byte(self):
+        """PIC S9(3) SIGN IS LEADING: sign zone nibble is in byte 0, not byte 2."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. SGNL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-N PIC S9(3) SIGN IS LEADING.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE -123 TO WS-N.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # SIGN LEADING: sign nibble in high nibble of byte 0 (0xD = negative).
+        assert (
+            region[0] & 0xF0 == 0xD0
+        ), f"expected sign in byte 0, got {region[0:3].hex()}"
+        assert (
+            region[2] & 0xF0 == 0xF0
+        ), f"expected neutral zone in byte 2, got {region[0:3].hex()}"
+
+    @covers(CobolFeature.SIGN_CLAUSE)
+    def test_sign_trailing_places_sign_nibble_in_last_byte(self):
+        """PIC S9(3) SIGN IS TRAILING (default): sign zone nibble is in byte 2."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. SGNT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-N PIC S9(3).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE -123 TO WS-N.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # SIGN TRAILING (default): sign nibble in high nibble of last byte (0xD = negative).
+        assert (
+            region[0] & 0xF0 == 0xF0
+        ), f"expected neutral zone in byte 0, got {region[0:3].hex()}"
+        assert (
+            region[2] & 0xF0 == 0xD0
+        ), f"expected sign in byte 2, got {region[0:3].hex()}"
+
+    @covers(CobolFeature.SIGN_CLAUSE)
+    def test_sign_leading_roundtrip(self):
+        """MOVE -123 to SIGN IS LEADING field then MOVE to plain field preserves value."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. SGNLRT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-SRC PIC S9(3) SIGN IS LEADING.",
+                "01 WS-DST PIC S9(3).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE -123 TO WS-SRC.",
+                "    MOVE WS-SRC TO WS-DST.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-DST at offset 3 (after WS-SRC 3 bytes); sign trailing by default.
+        assert region[3] & 0xF0 == 0xF0
+        assert region[5] & 0xF0 == 0xD0
+
     @covers(CobolFeature.SIGN_CLAUSE)
     def test_sign_leading_separate(self):
         """PIC S9(3) SIGN IS LEADING SEPARATE — sign byte + digits."""
