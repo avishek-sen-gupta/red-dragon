@@ -13,8 +13,14 @@ Grammar shape (ported from the retired ANTLR grammar):
   - alphanumeric: any sequence containing at least one ``X`` (with
     ``9``/``Z`` digit positions allowed mixed on either side).
   - ``POINTER`` USAGE.
-Editing characters (commas, '.', '-', currency) are ignored, matching the
-hidden-channel treatment of the old grammar.
+
+Numeric-edited pictures (sign / Z suppression / comma / decimal insertion) are
+detected BEFORE the Lark parse (see ``is_numeric_edited`` / ``parse_edit_picture``
+in :mod:`interpreter.cobol.edit_picture`) and produce a ``NUMERIC_EDITED``
+descriptor sized by the picture's full character width. The Lark grammar below
+therefore only sees plain numeric / alphanumeric pictures; its ``%ignore`` of
+editing characters is a defensive fallback for any edited picture that slips
+past detection (e.g. B / 0 / '/' insertion — see red-dragon-r9s9).
 """
 
 from __future__ import annotations
@@ -81,13 +87,13 @@ _GRAMMAR = r"""
     INT: /[0-9]+/
 
     // Editing / display characters carry no stored-digit semantics — ignore them
-    // exactly as the old grammar's HIDDEN channel did.
+    // exactly as the old grammar's HIDDEN channel did. Note that genuinely
+    // numeric-edited pictures are intercepted before this grammar runs (see the
+    // module docstring) and sized by edit_picture; these %ignore rules only keep
+    // the grammar from rejecting stray edit chars on pictures that reach it.
     %ignore /[ \t\f\r\n]+/
     %ignore ","
     %ignore "."
-    // Ignoring '-'/'+' over-accepts malformed edited PIC strings; that is
-    // intentional. Edited (currency/sign) PICs are sized by the bridge, not this
-    // parser, so dropping these chars mirrors the old hidden-channel behavior.
     %ignore "-"
     %ignore "+"
 """
