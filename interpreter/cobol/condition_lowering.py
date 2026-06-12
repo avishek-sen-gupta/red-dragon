@@ -54,7 +54,14 @@ def _emit_88_value_reg(
             return ctx.const_to_reg(0)
         return ctx.const_to_reg('"' + fill * max(parent_byte_length, 1) + '"')
     if parent_is_alpha:
-        return ctx.const_to_reg(f'"{raw}"')
+        # The parent decodes to its full byte width (no trailing-space trim), so
+        # a VALUE shorter than the parent must be right-space-padded to that width
+        # for the equality to hold — mirroring how SET <88> TO TRUE writes the
+        # padded value. (CardDemo COCRDSLC: 88 FOUND-CARDS-FOR-ACCOUNT VALUE
+        # '   Displaying...' on a PIC X(40) flag.)
+        return ctx.const_to_reg(
+            '"' + raw.ljust(max(parent_byte_length, len(raw))) + '"'
+        )
     return ctx.const_to_reg(ctx.parse_literal(raw))
 
 
