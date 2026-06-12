@@ -880,6 +880,54 @@ class TestEvaluateWhen:
         destroyed the quoted space token."""
         assert self._eval_blank("' '") == "HIT "
 
+    def _eval_stacked(self, value_clause: str) -> str:
+        """EVALUATE over WS-C with stacked WHENs:
+            WHEN 'Y' WHEN 'y'        -> 'ISY'
+            WHEN SPACES WHEN LOW-VALUES -> 'BLK'
+            WHEN OTHER               -> 'OTH'
+        Returns the 4-char WS-R result for the given WS-C VALUE clause."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVALSTACK.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                f"77 WS-C PIC X(1) VALUE {value_clause}.",
+                "77 WS-R PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    EVALUATE WS-C",
+                "        WHEN 'Y'",
+                "        WHEN 'y'",
+                "            MOVE 'ISY ' TO WS-R",
+                "        WHEN SPACES",
+                "        WHEN LOW-VALUES",
+                "            MOVE 'BLK ' TO WS-R",
+                "        WHEN OTHER",
+                "            MOVE 'OTH ' TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        return bytes(_first_region(vm)[1:5]).decode("cp037")
+
+    @covers(CobolFeature.EVALUATE)
+    def test_evaluate_stacked_when_first_value_matches(self):
+        """A stacked WHEN matches on its FIRST value."""
+        assert self._eval_stacked("'Y'") == "ISY "
+        assert self._eval_stacked("SPACE") == "BLK "
+
+    @covers(CobolFeature.EVALUATE)
+    def test_evaluate_stacked_when_later_value_matches(self):
+        """A stacked WHEN must also match on a NON-first value. The bridge
+        previously serialized only whens.get(0), dropping later stacked values
+        (here LOW-VALUES), so a 0x00 field fell through to WHEN OTHER."""
+        assert self._eval_stacked("LOW-VALUES") == "BLK "
+
+    @covers(CobolFeature.EVALUATE)
+    def test_evaluate_stacked_when_no_match_is_other(self):
+        assert self._eval_stacked("'Z'") == "OTH "
+
     @covers(CobolFeature.EVALUATE)
     def test_evaluate_when_literal_char_still_matches(self):
         """Regression guard: a normal char WHEN still matches (the value path
