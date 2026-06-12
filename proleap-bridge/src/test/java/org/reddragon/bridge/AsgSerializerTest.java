@@ -305,6 +305,20 @@ public class AsgSerializerTest {
         assertEquals(1, DataFieldSerializer.countStoragePositions("9"));
     }
 
+    @Test
+    public void testNumericEditedStoragePositions() {
+        // Numeric-edited pictures: every position (sign, digits, '.', ',') is
+        // a stored byte, so size by full character width.
+        assertEquals(12, DataFieldSerializer.countStoragePositions("+99999999.99"));
+        assertEquals(15, DataFieldSerializer.countStoragePositions("+ZZZ,ZZZ,ZZZ.99"));
+        assertEquals(13, DataFieldSerializer.countStoragePositions("Z(9).99-"));
+        assertEquals(15, DataFieldSerializer.countStoragePositions("-ZZZ,ZZZ,ZZZ.ZZ"));
+        // Plain numerics/alphanumerics remain digit/char counts (not edited).
+        assertFalse(DataFieldSerializer.isNumericEdited("S9(5)V99"));
+        assertFalse(DataFieldSerializer.isNumericEdited("X(8)"));
+        assertTrue(DataFieldSerializer.isNumericEdited("+99999999.99"));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private JsonObject parseFixture(String filename) throws Exception {
