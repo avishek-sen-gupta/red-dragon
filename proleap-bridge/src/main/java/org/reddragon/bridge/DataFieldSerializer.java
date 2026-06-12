@@ -410,8 +410,16 @@ public final class DataFieldSerializer {
     /**
      * Counts storage positions (digits/chars) from a PIC string.
      * Handles: 9(5) → 5, X(3) → 3, S9(5)V99 → 7, etc.
+     *
+     * <p>Numeric-edited pictures (sign, Z suppression, comma/decimal insertion)
+     * store the formatted character string, so every position — including the
+     * sign, '.', and ',' — occupies a byte. These are sized by their full
+     * character width (mirroring Python edit_picture.parse_edit_picture().width).
      */
     public static int countStoragePositions(String pic) {
+        if (isNumericEdited(pic)) {
+            return countEditedWidth(pic);
+        }
         int count = 0;
         Matcher matcher = PIC_TOKEN_PATTERN.matcher(pic.toUpperCase());
 
@@ -422,6 +430,55 @@ public final class DataFieldSerializer {
             }
             String countStr = matcher.group(3);
             count += (countStr != null) ? Integer.parseInt(countStr) : 1;
+        }
+        return count;
+    }
+
+    /**
+     * True if {@code pic} is a numeric-edited picture: it has digit positions
+     * (9/Z) and at least one editing symbol (sign, Z, comma, or an actual '.'
+     * decimal point) and no alphanumeric X/A positions. Mirrors Python
+     * {@code edit_picture.is_numeric_edited}.
+     */
+    public static boolean isNumericEdited(String pic) {
+        String upper = pic.toUpperCase();
+        if (upper.indexOf('X') >= 0 || upper.indexOf('A') >= 0) {
+            return false;
+        }
+        boolean hasDigit = upper.indexOf('9') >= 0 || upper.indexOf('Z') >= 0;
+        if (!hasDigit) {
+            return false;
+        }
+        for (int i = 0; i < upper.length(); i++) {
+            char c = upper.charAt(i);
+            if (c == 'Z' || c == '+' || c == '-' || c == ',' || c == '.') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Counts the character width of a numeric-edited picture: every symbol is a
+     * stored position (sign, Z, 9, '.', ','), with {@code (N)} expanding the
+     * preceding symbol. The repeat notation itself is not counted.
+     */
+    public static int countEditedWidth(String pic) {
+        String upper = pic.toUpperCase();
+        int count = 0;
+        int i = 0;
+        while (i < upper.length()) {
+            char c = upper.charAt(i);
+            if (c == '(') {
+                int close = upper.indexOf(')', i);
+                int repeat = Integer.parseInt(upper.substring(i + 1, close));
+                // The preceding symbol already added 1; add the remainder.
+                count += (repeat - 1);
+                i = close + 1;
+            } else {
+                count += 1;
+                i++;
+            }
         }
         return count;
     }
