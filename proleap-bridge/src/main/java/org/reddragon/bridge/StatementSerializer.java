@@ -769,15 +769,29 @@ public final class StatementSerializer {
                 obj.addProperty("subject", subject);
             }
 
-            // Each WhenPhrase maps to a WHEN branch with condition + statements
+            // Each WhenPhrase is "WHEN c1 [WHEN c2 ...] statements": one or more
+            // stacked conditions sharing a single body. Emit ONE WHEN child per
+            // stacked condition, each carrying the (shared) body, so a match on
+            // ANY stacked value runs the body. Serializing only whens.get(0)
+            // previously dropped every value after the first.
             for (WhenPhrase whenPhrase : stmt.getWhenPhrases()) {
-                // Extract the condition from the When objects
                 List<io.proleap.cobol.asg.metamodel.procedure.evaluate.When> whens = whenPhrase.getWhens();
-                JsonObject whenObj = newStatement("WHEN");
+                boolean hasBody = whenPhrase.getStatements() != null
+                        && !whenPhrase.getStatements().isEmpty();
 
-                if (whens != null && !whens.isEmpty()) {
-                    io.proleap.cobol.asg.metamodel.procedure.evaluate.When firstWhen = whens.get(0);
-                    io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition cond = firstWhen.getCondition();
+                if (whens == null || whens.isEmpty()) {
+                    JsonObject whenObj = newStatement("WHEN");
+                    if (hasBody) {
+                        JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
+                        if (whenStmts.size() > 0) whenObj.add("children", whenStmts);
+                    }
+                    children.add(whenObj);
+                    continue;
+                }
+
+                for (io.proleap.cobol.asg.metamodel.procedure.evaluate.When when : whens) {
+                    JsonObject whenObj = newStatement("WHEN");
+                    io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition cond = when.getCondition();
                     if (cond != null) {
                         io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType ct = cond.getConditionType();
                         ValueStmt cvs = cond.getConditionValueStmt();
@@ -809,17 +823,17 @@ public final class StatementSerializer {
                             whenObj.addProperty("condition", insertSpaces(cond.getCtx().getText()));
                         }
                     }
-                }
 
-                // Nested statements
-                if (whenPhrase.getStatements() != null && !whenPhrase.getStatements().isEmpty()) {
-                    JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
-                    if (whenStmts.size() > 0) {
-                        whenObj.add("children", whenStmts);
+                    // Attach the phrase's shared body to each stacked WHEN. Only
+                    // the first matching value's copy executes (each WHEN branches
+                    // to the EVALUATE end after its body), so this duplicates the
+                    // serialization but not the runtime behaviour.
+                    if (hasBody) {
+                        JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
+                        if (whenStmts.size() > 0) whenObj.add("children", whenStmts);
                     }
+                    children.add(whenObj);
                 }
-
-                children.add(whenObj);
             }
 
             // WHEN OTHER
