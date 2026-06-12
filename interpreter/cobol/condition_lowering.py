@@ -63,13 +63,19 @@ def _emit_single_value_test(
     cv: ConditionValue,
     materialised: MaterialisedSectionedLayout,
     parent_field_name: str,
+    subscripts: tuple = (),
 ) -> Register:
     """Emit IR to test a parent field against a single ConditionValue.
 
     For discrete values: parent_field == value
     For THRU ranges: parent_field >= from AND parent_field <= to
+
+    ``subscripts`` selects the OCCURS element when the level-88 is defined on a
+    table item and referenced with a subscript (e.g. ``SEL-OK(I)``).
     """
-    parent_ref, parent_rr = ctx.resolve_field_ref(parent_field_name, materialised)
+    parent_ref, parent_rr = ctx.resolve_field_ref(
+        parent_field_name, materialised, subscripts=subscripts
+    )
     parent_is_alpha = (
         parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
     )
@@ -89,7 +95,9 @@ def _emit_single_value_test(
             )
         )
 
-        parent_ref2, parent_rr2 = ctx.resolve_field_ref(parent_field_name, materialised)
+        parent_ref2, parent_rr2 = ctx.resolve_field_ref(
+            parent_field_name, materialised, subscripts=subscripts
+        )
         parent_reg2 = ctx.emit_decode_field(
             parent_rr2, parent_ref2.fl, parent_ref2.offset_reg
         )
@@ -156,6 +164,7 @@ def _expand_condition_name(
     condition_name: str,
     condition_index: ConditionNameIndex,
     materialised: MaterialisedSectionedLayout,
+    subscripts: tuple = (),
 ) -> Register:
     """Expand a level-88 condition name into field comparison IR.
 
@@ -163,10 +172,15 @@ def _expand_condition_name(
     For multi-value: parent == v1 OR parent == v2 OR ...
     For THRU ranges: parent >= from AND parent <= to
     Mixed: combines all with OR.
+
+    ``subscripts`` selects the OCCURS element for a table-defined 88
+    (e.g. ``SEL-OK(I)``).
     """
     entry = condition_index.lookup(condition_name)
     value_regs = [
-        _emit_single_value_test(ctx, cv, materialised, entry.parent_field_name)
+        _emit_single_value_test(
+            ctx, cv, materialised, entry.parent_field_name, subscripts=subscripts
+        )
         for cv in entry.values
     ]
 
@@ -730,6 +744,35 @@ def _lower_expr_dict(
     return ctx.const_to_reg(ctx.parse_literal(""))
 
 
+def _split_condition_subscript(token: str) -> tuple[str, tuple]:
+    """Split a (possibly subscripted) condition-name token into its name and
+    subscript expression nodes.
+
+    ``"SEL-OK(I)"``   -> ``("SEL-OK", (FieldRefNode("I"),))``
+    ``"SEL-OK(1, 2)"``-> ``("SEL-OK", (LiteralNode("1"), FieldRefNode("2")?))``
+    ``"SEL-OK"``      -> ``("SEL-OK", ())``
+
+    A bare integer subscript becomes a LiteralNode; anything else becomes a
+    FieldRefNode (a simple data-name index). Compound-expression subscripts are
+    not parsed here — they are rare in 88 references.
+    """
+    open_paren = token.find("(")
+    if open_paren == -1 or not token.endswith(")"):
+        return token, ()
+    name = token[:open_paren]
+    inner = token[open_paren + 1 : -1]
+    subs = tuple(
+        (
+            LiteralNode(value=s.strip())
+            if s.strip().isdigit()
+            else FieldRefNode(name=s.strip())
+        )
+        for s in inner.split(",")
+        if s.strip()
+    )
+    return name, subs
+
+
 def _lower_condition_str(
     ctx: EmitContext,
     condition: str,
@@ -740,12 +783,17 @@ def _lower_condition_str(
 
     Supports:
     - "field OP value" where OP is >, <, >=, <=, =, NOT =
-    - Single-token condition names (level-88) that expand to parent comparisons
+    - Single-token condition names (level-88) that expand to parent comparisons,
+      including a subscripted reference to a table-defined 88 (``SEL-OK(I)``)
     """
     parts = condition.split()
 
-    if len(parts) == 1 and condition_index.has_condition(parts[0]):
-        return _expand_condition_name(ctx, parts[0], condition_index, materialised)
+    if len(parts) == 1:
+        name, subscripts = _split_condition_subscript(parts[0])
+        if condition_index.has_condition(name):
+            return _expand_condition_name(
+                ctx, name, condition_index, materialised, subscripts=subscripts
+            )
 
     if len(parts) >= 3:
         left_name = parts[0]
