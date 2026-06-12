@@ -114,6 +114,10 @@ class CobolFeature(Enum):
     # Data Division — PIC clause and types
     # ---------------------------------------------------------------------------
     PIC_CLAUSE = "PIC/PICTURE clause defining field format and size"
+    NUMERIC_EDITED = (
+        "Numeric-edited PIC (sign, Z suppression, comma/decimal insertion) "
+        "applied on MOVE into the receiving item"
+    )
     VALUE_CLAUSE = "VALUE literal initial value clause on data items"
     VALUE_THRU_RANGE = "VALUE x THRU y range initial value clause"
     REDEFINES_CLAUSE = "REDEFINES other-field overlay type reuse"

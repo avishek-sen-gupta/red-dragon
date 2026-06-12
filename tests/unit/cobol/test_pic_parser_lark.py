@@ -54,3 +54,28 @@ class TestSignSeparateByteLength:
         """A sign-separate zoned field's byte_length includes the sign byte."""
         result = parse_pic("S9(5)", sign_separate=True)
         assert result.byte_length == 6
+
+
+class TestNumericEditedPic:
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_edited_pic_produces_numeric_edited_descriptor(self):
+        """+99999999.99 -> NUMERIC_EDITED with width 12, decimal 2, signed."""
+        result = parse_pic("+99999999.99")
+        assert result.category == CobolDataCategory.NUMERIC_EDITED
+        assert result.byte_length == 12
+        assert result.decimal_digits == 2
+        assert result.signed is True
+        assert result.pic_string == "+99999999.99"
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_edited_pic_with_suppression_and_commas(self):
+        """+ZZZ,ZZZ,ZZZ.99 -> width 15 (commas/sign/decimal count as positions)."""
+        result = parse_pic("+ZZZ,ZZZ,ZZZ.99")
+        assert result.category == CobolDataCategory.NUMERIC_EDITED
+        assert result.byte_length == 15
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_plain_numeric_is_not_edited(self):
+        """A plain numeric PIC stays ZONED_DECIMAL, not NUMERIC_EDITED."""
+        result = parse_pic("S9(5)V99")
+        assert result.category == CobolDataCategory.ZONED_DECIMAL

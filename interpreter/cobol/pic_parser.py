@@ -26,6 +26,7 @@ from lark import Lark, Transformer
 from lark.exceptions import UnexpectedInput
 
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from interpreter.cobol.edit_picture import is_numeric_edited, parse_edit_picture
 
 _USAGE_TO_CATEGORY = {
     "COMP-3": CobolDataCategory.COMP3,
@@ -226,6 +227,20 @@ def parse_pic(
             total_digits=0,
             decimal_digits=0,
             signed=False,
+        )
+
+    # Numeric-edited pictures (sign / Z suppression / comma / decimal insertion)
+    # carry editing characters the Lark grammar deliberately drops. Their storage
+    # is the formatted character string, so size by the picture's character width
+    # and keep the original PIC for the MOVE-time edit mask (red-dragon edit_picture).
+    if usage == "DISPLAY" and is_numeric_edited(pic):
+        ep = parse_edit_picture(pic)
+        return CobolTypeDescriptor(
+            category=CobolDataCategory.NUMERIC_EDITED,
+            total_digits=ep.width,
+            decimal_digits=ep.frac_digits,
+            signed=ep.signed,
+            pic_string=pic,
         )
 
     try:

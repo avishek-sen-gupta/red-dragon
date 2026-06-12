@@ -388,6 +388,7 @@ class TestByteBuiltinsRegistration:
             "__float_to_bytes",
             "__bytes_to_float",
             "__cobol_blank_when_zero",
+            "__cobol_apply_edit_picture",
             "__string_slice",
             "__string_splice",
             "__upper_case",
