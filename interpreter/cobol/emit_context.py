@@ -529,7 +529,12 @@ class EmitContext:
         )
 
         td = fl.type_descriptor
-        if td.category == CobolDataCategory.ALPHANUMERIC:
+        if td.category in (
+            CobolDataCategory.ALPHANUMERIC,
+            CobolDataCategory.NUMERIC_EDITED,
+        ):
+            # A numeric-edited field's stored content is its formatted character
+            # string; read it back as characters (its display form).
             ir = build_decode_alphanumeric_ir(f"dec_alpha_{fl.name}")
         elif td.category == CobolDataCategory.ZONED_DECIMAL:
             if td.sign_separate:
@@ -624,6 +629,22 @@ class EmitContext:
     ) -> Register:
         """Emit encoding IR from a string value register."""
         td = fl.type_descriptor
+        if td.category == CobolDataCategory.NUMERIC_EDITED:
+            # Apply the edit mask to the numeric value, then store the resulting
+            # character string as alphanumeric (the formatted bytes ARE the
+            # field's content). Mirrors GnuCOBOL's cob_move_edited.
+            formatted_reg = self.fresh_reg()
+            pic_reg = self.const_to_reg(f'"{td.pic_string}"')
+            self.emit_inst(
+                CallFunction(
+                    result_reg=formatted_reg,
+                    func_name=FuncName(BuiltinName.COBOL_APPLY_EDIT_PICTURE),
+                    args=(value_str_reg, pic_reg),
+                ),
+            )
+            ir = build_encode_alphanumeric_ir(f"enc_edited_{fl.name}", td.total_digits)
+            return self.inline_ir(ir, {"%p_value": formatted_reg})
+
         if td.category == CobolDataCategory.ALPHANUMERIC:
             if td.justified_right:
                 ir = build_encode_alphanumeric_justified_ir(
