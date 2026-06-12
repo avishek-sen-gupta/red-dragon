@@ -1036,6 +1036,43 @@ class TestSubscriptedConditionName:
         assert self._sel(3) == "OTH "  # WS-SEL(3) = ' ' -> not SEL-OK
 
 
+class TestLevel88AlphanumericValue:
+    """A level-88 VALUE shorter than its alphanumeric parent must compare with
+    the value space-padded to the parent width (red-dragon-b02t follow-on)."""
+
+    def _run(self, set_msg_line: str) -> str:
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-L88A.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-MSG PIC X(40).",
+                "   88 MSG-OK VALUE 'Hello'.",
+                "01 WS-R   PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                f"    {set_msg_line}",
+                "    IF MSG-OK",
+                "        MOVE 'HIT ' TO WS-R",
+                "    ELSE",
+                "        MOVE 'OTH ' TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        return bytes(_first_region(vm)[40:44]).decode("cp037")
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_88_short_value_matches_padded_parent(self):
+        # SET MSG-OK writes 'Hello' + spaces; IF MSG-OK must read TRUE.
+        assert self._run("SET MSG-OK TO TRUE.") == "HIT "
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_88_no_match_on_different_value(self):
+        assert self._run("MOVE 'Goodbye' TO WS-MSG.") == "OTH "
+
+
 class TestPerformVarying:
     @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_VARYING, CobolFeature.ADD)
     def test_perform_varying(self):
