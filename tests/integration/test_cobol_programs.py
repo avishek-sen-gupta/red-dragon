@@ -994,6 +994,48 @@ class TestNumericFigurativeComparison:
         assert self._cmp("WS-BAL = ZEROS") == "NO  "
 
 
+class TestSubscriptedConditionName:
+    """A level-88 condition name on an OCCURS element, referenced WITH a
+    subscript, must evaluate against that element (red-dragon-b02t)."""
+
+    def _sel(self, idx: int) -> str:
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SUB88.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLAGS PIC X(7) VALUE 'SU     '.",
+                "01 WS-ARR REDEFINES WS-FLAGS.",
+                "   05 WS-SEL PIC X(1) OCCURS 7 TIMES.",
+                "      88 SEL-OK VALUES 'S', 'U'.",
+                "01 WS-IDX PIC 9(1) VALUE 1.",
+                "01 WS-R   PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                f"    MOVE {idx} TO WS-IDX.",
+                "    EVALUATE TRUE",
+                "        WHEN SEL-OK(WS-IDX)",
+                "            MOVE 'HIT ' TO WS-R",
+                "        WHEN OTHER",
+                "            MOVE 'OTH ' TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        # WS-FLAGS/WS-ARR @0 (7), WS-IDX @7 (1), WS-R @8 (4).
+        return bytes(_first_region(vm)[8:12]).decode("cp037")
+
+    @covers(CobolFeature.EVALUATE)
+    def test_subscripted_88_matches_selected_element(self):
+        assert self._sel(1) == "HIT "  # WS-SEL(1) = 'S' -> SEL-OK
+        assert self._sel(2) == "HIT "  # WS-SEL(2) = 'U' -> SEL-OK
+
+    @covers(CobolFeature.EVALUATE)
+    def test_subscripted_88_no_match_on_blank_element(self):
+        assert self._sel(3) == "OTH "  # WS-SEL(3) = ' ' -> not SEL-OK
+
+
 class TestPerformVarying:
     @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_VARYING, CobolFeature.ADD)
     def test_perform_varying(self):
