@@ -1012,6 +1012,109 @@ def run_linked(
     return vm
 
 
+def _attach_layout(outcome: RunOutcome, linked: LinkedProgram) -> RunOutcome:
+    out_vm = outcome.vm if isinstance(outcome, Completed) else outcome.state.vm
+    out_vm.data_layout = linked.data_layout
+    return outcome
+
+
+def run_linked_resumable(
+    linked: LinkedProgram,
+    entry_point: EntryPoint,
+    max_steps: int = 100,
+    verbose: bool = False,
+    backend: str = LLMProvider.CLAUDE,
+    unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
+    io_provider: Any = None,
+    initial_vm: VMState | None = None,
+) -> RunOutcome:
+    """Like ``run_linked`` but suspendable: returns ``Suspended`` if execution
+    reaches a ``SUSPEND`` instruction, else ``Completed``.
+
+    The preamble (module init / function registration) runs to completion via the
+    non-resumable path — it never suspends — and only the program body (phase 2)
+    is run resumably. Continue with ``resume_linked``.
+    """
+    strategies = _build_strategies_from_linked(linked)
+    vm_config = VMConfig(
+        backend=backend,
+        max_steps=max_steps,
+        verbose=verbose,
+        source_language=linked.language,
+        unresolved_call_strategy=unresolved_call_strategy,
+        io_provider=io_provider,
+    )
+    if initial_vm is not None:
+        initial_vm.data_layout = linked.data_layout
+
+    if entry_point.is_top_level:
+        outcome = run_resumable(
+            linked.merged_cfg,
+            linked.merged_cfg.entry,
+            linked.merged_registry,
+            vm_config,
+            strategies,
+            vm=initial_vm,
+        )
+    else:
+        vm, preamble_stats = execute_cfg(
+            linked.merged_cfg,
+            linked.merged_cfg.entry,
+            linked.merged_registry,
+            vm_config,
+            strategies,
+            vm=initial_vm,
+        )
+        func_ref = entry_point.resolve(list(linked.func_symbol_table.values()))
+        func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
+        phase2_config = replace(
+            vm_config, max_steps=max(max_steps - preamble_stats.steps, 0)
+        )
+        outcome = run_resumable(
+            linked.merged_cfg,
+            func_label,
+            linked.merged_registry,
+            phase2_config,
+            strategies,
+            vm=vm,
+        )
+    return _attach_layout(outcome, linked)
+
+
+def resume_linked(
+    linked: LinkedProgram,
+    state: ExecutionState,
+    value: Any = None,
+    max_steps: int = 100,
+    verbose: bool = False,
+    backend: str = LLMProvider.CLAUDE,
+    unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
+    io_provider: Any = None,
+) -> RunOutcome:
+    """Resume a ``run_linked_resumable`` continuation, injecting ``value`` at the
+    suspension point, and run to the next suspension or to termination."""
+    strategies = _build_strategies_from_linked(linked)
+    vm_config = VMConfig(
+        backend=backend,
+        max_steps=max_steps,
+        verbose=verbose,
+        source_language=linked.language,
+        unresolved_call_strategy=unresolved_call_strategy,
+        io_provider=io_provider,
+    )
+    if io_provider is not None:
+        state.vm.io_provider = io_provider
+    outcome = resume(
+        linked.merged_cfg,
+        linked.merged_registry,
+        state,
+        value,
+        vm_config,
+        strategies,
+    )
+    return _attach_layout(outcome, linked)
+
+
 def run_linked_traced(
     linked: LinkedProgram,
     entry_point: EntryPoint,
