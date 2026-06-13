@@ -1137,6 +1137,97 @@ class TestPerformVarying:
         assert _decode_zoned_unsigned(region, 4, 4) == 6
 
 
+class TestPerformVaryingAfter:
+    """Integration tests for PERFORM VARYING … AFTER … multi-index nested loops."""
+
+    @covers(CobolFeature.PERFORM_VARYING_AFTER)
+    def test_perform_varying_after_test_before_2x3(self):
+        """PERFORM VARYING I AFTER J (TEST BEFORE) runs body 2×3=6 times.
+
+        WS-I varies 1..2, WS-J varies 1..3 — 6 body executions, each adds 1
+        to WS-CNT, so WS-CNT must equal 6 at program exit.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-PVAFTER.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-CNT PIC 9(4) VALUE 0.",
+                "01 WS-I   PIC 9(4) VALUE 0.",
+                "01 WS-J   PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    PERFORM VARYING WS-I FROM 1 BY 1 UNTIL WS-I > 2",
+                "        AFTER WS-J FROM 1 BY 1 UNTIL WS-J > 3",
+                "            ADD 1 TO WS-CNT",
+                "    END-PERFORM.",
+                "    STOP RUN.",
+            ],
+            max_steps=5000,
+        )
+        region = _first_region(vm)
+        # WS-CNT at offset 0 (first field, PIC 9(4))
+        assert _decode_zoned_unsigned(region, 0, 4) == 6
+
+    @covers(CobolFeature.PERFORM_VARYING_AFTER)
+    def test_perform_varying_after_test_before_3_levels(self):
+        """PERFORM VARYING I AFTER J AFTER K (TEST BEFORE) runs body 2×2×2=8 times."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-PV3LVL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-CNT PIC 9(4) VALUE 0.",
+                "01 WS-I   PIC 9(4) VALUE 0.",
+                "01 WS-J   PIC 9(4) VALUE 0.",
+                "01 WS-K   PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    PERFORM VARYING WS-I FROM 1 BY 1 UNTIL WS-I > 2",
+                "        AFTER WS-J FROM 1 BY 1 UNTIL WS-J > 2",
+                "        AFTER WS-K FROM 1 BY 1 UNTIL WS-K > 2",
+                "            ADD 1 TO WS-CNT",
+                "    END-PERFORM.",
+                "    STOP RUN.",
+            ],
+            max_steps=10000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 8
+
+    @covers(CobolFeature.PERFORM_VARYING_AFTER, CobolFeature.PERFORM_TEST_AFTER)
+    def test_perform_varying_after_test_after_2x3(self):
+        """PERFORM VARYING I AFTER J TEST AFTER runs body 2×3=6 times.
+
+        TEST AFTER executes the body before checking UNTIL, so with I ranging
+        1..2 and J ranging 1..3 the body still runs 6 times and WS-CNT == 6.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-PVTA.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-CNT PIC 9(4) VALUE 0.",
+                "01 WS-I   PIC 9(4) VALUE 0.",
+                "01 WS-J   PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    PERFORM VARYING WS-I FROM 1 BY 1 UNTIL WS-I > 2",
+                "        AFTER WS-J FROM 1 BY 1 UNTIL WS-J > 3",
+                "        TEST AFTER",
+                "            ADD 1 TO WS-CNT",
+                "    END-PERFORM.",
+                "    STOP RUN.",
+            ],
+            max_steps=5000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 6
+
+
 class TestStringMove:
     @covers(CobolFeature.MOVE)
     def test_string_move(self):
