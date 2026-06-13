@@ -60,3 +60,105 @@ class TestExtensionStrategyProtocol:
 
     def test_missing_handles_is_not_instance(self):
         assert not isinstance(_MissingHandles(), RedDragonExtensionLoweringStrategy)
+
+
+# ── Task 3-5 tests ────────────────────────────────────────────────────────────
+
+from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.statement_dispatch import dispatch_statement
+
+
+class _SpyStrategy:
+    def __init__(self, kind):
+        self._kind = kind  # the statement class this spy claims
+        self.lowered = []
+        self.entered = 0
+        self.preprocessed = 0
+
+    def handles(self, stmt):
+        return isinstance(stmt, self._kind)
+
+    def preprocess_program_dict(self, data):
+        self.preprocessed += 1
+        return data
+
+    def on_procedure_entry(self, ctx, materialised):
+        self.entered += 1
+
+    def lower(self, ctx, stmt, materialised):
+        self.lowered.append(stmt)
+
+
+class TestEmitContextExtensionArray:
+    def test_default_is_empty(self):
+        ctx = EmitContext(dispatch_fn=dispatch_statement)
+        assert tuple(ctx.extension_strategies) == ()
+
+    def test_injected_array_is_exposed(self):
+        spy = _SpyStrategy(ExecSqlStatement)
+        ctx = EmitContext(dispatch_fn=dispatch_statement, extension_strategies=[spy])
+        assert list(ctx.extension_strategies) == [spy]
+
+
+class TestArrayDispatch:
+    def test_routes_to_strategy_that_handles(self):
+        sql_spy = _SpyStrategy(ExecSqlStatement)
+        ctx = EmitContext(
+            dispatch_fn=dispatch_statement, extension_strategies=[sql_spy]
+        )
+        stmt = ExecSqlStatement(verb="SELECT", text="SELECT 1 INTO :X FROM T")
+        dispatch_statement(ctx, stmt, materialised=None)
+        assert sql_spy.lowered == [stmt]
+
+    def test_first_handler_wins_and_others_skipped(self):
+        from interpreter.cobol.cobol_statements import ExecCicsStatement
+
+        cics_spy = _SpyStrategy(ExecCicsStatement)
+        sql_spy = _SpyStrategy(ExecSqlStatement)
+        ctx = EmitContext(
+            dispatch_fn=dispatch_statement, extension_strategies=[cics_spy, sql_spy]
+        )
+        stmt = ExecSqlStatement(verb="DELETE", text="DELETE FROM T")
+        dispatch_statement(ctx, stmt, materialised=None)
+        assert sql_spy.lowered == [stmt]
+        assert cics_spy.lowered == []
+
+    def test_empty_array_no_handler_warns(self, caplog):
+        import logging
+
+        ctx = EmitContext(dispatch_fn=dispatch_statement, extension_strategies=[])
+        stmt = ExecSqlStatement(verb="SELECT", text="SELECT 1")
+        with caplog.at_level(logging.WARNING):
+            dispatch_statement(ctx, stmt, materialised=None)
+        assert "Unhandled" in caplog.text
+
+
+from interpreter.cobol.cobol_frontend import CobolFrontend
+from interpreter.cobol.asg_types import CobolASG
+from interpreter.cobol.cobol_parser import CobolParser
+
+
+class _PreprocessRecordingParser(CobolParser):
+    """Fake parser: calls the injected preprocessor on a minimal program dict,
+    then returns an empty ASG so frontend.lower() completes."""
+
+    def parse(self, source: bytes, preprocessor=None) -> CobolASG:
+        if preprocessor is not None:
+            preprocessor({"type": "PROGRAM", "program_id": "T"})
+        return CobolASG()
+
+
+class TestFrontendExtensionArray:
+    def test_all_strategies_preprocess_in_order(self):
+        a = _SpyStrategy(ExecSqlStatement)
+        b = _SpyStrategy(ExecSqlStatement)
+        frontend = CobolFrontend(
+            _PreprocessRecordingParser(), extension_strategies=[a, b]
+        )
+        frontend.lower(b"")
+        assert a.preprocessed == 1
+        assert b.preprocessed == 1
+
+    def test_default_array_is_empty(self):
+        frontend = CobolFrontend(_PreprocessRecordingParser())
+        assert tuple(frontend._extension_strategies) == ()
