@@ -988,6 +988,36 @@ class ResumeContinuation(InstructionBase):
         return [self.name]
 
 
+# ── Cooperative suspension ──────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class Suspend(InstructionBase):
+    """SUSPEND: cooperatively suspend execution, yielding the value in
+    ``operand_reg`` to the driver. On resume, the driver's injected value is
+    written to ``result_reg`` and execution continues at the next instruction.
+
+    A generic, frontend-agnostic primitive: the executor pauses here and hands a
+    serializable continuation back to its caller, rather than running to RETURN.
+    """
+
+    operand_reg: Register = NO_REGISTER
+
+    def reads(self) -> list[StorageIdentifier]:
+        return [self.operand_reg] if self.operand_reg.is_present() else []
+
+    def writes(self) -> StorageIdentifier | None:
+        return self.result_reg if self.result_reg.is_present() else None
+
+    @property
+    def opcode(self) -> Opcode:
+        return Opcode.SUSPEND
+
+    @property
+    def operands(self) -> list[Any]:
+        return [str(self.operand_reg)] if self.operand_reg.is_present() else []
+
+
 # ── Union type ───────────────────────────────────────────────────
 
 Instruction = Union[
@@ -1026,6 +1056,7 @@ Instruction = Union[
     WriteRegion,
     SetContinuation,
     ResumeContinuation,
+    Suspend,
 ]
 
 
@@ -1383,6 +1414,15 @@ def _resume_continuation(inst: Any) -> ResumeContinuation:
     )
 
 
+def _suspend(inst: Any) -> Suspend:
+    ops = inst.operands
+    return Suspend(
+        result_reg=inst.result_reg,
+        operand_reg=Register(str(ops[0])) if len(ops) >= 1 else NO_REGISTER,
+        source_location=inst.source_location,
+    )
+
+
 _TO_TYPED: dict[Opcode, Callable[[Any], Instruction]] = {
     Opcode.CONST: _const,
     Opcode.LOAD_VAR: _load_var,
@@ -1419,6 +1459,7 @@ _TO_TYPED: dict[Opcode, Callable[[Any], Instruction]] = {
     Opcode.WRITE_REGION: _write_region,
     Opcode.SET_CONTINUATION: _set_continuation,
     Opcode.RESUME_CONTINUATION: _resume_continuation,
+    Opcode.SUSPEND: _suspend,
 }
 
 
