@@ -47,6 +47,7 @@ class PerformVaryingSpec:
     varying_by: str  # BY step value
     condition: dict
     test_before: bool = True
+    after_specs: "tuple[PerformVaryingSpec, ...]" = field(default_factory=tuple)
 
 
 PerformSpec = Union[PerformTimesSpec, PerformUntilSpec, PerformVaryingSpec]
@@ -1055,12 +1056,23 @@ def _parse_perform_spec(
             test_before=data.get("test_before", True),
         )
     if perform_type == "VARYING":
+        raw_afters = data.get("after_specs", [])
+        after_specs: tuple[PerformVaryingSpec, ...] = tuple(
+            PerformVaryingSpec(
+                varying_var=a.get("varying_var", ""),
+                varying_from=a.get("varying_from", ""),
+                varying_by=a.get("varying_by", ""),
+                condition=a.get("until", {}),
+            )
+            for a in raw_afters
+        )
         return PerformVaryingSpec(
             varying_var=data.get("varying_var", ""),
             varying_from=data.get("varying_from", ""),
             varying_by=data.get("varying_by", ""),
             condition=data.get("until", {}),
             test_before=data.get("test_before", True),
+            after_specs=after_specs,
         )
     return None
 
@@ -1080,7 +1092,7 @@ def _spec_to_dict(
             "test_before": spec.test_before,
         }
     if isinstance(spec, PerformVaryingSpec):
-        return {
+        d: dict = {
             "perform_type": "VARYING",
             "varying_var": spec.varying_var,
             "varying_from": spec.varying_from,
@@ -1088,6 +1100,17 @@ def _spec_to_dict(
             "until": spec.condition,
             "test_before": spec.test_before,
         }
+        if spec.after_specs:
+            d["after_specs"] = [
+                {
+                    "varying_var": a.varying_var,
+                    "varying_from": a.varying_from,
+                    "varying_by": a.varying_by,
+                    "until": a.condition,
+                }
+                for a in spec.after_specs
+            ]
+        return d
     return {}
 
 
