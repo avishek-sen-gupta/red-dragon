@@ -90,6 +90,7 @@ CobolStatementType = Union[
     "StartStatement",
     "DeleteStatement",
     "ExecCicsStatement",
+    "ExecSqlStatement",
 ]
 
 
@@ -1043,6 +1044,26 @@ class ExecCicsStatement:
         return {"type": "EXEC_CICS", "verb": self.verb, "options": serialised}
 
 
+@dataclass(frozen=True)
+class ExecSqlStatement:
+    """EXEC SQL block. Carries the raw (untagged) SQL text verbatim; host-variable /
+    INTO parsing is done by the injected SQL strategy, not here (the COBOL frontend
+    treats the SQL body as opaque text)."""
+
+    verb: str  # first SQL keyword (SELECT/INSERT/UPDATE/DELETE/...), uppercased
+    text: str  # raw untagged SQL body (between EXEC SQL and END-EXEC)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ExecSqlStatement":
+        text = data.get("exec_sql_text", "") or ""
+        stripped = text.strip()
+        verb = stripped.split(None, 1)[0].upper() if stripped else ""
+        return cls(verb=verb, text=text)
+
+    def to_dict(self) -> dict:
+        return {"type": "EXEC_SQL", "verb": self.verb, "text": self.text}
+
+
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -1188,6 +1209,7 @@ _DISPATCH_TABLE: dict[str, type] = {
     "START": StartStatement,
     "DELETE": DeleteStatement,
     "EXEC_CICS": ExecCicsStatement,
+    "EXEC_SQL": ExecSqlStatement,
 }
 
 
