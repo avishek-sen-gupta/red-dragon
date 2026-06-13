@@ -1073,6 +1073,43 @@ class TestLevel88AlphanumericValue:
         assert self._run("MOVE 'Goodbye' TO WS-MSG.") == "OTH "
 
 
+class TestNumericVsAlphanumericField:
+    """Comparing a numeric USAGE DISPLAY field to an alphanumeric FIELD compares
+    by the numeric's zoned-character form, not its decoded integer
+    (COCRDUPC optimistic-lock CVV check: PIC 9(3) vs PIC X(3))."""
+
+    def _cmp(self, num_value: str, alpha_value: str) -> str:
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-NAF.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                f"01 WS-NUM   PIC 9(3) VALUE {num_value}.",
+                f"01 WS-ALPHA PIC X(3) VALUE '{alpha_value}'.",
+                "01 WS-R     PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-NUM = WS-ALPHA",
+                "        MOVE 'HIT ' TO WS-R",
+                "    ELSE",
+                "        MOVE 'OTH ' TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        # WS-NUM @0 (3), WS-ALPHA @3 (3), WS-R @6 (4).
+        return bytes(_first_region(vm)[6:10]).decode("cp037")
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_zoned_numeric_equals_alphanumeric_field(self):
+        assert self._cmp("123", "123") == "HIT "
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_zoned_numeric_differs_from_alphanumeric_field(self):
+        assert self._cmp("123", "456") == "OTH "
+
+
 class TestPerformVarying:
     @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_VARYING, CobolFeature.ADD)
     def test_perform_varying(self):

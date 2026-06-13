@@ -484,6 +484,37 @@ def _is_numeric_field(
     return ref.fl.type_descriptor.category in _NUMERIC_CATEGORIES
 
 
+def _is_alphanumeric_field(
+    ctx: EmitContext,
+    expr: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> bool:
+    """True if an operand is a reference to an ALPHANUMERIC (PIC X) field, or a
+    reference-modified slice (always character data)."""
+    if expr.get("kind") != "ref":
+        return False
+    if "ref_mod_start" in expr:
+        return True
+    name = expr.get("name", "")
+    if not ctx.has_field(name, materialised):
+        return False
+    ref, _ = ctx.resolve_field_ref(name, materialised)
+    return ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
+
+
+def _is_alphanumeric_sibling(
+    ctx: EmitContext,
+    sibling: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> bool:
+    """An operand counts as alphanumeric for the zoned-display comparison rule
+    when it is a non-numeric figurative / quoted char literal OR an alphanumeric
+    field (or ref-mod slice)."""
+    return _is_alphanumeric_operand(sibling) or _is_alphanumeric_field(
+        ctx, sibling, materialised
+    )
+
+
 def _lower_relation_operand(
     ctx: EmitContext,
     expr: dict,
@@ -503,8 +534,8 @@ def _lower_relation_operand(
     """
     if expr.get("kind") == "figurative":
         return _lower_figurative(ctx, expr, sibling, materialised)
-    if _is_zoned_display_field(ctx, expr, materialised) and _is_alphanumeric_operand(
-        sibling
+    if _is_zoned_display_field(ctx, expr, materialised) and _is_alphanumeric_sibling(
+        ctx, sibling, materialised
     ):
         name = expr.get("name", "")
         ref, rr = ctx.resolve_field_ref(name, materialised)
