@@ -4,6 +4,10 @@ These live in the COBOL layer so the frontend has a typed seam for CICS
 injection without depending on the interpreter.cics package. The full
 implementation (CicsLoweringStrategy) lives in the CICS runtime and is
 injected at CobolFrontend construction time.
+
+NOTE: As of the extension_strategies array migration, RedDragon's own frontend no
+longer uses this module. It is retained only for cicada's backward-compatible
+re-export and will be removed once cicada migrates to RedDragonExtensionLoweringStrategy.
 """
 
 from __future__ import annotations

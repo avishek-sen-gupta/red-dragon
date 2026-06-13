@@ -111,17 +111,29 @@ class TestArrayDispatch:
         assert sql_spy.lowered == [stmt]
 
     def test_first_handler_wins_and_others_skipped(self):
-        from interpreter.cobol.cobol_statements import ExecCicsStatement
+        class _AlwaysHandles:
+            def __init__(self):
+                self.lowered = []
 
-        cics_spy = _SpyStrategy(ExecCicsStatement)
-        sql_spy = _SpyStrategy(ExecSqlStatement)
+            def handles(self, stmt):
+                return True
+
+            def preprocess_program_dict(self, data):
+                return data
+
+            def on_procedure_entry(self, ctx, materialised): ...
+
+            def lower(self, ctx, stmt, materialised):
+                self.lowered.append(stmt)
+
+        first, second = _AlwaysHandles(), _AlwaysHandles()
         ctx = EmitContext(
-            dispatch_fn=dispatch_statement, extension_strategies=[cics_spy, sql_spy]
+            dispatch_fn=dispatch_statement, extension_strategies=[first, second]
         )
         stmt = ExecSqlStatement(verb="DELETE", text="DELETE FROM T")
         dispatch_statement(ctx, stmt, materialised=None)
-        assert sql_spy.lowered == [stmt]
-        assert cics_spy.lowered == []
+        assert first.lowered == [stmt]
+        assert second.lowered == []
 
     def test_empty_array_no_handler_warns(self, caplog):
         import logging
@@ -150,14 +162,29 @@ class _PreprocessRecordingParser(CobolParser):
 
 class TestFrontendExtensionArray:
     def test_all_strategies_preprocess_in_order(self):
-        a = _SpyStrategy(ExecSqlStatement)
-        b = _SpyStrategy(ExecSqlStatement)
+        order = []
+
+        class _OrderSpy:
+            def __init__(self, tag):
+                self._tag = tag
+
+            def handles(self, stmt):
+                return False
+
+            def preprocess_program_dict(self, data):
+                order.append(self._tag)
+                return data
+
+            def on_procedure_entry(self, ctx, materialised): ...
+
+            def lower(self, ctx, stmt, materialised): ...
+
+        a, b = _OrderSpy("a"), _OrderSpy("b")
         frontend = CobolFrontend(
             _PreprocessRecordingParser(), extension_strategies=[a, b]
         )
         frontend.lower(b"")
-        assert a.preprocessed == 1
-        assert b.preprocessed == 1
+        assert order == ["a", "b"]
 
     def test_default_array_is_empty(self):
         frontend = CobolFrontend(_PreprocessRecordingParser())
