@@ -1,10 +1,10 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of typed instruction dataclasses drawn from 34 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of typed instruction dataclasses drawn from 35 opcodes.
 
 ## Instruction format
 
-Each opcode has a dedicated frozen dataclass in `interpreter/instructions.py` (34 classes total). All share an `InstructionBase` with `source_location`. All fields use domain types:
+Each opcode has a dedicated frozen dataclass in `interpreter/instructions.py` (35 classes total). All share an `InstructionBase` with `source_location`. All fields use domain types:
 
 - **Register-holding fields**: `Register` objects (e.g., `result_reg`, `left`, `right`)
 - **Label-holding fields**: `CodeLabel` objects (e.g., `label`, `true_label`, `false_label`)
@@ -603,6 +603,38 @@ Looks up the continuation and branches to its label. If no continuation is set, 
 
 ```
 resume_continuation para_WORK_end
+```
+
+---
+
+## Cooperative suspension
+
+A generic, frontend-agnostic suspend/resume primitive. Distinct from the
+continuation operations above (which are intra-execution PERFORM return points):
+`SUSPEND` pauses the executor *and hands a serializable continuation back to its
+caller* — the program yields a value to the driver and is resumed later with an
+injected value. See [VM design notes](notes-on-vm-design.md#cooperative-suspendresume)
+for the execution model.
+
+### SUSPEND
+
+Cooperatively suspend execution, yielding a value to the driver.
+
+| Field | Type | Value |
+|-------|------|-------|
+| `operand_reg` | `Register` | the value yielded to the driver (the payload) |
+| `result_reg` | `Register` | receives the driver's injected value on resume |
+
+When `run_resumable()` / `resume()` reach a `SUSPEND`, the step loop stops and
+returns `Suspended(state, value)`, where `value` is `operand_reg`'s contents and
+`state` is an `ExecutionState` (the `VMState` plus the cursor). `resume(cfg,
+registry, state, injected)` writes `injected` into `result_reg` and continues at
+the next instruction — to the next suspension or to termination. Under the plain
+`execute_cfg()` entry point a `SUSPEND` raises (legacy callers never emit it).
+
+```
+%p = const 42
+%v = suspend %p        # yield 42 to the driver; on resume, %v = injected value
 ```
 
 ---
