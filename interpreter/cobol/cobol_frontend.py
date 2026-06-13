@@ -13,6 +13,7 @@ for backward compatibility.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from interpreter.cobol.condition_name_index import build_condition_index
@@ -38,9 +39,8 @@ from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
-from interpreter.cobol.exec_cics_strategy import (
-    CatchAllLoweringStrategy,
-    ExecCicsStrategy,
+from interpreter.cobol.red_dragon_extension_strategy import (
+    RedDragonExtensionLoweringStrategy,
 )
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
@@ -65,16 +65,16 @@ class CobolFrontend(Frontend):
         self,
         cobol_parser: CobolParser,
         observer: FrontendObserver = NullFrontendObserver(),
-        exec_cics_strategy: ExecCicsStrategy = CatchAllLoweringStrategy(),  # type: ignore[assignment]  # Pyright can't infer structural Protocol match for default args
+        extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
     ):
         self._parser = cobol_parser
         self._observer = observer
-        self._exec_cics_strategy = exec_cics_strategy
+        self._extension_strategies = tuple(extension_strategies)
         self._layout = DataLayout()
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
             observer=observer,
-            exec_cics_strategy=exec_cics_strategy,
+            extension_strategies=self._extension_strategies,
         )
 
     @property
@@ -173,9 +173,15 @@ class CobolFrontend(Frontend):
         resolved_imports: dict[str, PathName] | None = None,
     ) -> list[InstructionBase]:
         """Lower COBOL source to IR via the ProLeap bridge."""
+
+        def _chained_preprocess(data: dict) -> dict:
+            for strat in self._extension_strategies:
+                data = strat.preprocess_program_dict(data)
+            return data
+
         asg = self._parser.parse(
             source,
-            preprocessor=self._exec_cics_strategy.preprocess_program_dict,
+            preprocessor=_chained_preprocess,
         )
         sectioned = build_sectioned_layout(asg)
         self._program_id = asg.program_id or "MAIN"
@@ -193,7 +199,7 @@ class CobolFrontend(Frontend):
             dispatch_fn=dispatch_statement,
             observer=self._observer,
             condition_index=condition_index,
-            exec_cics_strategy=self._exec_cics_strategy,
+            extension_strategies=self._extension_strategies,
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
