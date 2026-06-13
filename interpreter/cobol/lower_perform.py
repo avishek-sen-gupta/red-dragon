@@ -212,6 +212,22 @@ def lower_perform_until(
         ctx.emit_inst(Label_(label=exit_label))
 
 
+def _init_varying_var(
+    ctx: EmitContext,
+    spec: PerformVaryingSpec,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """Write spec.varying_from into spec.varying_var in the heap."""
+    if not ctx.has_field(spec.varying_var, materialised):
+        return
+    varying_ref, varying_rr = ctx.resolve_field_ref(spec.varying_var, materialised)
+    from_val_reg = _eval_varying_from(ctx, spec.varying_from, materialised)
+    from_str_reg = ctx.emit_to_string(from_val_reg)
+    ctx.emit_encode_and_write(
+        varying_rr, varying_ref.fl, from_str_reg, varying_ref.offset_reg
+    )
+
+
 def lower_perform_varying(
     ctx: EmitContext,
     stmt: PerformStatement,
@@ -225,13 +241,7 @@ def lower_perform_varying(
     body_label = ctx.fresh_label("perform_varying_body")
     exit_label = ctx.fresh_label("perform_varying_exit")
 
-    if ctx.has_field(spec.varying_var, materialised):
-        varying_ref, varying_rr = ctx.resolve_field_ref(spec.varying_var, materialised)
-        from_val_reg = _eval_varying_from(ctx, spec.varying_from, materialised)
-        from_str_reg = ctx.emit_to_string(from_val_reg)
-        ctx.emit_encode_and_write(
-            varying_rr, varying_ref.fl, from_str_reg, varying_ref.offset_reg
-        )
+    _init_varying_var(ctx, spec, materialised)
 
     if spec.test_before:
         ctx.emit_inst(Label_(label=loop_label))
