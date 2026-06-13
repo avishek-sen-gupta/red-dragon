@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from interpreter.cobol.cobol_statements import (
     PerformStatement,
@@ -228,15 +229,13 @@ def _init_varying_var(
     )
 
 
-def lower_perform_varying(
+def _lower_perform_varying_single(
     ctx: EmitContext,
     stmt: PerformStatement,
+    spec: PerformVaryingSpec,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """PERFORM ... VARYING — counter variable loop with FROM/BY/UNTIL."""
-    spec = stmt.spec
-    assert isinstance(spec, PerformVaryingSpec)
-
+    """Original single-variable PERFORM VARYING lowering — unchanged."""
     loop_label = ctx.fresh_label("perform_varying_loop")
     body_label = ctx.fresh_label("perform_varying_body")
     exit_label = ctx.fresh_label("perform_varying_exit")
@@ -269,6 +268,146 @@ def lower_perform_varying(
             )
         )
         ctx.emit_inst(Label_(label=exit_label))
+
+
+def _emit_test_before_level(
+    ctx: EmitContext,
+    specs: tuple[PerformVaryingSpec, ...],
+    body_fn: Callable[[], None],
+    when_done_label: CodeLabel,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """Emit one level of a TEST BEFORE VARYING … AFTER … nested loop.
+
+    specs[0] is the current level's variable; specs[1:] are inner AFTER variables.
+    when_done_label is where to jump when this level's UNTIL fires — the caller
+    passes either the whole-loop exit (outermost call) or the parent's incr label
+    (inner calls), so a fired inner UNTIL cascades to the parent increment rather
+    than exiting the whole PERFORM.
+    """
+    spec = specs[0]
+    loop_label = ctx.fresh_label("pv_loop")
+    body_label = ctx.fresh_label("pv_body")
+    incr_label = ctx.fresh_label("pv_incr")
+
+    _init_varying_var(ctx, spec, materialised)
+
+    ctx.emit_inst(Label_(label=loop_label))
+    cond_reg = ctx.lower_condition(spec.condition, materialised)
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=Register(str(cond_reg)),
+            branch_targets=(when_done_label, body_label),
+        )
+    )
+    ctx.emit_inst(Label_(label=body_label))
+
+    if specs[1:]:
+        _emit_test_before_level(ctx, specs[1:], body_fn, incr_label, materialised)
+    else:
+        body_fn()
+
+    ctx.emit_inst(Label_(label=incr_label))
+    emit_varying_increment(ctx, spec, materialised)
+    ctx.emit_inst(Branch(label=loop_label))
+
+
+def _emit_test_after_varying(
+    ctx: EmitContext,
+    specs: tuple[PerformVaryingSpec, ...],
+    body_fn: Callable[[], None],
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """Emit a TEST AFTER VARYING … AFTER … nested loop.
+
+    specs[0] is the outermost (primary VARYING); specs[-1] is the innermost
+    (last AFTER). All variables are initialized before the body. After the
+    body, increments cascade from innermost to outermost. When an outer UNTIL
+    does not fire (loop continues), all exhausted inner variables are reset.
+
+    IR shape (2-level example, I outer, J inner):
+        init I; init J
+        body_label:
+          [body]
+          # fall through to innermost incr
+        incr_J:
+          J += BY_J; if UNTIL_J → incr_I; else → body_label
+        incr_I:
+          I += BY_I; if UNTIL_I → exit; else → continue_I
+        continue_I:
+          J = FROM_J; → body_label
+        exit_label:
+    """
+    n = len(specs)
+    body_label = ctx.fresh_label("pv_body")
+    exit_label = ctx.fresh_label("pv_exit")
+    incr_labels = tuple(ctx.fresh_label("pv_incr") for _ in range(n))
+    # continue_labels[i]: reset specs[i+1..n-1] to FROM, then jump to body.
+    # Only needed for levels 0..n-2; the innermost (i=n-1) loops back to body directly.
+    continue_labels = tuple(ctx.fresh_label("pv_continue") for _ in range(n - 1))
+
+    # Initialise all variables (outermost first)
+    for spec in specs:
+        _init_varying_var(ctx, spec, materialised)
+
+    # Body block
+    ctx.emit_inst(Label_(label=body_label))
+    body_fn()
+    # Falls through to innermost increment (incr_labels[n-1])
+
+    # Increment cascade: innermost (n-1) → outermost (0)
+    for i in range(n - 1, -1, -1):
+        spec = specs[i]
+        ctx.emit_inst(Label_(label=incr_labels[i]))
+        emit_varying_increment(ctx, spec, materialised)
+        cond_reg = ctx.lower_condition(spec.condition, materialised)
+
+        true_target = exit_label if i == 0 else incr_labels[i - 1]
+        # Innermost (i == n-1): false → body directly (no inner vars to reset)
+        false_target = body_label if i == n - 1 else continue_labels[i]
+
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=Register(str(cond_reg)),
+                branch_targets=(true_target, false_target),
+            )
+        )
+
+    # Continue blocks: reset exhausted inner variables, re-enter body
+    for i in range(n - 2, -1, -1):
+        ctx.emit_inst(Label_(label=continue_labels[i]))
+        for j in range(i + 1, n):
+            _init_varying_var(ctx, specs[j], materialised)
+        ctx.emit_inst(Branch(label=body_label))
+
+    ctx.emit_inst(Label_(label=exit_label))
+
+
+def lower_perform_varying(
+    ctx: EmitContext,
+    stmt: PerformStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """PERFORM ... VARYING — counter variable loop with FROM/BY/UNTIL."""
+    spec = stmt.spec
+    assert isinstance(spec, PerformVaryingSpec)
+
+    all_specs: tuple[PerformVaryingSpec, ...] = (spec,) + spec.after_specs
+
+    if len(all_specs) == 1:
+        _lower_perform_varying_single(ctx, stmt, spec, materialised)
+    elif spec.test_before:
+        exit_label = ctx.fresh_label("pv_exit")
+        body_fn = lambda: lower_perform_body(ctx, stmt, materialised)
+        _emit_test_before_level(ctx, all_specs, body_fn, exit_label, materialised)
+        ctx.emit_inst(Label_(label=exit_label))
+    else:
+        _emit_test_after_varying(
+            ctx,
+            all_specs,
+            lambda: lower_perform_body(ctx, stmt, materialised),
+            materialised,
+        )
 
 
 def _eval_varying_from(
