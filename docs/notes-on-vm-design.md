@@ -37,7 +37,7 @@ flowchart TD
     ts["tree-sitter\n15 languages"]
     llm["LLM Frontend\nany language"]
     chunked["Chunked LLM\nchunk→LLM×N"]
-    ir["Flattened IR\n(34 opcodes)"]
+    ir["Flattened IR\n(35 opcodes)"]
     cfg["Build CFG"]
     reg["Registry"]
     df["Dataflow Analysis"]
@@ -47,7 +47,7 @@ flowchart TD
     ir --> cfg & reg & df
 
     subgraph VM ["Symbolic VM"]
-        exec["Local Executor\n← handles all 34 opcodes"]
+        exec["Local Executor\n← handles all 35 opcodes"]
         oracle["LLM Oracle\n← fallback only"]
         exec -- "not handled" --> oracle
     end
@@ -107,7 +107,7 @@ The IR is a **flattened high-level three-address code** defined in `interpreter/
 
 ### Opcodes
 
-The `Opcode` enum (`interpreter/ir.py:11`) defines 34 opcodes in six categories:
+The `Opcode` enum (`interpreter/ir.py:11`) defines 35 opcodes in six categories:
 
 | Category | Opcodes | Description |
 |---|---|---|
@@ -116,7 +116,7 @@ The `Opcode` enum (`interpreter/ir.py:11`) defines 34 opcodes in six categories:
 | **Special** | `SYMBOLIC`, `LABEL` | Parameters, block boundaries |
 | **Pointer ops** | `ADDRESS_OF`, `LOAD_INDIRECT`, `LOAD_FIELD_INDIRECT`, `STORE_INDIRECT` | Pointer creation/dereference (`&x`, `*ptr`, `*ptr = val`) |
 | **Region ops** | `ALLOC_REGION`, `WRITE_REGION`, `LOAD_REGION` | Byte-addressed memory (COBOL) |
-| **Continuation ops** | `SET_CONTINUATION`, `RESUME_CONTINUATION` | Named return points (COBOL PERFORM) |
+| **Continuation ops** | `SET_CONTINUATION`, `RESUME_CONTINUATION`, `SUSPEND` | PERFORM return points + cooperative suspend/resume |
 
 ### Instruction structure
 
@@ -135,7 +135,7 @@ class Binop(InstructionBase):
     right: Register
 ```
 
-There are 34 per-opcode frozen dataclasses (e.g., `Const`, `LoadVar`, `StoreVar`, `Binop`, `CallFunction`, `NewObject`, etc.), each with named typed fields. All register-holding fields are `Register` objects, all label-holding fields are `CodeLabel` objects, variable names are `VarName`, field names are `FieldName`, function/method names are `FuncName`, and operators are `BinopKind`/`UnopKind` enums. Each instruction implements `reads()` and `writes()` methods returning `StorageIdentifier` values for dataflow analysis.
+There are 35 per-opcode frozen dataclasses (e.g., `Const`, `LoadVar`, `StoreVar`, `Binop`, `CallFunction`, `NewObject`, etc.), each with named typed fields. All register-holding fields are `Register` objects, all label-holding fields are `CodeLabel` objects, variable names are `VarName`, field names are `FieldName`, function/method names are `FuncName`, and operators are `BinopKind`/`UnopKind` enums. Each instruction implements `reads()` and `writes()` methods returning `StorageIdentifier` values for dataflow analysis.
 
 **Key design choice**: registers use SSA-like naming (`%0`, `%1`, ...) for temporaries, while named variables use string names (`x`, `total`). The `STORE_VAR` / `LOAD_VAR` opcodes bridge between registers and variables. For block-scoped languages, variable names may be mangled by the frontend (e.g. `x$1`) to disambiguate shadowed declarations — see the [Type System doc](type-system.md#block-scope-tracking-llvm-style) for details.
 
@@ -495,11 +495,56 @@ class LocalExecutor:
         CallFunction: _handle_call_function,
         CallMethod: _handle_call_method,
         CallCtorFunction: _handle_call_ctor,
-        ... # all 34 instruction types covered
+        ... # all 35 instruction types covered
     }
 ```
 
 Dispatch uses `type(instruction)` lookup (not `Opcode` enum), matching the per-opcode dataclass type directly. If the type isn't in the table, it returns `ExecutionResult.not_handled()`, triggering LLM fallback.
+
+### Cooperative suspend/resume
+
+The VM can pause mid-execution and be resumed later — the basis for cooperative
+coroutines, conversational terminal I/O, lazy generators, and step debuggers. It
+rests on one observation about the model above: **the only control state that
+lives outside `VMState` is the cursor `(current_label, ip)`** — a pair of loop
+locals. Everything else needed to continue execution is already plain data in
+`VMState`: registers and locals per frame, the entire `call_stack` (each frame's
+`return_label`/`return_ip`/`result_reg`), the heap, regions, and the continuation
+table. So a snapshot of `(VMState, current_label, ip)` is a **complete,
+serializable continuation** — no frozen Python/native stack is involved.
+
+The primitive is three pieces (all in `interpreter/run.py`):
+
+- **`SUSPEND` instruction** (`interpreter/instructions.py`) — yields the value in
+  its `operand_reg` and pauses; on resume the injected value lands in `result_reg`.
+  See [IR reference](ir-reference.md#suspend).
+- **`ExecutionState`** — the reified continuation: `vm` + `current_label` + `ip` +
+  `resume_reg`. It deliberately does **not** hold the static program; the
+  CFG/registry are rebuilt and passed back to `resume()`, so a continuation can be
+  pickled, the whole pipeline torn down and rebuilt, and execution resumed against
+  the fresh program.
+- **`run_resumable()` / `resume()`** — like `execute_cfg()` but returning a
+  `Suspended(state, value)` or `Completed(vm, stats)`. `resume(cfg, registry,
+  state, injected)` writes `injected` into the Suspend's `result_reg` and re-enters
+  the loop at the saved cursor.
+
+The step loop itself is extracted into a shared `_run_loop()` used by both
+`execute_cfg()` and `run_resumable()`/`resume()`; on a `SUSPEND` it returns the
+suspension cursor instead of running to a terminus. `execute_cfg()` is unchanged
+in behaviour — it raises if a `SUSPEND` is ever reached (frontends that don't use
+the primitive never emit one).
+
+Two properties fall out of the continuation being plain data, neither available to
+a thread/greenlet implementation:
+
+- **multi-shot** — deep-copy an `ExecutionState` and resume the copies independently
+  (speculative execution, what-if exploration, replay);
+- **durable** — serialize a suspended task, resume it in another process.
+
+Suspension is captured at instruction boundaries, so `VMState` is always
+consistent at a suspend point. Resume works identically when the `SUSPEND` is deep
+inside a nested `CALL`: the whole `call_stack` is in the snapshot, and the returns
+unwind normally afterward.
 
 ---
 
@@ -1009,7 +1054,7 @@ if result is Operators.UNCOMPUTABLE:
 
 ## 12. LLM Backend (Oracle Fallback)
 
-The LLM backend (`interpreter/backend.py`) is the fallback for instructions the local executor can't handle. In practice, the local executor handles all 34 opcodes, so the LLM is only called when the local executor explicitly delegates (which currently doesn't happen — all opcodes have handlers).
+The LLM backend (`interpreter/backend.py`) is the fallback for instructions the local executor can't handle. In practice, the local executor handles all 35 opcodes, so the LLM is only called when the local executor explicitly delegates (which currently doesn't happen — all opcodes have handlers).
 
 ### Architecture
 
@@ -1179,7 +1224,7 @@ Both graphs are returned in `DataflowResult`: `raw_dependency_graph` (direct edg
 ```
 interpreter/
 ├── ir.py                    Opcode enum, Register, CodeLabel, SourceLocation, IRInstruction factory
-├── instructions.py          34 per-opcode frozen dataclasses + InstructionBase + StorageIdentifier
+├── instructions.py          35 per-opcode frozen dataclasses + InstructionBase + StorageIdentifier
 ├── register.py              Register domain type
 ├── var_name.py              VarName domain type
 ├── field_name.py            FieldName domain type (with FieldKind enum)
@@ -1205,7 +1250,7 @@ interpreter/
 ├── vm/                      VM execution engine
 │   ├── vm_types.py          VM data types (SymbolicValue, HeapObject, VMState, StateUpdate, ...)
 │   ├── vm.py                apply_update(), helpers (Operators, _parse_const, _resolve_reg → TypedValue)
-│   ├── executor.py          LocalExecutor dispatch table, all 34 opcode handlers
+│   ├── executor.py          LocalExecutor dispatch table, all 35 opcode handlers
 │   ├── builtins.py          Built-in function table (len, range, print, ...)
 │   ├── unresolved_call.py   Symbolic/LLM call resolution strategies
 │   └── field_fallback.py    Field access fallback chain
@@ -1363,7 +1408,7 @@ Final state:
 
 | Principle | Manifestation |
 |---|---|
-| **Deterministic first** | Local executor handles all 34 opcodes; LLM is pure fallback |
+| **Deterministic first** | Local executor handles all 35 opcodes; LLM is pure fallback |
 | **Functional core, imperative shell** | Pure data types in `*_types.py`, mutation only in `apply_update()` |
 | **Result types over exceptions** | `ExecutionResult.not_handled()` instead of raising or returning `None` |
 | **Sentinel over exception** | `Operators.UNCOMPUTABLE` instead of try/catch for arithmetic failures |
