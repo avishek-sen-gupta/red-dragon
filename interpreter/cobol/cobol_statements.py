@@ -1046,22 +1046,20 @@ class ExecCicsStatement:
 
 @dataclass(frozen=True)
 class ExecSqlStatement:
-    """EXEC SQL block. Carries the raw (untagged) SQL text verbatim; host-variable /
-    INTO parsing is done by the injected SQL strategy, not here (the COBOL frontend
-    treats the SQL body as opaque text)."""
+    """EXEC SQL block. Carries the raw EXEC SQL text verbatim — including the
+    ``EXEC SQL``/``END-EXEC`` envelope — exactly as the ProLeap bridge emits it.
+    The COBOL frontend treats the SQL body as opaque text: envelope removal and
+    SQL parsing are done later by the injected SQL strategy's grammar-based parser
+    (squall), never by string surgery here."""
 
-    verb: str  # first SQL keyword (SELECT/INSERT/UPDATE/DELETE/...), uppercased
-    text: str  # raw untagged SQL body (between EXEC SQL and END-EXEC)
+    text: str  # raw EXEC SQL text verbatim, envelope included
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExecSqlStatement":
-        text = data.get("exec_sql_text", "") or ""
-        stripped = text.strip()
-        verb = stripped.split(None, 1)[0].upper() if stripped else ""
-        return cls(verb=verb, text=text)
+        return cls(text=data.get("exec_sql_text", "") or "")
 
     def to_dict(self) -> dict:
-        return {"type": "EXEC_SQL", "verb": self.verb, "text": self.text}
+        return {"type": "EXEC_SQL", "text": self.text}
 
 
 def _parse_perform_spec(
