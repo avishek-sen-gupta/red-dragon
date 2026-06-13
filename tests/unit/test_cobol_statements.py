@@ -737,6 +737,49 @@ class TestPerformSpecs:
         stmt = parse_statement({"type": "PERFORM", "operands": ["WORK-PARA"]})
         assert stmt.spec is None
 
+    @covers(CobolFeature.PERFORM_VARYING_AFTER)
+    def test_varying_spec_with_after_specs(self):
+        """PERFORM VARYING with one AFTER clause deserializes both loop variables."""
+        stmt = parse_statement(
+            {
+                "type": "PERFORM",
+                "perform_type": "VARYING",
+                "varying_var": "WS-I",
+                "varying_from": "1",
+                "varying_by": "1",
+                "until": {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-I"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "3"},
+                    },
+                },
+                "test_before": True,
+                "after_specs": [
+                    {
+                        "varying_var": "WS-J",
+                        "varying_from": "1",
+                        "varying_by": "1",
+                        "until": {
+                            "not": False,
+                            "relation": {
+                                "left": {"kind": "ref", "name": "WS-J"},
+                                "op": ">",
+                                "right": {"kind": "lit", "value": "3"},
+                            },
+                        },
+                    }
+                ],
+            }
+        )
+        assert isinstance(stmt.spec, PerformVaryingSpec)
+        assert len(stmt.spec.after_specs) == 1
+        inner = stmt.spec.after_specs[0]
+        assert inner.varying_var == "WS-J"
+        assert inner.varying_from == "1"
+        assert inner.varying_by == "1"
+
 
 class TestRoundTrip:
     """Each statement type round-trips through to_dict / parse_statement."""
@@ -913,6 +956,48 @@ class TestRoundTrip:
             "test_before": True,
         }
         assert self._round_trip(data) == data
+
+    @covers(CobolFeature.PERFORM_VARYING_AFTER)
+    def test_perform_varying_after_round_trip(self):
+        """PerformVaryingSpec with after_specs survives dict → spec → dict."""
+        data = {
+            "type": "PERFORM",
+            "perform_type": "VARYING",
+            "varying_var": "WS-I",
+            "varying_from": "1",
+            "varying_by": "1",
+            "until": {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-I"},
+                    "op": ">",
+                    "right": {"kind": "lit", "value": "3"},
+                },
+            },
+            "test_before": True,
+            "after_specs": [
+                {
+                    "varying_var": "WS-J",
+                    "varying_from": "1",
+                    "varying_by": "1",
+                    "until": {
+                        "not": False,
+                        "relation": {
+                            "left": {"kind": "ref", "name": "WS-J"},
+                            "op": ">",
+                            "right": {"kind": "lit", "value": "3"},
+                        },
+                    },
+                }
+            ],
+        }
+        stmt = parse_statement(data)
+        assert isinstance(stmt, PerformStatement)
+        from interpreter.cobol.cobol_statements import _spec_to_dict
+
+        result = _spec_to_dict(stmt.spec)
+        assert result["after_specs"][0]["varying_var"] == "WS-J"
+        assert result["after_specs"][0]["varying_by"] == "1"
 
     @covers(CobolFeature.EVALUATE, CobolFeature.EVALUATE_WHEN_OTHER)
     def test_evaluate_round_trip(self):
