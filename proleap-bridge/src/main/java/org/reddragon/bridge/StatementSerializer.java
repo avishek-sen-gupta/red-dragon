@@ -72,6 +72,7 @@ import io.proleap.cobol.asg.metamodel.procedure.perform.Times;
 import io.proleap.cobol.asg.metamodel.procedure.perform.Until;
 import io.proleap.cobol.asg.metamodel.procedure.perform.Varying;
 import io.proleap.cobol.asg.metamodel.procedure.perform.VaryingClause;
+import io.proleap.cobol.asg.metamodel.procedure.perform.After;
 import io.proleap.cobol.asg.metamodel.procedure.perform.VaryingPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.set.SetBy;
 import io.proleap.cobol.asg.metamodel.procedure.set.SetStatement;
@@ -656,6 +657,35 @@ public final class StatementSerializer {
                         }
                         if (vp.getUntil() != null) {
                             serializeUntilFields(vp.getUntil(), obj);
+                        }
+                    }
+                    List<After> afters = vc.getAfters();
+                    if (afters != null && !afters.isEmpty()) {
+                        JsonArray afterArr = new JsonArray();
+                        for (After after : afters) {
+                            if (after == null) continue;
+                            VaryingPhrase ap = after.getVaryingPhrase();
+                            if (ap == null) continue;
+                            JsonObject aObj = new JsonObject();
+                            if (ap.getVaryingValueStmt() != null) {
+                                aObj.addProperty("varying_var",
+                                    extractValueStmtText(ap.getVaryingValueStmt()));
+                            }
+                            if (ap.getFrom() != null && ap.getFrom().getFromValueStmt() != null) {
+                                aObj.add("varying_from",
+                                    serializeFromValue(ap.getFrom().getFromValueStmt()));
+                            }
+                            if (ap.getBy() != null && ap.getBy().getByValueStmt() != null) {
+                                aObj.addProperty("varying_by",
+                                    extractValueStmtText(ap.getBy().getByValueStmt()));
+                            }
+                            if (ap.getUntil() != null) {
+                                serializeUntilFields(ap.getUntil(), aObj);
+                            }
+                            afterArr.add(aObj);
+                        }
+                        if (afterArr.size() > 0) {
+                            obj.add("after_specs", afterArr);
                         }
                     }
                 }
