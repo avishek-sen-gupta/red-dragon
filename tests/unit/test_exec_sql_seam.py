@@ -28,3 +28,35 @@ class TestExecSqlStatementNode:
         stmt = parse_statement({"type": "EXEC_SQL", "exec_sql_text": "DELETE FROM T"})
         assert isinstance(stmt, ExecSqlStatement)
         assert stmt.verb == "DELETE"
+
+
+from interpreter.cobol.red_dragon_extension_strategy import (
+    RedDragonExtensionLoweringStrategy,
+)
+
+
+class _ConformingStrategy:
+    def handles(self, stmt):
+        return True
+
+    def preprocess_program_dict(self, data):
+        return data
+
+    def on_procedure_entry(self, ctx, materialised): ...
+    def lower(self, ctx, stmt, materialised): ...
+
+
+class _MissingHandles:
+    def preprocess_program_dict(self, data):
+        return data
+
+    def on_procedure_entry(self, ctx, materialised): ...
+    def lower(self, ctx, stmt, materialised): ...
+
+
+class TestExtensionStrategyProtocol:
+    def test_conforming_class_is_instance(self):
+        assert isinstance(_ConformingStrategy(), RedDragonExtensionLoweringStrategy)
+
+    def test_missing_handles_is_not_instance(self):
+        assert not isinstance(_MissingHandles(), RedDragonExtensionLoweringStrategy)
