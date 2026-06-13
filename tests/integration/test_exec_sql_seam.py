@@ -63,5 +63,6 @@ def test_real_exec_sql_reaches_strategy():
         len(spy.lowered) == 1
     ), f"Expected 1 ExecSqlStatement, got {len(spy.lowered)}: {spy.lowered}"
     assert isinstance(spy.lowered[0], ExecSqlStatement)
-    assert spy.lowered[0].verb == "SELECT"
+    # Opaque node: text is the raw EXEC SQL verbatim (envelope included).
+    assert "SELECT" in spy.lowered[0].text
     assert "SYSDUMMY1" in spy.lowered[0].text
