@@ -17,7 +17,6 @@ from interpreter.cobol.cobol_statements import (
     DisplayStatement,
     EntryStatement,
     EvaluateStatement,
-    ExecCicsStatement,
     ExitProgramStatement,
     ExitStatement,
     GobackStatement,
@@ -158,8 +157,10 @@ def dispatch_statement(
         lower_start(ctx, stmt, materialised)
     elif isinstance(stmt, DeleteStatement):
         lower_delete(ctx, stmt, materialised)
-    # ── CICS ──────────────────────────────────────────────
-    elif isinstance(stmt, ExecCicsStatement):
-        ctx.exec_cics_strategy.lower(ctx, stmt, materialised)
+    # ── Extension statements (EXEC CICS / EXEC SQL / …) routed via the array ──
     else:
+        for strat in ctx.extension_strategies:
+            if strat.handles(stmt):
+                strat.lower(ctx, stmt, materialised)
+                return
         logger.warning("Unhandled COBOL statement type: %s", type(stmt).__name__)

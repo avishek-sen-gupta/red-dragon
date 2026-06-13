@@ -18,9 +18,8 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     from interpreter.cobol.cobol_expression import ExprNode
 
-from interpreter.cobol.exec_cics_strategy import (
-    CatchAllLoweringStrategy,
-    ExecCicsStrategy,
+from interpreter.cobol.red_dragon_extension_strategy import (
+    RedDragonExtensionLoweringStrategy,
 )
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
@@ -83,12 +82,12 @@ class EmitContext:
         dispatch_fn: DispatchFn,
         observer: FrontendObserver | None = None,
         condition_index: ConditionNameIndex = ConditionNameIndex({}),
-        exec_cics_strategy: ExecCicsStrategy = CatchAllLoweringStrategy(),  # type: ignore[assignment]  # Pyright can't infer structural Protocol match for default args
+        extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
     ) -> None:
         self._dispatch_fn = dispatch_fn
         self._observer = observer
         self._condition_index = condition_index
-        self._exec_cics_strategy = exec_cics_strategy
+        self._extension_strategies = tuple(extension_strategies)
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
@@ -109,8 +108,8 @@ class EmitContext:
         self._section_paragraphs = value
 
     @property
-    def exec_cics_strategy(self) -> ExecCicsStrategy:
-        return self._exec_cics_strategy
+    def extension_strategies(self) -> tuple[RedDragonExtensionLoweringStrategy, ...]:
+        return self._extension_strategies
 
     # ── Core Primitives ───────────────────────────────────────────
 
