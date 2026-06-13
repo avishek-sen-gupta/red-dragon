@@ -32,6 +32,7 @@ class CobolFeature(Enum):
     PERFORM_TIMES = "PERFORM n TIMES loop statements"
     PERFORM_UNTIL = "PERFORM UNTIL cond loop statements"
     PERFORM_VARYING = "PERFORM VARYING x FROM ... BY ... UNTIL ... loop statements"
+    PERFORM_VARYING_AFTER = "PERFORM VARYING x ... AFTER y ... nested multi-index loop"
     PERFORM_TEST_BEFORE = "PERFORM WITH TEST BEFORE pre-condition loop variant"
     PERFORM_TEST_AFTER = "PERFORM WITH TEST AFTER post-condition loop variant"
     PERFORM_THRU = "PERFORM para THRU para2 paragraph range execution"
