@@ -93,6 +93,7 @@ import io.proleap.cobol.asg.metamodel.procedure.delete.DeleteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.rewrite.RewriteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.start.StartStatement;
 import io.proleap.cobol.asg.metamodel.procedure.execcics.ExecCicsStatement;
+import io.proleap.cobol.asg.metamodel.procedure.execsql.ExecSqlStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.call.TableCall;
 import io.proleap.cobol.asg.metamodel.valuestmt.ArithmeticValueStmt;
@@ -194,6 +195,7 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.START) return serializeStart((StartStatement) stmt);
         if (stmtType == StatementTypeEnum.DELETE) return serializeDelete((DeleteStatement) stmt);
         if (stmtType == StatementTypeEnum.EXEC_CICS) return serializeExecCics((ExecCicsStatement) stmt);
+        if (stmtType == StatementTypeEnum.EXEC_SQL) return serializeExecSql((ExecSqlStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -1456,6 +1458,25 @@ public final class StatementSerializer {
         String text = stmt.getExecCicsText();
         if (text != null) {
             obj.addProperty("exec_cics_text", text);
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeExecSql(ExecSqlStatement stmt) {
+        JsonObject obj = newStatement("EXEC_SQL");
+        String text = stmt.getExecSqlText();
+        if (text != null) {
+            // getExecSqlText() returns the full tagged form, e.g.
+            // "EXEC SQL SELECT ... END-EXEC". Strip the outer keywords so the
+            // Python side receives only the raw SQL body.
+            String body = text.trim();
+            if (body.toUpperCase().startsWith("EXEC SQL")) {
+                body = body.substring("EXEC SQL".length()).trim();
+            }
+            if (body.toUpperCase().endsWith("END-EXEC")) {
+                body = body.substring(0, body.length() - "END-EXEC".length()).trim();
+            }
+            obj.addProperty("exec_sql_text", body);
         }
         return obj;
     }
