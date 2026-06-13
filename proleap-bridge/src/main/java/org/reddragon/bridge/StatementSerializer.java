@@ -1463,20 +1463,13 @@ public final class StatementSerializer {
     }
 
     private static JsonObject serializeExecSql(ExecSqlStatement stmt) {
+        // Opaque passthrough, exactly like serializeExecCics: emit getExecSqlText()
+        // verbatim (the full "EXEC SQL ... END-EXEC" form). The bridge does no SQL
+        // parsing; envelope removal + parsing happen in the Python/squall layer.
         JsonObject obj = newStatement("EXEC_SQL");
         String text = stmt.getExecSqlText();
         if (text != null) {
-            // getExecSqlText() returns the full tagged form, e.g.
-            // "EXEC SQL SELECT ... END-EXEC". Strip the outer keywords so the
-            // Python side receives only the raw SQL body.
-            String body = text.trim();
-            if (body.toUpperCase().startsWith("EXEC SQL")) {
-                body = body.substring("EXEC SQL".length()).trim();
-            }
-            if (body.toUpperCase().endsWith("END-EXEC")) {
-                body = body.substring(0, body.length() - "END-EXEC".length()).trim();
-            }
-            obj.addProperty("exec_sql_text", body);
+            obj.addProperty("exec_sql_text", text);
         }
         return obj;
     }

@@ -4,30 +4,26 @@ from interpreter.cobol.cobol_statements import ExecSqlStatement, parse_statement
 
 
 class TestExecSqlStatementNode:
-    def test_from_dict_extracts_text_and_verb(self):
+    def test_from_dict_carries_text_verbatim(self):
         data = {
             "type": "EXEC_SQL",
-            "exec_sql_text": "SELECT ACCT_BAL INTO :WS-BAL FROM ACCOUNT WHERE ACCT_ID = :WS-ID",
+            "exec_sql_text": "EXEC SQL SELECT ACCT_BAL INTO :WS-BAL FROM ACCOUNT END-EXEC",
         }
         stmt = ExecSqlStatement.from_dict(data)
-        assert stmt.verb == "SELECT"
+        # Opaque node: the bridge's text is carried verbatim (envelope included).
+        # Envelope removal + SQL parsing happen later in squall's grammar, not here.
         assert stmt.text == data["exec_sql_text"]
 
-    def test_from_dict_empty_text_yields_empty_verb(self):
+    def test_from_dict_empty_text(self):
         stmt = ExecSqlStatement.from_dict({"type": "EXEC_SQL"})
-        assert stmt.verb == ""
         assert stmt.text == ""
 
-    def test_verb_is_uppercased_first_token(self):
-        stmt = ExecSqlStatement.from_dict(
-            {"type": "EXEC_SQL", "exec_sql_text": "  insert into T values (1)"}
-        )
-        assert stmt.verb == "INSERT"
-
     def test_parse_statement_dispatches_exec_sql(self):
-        stmt = parse_statement({"type": "EXEC_SQL", "exec_sql_text": "DELETE FROM T"})
+        stmt = parse_statement(
+            {"type": "EXEC_SQL", "exec_sql_text": "EXEC SQL DELETE FROM T END-EXEC"}
+        )
         assert isinstance(stmt, ExecSqlStatement)
-        assert stmt.verb == "DELETE"
+        assert stmt.text == "EXEC SQL DELETE FROM T END-EXEC"
 
 
 from interpreter.cobol.red_dragon_extension_strategy import (
@@ -106,7 +102,7 @@ class TestArrayDispatch:
         ctx = EmitContext(
             dispatch_fn=dispatch_statement, extension_strategies=[sql_spy]
         )
-        stmt = ExecSqlStatement(verb="SELECT", text="SELECT 1 INTO :X FROM T")
+        stmt = ExecSqlStatement(text="SELECT 1 INTO :X FROM T")
         dispatch_statement(ctx, stmt, materialised=None)
         assert sql_spy.lowered == [stmt]
 
@@ -130,7 +126,7 @@ class TestArrayDispatch:
         ctx = EmitContext(
             dispatch_fn=dispatch_statement, extension_strategies=[first, second]
         )
-        stmt = ExecSqlStatement(verb="DELETE", text="DELETE FROM T")
+        stmt = ExecSqlStatement(text="DELETE FROM T")
         dispatch_statement(ctx, stmt, materialised=None)
         assert first.lowered == [stmt]
         assert second.lowered == []
@@ -139,7 +135,7 @@ class TestArrayDispatch:
         import logging
 
         ctx = EmitContext(dispatch_fn=dispatch_statement, extension_strategies=[])
-        stmt = ExecSqlStatement(verb="SELECT", text="SELECT 1")
+        stmt = ExecSqlStatement(text="SELECT 1")
         with caplog.at_level(logging.WARNING):
             dispatch_statement(ctx, stmt, materialised=None)
         assert "Unhandled" in caplog.text
