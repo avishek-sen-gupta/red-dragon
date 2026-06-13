@@ -1114,6 +1114,145 @@ class TestPerformLoopLowering:
         plus_ops = [b for b in binops if b.operands[0] == "+"]
         assert len(plus_ops) >= 1
 
+    @covers(CobolFeature.PERFORM_VARYING_AFTER)
+    def test_perform_varying_after_test_before_emits_nested_loops(self):
+        """PERFORM VARYING I AFTER J (TEST BEFORE) emits two BRANCH_IF with nested structure.
+
+        The outer BranchIf's true-target must be the overall exit label.
+        The inner BranchIf's true-target must be the outer increment label (not exit).
+        Both WRITE_REGIONs for FROM init appear before their respective loop tops.
+        """
+        fields = [
+            CobolField(
+                name="WS-I", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="0"
+            ),
+            CobolField(
+                name="WS-J", level=77, pic="9(3)", usage="DISPLAY", offset=3, value="0"
+            ),
+        ]
+        until_i = {
+            "not": False,
+            "relation": {
+                "left": {"kind": "ref", "name": "WS-I"},
+                "op": ">",
+                "right": {"kind": "lit", "value": "2"},
+            },
+        }
+        until_j = {
+            "not": False,
+            "relation": {
+                "left": {"kind": "ref", "name": "WS-J"},
+                "op": ">",
+                "right": {"kind": "lit", "value": "3"},
+            },
+        }
+        stmts = [
+            PerformStatement(
+                children=[DisplayStatement(operand=RefModOperand(name="BODY"))],
+                spec=PerformVaryingSpec(
+                    varying_var="WS-I",
+                    varying_from="1",
+                    varying_by="1",
+                    condition=until_i,
+                    test_before=True,
+                    after_specs=(
+                        PerformVaryingSpec(
+                            varying_var="WS-J",
+                            varying_from="1",
+                            varying_by="1",
+                            condition=until_j,
+                        ),
+                    ),
+                ),
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        branch_ifs = _find_opcodes(instructions, Opcode.BRANCH_IF)
+        # Two BRANCH_IF instructions: outer (I) and inner (J)
+        assert len(branch_ifs) == 2
+
+        # Two BRANCH (unconditional) instructions: inner loop-back and outer loop-back
+        branches = _find_opcodes(instructions, Opcode.BRANCH)
+        assert len(branches) >= 2
+
+        # Two BINOP (+) for the two increment operations (may be more from encode/decode)
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        plus_ops = [b for b in binops if b.operands[0] == "+"]
+        assert len(plus_ops) >= 2
+
+        # Inner BRANCH_IF's true-target must NOT equal outer BRANCH_IF's true-target
+        # (inner exits to outer's incr, not the same exit as outer)
+        outer_true = branch_ifs[0].branch_targets[0]
+        inner_true = branch_ifs[1].branch_targets[0]
+        assert outer_true != inner_true
+
+    @covers(CobolFeature.PERFORM_VARYING_AFTER, CobolFeature.PERFORM_TEST_AFTER)
+    def test_perform_varying_after_test_after_emits_cascade(self):
+        """PERFORM VARYING I AFTER J TEST AFTER emits body-first cascade structure.
+
+        Expects:
+        - Two BRANCH_IF: innermost (J) first in IR, then outer (I)
+        - Two BINOP (+) for the two increments
+        - The two BRANCH_IF true-targets are different (innermost → outer incr, outer → exit)
+        """
+        fields = [
+            CobolField(
+                name="WS-I", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="0"
+            ),
+            CobolField(
+                name="WS-J", level=77, pic="9(3)", usage="DISPLAY", offset=3, value="0"
+            ),
+        ]
+        until_i = {
+            "not": False,
+            "relation": {
+                "left": {"kind": "ref", "name": "WS-I"},
+                "op": ">",
+                "right": {"kind": "lit", "value": "2"},
+            },
+        }
+        until_j = {
+            "not": False,
+            "relation": {
+                "left": {"kind": "ref", "name": "WS-J"},
+                "op": ">",
+                "right": {"kind": "lit", "value": "3"},
+            },
+        }
+        stmts = [
+            PerformStatement(
+                children=[DisplayStatement(operand=RefModOperand(name="BODY"))],
+                spec=PerformVaryingSpec(
+                    varying_var="WS-I",
+                    varying_from="1",
+                    varying_by="1",
+                    condition=until_i,
+                    test_before=False,
+                    after_specs=(
+                        PerformVaryingSpec(
+                            varying_var="WS-J",
+                            varying_from="1",
+                            varying_by="1",
+                            condition=until_j,
+                        ),
+                    ),
+                ),
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        branch_ifs = _find_opcodes(instructions, Opcode.BRANCH_IF)
+        assert len(branch_ifs) == 2
+
+        # Two BINOP (+): one for J increment, one for I increment (plus encode/decode overhead)
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        plus_ops = [b for b in binops if b.operands[0] == "+"]
+        assert len(plus_ops) >= 2
+
+        # The two BRANCH_IF true-targets are different (innermost → outer incr, outer → exit)
+        assert branch_ifs[0].branch_targets[0] != branch_ifs[1].branch_targets[0]
+
 
 class TestSectionPerform:
     """Tests for section-level PERFORM."""
