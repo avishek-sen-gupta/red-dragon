@@ -57,6 +57,8 @@ class Opcode(str, Enum):
     # Continuation operations (named return points)
     SET_CONTINUATION = "SET_CONTINUATION"
     RESUME_CONTINUATION = "RESUME_CONTINUATION"
+    # Cooperative suspension: yield to the driver and resume with an injected value
+    SUSPEND = "SUSPEND"
     # Pointer operations
     ADDRESS_OF = "ADDRESS_OF"
     LOAD_INDIRECT = "LOAD_INDIRECT"

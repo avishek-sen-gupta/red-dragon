@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass, field as dataclass_field, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Union
 
 from interpreter.constants import Language, FoundationTypeName
 from interpreter.func_name import FuncName
@@ -19,7 +19,10 @@ from interpreter.types.coercion.default_conversion_rules import (
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import Opcode, CodeLabel, NO_LABEL
-from interpreter.instructions import InstructionBase, Label_, Return_, Throw_
+from interpreter.instructions import InstructionBase, Label_, Return_, Throw_, Suspend
+from interpreter.register import Register
+from interpreter.types.typed_value import typed, unwrap
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.frontend import Frontend, get_frontend
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
@@ -317,58 +320,35 @@ def _handle_return_flow(
     return _StopExecution()
 
 
-def execute_cfg(
+@dataclass
+class _LoopResult:
+    """Internal outcome of one slice of the step loop."""
+
+    suspended: bool
+    steps: int = 0
+    llm_calls: int = 0
+    # Suspension cursor (set only when suspended=True):
+    susp_label: CodeLabel | None = None
+    susp_ip: int | None = None
+    susp_reg: Register | None = None
+    susp_value: Any = None
+
+
+def _make_base_ctx(
     cfg: CFG,
-    entry_point: str | CodeLabel,
     registry: FunctionRegistry,
-    config: VMConfig = VMConfig(),
-    strategies: ExecutionStrategies = ExecutionStrategies(),
-    vm: VMState | None = None,
-) -> tuple[VMState, ExecutionStats]:
-    """Execute a pre-built CFG from the given entry point.
-
-    Initializes a VM, runs the step loop (local execution + LLM fallback),
-    and returns the final VM state plus execution metrics.
-
-    Args:
-        cfg: Pre-built control flow graph.
-        entry_point: Label of the block to start execution from.
-        registry: Pre-built function/class registry.
-        config: Execution configuration (backend, max_steps, verbose).
-        strategies: Language-specific execution strategies (type env, coercion, etc.).
-        vm: Pre-built VM state to continue from. If None, a fresh VM is created.
-
-    Returns:
-        Tuple of (final VMState, ExecutionStats).
-    """
-    entry = _find_entry_point(cfg, entry_point)
-    logger.debug("execute_cfg: entry=%s max_steps=%d", entry, config.max_steps)
-
-    if vm is None:
-        vm = VMState()
-        vm.call_stack.append(
-            StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))
-        )
-        vm.io_provider = config.io_provider
-
-    llm = None  # lazy — only created if local executor can't handle an instruction
-    call_resolver = _create_resolver(config)
-    current_label = entry
-    ip = 0
-    llm_calls = 0
-    step = 0
-
-    type_env = strategies.type_env
-    conversion_rules = strategies.conversion_rules
-
-    base_ctx = HandlerContext(
+    call_resolver: Any,
+    strategies: ExecutionStrategies,
+) -> HandlerContext:
+    """Build the per-run HandlerContext shared by every step in a loop slice."""
+    return HandlerContext(
         cfg=cfg,
         registry=registry,
         current_label=NO_LABEL,
         ip=0,
         call_resolver=call_resolver,
         overload_resolver=strategies.overload_resolver,
-        type_env=type_env,
+        type_env=strategies.type_env,
         binop_coercion=strategies.binop_coercion,
         unop_coercion=strategies.unop_coercion,
         func_symbol_table=strategies.func_symbol_table,
@@ -378,6 +358,30 @@ def execute_cfg(
         symbol_table=strategies.symbol_table,
     )
 
+
+def _run_loop(
+    cfg: CFG,
+    vm: VMState,
+    current_label: CodeLabel,
+    ip: int,
+    *,
+    config: VMConfig,
+    base_ctx: HandlerContext,
+    type_env: Any,
+    conversion_rules: Any,
+) -> _LoopResult:
+    """The core fetch-decode-execute loop, shared by ``execute_cfg`` and the
+    resumable ``run_resumable``/``resume`` entry points.
+
+    Starts at ``(current_label, ip)`` and runs until the program terminates OR a
+    ``Suspend`` instruction is reached, in which case it returns immediately with
+    the suspension cursor. The cursor + ``vm`` together form a resumable
+    continuation; nothing else (no Python stack) needs preserving because the
+    call stack lives in ``vm.call_stack``.
+    """
+    llm = None
+    llm_calls = 0
+    step = 0
     for step in range(config.max_steps):
         block = cfg.blocks[current_label]
 
@@ -402,6 +406,22 @@ def execute_cfg(
         if isinstance(instruction, Label_):
             ip += 1
             continue
+
+        if isinstance(instruction, Suspend):
+            tv = (
+                vm.current_frame.registers.get(instruction.operand_reg)
+                if instruction.operand_reg.is_present()
+                else None
+            )
+            return _LoopResult(
+                suspended=True,
+                steps=step + 1,
+                llm_calls=llm_calls,
+                susp_label=current_label,
+                susp_ip=ip + 1,  # resume just after the Suspend
+                susp_reg=instruction.result_reg,
+                susp_value=unwrap(tv) if tv is not None else None,
+            )
 
         step_ctx = replace(base_ctx, current_label=current_label, ip=ip)
         result = _try_execute_locally(instruction, vm, step_ctx)
@@ -460,9 +480,65 @@ def execute_cfg(
         else:
             ip += 1
 
+    return _LoopResult(suspended=False, steps=step + 1, llm_calls=llm_calls)
+
+
+def execute_cfg(
+    cfg: CFG,
+    entry_point: str | CodeLabel,
+    registry: FunctionRegistry,
+    config: VMConfig = VMConfig(),
+    strategies: ExecutionStrategies = ExecutionStrategies(),
+    vm: VMState | None = None,
+) -> tuple[VMState, ExecutionStats]:
+    """Execute a pre-built CFG from the given entry point.
+
+    Initializes a VM, runs the step loop (local execution + LLM fallback),
+    and returns the final VM state plus execution metrics.
+
+    Args:
+        cfg: Pre-built control flow graph.
+        entry_point: Label of the block to start execution from.
+        registry: Pre-built function/class registry.
+        config: Execution configuration (backend, max_steps, verbose).
+        strategies: Language-specific execution strategies (type env, coercion, etc.).
+        vm: Pre-built VM state to continue from. If None, a fresh VM is created.
+
+    Returns:
+        Tuple of (final VMState, ExecutionStats).
+    """
+    entry = _find_entry_point(cfg, entry_point)
+    logger.debug("execute_cfg: entry=%s max_steps=%d", entry, config.max_steps)
+
+    if vm is None:
+        vm = VMState()
+        vm.call_stack.append(
+            StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))
+        )
+        vm.io_provider = config.io_provider
+
+    call_resolver = _create_resolver(config)
+    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies)
+
+    loop = _run_loop(
+        cfg,
+        vm,
+        entry,
+        0,
+        config=config,
+        base_ctx=base_ctx,
+        type_env=strategies.type_env,
+        conversion_rules=strategies.conversion_rules,
+    )
+    if loop.suspended:
+        raise RuntimeError(
+            "SUSPEND reached under execute_cfg(); use run_resumable()/resume() "
+            "for suspendable execution"
+        )
+
     stats = ExecutionStats(
-        steps=step + 1,
-        llm_calls=llm_calls + call_resolver.llm_call_count,
+        steps=loop.steps,
+        llm_calls=loop.llm_calls + call_resolver.llm_call_count,
         final_heap_objects=vm.heap_count(),
         final_symbolic_count=vm.symbolic_counter,
         closures_captured=len(vm.closures),
@@ -475,6 +551,136 @@ def execute_cfg(
         logger.info("(%d steps, %d LLM calls)", stats.steps, stats.llm_calls)
 
     return (vm, stats)
+
+
+# ── Cooperative suspend / resume ────────────────────────────────────
+
+
+@dataclass
+class ExecutionState:
+    """A resumable, serializable continuation.
+
+    Holds only the DYNAMIC state — the ``vm`` (working storage, call stack, heap,
+    regions, continuations) plus the cursor ``(current_label, ip)`` and the
+    register a resumed value lands in. It does NOT hold the static program: the
+    CFG/registry are rebuilt and passed to ``resume()``. So the continuation is
+    plain, picklable data — it can be serialized, the whole process torn down,
+    and execution resumed against a freshly rebuilt pipeline.
+    """
+
+    vm: VMState
+    current_label: CodeLabel
+    ip: int
+    resume_reg: Register
+
+
+@dataclass
+class Suspended:
+    """Outcome: execution paused at a ``Suspend`` instruction."""
+
+    state: ExecutionState
+    value: Any  # the payload the program yielded to the driver
+
+
+@dataclass
+class Completed:
+    """Outcome: execution ran to termination."""
+
+    vm: VMState
+    stats: ExecutionStats
+
+
+RunOutcome = Union[Suspended, Completed]
+
+
+def _wrap_outcome(loop: _LoopResult, vm: VMState, call_resolver: Any) -> RunOutcome:
+    if loop.suspended:
+        assert loop.susp_label is not None and loop.susp_ip is not None
+        assert loop.susp_reg is not None
+        return Suspended(
+            state=ExecutionState(
+                vm=vm,
+                current_label=loop.susp_label,
+                ip=loop.susp_ip,
+                resume_reg=loop.susp_reg,
+            ),
+            value=loop.susp_value,
+        )
+    stats = ExecutionStats(
+        steps=loop.steps,
+        llm_calls=loop.llm_calls + call_resolver.llm_call_count,
+        final_heap_objects=vm.heap_count(),
+        final_symbolic_count=vm.symbolic_counter,
+        closures_captured=len(vm.closures),
+    )
+    return Completed(vm=vm, stats=stats)
+
+
+def run_resumable(
+    cfg: CFG,
+    entry_point: str | CodeLabel,
+    registry: FunctionRegistry,
+    config: VMConfig = VMConfig(),
+    strategies: ExecutionStrategies = ExecutionStrategies(),
+    vm: VMState | None = None,
+) -> RunOutcome:
+    """Execute a CFG, returning ``Suspended`` if it hits a ``Suspend`` (instead of
+    raising as ``execute_cfg`` does), or ``Completed`` when it terminates."""
+    entry = _find_entry_point(cfg, entry_point)
+    if vm is None:
+        vm = VMState()
+        vm.call_stack.append(
+            StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))
+        )
+        vm.io_provider = config.io_provider
+    call_resolver = _create_resolver(config)
+    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies)
+    loop = _run_loop(
+        cfg,
+        vm,
+        entry,
+        0,
+        config=config,
+        base_ctx=base_ctx,
+        type_env=strategies.type_env,
+        conversion_rules=strategies.conversion_rules,
+    )
+    return _wrap_outcome(loop, vm, call_resolver)
+
+
+def resume(
+    cfg: CFG,
+    registry: FunctionRegistry,
+    state: ExecutionState,
+    value: Any = None,
+    config: VMConfig = VMConfig(),
+    strategies: ExecutionStrategies = ExecutionStrategies(),
+) -> RunOutcome:
+    """Resume a suspended ``ExecutionState``, injecting ``value`` as the result of
+    the ``Suspend`` (written into its result register), and run to the next
+    suspension or to termination.
+
+    ``cfg``/``registry`` are the (re)built static program — they need not be the
+    same Python objects used originally, enabling resume after a full pipeline
+    rebuild. The ``state`` is mutated in place (its ``vm`` advances); deep-copy it
+    first for multi-shot resumption.
+    """
+    vm = state.vm
+    if state.resume_reg is not None and state.resume_reg.is_present():
+        vm.current_frame.registers[state.resume_reg] = typed(value, UNKNOWN)
+    call_resolver = _create_resolver(config)
+    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies)
+    loop = _run_loop(
+        cfg,
+        vm,
+        state.current_label,
+        state.ip,
+        config=config,
+        base_ctx=base_ctx,
+        type_env=strategies.type_env,
+        conversion_rules=strategies.conversion_rules,
+    )
+    return _wrap_outcome(loop, vm, call_resolver)
 
 
 def execute_cfg_traced(

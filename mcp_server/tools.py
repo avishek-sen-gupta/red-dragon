@@ -484,6 +484,7 @@ _OPCODE_CATEGORIES: dict[str, str] = {
     "STORE_INDIRECT": "memory",
     "SET_CONTINUATION": "continuations",
     "RESUME_CONTINUATION": "continuations",
+    "SUSPEND": "continuations",
     "IMPORT_MODULE": "modules",
 }
 
@@ -673,6 +674,14 @@ _OPCODE_NOTES: dict[str, str] = {
         "Transfers control to the continuation registered under name. Paired with "
         "SET_CONTINUATION. Used to resume a suspended generator or coroutine from the "
         "point where SET_CONTINUATION was executed."
+    ),
+    "SUSPEND": (
+        "Cooperatively suspends execution: yields the value in operand_reg to the "
+        "driver and pauses the VM, handing back a serializable continuation "
+        "(VMState + cursor) instead of running to RETURN. On resume, the driver's "
+        "injected value is written to result_reg and execution continues at the next "
+        "instruction. Frontend-agnostic primitive behind run_resumable()/resume(); "
+        "used for conversational I/O, debuggers, and lazy generators."
     ),
     "IMPORT_MODULE": (
         "Imports a module specified by module_path and stores the result in result_reg. "
