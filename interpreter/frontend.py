@@ -101,7 +101,14 @@ def get_frontend(
         from interpreter.cobol.cobol_parser import ProLeapCobolParser
         from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 
-        bridge_jar = os.environ.get("PROLEAP_BRIDGE_JAR", "proleap-bridge.jar")
+        # Canonical JAR location is the build.sh output — always freshly built
+        # from source and gitignored, so it can never go stale. The old tracked
+        # root "proleap-bridge.jar" was a cached binary that build.sh did not
+        # regenerate; it has been removed. Override with PROLEAP_BRIDGE_JAR.
+        bridge_jar = os.environ.get(
+            "PROLEAP_BRIDGE_JAR",
+            "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
+        )
         parser = ProLeapCobolParser(
             RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
         )
