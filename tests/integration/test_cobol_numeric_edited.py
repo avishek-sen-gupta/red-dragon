@@ -12,33 +12,21 @@ independent of edit pictures — see red-dragon issue for numeric MOVE fraction
 loss); the field-source case below therefore uses a whole-number value.
 """
 
-import os
-
 import pytest
 
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
-    JAR_PATH,
-    JAR_AVAILABLE,
+    bridge_jar,
     first_region as _first_region,
     run_cobol,
 )
 
-pytestmark = pytest.mark.skipif(
-    not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
-)
 
-
-@pytest.fixture(autouse=True, scope="session")
-def _set_bridge_jar_env():
-    old = os.environ.get("PROLEAP_BRIDGE_JAR")
-    os.environ["PROLEAP_BRIDGE_JAR"] = JAR_PATH
-    yield
-    if old is None:
-        os.environ.pop("PROLEAP_BRIDGE_JAR", None)
-    else:
-        os.environ["PROLEAP_BRIDGE_JAR"] = old
+@pytest.fixture(autouse=True)
+def _require_bridge_jar(bridge_jar):
+    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_directory-based
+    tests (fails loudly via bridge_jar if it's unset)."""
 
 
 def _decode_chars(region, offset: int, length: int) -> str:

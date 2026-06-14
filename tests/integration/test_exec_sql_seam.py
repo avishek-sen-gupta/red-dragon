@@ -3,18 +3,11 @@ injected SQL strategy (proves serializeExecSql + the full array seam)."""
 
 from __future__ import annotations
 
-import os
-import pytest
-
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.cobol_statements import ExecSqlStatement
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
-from tests.integration.cobol_helpers import JAR_AVAILABLE, JAR_PATH, to_fixed
-
-pytestmark = pytest.mark.skipif(
-    not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
-)
+from tests.integration.cobol_helpers import bridge_jar, to_fixed
 
 _PROGRAM = to_fixed(
     [
@@ -48,15 +41,14 @@ class _SqlSpy:
         self.lowered.append(stmt)
 
 
-def _build_real_parser() -> ProLeapCobolParser:
+def _build_real_parser(bridge_jar: str) -> ProLeapCobolParser:
     """Build a JAR-backed ProLeapCobolParser the same way production code does."""
-    os.environ["PROLEAP_BRIDGE_JAR"] = JAR_PATH
-    return ProLeapCobolParser(RealSubprocessRunner(), JAR_PATH)
+    return ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
 
 
-def test_real_exec_sql_reaches_strategy():
+def test_real_exec_sql_reaches_strategy(bridge_jar):
     spy = _SqlSpy()
-    parser = _build_real_parser()
+    parser = _build_real_parser(bridge_jar)
     frontend = CobolFrontend(parser, extension_strategies=[spy])
     frontend.lower(_PROGRAM)
     assert (
