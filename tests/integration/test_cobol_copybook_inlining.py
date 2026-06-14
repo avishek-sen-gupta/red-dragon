@@ -15,21 +15,16 @@ from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
-    JAR_AVAILABLE,
-    bridge_jar_env,
+    bridge_jar,
     decode_zoned_unsigned as _decode_zoned_unsigned,
     to_fixed as _to_fixed,
 )
 
-pytestmark = pytest.mark.skipif(
-    not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
-)
-
 
 @pytest.fixture(autouse=True)
-def _bridge_jar_env(bridge_jar_env):
-    """Auto-apply the shared PROLEAP_BRIDGE_JAR env fixture to every test here."""
-    yield
+def _require_bridge_jar(bridge_jar):
+    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_directory-based
+    tests (fails loudly via bridge_jar if it's unset)."""
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)

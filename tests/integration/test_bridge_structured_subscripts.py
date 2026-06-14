@@ -2,27 +2,23 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 from tests.covers import covers
-from tests.integration.cobol_helpers import JAR_AVAILABLE, JAR_PATH
-
-pytestmark = pytest.mark.skipif(not JAR_AVAILABLE, reason="ProLeap JAR not built")
+from tests.integration.cobol_helpers import bridge_jar
 
 
 def _fixed(lines: list[str]) -> str:
     return "\n".join("       " + line for line in lines) + "\n"
 
 
-def _parse(src: list[str]) -> dict:
-    raw = RealSubprocessRunner().run(["java", "-jar", JAR_PATH], _fixed(src))
+def _parse(src: list[str], bridge_jar: str) -> dict:
+    raw = RealSubprocessRunner().run(["java", "-jar", bridge_jar], _fixed(src))
     return json.loads(raw)
 
 
 @covers(CobolFeature.OCCURS_FIXED)
-def test_bridge_emits_bare_name_and_structured_subscript_node():
+def test_bridge_emits_bare_name_and_structured_subscript_node(bridge_jar):
     """A subscript is a STRUCTURED expression node ({"kind":...}), not a string —
     the bridge reuses the value-stmt expression serializer (red-dragon-l445)."""
     obj = _parse(
@@ -37,7 +33,8 @@ def test_bridge_emits_bare_name_and_structured_subscript_node():
             "PROCEDURE DIVISION.",
             "    MOVE WS-ELEM(WS-IDX) TO WS-IDX.",
             "    GOBACK.",
-        ]
+        ],
+        bridge_jar,
     )
     move = obj["statements"][0]
     src = move["operands"][0]
@@ -51,7 +48,7 @@ def test_bridge_emits_bare_name_and_structured_subscript_node():
 
 
 @covers(CobolFeature.OCCURS_FIXED)
-def test_bridge_keeps_all_structured_subscripts_2d():
+def test_bridge_keeps_all_structured_subscripts_2d(bridge_jar):
     obj = _parse(
         [
             "IDENTIFICATION DIVISION.",
@@ -66,7 +63,8 @@ def test_bridge_keeps_all_structured_subscripts_2d():
             "PROCEDURE DIVISION.",
             "    MOVE WS-CELL(I, J) TO I.",
             "    GOBACK.",
-        ]
+        ],
+        bridge_jar,
     )
     src = obj["statements"][0]["operands"][0]
     subs = src["subscripts"]
