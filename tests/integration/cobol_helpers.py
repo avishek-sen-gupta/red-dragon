@@ -1,8 +1,8 @@
 """Shared helpers for COBOL integration tests (ProLeap bridge → IR → CFG → VM).
 
-Centralizes the ProLeap bridge JAR discovery, the env-var fixture, and the
-small decode/format helpers used across the COBOL integration test modules so
-they are defined exactly once.
+Centralizes the ProLeap bridge JAR path fixture (``bridge_jar``) and the small
+decode/format helpers used across the COBOL integration test modules so they are
+defined exactly once.
 """
 
 from __future__ import annotations
@@ -12,15 +12,6 @@ import os
 import pytest
 
 from interpreter.run import run
-
-JAR_PATH = os.environ.get(
-    "PROLEAP_BRIDGE_JAR",
-    os.path.expanduser(
-        "~/code/red-dragon/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
-    ),
-)
-JAR_AVAILABLE = os.path.isfile(JAR_PATH)
-
 
 _AREA_A = "       "  # 7 spaces: cols 1-6 (seq) + col 7 (indicator = space)
 _COMMENT = "      *"  # col 7 = * for comment line
@@ -73,15 +64,11 @@ def all_field_names(fields) -> set[str]:
 
 
 @pytest.fixture
-def bridge_jar_env():
-    """Ensure PROLEAP_BRIDGE_JAR is set for the duration of the fixture.
-
-    Restores the prior value (or unsets) on teardown.
+def bridge_jar() -> str:
+    """The ProLeap bridge JAR path — the single source of the JAR config, read from
+    the required PROLEAP_BRIDGE_JAR env. No default, no skip: if it's unset, a test
+    that needs the JAR fails loudly (KeyError) instead of silently skipping or
+    guessing a path. Fixtures/tests that build a parser take this and use the
+    returned path; run()/compile_directory read the same env var themselves.
     """
-    old = os.environ.get("PROLEAP_BRIDGE_JAR")
-    os.environ["PROLEAP_BRIDGE_JAR"] = JAR_PATH
-    yield
-    if old is None:
-        os.environ.pop("PROLEAP_BRIDGE_JAR", None)
-    else:
-        os.environ["PROLEAP_BRIDGE_JAR"] = old
+    return os.environ["PROLEAP_BRIDGE_JAR"]

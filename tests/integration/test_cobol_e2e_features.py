@@ -5,36 +5,22 @@ Unlike the focused tests in test_cobol_programs.py (one feature per test), these
 tests combine multiple features in a single program to verify they compose correctly.
 """
 
-import os
-
 import pytest
 
-from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
-    JAR_PATH,
-    JAR_AVAILABLE,
+    bridge_jar,
     decode_zoned_unsigned as _decode,
     first_region as _first_region,
     run_cobol,
 )
 
-pytestmark = pytest.mark.skipif(
-    not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
-)
 
-
-@pytest.fixture(autouse=True, scope="session")
-def _set_bridge_jar_env():
-    """Ensure PROLEAP_BRIDGE_JAR is set for the entire test session."""
-    old = os.environ.get("PROLEAP_BRIDGE_JAR")
-    os.environ["PROLEAP_BRIDGE_JAR"] = JAR_PATH
-    yield
-    if old is None:
-        os.environ.pop("PROLEAP_BRIDGE_JAR", None)
-    else:
-        os.environ["PROLEAP_BRIDGE_JAR"] = old
+@pytest.fixture(autouse=True)
+def _require_bridge_jar(bridge_jar):
+    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_directory-based
+    tests (fails loudly via bridge_jar if it's unset)."""
 
 
 # ── Helpers ──────────────────────────────────────────────────────
