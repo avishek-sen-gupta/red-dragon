@@ -8,8 +8,6 @@ Requires the ProLeap bridge JAR to be available (set PROLEAP_BRIDGE_JAR env var
 or have it at the default path). Tests skip gracefully when the JAR is absent.
 """
 
-import os
-
 import pytest
 
 from interpreter.address import Address
@@ -23,27 +21,16 @@ from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers, NotLanguageFeature
 from tests.integration.cobol_helpers import (
-    JAR_AVAILABLE as _JAR_AVAILABLE,
-    JAR_PATH,
+    bridge_jar,
     decode_zoned_unsigned as _decode_zoned_unsigned,
     to_fixed as _to_fixed,
 )
 
-pytestmark = pytest.mark.skipif(
-    not _JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
-)
 
-
-@pytest.fixture(autouse=True, scope="session")
-def _set_bridge_jar_env():
-    """Ensure PROLEAP_BRIDGE_JAR is set for the entire test session."""
-    old = os.environ.get("PROLEAP_BRIDGE_JAR")
-    os.environ["PROLEAP_BRIDGE_JAR"] = JAR_PATH
-    yield
-    if old is None:
-        os.environ.pop("PROLEAP_BRIDGE_JAR", None)
-    else:
-        os.environ["PROLEAP_BRIDGE_JAR"] = old
+@pytest.fixture(autouse=True)
+def _require_bridge_jar(bridge_jar):
+    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_directory-based
+    tests (fails loudly via bridge_jar if it's unset)."""
 
 
 def _run_cobol(lines: list[str], max_steps: int = 1000):
@@ -4785,7 +4772,6 @@ class TestSectionedDataDivision:
         # WS-OUT at offset 0, 2 bytes; initial VALUE 42 should be preserved
         assert _decode_zoned_unsigned(region, 0, 2) == 42
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_eighteen_digit_move_is_exact(self):
         """An 18-digit integer field survives MOVE exactly. Before integer
@@ -4813,7 +4799,6 @@ class TestSectionedDataDivision:
 
 
 class TestSubprogramWsPersistence:
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.CALL_USING, CobolFeature.SECTION_WORKING_STORAGE)
     def test_ws_counter_survives_two_calls(self, tmp_path):
         """SUBPROG increments WS-COUNTER on each CALL; value must be 2 after two calls."""
@@ -4885,7 +4870,6 @@ class TestSubprogramWsPersistence:
             counter == 2
         ), f"Expected WS-COUNTER=2 after two CALL SUBPROG, got {counter}"
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.SECTION_LOCAL_STORAGE)
     def test_local_storage_reinitializes_on_each_call(self, tmp_path):
         """LOCAL-STORAGE re-initializes to VALUE on every invocation — the
@@ -5054,7 +5038,6 @@ class TestCallUsingByReference:
             ws_value == 8
         ), f"WS-VALUE: expected 8 (5 + 3 written by DOUBLIT), got {ws_value}"
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.SECTION_LINKAGE)
     def test_linkage_only_subprogram_reads_parameter(self, tmp_path):
         """Regression (red-dragon-irl8): a subprogram with a LINKAGE SECTION and
@@ -5127,7 +5110,6 @@ class TestCallUsingByReference:
 class TestCallUsingByValue:
     """CALL USING BY VALUE: callee receives a copy; caller WS is unchanged after return."""
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.USING_BY_VALUE)
     def test_by_value_caller_ws_unchanged(self, tmp_path):
         """BY VALUE: callee receives a copy of WS-DATA=5; overwrites it with 99; caller sees 5.
@@ -5211,7 +5193,6 @@ class TestCallUsingByValue:
             ws_data == 5
         ), f"WS-DATA must be unchanged after BY VALUE call, got {ws_data}"
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.USING_BY_CONTENT)
     def test_by_content_caller_ws_unchanged(self, tmp_path):
         """BY CONTENT: callee receives a copy of WS-DATA=5; overwrites it with 99; caller sees 5.
@@ -5299,7 +5280,6 @@ class TestCallUsingByValue:
 class TestCallUsingLinkageRead:
     """Callee reads a value from LINKAGE SECTION into its own WS."""
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.SECTION_LINKAGE)
     def test_callee_reads_linkage_field_into_ws(self, tmp_path):
         """READER moves LK-INPUT into WS-COPY; MAINPROG verifies WS-COPY == 9.
@@ -5364,7 +5344,6 @@ class TestCallUsingLinkageRead:
         ws_copy = _decode_zoned_unsigned(region, offset=0, length=4)
         assert ws_copy == 9, f"WS-COPY: expected 9 (read from LK-INPUT), got {ws_copy}"
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.SECTION_LINKAGE, CobolFeature.CALL_USING)
     def test_callee_reads_second_linkage_field(self, tmp_path):
         """LINKAGE field at non-zero offset (LK-B, offset 4) is correctly read.
@@ -5431,7 +5410,6 @@ class TestCallUsingLinkageRead:
         ws_copy = _decode_zoned_unsigned(region, offset=0, length=4)
         assert ws_copy == 7, f"WS-COPY: expected 7 (LK-B at offset 4), got {ws_copy}"
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.SECTION_LINKAGE, CobolFeature.CALL_USING)
     def test_callee_linkage_wider_than_caller_arg_reads_zero_pad(self, tmp_path):
         """Callee LINKAGE field wider than caller's USING arg: overrun reads as zeroes.
@@ -5505,7 +5483,6 @@ class TestCallUsingLinkageRead:
 class TestGobackExitProgram:
     """GOBACK and EXIT PROGRAM must return control to the caller, not halt the VM."""
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.GOBACK)
     def test_goback_in_subprogram_returns_to_caller(self, tmp_path):
         """Subprogram ending with GOBACK returns; MAIN continues and sets WS-RESULT=42."""
@@ -5562,7 +5539,6 @@ class TestGobackExitProgram:
             ws_result == 42
         ), f"WS-RESULT: expected 42 (MAIN continued after GOBACK), got {ws_result}"
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.EXIT_PROGRAM)
     def test_exit_program_in_subprogram_returns_to_caller(self, tmp_path):
         """Subprogram ending with EXIT PROGRAM returns; MAIN continues and sets WS-RESULT=99."""
@@ -5619,7 +5595,6 @@ class TestGobackExitProgram:
             ws_result == 99
         ), f"WS-RESULT: expected 99 (MAIN continued after EXIT PROGRAM), got {ws_result}"
 
-    @pytest.mark.skipif(not _JAR_AVAILABLE, reason="ProLeap JAR not found")
     @covers(CobolFeature.GOBACK, CobolFeature.CALL_USING, CobolFeature.SECTION_LINKAGE)
     def test_goback_after_linkage_write_propagates_to_caller(self, tmp_path):
         """Callee writes to LINKAGE field then GOBACKs; caller sees the updated value.

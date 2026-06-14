@@ -8,21 +8,15 @@ this asserts the layout plumbing and is tagged INFRASTRUCTURE, NOT
 
 from __future__ import annotations
 
-import pytest
-
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 from tests.covers import covers, NotLanguageFeature
-from tests.integration.cobol_helpers import JAR_PATH, JAR_AVAILABLE, to_fixed
-
-pytestmark = pytest.mark.skipif(
-    not JAR_AVAILABLE, reason="ProLeap bridge JAR not available"
-)
+from tests.integration.cobol_helpers import bridge_jar, to_fixed
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_file_section_fields_in_sectioned_layout():
+def test_file_section_fields_in_sectioned_layout(bridge_jar):
     source = to_fixed(
         [
             "IDENTIFICATION DIVISION.",
@@ -43,7 +37,7 @@ def test_file_section_fields_in_sectioned_layout():
             "    STOP RUN.",
         ]
     )
-    parser = ProLeapCobolParser(RealSubprocessRunner(), JAR_PATH)
+    parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
     asg = parser.parse(source.encode("utf-8"))
 
     # FD record fields reached the ASG
