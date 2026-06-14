@@ -714,6 +714,48 @@ class TestPerformUntil:
         assert _decode_zoned_unsigned(region, 0, 4) == 3
 
 
+class TestPerformThruParagraphInsideSection:
+    @covers(
+        CobolFeature.PERFORM,
+        CobolFeature.PERFORM_THRU,
+        CobolFeature.PERFORM_UNTIL,
+        CobolFeature.ADD,
+    )
+    def test_perform_thru_paragraph_not_last_in_section(self):
+        """PERFORM <section> THRU <paragraph> returns after the THRU paragraph.
+
+        Regression for the cursor.sqb shape: the PERFORM range starts at a
+        SECTION (LOOP-SEC) and ends at a PARAGRAPH (LOOP-END) that is *not* the
+        last paragraph of that section — DONE-PARA (with STOP RUN) follows it in
+        the same section. The continuation must be keyed on the THRU paragraph's
+        end (``para_LOOP-END_end``); if it is wrongly keyed on the FROM section's
+        end, control falls through LOOP-END into DONE-PARA and STOP RUN runs
+        after a single iteration (WS-CTR == 1) instead of looping to 3.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-THRUSEC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-CTR PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-SEC SECTION.",
+                "    PERFORM LOOP-SEC THRU LOOP-END",
+                "       UNTIL WS-CTR NOT LESS THAN 3.",
+                "    GO TO DONE-PARA.",
+                "LOOP-SEC SECTION.",
+                "    ADD 1 TO WS-CTR.",
+                "LOOP-END. EXIT.",
+                "DONE-PARA.",
+                "    STOP RUN.",
+            ],
+            max_steps=3000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 2) == 3
+
+
 class TestNestedPerform:
     @covers(CobolFeature.PERFORM, CobolFeature.ADD)
     def test_nested_perform(self):
