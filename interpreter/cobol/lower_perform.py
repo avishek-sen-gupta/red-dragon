@@ -69,6 +69,14 @@ def resolve_perform_target(
         thru = stmt.thru
         if thru and thru in section_paras:
             continuation_key = CodeLabel(f"section_{thru}_end")
+        elif thru:
+            # THRU target is a paragraph, not a section. The perform range ends
+            # *after that paragraph*, so the return continuation must be keyed on
+            # the paragraph's end — not the FROM section's end. Keying it on the
+            # section end mismatches the `resume_continuation para_{thru}_end`
+            # that the paragraph emits, so control falls through to whatever
+            # paragraph follows the THRU target instead of returning to PERFORM.
+            continuation_key = CodeLabel(f"para_{thru}_end")
         else:
             continuation_key = CodeLabel(f"section_{target}_end")
         return branch_label, continuation_key
