@@ -10,7 +10,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from interpreter.cobol.cobol_statements import CobolStatementType, parse_statement
+from interpreter.cobol.cobol_statements import (
+    CobolStatementType,
+    parse_statement,
+    FileControlEntry,
+)
 from interpreter.cobol.cobol_types import CobolTypeDescriptor
 from interpreter.cobol.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.pic_parser import parse_pic
@@ -208,6 +212,7 @@ class CobolASG:
     """
 
     program_id: str = ""
+    file_control: list[FileControlEntry] = field(default_factory=list)
     data_fields: list[CobolField] = field(default_factory=list)
     linkage_fields: list[CobolField] = field(default_factory=list)
     local_storage_fields: list[CobolField] = field(default_factory=list)
@@ -220,6 +225,9 @@ class CobolASG:
     def from_dict(cls, data: dict) -> CobolASG:
         return cls(
             program_id=data.get("program_id", ""),
+            file_control=[
+                FileControlEntry.from_dict(e) for e in data.get("file_control", [])
+            ],
             data_fields=[CobolField.from_dict(f) for f in data.get("data_fields", [])],
             linkage_fields=[
                 CobolField.from_dict(f) for f in data.get("linkage_fields", [])
@@ -239,6 +247,8 @@ class CobolASG:
         result: dict = {}
         if self.program_id:
             result["program_id"] = self.program_id
+        if self.file_control:
+            result["file_control"] = [e.to_dict() for e in self.file_control]
         if self.data_fields:
             result["data_fields"] = [f.to_dict() for f in self.data_fields]
         if self.linkage_fields:

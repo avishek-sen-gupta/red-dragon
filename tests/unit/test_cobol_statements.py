@@ -539,12 +539,19 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.OPEN)
     def test_open(self):
+        from interpreter.cobol.file_enums import OpenMode
+
         stmt = parse_statement(
-            {"type": "OPEN", "mode": "INPUT", "files": ["CUST-FILE", "ORDER-FILE"]}
+            {
+                "type": "OPEN",
+                "mode_groups": [
+                    {"mode": "INPUT", "files": ["CUST-FILE", "ORDER-FILE"]}
+                ],
+            }
         )
         assert isinstance(stmt, OpenStatement)
-        assert stmt.mode == "INPUT"
-        assert stmt.files == ["CUST-FILE", "ORDER-FILE"]
+        assert len(stmt.mode_groups) == 1
+        assert stmt.mode_groups[0] == (OpenMode.INPUT, ["CUST-FILE", "ORDER-FILE"])
 
     @covers(CobolFeature.CLOSE)
     def test_close(self):
@@ -1168,7 +1175,10 @@ class TestRoundTrip:
 
     @covers(CobolFeature.OPEN)
     def test_open_round_trip(self):
-        data = {"type": "OPEN", "mode": "INPUT", "files": ["CUST-FILE"]}
+        data = {
+            "type": "OPEN",
+            "mode_groups": [{"mode": "INPUT", "files": ["CUST-FILE"]}],
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.CLOSE)
