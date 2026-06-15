@@ -52,32 +52,33 @@ def lower_open(
     stmt: OpenStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """OPEN mode file1 file2 ... — open files via __cobol_open_file."""
-    for filename in stmt.files:
-        fn_reg = ctx.const_to_reg(filename)
-        mode_reg = ctx.const_to_reg(stmt.mode)
-        # record_length, organization, key_offset, key_length — defaults until
-        # file-control metadata is plumbed through from the ENVIRONMENT DIVISION.
-        rec_len_reg = ctx.const_to_reg(0)
-        org_reg = ctx.const_to_reg("SEQUENTIAL")
-        key_off_reg = ctx.const_to_reg(0)
-        key_len_reg = ctx.const_to_reg(0)
-        result_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=result_reg,
-                func_name=FuncName("__cobol_open_file"),
-                args=(
-                    Register(str(fn_reg)),
-                    Register(str(mode_reg)),
-                    Register(str(rec_len_reg)),
-                    Register(str(org_reg)),
-                    Register(str(key_off_reg)),
-                    Register(str(key_len_reg)),
+    """OPEN [mode file1 file2 ...] ... — open files via __cobol_open_file."""
+    for mode, files in stmt.mode_groups:
+        for filename in files:
+            fn_reg = ctx.const_to_reg(filename)
+            mode_reg = ctx.const_to_reg(mode.value)
+            # record_length, organization, key_offset, key_length — defaults until
+            # file-control metadata is plumbed through from the ENVIRONMENT DIVISION.
+            rec_len_reg = ctx.const_to_reg(0)
+            org_reg = ctx.const_to_reg("SEQUENTIAL")
+            key_off_reg = ctx.const_to_reg(0)
+            key_len_reg = ctx.const_to_reg(0)
+            result_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=result_reg,
+                    func_name=FuncName("__cobol_open_file"),
+                    args=(
+                        Register(str(fn_reg)),
+                        Register(str(mode_reg)),
+                        Register(str(rec_len_reg)),
+                        Register(str(org_reg)),
+                        Register(str(key_off_reg)),
+                        Register(str(key_len_reg)),
+                    ),
                 ),
-            ),
-        )
-        logger.info("OPEN %s %s", stmt.mode, filename)
+            )
+            logger.info("OPEN %s %s", mode.value, filename)
 
 
 def lower_close(
