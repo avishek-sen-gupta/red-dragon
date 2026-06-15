@@ -200,6 +200,7 @@ class CobolFrontend(Frontend):
             observer=self._observer,
             condition_index=condition_index,
             extension_strategies=self._extension_strategies,
+            asg=asg,
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))

@@ -17,8 +17,9 @@ from interpreter.cobol.cobol_statements import (
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
-from interpreter.instructions import CallFunction
-from interpreter.register import Register
+from interpreter.instructions import Binop, Branch, BranchIf, CallFunction, Label_
+from interpreter.operator_kind import resolve_binop
+from interpreter.register import Register, NO_REGISTER
 
 logger = logging.getLogger(__name__)
 
@@ -52,32 +53,65 @@ def lower_open(
     stmt: OpenStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """OPEN [mode file1 file2 ...] ... — open files via __cobol_open_file."""
+    """OPEN [mode file1 ...] ... — emit __cobol_open_file per file with org/key metadata."""
     for mode, files in stmt.mode_groups:
         for filename in files:
             fn_reg = ctx.const_to_reg(filename)
             mode_reg = ctx.const_to_reg(mode.value)
-            # record_length, organization, key_offset, key_length — defaults until
-            # file-control metadata is plumbed through from the ENVIRONMENT DIVISION.
-            rec_len_reg = ctx.const_to_reg(0)
-            org_reg = ctx.const_to_reg("SEQUENTIAL")
-            key_off_reg = ctx.const_to_reg(0)
-            key_len_reg = ctx.const_to_reg(0)
-            result_reg = ctx.fresh_reg()
+
+            # Look up FileControlEntry for organization and key metadata
+            fce = next(
+                (e for e in ctx._asg.file_control if e.file_name == filename), None
+            )
+            org = fce.organization.value if fce else "SEQUENTIAL"
+
+            # Resolve record length from file section layout
+            record_length = 0
+            try:
+                fl, _ = materialised.resolve(filename)
+                record_length = fl.byte_length
+            except KeyError:
+                pass
+
+            # Resolve key offset/length from FileControlEntry.record_key
+            key_offset, key_length = 0, 0
+            if fce and fce.record_key:
+                try:
+                    key_fl, _ = materialised.resolve(fce.record_key)
+                    key_offset = key_fl.offset
+                    key_length = key_fl.byte_length
+                except KeyError:
+                    pass
+
+            rl_reg = ctx.const_to_reg(record_length)
+            org_reg = ctx.const_to_reg(org)
+            koff_reg = ctx.const_to_reg(key_offset)
+            klen_reg = ctx.const_to_reg(key_length)
+
+            raw_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
-                    result_reg=result_reg,
+                    result_reg=raw_reg,
                     func_name=FuncName("__cobol_open_file"),
                     args=(
                         Register(str(fn_reg)),
                         Register(str(mode_reg)),
-                        Register(str(rec_len_reg)),
+                        Register(str(rl_reg)),
                         Register(str(org_reg)),
-                        Register(str(key_off_reg)),
-                        Register(str(key_len_reg)),
+                        Register(str(koff_reg)),
+                        Register(str(klen_reg)),
                     ),
                 ),
             )
+            status_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=status_reg,
+                    func_name=FuncName("__cobol_io_status"),
+                    args=(Register(str(raw_reg)),),
+                )
+            )
+            ctx.emit_file_status_update(filename, status_reg, materialised)
             logger.info("OPEN %s %s", mode.value, filename)
 
 
@@ -105,35 +139,148 @@ def lower_read(
     stmt: ReadStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """READ file-name [INTO target] — read record via __cobol_read_record."""
+    """READ file [INTO target] [KEY k] [AT END ...] [INVALID KEY ...] — with IOResult branching."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
-    # key — empty string for sequential reads; keyed access will populate this
-    # once READ ... KEY IS ... parsing is supported.
-    key_reg = ctx.const_to_reg("")
-    io_result_reg = ctx.fresh_reg()
+
+    # Key for random access
+    if stmt.key and materialised.has_field(stmt.key):
+        key_ref, key_rr = ctx.resolve_field_ref(stmt.key, materialised)
+        key_val_reg = ctx.emit_decode_field(key_rr, key_ref.fl, key_ref.offset_reg)
+        key_str_reg = ctx.emit_to_string(key_val_reg)
+    else:
+        key_str_reg = ctx.const_to_reg("")
+
+    raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=io_result_reg,
+            result_reg=raw_reg,
             func_name=FuncName("__cobol_read_record"),
-            args=(Register(str(fn_reg)), Register(str(key_reg))),
+            args=(Register(str(fn_reg)), Register(str(key_str_reg))),
         ),
     )
-    if stmt.into and ctx.has_field(stmt.into, materialised):
-        # Extract the string payload from IOResult via __cobol_io_data.
-        data_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=data_reg,
-                func_name=FuncName("__cobol_io_data"),
-                args=(Register(str(io_result_reg)),),
-            ),
+
+    status_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=status_reg,
+            func_name=FuncName("__cobol_io_status"),
+            args=(Register(str(raw_reg)),),
         )
+    )
+    ctx.emit_file_status_update(stmt.file_name, status_reg, materialised)
+
+    data_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=data_reg,
+            func_name=FuncName("__cobol_io_data"),
+            args=(Register(str(raw_reg)),),
+        )
+    )
+
+    # Write data into file section region
+    try:
+        file_fl, file_rr = materialised.resolve(stmt.file_name)
+        ctx.emit_encode_and_write(file_rr, file_fl, data_reg, NO_REGISTER)
+    except KeyError:
+        pass
+
+    # INTO copy
+    if stmt.into and materialised.has_field(stmt.into):
         target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
         str_reg = ctx.emit_to_string(data_reg)
         ctx.emit_encode_and_write(
             target_rr, target_ref.fl, str_reg, target_ref.offset_reg
         )
+
+    after_label = ctx.fresh_label("read_after")
+    has_at_end = bool(stmt.at_end or stmt.not_at_end)
+    has_inv_key = bool(stmt.invalid_key or stmt.not_invalid_key)
+
+    if has_at_end:
+        at_end_lbl = ctx.fresh_label("read_at_end")
+        ok_lbl = ctx.fresh_label("read_ok")
+        cond_reg = ctx.fresh_reg()
+        ten_reg = ctx.const_to_reg("10")
+        ctx.emit_inst(
+            Binop(
+                result_reg=cond_reg,
+                operator=resolve_binop("=="),
+                left=status_reg,
+                right=Register(str(ten_reg)),
+            )
+        )
+        ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(at_end_lbl, ok_lbl)))
+        ctx.emit_inst(Label_(label=at_end_lbl))
+        for s in stmt.at_end:
+            ctx.lower_statement(s, materialised)
+        ctx.emit_inst(Branch(label=after_label))
+        ctx.emit_inst(Label_(label=ok_lbl))
+        for s in stmt.not_at_end:
+            ctx.lower_statement(s, materialised)
+        ctx.emit_inst(Branch(label=after_label))
+
+    if has_inv_key:
+        inv_lbl = ctx.fresh_label("read_inv_key")
+        not_inv_lbl = ctx.fresh_label("read_not_inv")
+        cond_reg = ctx.fresh_reg()
+        twenty_three_reg = ctx.const_to_reg("23")
+        ctx.emit_inst(
+            Binop(
+                result_reg=cond_reg,
+                operator=resolve_binop("=="),
+                left=status_reg,
+                right=Register(str(twenty_three_reg)),
+            )
+        )
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(inv_lbl, not_inv_lbl))
+        )
+        ctx.emit_inst(Label_(label=inv_lbl))
+        for s in stmt.invalid_key:
+            ctx.lower_statement(s, materialised)
+        ctx.emit_inst(Branch(label=after_label))
+        ctx.emit_inst(Label_(label=not_inv_lbl))
+        for s in stmt.not_invalid_key:
+            ctx.lower_statement(s, materialised)
+        ctx.emit_inst(Branch(label=after_label))
+
+    ctx.emit_inst(Label_(label=after_label))
     logger.info("READ %s INTO %s", stmt.file_name, stmt.into or "(none)")
+
+
+def _emit_invalid_key_branch(
+    ctx: EmitContext,
+    status_reg: Register,
+    file_name: str,
+    invalid_key: list,
+    not_invalid_key: list,
+    materialised: MaterialisedSectionedLayout,
+    after_label: object,
+) -> None:
+    if not (invalid_key or not_invalid_key):
+        return
+    inv_lbl = ctx.fresh_label("inv_key")
+    not_inv_lbl = ctx.fresh_label("not_inv_key")
+    cond_reg = ctx.fresh_reg()
+    twenty_three_reg = ctx.const_to_reg("23")
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("=="),
+            left=status_reg,
+            right=Register(str(twenty_three_reg)),
+        )
+    )
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(inv_lbl, not_inv_lbl)))
+    ctx.emit_inst(Label_(label=inv_lbl))
+    for s in invalid_key:
+        ctx.lower_statement(s, materialised)
+    ctx.emit_inst(Branch(label=after_label))  # type: ignore[arg-type]
+    ctx.emit_inst(Label_(label=not_inv_lbl))
+    for s in not_invalid_key:
+        ctx.lower_statement(s, materialised)
+    ctx.emit_inst(Branch(label=after_label))  # type: ignore[arg-type]
 
 
 def lower_write(
@@ -141,7 +288,7 @@ def lower_write(
     stmt: WriteStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """WRITE record-name [FROM field] — write record via __cobol_write_record."""
+    """WRITE record-name [FROM field] [INVALID KEY ...] — write record via __cobol_write_record."""
     if stmt.from_field and ctx.has_field(stmt.from_field, materialised):
         from_ref, from_rr = ctx.resolve_field_ref(stmt.from_field, materialised)
         decoded_reg = ctx.emit_decode_field(from_rr, from_ref.fl, from_ref.offset_reg)
@@ -150,14 +297,34 @@ def lower_write(
         data_reg = ctx.const_to_reg(stmt.from_field or stmt.record_name)
 
     fn_reg = ctx.const_to_reg(stmt.record_name)
-    result_reg = ctx.fresh_reg()
+    raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=result_reg,
+            result_reg=raw_reg,
             func_name=FuncName("__cobol_write_record"),
             args=(Register(str(fn_reg)), Register(str(data_reg))),
         ),
     )
+    status_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=status_reg,
+            func_name=FuncName("__cobol_io_status"),
+            args=(Register(str(raw_reg)),),
+        )
+    )
+    ctx.emit_file_status_update(stmt.record_name, status_reg, materialised)
+    after_label = ctx.fresh_label("write_after")
+    _emit_invalid_key_branch(
+        ctx,
+        status_reg,
+        stmt.record_name,
+        stmt.invalid_key,
+        stmt.not_invalid_key,
+        materialised,
+        after_label,
+    )
+    ctx.emit_inst(Label_(label=after_label))
     logger.info("WRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
 
 
@@ -166,7 +333,7 @@ def lower_rewrite(
     stmt: RewriteStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """REWRITE record-name [FROM field] — rewrite record via __cobol_rewrite_record."""
+    """REWRITE record-name [FROM field] [INVALID KEY ...] — rewrite via __cobol_rewrite_record."""
     if stmt.from_field and ctx.has_field(stmt.from_field, materialised):
         from_ref, from_rr = ctx.resolve_field_ref(stmt.from_field, materialised)
         decoded_reg = ctx.emit_decode_field(from_rr, from_ref.fl, from_ref.offset_reg)
@@ -175,14 +342,34 @@ def lower_rewrite(
         data_reg = ctx.const_to_reg(stmt.from_field or stmt.record_name)
 
     fn_reg = ctx.const_to_reg(stmt.record_name)
-    result_reg = ctx.fresh_reg()
+    raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=result_reg,
+            result_reg=raw_reg,
             func_name=FuncName("__cobol_rewrite_record"),
             args=(Register(str(fn_reg)), Register(str(data_reg))),
         ),
     )
+    status_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=status_reg,
+            func_name=FuncName("__cobol_io_status"),
+            args=(Register(str(raw_reg)),),
+        )
+    )
+    ctx.emit_file_status_update(stmt.record_name, status_reg, materialised)
+    after_label = ctx.fresh_label("rewrite_after")
+    _emit_invalid_key_branch(
+        ctx,
+        status_reg,
+        stmt.record_name,
+        stmt.invalid_key,
+        stmt.not_invalid_key,
+        materialised,
+        after_label,
+    )
+    ctx.emit_inst(Label_(label=after_label))
     logger.info("REWRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
 
 
@@ -191,15 +378,14 @@ def lower_start(
     stmt: StartStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """START file-name [KEY ...] — position file via __cobol_start_file."""
+    """START file-name [KEY relop key] [INVALID KEY ...] — position via __cobol_start_file."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
     key_reg = ctx.const_to_reg(stmt.key or "")
-    # relop — empty string default until START ... KEY IS ... relop parsing is supported.
-    relop_reg = ctx.const_to_reg("")
-    result_reg = ctx.fresh_reg()
+    relop_reg = ctx.const_to_reg(stmt.relop or "=")
+    raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=result_reg,
+            result_reg=raw_reg,
             func_name=FuncName("__cobol_start_file"),
             args=(
                 Register(str(fn_reg)),
@@ -208,7 +394,27 @@ def lower_start(
             ),
         ),
     )
-    logger.info("START %s KEY %s", stmt.file_name, stmt.key or "(none)")
+    status_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=status_reg,
+            func_name=FuncName("__cobol_io_status"),
+            args=(Register(str(raw_reg)),),
+        )
+    )
+    ctx.emit_file_status_update(stmt.file_name, status_reg, materialised)
+    after_label = ctx.fresh_label("start_after")
+    _emit_invalid_key_branch(
+        ctx,
+        status_reg,
+        stmt.file_name,
+        stmt.invalid_key,
+        stmt.not_invalid_key,
+        materialised,
+        after_label,
+    )
+    ctx.emit_inst(Label_(label=after_label))
+    logger.info("START %s KEY %s %s", stmt.file_name, stmt.relop, stmt.key or "(none)")
 
 
 def lower_delete(
@@ -216,14 +422,34 @@ def lower_delete(
     stmt: DeleteStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """DELETE file-name — delete record via __cobol_delete_record."""
+    """DELETE file-name [INVALID KEY ...] — delete record via __cobol_delete_record."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
-    result_reg = ctx.fresh_reg()
+    raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=result_reg,
+            result_reg=raw_reg,
             func_name=FuncName("__cobol_delete_record"),
             args=(Register(str(fn_reg)),),
         ),
     )
+    status_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=status_reg,
+            func_name=FuncName("__cobol_io_status"),
+            args=(Register(str(raw_reg)),),
+        )
+    )
+    ctx.emit_file_status_update(stmt.file_name, status_reg, materialised)
+    after_label = ctx.fresh_label("delete_after")
+    _emit_invalid_key_branch(
+        ctx,
+        status_reg,
+        stmt.file_name,
+        stmt.invalid_key,
+        stmt.not_invalid_key,
+        materialised,
+        after_label,
+    )
+    ctx.emit_inst(Label_(label=after_label))
     logger.info("DELETE %s", stmt.file_name)
