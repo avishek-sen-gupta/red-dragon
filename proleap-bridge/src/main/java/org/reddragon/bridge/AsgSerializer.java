@@ -12,6 +12,10 @@ import io.proleap.cobol.asg.metamodel.data.file.FileSection;
 import io.proleap.cobol.asg.metamodel.data.linkage.LinkageSection;
 import io.proleap.cobol.asg.metamodel.data.localstorage.LocalStorageSection;
 import io.proleap.cobol.asg.metamodel.data.workingstorage.WorkingStorageSection;
+import io.proleap.cobol.asg.metamodel.environment.EnvironmentDivision;
+import io.proleap.cobol.asg.metamodel.environment.inputoutput.InputOutputSection;
+import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlEntry;
+import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlParagraph;
 import io.proleap.cobol.asg.metamodel.identification.IdentificationDivision;
 import io.proleap.cobol.asg.metamodel.procedure.Paragraph;
 import io.proleap.cobol.asg.metamodel.procedure.ProcedureDivision;
@@ -75,6 +79,7 @@ public final class AsgSerializer {
 
         serializeDataDivision(pu, asg);
         serializeProcedureDivision(pu, asg);
+        asg.add("file_control", serializeFileControl(pu));
 
         return asg;
     }
@@ -232,6 +237,84 @@ public final class AsgSerializer {
             arr.add(paraObj);
         }
         return arr;
+    }
+
+    /**
+     * Serializes FILE-CONTROL entries from the ENVIRONMENT DIVISION to a JSON array.
+     * Each entry has: file_name, assign_to, organization, access_mode, record_key,
+     * relative_key, file_status_var.
+     */
+    private static JsonArray serializeFileControl(ProgramUnit pu) {
+        JsonArray result = new JsonArray();
+        try {
+            EnvironmentDivision env = pu.getEnvironmentDivision();
+            if (env == null) return result;
+            InputOutputSection ios = env.getInputOutputSection();
+            if (ios == null) return result;
+            FileControlParagraph fcp = ios.getFileControlParagraph();
+            if (fcp == null) return result;
+            for (FileControlEntry fce : fcp.getFileControlEntries()) {
+                JsonObject entry = new JsonObject();
+                entry.addProperty("file_name", fce.getName() != null ? fce.getName().toUpperCase() : "");
+
+                // ASSIGN TO
+                if (fce.getAssignClause() != null && fce.getAssignClause().getToValueStmt() != null) {
+                    io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt vs = fce.getAssignClause().getToValueStmt();
+                    String assign = (vs.getCtx() != null) ? vs.getCtx().getText() : vs.toString();
+                    // Strip surrounding quotes if present
+                    assign = assign.replaceAll("^['\"]|['\"]$", "");
+                    entry.addProperty("assign_to", assign);
+                } else {
+                    entry.addProperty("assign_to", "");
+                }
+
+                // ORGANIZATION
+                if (fce.getOrganizationClause() != null && fce.getOrganizationClause().getMode() != null) {
+                    entry.addProperty("organization", fce.getOrganizationClause().getMode().name());
+                } else {
+                    entry.addProperty("organization", "SEQUENTIAL");
+                }
+
+                // ACCESS MODE
+                if (fce.getAccessModeClause() != null && fce.getAccessModeClause().getMode() != null) {
+                    entry.addProperty("access_mode", fce.getAccessModeClause().getMode().name());
+                } else {
+                    entry.addProperty("access_mode", "SEQUENTIAL");
+                }
+
+                // RECORD KEY
+                if (fce.getRecordKeyClause() != null && fce.getRecordKeyClause().getRecordKeyCall() != null) {
+                    io.proleap.cobol.asg.metamodel.call.Call rkCall = fce.getRecordKeyClause().getRecordKeyCall();
+                    String rkName = rkCall.getName() != null ? rkCall.getName() : rkCall.toString();
+                    entry.addProperty("record_key", rkName.toUpperCase());
+                } else {
+                    entry.addProperty("record_key", "");
+                }
+
+                // RELATIVE KEY
+                if (fce.getRelativeKeyClause() != null && fce.getRelativeKeyClause().getRelativeKeyCall() != null) {
+                    io.proleap.cobol.asg.metamodel.call.Call relCall = fce.getRelativeKeyClause().getRelativeKeyCall();
+                    String relName = relCall.getName() != null ? relCall.getName() : relCall.toString();
+                    entry.addProperty("relative_key", relName.toUpperCase());
+                } else {
+                    entry.addProperty("relative_key", "");
+                }
+
+                // FILE STATUS
+                if (fce.getFileStatusClause() != null && fce.getFileStatusClause().getDataCall() != null) {
+                    io.proleap.cobol.asg.metamodel.call.Call fsCall = fce.getFileStatusClause().getDataCall();
+                    String fsName = fsCall.getName() != null ? fsCall.getName() : fsCall.toString();
+                    entry.addProperty("file_status_var", fsName.toUpperCase());
+                } else {
+                    entry.addProperty("file_status_var", "");
+                }
+
+                result.add(entry);
+            }
+        } catch (Exception e) {
+            LOG.warning("Could not serialize FILE-CONTROL: " + e.getMessage());
+        }
+        return result;
     }
 
     /**
