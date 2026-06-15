@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from interpreter.cobol.cobol_expression import ExprNode
+    from interpreter.cobol.asg_types import CobolASG
 
 from interpreter.cobol.red_dragon_extension_strategy import (
     RedDragonExtensionLoweringStrategy,
@@ -83,11 +84,15 @@ class EmitContext:
         observer: FrontendObserver | None = None,
         condition_index: ConditionNameIndex = ConditionNameIndex({}),
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
+        asg: "CobolASG | None" = None,
     ) -> None:
+        from interpreter.cobol.asg_types import CobolASG as _CobolASG
+
         self._dispatch_fn = dispatch_fn
         self._observer = observer
         self._condition_index = condition_index
         self._extension_strategies = tuple(extension_strategies)
+        self._asg: _CobolASG = asg if asg is not None else _CobolASG()
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
@@ -820,6 +825,34 @@ class EmitContext:
         )
 
         return _lower_condition(self, condition, materialised, self._condition_index)
+
+    # ── File I/O Status Helper ────────────────────────────────────
+
+    def emit_file_status_update(
+        self,
+        file_name: str,
+        status_reg: Register,
+        materialised: MaterialisedSectionedLayout,
+    ) -> None:
+        """Write I/O status code to the FILE STATUS variable if declared."""
+        from interpreter.cobol.cobol_statements import (
+            FileControlEntry,
+        )  # avoid circular at module level
+
+        fce: "FileControlEntry | None" = next(
+            (e for e in self._asg.file_control if e.file_name == file_name), None
+        )
+        if fce is None or not fce.file_status_var:
+            return
+        if not materialised.has_field(fce.file_status_var):
+            return
+        target_ref, target_rr = self.resolve_field_ref(
+            fce.file_status_var, materialised
+        )
+        str_reg = self.emit_to_string(status_reg)
+        self.emit_encode_and_write(
+            target_rr, target_ref.fl, str_reg, target_ref.offset_reg
+        )
 
     # ── Parse Literal ─────────────────────────────────────────────
 
