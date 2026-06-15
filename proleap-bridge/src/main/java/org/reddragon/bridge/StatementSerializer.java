@@ -1304,55 +1304,77 @@ public final class StatementSerializer {
     private static JsonObject serializeOpen(OpenStatement stmt) {
         JsonObject obj = newStatement("OPEN");
         try {
-            JsonArray files = new JsonArray();
-            String mode = "";
+            JsonArray modeGroups = new JsonArray();
 
             // INPUT files
             List<io.proleap.cobol.asg.metamodel.procedure.open.InputPhrase> inputPhrases = stmt.getInputPhrases();
             if (inputPhrases != null && !inputPhrases.isEmpty()) {
-                mode = "INPUT";
+                JsonArray files = new JsonArray();
                 inputPhrases.stream()
                     .flatMap(ip -> ip.getInputs().stream())
                     .map(io.proleap.cobol.asg.metamodel.procedure.open.Input::getFileCall)
                     .filter(c -> c != null)
                     .map(StatementSerializer::extractCallName)
                     .forEach(files::add);
+                if (files.size() > 0) {
+                    JsonObject grp = new JsonObject();
+                    grp.addProperty("mode", "INPUT");
+                    grp.add("files", files);
+                    modeGroups.add(grp);
+                }
             }
 
             // OUTPUT files
             List<io.proleap.cobol.asg.metamodel.procedure.open.OutputPhrase> outputPhrases = stmt.getOutputPhrases();
             if (outputPhrases != null && !outputPhrases.isEmpty()) {
-                mode = "OUTPUT";
+                JsonArray files = new JsonArray();
                 outputPhrases.stream()
                     .flatMap(op -> op.getOutputs().stream())
                     .map(io.proleap.cobol.asg.metamodel.procedure.open.Output::getFileCall)
                     .filter(c -> c != null)
                     .map(StatementSerializer::extractCallName)
                     .forEach(files::add);
+                if (files.size() > 0) {
+                    JsonObject grp = new JsonObject();
+                    grp.addProperty("mode", "OUTPUT");
+                    grp.add("files", files);
+                    modeGroups.add(grp);
+                }
             }
 
             // I-O files
             List<io.proleap.cobol.asg.metamodel.procedure.open.InputOutputPhrase> ioPhrases = stmt.getInputOutputPhrases();
             if (ioPhrases != null && !ioPhrases.isEmpty()) {
-                mode = "I-O";
+                JsonArray files = new JsonArray();
                 ioPhrases.stream()
                     .flatMap(iop -> iop.getFileCalls().stream())
                     .map(StatementSerializer::extractCallName)
                     .forEach(files::add);
+                if (files.size() > 0) {
+                    JsonObject grp = new JsonObject();
+                    grp.addProperty("mode", "I-O");
+                    grp.add("files", files);
+                    modeGroups.add(grp);
+                }
             }
 
             // EXTEND files
             List<io.proleap.cobol.asg.metamodel.procedure.open.ExtendPhrase> extendPhrases = stmt.getExtendPhrases();
             if (extendPhrases != null && !extendPhrases.isEmpty()) {
-                mode = "EXTEND";
+                JsonArray files = new JsonArray();
                 extendPhrases.stream()
                     .flatMap(ep -> ep.getFileCalls().stream())
                     .map(StatementSerializer::extractCallName)
                     .forEach(files::add);
+                if (files.size() > 0) {
+                    JsonObject grp = new JsonObject();
+                    grp.addProperty("mode", "EXTEND");
+                    grp.add("files", files);
+                    modeGroups.add(grp);
+                }
             }
 
-            obj.addProperty("mode", mode);
-            obj.add("files", files);
+            obj.add("mode_groups", modeGroups);
         } catch (Exception e) {
             LOG.fine("Could not extract OPEN operands: " + e.getMessage());
         }
@@ -1387,6 +1409,42 @@ public final class StatementSerializer {
             if (into != null && into.getIntoCall() != null) {
                 obj.addProperty("into", extractCallName(into.getIntoCall()));
             }
+
+            // KEY IS clause
+            io.proleap.cobol.asg.metamodel.procedure.read.Key key = stmt.getKey();
+            if (key != null && key.getKeyCall() != null) {
+                obj.addProperty("key", extractCallName(key.getKeyCall()));
+            } else {
+                obj.addProperty("key", "");
+            }
+
+            // AT END / NOT AT END
+            io.proleap.cobol.asg.metamodel.procedure.AtEndPhrase atEnd = stmt.getAtEnd();
+            if (atEnd != null && atEnd.getStatements() != null) {
+                obj.add("at_end", serializeStatements(atEnd.getStatements()));
+            } else {
+                obj.add("at_end", new JsonArray());
+            }
+            io.proleap.cobol.asg.metamodel.procedure.NotAtEndPhrase notAtEnd = stmt.getNotAtEndPhrase();
+            if (notAtEnd != null && notAtEnd.getStatements() != null) {
+                obj.add("not_at_end", serializeStatements(notAtEnd.getStatements()));
+            } else {
+                obj.add("not_at_end", new JsonArray());
+            }
+
+            // INVALID KEY / NOT INVALID KEY
+            io.proleap.cobol.asg.metamodel.procedure.InvalidKeyPhrase invalidKey = stmt.getInvalidKeyPhrase();
+            if (invalidKey != null && invalidKey.getStatements() != null) {
+                obj.add("invalid_key", serializeStatements(invalidKey.getStatements()));
+            } else {
+                obj.add("invalid_key", new JsonArray());
+            }
+            io.proleap.cobol.asg.metamodel.procedure.NotInvalidKeyPhrase notInvalidKey = stmt.getNotInvalidKeyPhrase();
+            if (notInvalidKey != null && notInvalidKey.getStatements() != null) {
+                obj.add("not_invalid_key", serializeStatements(notInvalidKey.getStatements()));
+            } else {
+                obj.add("not_invalid_key", new JsonArray());
+            }
         } catch (Exception e) {
             LOG.fine("Could not extract READ operands: " + e.getMessage());
         }
@@ -1402,6 +1460,20 @@ public final class StatementSerializer {
             io.proleap.cobol.asg.metamodel.procedure.write.From from = stmt.getFrom();
             if (from != null && from.getFromValueStmt() != null) {
                 obj.addProperty("from_field", extractValueStmtText(from.getFromValueStmt()));
+            }
+
+            // INVALID KEY / NOT INVALID KEY
+            io.proleap.cobol.asg.metamodel.procedure.InvalidKeyPhrase invalidKey = stmt.getInvalidKeyPhrase();
+            if (invalidKey != null && invalidKey.getStatements() != null) {
+                obj.add("invalid_key", serializeStatements(invalidKey.getStatements()));
+            } else {
+                obj.add("invalid_key", new JsonArray());
+            }
+            io.proleap.cobol.asg.metamodel.procedure.NotInvalidKeyPhrase notInvalidKey = stmt.getNotInvalidKeyPhrase();
+            if (notInvalidKey != null && notInvalidKey.getStatements() != null) {
+                obj.add("not_invalid_key", serializeStatements(notInvalidKey.getStatements()));
+            } else {
+                obj.add("not_invalid_key", new JsonArray());
             }
         } catch (Exception e) {
             LOG.fine("Could not extract WRITE operands: " + e.getMessage());
@@ -1419,6 +1491,20 @@ public final class StatementSerializer {
             if (from != null && from.getFromCall() != null) {
                 obj.addProperty("from_field", extractCallName(from.getFromCall()));
             }
+
+            // INVALID KEY / NOT INVALID KEY
+            io.proleap.cobol.asg.metamodel.procedure.InvalidKeyPhrase invalidKey = stmt.getInvalidKeyPhrase();
+            if (invalidKey != null && invalidKey.getStatements() != null) {
+                obj.add("invalid_key", serializeStatements(invalidKey.getStatements()));
+            } else {
+                obj.add("invalid_key", new JsonArray());
+            }
+            io.proleap.cobol.asg.metamodel.procedure.NotInvalidKeyPhrase notInvalidKey = stmt.getNotInvalidKeyPhrase();
+            if (notInvalidKey != null && notInvalidKey.getStatements() != null) {
+                obj.add("not_invalid_key", serializeStatements(notInvalidKey.getStatements()));
+            } else {
+                obj.add("not_invalid_key", new JsonArray());
+            }
         } catch (Exception e) {
             LOG.fine("Could not extract REWRITE operands: " + e.getMessage());
         }
@@ -1434,6 +1520,32 @@ public final class StatementSerializer {
             io.proleap.cobol.asg.metamodel.procedure.start.Key key = stmt.getKey();
             if (key != null && key.getComparisonCall() != null) {
                 obj.addProperty("key", extractCallName(key.getComparisonCall()));
+                // Relational operator from KeyType enum
+                if (key.getKeyType() != null) {
+                    String relop;
+                    switch (key.getKeyType()) {
+                        case GREATER: relop = ">"; break;
+                        case GREATER_OR_EQUAL: relop = ">="; break;
+                        case EQUAL: default: relop = "="; break;
+                    }
+                    obj.addProperty("relop", relop);
+                } else {
+                    obj.addProperty("relop", "=");
+                }
+            }
+
+            // INVALID KEY / NOT INVALID KEY
+            io.proleap.cobol.asg.metamodel.procedure.InvalidKeyPhrase invalidKey = stmt.getInvalidKeyPhrase();
+            if (invalidKey != null && invalidKey.getStatements() != null) {
+                obj.add("invalid_key", serializeStatements(invalidKey.getStatements()));
+            } else {
+                obj.add("invalid_key", new JsonArray());
+            }
+            io.proleap.cobol.asg.metamodel.procedure.NotInvalidKeyPhrase notInvalidKey = stmt.getNotInvalidKeyPhrase();
+            if (notInvalidKey != null && notInvalidKey.getStatements() != null) {
+                obj.add("not_invalid_key", serializeStatements(notInvalidKey.getStatements()));
+            } else {
+                obj.add("not_invalid_key", new JsonArray());
             }
         } catch (Exception e) {
             LOG.fine("Could not extract START operands: " + e.getMessage());
@@ -1446,6 +1558,20 @@ public final class StatementSerializer {
         try {
             if (stmt.getFileCall() != null) {
                 obj.addProperty("file_name", extractCallName(stmt.getFileCall()));
+            }
+
+            // INVALID KEY / NOT INVALID KEY
+            io.proleap.cobol.asg.metamodel.procedure.InvalidKeyPhrase invalidKey = stmt.getInvalidKeyPhrase();
+            if (invalidKey != null && invalidKey.getStatements() != null) {
+                obj.add("invalid_key", serializeStatements(invalidKey.getStatements()));
+            } else {
+                obj.add("invalid_key", new JsonArray());
+            }
+            io.proleap.cobol.asg.metamodel.procedure.NotInvalidKeyPhrase notInvalidKey = stmt.getNotInvalidKeyPhrase();
+            if (notInvalidKey != null && notInvalidKey.getStatements() != null) {
+                obj.add("not_invalid_key", serializeStatements(notInvalidKey.getStatements()));
+            } else {
+                obj.add("not_invalid_key", new JsonArray());
             }
         } catch (Exception e) {
             LOG.fine("Could not extract DELETE operands: " + e.getMessage());
