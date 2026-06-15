@@ -64,15 +64,22 @@ def lower_sectioned_data_division(
     else:
         ls_reg = NO_REGISTER
 
+    if layout.file.total_bytes > 0:
+        file_reg = lower_data_division(ctx, layout.file)
+    else:
+        file_reg = NO_REGISTER
+
     logger.debug(
-        "Sectioned data division: WS=%s LK=%s LS=%s",
+        "Sectioned data division: WS=%s LK=%s LS=%s FILE=%s",
         ws_reg,
         lk_reg,
         ls_reg,
+        file_reg,
     )
 
     return MaterialisedSectionedLayout(
         working_storage=(layout.working_storage, ws_reg),
         linkage=(layout.linkage, lk_reg),
         local_storage=(layout.local_storage, ls_reg),
+        file=(layout.file, file_reg),
     )
