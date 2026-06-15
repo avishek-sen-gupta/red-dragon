@@ -19,6 +19,7 @@ from interpreter.cobol.ref_mod import (
 )
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict
 from interpreter.cobol.cics_parser import parse_exec_cics_text, CicsOperand
+from interpreter.cobol.file_enums import OpenMode, FileOrganization, AccessMode
 
 # ── PERFORM specs ────────────────────────────────────────────────
 
@@ -888,21 +889,62 @@ class AcceptStatement:
 
 
 @dataclass(frozen=True)
-class OpenStatement:
-    """OPEN mode file1 file2 ..."""
+class FileControlEntry:
+    """FILE-CONTROL entry from the ENVIRONMENT DIVISION."""
 
-    mode: str = ""  # INPUT, OUTPUT, I-O, EXTEND
-    files: list[str] = field(default_factory=list)
+    file_name: str
+    assign_to: str = ""
+    organization: FileOrganization = FileOrganization.SEQUENTIAL
+    access_mode: AccessMode = AccessMode.SEQUENTIAL
+    record_key: str = ""
+    relative_key: str = ""
+    file_status_var: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict) -> OpenStatement:
+    def from_dict(cls, data: dict) -> FileControlEntry:
         return cls(
-            mode=data.get("mode", ""),
-            files=data.get("files", []),
+            file_name=data["file_name"],
+            assign_to=data.get("assign_to", ""),
+            organization=FileOrganization(data.get("organization", "SEQUENTIAL")),
+            access_mode=AccessMode(data.get("access_mode", "SEQUENTIAL")),
+            record_key=data.get("record_key", ""),
+            relative_key=data.get("relative_key", ""),
+            file_status_var=data.get("file_status_var", ""),
         )
 
     def to_dict(self) -> dict:
-        return {"type": "OPEN", "mode": self.mode, "files": list(self.files)}
+        return {
+            "file_name": self.file_name,
+            "assign_to": self.assign_to,
+            "organization": self.organization.value,
+            "access_mode": self.access_mode.value,
+            "record_key": self.record_key,
+            "relative_key": self.relative_key,
+            "file_status_var": self.file_status_var,
+        }
+
+
+@dataclass(frozen=True)
+class OpenStatement:
+    """OPEN [mode file1 file2 ...] ... — one or more mode groups."""
+
+    mode_groups: list[tuple[OpenMode, list[str]]] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> OpenStatement:
+        groups = [
+            (OpenMode(g["mode"]), list(g["files"])) for g in data.get("mode_groups", [])
+        ]
+        return cls(mode_groups=groups)
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "OPEN",
+            "mode_groups": [
+                {"mode": mode.value, "files": list(files)}
+                for mode, files in self.mode_groups
+            ],
+        }
 
 
 @dataclass(frozen=True)
@@ -921,100 +963,169 @@ class CloseStatement:
 
 @dataclass(frozen=True)
 class ReadStatement:
-    """READ file-name [INTO target]."""
+    """READ file-name [INTO target] [KEY key] [AT END ...] [INVALID KEY ...]."""
 
     file_name: str = ""
     into: str = ""
+    key: str = ""
+    at_end: list[CobolStatementType] = field(default_factory=list)
+    not_at_end: list[CobolStatementType] = field(default_factory=list)
+    invalid_key: list[CobolStatementType] = field(default_factory=list)
+    not_invalid_key: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> ReadStatement:
         return cls(
             file_name=data.get("file_name", ""),
             into=data.get("into", ""),
+            key=data.get("key", ""),
+            at_end=[parse_statement(c) for c in data.get("at_end", [])],
+            not_at_end=[parse_statement(c) for c in data.get("not_at_end", [])],
+            invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
+            not_invalid_key=[
+                parse_statement(c) for c in data.get("not_invalid_key", [])
+            ],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "READ", "file_name": self.file_name}
         if self.into:
             result["into"] = self.into
+        if self.key:
+            result["key"] = self.key
+        if self.at_end:
+            result["at_end"] = [c.to_dict() for c in self.at_end]
+        if self.not_at_end:
+            result["not_at_end"] = [c.to_dict() for c in self.not_at_end]
+        if self.invalid_key:
+            result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
+        if self.not_invalid_key:
+            result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         return result
 
 
 @dataclass(frozen=True)
 class WriteStatement:
-    """WRITE record-name [FROM field]."""
+    """WRITE record-name [FROM field] [INVALID KEY ...] [NOT INVALID KEY ...]."""
 
     record_name: str = ""
     from_field: str = ""
+    invalid_key: list[CobolStatementType] = field(default_factory=list)
+    not_invalid_key: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> WriteStatement:
         return cls(
             record_name=data.get("record_name", ""),
             from_field=data.get("from_field", ""),
+            invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
+            not_invalid_key=[
+                parse_statement(c) for c in data.get("not_invalid_key", [])
+            ],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "WRITE", "record_name": self.record_name}
         if self.from_field:
             result["from_field"] = self.from_field
+        if self.invalid_key:
+            result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
+        if self.not_invalid_key:
+            result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         return result
 
 
 @dataclass(frozen=True)
 class RewriteStatement:
-    """REWRITE record-name [FROM field]."""
+    """REWRITE record-name [FROM field] [INVALID KEY ...] [NOT INVALID KEY ...]."""
 
     record_name: str = ""
     from_field: str = ""
+    invalid_key: list[CobolStatementType] = field(default_factory=list)
+    not_invalid_key: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> RewriteStatement:
         return cls(
             record_name=data.get("record_name", ""),
             from_field=data.get("from_field", ""),
+            invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
+            not_invalid_key=[
+                parse_statement(c) for c in data.get("not_invalid_key", [])
+            ],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "REWRITE", "record_name": self.record_name}
         if self.from_field:
             result["from_field"] = self.from_field
+        if self.invalid_key:
+            result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
+        if self.not_invalid_key:
+            result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         return result
 
 
 @dataclass(frozen=True)
 class StartStatement:
-    """START file-name [KEY condition]."""
+    """START file-name [KEY relop key] [INVALID KEY ...] [NOT INVALID KEY ...]."""
 
     file_name: str = ""
     key: str = ""
+    relop: str = ""
+    invalid_key: list[CobolStatementType] = field(default_factory=list)
+    not_invalid_key: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> StartStatement:
         return cls(
             file_name=data.get("file_name", ""),
             key=data.get("key", ""),
+            relop=data.get("relop", ""),
+            invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
+            not_invalid_key=[
+                parse_statement(c) for c in data.get("not_invalid_key", [])
+            ],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "START", "file_name": self.file_name}
         if self.key:
             result["key"] = self.key
+        if self.relop:
+            result["relop"] = self.relop
+        if self.invalid_key:
+            result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
+        if self.not_invalid_key:
+            result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         return result
 
 
 @dataclass(frozen=True)
 class DeleteStatement:
-    """DELETE file-name [RECORD]."""
+    """DELETE file-name [RECORD] [INVALID KEY ...] [NOT INVALID KEY ...]."""
 
     file_name: str = ""
+    invalid_key: list[CobolStatementType] = field(default_factory=list)
+    not_invalid_key: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> DeleteStatement:
-        return cls(file_name=data.get("file_name", ""))
+        return cls(
+            file_name=data.get("file_name", ""),
+            invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
+            not_invalid_key=[
+                parse_statement(c) for c in data.get("not_invalid_key", [])
+            ],
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "DELETE", "file_name": self.file_name}
+        result: dict = {"type": "DELETE", "file_name": self.file_name}
+        if self.invalid_key:
+            result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
+        if self.not_invalid_key:
+            result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
+        return result
 
 
 @dataclass(frozen=True)

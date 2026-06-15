@@ -2196,7 +2196,9 @@ class TestCallAlterEntryCancelLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
         ]
-        stmts = [OpenStatement(mode="INPUT", files=["FILE-A", "FILE-B"])]
+        from interpreter.cobol.file_enums import OpenMode
+
+        stmts = [OpenStatement(mode_groups=[(OpenMode.INPUT, ["FILE-A", "FILE-B"])])]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
