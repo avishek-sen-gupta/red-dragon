@@ -86,12 +86,14 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.READ)
     def test_stub_read_returns_record(self):
-        ir = _build_call_function_ir("__cobol_read_record", "CUST-FILE")
+        from interpreter.cobol.io_provider import IOResult
+
+        ir = _build_call_function_ir("__cobol_read_record", "CUST-FILE", "")
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["RECORD-DATA"]}})
         vm = _execute_with_provider(ir, provider)
 
         result = unwrap(vm.current_frame.registers.get(Register("%result")))
-        assert result == "RECORD-DATA"
+        assert result == IOResult("00", "RECORD-DATA")
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.WRITE)
     def test_stub_write_captures_data(self):
@@ -103,7 +105,7 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.OPEN, CobolFeature.CLOSE)
     def test_stub_open_close_lifecycle(self):
-        # Build IR: OPEN, then CLOSE
+        # Build IR: OPEN (with all 6 args), then CLOSE
         instructions = [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))]
 
         instructions.append(
@@ -118,9 +120,27 @@ class TestExecutorIOProviderDispatch:
         )
         instructions.append(
             IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%rl"), operands=[80]
+            )
+        )
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CONST,
+                result_reg=Register("%org"),
+                operands=["SEQUENTIAL"],
+            )
+        )
+        instructions.append(
+            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%ko"), operands=[0])
+        )
+        instructions.append(
+            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%kl"), operands=[0])
+        )
+        instructions.append(
+            IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=Register("%r1"),
-                operands=["__cobol_open_file", "%f", "%m"],
+                operands=["__cobol_open_file", "%f", "%m", "%rl", "%org", "%ko", "%kl"],
             )
         )
         instructions.append(
