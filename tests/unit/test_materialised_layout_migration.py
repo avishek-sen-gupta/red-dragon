@@ -138,7 +138,7 @@ class TestEmitContextLowerStatement:
         ctx = EmitContext(dispatch_fn=dispatch_statement)
         materialised = lower_sectioned_data_division(ctx, sl)
 
-        stmt = DisplayStatement(operand=RefModOperand(name="HELLO"))
+        stmt = DisplayStatement(operands=(RefModOperand(name="HELLO"),))
         ctx.lower_statement(stmt, materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]

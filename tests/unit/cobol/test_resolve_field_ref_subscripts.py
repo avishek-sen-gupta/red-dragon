@@ -165,8 +165,10 @@ def test_lower_display_threads_operand_subscripts():
 
     ctx, materialised = _occurs_ctx()
     stmt = DisplayStatement(
-        operand=RefModOperand(
-            name="WS-ELEM", subscripts=(FieldRefNode("I"), FieldRefNode("J"))
+        operands=(
+            RefModOperand(
+                name="WS-ELEM", subscripts=(FieldRefNode("I"), FieldRefNode("J"))
+            ),
         )
     )
     with pytest.raises(NotImplementedError):
@@ -182,7 +184,7 @@ def test_lower_display_threads_single_subscript_happy_path():
 
     ctx, materialised = _occurs_ctx()
     stmt = DisplayStatement(
-        operand=RefModOperand(name="WS-ELEM", subscripts=(FieldRefNode("WS-IDX"),))
+        operands=(RefModOperand(name="WS-ELEM", subscripts=(FieldRefNode("WS-IDX"),)),)
     )
     n_before = len(ctx.instructions)
     lower_display(ctx, stmt, materialised)  # must not raise

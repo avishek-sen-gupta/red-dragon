@@ -4586,6 +4586,38 @@ class TestDisplayRefMod:
         assert out == "HELLO", f"Expected 'HELLO', got {out!r}"
 
 
+class TestDisplayMultipleOperands:
+    @covers(CobolFeature.DISPLAY)
+    def test_display_concatenates_all_operands(self, capsys):
+        """DISPLAY a b c … concatenates EVERY operand onto one line.
+
+        Regression: the ASG kept only operands[0], so a multi-operand DISPLAY
+        (alphanumeric + literals + a binary field, as in db2-samples cursor.sqb)
+        emitted just the first operand. All operands must appear, in order.
+        """
+        _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISP-MULTI.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-NAME PIC X(7) VALUE "SANDERS".',
+                "77 WS-DEPT PIC S9(4) COMP-5 VALUE 20.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                '    DISPLAY WS-NAME " in dept. " WS-DEPT " is a manager".',
+                "    STOP RUN.",
+            ]
+        )
+        out = capsys.readouterr().out
+        # The bug dropped everything after the first operand; assert each part is
+        # present (the trailing literal proves the LAST operand rendered).
+        assert "SANDERS" in out, out
+        assert "in dept." in out, out
+        assert "20" in out, out
+        assert "is a manager" in out, out
+
+
 class TestArithmeticRefMod:
     @covers(CobolFeature.ARITHMETIC_REF_MOD, CobolFeature.ADD)
     def test_add_source_ref_mod(self):

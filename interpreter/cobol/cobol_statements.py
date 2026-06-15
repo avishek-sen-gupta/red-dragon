@@ -388,20 +388,21 @@ class EvaluateStatement:
 
 @dataclass(frozen=True)
 class DisplayStatement:
-    """DISPLAY operand."""
+    """DISPLAY operand [operand ...] — operands are concatenated onto one line."""
 
-    operand: RefModOperand
+    operands: tuple[RefModOperand, ...]
 
     @classmethod
     def from_dict(cls, data: dict) -> DisplayStatement:
-        operands = data.get("operands", [])
-        raw = operands[0] if operands else {}
-        if isinstance(raw, str):
-            raw = {"name": raw}
-        return cls(operand=RefModOperand.from_dict(raw))
+        return cls(
+            operands=tuple(
+                RefModOperand.from_dict({"name": raw} if isinstance(raw, str) else raw)
+                for raw in data.get("operands", [])
+            )
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "DISPLAY", "operands": [self.operand.to_dict()]}
+        return {"type": "DISPLAY", "operands": [op.to_dict() for op in self.operands]}
 
 
 @dataclass(frozen=True)
