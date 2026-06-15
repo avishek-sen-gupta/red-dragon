@@ -1339,14 +1339,12 @@ def lower_set(
             )
 
 
-def lower_display(
+def _lower_display_operand(
     ctx: EmitContext,
-    stmt: DisplayStatement,
+    operand: RefModOperand,
     materialised: MaterialisedSectionedLayout,
-) -> None:
-    """DISPLAY field-or-literal."""
-    operand = stmt.operand
-
+) -> Register:
+    """Lower one DISPLAY operand to a register holding its display string."""
     if ctx.has_field(operand.name, materialised):
         ref, rr = ctx.resolve_field_ref(
             operand.name, materialised, subscripts=operand.subscripts
@@ -1383,11 +1381,42 @@ def lower_display(
         )
         display_reg = sliced_reg
 
+    return display_reg
+
+
+def lower_display(
+    ctx: EmitContext,
+    stmt: DisplayStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """DISPLAY operand [operand ...] — concatenate every operand onto one line.
+
+    COBOL concatenates the operands with no separator; we lower each to its
+    display string, fold them with string-concat, and print the result ONCE.
+    """
+    operand_regs = [
+        _lower_display_operand(ctx, operand, materialised) for operand in stmt.operands
+    ]
+    if not operand_regs:
+        return
+
+    combined_reg = operand_regs[0]
+    for next_reg in operand_regs[1:]:
+        folded = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=folded,
+                func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
+                args=(combined_reg, next_reg),
+            )
+        )
+        combined_reg = folded
+
     ctx.emit_inst(
         CallFunction(
             result_reg=ctx.fresh_reg(),
             func_name=FuncName("print"),
-            args=(display_reg,),
+            args=(combined_reg,),
         )
     )
 
