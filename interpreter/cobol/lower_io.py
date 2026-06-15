@@ -56,12 +56,25 @@ def lower_open(
     for filename in stmt.files:
         fn_reg = ctx.const_to_reg(filename)
         mode_reg = ctx.const_to_reg(stmt.mode)
+        # record_length, organization, key_offset, key_length — defaults until
+        # file-control metadata is plumbed through from the ENVIRONMENT DIVISION.
+        rec_len_reg = ctx.const_to_reg(0)
+        org_reg = ctx.const_to_reg("SEQUENTIAL")
+        key_off_reg = ctx.const_to_reg(0)
+        key_len_reg = ctx.const_to_reg(0)
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=result_reg,
                 func_name=FuncName("__cobol_open_file"),
-                args=(Register(str(fn_reg)), Register(str(mode_reg))),
+                args=(
+                    Register(str(fn_reg)),
+                    Register(str(mode_reg)),
+                    Register(str(rec_len_reg)),
+                    Register(str(org_reg)),
+                    Register(str(key_off_reg)),
+                    Register(str(key_len_reg)),
+                ),
             ),
         )
         logger.info("OPEN %s %s", stmt.mode, filename)
@@ -93,17 +106,29 @@ def lower_read(
 ) -> None:
     """READ file-name [INTO target] — read record via __cobol_read_record."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
-    result_reg = ctx.fresh_reg()
+    # key — empty string for sequential reads; keyed access will populate this
+    # once READ ... KEY IS ... parsing is supported.
+    key_reg = ctx.const_to_reg("")
+    io_result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
-            result_reg=result_reg,
+            result_reg=io_result_reg,
             func_name=FuncName("__cobol_read_record"),
-            args=(Register(str(fn_reg)),),
+            args=(Register(str(fn_reg)), Register(str(key_reg))),
         ),
     )
     if stmt.into and ctx.has_field(stmt.into, materialised):
+        # Extract the string payload from IOResult via __cobol_io_data.
+        data_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=data_reg,
+                func_name=FuncName("__cobol_io_data"),
+                args=(Register(str(io_result_reg)),),
+            ),
+        )
         target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
-        str_reg = ctx.emit_to_string(result_reg)
+        str_reg = ctx.emit_to_string(data_reg)
         ctx.emit_encode_and_write(
             target_rr, target_ref.fl, str_reg, target_ref.offset_reg
         )
@@ -168,12 +193,18 @@ def lower_start(
     """START file-name [KEY ...] — position file via __cobol_start_file."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
     key_reg = ctx.const_to_reg(stmt.key or "")
+    # relop — empty string default until START ... KEY IS ... relop parsing is supported.
+    relop_reg = ctx.const_to_reg("")
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
             func_name=FuncName("__cobol_start_file"),
-            args=(Register(str(fn_reg)), Register(str(key_reg))),
+            args=(
+                Register(str(fn_reg)),
+                Register(str(key_reg)),
+                Register(str(relop_reg)),
+            ),
         ),
     )
     logger.info("START %s KEY %s", stmt.file_name, stmt.key or "(none)")
