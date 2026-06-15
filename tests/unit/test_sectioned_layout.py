@@ -114,3 +114,82 @@ def test_materialised_has_field():
     assert m.has_field("WS-X")
     assert m.has_field("LK-Y")
     assert not m.has_field("MISSING")
+
+
+def _make_asg_with_file_field() -> CobolASG:
+    file_field = CobolField(
+        name="CUST-REC",
+        level=1,
+        pic="",
+        usage="DISPLAY",
+        offset=0,
+        children=[
+            CobolField(name="CUST-ID", level=5, pic="X(5)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="CUST-NAME", level=5, pic="X(20)", usage="DISPLAY", offset=5
+            ),
+        ],
+    )
+    return CobolASG(file_fields=[file_field])
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_sectioned_layout_has_file_section():
+    asg = _make_asg_with_file_field()
+    layout = build_sectioned_layout(asg)
+    assert layout.file.total_bytes > 0
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_materialised_has_file_field_attribute():
+    """MaterialisedSectionedLayout.file exists as a dataclass field."""
+    assert "file" in MaterialisedSectionedLayout.__dataclass_fields__
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_materialised_default_file_is_no_register():
+    from interpreter.register import NO_REGISTER
+
+    m = MaterialisedSectionedLayout(
+        working_storage=(DataLayout(), Register("%r0")),
+        linkage=(DataLayout(), Register("%r1")),
+        local_storage=(DataLayout(), Register("%r2")),
+    )
+    _, file_reg = m.file
+    assert file_reg == NO_REGISTER
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_has_field_includes_file_section():
+    from interpreter.register import NO_REGISTER
+
+    asg = _make_asg_with_file_field()
+    layout = build_sectioned_layout(asg)
+    dummy_reg = Register("%file")
+    m = MaterialisedSectionedLayout(
+        working_storage=(DataLayout(), NO_REGISTER),
+        linkage=(DataLayout(), NO_REGISTER),
+        local_storage=(DataLayout(), NO_REGISTER),
+        file=(layout.file, dummy_reg),
+    )
+    assert m.has_field("CUST-ID")
+    assert m.has_field("CUST-NAME")
+    assert not m.has_field("NONEXISTENT")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_resolve_finds_file_section_fields():
+    from interpreter.register import NO_REGISTER
+
+    asg = _make_asg_with_file_field()
+    layout = build_sectioned_layout(asg)
+    dummy_reg = Register("%file")
+    m = MaterialisedSectionedLayout(
+        working_storage=(DataLayout(), NO_REGISTER),
+        linkage=(DataLayout(), NO_REGISTER),
+        local_storage=(DataLayout(), NO_REGISTER),
+        file=(layout.file, dummy_reg),
+    )
+    fl, reg = m.resolve("CUST-ID")
+    assert reg == dummy_reg
+    assert fl.name == "CUST-ID"

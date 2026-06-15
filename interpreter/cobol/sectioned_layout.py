@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,9 @@ class MaterialisedSectionedLayout:
     working_storage: tuple[DataLayout, Register]
     linkage: tuple[DataLayout, Register]
     local_storage: tuple[DataLayout, Register]
+    file: tuple[DataLayout, Register] = field(
+        default_factory=lambda: (DataLayout(), NO_REGISTER)
+    )
 
     def resolve(
         self, name: str, qualifiers: tuple[str, ...] = ()
@@ -60,6 +63,11 @@ class MaterialisedSectionedLayout:
         if lk_fl is not None:
             return lk_fl, lk_reg
 
+        file_layout, file_reg = self.file
+        file_fl = file_layout.lookup_as_storage(name, qualifiers)
+        if file_fl is not None:
+            return file_fl, file_reg
+
         raise KeyError(f"Field {name!r} not found in any DATA DIVISION section")
 
     def subscript_stride(self, name: str) -> int:
@@ -73,6 +81,7 @@ class MaterialisedSectionedLayout:
             self.local_storage,
             self.working_storage,
             self.linkage,
+            self.file,
         ):
             if layout.lookup_as_storage(name) is not None:
                 return layout.enclosing_occurs_element_size(name)
@@ -82,22 +91,25 @@ class MaterialisedSectionedLayout:
         ls_layout, _ = self.local_storage
         ws_layout, _ = self.working_storage
         lk_layout, _ = self.linkage
+        file_layout, _ = self.file
         return (
             ls_layout.lookup_as_storage(name) is not None
             or ws_layout.lookup_as_storage(name) is not None
             or lk_layout.lookup_as_storage(name) is not None
+            or file_layout.lookup_as_storage(name) is not None
         )
 
     def group_leaf_names(self, group_name: str) -> list[str]:
         """Return the leaf field names of a group, searched across sections.
 
         Order is the layout's depth-first order. Returns [] if no such group.
-        Precedence mirrors resolve(): LOCAL-STORAGE > WORKING-STORAGE > LINKAGE.
+        Precedence mirrors resolve(): LOCAL-STORAGE > WORKING-STORAGE > LINKAGE > FILE.
         """
         for layout, _reg in (
             self.local_storage,
             self.working_storage,
             self.linkage,
+            self.file,
         ):
             try:
                 grp = layout.lookup_group(group_name)
