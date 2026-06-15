@@ -7,7 +7,7 @@ this is injected via VMConfig and accessed by the executor for __cobol_*
 CALL_FUNCTION dispatch.
 
 Two implementations:
-- NullIOProvider: returns UNCOMPUTABLE for all operations (symbolic fallback).
+- NullIOProvider: returns UNCOMPUTABLE for READ; IOResult("00", None) for all other ops.
 - StubIOProvider: returns queued test data for concrete execution without files.
 """
 
@@ -26,6 +26,20 @@ logger = logging.getLogger(__name__)
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
+
+@dataclass(frozen=True)
+class IOResult:
+    """Structured return value for all CobolIOProvider I/O methods.
+
+    status: COBOL file status code ("00"=success, "10"=AT END, "22"=dup key,
+            "23"=key not found, "35"=file not found, "47"=not open).
+    data:   Populated on successful READ; None for write-side verbs.
+    """
+
+    status: str
+    data: str | None
+
+
 # Dispatch table mapping __cobol_* function names to provider method names.
 _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_accept"): "_accept",
@@ -36,6 +50,8 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_rewrite_record"): "_rewrite_record",
     FuncName("__cobol_start_file"): "_start_file",
     FuncName("__cobol_delete_record"): "_delete_record",
+    FuncName("__cobol_io_status"): "_io_status",
+    FuncName("__cobol_io_data"): "_io_data",
 }
 
 
@@ -52,7 +68,7 @@ class CobolIOProvider(ABC):
 
     def handle_call(
         self, func_name: FuncName, args: list[TypedValue]
-    ) -> Any:  # Any: str | int | _Uncomputable — VM I/O boundary
+    ) -> Any:  # Any: str | int | IOResult | _Uncomputable — VM I/O boundary
         """Route a __cobol_* call to the appropriate method.
 
         Returns a concrete value or UNCOMPUTABLE if unhandled.
@@ -64,6 +80,18 @@ class CobolIOProvider(ABC):
         method = getattr(self, method_name)
         return method(*[a.value for a in args])
 
+    def _io_status(self, raw: Any) -> Any:
+        """Extract COBOL file status code from an IOResult."""
+        if isinstance(raw, IOResult):
+            return raw.status
+        return _UNCOMPUTABLE
+
+    def _io_data(self, raw: Any) -> Any:
+        """Extract record data from an IOResult (empty string if None)."""
+        if isinstance(raw, IOResult):
+            return raw.data or ""
+        return _UNCOMPUTABLE
+
     @abstractmethod
     def _accept(
         self, from_device: str
@@ -72,37 +100,47 @@ class CobolIOProvider(ABC):
         ...
 
     @abstractmethod
-    def _open_file(self, filename: str, mode: str) -> Any:
+    def _open_file(
+        self,
+        filename: str,
+        mode: str,
+        record_length: int,
+        organization: str,
+        key_offset: int,
+        key_length: int,
+    ) -> IOResult:
         """OPEN file in given mode (INPUT/OUTPUT/I-O/EXTEND)."""
         ...
 
     @abstractmethod
-    def _close_file(self, filename: str) -> Any:
+    def _close_file(self, filename: str) -> IOResult:
         """CLOSE file."""
         ...
 
     @abstractmethod
-    def _read_record(self, filename: str) -> Any:
+    def _read_record(
+        self, filename: str, key: str
+    ) -> Any:  # Any: IOResult | _Uncomputable
         """READ — get next record from file."""
         ...
 
     @abstractmethod
-    def _write_record(self, filename: str, data: str) -> Any:
+    def _write_record(self, filename: str, data: str) -> IOResult:
         """WRITE — write a record to file."""
         ...
 
     @abstractmethod
-    def _rewrite_record(self, filename: str, data: str) -> Any:
+    def _rewrite_record(self, filename: str, data: str) -> IOResult:
         """REWRITE — replace the last-read record in file."""
         ...
 
     @abstractmethod
-    def _start_file(self, filename: str, key: str) -> Any:
+    def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
         """START — position file at key for sequential reading."""
         ...
 
     @abstractmethod
-    def _delete_record(self, filename: str) -> Any:
+    def _delete_record(self, filename: str) -> IOResult:
         """DELETE — remove the last-read record from file."""
         ...
 
@@ -117,31 +155,39 @@ class StubFile:
 
 
 class NullIOProvider(CobolIOProvider):
-    """Default provider — returns UNCOMPUTABLE for all I/O operations."""
+    """Default provider — returns UNCOMPUTABLE for READ, IOResult("00", None) for all other ops."""
 
     def _accept(self, from_device: str) -> Any:
         return _UNCOMPUTABLE
 
-    def _open_file(self, filename: str, mode: str) -> Any:
+    def _open_file(
+        self,
+        filename: str,
+        mode: str,
+        record_length: int,
+        organization: str,
+        key_offset: int,
+        key_length: int,
+    ) -> IOResult:
+        return IOResult("00", None)
+
+    def _close_file(self, filename: str) -> IOResult:
+        return IOResult("00", None)
+
+    def _read_record(self, filename: str, key: str) -> Any:
         return _UNCOMPUTABLE
 
-    def _close_file(self, filename: str) -> Any:
-        return _UNCOMPUTABLE
+    def _write_record(self, filename: str, data: str) -> IOResult:
+        return IOResult("00", None)
 
-    def _read_record(self, filename: str) -> Any:
-        return _UNCOMPUTABLE
+    def _rewrite_record(self, filename: str, data: str) -> IOResult:
+        return IOResult("00", None)
 
-    def _write_record(self, filename: str, data: str) -> Any:
-        return _UNCOMPUTABLE
+    def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
+        return IOResult("00", None)
 
-    def _rewrite_record(self, filename: str, data: str) -> Any:
-        return _UNCOMPUTABLE
-
-    def _start_file(self, filename: str, key: str) -> Any:
-        return _UNCOMPUTABLE
-
-    def _delete_record(self, filename: str) -> Any:
-        return _UNCOMPUTABLE
+    def _delete_record(self, filename: str) -> IOResult:
+        return IOResult("00", None)
 
 
 class StubIOProvider(CobolIOProvider):
@@ -186,51 +232,61 @@ class StubIOProvider(CobolIOProvider):
         )
         return _UNCOMPUTABLE
 
-    def _open_file(self, filename: str, mode: str) -> Any:
+    def _open_file(
+        self,
+        filename: str,
+        mode: str,
+        record_length: int,
+        organization: str,
+        key_offset: int,
+        key_length: int,
+    ) -> IOResult:
         stub = self.get_file(filename)
         stub.is_open = True
         logger.info("StubIOProvider OPEN %s mode=%s", filename, mode)
-        return 0
+        return IOResult("00", None)
 
-    def _close_file(self, filename: str) -> Any:
+    def _close_file(self, filename: str) -> IOResult:
         if filename in self._files:
             self._files[filename].is_open = False
         logger.info("StubIOProvider CLOSE %s", filename)
-        return 0
+        return IOResult("00", None)
 
-    def _read_record(self, filename: str) -> Any:
+    def _read_record(self, filename: str, key: str) -> Any:
         stub = self._files.get(filename)
         if stub and stub.records:
             record = stub.records.pop(0)
             logger.info("StubIOProvider READ %s → %r", filename, record)
-            return record
-        logger.info("StubIOProvider READ %s → UNCOMPUTABLE (no records)", filename)
-        return _UNCOMPUTABLE
+            return IOResult("00", record)
+        logger.info("StubIOProvider READ %s → AT END", filename)
+        return IOResult("10", None)
 
-    def _write_record(self, filename: str, data: str) -> Any:
+    def _write_record(self, filename: str, data: str) -> IOResult:
         stub = self.get_file(filename)
         stub.written.append(data)
         logger.info("StubIOProvider WRITE %s ← %r", filename, data)
-        return data
+        return IOResult("00", None)
 
-    def _rewrite_record(self, filename: str, data: str) -> Any:
+    def _rewrite_record(self, filename: str, data: str) -> IOResult:
         stub = self.get_file(filename)
         if stub.written:
             stub.written[-1] = data
         else:
             stub.written.append(data)
         logger.info("StubIOProvider REWRITE %s ← %r", filename, data)
-        return data
+        return IOResult("00", None)
 
-    def _start_file(self, filename: str, key: str) -> Any:
-        logger.info("StubIOProvider START %s key=%s (no-op)", filename, key)
-        return 0
+    def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
+        logger.info(
+            "StubIOProvider START %s key=%s relop=%s (no-op)", filename, key, relop
+        )
+        return IOResult("00", None)
 
-    def _delete_record(self, filename: str) -> Any:
+    def _delete_record(self, filename: str) -> IOResult:
         stub = self._files.get(filename)
         if stub and stub.records:
             removed = stub.records.pop(0)
             logger.info("StubIOProvider DELETE %s → removed %r", filename, removed)
-            return removed
-        logger.info("StubIOProvider DELETE %s → UNCOMPUTABLE (no records)", filename)
-        return _UNCOMPUTABLE
+        else:
+            logger.info("StubIOProvider DELETE %s → no records", filename)
+        return IOResult("00", None)
