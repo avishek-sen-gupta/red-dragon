@@ -209,7 +209,7 @@ class TestParseStatementDispatch:
         assert len(stmt.children) == 1
         assert len(stmt.else_children) == 1
         assert isinstance(stmt.else_children[0], DisplayStatement)
-        assert stmt.else_children[0].operand.name == "NO"
+        assert stmt.else_children[0].operands[0].name == "NO"
 
     @covers(CobolFeature.IF_ELSE)
     def test_if_without_else_has_empty_else_children(self):
@@ -259,10 +259,13 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.DISPLAY)
     def test_display(self):
-        stmt = parse_statement({"type": "DISPLAY", "operands": [{"name": "HELLO"}]})
+        stmt = parse_statement(
+            {"type": "DISPLAY", "operands": [{"name": "WS-A"}, {"name": '" lit"'}]}
+        )
         assert isinstance(stmt, DisplayStatement)
-        assert isinstance(stmt.operand, RefModOperand)
-        assert stmt.operand.name == "HELLO"
+        # All operands are kept, in order (regression: only the first survived).
+        assert [op.name for op in stmt.operands] == ["WS-A", '" lit"']
+        assert all(isinstance(op, RefModOperand) for op in stmt.operands)
 
     @covers(CobolFeature.GO_TO)
     def test_goto(self):
