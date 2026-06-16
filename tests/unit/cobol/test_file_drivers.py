@@ -80,6 +80,20 @@ class TestSequentialDriver:
         drv3.close()
         assert first.data is not None and "XXXX" in first.data
 
+    @covers(CobolFeature.WRITE)
+    def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
+        path = tmp_path / "seq.dat"
+        drv = SequentialDriver()
+        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.write(_b("AAAA"))
+        drv.close()
+
+        drv2 = SequentialDriver()
+        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        result = drv2.write(_b("BBBB"))
+        drv2.close()
+        assert result == IOResult("48", None)
+
 
 class TestIndexedDriver:
     KO = 0
@@ -147,6 +161,20 @@ class TestIndexedDriver:
         r = drv3.read_key(b"BBB")
         drv3.close()
         assert r.status == "23"
+
+    @covers(CobolFeature.WRITE)
+    def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
+        path = tmp_path / "idx.dat"
+        drv = IndexedDriver()
+        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.write(_b("AAA"))
+        drv.close()
+
+        drv2 = IndexedDriver()
+        drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
+        result = drv2.write(_b("BBB"))
+        drv2.close()
+        assert result == IOResult("48", None)
 
     @covers(CobolFeature.START)
     def test_start_positions_for_seq_scan(self, tmp_path: Path) -> None:
@@ -220,6 +248,21 @@ class TestRelativeDriver:
         r = drv3.read_key(k2)
         drv3.close()
         assert r.status == "23"
+
+    @covers(CobolFeature.WRITE)
+    def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
+        path = tmp_path / "rel.dat"
+        k1 = (1).to_bytes(4, "big")
+        drv = RelativeDriver()
+        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.write(_b("SLOT1"), key=k1)
+        drv.close()
+
+        drv2 = RelativeDriver()
+        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        result = drv2.write(_b("SLOT2"), key=(2).to_bytes(4, "big"))
+        drv2.close()
+        assert result == IOResult("48", None)
 
     @covers(CobolFeature.READ)
     def test_seq_read_skips_empty_slots(self, tmp_path: Path) -> None:

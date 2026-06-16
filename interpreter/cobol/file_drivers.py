@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 _ACTIVE = b"\xff"
 _EMPTY = b"\x00"
 
+# Open modes that permit a WRITE statement. A WRITE attempted on a file open
+# in any other mode (e.g. INPUT) yields COBOL file status 48.
+_WRITE_MODES = frozenset({OpenMode.OUTPUT, OpenMode.EXTEND, OpenMode.IO})
+
 
 @runtime_checkable
 class FileOrganizationDriver(Protocol):
@@ -46,6 +50,7 @@ class SequentialDriver:
         self._fh: BinaryIO | None = None
         self._rl = 0
         self._last_pos = 0
+        self._mode = OpenMode.INPUT
 
     def open(
         self,
@@ -56,6 +61,7 @@ class SequentialDriver:
         key_length: int,
     ) -> None:
         self._rl = record_length
+        self._mode = mode
         if mode == OpenMode.OUTPUT:
             self._fh = open(path, "w+b")
         elif mode == OpenMode.EXTEND:
@@ -86,6 +92,8 @@ class SequentialDriver:
 
     def write(self, data: bytes, key: bytes = b"") -> IOResult:
         assert self._fh is not None
+        if self._mode not in _WRITE_MODES:
+            return IOResult("48", None)
         self._fh.seek(0, 2)
         self._fh.write(data[: self._rl].ljust(self._rl))
         return IOResult("00", None)
@@ -113,6 +121,7 @@ class IndexedDriver:
         self._klen = 0
         self._cursor = 0  # byte offset for sequential scan
         self._last_pos = 0  # byte offset of last-read record
+        self._mode = OpenMode.INPUT
 
     def open(
         self,
@@ -126,6 +135,7 @@ class IndexedDriver:
         self._koff = key_offset
         self._klen = key_length
         self._cursor = 0
+        self._mode = mode
         if mode == OpenMode.OUTPUT:
             self._fh = open(path, "w+b")
         elif mode == OpenMode.IO:
@@ -208,6 +218,8 @@ class IndexedDriver:
 
     def write(self, data: bytes, key: bytes = b"") -> IOResult:
         assert self._fh is not None
+        if self._mode not in _WRITE_MODES:
+            return IOResult("48", None)
         if not key:
             key = data[self._koff : self._koff + self._klen]
         slot, found = self._find(key)
@@ -271,6 +283,7 @@ class RelativeDriver:
         self._slot = 0  # slot size = 1 + record_length
         self._cursor = 0  # current slot index for sequential read
         self._last_slot = 0
+        self._mode = OpenMode.INPUT
 
     def open(
         self,
@@ -283,6 +296,7 @@ class RelativeDriver:
         self._rl = record_length
         self._slot = 1 + record_length
         self._cursor = 0
+        self._mode = mode
         if mode == OpenMode.OUTPUT:
             self._fh = open(path, "w+b")
         elif mode == OpenMode.IO:
@@ -341,6 +355,8 @@ class RelativeDriver:
 
     def write(self, data: bytes, key: bytes = b"") -> IOResult:
         assert self._fh is not None
+        if self._mode not in _WRITE_MODES:
+            return IOResult("48", None)
         if key:
             n = self._n(key)
         else:
