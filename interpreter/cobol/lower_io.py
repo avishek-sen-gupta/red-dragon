@@ -24,6 +24,15 @@ from interpreter.register import Register, NO_REGISTER
 logger = logging.getLogger(__name__)
 
 
+def _select_to_record(ctx: EmitContext) -> dict[str, str]:
+    """Return SELECT-file-name → first-FD-record-name (both uppercased)."""
+    result: dict[str, str] = {}
+    for rec, sel in ctx._asg.file_record_to_select.items():
+        if sel not in result:
+            result[sel] = rec
+    return result
+
+
 def lower_accept(
     ctx: EmitContext,
     stmt: AcceptStatement,
@@ -65,13 +74,17 @@ def lower_open(
             )
             org = fce.organization.value if fce else "SEQUENTIAL"
 
-            # Resolve record length from file section layout
+            # Resolve record length: look up the first FD record for this SELECT
+            # file, then read its byte_length from the file section layout.
             record_length = 0
-            try:
-                fl, _ = materialised.resolve(filename)
-                record_length = fl.byte_length
-            except KeyError:
-                pass
+            s2r = _select_to_record(ctx)
+            rec_name = s2r.get(filename.upper())
+            if rec_name:
+                try:
+                    fl, _ = materialised.resolve(rec_name)
+                    record_length = fl.byte_length
+                except KeyError:
+                    pass
 
             # Resolve key offset/length from FileControlEntry.record_key
             key_offset, key_length = 0, 0
@@ -178,12 +191,15 @@ def lower_read(
         )
     )
 
-    # Write data into file section region
-    try:
-        file_fl, file_rr = materialised.resolve(stmt.file_name)
-        ctx.emit_encode_and_write(file_rr, file_fl, data_reg, NO_REGISTER)
-    except KeyError:
-        pass
+    # Write data into file section region via the FD record name for this file
+    s2r = _select_to_record(ctx)
+    rec_name = s2r.get(stmt.file_name.upper())
+    if rec_name:
+        try:
+            file_fl, file_rr = materialised.resolve(rec_name)
+            ctx.emit_encode_and_write(file_rr, file_fl, data_reg, NO_REGISTER)
+        except KeyError:
+            pass
 
     # INTO copy
     if stmt.into and materialised.has_field(stmt.into):
@@ -296,7 +312,10 @@ def lower_write(
     else:
         data_reg = ctx.const_to_reg(stmt.from_field or stmt.record_name)
 
-    fn_reg = ctx.const_to_reg(stmt.record_name)
+    # Map FD record name → SELECT file name for the provider dispatch
+    r2s = ctx._asg.file_record_to_select
+    file_name = r2s.get(stmt.record_name.upper(), stmt.record_name)
+    fn_reg = ctx.const_to_reg(file_name)
     raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -313,7 +332,7 @@ def lower_write(
             args=(Register(str(raw_reg)),),
         )
     )
-    ctx.emit_file_status_update(stmt.record_name, status_reg, materialised)
+    ctx.emit_file_status_update(file_name, status_reg, materialised)
     after_label = ctx.fresh_label("write_after")
     _emit_invalid_key_branch(
         ctx,
@@ -341,7 +360,9 @@ def lower_rewrite(
     else:
         data_reg = ctx.const_to_reg(stmt.from_field or stmt.record_name)
 
-    fn_reg = ctx.const_to_reg(stmt.record_name)
+    r2s = ctx._asg.file_record_to_select
+    file_name = r2s.get(stmt.record_name.upper(), stmt.record_name)
+    fn_reg = ctx.const_to_reg(file_name)
     raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -358,12 +379,12 @@ def lower_rewrite(
             args=(Register(str(raw_reg)),),
         )
     )
-    ctx.emit_file_status_update(stmt.record_name, status_reg, materialised)
+    ctx.emit_file_status_update(file_name, status_reg, materialised)
     after_label = ctx.fresh_label("rewrite_after")
     _emit_invalid_key_branch(
         ctx,
         status_reg,
-        stmt.record_name,
+        file_name,
         stmt.invalid_key,
         stmt.not_invalid_key,
         materialised,

@@ -127,18 +127,25 @@ public final class AsgSerializer {
 
         FileSection fileSection = dataDivision.getFileSection();
         if (fileSection != null) {
-            // Flatten every FD's record entries into one list. For a single FD
-            // (the common case) byte offsets are correct; multiple FDs would get
-            // sequential offsets rather than each starting at 0 — acceptable for
-            // this layout-only slice (no file buffering yet).
-            List<DataDescriptionEntry> rootEntries = new ArrayList<>();
+            // Flatten every FD's record entries into one list, tagging each
+            // 01-level root entry with its FD (SELECT) name so the Python side
+            // can map record names back to file names.
+            JsonArray allFields = new JsonArray();
             for (FileDescriptionEntry fd : fileSection.getFileDescriptionEntries()) {
-                rootEntries.addAll(fd.getRootDataDescriptionEntries());
+                String fdName = fd.getName();
+                List<DataDescriptionEntry> fdRoots =
+                        new ArrayList<>(fd.getRootDataDescriptionEntries());
+                JsonArray fdFields = DataFieldSerializer.serializeEntries(fdRoots);
+                for (int i = 0; i < fdFields.size(); i++) {
+                    fdFields.get(i).getAsJsonObject().addProperty("fd_name", fdName);
+                }
+                for (com.google.gson.JsonElement elem : fdFields) {
+                    allFields.add(elem);
+                }
             }
-            if (!rootEntries.isEmpty()) {
-                JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
-                asg.add("file_fields", fields);
-                LOG.info("Serialized " + fields.size() + " file-section fields");
+            if (allFields.size() > 0) {
+                asg.add("file_fields", allFields);
+                LOG.info("Serialized " + allFields.size() + " file-section fields");
             }
         }
     }
