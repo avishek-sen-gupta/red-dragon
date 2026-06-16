@@ -2,13 +2,12 @@
 
 Run: poetry run python -m pytest tests/nist/test_rl.py -m nist -v
 
-Probe results (2026-06-16): 32 pass, 3 skip out of 35 programs.
-  SKIP (M-stubs, need external input files): RL301M, RL302M, RL401M
-  RL104A, RL111A, RL112A, RL119A, RL204A now pass: DECLARATIVES handled (red-dragon-m0oa.3).
-
-NOTE: WRITE record-name (no FROM) currently writes the record NAME literal, so
-these passes are partly vacuous (assert_nist_pass only checks for "FAIL*").
-See red-dragon-m0oa.6.
+assert_nist_pass now requires real completion (END OF TEST banner) AND a zero
+failure count in the CCVS summary — see tests/nist/conftest.py. Under that
+honest bar most programs currently FAIL: across SQ/IX/RL only ~17/162 genuinely
+pass; ~98 halt before completion (red-dragon-m0oa.7) and ~38 complete but report
+real conformance failures. This suite is excluded from the default test run and
+is executed on demand with `-m nist`.
 """
 
 from __future__ import annotations
