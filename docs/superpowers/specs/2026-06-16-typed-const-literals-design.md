@@ -62,15 +62,28 @@ may be red; the branch is green before merge.
 | float | Python `float` | `scalar(FoundationTypeName.FLOAT)` |
 | string | Python `str` (unquoted) | `scalar(FoundationTypeName.STRING)` |
 | boolean | Python `bool` | `scalar(FoundationTypeName.BOOL)` |
-| null/None | `None` | `UnknownType()` (matches `typed_from_runtime(None)`) |
+| null/None | `None` | `scalar(FoundationTypeName.NULL)` — the `Null` scalar |
 | function ref | label `str` (e.g. `func_foo_0`) | `FunctionType(...)` |
 | class ref | label `str` | `metatype(scalar(<class>))` |
 
-`scalar` is the existing `types/type_expr` constructor. Null reuses
-`UnknownType` to match current `typed_from_runtime` behavior and avoid scope
-creep; a dedicated `Null`/`Void` scalar is explicitly out of scope.
+`scalar` is the existing `types/type_expr` constructor. A `null`/`None` literal is
+definitively of the **Null** type, which already exists in the ADT
+(`type_expr.py:346`, `_NULL = ScalarType(TypeName("Null"))`, used by
+`optional_of`/`Union[T, Null]`). It is **not** `UnknownType` — "unknown" means the
+type could not be determined, whereas a null literal's type is known. We expose
+the canonical name by adding `FoundationTypeName.NULL = TypeName("Null")` and have
+emit helpers use `scalar(FoundationTypeName.NULL)` (identical to the existing
+`_NULL`). `typed_from_runtime(None)` currently returns `UnknownType`; aligning it
+to the `Null` scalar is a small follow-up (see "Follow-up" below), not required
+for this change since the Const literal carries its `type_expr` explicitly.
 
 ## Components
+
+### 0. Type vocabulary — `interpreter/constants.py`, `interpreter/types/type_expr.py`
+- Add `FoundationTypeName.NULL = TypeName("Null")` so the null literal type has a
+  canonical public name. It denotes the same `ScalarType(TypeName("Null"))` as the
+  existing private `_NULL` in `type_expr.py`; consider exporting `_NULL` (or
+  defining it via `scalar(FoundationTypeName.NULL)`) so there is one source of truth.
 
 ### 1. `Const` instruction — `interpreter/instructions.py`
 - Add required `type_expr: TypeExpr` (positional/keyword, no default).
@@ -124,6 +137,11 @@ to these.
 - `_status_const_reg` quoting workaround in `interpreter/cobol/lower_io.py`
   (replace its call sites with `emit_str_const("10")` / `emit_str_const("23")`).
 
+### Follow-up (out of scope, tracked separately)
+- Align `typed_from_runtime(None)` to return the `Null` scalar instead of
+  `UnknownType`, so runtime-wrapped `None` agrees with the null literal type. Not
+  required here because the Const literal carries its `type_expr` explicitly.
+
 ## Data flow
 
 ```
@@ -149,7 +167,7 @@ LLM JSON CONST {value, literal_type}
 ## Error handling / edge cases
 - Empty-string literal: preserved via the `operands`/has-value fix (§1).
 - Func/class refs: resolved by `type_expr`, not by string-matching `value`.
-- Null: `UnknownType` (consistent with `typed_from_runtime(None)`).
+- Null: the `Null` scalar (`scalar(FoundationTypeName.NULL)`), not `UnknownType`.
 - Mismatched payload vs type (e.g. `STRING` with an int payload): `_handle_const`
   trusts `type_expr` for the `TypedValue.type`; helpers guarantee payload/type
   agreement, so this cannot arise from migrated producers.
