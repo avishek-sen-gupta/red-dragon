@@ -1,4 +1,12 @@
-"""NIST-85 Indexed File I/O tests (IX series)."""
+"""NIST-85 Indexed File I/O tests (IX series).
+
+Run: poetry run python -m pytest tests/nist/test_ix.py -m nist -v
+
+Probe results (2026-06-16): 34 pass, 7 skip, 1 xfail out of 42 programs.
+  SKIP (M-stubs, need external input files): IX301M, IX302M, IX401M
+  SKIP (step-cap at 50k; would pass at 200k): IX104A, IX108A, IX204A, IX216A
+  XFAIL (bare PIC P clause not parsed): IX110A
+"""
 
 from __future__ import annotations
 
@@ -35,6 +43,50 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
         "IX101A",
         "IX102A",
         "IX103A",
+        "IX104A",
+        "IX105A",
+        "IX106A",
+        "IX107A",
+        "IX108A",
+        "IX109A",
+        pytest.param(
+            "IX110A",
+            marks=pytest.mark.xfail(
+                reason="ValueError: Cannot parse PIC clause: 'P' — bare P scaling not supported in pic_parser.py"
+            ),
+        ),
+        "IX111A",
+        "IX112A",
+        "IX113A",
+        "IX114A",
+        "IX115A",
+        "IX116A",
+        "IX117A",
+        "IX118A",
+        "IX119A",
+        "IX120A",
+        "IX121A",
+        "IX201A",
+        "IX202A",
+        "IX203A",
+        "IX204A",
+        "IX205A",
+        "IX206A",
+        "IX207A",
+        "IX208A",
+        "IX209A",
+        "IX210A",
+        "IX211A",
+        "IX212A",
+        "IX213A",
+        "IX214A",
+        "IX215A",
+        "IX216A",
+        "IX217A",
+        "IX218A",
+        "IX301M",
+        "IX302M",
+        "IX401M",
     ],
 )
 def test_ix_program(prog: str, tmp_path: Path) -> None:
