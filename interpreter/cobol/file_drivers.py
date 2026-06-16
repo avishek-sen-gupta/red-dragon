@@ -341,7 +341,11 @@ class RelativeDriver:
 
     def write(self, data: bytes, key: bytes = b"") -> IOResult:
         assert self._fh is not None
-        n = self._n(key)
+        if key:
+            n = self._n(key)
+        else:
+            # Sequential write: append to next slot
+            n = self._total_slots() + 1
         # Ensure file is large enough
         total = self._total_slots()
         if n > total:
