@@ -58,7 +58,7 @@ Labels use underscores: entry, func_fib_0, if_true_1, end_fib_2, etc.
 ## Opcodes
 
 Value producers (result_reg is set):
-- CONST: operands=[value_string]. Strings must include quotes: ["\\\"Alice\\\""]
+- CONST: operands=[value], literal_type=<type>. Always include "literal_type" (one of: "Int", "Float", "String", "Bool", "Null", "FuncRef", "ClassRef"). For Null, operands=[]. For String, value is the raw string without surrounding quotes. For Int/Float, value is the number as a string. For Bool, value is "True" or "False". For FuncRef/ClassRef, value is the label string (e.g. "<function:foo@func_foo_0>").
 - LOAD_VAR: operands=[var_name]
 - LOAD_FIELD: operands=[obj_reg, field_name]
 - LOAD_INDEX: operands=[obj_reg, index_reg]
@@ -97,9 +97,9 @@ For `def foo(a, b): ...body... return expr`:
 2. LABEL func_foo_M (function entry point)
 3. For EACH parameter: SYMBOLIC "param:name" → DECL_VAR name %reg
 4. ...body instructions...
-5. CONST "None" → RETURN %reg (implicit return at end of function)
+5. CONST (literal_type "Null", operands=[]) → RETURN %reg (implicit return at end of function)
 6. LABEL end_foo_N
-7. CONST "<function:foo@func_foo_M>" → DECL_VAR foo %reg
+7. CONST (literal_type "FuncRef", operands=["<function:foo@func_foo_M>"]) → DECL_VAR foo %reg
 
 The DECL_VAR after the end label registers the function by name. The value MUST be \
 "<function:NAME@FUNC_LABEL>" where NAME is the function name and FUNC_LABEL is the \
@@ -113,7 +113,7 @@ For `class Cls: def __init__(self, x): ...`:
 2. LABEL class_Cls_M (class entry point)
 3. ...nested function definitions for methods (each using the function pattern above)...
 4. LABEL end_class_Cls_N
-5. CONST "<class:Cls@class_Cls_M>" → DECL_VAR Cls %reg
+5. CONST (literal_type "ClassRef", operands=["<class:Cls@class_Cls_M>"]) → DECL_VAR Cls %reg
 
 Methods inside a class use the EXACT same function definition pattern. The __init__ \
 method must be named exactly __init__.
@@ -184,7 +184,7 @@ IR:
   {"opcode":"SYMBOLIC","result_reg":"%0","operands":["param:n"],"label":null,"source_location":null},
   {"opcode":"DECL_VAR","result_reg":null,"operands":["n","%0"],"label":null,"source_location":null},
   {"opcode":"LOAD_VAR","result_reg":"%1","operands":["n"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%2","operands":["1"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%2","operands":["1"],"literal_type":"Int","label":null,"source_location":null},
   {"opcode":"BINOP","result_reg":"%3","operands":["<=","%1","%2"],"label":null,"source_location":null},
   {"opcode":"BRANCH_IF","result_reg":null,"operands":["%3"],"branch_targets":["if_true_2","if_end_3"],"source_location":null},
   {"opcode":"LABEL","result_reg":null,"operands":[],"label":"if_true_2","source_location":null},
@@ -193,21 +193,21 @@ IR:
   {"opcode":"BRANCH","result_reg":null,"operands":[],"label":"if_end_3","source_location":null},
   {"opcode":"LABEL","result_reg":null,"operands":[],"label":"if_end_3","source_location":null},
   {"opcode":"LOAD_VAR","result_reg":"%5","operands":["n"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%6","operands":["1"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%6","operands":["1"],"literal_type":"Int","label":null,"source_location":null},
   {"opcode":"BINOP","result_reg":"%7","operands":["-","%5","%6"],"label":null,"source_location":null},
   {"opcode":"CALL_FUNCTION","result_reg":"%8","operands":["fib","%7"],"label":null,"source_location":null},
   {"opcode":"LOAD_VAR","result_reg":"%9","operands":["n"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%10","operands":["2"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%10","operands":["2"],"literal_type":"Int","label":null,"source_location":null},
   {"opcode":"BINOP","result_reg":"%11","operands":["-","%9","%10"],"label":null,"source_location":null},
   {"opcode":"CALL_FUNCTION","result_reg":"%12","operands":["fib","%11"],"label":null,"source_location":null},
   {"opcode":"BINOP","result_reg":"%13","operands":["+","%8","%12"],"label":null,"source_location":null},
   {"opcode":"RETURN","result_reg":null,"operands":["%13"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%14","operands":["None"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%14","operands":[],"literal_type":"Null","label":null,"source_location":null},
   {"opcode":"RETURN","result_reg":null,"operands":["%14"],"label":null,"source_location":null},
   {"opcode":"LABEL","result_reg":null,"operands":[],"label":"end_fib_1","source_location":null},
-  {"opcode":"CONST","result_reg":"%15","operands":["<function:fib@func_fib_0>"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%15","operands":["<function:fib@func_fib_0>"],"literal_type":"FuncRef","label":null,"source_location":null},
   {"opcode":"DECL_VAR","result_reg":null,"operands":["fib","%15"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%16","operands":["6"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%16","operands":["6"],"literal_type":"Int","label":null,"source_location":null},
   {"opcode":"CALL_FUNCTION","result_reg":"%17","operands":["fib","%16"],"label":null,"source_location":null},
   {"opcode":"DECL_VAR","result_reg":null,"operands":["result","%17"],"label":null,"source_location":null}
 ]
@@ -220,14 +220,14 @@ IR:
 [
   {"opcode":"LABEL","result_reg":null,"operands":[],"label":"entry","source_location":null},
   {"opcode":"NEW_ARRAY","result_reg":"%0","operands":["int"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%1","operands":["5"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%2","operands":["0"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%1","operands":["5"],"literal_type":"Int","label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%2","operands":["0"],"literal_type":"Int","label":null,"source_location":null},
   {"opcode":"STORE_INDEX","result_reg":null,"operands":["%0","%2","%1"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%3","operands":["3"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%4","operands":["1"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%3","operands":["3"],"literal_type":"Int","label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%4","operands":["1"],"literal_type":"Int","label":null,"source_location":null},
   {"opcode":"STORE_INDEX","result_reg":null,"operands":["%0","%4","%3"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%5","operands":["8"],"label":null,"source_location":null},
-  {"opcode":"CONST","result_reg":"%6","operands":["2"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%5","operands":["8"],"literal_type":"Int","label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%6","operands":["2"],"literal_type":"Int","label":null,"source_location":null},
   {"opcode":"STORE_INDEX","result_reg":null,"operands":["%0","%6","%5"],"label":null,"source_location":null},
   {"opcode":"DECL_VAR","result_reg":null,"operands":["arr","%0"],"label":null,"source_location":null}
 ]
@@ -239,13 +239,15 @@ Note: each element value AND each index gets its own CONST + register. STORE_IND
 - The first instruction is always LABEL "entry"
 - Every expression is flattened into registers. No nested expressions
 - Every function parameter needs SYMBOLIC + DECL_VAR (both instructions)
-- Functions end with an implicit CONST "None" + RETURN
-- String literals include quotes in the operand: ["\\\"hello\\\""]
-- Numeric literals are strings: ["42"], ["3.14"]
-- Boolean literals: ["True"], ["False"]. None: ["None"]
+- Functions end with an implicit CONST (literal_type "Null", operands=[]) + RETURN
+- Every CONST must include a "literal_type" field
+- String literal: operands=["hello"] (no surrounding quotes), literal_type="String"
+- Numeric literals: operands=["42"] or ["3.14"], literal_type="Int" or "Float"
+- Boolean literals: operands=["True"] or ["False"], literal_type="Bool"
+- Null: operands=[], literal_type="Null"
 - Do NOT add comments in the JSON
 - Return ONLY the JSON array. No markdown fences. No text outside the array
-- NEVER reuse a register for a different purpose. Register names (%0, %1, ...) are arbitrary identifiers — the number has NO relationship to the value stored. If you need the integer 3 as an index, you MUST emit CONST "3" into a fresh register, even if %3 already exists holding a different value
+- NEVER reuse a register for a different purpose. Register names (%0, %1, ...) are arbitrary identifiers — the number has NO relationship to the value stored. If you need the integer 3 as an index, you MUST emit CONST operands=["3"], literal_type="Int" into a fresh register, even if %3 already exists holding a different value
 """
 
     USER_PROMPT_TEMPLATE = (
@@ -283,6 +285,7 @@ def _parse_single_instruction(raw: dict[str, Any]) -> InstructionBase:
         label=CodeLabel(raw_label) if raw_label else NO_LABEL,
         branch_targets=[CodeLabel(t) for t in raw_targets],
         source_location=NO_SOURCE_LOCATION,
+        literal_type=raw.get("literal_type"),
     )
 
 
