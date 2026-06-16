@@ -60,6 +60,7 @@ _GRAMMAR = r"""
     pointer: POINTER
 
     fraction: SIGN? scaling* body scaling*
+            | SIGN? scaling+               -> scaling_only
 
     body: integer_part DECPOINT fraction_part -> both_sides
         | integer_part DECPOINT               -> only_left
@@ -151,6 +152,18 @@ class _PicTransformer(Transformer):
             "alphanumeric": False,
             "integer_digits": integer_digits,
             "decimal_digits": decimal_digits,
+            "signed": signed,
+        }
+
+    def scaling_only(self, items: list) -> dict:
+        # A picture of only P scaling positions (e.g. "P", "PPP", "SPP"): no
+        # stored digit positions. The scaling shifts the implied decimal point
+        # but contributes zero digits to storage.
+        signed = any(getattr(t, "type", None) == "SIGN" for t in items)
+        return {
+            "alphanumeric": False,
+            "integer_digits": 0,
+            "decimal_digits": 0,
             "signed": signed,
         }
 
