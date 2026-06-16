@@ -2,10 +2,14 @@
 
 Run: poetry run python -m pytest tests/nist/test_ix.py -m nist -v
 
-Probe results (2026-06-16): 35 pass, 7 skip out of 42 programs.
+Probe results (2026-06-16): 39 pass, 3 skip out of 42 programs.
   SKIP (M-stubs, need external input files): IX301M, IX302M, IX401M
-  SKIP (DECLARATIVES not handled — see red-dragon-m0oa.3): IX104A, IX108A, IX204A, IX216A
-  IX110A now passes: bare PIC P scaling clause parses (red-dragon-m0oa.2).
+  IX104A, IX108A, IX204A, IX216A now pass: DECLARATIVES handled (red-dragon-m0oa.3).
+  IX110A passes: bare PIC P scaling clause parses (red-dragon-m0oa.2).
+
+NOTE: WRITE record-name (no FROM) currently writes the record NAME literal, so
+these passes are partly vacuous (assert_nist_pass only checks for "FAIL*").
+See red-dragon-m0oa.6.
 """
 
 from __future__ import annotations
