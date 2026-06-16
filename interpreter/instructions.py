@@ -1184,11 +1184,43 @@ Instruction = Union[
 
 
 def _const(inst: Any) -> Const:
-    return Const(
-        result_reg=inst.result_reg,
-        value=str(inst.operands[0]) if inst.operands else "",
-        source_location=inst.source_location,
-    )
+    """Convert a flat CONST instruction to a typed ``Const``.
+
+    The flat instruction must carry a ``literal_type`` field (one of
+    "Int", "Float", "String", "Bool", "Null", "FuncRef", "ClassRef").
+    Raises ``ValueError`` when the field is absent or unrecognised.
+    """
+    reg: Register = inst.result_reg
+    raw: Any = inst.operands[0] if inst.operands else None
+    sl: Any = inst.source_location
+    lit: Any = getattr(inst, "literal_type", None)
+
+    if lit == "Int":
+        return Const.int_(reg, int(raw), source_location=sl)
+    if lit == "Float":
+        return Const.float_(reg, float(raw), source_location=sl)
+    if lit == "String":
+        return Const.string(reg, str(raw), source_location=sl)
+    if lit == "Bool":
+        return Const.bool_(reg, str(raw) == "True", source_location=sl)
+    if lit == "Null":
+        return Const.null_(reg, source_location=sl)
+    if lit == "FuncRef":
+        return Const.func_ref(
+            reg,
+            str(raw),
+            params=[],
+            return_type=NULL,
+            source_location=sl,
+        )
+    if lit == "ClassRef":
+        return Const.class_ref(
+            reg,
+            str(raw),
+            class_type=UNKNOWN,
+            source_location=sl,
+        )
+    raise ValueError(f"CONST missing/unknown literal_type: {lit!r}")
 
 
 def _load_var(inst: Any) -> LoadVar:
