@@ -2,10 +2,10 @@
 
 Run: poetry run python -m pytest tests/nist/test_sq.py -m nist -v
 
-Probe results (2026-06-16): 79 pass, ~11 skip, 2 xfail out of 85 programs.
+Probe results (2026-06-16): 81 pass, ~4 skip out of 85 programs.
   SKIP (M-stubs, need external input files): SQ302M, SQ303M, SQ401M
-  SKIP (step-cap at 50k; would pass at 200k): SQ212A
-  XFAIL (INPUT-mode write bug in file_drivers.py): SQ152A, SQ155A
+  SKIP (DECLARATIVES not handled — see red-dragon-m0oa.3): SQ212A
+  SQ152A, SQ155A now pass: INPUT-mode write returns status 48 (red-dragon-m0oa.1).
 """
 
 from __future__ import annotations
@@ -87,20 +87,10 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
         "SQ149A",
         "SQ150A",
         "SQ151A",
-        pytest.param(
-            "SQ152A",
-            marks=pytest.mark.xfail(
-                reason="INPUT-mode write: driver calls fh.write() on read-only handle instead of returning status 48"
-            ),
-        ),
+        "SQ152A",
         "SQ153A",
         "SQ154A",
-        pytest.param(
-            "SQ155A",
-            marks=pytest.mark.xfail(
-                reason="INPUT-mode write: driver calls fh.write() on read-only handle instead of returning status 48"
-            ),
-        ),
+        "SQ155A",
         "SQ156A",
         "SQ201M",
         "SQ202A",
