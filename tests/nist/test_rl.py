@@ -2,9 +2,13 @@
 
 Run: poetry run python -m pytest tests/nist/test_rl.py -m nist -v
 
-Probe results (2026-06-16): 27 pass, 8 skip, 0 xfail out of 35 programs.
+Probe results (2026-06-16): 32 pass, 3 skip out of 35 programs.
   SKIP (M-stubs, need external input files): RL301M, RL302M, RL401M
-  SKIP (step-cap at 50k; would pass at 200k): RL104A, RL111A, RL112A, RL119A
+  RL104A, RL111A, RL112A, RL119A, RL204A now pass: DECLARATIVES handled (red-dragon-m0oa.3).
+
+NOTE: WRITE record-name (no FROM) currently writes the record NAME literal, so
+these passes are partly vacuous (assert_nist_pass only checks for "FAIL*").
+See red-dragon-m0oa.6.
 """
 
 from __future__ import annotations
