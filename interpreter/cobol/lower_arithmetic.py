@@ -44,7 +44,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.cobol_expression import expr_from_dict
 from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
-from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop, BinopKind
 from interpreter.func_name import FuncName
@@ -163,10 +163,9 @@ def eval_ref_mod_expr(
     - RefModBinOp: binary operation → evaluate left/right → emit Binop → register
     """
     if isinstance(expr, RefModLiteral):
-        # Literal: numeric value for reference modification
-        # Keep as unquoted numeric literal so arithmetic operations work
-        value = expr.value
-        return ctx.const_to_reg(value)
+        # Literal: numeric value for reference modification.
+        # parse_literal converts e.g. "2" → int 2 so arithmetic Binops work.
+        return ctx.const_to_reg(ctx.parse_literal(expr.value))
 
     elif isinstance(expr, RefModReference):
         # Field reference: resolve field → decode
@@ -179,7 +178,7 @@ def eval_ref_mod_expr(
             return decoded_reg
         else:
             # Unknown field: treat as literal numeric 0
-            return ctx.const_to_reg("0")
+            return ctx.const_to_reg(0)
 
     elif isinstance(expr, RefModLengthOf):
         # LENGTH OF <field>: the field's byte length (a compile-time constant),
@@ -190,7 +189,7 @@ def eval_ref_mod_expr(
             field_ref, _ = ctx.resolve_field_ref(name, materialised)
             return ctx.const_to_reg(field_ref.fl.byte_length)
         logging.warning("eval_ref_mod_expr: LENGTH OF unknown field %s → 0", name)
-        return ctx.const_to_reg("0")
+        return ctx.const_to_reg(0)
 
     elif isinstance(expr, RefModBinOp):
         # Binary operation: evaluate left and right, emit Binop
@@ -213,7 +212,7 @@ def eval_ref_mod_expr(
 
     else:
         # Fallback: treat as literal zero
-        return ctx.const_to_reg('"0"')
+        return ctx.const_to_reg(0)
 
 
 # Maps canonical COBOL intrinsic function names to COBOL-layer builtin names.
@@ -278,7 +277,7 @@ def lower_function_operand(
         )
         if operand.args:
             return _lower_function_arg_to_string(ctx, operand.args[0], materialised)
-        return ctx.const_to_reg('""')
+        return ctx.const_to_reg("")
 
     arg_regs = tuple(
         _lower_function_arg_to_string(ctx, arg, materialised) for arg in operand.args
@@ -355,7 +354,7 @@ def lower_move(
                     # Ref-modified receiver: fall back to the character path so the
                     # SPLICE write still works (rare combination).
                     raw_str = chr(fill_byte)
-                    src_reg = ctx.const_to_reg(f'"{raw_str}"')
+                    src_reg = ctx.const_to_reg(raw_str)
                     _store_move_value(ctx, target, src_reg, materialised)
                     continue
                 target_ref, target_rr = ctx.resolve_field_ref(
@@ -387,13 +386,7 @@ def lower_move(
         )
         value_str_reg = ctx.emit_to_string(decoded_reg)
     else:
-        literal = translate_cobol_figurative(stmt.source.name)
-        # Ensure unquoted literals (e.g. digit-only "12345") are stored as
-        # quoted strings so _parse_const returns str, not int/float.
-        if not (
-            len(literal) >= 2 and literal[0] in ('"', "'") and literal[-1] == literal[0]
-        ):
-            literal = f'"{literal}"'
+        literal = strip_cobol_literal(translate_cobol_figurative(stmt.source.name))
         value_str_reg = ctx.const_to_reg(literal)
 
     # Handle reference modification if present
@@ -402,7 +395,7 @@ def lower_move(
         start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
         # COBOL uses 1-indexed positions, but SLICE uses 0-indexed.
         # Convert: start_0indexed = start_1indexed - 1
-        one_reg = ctx.const_to_reg("1")  # Numeric 1, not string "1"
+        one_reg = ctx.const_to_reg(1)
         start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -429,9 +422,8 @@ def lower_move(
             value_str_reg = result_reg
         else:
             # Only start specified, no length: SLICE from start to end
-            # Use the length of the value string minus start position
-            # For now, use a very large number as length to get substring to end
-            large_length = ctx.const_to_reg('"999999"')
+            # Use a large sentinel as length to get the substring to end.
+            large_length = ctx.const_to_reg(999999)
             result_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
@@ -522,7 +514,7 @@ def _store_move_value(
 
         # Evaluate target ref mod start; convert 1-indexed → 0-indexed
         tgt_start_reg = eval_ref_mod_expr(ctx, target.ref_mod_start, materialised)
-        one_reg = ctx.const_to_reg("1")
+        one_reg = ctx.const_to_reg(1)
         tgt_start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -537,7 +529,7 @@ def _store_move_value(
         if target.ref_mod_length is not None:
             tgt_length_reg = eval_ref_mod_expr(ctx, target.ref_mod_length, materialised)
         else:
-            tgt_length_reg = ctx.const_to_reg("999999")
+            tgt_length_reg = ctx.const_to_reg(999999)
 
         # Emit SPLICE: replace substring in target with source value
         spliced_reg = ctx.fresh_reg()
@@ -619,7 +611,7 @@ def lower_arithmetic(
             # Evaluate start and length
             start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
             # Convert 1-indexed to 0-indexed
-            one_reg = ctx.const_to_reg("1")
+            one_reg = ctx.const_to_reg(1)
             start_0indexed_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
@@ -636,7 +628,7 @@ def lower_arithmetic(
                     ctx, stmt.source.ref_mod_length, materialised
                 )
             else:
-                length_reg = ctx.const_to_reg("999999")
+                length_reg = ctx.const_to_reg(999999)
 
             sliced_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -1273,9 +1265,9 @@ def _set_condition_name(
     if parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC:
         if fig_fill is not None:
             filled = fig_fill * max(parent_ref.fl.byte_length, 1)
-            value_reg = ctx.const_to_reg('"' + filled + '"')
+            value_reg = ctx.const_to_reg(filled)
         else:
-            value_reg = ctx.const_to_reg(f'"{cv.from_val}"')
+            value_reg = ctx.const_to_reg(cv.from_val)
     elif fig_fill is not None and cv.from_val.upper() in ("ZERO", "ZEROS", "ZEROES"):
         value_reg = ctx.const_to_reg(0)
     else:
@@ -1428,7 +1420,7 @@ def lower_stop_run(
 ) -> None:
     """STOP RUN."""
     zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=zero_reg, value=0))
+    ctx.emit_inst(Const.int_(zero_reg, 0))
     ctx.emit_inst(Return_(value_reg=zero_reg))
 
 
@@ -1439,7 +1431,7 @@ def lower_goback(
 ) -> None:
     """GOBACK — return control to the caller (same as STOP RUN at the IR level)."""
     zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=zero_reg, value=0))
+    ctx.emit_inst(Const.int_(zero_reg, 0))
     ctx.emit_inst(Return_(value_reg=zero_reg))
 
 
@@ -1450,7 +1442,7 @@ def lower_exit_program(
 ) -> None:
     """EXIT PROGRAM — return control to the caller."""
     zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=zero_reg, value=0))
+    ctx.emit_inst(Const.int_(zero_reg, 0))
     ctx.emit_inst(Return_(value_reg=zero_reg))
 
 
