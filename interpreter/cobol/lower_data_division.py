@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def lower_data_division(ctx: EmitContext, layout: DataLayout) -> Register:
     """Emit ALLOC_REGION + initial VALUE encodings. Returns region register."""
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=layout.total_bytes))
+    ctx.emit_inst(Const.int_(size_reg, layout.total_bytes))
     region_reg = ctx.fresh_reg()
     ctx.emit_inst(
         AllocRegion(result_reg=region_reg, size_reg=size_reg),
