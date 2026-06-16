@@ -25,18 +25,22 @@ from interpreter.vm.vm import (
     ExecutionResult,
     StateUpdate,
     _resolve_reg,
-    _parse_const,
 )
 from interpreter.vm.vm_types import HeapWrite
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
-from interpreter.types.type_expr import UNKNOWN, scalar
-from interpreter.types.typed_value import typed, typed_from_runtime
+from interpreter.types.type_expr import UNKNOWN, FunctionType, ParameterizedType, scalar
+from interpreter.types.typed_value import TypedValue, typed
 from interpreter import constants
 from interpreter.handlers._common import _write_var_to_frame
 from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
 
 logger = logging.getLogger(__name__)
+
+
+def _is_metatype(te: object) -> bool:
+    """Return True if *te* is a ``Type[X]`` metatype produced by ``metatype()``."""
+    return isinstance(te, ParameterizedType) and te.constructor == "Type"
 
 
 def _handle_const(
@@ -46,15 +50,17 @@ def _handle_const(
     assert isinstance(t, Const)
     func_symbol_table = ctx.func_symbol_table
     class_symbol_table = ctx.class_symbol_table
-    raw = inst.operands[0] if inst.operands else "None"
-    val = _parse_const(raw)
 
-    # Symbol table lookup: produce BoundFuncRef for function labels
-    func_ref_entry = None
-    if isinstance(val, str) and val in func_symbol_table:
+    val = t.value
+    te = t.type_expr
+
+    # Function reference: FunctionType + label string → BoundFuncRef
+    if (
+        isinstance(te, FunctionType)
+        and isinstance(val, str)
+        and val in func_symbol_table
+    ):
         func_ref_entry = func_symbol_table[val]
-
-    if func_ref_entry is not None:
         closure_id = NO_CLOSURE_ID
         if len(vm.call_stack) > 1:
             enclosing = vm.current_frame
@@ -83,14 +89,14 @@ def _handle_const(
                 list(env.bindings.keys()),
             )
         val = BoundFuncRef(func_ref=func_ref_entry, closure_id=closure_id)
-    # Class symbol table lookup: store ClassRef directly in register
-    elif isinstance(val, str) and val in class_symbol_table:
+    # Class reference: metatype → ClassRef
+    elif _is_metatype(te) and isinstance(val, str) and val in class_symbol_table:
         val = class_symbol_table[val]
 
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={t.result_reg: typed_from_runtime(val)},
-            reasoning=f"const {raw!r} → {t.result_reg}",
+            register_writes={t.result_reg: TypedValue(value=val, type=te)},
+            reasoning=f"const {val!r}:{te} -> {t.result_reg}",
         )
     )
 
