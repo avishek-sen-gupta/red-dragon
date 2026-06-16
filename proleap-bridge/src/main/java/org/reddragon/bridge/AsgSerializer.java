@@ -21,6 +21,9 @@ import io.proleap.cobol.asg.metamodel.procedure.Paragraph;
 import io.proleap.cobol.asg.metamodel.procedure.ProcedureDivision;
 import io.proleap.cobol.asg.metamodel.procedure.Section;
 import io.proleap.cobol.asg.metamodel.procedure.Statement;
+import io.proleap.cobol.CobolParser;
+import io.proleap.cobol.asg.metamodel.procedure.declaratives.Declaratives;
+import io.proleap.cobol.asg.metamodel.procedure.declaratives.Declarative;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -166,6 +169,7 @@ public final class AsgSerializer {
 
         Collection<Section> sections = pd.getSections();
         Collection<Paragraph> allParagraphs = pd.getParagraphs();
+        Declaratives decl = pd.getDeclaratives();
 
         if (sections != null && !sections.isEmpty()) {
             JsonArray sectionsArray = serializeSections(sections);
@@ -174,13 +178,21 @@ public final class AsgSerializer {
             }
         }
 
-        // Standalone paragraphs (those not inside a section)
-        List<Paragraph> standaloneParagraphs = findStandaloneParagraphs(sections, allParagraphs);
+        // Standalone paragraphs: not inside a section AND not inside declaratives.
+        List<Paragraph> standaloneParagraphs =
+                new ArrayList<>(findStandaloneParagraphs(sections, allParagraphs));
+        standaloneParagraphs.removeIf(p -> isInDeclaratives(p, decl));
         if (!standaloneParagraphs.isEmpty()) {
             JsonArray parasArray = serializeParagraphs(standaloneParagraphs);
             if (parasArray.size() > 0) {
                 asg.add("paragraphs", parasArray);
             }
+        }
+
+        // DECLARATIVES sections (event-driven USE procedures).
+        JsonArray declArray = serializeDeclaratives(pd, allParagraphs);
+        if (declArray.size() > 0) {
+            asg.add("declaratives", declArray);
         }
 
         // Division-level bare statements (not inside any paragraph or section)
@@ -221,6 +233,62 @@ public final class AsgSerializer {
             }
 
             arr.add(sectionObj);
+        }
+        return arr;
+    }
+
+    /**
+     * True if a paragraph's first source line falls within the DECLARATIVES block.
+     */
+    private static boolean isInDeclaratives(Paragraph p, Declaratives decl) {
+        if (decl == null || p.getCtx() == null || decl.getCtx() == null) {
+            return false;
+        }
+        int line = p.getCtx().getStart().getLine();
+        int start = decl.getCtx().getStart().getLine();
+        int stop = decl.getCtx().getStop().getLine();
+        return line >= start && line <= stop;
+    }
+
+    /**
+     * Serializes DECLARATIVES sections. Each Declarative contributes one
+     * {name, paragraphs} entry shaped exactly like a regular section. Paragraphs
+     * are bucketed from pd.getParagraphs() by source-line range, because ProLeap
+     * lists declaratives paragraphs in the flat paragraph list, not under the
+     * declarative object.
+     */
+    private static JsonArray serializeDeclaratives(
+            ProcedureDivision pd, Collection<Paragraph> allParagraphs) {
+        JsonArray arr = new JsonArray();
+        Declaratives decl = pd.getDeclaratives();
+        if (decl == null) {
+            return arr;
+        }
+        for (Declarative d : decl.getDeclaratives()) {
+            JsonObject secObj = new JsonObject();
+            String name = ((CobolParser.ProcedureSectionHeaderContext)
+                    d.getSectionHeader().getCtx()).sectionName().getText();
+            secObj.addProperty("name", name);
+
+            int start = d.getCtx().getStart().getLine();
+            int stop = d.getCtx().getStop().getLine();
+            List<Paragraph> declParas = new ArrayList<>();
+            for (Paragraph p : allParagraphs) {
+                if (p.getCtx() == null) {
+                    continue;
+                }
+                int line = p.getCtx().getStart().getLine();
+                if (line >= start && line <= stop) {
+                    declParas.add(p);
+                }
+            }
+            if (!declParas.isEmpty()) {
+                JsonArray parasArray = serializeParagraphs(declParas);
+                if (parasArray.size() > 0) {
+                    secObj.add("paragraphs", parasArray);
+                }
+            }
+            arr.add(secObj);
         }
         return arr;
     }
