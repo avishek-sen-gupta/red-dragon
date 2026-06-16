@@ -299,18 +299,34 @@ def _emit_invalid_key_branch(
     ctx.emit_inst(Branch(label=after_label))  # type: ignore[arg-type]
 
 
+def _write_source_reg(
+    ctx: EmitContext,
+    from_field: str | None,
+    record_name: str,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Resolve the data register for WRITE/REWRITE.
+
+    `WRITE rec FROM fld` writes the contents of `fld`; a plain `WRITE rec`
+    writes the current contents of the record area `rec`. Both decode the
+    source field's bytes to its logical value. Only when neither names a known
+    field do we fall back to the bare name as a string constant.
+    """
+    source = from_field or record_name
+    if ctx.has_field(source, materialised):
+        ref, rr = ctx.resolve_field_ref(source, materialised)
+        decoded_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+        return ctx.emit_to_string(decoded_reg)
+    return ctx.const_to_reg(source)
+
+
 def lower_write(
     ctx: EmitContext,
     stmt: WriteStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """WRITE record-name [FROM field] [INVALID KEY ...] — write record via __cobol_write_record."""
-    if stmt.from_field and ctx.has_field(stmt.from_field, materialised):
-        from_ref, from_rr = ctx.resolve_field_ref(stmt.from_field, materialised)
-        decoded_reg = ctx.emit_decode_field(from_rr, from_ref.fl, from_ref.offset_reg)
-        data_reg = ctx.emit_to_string(decoded_reg)
-    else:
-        data_reg = ctx.const_to_reg(stmt.from_field or stmt.record_name)
+    data_reg = _write_source_reg(ctx, stmt.from_field, stmt.record_name, materialised)
 
     # Map FD record name → SELECT file name for the provider dispatch
     r2s = ctx._asg.file_record_to_select
@@ -353,12 +369,7 @@ def lower_rewrite(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """REWRITE record-name [FROM field] [INVALID KEY ...] — rewrite via __cobol_rewrite_record."""
-    if stmt.from_field and ctx.has_field(stmt.from_field, materialised):
-        from_ref, from_rr = ctx.resolve_field_ref(stmt.from_field, materialised)
-        decoded_reg = ctx.emit_decode_field(from_rr, from_ref.fl, from_ref.offset_reg)
-        data_reg = ctx.emit_to_string(decoded_reg)
-    else:
-        data_reg = ctx.const_to_reg(stmt.from_field or stmt.record_name)
+    data_reg = _write_source_reg(ctx, stmt.from_field, stmt.record_name, materialised)
 
     r2s = ctx._asg.file_record_to_select
     file_name = r2s.get(stmt.record_name.upper(), stmt.record_name)
