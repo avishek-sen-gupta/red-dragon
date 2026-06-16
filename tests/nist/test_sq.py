@@ -2,10 +2,14 @@
 
 Run: poetry run python -m pytest tests/nist/test_sq.py -m nist -v
 
-Probe results (2026-06-16): 81 pass, ~4 skip out of 85 programs.
+Probe results (2026-06-16): 82 pass, 3 skip out of 85 programs.
   SKIP (M-stubs, need external input files): SQ302M, SQ303M, SQ401M
-  SKIP (DECLARATIVES not handled — see red-dragon-m0oa.3): SQ212A
-  SQ152A, SQ155A now pass: INPUT-mode write returns status 48 (red-dragon-m0oa.1).
+  SQ212A now passes: DECLARATIVES handled (red-dragon-m0oa.3).
+  SQ152A, SQ155A pass: INPUT-mode write returns status 48 (red-dragon-m0oa.1).
+
+NOTE: WRITE record-name (no FROM) currently writes the record NAME literal, so
+these passes are partly vacuous (assert_nist_pass only checks for "FAIL*").
+See red-dragon-m0oa.6.
 """
 
 from __future__ import annotations
