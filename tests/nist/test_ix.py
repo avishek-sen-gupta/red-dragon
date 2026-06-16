@@ -2,10 +2,10 @@
 
 Run: poetry run python -m pytest tests/nist/test_ix.py -m nist -v
 
-Probe results (2026-06-16): 34 pass, 7 skip, 1 xfail out of 42 programs.
+Probe results (2026-06-16): 35 pass, 7 skip out of 42 programs.
   SKIP (M-stubs, need external input files): IX301M, IX302M, IX401M
-  SKIP (step-cap at 50k; would pass at 200k): IX104A, IX108A, IX204A, IX216A
-  XFAIL (bare PIC P clause not parsed): IX110A
+  SKIP (DECLARATIVES not handled — see red-dragon-m0oa.3): IX104A, IX108A, IX204A, IX216A
+  IX110A now passes: bare PIC P scaling clause parses (red-dragon-m0oa.2).
 """
 
 from __future__ import annotations
@@ -49,12 +49,7 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
         "IX107A",
         "IX108A",
         "IX109A",
-        pytest.param(
-            "IX110A",
-            marks=pytest.mark.xfail(
-                reason="ValueError: Cannot parse PIC clause: 'P' — bare P scaling not supported in pic_parser.py"
-            ),
-        ),
+        "IX110A",
         "IX111A",
         "IX112A",
         "IX113A",

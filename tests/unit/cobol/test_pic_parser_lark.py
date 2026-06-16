@@ -79,3 +79,40 @@ class TestNumericEditedPic:
         """A plain numeric PIC stays ZONED_DECIMAL, not NUMERIC_EDITED."""
         result = parse_pic("S9(5)V99")
         assert result.category == CobolDataCategory.ZONED_DECIMAL
+
+
+class TestScalingOnlyPic:
+    """Bare 'P' scaling pictures (no stored digit positions). NIST IX110A has
+    ``01 STATUS-TEST-10 PIC P VALUE ZERO.`` — see red-dragon-m0oa.2."""
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_bare_p_parses_as_zero_digit_numeric(self):
+        result = parse_pic("P")
+        assert result.category == CobolDataCategory.ZONED_DECIMAL
+        assert result.total_digits == 0
+        assert result.decimal_digits == 0
+        assert result.signed is False
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_multiple_p_parses(self):
+        result = parse_pic("PPP")
+        assert result.category == CobolDataCategory.ZONED_DECIMAL
+        assert result.total_digits == 0
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_signed_scaling_only(self):
+        result = parse_pic("SPP")
+        assert result.signed is True
+        assert result.total_digits == 0
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_leading_scaling_with_digit_still_parses(self):
+        """PPP9 already parsed (scaling* before body); guard against regression."""
+        result = parse_pic("PPP9")
+        assert result.total_digits == 1
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_trailing_scaling_with_digit_still_parses(self):
+        """9PPP already parsed (scaling* after body); guard against regression."""
+        result = parse_pic("9PPP")
+        assert result.total_digits == 1
