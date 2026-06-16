@@ -220,9 +220,17 @@ class CobolASG:
     sections: list[CobolSection] = field(default_factory=list)
     paragraphs: list[CobolParagraph] = field(default_factory=list)
     statements: list[CobolStatementType] = field(default_factory=list)
+    file_record_to_select: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolASG:
+        # Build FD-record-name → SELECT-file-name mapping from fd_name tags
+        # (populated by bridge since the fd_name fix). Level-1 fields only.
+        record_to_select: dict[str, str] = {
+            f["name"].upper(): f["fd_name"].upper()
+            for f in data.get("file_fields", [])
+            if f.get("fd_name") and f.get("level") == 1
+        }
         return cls(
             program_id=data.get("program_id", ""),
             file_control=[
@@ -241,6 +249,7 @@ class CobolASG:
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
             ],
             statements=[parse_statement(s) for s in data.get("statements", [])],
+            file_record_to_select=record_to_select,
         )
 
     def to_dict(self) -> dict:
