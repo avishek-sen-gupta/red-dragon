@@ -44,6 +44,7 @@ class CobolFeature(Enum):
     EXIT = "EXIT and EXIT PROGRAM section/program exit statements"
     GOBACK = "GOBACK return control to caller"
     EXIT_PROGRAM = "EXIT PROGRAM return control to caller from subprogram"
+    DECLARATIVES = "DECLARATIVES USE procedures (event-driven sections)"
 
     # ---------------------------------------------------------------------------
     # Data manipulation

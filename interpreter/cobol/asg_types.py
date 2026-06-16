@@ -221,6 +221,7 @@ class CobolASG:
     paragraphs: list[CobolParagraph] = field(default_factory=list)
     statements: list[CobolStatementType] = field(default_factory=list)
     file_record_to_select: dict[str, str] = field(default_factory=dict)
+    declaratives: list[CobolSection] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolASG:
@@ -250,6 +251,9 @@ class CobolASG:
             ],
             statements=[parse_statement(s) for s in data.get("statements", [])],
             file_record_to_select=record_to_select,
+            declaratives=[
+                CobolSection.from_dict(s) for s in data.get("declaratives", [])
+            ],
         )
 
     def to_dict(self) -> dict:
@@ -274,4 +278,6 @@ class CobolASG:
             result["paragraphs"] = [p.to_dict() for p in self.paragraphs]
         if self.statements:
             result["statements"] = [s.to_dict() for s in self.statements]
+        if self.declaratives:
+            result["declaratives"] = [s.to_dict() for s in self.declaratives]
         return result
