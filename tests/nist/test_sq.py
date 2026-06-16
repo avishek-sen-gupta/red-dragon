@@ -1,6 +1,11 @@
 """NIST-85 Sequential File I/O tests (SQ series).
 
 Run: poetry run python -m pytest tests/nist/test_sq.py -m nist -v
+
+Probe results (2026-06-16): 79 pass, ~11 skip, 2 xfail out of 85 programs.
+  SKIP (M-stubs, need external input files): SQ302M, SQ303M, SQ401M
+  SKIP (step-cap at 50k; would pass at 200k): SQ212A
+  XFAIL (INPUT-mode write bug in file_drivers.py): SQ152A, SQ155A
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "prog",
     [
+        "SQ101M",
         "SQ102A",
         "SQ103A",
         "SQ104A",
@@ -42,6 +48,93 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
         "SQ106A",
         "SQ107A",
         "SQ108A",
+        "SQ109M",
+        "SQ110M",
+        "SQ111A",
+        "SQ112A",
+        "SQ113A",
+        "SQ114A",
+        "SQ115A",
+        "SQ116A",
+        "SQ117A",
+        "SQ121A",
+        "SQ122A",
+        "SQ123A",
+        "SQ124A",
+        "SQ125A",
+        "SQ126A",
+        "SQ127A",
+        "SQ128A",
+        "SQ129A",
+        "SQ130A",
+        "SQ131A",
+        "SQ132A",
+        "SQ133A",
+        "SQ134A",
+        "SQ135A",
+        "SQ136A",
+        "SQ137A",
+        "SQ138A",
+        "SQ139A",
+        "SQ140A",
+        "SQ141A",
+        "SQ142A",
+        "SQ143A",
+        "SQ144A",
+        "SQ146A",
+        "SQ147A",
+        "SQ148A",
+        "SQ149A",
+        "SQ150A",
+        "SQ151A",
+        pytest.param(
+            "SQ152A",
+            marks=pytest.mark.xfail(
+                reason="INPUT-mode write: driver calls fh.write() on read-only handle instead of returning status 48"
+            ),
+        ),
+        "SQ153A",
+        "SQ154A",
+        pytest.param(
+            "SQ155A",
+            marks=pytest.mark.xfail(
+                reason="INPUT-mode write: driver calls fh.write() on read-only handle instead of returning status 48"
+            ),
+        ),
+        "SQ156A",
+        "SQ201M",
+        "SQ202A",
+        "SQ203A",
+        "SQ204A",
+        "SQ205A",
+        "SQ206A",
+        "SQ207M",
+        "SQ208M",
+        "SQ209M",
+        "SQ210M",
+        "SQ211A",
+        "SQ212A",
+        "SQ213A",
+        "SQ214A",
+        "SQ215A",
+        "SQ216A",
+        "SQ217A",
+        "SQ218A",
+        "SQ219A",
+        "SQ220A",
+        "SQ221A",
+        "SQ222A",
+        "SQ223A",
+        "SQ224A",
+        "SQ225A",
+        "SQ226A",
+        "SQ227A",
+        "SQ228A",
+        "SQ229A",
+        "SQ230A",
+        "SQ302M",
+        "SQ303M",
+        "SQ401M",
     ],
 )
 def test_sq_program(prog: str, tmp_path: Path) -> None:
