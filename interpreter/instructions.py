@@ -292,8 +292,8 @@ class Const(InstructionBase):
         cls,
         result_reg: Register,
         value: Any,
-        params: list[TypeExpr],
-        return_type: TypeExpr,
+        params: list[TypeExpr] | None = None,
+        return_type: TypeExpr = UNKNOWN,
         **kw: Any,
     ) -> "Const":
         """Create a function-reference constant.
@@ -305,7 +305,7 @@ class Const(InstructionBase):
             result_reg=result_reg,
             value=str(value),
             has_value=True,
-            type_expr=fn_type(params, return_type),
+            type_expr=fn_type(params or [], return_type),
             **kw,
         )
 
@@ -1209,8 +1209,6 @@ def _const(inst: Any) -> Const:
         return Const.func_ref(
             reg,
             str(raw),
-            params=[],
-            return_type=NULL,
             source_location=sl,
         )
     if lit == "ClassRef":

@@ -65,8 +65,28 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from interpreter.register import Register, NO_REGISTER
+from interpreter.constants import FoundationTypeName
+from interpreter.types.type_expr import array_of, scalar
 
 logger = logging.getLogger(__name__)
+
+
+def strip_cobol_literal(value: str) -> str:
+    """Strip surrounding COBOL string delimiters from a literal.
+
+    The ProLeap bridge emits string literals with their surrounding COBOL
+    quote characters (e.g. ``'"A"'`` or ``"'HELLO'"``).  Call this before
+    passing such a value to ``const_to_reg`` so the stored value is the raw
+    character content rather than a string with embedded quote chars.
+
+    Pure numeric strings (``"10"``, ``"0"``) pass through unchanged — they
+    contain no surrounding delimiters and ``const_to_reg`` will emit them as
+    strings (which is correct for alphanumeric operands).
+    """
+    if len(value) >= 2 and value[0] in ('"', "'") and value[-1] == value[0]:
+        return value[1:-1]
+    return value
+
 
 # Type alias for the dispatch callback signature.
 # Any is CobolStatementType — avoided here to prevent a circular import via statement_dispatch.
@@ -140,9 +160,19 @@ class EmitContext:
         return inst
 
     def const_to_reg(self, value: Any) -> Register:
-        """Emit a CONST and return its register."""
+        """Emit a typed CONST for a Python literal and return its register."""
         reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=reg, value=value))
+        if isinstance(value, bool):
+            inst = Const.bool_(reg, value)
+        elif isinstance(value, int):
+            inst = Const.int_(reg, value)
+        elif isinstance(value, float):
+            inst = Const.float_(reg, value)
+        elif value is None:
+            inst = Const.null_(reg)
+        else:
+            inst = Const.string(reg, str(value))
+        self.emit_inst(inst)
         return reg
 
     def inline_ir(
@@ -241,7 +271,7 @@ class EmitContext:
 
         if subscript_node is None:
             offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            self.emit_inst(Const.int_(offset_reg, fl.offset))
             return ResolvedFieldRef(fl=fl, offset_reg=offset_reg), region_reg
 
         # Evaluate the structured subscript expression to a 1-based index register.
@@ -325,7 +355,7 @@ class EmitContext:
         Used when the FieldLayout is already known (e.g. MOVE CORRESPONDING).
         """
         offset_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+        self.emit_inst(Const.int_(offset_reg, fl.offset))
         return ResolvedFieldRef(fl=fl, offset_reg=offset_reg)
 
     # ── Field Encode / Decode ─────────────────────────────────────
@@ -341,7 +371,7 @@ class EmitContext:
         encoded_reg = self.emit_encode_value(fl, value)
         if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            self.emit_inst(Const.int_(offset_reg, fl.offset))
         self.emit_inst(
             WriteRegion(
                 region_reg=region_reg,
@@ -372,6 +402,7 @@ class EmitContext:
                         Const(
                             result_reg=result,
                             value=[COBOL_RAW_FIGURATIVE_BYTES[value]] * fl.byte_length,
+                            type_expr=array_of(scalar(FoundationTypeName.INT)),
                         )
                     )
                     return result
@@ -403,7 +434,13 @@ class EmitContext:
         """
         padded = encode_hex_literal(raw, byte_length)
         result = self.fresh_reg()
-        self.emit_inst(Const(result_reg=result, value=list(padded)))
+        self.emit_inst(
+            Const(
+                result_reg=result,
+                value=list(padded),
+                type_expr=array_of(scalar(FoundationTypeName.INT)),
+            )
+        )
         return result
 
     def emit_fill_raw_byte(
@@ -421,10 +458,16 @@ class EmitContext:
         written as a literal list of ``byte_length`` copies (red-dragon-raxa).
         """
         result = self.fresh_reg()
-        self.emit_inst(Const(result_reg=result, value=[fill_byte] * fl.byte_length))
+        self.emit_inst(
+            Const(
+                result_reg=result,
+                value=[fill_byte] * fl.byte_length,
+                type_expr=array_of(scalar(FoundationTypeName.INT)),
+            )
+        )
         if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            self.emit_inst(Const.int_(offset_reg, fl.offset))
         self.emit_inst(
             WriteRegion(
                 region_reg=region_reg,
@@ -457,7 +500,7 @@ class EmitContext:
     ) -> Register:
         """Emit inline alphanumeric encoding IR. Returns result register."""
         value_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=value_reg, value=f'"{value}"'))
+        self.emit_inst(Const.string(value_reg, value))
 
         if justified_right:
             ir = build_encode_alphanumeric_justified_ir(
@@ -473,7 +516,7 @@ class EmitContext:
         """Emit inline float encoding IR for COMP-1/COMP-2. Returns result register."""
         float_val = float(value)
         value_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=value_reg, value=float_val))
+        self.emit_inst(Const.float_(value_reg, float_val))
 
         ir = build_encode_float_ir(f"enc_float_{field_name}", td.byte_length)
         return self.inline_ir(ir, {"%p_float_value": value_reg})
@@ -501,10 +544,16 @@ class EmitContext:
             sign_nibble = ByteConstants.SIGN_NIBBLE_POSITIVE
 
         digits_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=digits_reg, value=digits))
+        self.emit_inst(
+            Const(
+                result_reg=digits_reg,
+                value=digits,
+                type_expr=array_of(scalar(FoundationTypeName.INT)),
+            )
+        )
 
         sign_reg = self.fresh_reg()
-        self.emit_inst(Const(result_reg=sign_reg, value=sign_nibble))
+        self.emit_inst(Const.int_(sign_reg, sign_nibble))
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
             if td.sign_separate:
@@ -537,7 +586,7 @@ class EmitContext:
         """Emit IR to load and decode a field from the region. Returns decoded value register."""
         if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            self.emit_inst(Const.int_(offset_reg, fl.offset))
 
         data_reg = self.fresh_reg()
         self.emit_inst(
@@ -602,7 +651,7 @@ class EmitContext:
         """
         if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            self.emit_inst(Const.int_(offset_reg, fl.offset))
 
         data_reg = self.fresh_reg()
         self.emit_inst(
@@ -655,7 +704,7 @@ class EmitContext:
             # character string as alphanumeric (the formatted bytes ARE the
             # field's content). Mirrors GnuCOBOL's cob_move_edited.
             formatted_reg = self.fresh_reg()
-            pic_reg = self.const_to_reg(f'"{td.pic_string}"')
+            pic_reg = self.const_to_reg(td.pic_string)
             self.emit_inst(
                 CallFunction(
                     result_reg=formatted_reg,
@@ -804,7 +853,7 @@ class EmitContext:
         encoded_reg = self.emit_encode_from_string(fl, value_str_reg)
         if not offset_reg.is_present():
             offset_reg = self.fresh_reg()
-            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+            self.emit_inst(Const.int_(offset_reg, fl.offset))
         self.emit_inst(
             WriteRegion(
                 region_reg=region_reg,
@@ -857,13 +906,28 @@ class EmitContext:
     # ── Parse Literal ─────────────────────────────────────────────
 
     def parse_literal(self, text: str) -> Any:
-        """Parse a literal value from condition text."""
+        """Parse a literal value from condition text.
+
+        If the raw value has COBOL quote delimiters (``'...'`` or ``"..."``),
+        it is an ALPHANUMERIC literal: strip the delimiters and return the
+        contents as a ``str`` unconditionally — no numeric coercion.
+
+        Only when the raw value has NO surrounding delimiters (i.e. it is a
+        bare numeric token such as ``10`` or ``3.14``) is int→float→str
+        coercion attempted.
+        """
+        stripped = strip_cobol_literal(text)
+        is_quoted = stripped != text
+        if is_quoted:
+            # Quoted literal: alphanumeric — never coerce to int/float.
+            return stripped
+        # Bare (unquoted) literal: attempt numeric coercion.
         try:
-            return int(text)
+            return int(stripped)
         except ValueError:
             pass
         try:
-            return float(text)
+            return float(stripped)
         except ValueError:
             pass
-        return text
+        return stripped

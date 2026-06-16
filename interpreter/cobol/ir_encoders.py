@@ -36,6 +36,8 @@ from interpreter.instructions import (
     Const,
     Return_,
 )
+from interpreter.constants import FoundationTypeName
+from interpreter.types.type_expr import array_of, scalar, UNKNOWN
 from interpreter.register import Register
 
 
@@ -53,9 +55,17 @@ class _RegCounter:
 
 
 def _lit(rc: _RegCounter, instructions: list[InstructionBase], value: Any) -> Register:
-    """Emit a CONST instruction for a literal value, return the register."""
+    """Emit a typed CONST instruction for a literal value, return the register."""
     reg = rc.next()
-    instructions.append(Const(result_reg=reg, value=str(value)))
+    if isinstance(value, bool):
+        inst = Const.bool_(reg, value)
+    elif isinstance(value, int):
+        inst = Const.int_(reg, value)
+    elif isinstance(value, float):
+        inst = Const.float_(reg, value)
+    else:
+        inst = Const.string(reg, str(value))
+    instructions.append(inst)
     return reg
 
 
@@ -321,7 +331,7 @@ def build_decode_zoned_ir(
 
     # Accumulate digit values: value = sum(digit[i] * 10^(n-1-i))
     accum = rc.next()
-    instructions.append(Const(result_reg=accum, value="0"))
+    instructions.append(Const.int_(accum, 0))
 
     accum, decode_instructions = reduce(
         lambda acc, i: _decode_digit_step(rc, p_data, total_digits, acc, i),
@@ -593,7 +603,7 @@ def build_decode_zoned_separate_ir(
 
     # Accumulate digit values
     accum = rc.next()
-    instructions.append(Const(result_reg=accum, value="0"))
+    instructions.append(Const.int_(accum, 0))
 
     accum, decode_instructions = reduce(
         lambda acc, i: _decode_digit_step(
@@ -905,7 +915,7 @@ def build_decode_comp3_ir(
 
     # Accumulate digits into a value
     accum = rc.next()
-    instructions.append(Const(result_reg=accum, value="0"))
+    instructions.append(Const.int_(accum, 0))
 
     def _accumulate_dreg(
         acc: tuple[Register, list[InstructionBase]], pair: tuple[int, Register]
@@ -1020,7 +1030,7 @@ def build_encode_binary_ir(
 
     # Accumulate digits into integer value
     accum = rc.next()
-    instructions.append(Const(result_reg=accum, value="0"))
+    instructions.append(Const.int_(accum, 0))
 
     accum, accum_instructions = reduce(
         lambda acc, i: _accumulate_digit_step(rc, p_digits, total_digits, acc, i),
