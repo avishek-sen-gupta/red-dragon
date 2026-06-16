@@ -26,6 +26,9 @@ def lower_procedure_division(
     ctx.section_paragraphs = {
         section.name: [p.name for p in section.paragraphs] for section in asg.sections
     }
+    # Declaratives sections are PERFORM-able within declaratives; register them too.
+    for section in asg.declaratives:
+        ctx.section_paragraphs[section.name] = [p.name for p in section.paragraphs]
 
     for stmt in asg.statements:
         ctx.lower_statement(stmt, materialised)
@@ -34,6 +37,11 @@ def lower_procedure_division(
         lower_paragraph(ctx, para, materialised)
 
     for section in asg.sections:
+        lower_section(ctx, section, materialised)
+
+    # Declaratives last: real flow above keeps the entry point on the first real
+    # element. USE-procedure triggering on I/O errors is deferred to m0oa.4.
+    for section in asg.declaratives:
         lower_section(ctx, section, materialised)
 
 
