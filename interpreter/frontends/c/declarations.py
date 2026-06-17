@@ -37,8 +37,8 @@ from interpreter.types.type_expr import UNKNOWN, EnumType, TypeExpr, scalar, poi
 from interpreter.frontends.common.expressions import (
     lower_null_literal,
     lower_int_literal,
-    lower_default_return,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 
 logger = logging.getLogger(__name__)
 
@@ -424,8 +424,7 @@ def lower_function_def_c(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -624,8 +623,7 @@ def lower_preproc_function_def(
         val_reg = ctx.lower_expr(value_node)
         ctx.emit_inst(Return_(value_reg=val_reg))
     else:
-        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
 
     ctx.emit_inst(Label_(label=end_label))
 
