@@ -27,6 +27,10 @@ from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+    lower_int_literal,
+)
 from interpreter.frontends.php.node_types import PHPNodeType
 
 logger = logging.getLogger(__name__)
@@ -52,10 +56,7 @@ def lower_php_return(
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=val_reg), node=node)
 
 
@@ -179,7 +180,7 @@ def lower_php_foreach(
         value_var = ctx.node_text(binding_node)
 
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=idx_reg, value="0"))
+    ctx.emit_inst(Const.int_(idx_reg, 0))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
@@ -221,7 +222,7 @@ def lower_php_foreach(
 
     ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
