@@ -18,7 +18,6 @@ from interpreter.instructions import (
     DeclVar,
     Label_,
     LoadVar,
-    Return_,
     StoreField,
     Symbolic,
 )
@@ -32,9 +31,9 @@ from interpreter.frontends.php.node_types import PHPNodeType
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
+    emit_implicit_return,
 )
 from interpreter.frontends.common.expressions import (
-    lower_default_return,
     lower_null_literal,
     lower_string_literal,
 )
@@ -157,8 +156,7 @@ def lower_php_func_def(
     if body_node:
         lower_php_compound(ctx, body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -194,8 +192,7 @@ def lower_php_method_decl(
     if body_node:
         lower_php_compound(ctx, body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -263,8 +260,7 @@ def _emit_php_synthetic_constructor(
     _emit_this_param(ctx)
     emit_field_initializers(ctx, field_inits, this_var=constants.PARAM_PHP_THIS)
 
-    none_reg = lower_default_return(ctx, None, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, None)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -460,8 +456,7 @@ def _lower_php_constructor_with_field_inits(
     if body_node:
         lower_php_compound(ctx, body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
