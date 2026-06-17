@@ -10,7 +10,11 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
-    lower_const_literal,
+    lower_string_literal,
+    lower_int_literal,
+    lower_float_literal,
+    lower_null_literal,
+    lower_default_return,
     extract_call_args,
 )
 from interpreter.frontends.go.node_types import GoNodeType
@@ -44,7 +48,7 @@ def lower_go_iota(
     """Lower `iota` to CONST with current iota counter value."""
     iota_val = getattr(ctx, "_go_iota_value", 0)
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=str(iota_val)), node=node)
+    ctx.emit_inst(Const.int_(reg, iota_val), node=node)
     return reg
 
 
@@ -166,7 +170,7 @@ def lower_selector(
     operand_node = node.child_by_field_name("operand")
     field_node = node.child_by_field_name("field")
     if operand_node is None or field_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_string_literal(ctx, node, ctx.node_text(node))
     obj_reg = ctx.lower_expr(operand_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
@@ -186,7 +190,7 @@ def lower_go_index(
     operand_node = node.child_by_field_name("operand")
     index_node = node.child_by_field_name("index")
     if operand_node is None or index_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_string_literal(ctx, node, ctx.node_text(node))
     obj_reg = ctx.lower_expr(operand_node)
     idx_reg = ctx.lower_expr(index_node)
     reg = ctx.fresh_reg()
@@ -249,7 +253,7 @@ def lower_composite_literal(
             inner = next((c for c in elem.children if c.is_named), elem)
             val_reg = ctx.lower_expr(inner)
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            ctx.emit_inst(Const.int_(idx_reg, i))
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=elem,
@@ -258,7 +262,7 @@ def lower_composite_literal(
             # Direct expression element
             val_reg = ctx.lower_expr(elem)
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            ctx.emit_inst(Const.int_(idx_reg, i))
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=elem,
@@ -307,7 +311,7 @@ def lower_generic_type(
     When generic_type appears in expression context (e.g. inside
     type_conversion_expression), we treat it as a type name reference.
     """
-    return lower_const_literal(ctx, node)
+    return lower_string_literal(ctx, node, ctx.node_text(node))
 
 
 # -- Go: type assertion expression -----------------------------------------
@@ -319,7 +323,7 @@ def lower_type_assertion(
     """Lower type_assertion_expression: x.(Type) -> CALL_FUNCTION('type_assert', x, Type)."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
-        return lower_const_literal(ctx, node)
+        return lower_string_literal(ctx, node, ctx.node_text(node))
     expr_reg = ctx.lower_expr(named_children[0])
     type_text = (
         ctx.node_text(named_children[-1]) if len(named_children) > 1 else "interface{}"
@@ -339,10 +343,17 @@ def lower_type_assertion(
 # -- Go: slice expression --------------------------------------------------
 
 
-def _make_const(ctx: TreeSitterEmitContext, value: str) -> Register:
-    """Emit a CONST and return its register."""
+def _make_const_zero(ctx: TreeSitterEmitContext) -> Register:
+    """Emit a typed integer 0 CONST and return its register."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=value))
+    ctx.emit_inst(Const.int_(reg, 0))
+    return reg
+
+
+def _make_const_null(ctx: TreeSitterEmitContext) -> Register:
+    """Emit a typed null CONST and return its register."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.null_(reg))
     return reg
 
 
@@ -356,12 +367,8 @@ def lower_slice_expr(
     start_node = node.child_by_field_name("start")
     end_node = node.child_by_field_name("end")
 
-    start_reg = ctx.lower_expr(start_node) if start_node else _make_const(ctx, "0")
-    end_reg = (
-        ctx.lower_expr(end_node)
-        if end_node
-        else _make_const(ctx, ctx.constants.none_literal)
-    )
+    start_reg = ctx.lower_expr(start_node) if start_node else _make_const_zero(ctx)
+    end_reg = ctx.lower_expr(end_node) if end_node else _make_const_null(ctx)
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -400,14 +407,127 @@ def lower_func_literal(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=reg)
     return reg
+
+
+# -- Go: rune and string literal lowerers ----------------------------------
+
+
+def _parse_go_rune_escape(inner: str) -> int:
+    """Parse Go rune escape sequences → Unicode code point."""
+    if len(inner) == 1:
+        return ord(inner)
+    if inner.startswith("\\"):
+        esc = inner[1:]
+        simple = {
+            "n": 10,
+            "t": 9,
+            "r": 13,
+            "\\": 92,
+            "'": 39,
+            '"': 34,
+            "a": 7,
+            "b": 8,
+            "f": 12,
+            "v": 11,
+            "0": 0,
+        }
+        if esc in simple:
+            return simple[esc]
+        if esc.startswith("x") and len(esc) == 3:
+            return int(esc[1:], 16)
+        if esc.startswith("u") and len(esc) == 5:
+            return int(esc[1:], 16)
+        if esc.startswith("U") and len(esc) == 9:
+            return int(esc[1:], 16)
+        # Octal: 3 octal digits
+        if len(esc) == 3 and all(c in "01234567" for c in esc):
+            return int(esc, 8)
+    return ord(inner[0]) if inner else 0
+
+
+def lower_go_rune_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Rune literal 'x' → Const.int_ with Unicode code point."""
+    text = ctx.node_text(node)  # e.g. "'a'" or "'\n'" or "'\x41'"
+    # Strip surrounding single quotes
+    inner = text[1:-1]
+    cp = _parse_go_rune_escape(inner)
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.int_(reg, cp), node=node)
+    return reg
+
+
+def _unescape_go_string(s: str) -> str:
+    """Unescape Go interpreted string escape sequences."""
+    result = []
+    i = 0
+    while i < len(s):
+        if s[i] == "\\" and i + 1 < len(s):
+            esc = s[i + 1]
+            simple = {
+                "n": "\n",
+                "t": "\t",
+                "r": "\r",
+                "\\": "\\",
+                '"': '"',
+                "'": "'",
+                "a": "\a",
+                "b": "\b",
+                "f": "\f",
+                "v": "\v",
+                "0": "\0",
+            }
+            if esc in simple:
+                result.append(simple[esc])
+                i += 2
+            elif esc == "x" and i + 3 < len(s):
+                result.append(chr(int(s[i + 2 : i + 4], 16)))
+                i += 4
+            elif esc == "u" and i + 5 < len(s):
+                result.append(chr(int(s[i + 2 : i + 6], 16)))
+                i += 6
+            elif esc == "U" and i + 9 < len(s):
+                result.append(chr(int(s[i + 2 : i + 10], 16)))
+                i += 10
+            elif esc.isdigit():  # octal
+                result.append(chr(int(s[i + 1 : i + 4], 8)))
+                i += 4
+            else:
+                result.append(s[i])
+                i += 1
+        else:
+            result.append(s[i])
+            i += 1
+    return "".join(result)
+
+
+def lower_go_interpreted_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Interpreted string literal "..." → unescape and emit Const.string."""
+    text = ctx.node_text(node)
+    # Strip surrounding double quotes
+    inner = text[1:-1]
+    value = _unescape_go_string(inner)
+    return lower_string_literal(ctx, node, value)
+
+
+def lower_go_raw_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Raw string literal `...` → NO escape processing, just strip backticks."""
+    text = ctx.node_text(node)
+    # Strip surrounding backticks
+    value = text[1:-1]  # Do NOT unescape
+    return lower_string_literal(ctx, node, value)
 
 
 # -- Go: expression list helpers -------------------------------------------

@@ -140,10 +140,10 @@ func f() {
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -263,11 +263,11 @@ class TestGoFrontendReturn:
         ir = _parse_and_lower(source)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
-        # Bare return should emit a CONST "None" (default return value) before RETURN
+        # Bare return should emit a CONST null (default return value) before RETURN
         consts = _find_all(ir, Opcode.CONST)
         assert any(
-            c.operands == ["None"] for c in consts
-        ), f"bare return should emit CONST ['None'], got {[c.operands for c in consts]}"
+            c.operands == [None] for c in consts
+        ), f"bare return should emit CONST [None], got {[c.operands for c in consts]}"
 
 
 class TestGoFrontendMultipleReturn:
@@ -1091,7 +1091,7 @@ class TestGoRuneLiteral:
         """Rune literal should emit a CONST instruction."""
         ir = _parse_and_lower("package main; func main() { x := 'a' }")
         consts = _find_all(ir, Opcode.CONST)
-        assert any("'a'" in str(inst.operands) for inst in consts)
+        assert any(97 in inst.operands for inst in consts)
 
     @covers(GoFeature.RUNE_LITERAL)
     def test_rune_literal_stored_to_variable(self):
