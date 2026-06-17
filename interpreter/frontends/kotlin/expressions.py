@@ -41,13 +41,107 @@ from interpreter.instructions import (
 )
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
-    lower_const_literal,
+    lower_bool_literal,
+    lower_float_literal,
     lower_identifier,
+    lower_int_literal,
     lower_interpolated_string_parts,
+    lower_null_literal,
+    lower_string_literal,
     lower_update_expr,
 )
 
 _UNSIGNED_SUFFIX = re.compile(r"[uUlL]+$")
+
+# Suffix patterns for Kotlin numeric literals
+# Integer suffixes: L, l, u, U, ul, UL, uL, Lu, LU, lu (and combinations)
+_INT_SUFFIX = re.compile(r"[uUlL]+$")
+# Float suffix: f or F only (doubles have no suffix in Kotlin)
+_FLOAT_SUFFIX = re.compile(r"[fF]$")
+
+# Escape sequences for Kotlin character/string literals
+_KOTLIN_CHAR_ESCAPES: dict[str, str] = {
+    "\\n": "\n",
+    "\\t": "\t",
+    "\\r": "\r",
+    "\\\\": "\\",
+    "\\'": "'",
+    '\\"': '"',
+    "\\b": "\b",
+    "\\$": "$",
+    "\\0": "\0",
+}
+
+
+def _parse_kotlin_char(text: str) -> int:
+    """Return the ordinal of a Kotlin character literal (e.g. "'c'" -> 99, "'\\n'" -> 10)."""
+    # text is the raw node text, e.g. "'c'" or "'\\n'" or "'\\u0041'"
+    inner = text[1:-1]  # strip surrounding single quotes
+    if inner in _KOTLIN_CHAR_ESCAPES:
+        return ord(_KOTLIN_CHAR_ESCAPES[inner])
+    if inner.startswith("\\u") and len(inner) == 6:
+        return int(inner[2:], 16)
+    if len(inner) == 1:
+        return ord(inner)
+    return ord(inner[0])
+
+
+def _unescape_kotlin_string(s: str) -> str:
+    """Resolve Kotlin string escape sequences in an already-unquoted string."""
+
+    def replace_escape(m: re.Match) -> str:  # type: ignore[type-arg]
+        seq = m.group(0)
+        if seq in _KOTLIN_CHAR_ESCAPES:
+            return _KOTLIN_CHAR_ESCAPES[seq]
+        if seq.startswith("\\u") and len(seq) == 6:
+            return chr(int(seq[2:], 16))
+        return seq
+
+    return re.sub(r'\\u[0-9a-fA-F]{4}|\\[ntrb\\f\'"$0]', replace_escape, s)
+
+
+def lower_kotlin_int_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Kotlin integer literal (int/long), stripping L/u/U suffixes and underscores."""
+    raw = ctx.node_text(node)
+    cleaned = _INT_SUFFIX.sub("", raw)
+    return lower_int_literal(ctx, node, text=cleaned)
+
+
+def lower_kotlin_float_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Kotlin real literal (Float/Double), stripping f/F suffix."""
+    raw = ctx.node_text(node)
+    cleaned = _FLOAT_SUFFIX.sub("", raw).replace("_", "")
+    return lower_float_literal(ctx, node, text=cleaned)
+
+
+def lower_kotlin_char_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Kotlin character literal to its integer ordinal value (typed Const.int_)."""
+    ordinal = _parse_kotlin_char(ctx.node_text(node))
+    return lower_int_literal(ctx, node, text=str(ordinal))
+
+
+def lower_kotlin_label(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a Kotlin label node as a typed Const.string."""
+    return lower_string_literal(ctx, node, ctx.node_text(node))
+
+
+def lower_kotlin_symbolic_fallback(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Fallback for unhandled expression nodes — emit typed Const.null_."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Symbolic(result_reg=reg, hint=f"unhandled_{node.type}"), node=node)
+    return reg
+
+
 from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
 from interpreter.frontends.common.patterns import (
     WildcardPattern,
@@ -93,16 +187,22 @@ def lower_kotlin_string_literal(
         for c in node.children
     )
     if not has_interpolation:
-        return lower_const_literal(ctx, node)
+        # Regular string with no interpolation: strip surrounding quotes
+        raw = ctx.node_text(node)
+        if raw.startswith('"""') and raw.endswith('"""'):
+            # Triple-quoted (raw/multiline) string — no escape processing
+            value = raw[3:-3]
+        elif len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+            value = _unescape_kotlin_string(raw[1:-1])
+        else:
+            value = raw
+        return lower_string_literal(ctx, node, value)
 
     parts: list[str] = []
     for child in node.children:
         if child.type == KNT.STRING_CONTENT:
-            frag_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
-            )
-            parts.append(frag_reg)
+            # STRING_CONTENT fragments are already unquoted — don't re-strip
+            parts.append(lower_string_literal(ctx, child, ctx.node_text(child)))
         elif child.type == KNT.INTERPOLATED_IDENTIFIER:
             parts.append(lower_identifier(ctx, child))
         elif child.type == KNT.INTERPOLATED_EXPRESSION:
@@ -154,7 +254,7 @@ def lower_kotlin_call(
     """Lower call_expression: first child is callee, call_suffix has args."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
-        return lower_const_literal(ctx, node)
+        return lower_kotlin_symbolic_fallback(ctx, node)
 
     callee_node = named_children[0]
     call_suffix = next(
@@ -223,7 +323,7 @@ def lower_navigation_expr(
 
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_kotlin_symbolic_fallback(ctx, node)
     obj_node = named_children[0]
     obj_reg = ctx.lower_expr(obj_node)
     field_name = _extract_nav_field_name(ctx, named_children[-1])
@@ -249,7 +349,7 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower control_structure_body or block, returning last expr reg."""
     if body_node is None:
         reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(reg))
         return reg
     children = [
         c
@@ -261,7 +361,7 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     ]
     if not children:
         reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(reg))
         return reg
     # If the sole child is a block node (e.g. `statements`), unwrap it
     if len(children) == 1 and children[0].type in ctx.constants.block_node_types:
@@ -282,10 +382,10 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> Register:
         elif inner:
             ctx.lower_stmt(inner[-1])
             result = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=result, value=ctx.constants.none_literal))
+            ctx.emit_inst(Const.null_(result))
         else:
             result = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=result, value=ctx.constants.none_literal))
+            ctx.emit_inst(Const.null_(result))
         if scope_entered:
             ctx.exit_block_scope()
         return result
@@ -494,7 +594,7 @@ def _lower_when_body(ctx: TreeSitterEmitContext, entry) -> Register:
     if body_children:
         return ctx.lower_expr(body_children[0])
     arm_result = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=arm_result, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(arm_result))
     return arm_result
 
 
@@ -508,7 +608,7 @@ def lower_statements_expr(
     children = [c for c in node.children if c.is_named]
     if not children:
         reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(reg))
         return reg
     for child in children[:-1]:
         ctx.lower_stmt(child)
@@ -521,7 +621,7 @@ def lower_loop_as_expr(
     """Lower while/for/do-while in expression position (returns unit)."""
     ctx.lower_stmt(node)
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(reg))
     return reg
 
 
@@ -536,7 +636,7 @@ def lower_kotlin_assignment_expr(
 
     lower_kotlin_assignment(ctx, node)
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(reg))
     return reg
 
 
@@ -551,7 +651,7 @@ def lower_jump_as_expr(
 
     lower_jump_expr(ctx, node)
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(reg))
     return reg
 
 
@@ -566,7 +666,7 @@ def lower_postfix_expr(
         return lower_update_expr(ctx, node)
     if text.endswith("!!"):
         return _lower_not_null_assertion(ctx, node)
-    return lower_const_literal(ctx, node)
+    return lower_kotlin_symbolic_fallback(ctx, node)
 
 
 def _lower_not_null_assertion(
@@ -575,7 +675,7 @@ def _lower_not_null_assertion(
     """Lower not-null assertion (expr!!) as UNOP('!!', expr)."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
-        return lower_const_literal(ctx, node)
+        return lower_kotlin_symbolic_fallback(ctx, node)
     expr_reg = ctx.lower_expr(named_children[0])
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -656,9 +756,7 @@ def lower_lambda_literal(
 
     if not last_returned:
         none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        ctx.emit_inst(Const.null_(none_reg))
         ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -704,9 +802,7 @@ def lower_anonymous_function(
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        ctx.emit_inst(Const.null_(none_reg))
         ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -826,7 +922,7 @@ def lower_check_expr(
     """Lower check_expression (is/!is) as CALL_FUNCTION('is', expr, type_text)."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_kotlin_symbolic_fallback(ctx, node)
     expr_reg = ctx.lower_expr(named_children[0])
     type_text = ctx.node_text(named_children[-1])
     reg = ctx.fresh_reg()
@@ -855,7 +951,7 @@ def lower_try_expr(
 
     lower_try_stmt(ctx, node)
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(reg))
     return reg
 
 
@@ -880,7 +976,7 @@ def lower_elvis_expr(
     """
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_kotlin_symbolic_fallback(ctx, node)
 
     rhs_node = named_children[-1]
 
@@ -906,7 +1002,7 @@ def _lower_elvis_with_throw(
     left_reg = ctx.lower_expr(lhs_node)
 
     null_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=null_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(null_reg))
 
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -964,7 +1060,7 @@ def lower_infix_expr(
     """
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 3:
-        return lower_const_literal(ctx, node)
+        return lower_kotlin_symbolic_fallback(ctx, node)
     left_reg = ctx.lower_expr(named_children[0])
     func_name = ctx.node_text(named_children[1])
     right_reg = ctx.lower_expr(named_children[2])
@@ -1004,7 +1100,7 @@ def lower_indexing_expr(
     """Lower `collection[index]` as LOAD_INDEX."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
-        return lower_const_literal(ctx, node)
+        return lower_kotlin_symbolic_fallback(ctx, node)
     obj_reg = ctx.lower_expr(named_children[0])
     # The index is inside indexing_suffix
     suffix_node = next(
@@ -1033,7 +1129,7 @@ def lower_as_expr(
     """Lower `expr as Type` as CALL_FUNCTION('as', expr, type_name)."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_kotlin_symbolic_fallback(ctx, node)
     expr_reg = ctx.lower_expr(named_children[0])
     type_name = ctx.node_text(named_children[-1])
     reg = ctx.fresh_reg()
@@ -1062,7 +1158,7 @@ def lower_type_test(
     type_node = named_children[0] if named_children else None
     type_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=f"is:{type_name}"), node=node)
+    ctx.emit_inst(Const.string(reg, f"is:{type_name}"), node=node)
     return reg
 
 
@@ -1241,9 +1337,7 @@ def lower_unsigned_literal(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Kotlin unsigned literal (42u, 10UL) by stripping the suffix."""
     text = _UNSIGNED_SUFFIX.sub("", ctx.node_text(node))
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=text), node=node)
-    return reg
+    return lower_int_literal(ctx, node, text=text)
 
 
 def lower_spread_expression(
