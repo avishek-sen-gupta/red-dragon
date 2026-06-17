@@ -17,8 +17,8 @@ from interpreter.frontends.common.expressions import (
     lower_null_literal,
     lower_string_literal,
     lower_int_literal,
-    lower_default_return,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.typescript.type_alias_extractor import (
     TypeScriptTypeAliasExtractor,
 )
@@ -288,8 +288,7 @@ def _lower_ts_interface_method(
     ctx.emit_inst(Label_(label=func_label))
     ctx.seed_func_return_type(func_label, return_hint)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -488,8 +487,7 @@ def _lower_ts_method_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -509,8 +507,7 @@ def lower_ts_abstract_method(
     ctx.emit_inst(Branch(label=end_label), node=node)
     ctx.emit_inst(Label_(label=func_label))
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -655,8 +652,7 @@ def lower_ts_arrow_function(
             val_reg = ctx.lower_expr(body_node)
             ctx.emit_inst(Return_(value_reg=val_reg))
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -685,8 +681,7 @@ def lower_ts_function_expression(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -719,8 +714,7 @@ def lower_ts_function_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
 
     ctx.emit_inst(Label_(label=end_label))
 
