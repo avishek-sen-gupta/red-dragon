@@ -9,7 +9,7 @@ from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from interpreter.frontends.kotlin.features import KotlinFeature
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_kotlin(source: str) -> list[InstructionBase]:
@@ -33,6 +33,15 @@ def _find_all(
     instructions: list[InstructionBase], opcode: Opcode
 ) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
+
+
+class TestKotlinImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        instructions = _parse_kotlin("fun f(): Int { return 42 }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)
 
 
 class TestKotlinDeclarations:
