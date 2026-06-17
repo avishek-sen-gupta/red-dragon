@@ -37,7 +37,7 @@ class TestJavaScriptSmoke:
     def test_number_literal(self):
         instructions = _parse_js("42;")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
 
 class TestJavaScriptExpressions:
@@ -72,7 +72,7 @@ class TestJavaScriptExpressions:
     def test_template_literal(self):
         instructions = _parse_js("const s = `hello`;")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("`hello`" in inst.operands for inst in consts)
+        assert any("hello" in inst.operands for inst in consts)
 
 
 class TestJavaScriptControlFlow:
@@ -123,10 +123,10 @@ class TestJavaScriptControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -769,9 +769,9 @@ class TestJavaScriptSequenceExpression:
     def test_sequence_basic(self):
         instructions = _parse_js("const x = (1, 2, 3);")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("1" in inst.operands for inst in consts)
-        assert any("2" in inst.operands for inst in consts)
-        assert any("3" in inst.operands for inst in consts)
+        assert any(1 in inst.operands for inst in consts)
+        assert any(2 in inst.operands for inst in consts)
+        assert any(3 in inst.operands for inst in consts)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
@@ -1024,7 +1024,7 @@ class TestJavaScriptTemplateSubstitution:
         source = "const msg = `plain text`;"
         instructions = _parse_js(source)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("`plain text`" in inst.operands for inst in consts)
+        assert any("plain text" in inst.operands for inst in consts)
 
 
 class TestJavaScriptClassStaticBlock:
@@ -1100,7 +1100,7 @@ class TestJavaScriptExportStatement:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
     @covers(JavaScriptFeature.EXPORT)
     def test_export_class_declaration(self):
