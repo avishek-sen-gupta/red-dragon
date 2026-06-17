@@ -1086,7 +1086,7 @@ class BaseFrontend(Frontend):
         # Implicit return at end of function
         none_reg = self._fresh_reg()
         self._emit_inst(Const.null_(none_reg), node=node)
-        self._emit_inst(Return_(value_reg=none_reg), node=node)
+        self._emit_inst(Return_(value_reg=none_reg, implicit=True), node=node)
 
         self._emit_inst(Label_(label=end_label))
 
