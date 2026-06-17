@@ -32,7 +32,12 @@ from interpreter.instructions import (
     Return_,
 )
 from interpreter.frontends.common.expressions import (
-    lower_const_literal,
+    lower_int_literal,
+    lower_float_literal,
+    lower_string_literal,
+    lower_null_literal,
+    lower_bool_literal,
+    lower_default_return,
     lower_interpolated_string_parts,
     lower_call_impl,
     extract_call_args,
@@ -42,6 +47,86 @@ from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.scala.patterns import parse_scala_pattern
 from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
+
+
+def lower_scala_integer_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower integer_literal: strip L/l suffix, underscores; pass hex/octal/binary via int(,0)."""
+    raw = ctx.node_text(node)
+    # Strip long suffix (L or l) before parsing
+    text = raw.rstrip("Ll")
+    return lower_int_literal(ctx, node, text=text)
+
+
+def lower_scala_float_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower floating_point_literal: strip f/F/d/D suffix."""
+    raw = ctx.node_text(node)
+    text = raw.rstrip("fFdD")
+    return lower_float_literal(ctx, node, text=text)
+
+
+def lower_scala_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower string node: handles regular "..." (with escapes) and triple-quoted \"""...\""" (raw).
+
+    Regular strings: strip outer quotes, then decode Python escape sequences.
+    Triple-quoted strings: strip the triple-quote delimiters, no escape processing (raw).
+    """
+    raw = ctx.node_text(node)
+    if raw.startswith('"""'):
+        # Triple-quoted raw string — strip delimiters, no escape processing
+        value = raw[3:-3]
+    else:
+        # Regular string — strip outer quotes and decode standard escape sequences
+        inner = raw[1:-1]
+        value = inner.encode("raw_unicode_escape").decode("unicode_escape")
+    return lower_string_literal(ctx, node, value)
+
+
+def lower_scala_char_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower character_literal 'x' → int ord value.
+
+    Scala chars are JVM chars (Unicode codepoints), not strings.
+    Handles simple chars ('a') and escape sequences ('\\n', '\\t', '\\\\', '\\'').
+    """
+    raw = ctx.node_text(node)  # e.g. "'a'" or "'\\n'"
+    inner = raw[1:-1]  # strip surrounding single quotes
+    if inner.startswith("\\"):
+        escape_map = {
+            "\\n": 10,
+            "\\t": 9,
+            "\\r": 13,
+            "\\\\": 92,
+            "\\'": 39,
+            '\\"': 34,
+            "\\b": 8,
+            "\\f": 12,
+            "\\0": 0,
+        }
+        code = escape_map.get(inner)
+        if code is None:
+            # Unicode escape: \\uXXXX
+            if inner.startswith("\\u") and len(inner) == 6:
+                code = int(inner[2:], 16)
+            else:
+                # Fallback: try Python escape
+                code = ord(inner.encode("raw_unicode_escape").decode("unicode_escape"))
+    else:
+        code = ord(inner)
+    return lower_int_literal(ctx, node, text=str(code))
+
+
+def lower_scala_unit_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower unit () → typed Const using lower_default_return with Scala's sentinel '()'."""
+    return lower_default_return(ctx, node, ctx.constants.default_return_value)
 
 
 def lower_scala_call(
@@ -106,7 +191,7 @@ def lower_field_expr(
     value_node = node.child_by_field_name(ctx.constants.attr_object_field)
     field_node = node.child_by_field_name("field")
     if value_node is None or field_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_string_literal(ctx, node, ctx.node_text(node))
     obj_reg = ctx.lower_expr(value_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
@@ -213,9 +298,7 @@ def lower_if_expr(
 def _lower_body_as_expr(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower a body node as an expression, returning the last expression's reg."""
     if body_node is None:
-        reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-        return reg
+        return lower_default_return(ctx, body_node, ctx.constants.default_return_value)
     if body_node.type == NT.BLOCK:
         return lower_block_expr(ctx, body_node)
     return ctx.lower_expr(body_node)
@@ -273,9 +356,7 @@ def lower_block_expr(
         and c.is_named
     ]
     if not children:
-        reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-        return reg
+        return lower_default_return(ctx, node, ctx.constants.default_return_value)
     for child in children[:-1]:
         ctx.lower_stmt(child)
     return ctx.lower_expr(children[-1])
@@ -286,9 +367,7 @@ def lower_loop_as_expr(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower while/for/do-while in expression position (returns unit)."""
     ctx.lower_stmt(node)
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_default_return(ctx, node, ctx.constants.default_return_value)
 
 
 def lower_break_as_expr(
@@ -298,9 +377,7 @@ def lower_break_as_expr(
     from interpreter.frontends.common.control_flow import lower_break
 
     lower_break(ctx, node)
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_default_return(ctx, node, ctx.constants.default_return_value)
 
 
 def lower_continue_as_expr(
@@ -310,9 +387,7 @@ def lower_continue_as_expr(
     from interpreter.frontends.common.control_flow import lower_continue
 
     lower_continue(ctx, node)
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_default_return(ctx, node, ctx.constants.default_return_value)
 
 
 def lower_return_expr(
@@ -322,10 +397,7 @@ def lower_return_expr(
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=val_reg), node=node)
     return val_reg
 
@@ -336,7 +408,7 @@ def lower_tuple_expr(
     elems = [c for c in node.children if c.type not in (NT.LPAREN, NT.RPAREN, NT.COMMA)]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(Const.int_(size_reg, len(elems)))
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg, type_hint=scalar(TypeName("tuple")), size_reg=size_reg
@@ -346,7 +418,7 @@ def lower_tuple_expr(
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
@@ -404,10 +476,7 @@ def lower_lambda_expr(
         last_reg = ctx.lower_expr(named_children[-1])
         ctx.emit_inst(Return_(value_reg=last_reg))
     else:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
         ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -465,7 +534,7 @@ def lower_scala_interpolated_string(
         None,
     )
     if interp_string is None:
-        return lower_const_literal(ctx, node)
+        return lower_string_literal(ctx, node, ctx.node_text(node))
     return lower_scala_interpolated_string_body(ctx, interp_string)
 
 
@@ -475,7 +544,7 @@ def lower_scala_interpolated_string_body(
     """Lower interpolated_string, extracting literal gaps and interpolation children."""
     interpolations = [c for c in node.children if c.type == NT.INTERPOLATION]
     if not interpolations:
-        return lower_const_literal(ctx, node)
+        return lower_scala_string_literal(ctx, node)
 
     parts: list[str] = []
     content_start = node.start_byte + 1  # skip opening "
@@ -488,9 +557,7 @@ def lower_scala_interpolated_string_body(
             # Emit literal gap before this interpolation
             gap_text = ctx.source[content_start : child.start_byte].decode("utf-8")
             if gap_text:
-                frag_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=frag_reg, value=gap_text), node=node)
-                parts.append(frag_reg)
+                parts.append(lower_string_literal(ctx, node, gap_text))
             # Lower the interpolation expression
             named = [c for c in child.children if c.is_named]
             if named:
@@ -500,9 +567,7 @@ def lower_scala_interpolated_string_body(
     # Trailing literal after last interpolation
     trailing = ctx.source[content_start:content_end].decode("utf-8")
     if trailing:
-        frag_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=frag_reg, value=trailing), node=node)
-        parts.append(frag_reg)
+        parts.append(lower_string_literal(ctx, node, trailing))
 
     return lower_interpolated_string_parts(ctx, parts, node)
 
@@ -514,9 +579,7 @@ def lower_try_expr(
     from interpreter.frontends.scala.control_flow import lower_try_stmt
 
     lower_try_stmt(ctx, node)
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_default_return(ctx, node, ctx.constants.default_return_value)
 
 
 def lower_throw_expr(
@@ -527,10 +590,7 @@ def lower_throw_expr(
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
     return val_reg
 

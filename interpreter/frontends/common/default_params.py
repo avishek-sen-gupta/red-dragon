@@ -169,7 +169,7 @@ def emit_default_param_guard(
     ctx.emit_inst(LoadVar(result_reg=args_reg, name=VarName("arguments")))
 
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=idx_reg, value=param_index))
+    ctx.emit_inst(Const.int_(idx_reg, param_index))
 
     # Call __resolve_default__(arguments, param_index, default_value)
     result_reg = ctx.fresh_reg()

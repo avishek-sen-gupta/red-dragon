@@ -78,6 +78,7 @@ def _make_stub_module(class_name: str, label_str: str) -> ModuleUnit:
     from interpreter.instructions import Label_, Branch, Const, DeclVar
     from interpreter.register import Register
     from interpreter.var_name import VarName
+    from interpreter.types.type_expr import UNKNOWN
 
     cls_label = f"class_{class_name}_0"
     end_label = f"end_class_{class_name}_1"
@@ -89,7 +90,7 @@ def _make_stub_module(class_name: str, label_str: str) -> ModuleUnit:
             Branch(label=CodeLabel(end_label)),
             Label_(label=CodeLabel(cls_label)),
             Label_(label=CodeLabel(end_label)),
-            Const(result_reg=Register("%0"), value=cls_label),
+            Const.class_ref(Register("%0"), cls_label, class_type=UNKNOWN),
             DeclVar(name=VarName(class_name), value_reg=Register("%0")),
         ),
         exports=ExportTable(

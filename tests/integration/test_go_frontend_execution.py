@@ -24,7 +24,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_[VarName("x")] == "a"
+        assert vars_[VarName("x")] == 97
 
     @covers(GoFeature.RUNE_LITERAL)
     def test_rune_literal_in_comparison(self):

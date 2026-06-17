@@ -27,6 +27,7 @@ from interpreter.instructions import (
     StoreField,
 )
 from interpreter.ir import CodeLabel
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -43,15 +44,15 @@ CALENDAR_IR = (
     # Allocate a heap object to hold static constants (Calendar.YEAR etc.)
     NewObject(result_reg=Register("%0"), type_hint="Calendar"),
     # Store constants as fields on the heap object
-    Const(result_reg=Register("%1"), value=1),
+    Const.int_(Register("%1"), 1),
     StoreField(
         obj_reg=Register("%0"), field_name=FieldName("YEAR"), value_reg=Register("%1")
     ),
-    Const(result_reg=Register("%2"), value=2),
+    Const.int_(Register("%2"), 2),
     StoreField(
         obj_reg=Register("%0"), field_name=FieldName("MONTH"), value_reg=Register("%2")
     ),
-    Const(result_reg=Register("%3"), value=5),
+    Const.int_(Register("%3"), 5),
     StoreField(
         obj_reg=Register("%0"),
         field_name=FieldName("DAY_OF_MONTH"),

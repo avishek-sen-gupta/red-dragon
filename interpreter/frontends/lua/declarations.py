@@ -10,6 +10,10 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.declarations import lower_params
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+    lower_null_literal,
+)
 from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
@@ -39,8 +43,7 @@ def lower_lua_variable_declaration(
     # Local declaration without assignment: local x
     for child in node.children:
         if child.type == LuaNodeType.IDENTIFIER:
-            val_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+            val_reg = lower_null_literal(ctx, node)
             ctx.emit_inst(
                 DeclVar(name=VarName(ctx.node_text(child)), value_reg=val_reg),
                 node=node,
@@ -76,9 +79,10 @@ def lower_lua_assignment(
     val_regs = [ctx.lower_expr(v) for v in values]
 
     for i, target in enumerate(targets):
-        val_reg = val_regs[i] if i < len(val_regs) else ctx.fresh_reg()
-        if i >= len(val_regs):
-            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        if i < len(val_regs):
+            val_reg = val_regs[i]
+        else:
+            val_reg = lower_null_literal(ctx, node)
         lower_lua_store_target(ctx, target, val_reg, node)
 
 
@@ -158,8 +162,7 @@ def lower_lua_function_declaration(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -187,10 +190,7 @@ def lower_lua_return(
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=val_reg), node=node)
 
 

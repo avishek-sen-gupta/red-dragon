@@ -147,18 +147,6 @@ def lower_close(
         logger.info("CLOSE %s", filename)
 
 
-def _status_const_reg(ctx: EmitContext, code: str) -> Register:
-    """Emit a COBOL file-status literal as a STRING constant.
-
-    __cobol_io_status returns the 2-char status as a Python string (e.g. "10").
-    A bare const like "10" is parsed by the VM as the integer 10 (see
-    interpreter.vm.vm._parse_const), so ``status == "10"`` would compare String
-    vs Int and never match. Quoting forces the literal to stay a string, exactly
-    as COBOL alphanumeric literals are emitted. (red-dragon-m0oa.7)
-    """
-    return ctx.const_to_reg(f'"{code}"')
-
-
 def lower_read(
     ctx: EmitContext,
     stmt: ReadStatement,
@@ -229,7 +217,7 @@ def lower_read(
         at_end_lbl = ctx.fresh_label("read_at_end")
         ok_lbl = ctx.fresh_label("read_ok")
         cond_reg = ctx.fresh_reg()
-        ten_reg = _status_const_reg(ctx, "10")
+        ten_reg = ctx.const_to_reg("10")
         ctx.emit_inst(
             Binop(
                 result_reg=cond_reg,
@@ -252,7 +240,7 @@ def lower_read(
         inv_lbl = ctx.fresh_label("read_inv_key")
         not_inv_lbl = ctx.fresh_label("read_not_inv")
         cond_reg = ctx.fresh_reg()
-        twenty_three_reg = _status_const_reg(ctx, "23")
+        twenty_three_reg = ctx.const_to_reg("23")
         ctx.emit_inst(
             Binop(
                 result_reg=cond_reg,
@@ -291,7 +279,7 @@ def _emit_invalid_key_branch(
     inv_lbl = ctx.fresh_label("inv_key")
     not_inv_lbl = ctx.fresh_label("not_inv_key")
     cond_reg = ctx.fresh_reg()
-    twenty_three_reg = _status_const_reg(ctx, "23")
+    twenty_three_reg = ctx.const_to_reg("23")
     ctx.emit_inst(
         Binop(
             result_reg=cond_reg,

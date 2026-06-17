@@ -10,6 +10,10 @@ from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
+from interpreter.frontends.common.expressions import (
+    lower_string_literal,
+    lower_int_literal,
+)
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.operator_kind import resolve_binop
 from interpreter.var_name import VarName
@@ -110,7 +114,7 @@ def lower_for_in(
     )
 
     init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(Const.int_(init_idx, 0))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -156,7 +160,7 @@ def lower_for_in(
 
     ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -191,7 +195,7 @@ def lower_for_of(
     )
 
     init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(Const.int_(init_idx, 0))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -237,7 +241,7 @@ def lower_for_of(
 
     ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(

@@ -75,7 +75,8 @@ class TestCppFunctions:
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        # After typed-Const migration: integer value stored as Python int, not string
+        assert any(42 in inst.operands for inst in consts)
 
 
 class TestCppControlFlow:
@@ -123,10 +124,11 @@ class TestCppControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        # After typed-Const migration: integer values stored as Python int, not string
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -213,13 +215,60 @@ class TestCppSpecial:
     def test_string_literal(self):
         instructions = _parse_cpp('int main() { const char* s = "hello"; }')
         consts = _find_all(instructions, Opcode.CONST)
-        assert any('"hello"' in inst.operands for inst in consts)
+        # After typed-Const migration: string value stored WITHOUT surrounding quotes
+        assert any("hello" in inst.operands for inst in consts)
 
     @covers(CppFeature.BINARY_EXPRESSION)
     def test_binary_expression(self):
         instructions = _parse_cpp("int main() { int z = x + y; }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
+
+    @covers(CppFeature.STRING_LITERAL)
+    def test_raw_string_literal(self):
+        """R"(content)" raw string → content verbatim, no escape processing."""
+        instructions = _parse_cpp(r'int main() { const char* s = R"(hello\nworld)"; }')
+        consts = _find_all(instructions, Opcode.CONST)
+        # Raw string content is literal — backslash-n is two chars, not newline
+        assert any(r"hello\nworld" in inst.operands for inst in consts)
+
+    @covers(CppFeature.NUMBER_LITERAL)
+    def test_int_literal_hex(self):
+        """Hex integer literals parsed correctly."""
+        instructions = _parse_cpp("int main() { int x = 0xFF; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(255 in inst.operands for inst in consts)
+
+    @covers(CppFeature.NUMBER_LITERAL)
+    def test_int_literal_with_suffix(self):
+        """C++ integer suffixes (u/l/ll) are stripped."""
+        instructions = _parse_cpp("int main() { unsigned long long x = 42ULL; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(42 in inst.operands for inst in consts)
+
+    @covers(CppFeature.NUMBER_LITERAL)
+    def test_int_literal_digit_separator(self):
+        """C++14 apostrophe digit separators are stripped."""
+        instructions = _parse_cpp("int main() { int x = 1'000'000; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(1000000 in inst.operands for inst in consts)
+
+    @covers(CppFeature.NUMBER_LITERAL)
+    def test_float_literal_with_suffix(self):
+        """Float suffix f is stripped."""
+        instructions = _parse_cpp("int main() { float x = 3.14f; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        float_vals = [
+            op for inst in consts for op in inst.operands if isinstance(op, float)
+        ]
+        assert any(abs(v - 3.14) < 0.001 for v in float_vals)
+
+    @covers(CppFeature.NULLPTR)
+    def test_nullptr_is_null(self):
+        """nullptr lowers to Const.null_."""
+        instructions = _parse_cpp("int main() { int* p = nullptr; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(inst.operands == [None] for inst in consts)
 
 
 def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
@@ -448,9 +497,11 @@ class TestCppDeleteExpression:
 class TestCppCharLiteral:
     @covers(CppFeature.CHAR_LITERAL)
     def test_char_literal_produces_const(self):
+        # After typed-Const migration: char → int ordinal (Const.int_)
         instructions = _parse_cpp("int main() { char c = 'A'; }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("'A'" in str(inst.operands) for inst in consts)
+        # 'A' = ord 65
+        assert any(65 in inst.operands for inst in consts)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("char_literal" in str(inst.operands) for inst in symbolics)
 
@@ -460,6 +511,14 @@ class TestCppCharLiteral:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("char_literal" in str(inst.operands) for inst in symbolics)
         assert not any("character_literal" in str(inst.operands) for inst in symbolics)
+
+    @covers(CppFeature.CHAR_LITERAL)
+    def test_char_literal_to_int_ord(self):
+        """char literals are lowered to their integer ordinal (Const.int_), not strings."""
+        instructions = _parse_cpp("int main() { char c = 'x'; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        # 'x' = ord 120
+        assert any(120 in inst.operands for inst in consts)
 
 
 class TestCppEnumSpecifier:

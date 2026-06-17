@@ -36,12 +36,30 @@ from interpreter.instructions import (
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     extract_call_args,
-    lower_const_literal,
+    lower_canonical_none,
+    lower_default_return,
+    lower_int_literal,
+    lower_float_literal,
+    lower_string_literal,
     lower_interpolated_string_parts,
 )
 from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
+
+
+def lower_ruby_symbol(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a Ruby symbol literal (:foo, :"foo", %i[a b]) as a colon-prefixed string.
+
+    Symbols are represented throughout the IR as colon-prefixed strings
+    (e.g. ``:foo`` → ``":foo"``).  The leading colon is preserved — it is NOT
+    stripped.  For simple_symbol / hash_key_symbol the node text is used
+    directly (tree-sitter includes the colon).  For delimited_symbol
+    (``:"foo with spaces"``) the text is used as-is.
+    """
+    return lower_string_literal(ctx, node, ctx.node_text(node))
 
 
 def lower_scope_resolution(
@@ -94,16 +112,21 @@ def lower_ruby_string(
     """Lower Ruby string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
     has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
-        return lower_const_literal(ctx, node)
+        # Concatenate ALL STRING_CONTENT children (already unquoted). tree-sitter
+        # splits a single literal into multiple fragments around a '#' that does
+        # not begin a valid interpolation (e.g. "...#$(..." or "...#@..."), so
+        # taking only the first fragment would silently truncate the string.
+        value = "".join(
+            ctx.node_text(c)
+            for c in node.children
+            if c.type == RubyNodeType.STRING_CONTENT
+        )
+        return lower_string_literal(ctx, node, value)
 
     parts: list[str] = []
     for child in node.children:
         if child.type == RubyNodeType.STRING_CONTENT:
-            frag_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
-            )
-            parts.append(frag_reg)
+            parts.append(lower_string_literal(ctx, child, ctx.node_text(child)))
         elif child.type == RubyNodeType.INTERPOLATION:
             named = [c for c in child.children if c.is_named]
             if named:
@@ -118,16 +141,18 @@ def lower_ruby_heredoc_body(
     """Lower Ruby heredoc body, decomposing interpolation like lower_ruby_string."""
     has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
-        return lower_const_literal(ctx, node)
+        # Collect all HEREDOC_CONTENT fragments as a single string
+        content = "".join(
+            ctx.node_text(c)
+            for c in node.children
+            if c.type == RubyNodeType.HEREDOC_CONTENT
+        )
+        return lower_string_literal(ctx, node, content)
 
     parts: list[str] = []
     for child in node.children:
         if child.type == RubyNodeType.HEREDOC_CONTENT:
-            frag_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
-            )
-            parts.append(frag_reg)
+            parts.append(lower_string_literal(ctx, child, ctx.node_text(child)))
         elif child.type == RubyNodeType.INTERPOLATION:
             named = [c for c in child.children if c.is_named]
             if named:
@@ -231,9 +256,7 @@ def lower_ruby_argument_list(
     named = [c for c in node.children if c.is_named]
     if named:
         return ctx.lower_expr(named[0])
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.default_return_value))
-    return reg
+    return lower_default_return(ctx, node, ctx.constants.default_return_value)
 
 
 def lower_ruby_hash(
@@ -331,8 +354,7 @@ def lower_ruby_lambda(
             ):
                 ctx.lower_stmt(child)
 
-    nil_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=nil_reg, value=ctx.constants.default_return_value))
+    nil_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=nil_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -359,7 +381,7 @@ def lower_ruby_word_array(
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(Const.int_(size_reg, len(elems)))
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg, type_hint=scalar(TypeName("list")), size_reg=size_reg
@@ -367,10 +389,9 @@ def lower_ruby_word_array(
         node=node,
     )
     for i, elem in enumerate(elems):
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.node_text(elem)))
+        val_reg = lower_string_literal(ctx, elem, ctx.node_text(elem))
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
@@ -381,7 +402,11 @@ def lower_element_reference(
     """Lower `arr[idx]` as LOAD_INDEX, `arr[1..3]` as CALL_FUNCTION('slice')."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Symbolic(result_reg=reg, hint="empty_element_reference"), node=node
+        )
+        return reg
     obj_reg = ctx.lower_expr(named_children[0])
     if len(named_children) > 1 and named_children[1].type == RubyNodeType.RANGE:
         return _lower_range_slice(ctx, named_children[1], obj_reg)
@@ -483,9 +508,24 @@ def _lower_positional_slice(
 
 
 def _make_const(ctx: TreeSitterEmitContext, value: str) -> Register:
-    """Emit a CONST and return the register."""
+    """Emit a typed CONST and return the register.
+
+    Handles "None" → Const.null_, integer strings → Const.int_,
+    all other strings → Const.string.
+    """
+    from interpreter.constants import CanonicalLiteral
+
+    if value == CanonicalLiteral.NONE:
+        return lower_canonical_none(ctx, None)
+    try:
+        int_val = int(value)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Const.int_(reg, int_val))
+        return reg
+    except (ValueError, TypeError):
+        pass
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=value))
+    ctx.emit_inst(Const.string(reg, value))
     return reg
 
 
@@ -573,7 +613,9 @@ def lower_ruby_pattern(
     named_children = [c for c in node.children if c.is_named]
     if named_children:
         return ctx.lower_expr(named_children[0])
-    return lower_const_literal(ctx, node)
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Symbolic(result_reg=reg, hint="empty_pattern"), node=node)
+    return reg
 
 
 # ── Ruby block as inline closure ─────────────────────────────────────
@@ -629,14 +671,13 @@ def lower_ruby_block(
             ):
                 ctx.lower_stmt(child)
 
-    nil_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=nil_reg, value=ctx.constants.default_return_value))
+    nil_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=nil_reg))
 
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=ref_reg, value=f"func:{block_label}"), node=node)
+    ctx.emit_func_ref(str(block_label), block_label, result_reg=ref_reg, node=node)
     return ref_reg
 
 

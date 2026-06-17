@@ -81,9 +81,9 @@ class CFrontend(BaseFrontend):
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             CNodeType.IDENTIFIER: common_expr.lower_identifier,
-            CNodeType.NUMBER_LITERAL: common_expr.lower_const_literal,
-            CNodeType.STRING_LITERAL: common_expr.lower_const_literal,
-            CNodeType.CHAR_LITERAL: common_expr.lower_const_literal,
+            CNodeType.NUMBER_LITERAL: c_expr.lower_c_number_literal,
+            CNodeType.STRING_LITERAL: c_expr.lower_c_string_literal,
+            CNodeType.CHAR_LITERAL: c_expr.lower_c_char_literal,
             CNodeType.TRUE: common_expr.lower_canonical_true,
             CNodeType.FALSE: common_expr.lower_canonical_false,
             CNodeType.NULL: common_expr.lower_canonical_none,
@@ -100,10 +100,10 @@ class CFrontend(BaseFrontend):
             CNodeType.SIZEOF_EXPRESSION: c_expr.lower_sizeof,
             CNodeType.CONDITIONAL_EXPRESSION: c_expr.lower_ternary,
             CNodeType.COMMA_EXPRESSION: c_expr.lower_comma_expr,
-            CNodeType.CONCATENATED_STRING: common_expr.lower_const_literal,
+            CNodeType.CONCATENATED_STRING: c_expr.lower_c_concatenated_string,
             CNodeType.TYPE_IDENTIFIER: common_expr.lower_identifier,
             CNodeType.COMPOUND_LITERAL_EXPRESSION: c_expr.lower_compound_literal,
-            CNodeType.PREPROC_ARG: common_expr.lower_const_literal,
+            CNodeType.PREPROC_ARG: c_expr.lower_c_preproc_arg,
             CNodeType.INITIALIZER_LIST: c_expr.lower_initializer_list,
             CNodeType.INITIALIZER_PAIR: c_expr.lower_initializer_pair,
         }
