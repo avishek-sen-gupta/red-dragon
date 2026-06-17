@@ -31,10 +31,10 @@ from interpreter.frontends.java.node_types import JavaNodeType
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
+    emit_implicit_return,
     emit_synthetic_init,
 )
 from interpreter.frontends.common.expressions import (
-    lower_default_return,
     lower_null_literal,
     lower_string_literal,
 )
@@ -130,8 +130,7 @@ def lower_method_decl(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -432,7 +431,7 @@ def _emit_record_init(
 
     none_reg = ctx.fresh_reg()
     ctx.emit_inst(Const.null_(none_reg))
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Return_(value_reg=none_reg, implicit=True))
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -465,8 +464,7 @@ def _lower_constructor_decl(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
