@@ -91,7 +91,7 @@ class TestKotlinFunctions:
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)  # typed int literal
 
 
 class TestKotlinControlFlow:
@@ -139,10 +139,10 @@ class TestKotlinControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"  # typed int literal
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -202,13 +202,15 @@ class TestKotlinExpressions:
     def test_string_literal(self):
         instructions = _parse_kotlin('fun main() { val s = "hello" }')
         consts = _find_all(instructions, Opcode.CONST)
-        assert any('"hello"' in inst.operands for inst in consts)
+        # Typed Const.string stores the unquoted value
+        assert any("hello" in inst.operands for inst in consts)
 
     @covers(KotlinFeature.NULL_LITERAL)
     def test_null_literal(self):
         instructions = _parse_kotlin("fun main() { val n = null }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("None" in inst.operands for inst in consts)
+        # Typed Const.null_ stores Python None
+        assert any(None in inst.operands for inst in consts)
 
 
 class TestKotlinSpecial:
@@ -521,7 +523,7 @@ class MyClass {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("MyClass" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)  # typed int literal
 
     @covers(KotlinFeature.COMPANION_OBJECT)
     def test_companion_with_method(self):
@@ -626,7 +628,8 @@ class TestKotlinHexLiteral:
     def test_hex_literal_basic(self):
         instructions = _parse_kotlin("fun main() { val x = 0xFF }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("0xFF" in inst.operands for inst in consts)
+        # Hex literals lower to their integer value (typed Const.int_)
+        assert any(255 in inst.operands for inst in consts)  # 0xFF == 255
 
     @covers(KotlinFeature.HEX_LITERAL)
     def test_hex_literal_not_symbolic(self):
@@ -638,7 +641,8 @@ class TestKotlinHexLiteral:
     def test_hex_literal_in_expression(self):
         instructions = _parse_kotlin("fun main() { val x = 0xFF + 1 }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("0xFF" in inst.operands for inst in consts)
+        # Hex literals lower to their integer value (typed Const.int_)
+        assert any(255 in inst.operands for inst in consts)  # 0xFF == 255
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
@@ -902,7 +906,16 @@ class TestKotlinCharacterLiteral:
         source = "val c = 'Z'"
         instructions = _parse_kotlin(source)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("'Z'" in str(inst.operands) for inst in consts)
+        # Char literals lower to their integer ordinal value (typed Const.int_)
+        assert any(90 in inst.operands for inst in consts)  # ord('Z') == 90
+
+    @covers(KotlinFeature.CHAR_LITERAL)
+    def test_char_literal_escape_sequence(self):
+        """Char escape \\n should lower to ord(\\n) == 10 as typed Const.int_."""
+        source = r"val c = '\n'"
+        instructions = _parse_kotlin(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(10 in inst.operands for inst in consts)  # ord('\n') == 10
 
 
 class TestKotlinTypeTest:
@@ -1660,16 +1673,18 @@ class TestKotlinUnsignedLiteral:
         ir = _parse_kotlin("val x = 42u")
         consts = _find_all(ir, Opcode.CONST)
         const_values = [inst.operands[0] for inst in consts]
-        assert "42" in const_values
+        # Unsigned literals lower to their integer value (typed Const.int_)
+        assert 42 in const_values
         assert "42u" not in const_values
 
     @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_long_suffix_stripped(self):
-        """val x = 42UL should emit CONST '42', not '42UL'."""
+        """val x = 42UL should emit CONST 42 (int), not '42UL'."""
         ir = _parse_kotlin("val x = 42UL")
         consts = _find_all(ir, Opcode.CONST)
         const_values = [inst.operands[0] for inst in consts]
-        assert "42" in const_values
+        # Unsigned literals lower to their integer value (typed Const.int_)
+        assert 42 in const_values
         assert "42UL" not in const_values
 
     @covers(KotlinFeature.UNSIGNED_LITERAL)
@@ -1678,12 +1693,14 @@ class TestKotlinUnsignedLiteral:
         ir = _parse_kotlin("val x = 100uL")
         consts = _find_all(ir, Opcode.CONST)
         const_values = [inst.operands[0] for inst in consts]
-        assert "100" in const_values
+        # Unsigned literals lower to their integer value (typed Const.int_)
+        assert 100 in const_values
 
     @covers(KotlinFeature.UNSIGNED_LITERAL)
     def test_unsigned_hex_literal(self):
-        """val x = 0xFFu should emit '0xFF', not '0xFFu'."""
+        """val x = 0xFFu should emit 255 (int), not '0xFFu'."""
         ir = _parse_kotlin("val x = 0xFFu")
         consts = _find_all(ir, Opcode.CONST)
         const_values = [inst.operands[0] for inst in consts]
-        assert "0xFF" in const_values
+        # Unsigned hex literals lower to their integer value (typed Const.int_)
+        assert 255 in const_values  # 0xFF == 255
