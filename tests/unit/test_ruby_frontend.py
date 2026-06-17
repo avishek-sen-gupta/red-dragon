@@ -7,6 +7,7 @@ from interpreter.frontends.ruby.features import RubyFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.types.type_expr import FunctionType
 from tests.covers import covers
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
@@ -37,7 +38,8 @@ class TestRubySmoke:
     def test_integer_literal(self):
         instructions = _parse_ruby("42")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        # typed Const: int payload is a real Python int
+        assert any(42 in inst.operands for inst in consts)
 
 
 class TestRubyVariables:
@@ -81,7 +83,8 @@ class TestRubyExpressions:
     def test_string_literal(self):
         instructions = _parse_ruby('s = "hello world"')
         consts = _find_all(instructions, Opcode.CONST)
-        assert any('"hello world"' in inst.operands for inst in consts)
+        # typed Const.string: payload is unquoted str (no surrounding quotes)
+        assert any("hello world" in inst.operands for inst in consts)
 
 
 class TestRubyControlFlow:
@@ -497,12 +500,13 @@ end
         instructions = _parse_ruby(source)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("each" in inst.operands for inst in calls)
-        # Block is lowered as inline closure — expect RETURN and CONST with Ruby's "func:" ref
-        # (Note: Ruby uses "func:label" rather than the standard "<function:name@label>" format)
+        # Block is lowered as inline closure — expect RETURN and CONST.func_ref
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("func:" in str(inst.operands) for inst in consts)
+        assert any(
+            isinstance(inst.type_expr, FunctionType) for inst in consts
+        ), "Expected closure CONST with FunctionType (emit_func_ref)"
 
     @covers(RubyFeature.BLOCK_CURLY)
     def test_block_curly_brace(self):
@@ -511,7 +515,9 @@ end
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("map" in inst.operands for inst in calls)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("func:" in str(inst.operands) for inst in consts)
+        assert any(
+            isinstance(inst.type_expr, FunctionType) for inst in consts
+        ), "Expected closure CONST with FunctionType (emit_func_ref)"
         # Verify block body is lowered (multiplication and return)
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
@@ -538,7 +544,9 @@ end
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("times" in inst.operands for inst in calls)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("func:" in str(inst.operands) for inst in consts)
+        assert any(
+            isinstance(inst.type_expr, FunctionType) for inst in consts
+        ), "Expected closure CONST with FunctionType (emit_func_ref)"
 
     @covers(RubyFeature.BLOCK_DO_END)
     def test_block_body_lowered(self):
@@ -572,6 +580,19 @@ class TestRubySimpleSymbol:
         instructions = _parse_ruby("sym = :world")
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("sym" in inst.operands for inst in stores)
+
+    @covers(RubyFeature.SYMBOL)
+    def test_symbol_colon_preserved_in_typed_const(self):
+        """typed Const migration: symbol MUST keep leading colon — Const.string(reg, ':foo')."""
+        instructions = _parse_ruby("x = :foo")
+        consts = _find_all(instructions, Opcode.CONST)
+        # The operand must be the string ':foo' — the colon must NOT be stripped
+        symbol_consts = [inst for inst in consts if ":foo" in inst.operands]
+        assert (
+            symbol_consts
+        ), "symbol ':foo' must be stored as the string ':foo' (colon preserved)"
+        # Verify the payload is a plain Python str (typed Const.string)
+        assert isinstance(symbol_consts[0].value, str), "symbol payload must be str"
 
 
 class TestRubyRange:
@@ -934,8 +955,9 @@ class TestRubyConditional:
     def test_conditional_has_both_branches(self):
         instructions = _parse_ruby("y = cond ? 1 : 2")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("1" in inst.operands for inst in consts)
-        assert any("2" in inst.operands for inst in consts)
+        # typed Const: int payload is a real Python int
+        assert any(1 in inst.operands for inst in consts)
+        assert any(2 in inst.operands for inst in consts)
 
 
 class TestRubyUnary:
@@ -1429,11 +1451,11 @@ numbers.each do |n|
 end
 """
         instructions = _parse_ruby(source)
-        # Block with parameter should produce a closure (func: const)
+        # Block with parameter should produce a closure (CONST.func_ref)
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "func:" in str(inst.operands) for inst in consts
-        ), "Expected closure (func:)"
+            isinstance(inst.type_expr, FunctionType) for inst in consts
+        ), "Expected closure CONST with FunctionType (emit_func_ref)"
         # Should have a CALL_METHOD for 'each'
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any(
@@ -1445,11 +1467,11 @@ end
         """Block parameters in curly braces { |x| ... } should also be lowered as closures."""
         source = "result = [1, 2, 3].map { |x| x * 2 }"
         instructions = _parse_ruby(source)
-        # Block with parameter should produce a closure
+        # Block with parameter should produce a closure (CONST.func_ref)
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "func:" in str(inst.operands) for inst in consts
-        ), "Expected closure (func:)"
+            isinstance(inst.type_expr, FunctionType) for inst in consts
+        ), "Expected closure CONST with FunctionType (emit_func_ref)"
         # Should have CALL_METHOD for 'map'
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any(
