@@ -7,7 +7,7 @@ from interpreter.frontends.rust.features import RustFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_rust(source: str) -> list[InstructionBase]:
@@ -1169,3 +1169,19 @@ class TestRustRawStringHashNesting:
         assert any(
             r"\n" in str(inst.operands) for inst in consts
         ), f"Expected literal '\\n' in raw string const, got {[c.operands for c in consts]}"
+
+
+class TestRustImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        # `return;` lowers as an explicit (non-implicit) return; falling off the
+        # end of the body emits a synthetic implicit return.
+        instructions = _parse_rust("fn f() { return; }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert returns, "expected at least one RETURN instruction"
+        assert any(
+            r.implicit for r in returns
+        ), "expected a synthetic fall-off-the-end return marked implicit=True"
+        assert any(
+            not r.implicit for r in returns
+        ), "expected the explicit `return;` to remain non-implicit"
