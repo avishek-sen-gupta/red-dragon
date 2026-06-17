@@ -10,9 +10,9 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
-    lower_default_return,
     lower_null_literal,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.javascript.expressions import lower_js_params
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.frontends.type_extraction import (
@@ -317,8 +317,7 @@ def _lower_method_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -351,8 +350,7 @@ def lower_js_function_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
 
     ctx.emit_inst(Label_(label=end_label))
 
