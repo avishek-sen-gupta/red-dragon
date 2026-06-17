@@ -33,6 +33,11 @@ from interpreter.frontends.common.declarations import (
     emit_field_initializers,
     emit_synthetic_init,
 )
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+    lower_null_literal,
+    lower_string_literal,
+)
 from interpreter.types.type_expr import AnnotationType, EnumType, ScalarType, scalar
 
 
@@ -53,10 +58,7 @@ def lower_local_var_decl(
                 ctx.seed_var_type(var_name, type_hint)
             elif name_node:
                 var_name = ctx.declare_block_var(ctx.node_text(name_node))
-                val_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(result_reg=val_reg, value=ctx.constants.none_literal)
-                )
+                val_reg = lower_null_literal(ctx, node)
                 ctx.emit_inst(
                     DeclVar(name=VarName(var_name), value_reg=val_reg), node=node
                 )
@@ -128,8 +130,7 @@ def lower_method_decl(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -430,7 +431,7 @@ def _emit_record_init(
         )
 
     none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Const.null_(none_reg))
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -464,8 +465,7 @@ def _lower_constructor_decl(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -571,10 +571,9 @@ def lower_enum_decl(
                     if member_name_node
                     else ctx.node_text(child)
                 )
-                key_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=key_reg, value=member_name))
+                key_reg = lower_string_literal(ctx, child, member_name)
                 val_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=val_reg, value=str(i)))
+                ctx.emit_inst(Const.int_(val_reg, i))
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
                 )
@@ -603,10 +602,9 @@ def lower_annotation_type_decl(
                 if member_name_node
                 else ctx.node_text(child)[:40]
             )
-            key_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=key_reg, value=member_name))
+            key_reg = lower_string_literal(ctx, child, member_name)
             val_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=val_reg, value=str(i)))
+            ctx.emit_inst(Const.int_(val_reg, i))
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
             )
