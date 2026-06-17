@@ -15,7 +15,6 @@ from interpreter.class_name import ClassName
 from interpreter.register import Register
 from interpreter.instructions import (
     Branch,
-    Const,
     DeclVar,
     Label_,
     LoadVar,
@@ -33,6 +32,11 @@ from interpreter.frontends.php.node_types import PHPNodeType
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
+)
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+    lower_null_literal,
+    lower_string_literal,
 )
 from interpreter.types.type_expr import ScalarType
 
@@ -153,8 +157,7 @@ def lower_php_func_def(
     if body_node:
         lower_php_compound(ctx, body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -191,8 +194,7 @@ def lower_php_method_decl(
     if body_node:
         lower_php_compound(ctx, body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -261,8 +263,7 @@ def _emit_php_synthetic_constructor(
     _emit_this_param(ctx)
     emit_field_initializers(ctx, field_inits, this_var=constants.PARAM_PHP_THIS)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, None, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -402,10 +403,7 @@ def lower_php_function_static(
                     node=child,
                 )
             elif name_node:
-                val_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(result_reg=val_reg, value=ctx.constants.none_literal)
-                )
+                val_reg = lower_null_literal(ctx, child)
                 ctx.emit_inst(
                     DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
                     node=child,
@@ -462,8 +460,7 @@ def _lower_php_constructor_with_field_inits(
     if body_node:
         lower_php_compound(ctx, body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -532,10 +529,7 @@ def lower_php_property_declaration(
                 if value_node:
                     val_reg = ctx.lower_expr(value_node)
                 else:
-                    val_reg = ctx.fresh_reg()
-                    ctx.emit_inst(
-                        Const(result_reg=val_reg, value=ctx.constants.none_literal)
-                    )
+                    val_reg = lower_null_literal(ctx, node)
                 field_name = ctx.node_text(name_node).lstrip("$")
                 ctx.emit_inst(
                     StoreField(
@@ -583,8 +577,7 @@ def lower_php_enum_case(
         if value_node:
             val_reg = ctx.lower_expr(value_node)
         else:
-            val_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=val_reg, value=case_name))
+            val_reg = lower_string_literal(ctx, node, case_name)
         ctx.emit_inst(
             StoreField(
                 obj_reg=self_reg, field_name=FieldName(case_name), value_reg=val_reg
