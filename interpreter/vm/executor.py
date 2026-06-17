@@ -33,7 +33,6 @@ from interpreter.vm.vm import (
     _resolve_reg,
     _is_symbolic,
     _heap_addr,
-    _parse_const,
 )
 from interpreter.vm.vm_types import BuiltinResult, HeapWrite, StackFrame
 from interpreter.registry import FunctionRegistry

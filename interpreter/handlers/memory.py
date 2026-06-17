@@ -33,7 +33,6 @@ from interpreter.vm.vm import (
     _resolve_reg,
     _heap_addr,
     _is_symbolic,
-    _parse_const,
 )
 from interpreter.vm.vm_types import HeapWrite
 from interpreter.cfg import CFG
@@ -420,8 +419,10 @@ def _handle_load_field(
         symbol_table = ctx.symbol_table
         class_info = symbol_table.classes.get(ClassName(str(obj_val.name)))
         if class_info and str(field_name) in class_info.constants:
-            raw = class_info.constants[str(field_name)]
-            val = _parse_const(raw)
+            # ClassInfo.constants is dict[str, str]; the stored value is the
+            # class constant's string form. (Typed class-constant values are
+            # future work — see red-dragon-v0l2 follow-ups.)
+            val = class_info.constants[str(field_name)]
             static_tv = typed_from_runtime(val)
             logger.debug(
                 "load_field ClassRef %s.%s = %r",
