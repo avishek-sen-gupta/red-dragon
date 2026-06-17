@@ -173,6 +173,8 @@ _BUILTIN_METHOD_RETURN_TYPES: dict[str, TypeExpr] = {
 _SELF_PARAM_NAMES = constants.SELF_PARAM_NAMES
 
 _GLOBAL_SCOPE = ""
+_FUNC_FRAME = "func"
+_CLASS_FRAME = "class"
 
 
 @dataclass
@@ -185,7 +187,8 @@ class _InferenceContext:
     func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(
         default_factory=dict
     )
-    current_func_label: str = ""
+    scope_stack: list[tuple[str, object]] = field(default_factory=list)
+    # frame = (_FUNC_FRAME, func_label: str) | (_CLASS_FRAME, class_type: TypeExpr)
     current_class_name: TypeExpr = UNKNOWN
     class_method_types: dict[TypeExpr, dict[FuncName, TypeExpr]] = field(
         default_factory=dict
@@ -208,6 +211,14 @@ class _InferenceContext:
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
     _seeded_var_names: frozenset[VarName] = field(default_factory=frozenset)
     _seeded_func_return_labels: frozenset[FuncName] = field(default_factory=frozenset)
+
+    @property
+    def current_func_label(self) -> str:
+        """Label of the innermost enclosing function, or "" at top level / inside a
+        class body. Pure view over scope_stack."""
+        if self.scope_stack and self.scope_stack[-1][0] == _FUNC_FRAME:
+            return str(self.scope_stack[-1][1])
+        return ""
 
     def lookup_func_return_type(self, name: FuncName) -> TypeExpr:
         return self.func_return_types.get(name, UNKNOWN)
@@ -421,6 +432,7 @@ def infer_types(
     current_size = 0
     passes = 0
     while current_size > prev_size:
+        ctx.scope_stack.clear()
         prev_size = current_size
         for inst in instructions:
             _infer_instruction(inst, ctx, type_resolver)
@@ -484,6 +496,20 @@ def _infer_instruction(
         handler(typed, ctx, type_resolver)
 
 
+def _pop_frame(ctx: _InferenceContext, kind: str) -> None:
+    """Pop the top scope frame, asserting it is the expected kind. Well-formed IR has
+    balanced, properly nested entry/end labels, so the matching top frame is an invariant.
+    """
+    assert (
+        ctx.scope_stack
+    ), f"scope-stack underflow: end label with no open {kind} frame"
+    top_kind = ctx.scope_stack[-1][0]
+    assert (
+        top_kind == kind
+    ), f"scope-stack imbalance: end label expected top {kind} frame, got {top_kind}"
+    ctx.scope_stack.pop()
+
+
 def _infer_label(
     inst: Label_,
     ctx: _InferenceContext,
@@ -492,19 +518,26 @@ def _infer_label(
     if not inst.label.is_present():
         return
     if inst.label.is_function():
-        ctx.current_func_label = str(inst.label)
+        ctx.scope_stack.append((_FUNC_FRAME, str(inst.label)))
         ctx.func_param_types.setdefault(str(inst.label), [])
-    elif (
-        inst.label.starts_with(constants.CLASS_LABEL_PREFIX)
-        and not inst.label.is_end_class()
-    ):
-        ctx.current_class_name = scalar(
-            TypeName(inst.label.extract_name(constants.CLASS_LABEL_PREFIX))
-        )
-        ctx.class_method_types.setdefault(ctx.current_class_name, {})
-        ctx.current_func_label = ""
-    else:
-        ctx.current_func_label = ""
+    elif inst.label.is_class():
+        # Barrier so current_func_label reads "" inside a class body and restores the
+        # enclosing function afterward. Push for ANY class entry (incl. prelude /
+        # namespaced) so it stays balanced with is_end_class() pops below.
+        cls = scalar(TypeName(inst.label.extract_name(constants.CLASS_LABEL_PREFIX)))
+        ctx.scope_stack.append((_CLASS_FRAME, cls))
+        # Set the bled current_class_name field ONLY for real (non-prelude) class
+        # labels, exactly as main did via starts_with(CLASS_LABEL_PREFIX). Never reset.
+        if inst.label.starts_with(constants.CLASS_LABEL_PREFIX):
+            ctx.current_class_name = cls
+            ctx.class_method_types.setdefault(cls, {})
+    elif inst.label.is_end_class():
+        _pop_frame(
+            ctx, _CLASS_FRAME
+        )  # pop the barrier; do NOT reset current_class_name (bleed preserved)
+    elif inst.label.is_end_label():  # end_ prefix but not end_class → function end
+        _pop_frame(ctx, _FUNC_FRAME)
+    # any other label (control-flow) → no scope change
 
 
 def _infer_symbolic(
