@@ -8,6 +8,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter import constants
+from interpreter.frontends.common.expressions import lower_default_return
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -101,8 +102,7 @@ def lower_go_func_decl(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -154,8 +154,7 @@ def lower_go_method_decl(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -287,8 +286,9 @@ def _lower_go_interface_method(ctx: TreeSitterEmitContext, method_node) -> None:
     ctx.emit_inst(Label_(label=func_label))
     ctx.seed_func_return_type(func_label, return_hint)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(
+        ctx, method_node, ctx.constants.default_return_value
+    )
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -351,7 +351,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
         for name_node in names[len(val_regs) :]:
             name_str = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+            ctx.emit_inst(Const.null_(val_reg))
             ctx.emit_inst(
                 DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node
             )
@@ -360,7 +360,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
         for name_node in names:
             name_str = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+            ctx.emit_inst(Const.null_(val_reg))
             ctx.emit_inst(
                 DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node
             )
@@ -429,7 +429,7 @@ def _lower_const_spec(
         )
     elif name_node:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(val_reg))
         ctx.emit_inst(
             DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
             node=node,
