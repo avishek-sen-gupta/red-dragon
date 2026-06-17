@@ -13,6 +13,12 @@ from typing import Any, Callable
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.context import GrammarConstants
 from interpreter.frontends.common import expressions as common_expr
+from interpreter.frontends.common.expressions import (
+    lower_null_literal,
+    lower_string_literal,
+    lower_int_literal,
+    lower_default_return,
+)
 from interpreter.frontends.typescript.type_alias_extractor import (
     TypeScriptTypeAliasExtractor,
 )
@@ -109,7 +115,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
         dispatch.update(
             {
                 TypeScriptNodeType.TYPE_IDENTIFIER: common_expr.lower_identifier,
-                TypeScriptNodeType.PREDEFINED_TYPE: common_expr.lower_const_literal,
+                TypeScriptNodeType.PREDEFINED_TYPE: _lower_ts_predefined_type,
                 TypeScriptNodeType.AS_EXPRESSION: lower_as_expression,
                 TypeScriptNodeType.NON_NULL_EXPRESSION: lower_non_null_expr,
                 TypeScriptNodeType.SATISFIES_EXPRESSION: lower_satisfies_expr,
@@ -159,6 +165,14 @@ class TypeScriptFrontend(JavaScriptFrontend):
 # ── TS-specific expression lowerers (pure functions) ─────────────
 
 
+def _lower_ts_predefined_type(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a TypeScript predefined_type keyword (number, string, boolean, etc.)
+    as a typed string CONST containing the keyword text."""
+    return lower_string_literal(ctx, node, ctx.node_text(node))
+
+
 def lower_as_expression(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
@@ -166,7 +180,7 @@ def lower_as_expression(
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[0])
-    return common_expr.lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_non_null_expr(
@@ -176,7 +190,7 @@ def lower_non_null_expr(
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[0])
-    return common_expr.lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_satisfies_expr(
@@ -185,7 +199,7 @@ def lower_satisfies_expr(
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[0])
-    return common_expr.lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_instantiation_expr(
@@ -198,7 +212,7 @@ def lower_instantiation_expr(
     )
     if func_node:
         return ctx.lower_expr(func_node)
-    return common_expr.lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_type_assertion(
@@ -211,7 +225,7 @@ def lower_type_assertion(
         return ctx.lower_expr(children[-1])
     if children:
         return ctx.lower_expr(children[0])
-    return common_expr.lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 # ── TS-specific statement lowerers (pure functions) ──────────────
@@ -274,8 +288,7 @@ def _lower_ts_interface_method(
     ctx.emit_inst(Label_(label=func_label))
     ctx.seed_func_return_type(func_label, return_hint)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -296,8 +309,7 @@ def _lower_ts_interface_property(
     prop_name = ctx.node_text(name_node) if name_node else "__unknown_prop"
     raw_type = extract_type_from_field(ctx, node, "type")
     type_hint = normalize_type_hint(raw_type.lstrip(": "), ctx.type_map)
-    val_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+    val_reg = lower_null_literal(ctx, node)
     ctx.emit_inst(DeclVar(name=VarName(prop_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(prop_name, type_hint)
 
@@ -317,10 +329,9 @@ def lower_enum_decl(
         if body_node:
             for i, child in enumerate(c for c in body_node.children if c.is_named):
                 member_name = ctx.node_text(child).split("=")[0].strip()
-                key_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=key_reg, value=member_name))
+                key_reg = lower_string_literal(ctx, child, member_name)
                 val_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=val_reg, value=str(i)))
+                ctx.emit_inst(Const.int_(val_reg, i))
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
                 )
@@ -348,8 +359,7 @@ def lower_ts_field_definition(
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        val_reg = lower_null_literal(ctx, node)
     ctx.emit_inst(DeclVar(name=VarName(field_name), value_reg=val_reg), node=node)
 
 
@@ -478,8 +488,7 @@ def _lower_ts_method_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -500,8 +509,7 @@ def lower_ts_abstract_method(
     ctx.emit_inst(Branch(label=end_label), node=node)
     ctx.emit_inst(Label_(label=func_label))
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -647,8 +655,7 @@ def lower_ts_arrow_function(
             val_reg = ctx.lower_expr(body_node)
             ctx.emit_inst(Return_(value_reg=val_reg))
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -678,8 +685,7 @@ def lower_ts_function_expression(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -713,8 +719,7 @@ def lower_ts_function_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -926,7 +931,7 @@ def _lower_import_require_clause(
         # Extract string content (without quotes)
         raw = ctx.node_text(string_node)
         module_path = raw.strip("'\"")
-        ctx.emit_inst(Const(result_reg=arg_reg, value=module_path), node=parent)
+        ctx.emit_inst(Const.string(arg_reg, module_path), node=parent)
     # Emit CALL_FUNCTION require
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(

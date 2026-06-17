@@ -9,6 +9,10 @@ from typing import Any
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter import constants
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+    lower_null_literal,
+)
 from interpreter.frontends.javascript.expressions import lower_js_params
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.frontends.type_extraction import (
@@ -58,8 +62,7 @@ def lower_js_var_declaration(
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
         else:
             var_name = ctx.declare_block_var(ctx.node_text(name_node))
-            val_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+            val_reg = lower_null_literal(ctx, node)
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
 
 
@@ -128,10 +131,10 @@ def _lower_object_destructure(
 
 
 def _const_reg(ctx: TreeSitterEmitContext, value: str) -> str:
-    """Emit a CONST and return the register holding the value."""
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=value))
-    return reg
+    """Emit a string CONST and return the register holding the value."""
+    from interpreter.frontends.common.expressions import lower_string_literal
+
+    return lower_string_literal(ctx, None, value)  # type: ignore[arg-type]
 
 
 def _extract_rest_name(child) -> str | None:
@@ -152,7 +155,7 @@ def _lower_array_destructure(
         if rest_name is not None:
             # ...rest — slice from index i onward
             start_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=start_reg, value=str(i)))
+            ctx.emit_inst(Const.int_(start_reg, i))
             rest_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
@@ -167,7 +170,7 @@ def _lower_array_destructure(
             )
         else:
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            ctx.emit_inst(Const.int_(idx_reg, i))
             elem_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
@@ -314,8 +317,7 @@ def _lower_method_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -349,8 +351,7 @@ def lower_js_function_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
 
     ctx.emit_inst(Label_(label=end_label))
