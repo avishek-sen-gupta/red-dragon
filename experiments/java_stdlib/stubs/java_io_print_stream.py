@@ -14,6 +14,7 @@ from interpreter.instructions import (
     Symbolic,
 )
 from interpreter.ir import CodeLabel
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -31,7 +32,7 @@ PRINT_STREAM_IR = (
     Branch(label=CodeLabel(_END_CLS)),
     Label_(label=CodeLabel(_CLS)),
     Label_(label=CodeLabel(_END_CLS)),
-    Const(result_reg=Register("%0"), value=_CLS),
+    Const.class_ref(Register("%0"), _CLS, class_type=UNKNOWN),
     DeclVar(name=VarName("PrintStream"), value_reg=Register("%0")),
     # ── println(this, msg) → println(msg) ────────────────────────────────────
     Branch(label=CodeLabel(_PRINTLN_END)),
@@ -46,10 +47,10 @@ PRINT_STREAM_IR = (
         func_name=FuncName("println"),
         args=(Register("%3"),),
     ),
-    Const(result_reg=Register("%5"), value="None"),
+    Const.null_(Register("%5")),
     Return_(value_reg=Register("%5")),
     Label_(label=CodeLabel(_PRINTLN_END)),
-    Const(result_reg=Register("%6"), value=_PRINTLN_F),
+    Const.func_ref(Register("%6"), _PRINTLN_F),
     DeclVar(name=VarName("println"), value_reg=Register("%6")),
     # ── print(this, msg) → print(msg) ─────────────────────────────────────────
     Branch(label=CodeLabel(_PRINT_END)),
@@ -64,10 +65,10 @@ PRINT_STREAM_IR = (
         func_name=FuncName("print"),
         args=(Register("%9"),),
     ),
-    Const(result_reg=Register("%11"), value="None"),
+    Const.null_(Register("%11")),
     Return_(value_reg=Register("%11")),
     Label_(label=CodeLabel(_PRINT_END)),
-    Const(result_reg=Register("%12"), value=_PRINT_F),
+    Const.func_ref(Register("%12"), _PRINT_F),
     DeclVar(name=VarName("print"), value_reg=Register("%12")),
 )
 

@@ -65,7 +65,7 @@ class TestJavaVariables:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("None" in inst.operands for inst in consts)
+        assert any(None in inst.operands for inst in consts)
 
     @covers(JavaFeature.ASSIGNMENT)
     def test_assignment_expression(self):
@@ -131,9 +131,9 @@ class TestJavaMethodCalls:
         instructions = _parse_java('class M { void m() { Dog d = new Dog("Rex"); } }')
         calls = _find_all(instructions, Opcode.CALL_CTOR)
         assert any("Dog" in inst.operands for inst in calls)
-        # Constructor argument "Rex" should be loaded as a CONST
+        # Constructor argument "Rex" should be loaded as a typed string CONST
         consts = _find_all(instructions, Opcode.CONST)
-        assert any('"Rex"' in str(inst.operands) for inst in consts)
+        assert any("Rex" in str(inst.operands) for inst in consts)
         # Result stored in variable d
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("d" in inst.operands for inst in stores)
@@ -293,10 +293,10 @@ class TestJavaControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -634,74 +634,68 @@ class TestJavaArrayCreation:
 
 
 class TestJavaIntegerLiterals:
-    """Hex, octal, and binary integer literals must be lowered to decimal strings."""
+    """Hex, octal, and binary integer literals must be lowered to typed int Const."""
 
     @covers(JavaFeature.INTEGER_LITERALS)
     @covers(JavaFeature.HEX_INTEGER_LITERAL)
     def test_hex_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0x7f; } }")
         consts = _find_all(instructions, Opcode.CONST)
-        hex_const = [c for c in consts if c.value == "127"]
-        assert (
-            hex_const
-        ), f"Expected CONST '127', got values: {[c.value for c in consts]}"
+        hex_const = [c for c in consts if c.value == 127]
+        assert hex_const, f"Expected CONST 127, got values: {[c.value for c in consts]}"
 
     @covers(JavaFeature.INTEGER_LITERALS)
     @covers(JavaFeature.HEX_INTEGER_LITERAL)
     def test_hex_literal_with_long_suffix(self):
         instructions = _parse_java("class M { void m() { long x = 0x7fffffffL; } }")
         consts = _find_all(instructions, Opcode.CONST)
-        hex_const = [c for c in consts if c.value == "2147483647"]
+        hex_const = [c for c in consts if c.value == 2147483647]
         assert (
             hex_const
-        ), f"Expected CONST '2147483647', got values: {[c.value for c in consts]}"
+        ), f"Expected CONST 2147483647, got values: {[c.value for c in consts]}"
 
     @covers(JavaFeature.INTEGER_LITERALS)
     @covers(JavaFeature.OCTAL_INTEGER_LITERAL)
     def test_octal_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0777; } }")
         consts = _find_all(instructions, Opcode.CONST)
-        oct_const = [c for c in consts if c.value == "511"]
-        assert (
-            oct_const
-        ), f"Expected CONST '511', got values: {[c.value for c in consts]}"
+        oct_const = [c for c in consts if c.value == 511]
+        assert oct_const, f"Expected CONST 511, got values: {[c.value for c in consts]}"
 
     @covers(JavaFeature.INTEGER_LITERALS)
     @covers(JavaFeature.BINARY_INTEGER_LITERAL)
     def test_binary_literal(self):
         instructions = _parse_java("class M { void m() { int x = 0b1010; } }")
         consts = _find_all(instructions, Opcode.CONST)
-        bin_const = [c for c in consts if c.value == "10"]
-        assert (
-            bin_const
-        ), f"Expected CONST '10', got values: {[c.value for c in consts]}"
+        bin_const = [c for c in consts if c.value == 10]
+        assert bin_const, f"Expected CONST 10, got values: {[c.value for c in consts]}"
 
     @covers(JavaFeature.INTEGER_LITERALS)
     def test_decimal_literal_unchanged(self):
         instructions = _parse_java("class M { void m() { int x = 42; } }")
         consts = _find_all(instructions, Opcode.CONST)
-        dec_const = [c for c in consts if c.value == "42"]
+        dec_const = [c for c in consts if c.value == 42]
         assert dec_const
 
 
 class TestJavaCharacterLiterals:
-    """Character literals must be lowered to a CONST with their integer ordinal value."""
+    """Character literals must be lowered to a typed int Const with their integer ordinal value."""
 
     @covers(JavaFeature.CHARACTER_LITERAL)
     def test_plain_char_literal(self):
         instructions = _parse_java("class M { void m() { char c = 'a'; } }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            inst.value == "97" for inst in consts
-        ), f"Expected CONST '97' (ord('a')), got: {[i.value for i in consts]}"
+            inst.value == 97 for inst in consts
+        ), f"Expected CONST 97 (ord('a')), got: {[i.value for i in consts]}"
 
     @covers(JavaFeature.CHARACTER_LITERAL)
     def test_escape_char_literal(self):
         instructions = _parse_java(r"class M { void m() { char c = '\n'; } }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            inst.value == "10" for inst in consts
-        ), f"Expected CONST '10' (ord('\\n')), got: {[i.value for i in consts]}"
+            inst.value == 10 for inst in consts
+        ), f"Expected CONST 10 (ord('\\n')), got: {[i.value for i in consts]}"
 
     @covers(JavaFeature.CHARACTER_LITERAL)
     def test_char_literal_no_symbolic_fallback(self):
@@ -717,12 +711,12 @@ class TestJavaParenthesizedExpression:
 
     @covers(JavaFeature.PARENTHESIZED_EXPRESSION)
     def test_parenthesized_literal_emits_const(self):
-        """(42) should produce a CONST with value '42'."""
+        """(42) should produce a CONST with integer value 42."""
         instructions = _parse_java("class M { void m() { int x = (42); } }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            c.value == "42" for c in consts
-        ), f"Expected CONST '42', got: {[c.value for c in consts]}"
+            c.value == 42 for c in consts
+        ), f"Expected CONST 42, got: {[c.value for c in consts]}"
 
     @covers(JavaFeature.PARENTHESIZED_EXPRESSION)
     def test_parenthesized_binop_emits_binop(self):
@@ -818,12 +812,12 @@ class TestJavaConstantDeclaration:
 
     @covers(JavaFeature.CONSTANT_DECLARATION)
     def test_interface_constant_initializer_is_loaded(self):
-        """The initializer value (100) must appear as a CONST before the DECL_VAR."""
+        """The initializer value (100) must appear as a typed int CONST before the DECL_VAR."""
         instructions = _parse_java("interface Limits { int MAX = 100; }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            c.value == "100" for c in consts
-        ), f"Expected CONST '100', got: {[c.value for c in consts]}"
+            c.value == 100 for c in consts
+        ), f"Expected CONST 100, got: {[c.value for c in consts]}"
 
     @covers(JavaFeature.CONSTANT_DECLARATION)
     def test_static_final_field_emits_decl_var(self):
@@ -1387,7 +1381,7 @@ class TestJavaHexFloatingPointLiteral:
         # Verify the actual numeric value, not just string repr
         const_values = [inst.operands[0] for inst in consts]
         assert any(
-            v == 1024.0 or v == "1024.0" for v in const_values
+            v == 1024.0 for v in const_values
         ), f"expected CONST 1024.0, got values: {const_values}"
 
     @covers(JavaFeature.HEX_FLOAT_LITERAL)
