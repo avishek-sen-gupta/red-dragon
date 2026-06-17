@@ -11,6 +11,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter import constants
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.control_flow import lower_pascal_block
+from interpreter.frontends.common.expressions import lower_default_return
 from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
@@ -158,7 +159,7 @@ def lower_pascal_decl_var(
     array_size, elem_type = _pascal_array_info(ctx, type_node) if type_node else (0, "")
     if array_size > 0:
         size_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=size_reg, value=str(array_size)))
+        ctx.emit_inst(Const.int_(size_reg, array_size))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
             NewArray(
@@ -188,7 +189,7 @@ def lower_pascal_decl_var(
                 node=node,
             )
         else:
-            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+            ctx.emit_inst(Const.null_(val_reg))
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
         ctx.seed_var_type(var_name, type_hint)
         pascal_var_types: dict = getattr(ctx, "_pascal_var_types", {})
@@ -207,7 +208,7 @@ def _populate_array_with_records(
     """Pre-populate each slot of *arr_reg* with a fresh record instance."""
     for i in range(size):
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         obj_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(result_reg=obj_reg, func_name=FuncName(record_type), args=()),
@@ -343,10 +344,7 @@ def lower_pascal_proc(
         ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName("Result")))
         ctx.emit_inst(Return_(value_reg=result_reg))
     else:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
         ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -459,10 +457,10 @@ def lower_pascal_decl_const(
         )
         val_reg = ctx.lower_expr(inner) if inner else ctx.fresh_reg()
         if inner is None:
-            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+            ctx.emit_inst(Const.null_(val_reg))
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(val_reg))
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
 
 
@@ -570,15 +568,14 @@ def _emit_synthetic_init_for_fields(
 
     for fname in field_names:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(val_reg))
         this_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
         ctx.emit_inst(
             StoreField(obj_reg=this_reg, field_name=FieldName(fname), value_reg=val_reg)
         )
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, None, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -636,8 +633,7 @@ def _lower_pascal_method(
         _lower_pascal_params(ctx, args_node)
 
     # Forward declarations have no body -- emit default return
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -789,8 +785,7 @@ def _emit_property_setter(
             )
         )
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, None, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -823,13 +818,13 @@ def _lower_pascal_enum(
         )
         member_name = ctx.node_text(member_id) if member_id else ctx.node_text(member)
         key_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=key_reg, value=member_name))
+        ctx.emit_inst(Const.string(key_reg, member_name))
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=i))
+        ctx.emit_inst(Const.int_(val_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg))
         # Declare each member as a top-level variable with ordinal value
         ord_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=ord_reg, value=i))
+        ctx.emit_inst(Const.int_(ord_reg, i))
         ctx.emit_inst(DeclVar(name=VarName(member_name), value_reg=ord_reg))
     ctx.emit_inst(DeclVar(name=VarName(type_name), value_reg=obj_reg))
 

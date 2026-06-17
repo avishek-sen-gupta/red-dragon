@@ -8,7 +8,12 @@ from typing import Any
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.common.expressions import (
+    lower_int_literal,
+    lower_float_literal,
+    lower_string_literal,
+    lower_null_literal,
+)
 from interpreter.frontends.common.property_accessors import emit_field_load_or_getter
 from interpreter.frontends.pascal.pascal_constants import (
     K_OPERATOR_MAP,
@@ -38,13 +43,89 @@ from interpreter.instructions import (
 logger = logging.getLogger(__name__)
 
 
+def lower_pascal_number_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Pascal literalNumber to a typed int or float CONST.
+
+    Handles:
+    - ``$FF`` / ``$1A`` — Pascal hex prefix, converted via ``int(text[1:], 16)``.
+    - Decimal integers and float literals (delegates to common helpers).
+    """
+    text = ctx.node_text(node)
+    if text.startswith("$"):
+        # Pascal hex literal: $FF -> 255
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Const.int_(reg, int(text[1:], 16)), node=node)
+        return reg
+    if "." in text or "e" in text.lower():
+        return lower_float_literal(ctx, node)
+    return lower_int_literal(ctx, node)
+
+
+def lower_pascal_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Pascal literalString to a typed string CONST.
+
+    Handles:
+    - ``'hello'`` — strip outer single quotes, replace ``''`` → ``'`` escape.
+    - ``#65`` — decimal char code: ``chr(65) == 'A'``.
+    - ``#$41`` — hex char code: ``chr(0x41) == 'A'``.
+    - Concatenation of the above forms (e.g. ``'abc'#13#10``).
+    """
+    text = ctx.node_text(node)
+    result = _parse_pascal_string(text)
+    return lower_string_literal(ctx, node, result)
+
+
+def _parse_pascal_string(text: str) -> str:
+    """Parse a Pascal string literal (may contain quoted parts + char codes)."""
+    result = []
+    i = 0
+    while i < len(text):
+        if text[i] == "'":
+            # Quoted string segment: scan to matching close quote, handle '' escapes
+            i += 1
+            while i < len(text):
+                if text[i] == "'":
+                    if i + 1 < len(text) and text[i + 1] == "'":
+                        result.append("'")
+                        i += 2
+                    else:
+                        i += 1  # closing quote
+                        break
+                else:
+                    result.append(text[i])
+                    i += 1
+        elif text[i] == "#":
+            # Char code: #65 or #$41
+            i += 1
+            if i < len(text) and text[i] == "$":
+                # Hex char code
+                i += 1
+                start = i
+                while i < len(text) and text[i] in "0123456789abcdefABCDEF":
+                    i += 1
+                result.append(chr(int(text[start:i], 16)))
+            else:
+                # Decimal char code
+                start = i
+                while i < len(text) and text[i].isdigit():
+                    i += 1
+                result.append(chr(int(text[start:i])))
+        else:
+            i += 1
+    return "".join(result)
+
+
 def lower_pascal_binop(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower exprBinary -- children: lhs, operator_keyword, rhs."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
 
     # Find the operator keyword between operands
     op_symbol = "?"
@@ -129,7 +210,7 @@ def lower_pascal_paren(
         None,
     )
     if inner is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     return ctx.lower_expr(inner)
 
 
@@ -145,7 +226,7 @@ def lower_pascal_dot(
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
     ]
     if len(named_children) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_node = named_children[0]
     field_node = named_children[-1]
     obj_reg = ctx.lower_expr(obj_node)
@@ -172,7 +253,7 @@ def lower_pascal_subscript(
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
     ]
     if not named_children:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_node = named_children[0]
     args_node = next(
         (c for c in node.children if c.type == PascalNodeType.EXPR_ARGS), None
@@ -207,7 +288,7 @@ def lower_pascal_unary(
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
     ]
     if not named_children:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     operand_reg = ctx.lower_expr(named_children[0])
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -224,7 +305,7 @@ def lower_pascal_brackets(
     elems = [c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(Const.int_(size_reg, len(elems)))
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg, type_hint=scalar(TypeName("set")), size_reg=size_reg
@@ -234,7 +315,7 @@ def lower_pascal_brackets(
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
