@@ -84,10 +84,10 @@ class TestMapRegisters:
         assert mapped.label == CodeLabel("entry")  # labels not affected
 
     def test_const_value_not_touched(self):
-        inst = Const(result_reg=Register("%r0"), value="42")
+        inst = Const.int_(Register("%r0"), 42)
         mapped = inst.map_registers(_inc)
         assert mapped.result_reg == Register("%r100")
-        assert mapped.value == "42"  # str field — not a register
+        assert mapped.value == 42  # typed int payload — not a register
 
     def test_store_field(self):
         inst = StoreField(
@@ -155,7 +155,7 @@ class TestMapLabels:
         assert mapped.name == ContinuationName("__cont")
 
     def test_no_label_unchanged(self):
-        inst = Const(result_reg=Register("%r0"), value="42")
+        inst = Const.int_(Register("%r0"), 42)
         mapped = inst.map_labels(_ns)
         assert mapped.label == NO_LABEL  # NO_LABEL.namespace() returns self
 
