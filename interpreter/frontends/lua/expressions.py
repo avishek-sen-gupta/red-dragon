@@ -6,13 +6,18 @@ from interpreter.type_name import TypeName
 from typing import Any
 
 import logging
+import re
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     extract_call_args,
-    lower_const_literal,
+    lower_int_literal,
+    lower_float_literal,
+    lower_string_literal,
+    lower_null_literal,
+    lower_default_return,
 )
 from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.register import Register
@@ -35,6 +40,139 @@ from interpreter.instructions import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ── Lua literal helpers ───────────────────────────────────────────────────────
+
+_LONG_BRACKET_RE = re.compile(r"^\[(=*)\[")
+_ESCAPE_MAP: dict[str, str] = {
+    "a": "\a",
+    "b": "\b",
+    "f": "\f",
+    "n": "\n",
+    "r": "\r",
+    "t": "\t",
+    "v": "\v",
+    "\\": "\\",
+    "'": "'",
+    '"': '"',
+    "\n": "\n",
+    "\r": "\n",
+}
+
+
+def _lua_unescape(raw: str) -> str:
+    """Process Lua escape sequences inside a quoted string body."""
+    result: list[str] = []
+    i = 0
+    while i < len(raw):
+        if raw[i] == "\\":
+            i += 1
+            if i >= len(raw):
+                break
+            c = raw[i]
+            if c in _ESCAPE_MAP:
+                result.append(_ESCAPE_MAP[c])
+                i += 1
+            elif c.isdigit():
+                # Decimal escape \ddd (up to 3 digits)
+                j = i
+                while j < i + 3 and j < len(raw) and raw[j].isdigit():
+                    j += 1
+                result.append(chr(int(raw[i:j])))
+                i = j
+            elif c == "x":
+                # Hex escape \xXX
+                result.append(chr(int(raw[i + 1 : i + 3], 16)))
+                i += 3
+            elif c == "u":
+                # Unicode escape \u{XXXX}
+                end = raw.index("}", i + 2)
+                result.append(chr(int(raw[i + 2 : end], 16)))
+                i = end + 1
+            elif c == "z":
+                # Skip following whitespace
+                i += 1
+                while i < len(raw) and raw[i] in " \t\n\r":
+                    i += 1
+            else:
+                result.append(c)
+                i += 1
+        else:
+            result.append(raw[i])
+            i += 1
+    return "".join(result)
+
+
+def _strip_long_bracket(text: str) -> str | None:
+    """Strip [=*[...]=*] long-bracket delimiters; return content or None."""
+    m = _LONG_BRACKET_RE.match(text)
+    if m:
+        eq = m.group(1)
+        prefix = "[" + eq + "["
+        suffix = "]" + eq + "]"
+        if text.endswith(suffix):
+            content = text[len(prefix) : -len(suffix)]
+            # Lua strips a leading newline from long strings
+            if content.startswith("\n"):
+                content = content[1:]
+            return content
+    return None
+
+
+def lower_lua_number(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a Lua NUMBER literal to a typed int or float CONST.
+
+    Rules:
+    - Integers: no '.', no 'e'/'E' exponent, hex without 'p'/'P'
+      Examples: 42, 0xFF, 0x1A
+    - Floats: anything with '.', 'e'/'E', or hex float with 'p'/'P'
+      Examples: 3.14, 3., 1e5, 0x1p4
+    """
+    text = ctx.node_text(node)
+    lo = text.lower()
+    is_hex = lo.startswith("0x")
+    if is_hex:
+        # Hex integer: no '.' and no 'p' (exponent)
+        if "." not in lo and "p" not in lo:
+            return lower_int_literal(ctx, node, text=text)
+        # Hex float: must use float.fromhex() since float() rejects hex floats
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Const.float_(reg, float.fromhex(text)), node=node)
+        return reg
+    else:
+        # Decimal integer: no '.' and no 'e'
+        if "." not in lo and "e" not in lo:
+            return lower_int_literal(ctx, node, text=text)
+        # Decimal float
+        return lower_float_literal(ctx, node, text=text)
+
+
+def lower_lua_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a Lua STRING literal to a typed string CONST.
+
+    Handles:
+    - Quoted strings: "..." and '...' with Lua escape sequences
+    - Long bracket strings: [[...]], [=[...]=], [==[...]==], etc.
+    """
+    text = ctx.node_text(node)
+    # Long bracket strings: [[...]], [=[...]=], etc.
+    content = _strip_long_bracket(text)
+    if content is not None:
+        return lower_string_literal(ctx, node, content)
+    # Quoted strings: strip delimiter and process escapes
+    if len(text) >= 2 and text[0] in ('"', "'") and text[-1] == text[0]:
+        body = text[1:-1]
+        value = _lua_unescape(body)
+        return lower_string_literal(ctx, node, value)
+    # Fallback: use raw text as-is
+    return lower_string_literal(ctx, node, text)
+
+
+# ── call lowerers ─────────────────────────────────────────────────────────────
 
 
 def lower_lua_call(
@@ -126,7 +264,7 @@ def lower_dot_index(
     table_node = node.child_by_field_name("table")
     field_node = node.child_by_field_name("field")
     if table_node is None or field_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(table_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
@@ -148,7 +286,7 @@ def lower_method_index(
     table_node = node.child_by_field_name("table")
     method_node = node.child_by_field_name("method")
     if table_node is None or method_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(table_node)
     method_name = ctx.node_text(method_node)
     reg = ctx.fresh_reg()
@@ -166,7 +304,7 @@ def lower_bracket_index(
     table_node = node.child_by_field_name("table")
     key_node = node.child_by_field_name("field")
     if table_node is None or key_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(table_node)
     key_reg = ctx.lower_expr(key_node)
     reg = ctx.fresh_reg()
@@ -191,7 +329,9 @@ def lower_table_constructor(
             value_node = child.child_by_field_name("value")
             if name_node and value_node:
                 key_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=key_reg, value=ctx.node_text(name_node)))
+                ctx.emit_inst(
+                    Const.string(key_reg, ctx.node_text(name_node)), node=child
+                )
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
@@ -199,7 +339,7 @@ def lower_table_constructor(
             elif value_node:
                 # Positional entry (array-like)
                 idx_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=idx_reg, value=str(positional_idx)))
+                ctx.emit_inst(Const.int_(idx_reg, positional_idx), node=child)
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg)
@@ -215,9 +355,7 @@ def lower_expression_list(
     named = [c for c in node.children if c.is_named]
     if named:
         return ctx.lower_expr(named[0])
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.default_return_value))
-    return reg
+    return lower_default_return(ctx, node, ctx.constants.default_return_value)
 
 
 def lower_lua_function_definition(
@@ -246,8 +384,7 @@ def lower_lua_function_definition(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
