@@ -1,6 +1,19 @@
 # Scope-Stack Type-Inference Design (red-dragon-b4j6)
 
-**Status:** Designed (2026-06-18). Awaiting spec review → implementation plan.
+**Status:** Implemented function-scope only (2026-06-18) on branch `scope-stack-inference`,
+commit `a469a6e4`. The scope stack drives `current_func_label` — fixing branched-return
+orphaning and cross-function variable bleed across all 15 frontends (the reported bug).
+**Class unification was NOT shipped:** Java/C#/Scala emit methods *flattened after*
+`end_class` (empty class body), and the old `current_class_name` "bleed" (set on class
+entry, never reset) is the load-bearing mechanism that attributes those flattened methods
+to their class. Popping a class frame at `end_class` breaks them. So `current_class_name`
+was kept as its original bled field; class-attribution behaviour is unchanged from main.
+The class-scope bug (bleed onto a top-level function following a class; reliance on
+positional flattening) is deferred to a separate follow-up — the principled fix is to
+normalize the 3 frontends' IR so methods nest inside the class label range. The §Components
+"§1 current_class_name property" and the class push/pop-for-attribution parts of this design
+are therefore superseded by "keep current_class_name as a bled field"; the function-scope
+parts shipped as designed.
 
 **Problem:** Type inference tracks the current scope with two single mutable pointers,
 `current_func_label` and `current_class_name`, on `_InferenceContext`
