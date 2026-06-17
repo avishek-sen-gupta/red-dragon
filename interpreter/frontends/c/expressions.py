@@ -9,7 +9,12 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
-from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.common.expressions import (
+    lower_const_literal,
+    lower_null_literal,
+    lower_string_literal,
+    lower_int_literal,
+)
 from interpreter.frontends.c.node_types import CNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
@@ -218,8 +223,7 @@ def lower_sizeof(
         None,
     )
     if type_node:
-        arg_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=arg_reg, value=ctx.node_text(type_node)))
+        arg_reg = lower_string_literal(ctx, type_node, ctx.node_text(type_node))
     else:
         expr_node = next(
             (c for c in node.children if c.is_named and c.type != CNodeType.SIZEOF),
@@ -271,8 +275,7 @@ def lower_comma_expr(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower comma expression (a, b) — evaluate both, return last."""
     children = [c for c in node.children if c.is_named]
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+    reg = lower_null_literal(ctx, node)
     for child in children:
         reg = ctx.lower_expr(child)
     return reg
@@ -298,8 +301,7 @@ def lower_compound_literal(
     if init_node:
         elements = [c for c in init_node.children if c.is_named]
         for i, elem in enumerate(elements):
-            idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            idx_reg = lower_int_literal(ctx, elem, text=str(i))
             val_reg = ctx.lower_expr(elem)
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg)
@@ -312,8 +314,7 @@ def lower_initializer_list(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower initializer_list {a, b, c} as NEW_ARRAY + STORE_INDEX per element."""
     elements = [c for c in node.children if c.is_named]
-    size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
+    size_reg = lower_int_literal(ctx, node, text=str(len(elements)))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
         NewArray(
@@ -322,8 +323,7 @@ def lower_initializer_list(
         node=node,
     )
     for i, elem in enumerate(elements):
-        idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        idx_reg = lower_int_literal(ctx, elem, text=str(i))
         val_reg = ctx.lower_expr(elem)
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg

@@ -42,6 +42,10 @@ from interpreter.frontends.common.declarations import (
     emit_field_initializers,
     emit_synthetic_init,
 )
+from interpreter.frontends.common.expressions import (
+    lower_null_literal,
+    lower_default_return,
+)
 
 
 def lower_cpp_declaration(
@@ -69,10 +73,7 @@ def lower_cpp_declaration(
                     node=node,
                 )
             else:
-                val_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(result_reg=val_reg, value=ctx.constants.none_literal)
-                )
+                val_reg = lower_null_literal(ctx, node)
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
             ctx.seed_var_type(var_name, type_hint)
 
@@ -206,8 +207,7 @@ def _lower_cpp_constructor_with_field_inits(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -385,8 +385,7 @@ def lower_cpp_method(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -423,9 +422,8 @@ def lower_field_initializer_list(
                     ctx.lower_expr(arg_children[0]) if arg_children else ctx.fresh_reg()
                 )
             else:
-                val_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(result_reg=val_reg, value=ctx.constants.default_return_value)
+                val_reg = lower_default_return(
+                    ctx, child, ctx.constants.default_return_value
                 )
             ctx.emit_inst(
                 StoreField(
@@ -493,8 +491,7 @@ def lower_cpp_function_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
