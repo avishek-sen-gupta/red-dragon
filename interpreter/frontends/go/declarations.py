@@ -8,7 +8,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter import constants
-from interpreter.frontends.common.expressions import lower_default_return
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -31,7 +31,6 @@ from interpreter.instructions import (
     Symbolic,
     Branch,
     Label_,
-    Return_,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,8 +101,7 @@ def lower_go_func_decl(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -154,8 +152,7 @@ def lower_go_method_decl(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -286,10 +283,7 @@ def _lower_go_interface_method(ctx: TreeSitterEmitContext, method_node) -> None:
     ctx.emit_inst(Label_(label=func_label))
     ctx.seed_func_return_type(func_label, return_hint)
 
-    none_reg = lower_default_return(
-        ctx, method_node, ctx.constants.default_return_value
-    )
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, method_node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()

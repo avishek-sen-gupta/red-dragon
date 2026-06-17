@@ -43,8 +43,8 @@ from interpreter.frontends.common.expressions import (
     lower_string_literal,
     lower_null_literal,
     lower_interpolated_string_parts,
-    lower_default_return,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.common.node_types import CommonNodeType
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
@@ -612,8 +612,7 @@ def lower_lambda(
 
     # Implicit return for block bodies (if no explicit return)
     if body_node and body_node.type == NT.BLOCK:
-        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
 
     ctx.byref_params = saved_byref
     ctx.emit_inst(Label_(label=end_label))

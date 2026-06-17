@@ -207,6 +207,7 @@ class _InferenceContext:
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
     _seeded_var_names: frozenset[VarName] = field(default_factory=frozenset)
+    _seeded_func_return_labels: frozenset[FuncName] = field(default_factory=frozenset)
 
     def lookup_func_return_type(self, name: FuncName) -> TypeExpr:
         return self.func_return_types.get(name, UNKNOWN)
@@ -411,6 +412,9 @@ def infer_types(
         _seeded_var_names=frozenset(
             VarName(k) for k in type_env_builder.var_types.keys()
         ),
+        _seeded_func_return_labels=frozenset(
+            FuncName(k) for k in type_env_builder.func_return_types.keys()
+        ),
     )
 
     prev_size = -1
@@ -594,15 +598,10 @@ def _infer_const(
         return
     ctx.const_values[str(inst.result_reg)] = raw
     # Typed literal: trust the Const's declared type_expr — no string re-inference.
+    # Null literals infer as the Null scalar; nullability then surfaces as
+    # Union[T, Null] via store_var_type widening and explicit-return unioning
+    # (red-dragon-x78r). Synthetic fall-through returns are excluded in _infer_return.
     te = inst.type_expr
-    # A null literal is typed Null, but TYPE INFERENCE currently treats it as
-    # UNKNOWN. Inferring it as Null propagates through implicit/default returns and
-    # makes nearly every dynamic-language function infer a Null/Optional return
-    # type — a return-type-inference semantic change that belongs to the
-    # option-style nullability work (red-dragon-x78r), not this mechanical Const
-    # refactor. Until then, preserve the established UNKNOWN behavior.
-    if isinstance(te, ScalarType) and te.name == FoundationTypeName.NULL:
-        te = UNKNOWN
     if te:  # UNKNOWN is falsy — don't record it (mirrors prior behavior)
         ctx.register_types[inst.result_reg] = te
 
@@ -916,14 +915,22 @@ def _infer_return(
 ) -> None:
     if not ctx.current_func_label:
         return
-    current_label_key = FuncName(ctx.current_func_label)
-    if current_label_key in ctx.func_return_types:
-        return
+    if getattr(inst, "implicit", False):
+        return  # synthetic fall-through return is a lowering artifact, not a real return
     if inst.value_reg is None:
         return
+    current_label_key = FuncName(ctx.current_func_label)
+    # A declared/annotated return type (pre-seeded by the builder) is authoritative
+    # and must not be widened by inferred RETURN types.
+    if current_label_key in ctx._seeded_func_return_labels:
+        return
     ret_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)
-    if ret_type:
-        ctx.func_return_types[current_label_key] = ret_type
+    if not ret_type:
+        return
+    existing = ctx.func_return_types.get(current_label_key, UNKNOWN)
+    ctx.func_return_types[current_label_key] = (
+        union_of(existing, ret_type) if existing else ret_type
+    )
 
 
 def _infer_load_indirect(

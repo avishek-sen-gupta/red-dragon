@@ -41,10 +41,10 @@ from interpreter.frontends.common.expressions import (
     lower_string_literal,
     lower_null_literal,
     lower_bool_literal,
-    lower_default_return,
     extract_call_args_unwrap,
     lower_interpolated_string_parts,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.php.node_types import PHPNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
@@ -756,8 +756,7 @@ def lower_php_arrow_function(
         val_reg = ctx.lower_expr(body_node)
         ctx.emit_inst(Return_(value_reg=val_reg))
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -821,8 +820,7 @@ def lower_php_anonymous_function(
     if body_node:
         lower_php_compound(ctx, body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()

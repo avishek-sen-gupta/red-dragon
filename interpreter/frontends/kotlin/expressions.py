@@ -50,6 +50,7 @@ from interpreter.frontends.common.expressions import (
     lower_string_literal,
     lower_update_expr,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 
 _UNSIGNED_SUFFIX = re.compile(r"[uUlL]+$")
 
@@ -755,9 +756,7 @@ def lower_lambda_literal(
             ctx.lower_stmt(child)
 
     if not last_returned:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const.null_(none_reg))
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
@@ -801,9 +800,7 @@ def lower_anonymous_function(
     if expr_reg:
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const.null_(none_reg))
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()

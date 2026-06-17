@@ -40,6 +40,7 @@ from interpreter.types.type_expr import ScalarType
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
+    emit_implicit_return,
     emit_synthetic_init,
 )
 from interpreter.frontends.common.expressions import (
@@ -207,8 +208,7 @@ def _lower_cpp_constructor_with_field_inits(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -385,8 +385,7 @@ def lower_cpp_method(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -491,8 +490,7 @@ def lower_cpp_function_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
