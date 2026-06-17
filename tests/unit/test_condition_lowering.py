@@ -66,8 +66,8 @@ class TestFigurativeConditions:
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        # The figurative SPACES const must be exactly 8 spaces (quoted string).
-        assert '"' + " " * 8 + '"' in const_vals
+        # The figurative SPACES const must be exactly 8 spaces.
+        assert " " * 8 in const_vals
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         assert any(i.operands[0] == "==" for i in binop_insts)
 
@@ -94,7 +94,7 @@ class TestFigurativeConditions:
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        assert '"' + " " * 5 + '"' in const_vals
+        assert " " * 5 in const_vals
 
     @covers(CobolFeature.FIGURATIVE_ZEROS)
     def test_zeros_on_alphanumeric_field(self):
@@ -119,7 +119,7 @@ class TestFigurativeConditions:
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        assert '"' + "0" * 4 + '"' in const_vals
+        assert "0" * 4 in const_vals
 
 
 class TestAbbreviatedConditions:
@@ -202,7 +202,7 @@ class TestConditionLoweringBasic:
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
-        assert last_const.operands == ["False"]
+        assert last_const.operands == [False]
 
 
 class TestConditionNameExpansion:
@@ -245,7 +245,7 @@ class TestConditionNameExpansion:
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        assert '"A"' in const_vals
+        assert "A" in const_vals
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_multi_value_or_expansion(self):
@@ -323,8 +323,8 @@ class TestConditionNameExpansion:
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        assert '"A"' in const_vals
-        assert '"Z"' in const_vals
+        assert "A" in const_vals
+        assert "Z" in const_vals
 
     @covers(CobolFeature.CONDITION_VALUES_THRU)
     def test_mixed_discrete_and_range(self):
@@ -370,9 +370,9 @@ class TestConditionNameExpansion:
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
         ]
-        assert '"A"' in const_vals
-        assert '"X"' in const_vals
-        assert '"Z"' in const_vals
+        assert "A" in const_vals
+        assert "X" in const_vals
+        assert "Z" in const_vals
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_unknown_condition_passes_through(self):
@@ -387,7 +387,7 @@ class TestConditionNameExpansion:
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
-        assert last_const.operands == ["False"]
+        assert last_const.operands == [False]
         # No expansion: no or/and BINOPs that condition-name expansion would produce
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         expansion_ops = [i for i in binop_insts if i.operands[0] in ("or", "and", "==")]
