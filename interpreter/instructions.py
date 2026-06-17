@@ -1218,7 +1218,34 @@ def _const(inst: Any) -> Const:
             class_type=UNKNOWN,
             source_location=sl,
         )
-    raise ValueError(f"CONST missing/unknown literal_type: {lit!r}")
+    # Legacy / untyped flat CONST (no explicit literal_type): infer the type from
+    # the operand, mirroring the pre-typed wire convention. This is the single
+    # place where text->type decoding is inherent — legacy IR and hand-written IR
+    # fixtures. Structured frontends never reach here (they build typed Const
+    # directly via the factories), so this does not reintroduce the production
+    # type-ambiguity bug.
+    if raw is None:
+        return Const.null_(reg, source_location=sl)
+    s = str(raw)
+    if s == "None":
+        return Const.null_(reg, source_location=sl)
+    if s in ("True", "False"):
+        return Const.bool_(reg, s == "True", source_location=sl)
+    if s.startswith("func_") or s.startswith("<function:"):
+        return Const.func_ref(reg, s, source_location=sl)
+    if s.startswith("class_") or s.startswith("<class:"):
+        return Const.class_ref(reg, s, class_type=UNKNOWN, source_location=sl)
+    try:
+        return Const.int_(reg, int(s), source_location=sl)
+    except ValueError:
+        pass
+    try:
+        return Const.float_(reg, float(s), source_location=sl)
+    except ValueError:
+        pass
+    if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
+        return Const.string(reg, s[1:-1], source_location=sl)
+    return Const.string(reg, s, source_location=sl)
 
 
 def _load_var(inst: Any) -> LoadVar:
