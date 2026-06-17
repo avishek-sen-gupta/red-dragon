@@ -112,12 +112,15 @@ def lower_ruby_string(
     """Lower Ruby string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
     has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
-        # Extract STRING_CONTENT child (already unquoted) or fall back to empty string
-        content_child = next(
-            (c for c in node.children if c.type == RubyNodeType.STRING_CONTENT),
-            None,
+        # Concatenate ALL STRING_CONTENT children (already unquoted). tree-sitter
+        # splits a single literal into multiple fragments around a '#' that does
+        # not begin a valid interpolation (e.g. "...#$(..." or "...#@..."), so
+        # taking only the first fragment would silently truncate the string.
+        value = "".join(
+            ctx.node_text(c)
+            for c in node.children
+            if c.type == RubyNodeType.STRING_CONTENT
         )
-        value = ctx.node_text(content_child) if content_child is not None else ""
         return lower_string_literal(ctx, node, value)
 
     parts: list[str] = []
