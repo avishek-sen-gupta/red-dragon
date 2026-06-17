@@ -279,9 +279,13 @@ def _transform_module(
                             # (metatype), everything else -> func_ref (FunctionType),
                             # so the VM resolves the symbol-table entry by type.
                             actual_label = import_source
-                            if actual_label.startswith(
+                            # Cross-module labels carry a "<module>." prefix
+                            # (e.g. "geometry.class_Circle_0"), so test the bare
+                            # label segment, not the fully-qualified string.
+                            bare_label = actual_label.rsplit(".", 1)[-1]
+                            if bare_label.startswith(
                                 CLASS_LABEL_PREFIX
-                            ) or actual_label.startswith(PRELUDE_CLASS_LABEL_PREFIX):
+                            ) or bare_label.startswith(PRELUDE_CLASS_LABEL_PREFIX):
                                 const_inst = Const.class_ref(
                                     load_field.result_reg, actual_label, UNKNOWN
                                 )
