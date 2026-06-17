@@ -59,7 +59,7 @@ class TestLiteralPattern:
         consts = [i for i in instrs if i.opcode == Opcode.CONST]
         binops = [i for i in instrs if i.opcode == Opcode.BINOP]
         assert len(consts) >= 1, f"expected CONST, got {_opcodes(instrs)}"
-        assert consts[-1].operands == ["42"]
+        assert consts[-1].operands == [42]
         assert len(binops) >= 1, f"expected BINOP, got {_opcodes(instrs)}"
         assert binops[-1].operands[0] == "=="
         assert binops[-1].operands[1] == subject_reg
@@ -352,7 +352,7 @@ class TestStarPattern:
         ]
         assert len(gte_ops) >= 1, "expected >= length check for star-in-middle"
         const_2 = [
-            c for c in instrs if c.opcode == Opcode.CONST and c.operands == ["2"]
+            c for c in instrs if c.opcode == Opcode.CONST and c.operands == [2]
         ]
         assert len(const_2) >= 1, "expected CONST 2 for fixed element count"
 
