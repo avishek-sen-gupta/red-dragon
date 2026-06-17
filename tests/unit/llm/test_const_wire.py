@@ -68,21 +68,20 @@ class TestConstBuilder:
         assert c.value == "<class:Foo@class_Foo_0>"
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_builder_missing_literal_type_raises(self) -> None:
-        import pytest
-
+    def test_builder_missing_literal_type_falls_back_to_operand(self) -> None:
+        # Untyped flat CONST (no literal_type) is a legacy/hand-written form;
+        # _const infers the type from the operand (here "42" -> Int).
         class _NoType:
             result_reg = "%1"
             operands = ["42"]
             source_location = None
             # no literal_type attribute
 
-        with pytest.raises(ValueError, match="literal_type"):
-            _const(_NoType())
+        c = _const(_NoType())
+        assert c.value == 42 and c.type_expr == scalar(FoundationTypeName.INT)
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_builder_unknown_literal_type_raises(self) -> None:
-        import pytest
-
-        with pytest.raises(ValueError, match="literal_type"):
-            _const(_Raw("%1", ["42"], "WeirdType"))
+    def test_builder_unknown_literal_type_falls_back_to_operand(self) -> None:
+        # An unrecognised literal_type also falls back to operand inference.
+        c = _const(_Raw("%1", ["42"], "WeirdType"))
+        assert c.value == 42 and c.type_expr == scalar(FoundationTypeName.INT)
