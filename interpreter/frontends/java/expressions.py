@@ -41,6 +41,7 @@ from interpreter.frontends.common.expressions import (
     lower_string_literal,
     lower_store_target,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 
 # lower_const_literal is intentionally NOT imported — it now raises TypeError.
 # All literal sites must use the typed helpers above (gjoy.4 migration).
@@ -325,8 +326,7 @@ def lower_lambda(
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
     if body_node and body_node.type == JavaNodeType.BLOCK:
         ctx.lower_block(body_node)
-        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
     elif body_node:
         body_reg = ctx.lower_expr(body_node)
         ctx.emit_inst(Return_(value_reg=body_reg))
