@@ -13,6 +13,15 @@ from interpreter.frontends.common import expressions as common_expr
 from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
 from interpreter.frontends.rust import expressions as rust_expr
+from interpreter.frontends.rust.expressions import (
+    lower_rust_integer_literal,
+    lower_rust_float_literal,
+    lower_rust_string_literal,
+    lower_rust_char_literal,
+    lower_rust_raw_string_literal,
+    lower_rust_negative_literal,
+    lower_rust_unit_expression,
+)
 from interpreter.frontends.rust import control_flow as rust_cf
 from interpreter.frontends.rust import declarations as rust_decl
 from interpreter.frontends.rust.node_types import RustNodeType
@@ -83,14 +92,14 @@ class RustFrontend(BaseFrontend):
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             RustNodeType.IDENTIFIER: common_expr.lower_identifier,
-            RustNodeType.INTEGER_LITERAL: common_expr.lower_const_literal,
-            RustNodeType.FLOAT_LITERAL: common_expr.lower_const_literal,
-            RustNodeType.STRING_LITERAL: common_expr.lower_const_literal,
-            RustNodeType.CHAR_LITERAL: common_expr.lower_const_literal,
-            RustNodeType.RAW_STRING_LITERAL: common_expr.lower_const_literal,
-            RustNodeType.NEGATIVE_LITERAL: common_expr.lower_const_literal,
+            RustNodeType.INTEGER_LITERAL: lower_rust_integer_literal,
+            RustNodeType.FLOAT_LITERAL: lower_rust_float_literal,
+            RustNodeType.STRING_LITERAL: lower_rust_string_literal,
+            RustNodeType.CHAR_LITERAL: lower_rust_char_literal,
+            RustNodeType.RAW_STRING_LITERAL: lower_rust_raw_string_literal,
+            RustNodeType.NEGATIVE_LITERAL: lower_rust_negative_literal,
             RustNodeType.BOOLEAN_LITERAL: common_expr.lower_canonical_bool,
-            RustNodeType.UNIT_EXPRESSION: common_expr.lower_const_literal,
+            RustNodeType.UNIT_EXPRESSION: lower_rust_unit_expression,
             RustNodeType.TRUE: common_expr.lower_canonical_true,
             RustNodeType.FALSE: common_expr.lower_canonical_false,
             RustNodeType.BINARY_EXPRESSION: common_expr.lower_binop,
