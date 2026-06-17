@@ -38,6 +38,7 @@ from interpreter.frontends.common.expressions import (
     lower_null_literal,
     lower_default_return,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.c.expressions import lower_c_store_target
 from interpreter.frontends.cpp.node_types import CppNodeType
 from interpreter.types.type_expr import ScalarType
@@ -385,8 +386,7 @@ def lower_lambda(
             val_reg = ctx.lower_expr(body_node)
             ctx.emit_inst(Return_(value_reg=val_reg))
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()

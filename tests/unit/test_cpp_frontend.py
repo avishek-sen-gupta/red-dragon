@@ -7,7 +7,7 @@ from interpreter.frontends.cpp.features import CppFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_cpp(source: str) -> list[InstructionBase]:
@@ -42,6 +42,15 @@ class TestCppDeclarations:
         assert Opcode.DECL_VAR in opcodes
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
+
+
+class TestCppImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        instructions = _parse_cpp("int f() { return 42; }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)
 
 
 class TestCppFunctions:
