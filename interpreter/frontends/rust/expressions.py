@@ -36,7 +36,17 @@ from interpreter.instructions import (
     Unop,
 )
 from interpreter import constants
-from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+    lower_int_literal,
+    lower_float_literal,
+    lower_string_literal,
+    lower_null_literal,
+    lower_bool_literal,
+    lower_canonical_none,
+    lower_canonical_true,
+    lower_canonical_false,
+)
 from interpreter.frontends.rust.node_types import RustNodeType
 from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
 from interpreter.frontends.common.patterns import (
@@ -49,6 +59,322 @@ from interpreter.register import Register
 from interpreter.types.type_expr import StructPatternType, scalar
 
 logger = logging.getLogger(__name__)
+
+# ── Rust-specific literal lowerers ────────────────────────────────────────────
+
+_RUST_INT_SUFFIXES = frozenset(
+    [
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "i128",
+        "isize",
+        "u8",
+        "u16",
+        "u32",
+        "u64",
+        "u128",
+        "usize",
+    ]
+)
+_RUST_FLOAT_SUFFIXES = frozenset(["f32", "f64"])
+
+
+def _strip_rust_numeric_suffix(text: str) -> tuple[str, str]:
+    """Return (stripped_text, suffix) for a Rust numeric literal.
+
+    Strips the type suffix (i32, u64, f32, f64, usize, etc.) from the literal
+    text so that int(text, 0) / float(text) can parse it cleanly.
+    """
+    for suffix in _RUST_INT_SUFFIXES | _RUST_FLOAT_SUFFIXES:
+        if text.endswith(suffix):
+            return text[: -len(suffix)], suffix
+    return text, ""
+
+
+def lower_rust_integer_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Rust integer_literal to a typed int Const.
+
+    Strips type suffixes (i8/u32/i64/usize etc.) and digit-separator
+    underscores; supports hex/octal/binary via int(text, 0).
+    """
+    raw = ctx.node_text(node)
+    stripped, _ = _strip_rust_numeric_suffix(raw)
+    return lower_int_literal(ctx, node, text=stripped)
+
+
+def lower_rust_float_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Rust float_literal to a typed float Const.
+
+    Strips type suffixes (f32/f64) before parsing.
+    """
+    raw = ctx.node_text(node)
+    stripped, _ = _strip_rust_numeric_suffix(raw)
+    # Remove underscores in float literals too (e.g. 1_000.0_f64)
+    stripped = stripped.replace("_", "")
+    return lower_float_literal(ctx, node, text=stripped)
+
+
+def lower_rust_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Rust string_literal (regular or byte string) to a typed string Const.
+
+    Extracts the string_content child node which tree-sitter already
+    provides as the unquoted content (escape sequences are raw bytes).
+    Falls back to stripping surrounding quotes from the full text if
+    no string_content child is found.
+    """
+    content_node = next(
+        (c for c in node.children if c.type == RustNodeType.STRING_CONTENT),
+        None,
+    )
+    if content_node is not None:
+        value = content_node.text.decode("utf-8", errors="replace")
+    else:
+        # Fallback: strip surrounding quotes (handles b"..." where tree-sitter
+        # may not expose STRING_CONTENT)
+        raw = ctx.node_text(node)
+        # Strip leading b/B prefix and surrounding quotes
+        raw = raw.lstrip("bB")
+        if raw.startswith('"') and raw.endswith('"'):
+            value = raw[1:-1]
+        else:
+            value = raw
+    return lower_string_literal(ctx, node, value)
+
+
+def lower_rust_raw_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Rust raw_string_literal (r#"..."# / r##"..."##) to a typed string Const.
+
+    Tree-sitter exposes the unescaped content via a string_content child node,
+    so we simply extract that. Content is literal (no escape processing).
+    """
+    content_node = next(
+        (c for c in node.children if c.type == RustNodeType.STRING_CONTENT),
+        None,
+    )
+    if content_node is not None:
+        value = content_node.text.decode("utf-8", errors="replace")
+    else:
+        # Fallback: strip r + matching #...# + quotes by counting the # nesting
+        raw = ctx.node_text(node)
+        if raw.startswith("r"):
+            raw = raw[1:]
+        hash_count = 0
+        while raw.startswith("#"):
+            hash_count += 1
+            raw = raw[1:]
+        # raw now starts with ", strip leading quote
+        if raw.startswith('"'):
+            raw = raw[1:]
+        # strip trailing "#...#
+        suffix = '"' + "#" * hash_count
+        if raw.endswith(suffix):
+            raw = raw[: -len(suffix)]
+        value = raw
+    return lower_string_literal(ctx, node, value)
+
+
+def lower_rust_char_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Rust char_literal to a typed int Const (Unicode code point / ord).
+
+    Rust char literals are Unicode scalar values, conventionally lowered
+    to their integer ordinal so arithmetic and comparisons work uniformly.
+    """
+    raw = ctx.node_text(node)
+    # Strip surrounding single quotes: 'x' -> x
+    if raw.startswith("'") and raw.endswith("'"):
+        inner = raw[1:-1]
+    else:
+        inner = raw
+
+    # Handle escape sequences
+    if inner.startswith("\\"):
+        escape = inner[1:] if len(inner) > 1 else ""
+        escape_map = {
+            "n": "\n",
+            "t": "\t",
+            "r": "\r",
+            "\\": "\\",
+            "'": "'",
+            '"': '"',
+            "0": "\0",
+        }
+        if escape in escape_map:
+            char = escape_map[escape]
+        elif escape.startswith("u{") and escape.endswith("}"):
+            # Unicode escape \u{HHHH}
+            hex_str = escape[2:-1]
+            char = chr(int(hex_str, 16))
+        elif escape.startswith("x") and len(escape) == 3:
+            # ASCII escape \xHH
+            char = chr(int(escape[1:], 16))
+        else:
+            char = inner
+    else:
+        char = inner
+
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.int_(reg, ord(char[0]) if char else 0), node=node)
+    return reg
+
+
+def lower_rust_negative_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Rust negative_literal or unary-minus+literal to a typed int/float Const.
+
+    Tree-sitter represents -42 as unary_expression with children ['-', integer_literal].
+    This function handles the negative_literal node type (if present) and is also
+    called from the unary_expression dispatcher for the negated-literal case.
+    """
+    # Try child-based approach first (unary_expression: '-' + integer_literal|float_literal)
+    named_children = [c for c in node.children if c.is_named]
+    if named_children:
+        child = named_children[0]
+        if child.type == RustNodeType.INTEGER_LITERAL:
+            raw = ctx.node_text(child)
+            stripped, _ = _strip_rust_numeric_suffix(raw)
+            cleaned = stripped.replace("_", "")
+            reg = ctx.fresh_reg()
+            ctx.emit_inst(Const.int_(reg, -int(cleaned, 0)), node=node)
+            return reg
+        if child.type == RustNodeType.FLOAT_LITERAL:
+            raw = ctx.node_text(child)
+            stripped, _ = _strip_rust_numeric_suffix(raw)
+            cleaned = stripped.replace("_", "")
+            reg = ctx.fresh_reg()
+            ctx.emit_inst(Const.float_(reg, -float(cleaned)), node=node)
+            return reg
+    # Fallback: parse the full text (handles negative_literal as single token)
+    raw = ctx.node_text(node)
+    stripped, suffix = _strip_rust_numeric_suffix(raw)
+    cleaned = stripped.replace("_", "")
+    if suffix in _RUST_FLOAT_SUFFIXES or "." in cleaned or "e" in cleaned.lower():
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Const.float_(reg, float(cleaned)), node=node)
+        return reg
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.int_(reg, int(cleaned, 0)), node=node)
+    return reg
+
+
+def lower_rust_unit_expression(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Rust unit expression `()` as a typed string Const with value '()'.
+
+    Rust's default return value is '()' (unit type). We emit it as a string
+    constant to match how lower_default_return handles '()' via Const.string.
+    """
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.string(reg, "()"), node=node)
+    return reg
+
+
+def lower_rust_fallback_const(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Fallback typed const for Rust expressions that produce a string-typed sentinel.
+
+    Used for field_expr / index_expr / type_cast fallbacks where we need
+    a safe typed Const rather than calling lower_const_literal.
+    """
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.string(reg, ctx.node_text(node)), node=node)
+    return reg
+
+
+def lower_rust_default_return(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit the Rust default return value '()' as a typed Const."""
+    return lower_default_return(ctx, node, ctx.constants.default_return_value)
+
+
+def lower_rust_none_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit a typed null Const for Rust's None sentinel."""
+    return lower_null_literal(ctx, node)
+
+
+def lower_rust_enum_variant_const(
+    ctx: TreeSitterEmitContext, variant_name: str, node: Any
+) -> Register:
+    """Emit a typed string Const for an enum variant name."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.string(reg, variant_name), node=node)
+    return reg
+
+
+def lower_rust_index_const(ctx: TreeSitterEmitContext, index: int) -> Register:
+    """Emit a typed int Const for an array/tuple index."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.int_(reg, index))
+    return reg
+
+
+def lower_rust_size_const(ctx: TreeSitterEmitContext, size: int, node: Any) -> Register:
+    """Emit a typed int Const for a collection size."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.int_(reg, size), node=node)
+    return reg
+
+
+def lower_rust_string_const(
+    ctx: TreeSitterEmitContext, value: str, node: Any
+) -> Register:
+    """Emit a typed string Const from a Python string value."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.string(reg, value), node=node)
+    return reg
+
+
+def lower_rust_int_const(
+    ctx: TreeSitterEmitContext, value: int, node: Any | None = None
+) -> Register:
+    """Emit a typed int Const from a Python int value."""
+    reg = ctx.fresh_reg()
+    if node is not None:
+        ctx.emit_inst(Const.int_(reg, value), node=node)
+    else:
+        ctx.emit_inst(Const.int_(reg, value))
+    return reg
+
+
+def lower_rust_none_const(
+    ctx: TreeSitterEmitContext, node: Any | None = None
+) -> Register:
+    """Emit a typed null Const."""
+    reg = ctx.fresh_reg()
+    if node is not None:
+        ctx.emit_inst(Const.null_(reg), node=node)
+    else:
+        ctx.emit_inst(Const.null_(reg))
+    return reg
+
+
+def lower_rust_default_return_const(
+    ctx: TreeSitterEmitContext, node: Any | None = None
+) -> Register:
+    """Emit the Rust default return value '()' as a typed Const."""
+    reg = ctx.fresh_reg()
+    if node is not None:
+        ctx.emit_inst(Const.string(reg, "()"), node=node)
+    else:
+        ctx.emit_inst(Const.string(reg, "()"))
+    return reg
 
 
 def lower_call_with_box_option(
@@ -123,7 +449,7 @@ def lower_field_expr(
     value_node = node.child_by_field_name("value")
     field_node = node.child_by_field_name("field")
     if value_node is None or field_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_rust_fallback_const(ctx, node)
     obj_reg = ctx.lower_expr(value_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
@@ -365,9 +691,7 @@ def lower_expr_stmt_as_expr(
     named = [c for c in node.children if c.is_named]
     if named:
         return ctx.lower_expr(named[0])
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_null_literal(ctx, node)
 
 
 def lower_else_clause(
@@ -377,9 +701,7 @@ def lower_else_clause(
     named = [c for c in node.children if c.is_named]
     if named:
         return ctx.lower_expr(named[0])
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_null_literal(ctx, node)
 
 
 def lower_return_expr(
@@ -390,10 +712,7 @@ def lower_return_expr(
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_rust_default_return_const(ctx, node)
     ctx.emit_inst(Return_(value_reg=val_reg), node=node)
     return val_reg
 
@@ -481,9 +800,7 @@ def lower_block_expr(
         and c.is_named
     ]
     if not children:
-        reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-        return reg
+        return lower_null_literal(ctx, node)
     for child in children[:-1]:
         ctx.lower_stmt(child)
     return ctx.lower_expr(children[-1])
@@ -510,10 +827,7 @@ def lower_closure_expr(
         result_reg = ctx.lower_expr(body_node)
         ctx.emit_inst(Return_(value_reg=result_reg))
     else:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        none_reg = lower_rust_default_return_const(ctx, node)
         ctx.emit_inst(Return_(value_reg=none_reg))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -616,8 +930,7 @@ def _lower_vec_macro(
     token_tree = next(c for c in node.children if c.type == "token_tree")
     elems = [c for c in token_tree.children if c.is_named]
     arr_reg = ctx.fresh_reg()
-    size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    size_reg = lower_rust_size_const(ctx, len(elems), node)
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg, type_hint=scalar(TypeName("list")), size_reg=size_reg
@@ -626,8 +939,7 @@ def _lower_vec_macro(
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
-        idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        idx_reg = lower_rust_index_const(ctx, i)
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
@@ -638,7 +950,7 @@ def lower_index_expr(
     """Lower index_expression: arr[idx] -> LOAD_INDEX, arr[1..3] -> slice."""
     children = [c for c in node.children if c.is_named]
     if len(children) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_rust_fallback_const(ctx, node)
     obj_reg = ctx.lower_expr(children[0])
     if children[1].type == RustNodeType.RANGE_EXPRESSION:
         return _lower_range_slice(ctx, children[1], obj_reg)
@@ -700,9 +1012,21 @@ def _lower_range_slice(
 
 
 def _make_rust_const(ctx: TreeSitterEmitContext, value: str) -> Register:
-    """Emit a CONST and return the register."""
+    """Emit a typed CONST and return the register.
+
+    Converts ``value`` to the appropriate typed Const:
+    - integer strings → int
+    - "None" → null_
+    - other strings → string
+    """
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=value))
+    if value == ctx.constants.none_literal or value == "None":
+        ctx.emit_inst(Const.null_(reg))
+    else:
+        try:
+            ctx.emit_inst(Const.int_(reg, int(value)))
+        except (ValueError, TypeError):
+            ctx.emit_inst(Const.string(reg, value))
     return reg
 
 
@@ -717,8 +1041,7 @@ def lower_tuple_expr(
         not in (RustNodeType.OPEN_PAREN, RustNodeType.CLOSE_PAREN, RustNodeType.COMMA)
     ]
     arr_reg = ctx.fresh_reg()
-    size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    size_reg = lower_rust_size_const(ctx, len(elems), node)
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg, type_hint=scalar(TypeName("tuple")), size_reg=size_reg
@@ -727,8 +1050,7 @@ def lower_tuple_expr(
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
-        idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        idx_reg = lower_rust_index_const(ctx, i)
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
@@ -784,7 +1106,7 @@ def lower_type_cast_expr(
     """Lower `expr as Type` as CALL_FUNCTION('as', expr, type_name)."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
-        return lower_const_literal(ctx, node)
+        return lower_rust_fallback_const(ctx, node)
     expr_reg = ctx.lower_expr(named_children[0])
     type_name = ctx.node_text(named_children[-1])
     reg = ctx.fresh_reg()
@@ -841,9 +1163,7 @@ def lower_loop_as_expr(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower while/loop/for in expression position (returns unit)."""
     ctx.lower_stmt(node)
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_null_literal(ctx, node)
 
 
 def lower_continue_as_expr(
@@ -853,9 +1173,7 @@ def lower_continue_as_expr(
     from interpreter.frontends.common.control_flow import lower_continue
 
     lower_continue(ctx, node)
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_null_literal(ctx, node)
 
 
 def lower_break_as_expr(
@@ -865,9 +1183,7 @@ def lower_break_as_expr(
     from interpreter.frontends.common.control_flow import lower_break
 
     lower_break(ctx, node)
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_null_literal(ctx, node)
 
 
 def lower_assignment_expr(
@@ -923,8 +1239,7 @@ def lower_tuple_struct_pattern(
         None,
     )
     variant_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
-    variant_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=variant_reg, value=variant_name), node=node)
+    variant_reg = lower_rust_enum_variant_const(ctx, variant_name, node)
     # Extract inner bindings (identifiers inside parentheses)
     inner_ids = [
         c
@@ -939,8 +1254,7 @@ def lower_tuple_struct_pattern(
     ]
     for i, child in enumerate(inner_ids):
         child_reg = ctx.lower_expr(child)
-        idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        idx_reg = lower_rust_index_const(ctx, i)
         ctx.emit_inst(
             StoreIndex(arr_reg=variant_reg, index_reg=idx_reg, value_reg=child_reg)
         )
@@ -954,7 +1268,7 @@ def lower_generic_function(
     named_children = [c for c in node.children if c.is_named]
     if named_children:
         return ctx.lower_expr(named_children[0])
-    return lower_const_literal(ctx, node)
+    return lower_rust_fallback_const(ctx, node)
 
 
 def lower_let_condition(
@@ -1004,10 +1318,8 @@ def lower_struct_pattern_expr(
         )
         if name_node:
             field_name = ctx.node_text(name_node)
-            key_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=key_reg, value=field_name))
-            val_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=val_reg, value=field_name))
+            key_reg = lower_rust_string_const(ctx, field_name, node)
+            val_reg = lower_rust_string_const(ctx, field_name, node)
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
             )
