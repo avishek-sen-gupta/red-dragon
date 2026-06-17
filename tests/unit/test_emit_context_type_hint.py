@@ -117,5 +117,5 @@ class TestSeedHelpers:
 
     def test_const_instruction_has_no_type_hint_field(self):
         ctx = _make_ctx()
-        inst = ctx.emit_inst(Const(result_reg=Register("%0"), value="42"))
+        inst = ctx.emit_inst(Const.int_(Register("%0"), 42))
         assert not hasattr(inst, "type_hint")
