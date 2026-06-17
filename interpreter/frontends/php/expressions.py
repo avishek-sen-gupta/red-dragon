@@ -36,14 +36,78 @@ from interpreter.instructions import (
 )
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
-    lower_const_literal,
+    lower_int_literal,
+    lower_float_literal,
+    lower_string_literal,
+    lower_null_literal,
+    lower_bool_literal,
+    lower_default_return,
     extract_call_args_unwrap,
+    lower_interpolated_string_parts,
 )
 from interpreter.frontends.php.node_types import PHPNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 
 logger = logging.getLogger(__name__)
+
+# ── PHP escape-sequence helpers ───────────────────────────────────────────────
+
+_PHP_DOUBLE_ESCAPE: dict[str, str] = {
+    "\\n": "\n",
+    "\\r": "\r",
+    "\\t": "\t",
+    "\\v": "\v",
+    "\\e": "\x1b",
+    "\\f": "\f",
+    "\\\\": "\\",
+    '\\"': '"',
+    "\\$": "$",
+}
+
+
+def _decode_php_double_escape(seq: str) -> str:
+    """Decode a PHP double-quoted escape sequence (raw source form).
+
+    Single-char sequences: \\n \\r \\t \\v \\e \\f \\\\ \\" \\$
+    Unicode:  \\u{HHHH} (1-6 hex digits)
+    Hex:      \\xHH
+    Octal:    \\NNN  (1-3 octal digits, starting with a digit 0-7)
+    Anything else: return as-is (no-op escape).
+    """
+    if seq in _PHP_DOUBLE_ESCAPE:
+        return _PHP_DOUBLE_ESCAPE[seq]
+    if seq.startswith("\\u{") and seq.endswith("}"):
+        try:
+            return chr(int(seq[3:-1], 16))
+        except (ValueError, OverflowError):
+            return seq
+    if seq.startswith("\\x") and len(seq) >= 3:
+        try:
+            return chr(int(seq[2:], 16))
+        except (ValueError, OverflowError):
+            return seq
+    if len(seq) >= 2 and seq[1].isdigit():
+        try:
+            return chr(int(seq[1:], 8))
+        except (ValueError, OverflowError):
+            return seq
+    # Unknown escape — return as-is
+    return seq
+
+
+def _decode_php_single_escape(seq: str) -> str:
+    """Decode a PHP single-quoted escape sequence (raw source form).
+
+    Only ``\\'`` → ``'`` and ``\\\\`` → ``\\`` are valid; anything else is
+    kept as-is (PHP single-quoted strings are almost completely literal).
+    """
+    if seq == "\\'":
+        return "'"
+    if seq == "\\\\":
+        return "\\"
+    return seq
+
 
 _NON_INTERPOLATION_TYPES = frozenset(
     {PHPNodeType.STRING_CONTENT, PHPNodeType.ESCAPE_SEQUENCE}
@@ -61,21 +125,21 @@ def lower_php_variable(
 
 
 def _lower_php_interpolated_children(
-    ctx: TreeSitterEmitContext, children, node
+    ctx: TreeSitterEmitContext, children, node, *, single_quoted: bool = False
 ) -> Register:
-    """Shared logic: decompose string_content / variable_name / expr children into CONST + BINOP '+'.
+    """Shared logic: decompose string_content / escape_sequence / variable_name / expr children into CONST + BINOP '+'.
 
-    Used by both encapsed_string and heredoc_body.
+    Used by encapsed_string, heredoc_body, and single-quoted string lowering.
     NOTE: PHP ``dynamic_variable_name`` (``${$var}``) is not registered in
     ``_EXPR_DISPATCH`` and falls back to SYMBOLIC -- variable-variable
     indirection cannot be statically lowered.
     """
     parts: list[str] = [
-        _lower_interpolated_child(ctx, child)
+        _lower_interpolated_child(ctx, child, single_quoted=single_quoted)
         for child in children
         if _is_interpolation_relevant(child)
     ]
-    return _lower_interpolated_string_parts(ctx, parts, node)
+    return lower_interpolated_string_parts(ctx, parts, node)
 
 
 def _is_interpolation_relevant(child) -> bool:
@@ -87,50 +151,53 @@ def _is_interpolation_relevant(child) -> bool:
     )
 
 
-def _lower_interpolated_child(ctx: TreeSitterEmitContext, child) -> Register:
-    """Lower a single interpolation child to a register."""
+def _lower_interpolated_child(
+    ctx: TreeSitterEmitContext, child, *, single_quoted: bool = False
+) -> Register:
+    """Lower a single interpolation child to a register.
+
+    ``single_quoted=True`` selects PHP single-quoted escape rules for
+    ``escape_sequence`` children; the default uses double-quoted rules.
+    """
     if child.type == PHPNodeType.STRING_CONTENT:
-        frag_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
+        # STRING_CONTENT fragments are already-unquoted raw text — no further
+        # processing needed.
+        return lower_string_literal(ctx, child, ctx.node_text(child))
+    if child.type == PHPNodeType.ESCAPE_SEQUENCE:
+        raw = ctx.node_text(child)
+        decoded = (
+            _decode_php_single_escape(raw)
+            if single_quoted
+            else _decode_php_double_escape(raw)
         )
-        return frag_reg
+        return lower_string_literal(ctx, child, decoded)
     if child.type == PHPNodeType.VARIABLE_NAME:
         return lower_php_variable(ctx, child)
     return ctx.lower_expr(child)
 
 
-def _lower_interpolated_string_parts(
-    ctx: TreeSitterEmitContext, parts: list[str], node
-) -> Register:
-    """Concatenate parts with BINOP '+'."""
-    if not parts:
-        reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=reg, value=""), node=node)
-        return reg
-    result = parts[0]
-    for part in parts[1:]:
-        new_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part
-            ),
-            node=node,
-        )
-        result = new_reg
-    return result
-
-
 def lower_php_encapsed_string(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-    """Lower PHP double-quoted string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
-    has_interpolation = any(
-        c.is_named and c.type not in _NON_INTERPOLATION_TYPES for c in node.children
+    """Lower PHP double-quoted string, decomposing string_content / escape_sequence / variable into CONST + LOAD_VAR + BINOP '+'."""
+    # Always use the child-decomposition path so escape sequences are properly decoded.
+    return _lower_php_interpolated_children(
+        ctx, node.children, node, single_quoted=False
     )
-    if not has_interpolation:
-        return lower_const_literal(ctx, node)
-    return _lower_php_interpolated_children(ctx, node.children, node)
+
+
+def lower_php_single_quoted_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower PHP single-quoted string ('...').
+
+    Only ``\\'`` and ``\\\\`` are valid escapes; everything else is literal.
+    The tree-sitter PHP grammar decomposes the body into ``string_content``
+    and ``escape_sequence`` children just like double-quoted strings.
+    """
+    return _lower_php_interpolated_children(
+        ctx, node.children, node, single_quoted=True
+    )
 
 
 def lower_php_heredoc(
@@ -139,14 +206,26 @@ def lower_php_heredoc(
     """Lower PHP heredoc (<<<EOT ... EOT), decomposing interpolation inside heredoc_body."""
     body = next((c for c in node.children if c.type == PHPNodeType.HEREDOC_BODY), None)
     if body is None:
-        return lower_const_literal(ctx, node)
-
-    has_interpolation = any(
-        c.is_named and c.type not in _NON_INTERPOLATION_TYPES for c in body.children
+        return lower_string_literal(ctx, node, "")
+    return _lower_php_interpolated_children(
+        ctx, body.children, node, single_quoted=False
     )
-    if not has_interpolation:
-        return lower_const_literal(ctx, node)
-    return _lower_php_interpolated_children(ctx, body.children, node)
+
+
+def lower_php_nowdoc(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower PHP nowdoc (<<<'EOT' ... EOT) — raw string content, no interpolation."""
+    # nowdoc → nowdoc_body → nowdoc_string children
+    body = next((c for c in node.children if c.type == "nowdoc_body"), None)
+    if body is None:
+        return lower_string_literal(ctx, node, "")
+    # Concatenate all nowdoc_string and string_content fragments
+    parts: list[str] = []
+    for child in body.children:
+        if child.is_named:
+            parts.append(lower_string_literal(ctx, child, ctx.node_text(child)))
+    return lower_interpolated_string_parts(ctx, parts, node)
 
 
 def lower_php_func_call(
@@ -209,7 +288,7 @@ def lower_php_member_access(
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
     if obj_node is None or name_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(name_node)
     reg = ctx.fresh_reg()
@@ -226,7 +305,7 @@ def lower_php_subscript(
     """Lower $arr[idx] as LOAD_INDEX."""
     children = [c for c in node.children if c.is_named]
     if len(children) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(children[0])
     idx_reg = ctx.lower_expr(children[1])
     reg = ctx.fresh_reg()
@@ -306,7 +385,7 @@ def lower_php_store_target(
         vars_ = [c for c in target.children if c.is_named]
         for i, var_node in enumerate(vars_):
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=i))
+            ctx.emit_inst(Const.int_(idx_reg, i))
             elem_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
@@ -327,7 +406,7 @@ def lower_php_cast(
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[-1])
-    return lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_php_ternary(
@@ -339,7 +418,7 @@ def lower_php_ternary(
     false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     if cond_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("ternary_true")
@@ -372,9 +451,7 @@ def lower_php_throw_expr(
     from interpreter.frontends.common.exceptions import lower_raise_or_throw
 
     lower_raise_or_throw(ctx, node, keyword="throw")
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
-    return reg
+    return lower_null_literal(ctx, node)
 
 
 def lower_php_object_creation(
@@ -544,7 +621,7 @@ def _lower_php_associative_array(
             )
         elif named:
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value="0"))
+            ctx.emit_inst(Const.int_(idx_reg, 0))
             val_reg = ctx.lower_expr(named[0])
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg)
@@ -557,7 +634,7 @@ def _lower_php_indexed_array(
 ) -> Register:
     """Lower indexed array as NEW_ARRAY + STORE_INDEX per element."""
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
+    ctx.emit_inst(Const.int_(size_reg, len(elements)))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
         NewArray(
@@ -569,7 +646,7 @@ def _lower_php_indexed_array(
         named = [c for c in elem.children if c.is_named]
         val_reg = ctx.lower_expr(named[0]) if named else ctx.fresh_reg()
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
@@ -679,8 +756,7 @@ def lower_php_arrow_function(
         val_reg = ctx.lower_expr(body_node)
         ctx.emit_inst(Return_(value_reg=val_reg))
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -745,8 +821,7 @@ def lower_php_anonymous_function(
     if body_node:
         lower_php_compound(ctx, body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -762,7 +837,7 @@ def lower_php_nullsafe_member_access(
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
     if obj_node is None or name_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(name_node)
     reg = ctx.fresh_reg()
@@ -779,7 +854,7 @@ def lower_php_class_constant_access(
     """Lower ClassName::CONST as LOAD_FIELD on the class."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     class_reg = ctx.lower_expr(named[0])
     const_name = ctx.node_text(named[1])
     reg = ctx.fresh_reg()
@@ -796,7 +871,7 @@ def lower_php_scoped_property_access(
     """Lower ClassName::$prop as LOAD_FIELD on the class."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     class_reg = ctx.lower_expr(named[0])
     prop_name = ctx.node_text(named[1])
     reg = ctx.fresh_reg()
@@ -840,7 +915,7 @@ def lower_php_dynamic_variable(
     named_children = [c for c in node.children if c.is_named]
     if named_children:
         return ctx.lower_expr(named_children[0])
-    return lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_php_include(
@@ -937,7 +1012,7 @@ def lower_php_error_suppression(
     return (
         ctx.lower_expr(named_children[0])
         if named_children
-        else lower_const_literal(ctx, node)
+        else lower_null_literal(ctx, node)
     )
 
 
@@ -947,7 +1022,7 @@ def lower_php_sequence_expression(
     """Lower comma expression ($a = 1, $b = 2) -> evaluate all, return last."""
     children = [c for c in node.children if c.is_named]
     if not children:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     last_reg = children[0]
     for child in children:
         last_reg = ctx.lower_expr(child)
