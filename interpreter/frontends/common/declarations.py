@@ -31,6 +31,20 @@ from interpreter.frontends.type_extraction import (
 from interpreter.frontends.common.expressions import lower_default_return
 
 
+def emit_implicit_return(
+    ctx: TreeSitterEmitContext,
+    node: Any,  # tree-sitter node or None — untyped at Python boundary
+) -> None:
+    """Emit the synthetic fall-off-the-end return appended to a function body.
+
+    Marks the Return_ as ``implicit=True`` so return-type inference ignores it
+    (it is a lowering artifact, not a programmer-written return). Honours each
+    language's ``default_return_value`` sentinel via ``lower_default_return``.
+    """
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
+    ctx.emit_inst(Return_(value_reg=none_reg, implicit=True), node=node)
+
+
 def extract_param_name(
     ctx: TreeSitterEmitContext, child: Any
 ) -> str | None:  # Any: tree-sitter node — untyped at Python boundary
