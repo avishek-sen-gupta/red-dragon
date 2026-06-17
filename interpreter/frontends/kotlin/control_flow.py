@@ -153,7 +153,7 @@ def _lower_for_multi_destructure(
         raw_name = ctx.node_text(name_node) if name_node else f"__destructure_{i}"
         var_name = ctx.declare_block_var(raw_name)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),
@@ -198,7 +198,7 @@ def lower_for_stmt(
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
 
     init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(Const.int_(init_idx, 0))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -243,7 +243,7 @@ def lower_for_stmt(
 
     ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -269,9 +269,7 @@ def lower_jump_expr(
             val_reg = ctx.lower_expr(children[0])
         else:
             val_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-            )
+            ctx.emit_inst(Const.null_(val_reg))
         ctx.emit_inst(Return_(value_reg=val_reg), node=node)
     elif text.startswith("throw"):
         lower_raise_or_throw(ctx, node, keyword="throw")
