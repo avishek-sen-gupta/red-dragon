@@ -902,6 +902,8 @@ class Return_(InstructionBase):
     """RETURN: return from the current function."""
 
     value_reg: Register | None = None
+    implicit: bool = False  # True = synthetic fall-off-the-end return (lowering
+    # artifact); such returns do not shape inferred return types.
 
     def writes(self) -> StorageIdentifier | None:
         return None
