@@ -30,6 +30,8 @@ from interpreter.instructions import (
     StoreVar,
     Unop,
 )
+from interpreter.types.type_expr import scalar, NULL
+from interpreter.constants import FoundationTypeName
 
 
 @dataclass(frozen=True)
@@ -161,10 +163,28 @@ class MatchCase:
 
 
 def _const_true(ctx: TreeSitterEmitContext) -> Register:
-    """Emit a CONST True and return the register."""
+    """Emit a typed boolean True CONST and return the register."""
     true_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=true_reg, value="True"))
+    ctx.emit_inst(Const.bool_(true_reg, True))
     return true_reg
+
+
+def _emit_literal_const(
+    ctx: TreeSitterEmitContext, v: int | float | str | bool | None
+) -> Register:
+    """Emit a typed CONST for a literal value of any supported kind."""
+    reg = ctx.fresh_reg()
+    if v is None:
+        ctx.emit_inst(Const.null_(reg))
+    elif isinstance(v, bool):
+        ctx.emit_inst(Const.bool_(reg, v))
+    elif isinstance(v, int):
+        ctx.emit_inst(Const.int_(reg, v))
+    elif isinstance(v, float):
+        ctx.emit_inst(Const.float_(reg, v))
+    else:
+        ctx.emit_inst(Const.string(reg, str(v)))
+    return reg
 
 
 def _compile_indexed_element(
@@ -221,9 +241,7 @@ def _compile_after_star_element_test(
 ) -> Register:
     """Load an after-star element by computing index = len - (after_count - after_offset)."""
     offset_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(result_reg=offset_reg, value=str(after_count - after_offset)),
-    )
+    ctx.emit_inst(Const.int_(offset_reg, after_count - after_offset))
     idx_reg = _emit_binop(ctx, "-", len_reg, offset_reg)
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -252,8 +270,7 @@ def compile_pattern_test(
     """Emit IR that tests whether subject matches pattern. Returns a boolean register."""
     match pattern:
         case LiteralPattern(value=v):
-            const_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=const_reg, value=str(v)))
+            const_reg = _emit_literal_const(ctx, v)
             cmp_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
@@ -282,12 +299,7 @@ def compile_pattern_test(
             if not has_star:
                 # No star — exact length match
                 expected_len_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(
-                        result_reg=expected_len_reg,
-                        value=str(len(elems)),
-                    ),
-                )
+                ctx.emit_inst(Const.int_(expected_len_reg, len(elems)))
                 len_ok_reg = _emit_binop(ctx, "==", len_reg, expected_len_reg)
                 sub_results = [len_ok_reg] + [
                     _compile_indexed_element(ctx, subject_reg, i, elem_pat)
@@ -298,9 +310,7 @@ def compile_pattern_test(
                 star_idx = _star_index(elems)
                 fixed_count = len(elems) - 1
                 min_len_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(result_reg=min_len_reg, value=str(fixed_count)),
-                )
+                ctx.emit_inst(Const.int_(min_len_reg, fixed_count))
                 len_ok_reg = _emit_binop(ctx, ">=", len_reg, min_len_reg)
                 sub_results = [len_ok_reg]
                 # Before star: literal indices
@@ -334,7 +344,7 @@ def compile_pattern_test(
             return _and_all(ctx, sub_results) if sub_results else _const_true(ctx)
         case ClassPattern(class_name=cls, positional=pos, keyword=kw):
             cls_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=cls_reg, value=cls))
+            ctx.emit_inst(Const.string(cls_reg, cls))
             isinstance_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
@@ -407,8 +417,7 @@ def compile_pattern_test(
             )
             return cmp_reg
         case RelationalPattern(operator=op, value=v):
-            const_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=const_reg, value=str(v)))
+            const_reg = _emit_literal_const(ctx, v)
             cmp_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
@@ -457,9 +466,7 @@ def _compile_after_star_element_binding(
 ) -> None:
     """Bind an after-star element by computing index = len - (after_count - after_offset)."""
     offset_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(result_reg=offset_reg, value=str(after_count - after_offset)),
-    )
+    ctx.emit_inst(Const.int_(offset_reg, after_count - after_offset))
     idx_reg = _emit_binop(ctx, "-", len_reg, offset_reg)
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -527,13 +534,9 @@ def compile_pattern_bindings(
                 star_pat = elems[star_idx]
                 if isinstance(star_pat, StarPattern) and star_pat.name != "_":
                     start_reg = ctx.fresh_reg()
-                    ctx.emit_inst(
-                        Const(result_reg=start_reg, value=str(star_idx)),
-                    )
+                    ctx.emit_inst(Const.int_(start_reg, star_idx))
                     after_reg = ctx.fresh_reg()
-                    ctx.emit_inst(
-                        Const(result_reg=after_reg, value=str(after_count)),
-                    )
+                    ctx.emit_inst(Const.int_(after_reg, after_count))
                     stop_reg = _emit_binop(ctx, "-", len_reg, after_reg)
                     slice_reg = ctx.fresh_reg()
                     ctx.emit_inst(
