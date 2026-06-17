@@ -32,6 +32,7 @@ from interpreter.frontends.type_extraction import (
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
+    emit_implicit_return,
     emit_synthetic_init,
 )
 from interpreter.types.type_expr import EnumType, ScalarType, scalar
@@ -260,9 +261,7 @@ def lower_function_decl(
     if expr_reg:
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const.null_(none_reg))
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -320,9 +319,7 @@ def _emit_synthetic_getter(
     if expr_reg:
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const.null_(none_reg))
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, getter_node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -371,9 +368,7 @@ def _emit_synthetic_setter(
 
     ctx._accessor_backing_field = prev_backing
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.null_(none_reg))
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, setter_node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -562,9 +557,7 @@ def _emit_primary_constructor_init(
             StoreField(obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg)
         )
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.null_(none_reg))
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, None)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -616,9 +609,7 @@ def lower_secondary_constructor(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.null_(none_reg))
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
