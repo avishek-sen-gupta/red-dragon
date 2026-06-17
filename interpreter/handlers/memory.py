@@ -399,6 +399,32 @@ def _handle_store_field(
     )
 
 
+def _decode_class_constant(raw: str):
+    """Decode a class constant's raw source text into a Python value.
+
+    ``ClassInfo.constants`` stores the constant's raw RHS source (e.g. ``'"move"'``
+    with quotes, ``"42"``). Decode it like a literal: strip string quotes, parse
+    ints/floats, map None/True/False. Self-contained (no dependency on the legacy
+    ``_parse_const``) so the latter can be deleted; storing typed class-constant
+    values at frontend build time is the proper fix (red-dragon-gjoy.3 / x78r).
+    """
+    if raw == "None":
+        return None
+    if raw in ("True", "False"):
+        return raw == "True"
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        pass
+    try:
+        return float(raw)
+    except (ValueError, TypeError):
+        pass
+    if len(raw) >= 2 and raw[0] in ("'", '"') and raw[-1] == raw[0]:
+        return raw[1:-1]
+    return raw
+
+
 def _handle_load_field(
     inst: InstructionBase,
     vm: VMState,
@@ -419,10 +445,11 @@ def _handle_load_field(
         symbol_table = ctx.symbol_table
         class_info = symbol_table.classes.get(ClassName(str(obj_val.name)))
         if class_info and str(field_name) in class_info.constants:
-            # ClassInfo.constants is dict[str, str]; the stored value is the
-            # class constant's string form. (Typed class-constant values are
-            # future work — see red-dragon-v0l2 follow-ups.)
-            val = class_info.constants[str(field_name)]
+            # ClassInfo.constants is dict[str, str] holding the RAW source text of
+            # the constant (e.g. '"move"' with quotes, "42"). Decode it to a
+            # Python value. (Storing typed class-constant values at frontend build
+            # time is the proper fix — tracked under red-dragon-gjoy.3 / x78r.)
+            val = _decode_class_constant(class_info.constants[str(field_name)])
             static_tv = typed_from_runtime(val)
             logger.debug(
                 "load_field ClassRef %s.%s = %r",
