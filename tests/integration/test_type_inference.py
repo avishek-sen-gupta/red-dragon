@@ -2,7 +2,7 @@
 
 import pytest
 from interpreter.type_name import TypeName
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 from interpreter.frontends.go.features import GoFeature
 from interpreter.frontends.rust.features import RustFeature
 from interpreter.frontends.typescript.features import TypeScriptFeature
@@ -2062,6 +2062,44 @@ def make_value():
             env.get_func_signature(FuncName("make_value")).return_type
             == FoundationTypeName.FLOAT
         )
+
+
+class TestReturnUnionInference:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_single_explicit_return_unchanged(self):
+        src = "def f():\n    return 42\n"
+        _i, env = _lower_and_infer(src, "python")
+        rt = env.get_func_signature(FuncName("f")).return_type
+        assert rt == FoundationTypeName.INT
+
+
+class TestNullVisibleInference:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_inferred_var_reassigned_null_is_union(self):
+        _i, env = _lower_and_infer("x = 'hi'\nx = None\n", "python")
+        assert str(env.var_types[VarName("x")]) == "Union[Null, String]"
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_annotated_var_assigned_null_keeps_type(self):
+        src = 'class C { void m() { String s = "hi"; s = null; } }'
+        _i, env = _lower_and_infer(src, "java")
+        assert env.var_types[VarName("s")] == FoundationTypeName.STRING
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_single_null_return_is_null(self):
+        # single explicit `return None`, no control flow → func label intact
+        _i, env = _lower_and_infer("def f():\n    return None\n", "python")
+        rt = env.get_func_signature(FuncName("f")).return_type
+        from interpreter.types.type_expr import NULL
+
+        assert rt == NULL
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_value_return_not_shadowed_by_synthetic(self):
+        # `return 42` then synthetic fall-through return None → Int (synthetic skipped)
+        _i, env = _lower_and_infer("def f():\n    return 42\n", "python")
+        rt = env.get_func_signature(FuncName("f")).return_type
+        assert rt == FoundationTypeName.INT
 
 
 class TestForwardReferenceJavaScript:
