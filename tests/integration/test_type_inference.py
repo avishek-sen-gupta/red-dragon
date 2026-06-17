@@ -3227,3 +3227,58 @@ class Dog extends Animal {
             )
             is _NULL_SIGNATURE
         )
+
+
+class TestScopeStackInference:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_branched_return_unions(self):
+        src = "def f(c):\n    if c:\n        return 1\n    return 'x'\n"
+        _i, env = _lower_and_infer(src, "python")
+        rt = env.get_func_signature(FuncName("f")).return_type
+        assert str(rt) == "Union[Int, String]"
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_branched_value_and_null_unions(self):
+        src = "def f(c):\n    if c:\n        return 42\n    return None\n"
+        _i, env = _lower_and_infer(src, "python")
+        rt = env.get_func_signature(FuncName("f")).return_type
+        assert str(rt) == "Union[Int, Null]"
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_no_cross_function_var_bleed(self):
+        src = (
+            "def a(c):\n    if c:\n        v = 5\n    return 0\n\n"
+            "def b(c):\n    if c:\n        v = 'hi'\n    return 1\n"
+        )
+        _i, env = _lower_and_infer(src, "python")
+        a_scope = next(s for s in env.scoped_var_types if "func_a" in s)
+        b_scope = next(s for s in env.scoped_var_types if "func_b" in s)
+        assert env.scoped_var_types[a_scope][VarName("v")] == FoundationTypeName.INT
+        assert env.scoped_var_types[b_scope][VarName("v")] == FoundationTypeName.STRING
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_closure_restores_parent_scope(self):
+        src = "def f():\n    g = lambda x: x\n    return 7\n"
+        _i, env = _lower_and_infer(src, "python")
+        rt = env.get_func_signature(FuncName("f")).return_type
+        assert rt == FoundationTypeName.INT
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_class_method_still_attributed_to_class_nested_python(self):
+        """Class-method attribution is PRESERVED for a nested (Python) frontend:
+        the CLASS frame is set as the bled field and never reset, so the method
+        resolves under its class."""
+        src = "class C:\n    def m(self):\n        return 5\n"
+        _i, env = _lower_and_infer(src, "python")
+        sig = env.get_func_signature(FuncName("m"), class_name=scalar(TypeName("C")))
+        assert sig.return_type == "Int"
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_class_method_still_attributed_to_class_flattened_java(self):
+        """Class-method attribution is PRESERVED for a flattened (Java) frontend
+        whose method label is emitted after end_class: the bled
+        current_class_name field still attributes the method to its class."""
+        src = "class M {\n    static int add(int a, int b) { return a + b; }\n}\n"
+        _i, env = _lower_and_infer(src, "java")
+        sig = env.get_func_signature(FuncName("add"), class_name=scalar(TypeName("M")))
+        assert sig.return_type == "Int"
