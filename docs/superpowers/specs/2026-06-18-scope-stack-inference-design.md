@@ -112,17 +112,22 @@ class name correctly for both prelude and namespaced class labels — match what
 (preserve existing class-name values exactly; this design does not change how class names
 are spelled, only when they are pushed/popped).
 
-### 3. Pop-safety helper
+### 3. Pop helper (strong-assertion, not defensive)
+Well-formed IR guarantees balanced, properly nested entry/end labels, so the matching top
+frame is an **invariant**, not a possibility to defend against. The helper *asserts* the
+invariant and fails loud if violated — no silent no-op:
 ```python
 def _pop_frame(ctx, kind: str) -> None:
-    """Pop the top scope frame if it matches `kind`. Defensive against malformed/
-    unbalanced IR: if the stack is empty or the top frame is a different kind, leave it
-    unchanged rather than corrupting the scope or raising."""
-    if ctx.scope_stack and ctx.scope_stack[-1][0] == kind:
-        ctx.scope_stack.pop()
+    assert ctx.scope_stack, f"scope-stack underflow: end label with no open {kind} frame"
+    top_kind, _ = ctx.scope_stack[-1]
+    assert top_kind == kind, (
+        f"scope-stack imbalance: end label expected top {kind} frame, got {top_kind}"
+    )
+    ctx.scope_stack.pop()
 ```
-With well-formed, properly nested IR the top always matches the end being processed; the
-guard only protects against rare malformed streams.
+These are strong structural assertions (they verify the entry/end nesting invariant), not
+vacuous ones. If a frontend ever emits unbalanced labels, this surfaces it immediately at
+the root cause rather than masking it.
 
 ### 4. Per-pass reset
 `infer_types` runs a fixpoint that re-walks the entire instruction list each pass. Add
@@ -143,9 +148,34 @@ attributed to the correct function/class for the entire body — including after
 labels and after nested closures.
 
 ## Error handling
-- Malformed/unbalanced labels: `_pop_frame` no-ops rather than raising (see §3).
-- Empty stack reads: properties return `""` / `UNKNOWN` (global scope), matching today's
-  uninitialized state.
+- Malformed/unbalanced labels are an invariant violation, not an expected condition:
+  `_pop_frame` asserts and fails loud (see §3) — no defensive recovery.
+- Empty stack reads from the computed properties are a normal state (top-level/global code),
+  not an error: `current_func_label` returns `""` and `current_class_name` returns `UNKNOWN`.
+
+## Implementation principles (binding on the plan)
+
+- **TDD.** Every behavioural change is driven by a failing test first (red → green). The
+  test matrix below is the starting set; add a failing test before each implementation step.
+- **FP / no hidden state.** Frames are immutable tuples. `current_func_label` /
+  `current_class_name` are *pure computed properties* over `scope_stack` — single source of
+  truth, no shadow fields, no setter side effects. Helpers (`_pop_frame`, property bodies)
+  are pure functions of their inputs. The fixpoint walk remains the existing imperative
+  shell; new logic stays pure within it.
+- **No defensive programming.** Do not add guards for conditions that well-formed IR makes
+  impossible (e.g. silently tolerating an unbalanced stack). Assert the invariant and fail
+  loud instead.
+- **No `None` in signatures.** New functions/properties take and return concrete types — no
+  `Optional`/`| None` parameters or returns. (The global/top-level scope is the empty string
+  `""` and `UNKNOWN`, never `None`.)
+- **No default parameters.** New helper functions take all arguments explicitly. (The one
+  permitted default is the dataclass field initializer `scope_stack: list[...] =
+  field(default_factory=list)`, which is the field's initial value, not a function default.)
+- **Strong assertions only — no vacuous ones.** Assertions must verify a real invariant
+  (e.g. the entry/end nesting in `_pop_frame`, or that a specific function infers a specific
+  `Union[...]`). No `assert x is not None`-style placeholders, no asserting a value equals
+  itself, no asserting only that "something" was produced when the exact expected value is
+  knowable. Tests assert the precise inferred type, not merely that a type exists.
 
 ## Testing
 
@@ -177,5 +207,11 @@ and must be investigated, not papered over.
 - COBOL: COBOL paragraphs/sections do not use the tree-sitter `func_`/`end_` function
   convention the same way; this design targets the 15 tree-sitter frontends' inference.
   The implementation must confirm the COBOL inference path is unaffected (its tests stay
-  green) but does not add COBOL scope-stack behaviour.
+  green) but does not add COBOL scope-stack behaviour. **Because `_pop_frame` now asserts
+  balanced labels (no defensive no-op), this must be checked early**: if COBOL (or any
+  frontend) emits `func_`/`end_` or `class_`/`end_class_` labels that are not balanced and
+  properly nested in the inference walk, the assertion will fire. That is the correct
+  fail-loud behaviour; the fix is to correct the offending label emission, not to soften the
+  assertion. The first implementation step after wiring the stack is a full-suite run to
+  surface any such imbalance immediately.
 - No change to runtime/VM, frontends, or the `TypeExpr` ADT. Pure inference-pass change.
