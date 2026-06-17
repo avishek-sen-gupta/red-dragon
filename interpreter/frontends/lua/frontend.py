@@ -36,8 +36,8 @@ class LuaFrontend(BaseFrontend):
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             LuaNodeType.IDENTIFIER: common_expr.lower_identifier,
-            LuaNodeType.NUMBER: common_expr.lower_const_literal,
-            LuaNodeType.STRING: common_expr.lower_const_literal,
+            LuaNodeType.NUMBER: lua_expr.lower_lua_number,
+            LuaNodeType.STRING: lua_expr.lower_lua_string,
             LuaNodeType.TRUE: common_expr.lower_canonical_true,
             LuaNodeType.FALSE: common_expr.lower_canonical_false,
             LuaNodeType.NIL: common_expr.lower_canonical_none,
@@ -52,8 +52,8 @@ class LuaFrontend(BaseFrontend):
             LuaNodeType.EXPRESSION_LIST: lua_expr.lower_expression_list,
             LuaNodeType.FUNCTION_DEFINITION: lua_expr.lower_lua_function_definition,
             LuaNodeType.VARARG_EXPRESSION: lua_expr.lower_lua_vararg,
-            LuaNodeType.STRING_CONTENT: common_expr.lower_const_literal,
-            LuaNodeType.ESCAPE_SEQUENCE: common_expr.lower_const_literal,
+            LuaNodeType.STRING_CONTENT: lua_expr.lower_lua_string,
+            LuaNodeType.ESCAPE_SEQUENCE: lua_expr.lower_lua_string,
         }
 
     def _build_stmt_dispatch(
