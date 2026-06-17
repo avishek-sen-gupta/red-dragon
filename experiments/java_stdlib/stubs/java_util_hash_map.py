@@ -20,6 +20,7 @@ from interpreter.instructions import (
     Symbolic,
 )
 from interpreter.ir import CodeLabel
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -46,7 +47,7 @@ HASH_MAP_IR = (
     Branch(label=CodeLabel(_END_CLS)),
     Label_(label=CodeLabel(_CLS)),
     Label_(label=CodeLabel(_END_CLS)),
-    Const(result_reg=Register("%0"), value=_CLS),
+    Const.class_ref(Register("%0"), _CLS, class_type=UNKNOWN),
     DeclVar(name=VarName("HashMap"), value_reg=Register("%0")),
     # ── __init__(this) — initialise self.entries = {} and this.length = 0 ─────
     Branch(label=CodeLabel(_INIT_END)),
@@ -56,14 +57,14 @@ HASH_MAP_IR = (
     NewObject(result_reg=Register("%2"), type_hint="dict"),
     LoadVar(result_reg=Register("%3"), name=VarName("this")),
     StoreField(obj_reg=Register("%3"), field_name=_ENTRIES, value_reg=Register("%2")),
-    Const(result_reg=Register("%4"), value="0"),
+    Const.int_(Register("%4"), 0),
     StoreField(
         obj_reg=Register("%3"), field_name=_LEN_SPECIAL, value_reg=Register("%4")
     ),
-    Const(result_reg=Register("%5"), value="None"),
+    Const.null_(Register("%5")),
     Return_(value_reg=Register("%5")),
     Label_(label=CodeLabel(_INIT_END)),
-    Const(result_reg=Register("%6"), value=_INIT_F),
+    Const.func_ref(Register("%6"), _INIT_F),
     DeclVar(name=VarName("__init__"), value_reg=Register("%6")),
     # ── put(this, key, value) → entries[key] = value; update this.length ──────
     Branch(label=CodeLabel(_PUT_END)),
@@ -91,10 +92,10 @@ HASH_MAP_IR = (
     StoreField(
         obj_reg=Register("%15"), field_name=_LEN_SPECIAL, value_reg=Register("%14")
     ),
-    Const(result_reg=Register("%16"), value="None"),
+    Const.null_(Register("%16")),
     Return_(value_reg=Register("%16")),
     Label_(label=CodeLabel(_PUT_END)),
-    Const(result_reg=Register("%17"), value=_PUT_F),
+    Const.func_ref(Register("%17"), _PUT_F),
     DeclVar(name=VarName("put"), value_reg=Register("%17")),
     # ── get(this, key) → entries[key] ─────────────────────────────────────────
     Branch(label=CodeLabel(_GET_END)),
@@ -111,7 +112,7 @@ HASH_MAP_IR = (
     ),
     Return_(value_reg=Register("%23")),
     Label_(label=CodeLabel(_GET_END)),
-    Const(result_reg=Register("%24"), value=_GET_F),
+    Const.func_ref(Register("%24"), _GET_F),
     DeclVar(name=VarName("get"), value_reg=Register("%24")),
     # ── containsKey(this, key) → dict_contains_key(entries, key) ─────────────
     # BinopKind.IN on a heap dict returns UNCOMPUTABLE (Pointer has no __contains__).
@@ -132,7 +133,7 @@ HASH_MAP_IR = (
     ),
     Return_(value_reg=Register("%30")),
     Label_(label=CodeLabel(_CONTAINS_END)),
-    Const(result_reg=Register("%31"), value=_CONTAINS_F),
+    Const.func_ref(Register("%31"), _CONTAINS_F),
     DeclVar(name=VarName("containsKey"), value_reg=Register("%31")),
     # ── size(this) → DEAD CODE at runtime (intercepted by METHOD_TABLE) ───────
     Branch(label=CodeLabel(_SIZE_END)),
@@ -147,7 +148,7 @@ HASH_MAP_IR = (
     ),
     Return_(value_reg=Register("%34")),
     Label_(label=CodeLabel(_SIZE_END)),
-    Const(result_reg=Register("%35"), value=_SIZE_F),
+    Const.func_ref(Register("%35"), _SIZE_F),
     DeclVar(name=VarName("size"), value_reg=Register("%35")),
 )
 

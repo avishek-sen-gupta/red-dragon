@@ -29,6 +29,7 @@ from interpreter.instructions import (
     Symbolic,
 )
 from interpreter.ir import CodeLabel
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -52,22 +53,22 @@ GREGORIAN_CALENDAR_IR = (
     Branch(label=CodeLabel(_END_CLS)),
     Label_(label=CodeLabel(_CLS)),
     Label_(label=CodeLabel(_END_CLS)),
-    Const(result_reg=Register("%0"), value=_CLS),
+    Const.class_ref(Register("%0"), _CLS, class_type=UNKNOWN),
     DeclVar(name=VarName("GregorianCalendar"), value_reg=Register("%0")),
     # ── __init__(this) — set year/month/day to 0 ────────────────────────
     Branch(label=CodeLabel(_INIT_END)),
     Label_(label=CodeLabel(_INIT_F)),
     Symbolic(result_reg=Register("%1"), hint="param:this"),
     DeclVar(name=VarName("this"), value_reg=Register("%1")),
-    Const(result_reg=Register("%2"), value=0),
+    Const.int_(Register("%2"), 0),
     LoadVar(result_reg=Register("%3"), name=VarName("this")),
     StoreField(obj_reg=Register("%3"), field_name=_F_YEAR, value_reg=Register("%2")),
     StoreField(obj_reg=Register("%3"), field_name=_F_MONTH, value_reg=Register("%2")),
     StoreField(obj_reg=Register("%3"), field_name=_F_DAY, value_reg=Register("%2")),
-    Const(result_reg=Register("%4"), value="None"),
+    Const.null_(Register("%4")),
     Return_(value_reg=Register("%4")),
     Label_(label=CodeLabel(_INIT_END)),
-    Const(result_reg=Register("%5"), value=_INIT_F),
+    Const.func_ref(Register("%5"), _INIT_F),
     DeclVar(name=VarName("__init__"), value_reg=Register("%5")),
     # ── set(this, field, value) — store value under field name ───────────
     # In real Java, field is an int (Calendar.YEAR=1, etc.).  We store
@@ -92,10 +93,10 @@ GREGORIAN_CALENDAR_IR = (
         field_name=FieldName("_cal_last_set"),
         value_reg=Register("%10"),
     ),
-    Const(result_reg=Register("%11"), value="None"),
+    Const.null_(Register("%11")),
     Return_(value_reg=Register("%11")),
     Label_(label=CodeLabel(_SET_END)),
-    Const(result_reg=Register("%12"), value=_SET_F),
+    Const.func_ref(Register("%12"), _SET_F),
     DeclVar(name=VarName("set"), value_reg=Register("%12")),
     # ── getTime(this) — return a concrete string representation ──────────
     Branch(label=CodeLabel(_GETTIME_END)),
@@ -103,10 +104,10 @@ GREGORIAN_CALENDAR_IR = (
     Symbolic(result_reg=Register("%13"), hint="param:this"),
     DeclVar(name=VarName("this"), value_reg=Register("%13")),
     # Return a concrete placeholder — the key property is that it is NOT symbolic
-    Const(result_reg=Register("%14"), value="Date(concrete)"),
+    Const.string(Register("%14"), "Date(concrete)"),
     Return_(value_reg=Register("%14")),
     Label_(label=CodeLabel(_GETTIME_END)),
-    Const(result_reg=Register("%15"), value=_GETTIME_F),
+    Const.func_ref(Register("%15"), _GETTIME_F),
     DeclVar(name=VarName("getTime"), value_reg=Register("%15")),
 )
 

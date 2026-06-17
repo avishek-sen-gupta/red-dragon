@@ -119,3 +119,4 @@ class FoundationTypeName:
     TUPLE = TypeName("Tuple")
     REGION = TypeName("Region")
     VOID = TypeName("Void")
+    NULL = TypeName("Null")

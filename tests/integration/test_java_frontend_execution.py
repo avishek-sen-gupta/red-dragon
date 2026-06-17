@@ -858,3 +858,40 @@ class M {
 """
         _, locals_ = _run_java(source)
         assert locals_[VarName("result")] == 10
+
+
+class TestJavaCharLiteralArithmeticExecution:
+    """Char literals lowered as typed int Const; verify arithmetic works in the VM."""
+
+    @covers(JavaFeature.CHARACTER_LITERAL)
+    def test_char_literal_ordinal_arithmetic(self):
+        """'a' + 1 == 98 (b): verifies char is treated as int ordinal, not string."""
+        source = """\
+class M {
+    static int result = 'a' + 1;
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 98
+
+    @covers(JavaFeature.CHARACTER_LITERAL)
+    def test_escape_char_literal_arithmetic(self):
+        """'\\n' == 10: verifies escape char resolves to correct ordinal."""
+        source = """\
+class M {
+    static int result = '\\n';
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 10
+
+    @covers(JavaFeature.CHARACTER_LITERAL)
+    def test_uppercase_char_ordinal(self):
+        """'A' == 65: ASCII ordinal for uppercase letter."""
+        source = """\
+class M {
+    static int result = 'A';
+}
+"""
+        _, locals_ = _run_java(source)
+        assert locals_[VarName("result")] == 65

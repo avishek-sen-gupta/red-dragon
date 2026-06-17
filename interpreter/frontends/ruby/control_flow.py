@@ -137,7 +137,7 @@ def lower_ruby_for(
     var_name = ctx.node_text(pattern_node) if pattern_node else "__for_var"
 
     init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(Const.int_(init_idx, 0))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -175,7 +175,7 @@ def lower_ruby_for(
 
     ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(

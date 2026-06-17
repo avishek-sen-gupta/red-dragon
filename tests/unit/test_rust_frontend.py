@@ -81,7 +81,7 @@ class TestRustFunctions:
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
 
 class TestRustControlFlow:
@@ -146,10 +146,10 @@ class TestRustControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -481,7 +481,7 @@ class TestRustAsyncBlock:
     def test_async_block_produces_ir(self):
         instructions = _parse_rust("fn main() { let f = async { 42 }; }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
@@ -551,7 +551,7 @@ class TestRustConstItem:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("MAX" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("100" in inst.operands for inst in consts)
+        assert any(100 in inst.operands for inst in consts)
 
     @covers(RustFeature.CONST_ITEM)
     def test_const_item_string(self):
@@ -567,7 +567,7 @@ class TestRustStaticItem:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("COUNT" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("0" in inst.operands for inst in consts)
+        assert any(0 in inst.operands for inst in consts)
 
     @covers(RustFeature.STATIC_ITEM)
     def test_static_mut_item(self):
@@ -820,7 +820,7 @@ class TestRustMatchPatternUnwrap:
         source = "fn f() { match x { (y) => y + 1, _ => 0 } }"
         instructions = _parse_rust(source)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("1" in inst.operands for inst in consts)
+        assert any(1 in inst.operands for inst in consts)
 
 
 class TestRustUnitExpression:
@@ -949,9 +949,9 @@ fn main() {
         instructions = _parse_rust(source)
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values
-        assert "30" in const_values
-        assert "0" in const_values
+        assert 10 in const_values
+        assert 30 in const_values
+        assert 0 in const_values
         # Should have branch_if for or_pattern arm, for arm 3, no branch_if for wildcard
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) >= 2
@@ -1111,3 +1111,61 @@ class TestRustRangeSlice:
         ir = _parse_rust("fn main() { let arr = [1, 2]; let x = arr[0]; }")
         opcodes = _opcodes(ir)
         assert Opcode.LOAD_INDEX in opcodes
+
+
+class TestRustCharLiteral:
+    @covers(RustFeature.CHAR_LITERAL)
+    def test_char_literal_emits_int_const(self):
+        """'x' should emit CONST with integer ord value (120 for 'x')."""
+        ir = _parse_rust("fn main() { let c = 'x'; }")
+        consts = _find_all(ir, Opcode.CONST)
+        # ord('x') == 120
+        assert any(
+            120 in inst.operands for inst in consts
+        ), f"Expected ord('x')=120 in consts, got {[c.operands for c in consts]}"
+
+    @covers(RustFeature.CHAR_LITERAL)
+    def test_char_literal_newline_escape(self):
+        """'\\n' should emit CONST with integer 10 (ord of newline)."""
+        ir = _parse_rust("fn main() { let c = '\\n'; }")
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            10 in inst.operands for inst in consts
+        ), f"Expected ord('\\n')=10 in consts, got {[c.operands for c in consts]}"
+
+    @covers(RustFeature.CHAR_LITERAL)
+    def test_char_literal_no_symbolic(self):
+        """'A' should not produce SYMBOLIC fallthrough."""
+        ir = _parse_rust("fn main() { let c = 'A'; }")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("char_literal" in str(inst.operands) for inst in symbolics)
+
+
+class TestRustRawStringHashNesting:
+    @covers(RustFeature.RAW_STRING_LITERAL)
+    def test_raw_string_single_hash_content(self):
+        """r#\"hello\"# should emit CONST with value 'hello'."""
+        ir = _parse_rust('fn main() { let s = r#"hello"#; }')
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            "hello" in str(inst.operands) for inst in consts
+        ), f"Expected 'hello' in raw string const, got {[c.operands for c in consts]}"
+
+    @covers(RustFeature.RAW_STRING_LITERAL)
+    def test_raw_string_double_hash_content(self):
+        """r##\"has # inside\"## should emit CONST with value 'has # inside'."""
+        ir = _parse_rust('fn main() { let s = r##"has # inside"##; }')
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            "has # inside" in str(inst.operands) for inst in consts
+        ), f"Expected 'has # inside' in const, got {[c.operands for c in consts]}"
+
+    @covers(RustFeature.RAW_STRING_LITERAL)
+    def test_raw_string_no_escape_processing(self):
+        r"""r\"\\n\" should contain literal backslash-n, not a newline."""
+        ir = _parse_rust(r'fn main() { let s = r"\n"; }')
+        consts = _find_all(ir, Opcode.CONST)
+        # In a raw string, \n is two characters: backslash + n (not a newline)
+        assert any(
+            r"\n" in str(inst.operands) for inst in consts
+        ), f"Expected literal '\\n' in raw string const, got {[c.operands for c in consts]}"

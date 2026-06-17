@@ -28,6 +28,7 @@ from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
+from interpreter.frontends.common.expressions import lower_int_literal
 from interpreter.frontends.cpp.node_types import CppNodeType
 
 
@@ -164,8 +165,7 @@ def _lower_structured_binding(
     for i, id_node in enumerate(identifiers):
         raw_name = ctx.node_text(id_node)
         var_name = ctx.declare_block_var(raw_name)
-        idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        idx_reg = lower_int_literal(ctx, id_node, text=str(i))
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),
@@ -199,8 +199,7 @@ def lower_range_for(
 
     iter_reg = ctx.lower_expr(right_node) if right_node else ctx.fresh_reg()
 
-    init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    init_idx = lower_int_literal(ctx, right_node or node, text="0")
     ctx.emit_inst(DeclVar(name=VarName("__range_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -244,8 +243,7 @@ def lower_range_for(
     ctx.exit_block_scope()
 
     ctx.emit_inst(Label_(label=update_label))
-    one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    one_reg = lower_int_literal(ctx, node, text="1")
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(

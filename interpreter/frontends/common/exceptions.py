@@ -124,12 +124,7 @@ def lower_raise_or_throw(
         val_reg = ctx.lower_expr(children[0])
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(
-                result_reg=val_reg,
-                value=ctx.constants.default_return_value,
-            ),
-        )
+        ctx.emit_inst(Const.null_(val_reg))
     ctx.emit_inst(
         Throw_(value_reg=val_reg),
         node=node,

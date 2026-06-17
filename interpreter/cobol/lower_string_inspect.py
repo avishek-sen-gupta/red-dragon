@@ -11,7 +11,7 @@ from interpreter.cobol.cobol_statements import (
     UnstringStatement,
 )
 from interpreter.cobol.data_layout import FieldLayout
-from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ir_encoders import (
     build_inspect_replace_ir,
@@ -54,7 +54,7 @@ def lower_string(
             )
             src_str_reg = ctx.emit_to_string(decoded_reg)
         else:
-            src_str_reg = ctx.const_to_reg(str(sending.value.name))
+            src_str_reg = ctx.const_to_reg(strip_cobol_literal(str(sending.value.name)))
 
         if sending.value.ref_mod_start is not None:
             raw_start_reg = eval_ref_mod_expr(
@@ -90,7 +90,9 @@ def lower_string(
             part_regs.append(src_str_reg)
         else:
             delim_reg = ctx.const_to_reg(
-                translate_cobol_figurative(str(sending.delimited_by))
+                strip_cobol_literal(
+                    translate_cobol_figurative(str(sending.delimited_by))
+                )
             )
             find_pos = ctx.fresh_reg()
             ctx.emit_inst(
@@ -159,7 +161,7 @@ def lower_unstring(
         )
         src_str_reg = ctx.emit_to_string(decoded_reg)
     else:
-        src_str_reg = ctx.const_to_reg(str(stmt.source.name))
+        src_str_reg = ctx.const_to_reg(strip_cobol_literal(str(stmt.source.name)))
 
     if stmt.source.ref_mod_start is not None:
         raw_start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
@@ -189,7 +191,7 @@ def lower_unstring(
         )
         src_str_reg = sliced_reg
 
-    delimiter = translate_cobol_figurative(str(stmt.delimited_by))
+    delimiter = strip_cobol_literal(translate_cobol_figurative(str(stmt.delimited_by)))
     delim_reg = ctx.const_to_reg(delimiter)
     ir = build_string_split_ir(f"unstring_split_{source_name}")
     parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})
@@ -276,7 +278,7 @@ def _resolve_convert_operand(
         return ctx.emit_to_string(decoded)
     if operand in ("SPACES", "SPACE", "ZEROS", "ZEROES", "ZERO", "LOW-VALUES"):
         return ctx.const_to_reg(translate_cobol_figurative(operand))
-    return ctx.const_to_reg(ctx.parse_literal(operand))
+    return ctx.const_to_reg(strip_cobol_literal(str(operand)))
 
 
 def lower_inspect_converting(
@@ -322,7 +324,7 @@ def lower_inspect_tallying(
     total_count_reg = ctx.const_to_reg(0)
 
     for tally_for in stmt.tallying_for:
-        pattern_reg = ctx.const_to_reg(str(tally_for.pattern))
+        pattern_reg = ctx.const_to_reg(strip_cobol_literal(str(tally_for.pattern)))
         mode_reg = ctx.const_to_reg(tally_for.mode.lower())
         ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
         count_reg = ctx.inline_ir(
@@ -363,8 +365,8 @@ def lower_inspect_replacing(
     current_str_reg: Register = src_str_reg
 
     for replacing in stmt.replacings:
-        from_reg = ctx.const_to_reg(str(replacing.from_pattern))
-        to_reg = ctx.const_to_reg(str(replacing.to_pattern))
+        from_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.from_pattern)))
+        to_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.to_pattern)))
         mode_reg = ctx.const_to_reg(replacing.mode.lower())
         ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")
         new_str_reg = ctx.inline_ir(

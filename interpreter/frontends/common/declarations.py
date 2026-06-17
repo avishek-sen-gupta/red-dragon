@@ -28,6 +28,7 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.common.expressions import lower_default_return
 
 
 def extract_param_name(
@@ -122,15 +123,8 @@ def lower_function_def(
     if body_node:
         ctx.lower_block(body_node)
 
-    # Implicit return at end of function
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(
-            result_reg=none_reg,
-            value=ctx.constants.default_return_value,
-        ),
-        node=node,
-    )
+    # Implicit return at end of function — honour per-language default_return_value
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg), node=node)
 
     ctx.emit_inst(Label_(label=end_label))
@@ -200,12 +194,7 @@ def emit_synthetic_init(
     emit_field_initializers(ctx, field_inits, this_var=this_var)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(
-            result_reg=none_reg,
-            value=ctx.constants.default_return_value,
-        ),
-    )
+    ctx.emit_inst(Const.null_(none_reg))
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -255,12 +244,7 @@ def lower_var_declaration(
             elif name_node:
                 # Declaration without initializer
                 val_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(
-                        result_reg=val_reg,
-                        value=ctx.constants.none_literal,
-                    ),
-                )
+                ctx.emit_inst(Const.null_(val_reg))
                 ctx.emit_inst(
                     DeclVar(
                         name=VarName(ctx.node_text(name_node)),

@@ -474,35 +474,41 @@ class BaseFrontend(Frontend):
     def _lower_const_literal(
         self, node: Any
     ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-        reg = self._fresh_reg()
-        self._emit_inst(
-            Const(result_reg=reg, value=self._node_text(node)),
-            node=node,
+        """REMOVED — raises TypeError to direct callers to the typed helpers.
+
+        Use _lower_canonical_none/true/false for booleans/null, or call
+        Const.int_ / Const.float_ / Const.string directly.  Per-frontend
+        stories must re-point their dispatch tables to the appropriate typed
+        helper.
+        """
+        raise TypeError(
+            "_lower_const_literal cannot be used after the typed-Const migration. "
+            "Use a typed helper: _lower_canonical_none, _lower_canonical_true, "
+            "_lower_canonical_false, or build the Const with the right factory."
         )
-        return reg
 
     def _lower_canonical_none(
         self, node: Any
     ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-        """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
+        """Emit typed null CONST for any language's null/nil/undefined."""
         reg = self._fresh_reg()
-        self._emit_inst(Const(result_reg=reg, value=self.NONE_LITERAL), node=node)
+        self._emit_inst(Const.null_(reg), node=node)
         return reg
 
     def _lower_canonical_true(
         self, node: Any
     ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-        """Emit canonical ``CONST "True"``."""
+        """Emit typed boolean True CONST."""
         reg = self._fresh_reg()
-        self._emit_inst(Const(result_reg=reg, value=self.TRUE_LITERAL), node=node)
+        self._emit_inst(Const.bool_(reg, True), node=node)
         return reg
 
     def _lower_canonical_false(
         self, node: Any
     ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-        """Emit canonical ``CONST "False"``."""
+        """Emit typed boolean False CONST."""
         reg = self._fresh_reg()
-        self._emit_inst(Const(result_reg=reg, value=self.FALSE_LITERAL), node=node)
+        self._emit_inst(Const.bool_(reg, False), node=node)
         return reg
 
     def _lower_canonical_bool(
@@ -846,9 +852,7 @@ class BaseFrontend(Frontend):
             val_reg = self._lower_expr(children[0])
         else:
             val_reg = self._fresh_reg()
-            self._emit_inst(
-                Const(result_reg=val_reg, value=self.DEFAULT_RETURN_VALUE),
-            )
+            self._emit_inst(Const.null_(val_reg))
         self._emit_inst(
             Return_(value_reg=val_reg),
             node=node,
@@ -1081,10 +1085,7 @@ class BaseFrontend(Frontend):
 
         # Implicit return at end of function
         none_reg = self._fresh_reg()
-        self._emit_inst(
-            Const(result_reg=none_reg, value=self.DEFAULT_RETURN_VALUE),
-            node=node,
-        )
+        self._emit_inst(Const.null_(none_reg), node=node)
         self._emit_inst(Return_(value_reg=none_reg), node=node)
 
         self._emit_inst(Label_(label=end_label))
@@ -1173,9 +1174,7 @@ class BaseFrontend(Frontend):
             val_reg = self._lower_expr(children[0])
         else:
             val_reg = self._fresh_reg()
-            self._emit_inst(
-                Const(result_reg=val_reg, value=self.DEFAULT_RETURN_VALUE),
-            )
+            self._emit_inst(Const.null_(val_reg))
         self._emit_inst(
             Throw_(value_reg=val_reg),
             node=node,
@@ -1196,7 +1195,7 @@ class BaseFrontend(Frontend):
         ]
         arr_reg = self._fresh_reg()
         size_reg = self._fresh_reg()
-        self._emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+        self._emit_inst(Const.int_(size_reg, len(elems)))
         self._emit_inst(
             NewArray(
                 result_reg=arr_reg,
@@ -1208,7 +1207,7 @@ class BaseFrontend(Frontend):
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
             idx_reg = self._fresh_reg()
-            self._emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            self._emit_inst(Const.int_(idx_reg, i))
             self._emit_inst(
                 StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg)
             )
@@ -1245,7 +1244,7 @@ class BaseFrontend(Frontend):
         op = "+" if "++" in text else "-"
         operand_reg = self._lower_expr(operand)
         one_reg = self._fresh_reg()
-        self._emit_inst(Const(result_reg=one_reg, value="1"))
+        self._emit_inst(Const.int_(one_reg, 1))
         result_reg = self._fresh_reg()
         self._emit_inst(
             Binop(
@@ -1376,9 +1375,7 @@ class BaseFrontend(Frontend):
                 elif name_node:
                     # Declaration without initializer
                     val_reg = self._fresh_reg()
-                    self._emit_inst(
-                        Const(result_reg=val_reg, value=self.NONE_LITERAL),
-                    )
+                    self._emit_inst(Const.null_(val_reg))
                     self._emit_inst(
                         DeclVar(
                             name=VarName(self._node_text(name_node)), value_reg=val_reg

@@ -21,6 +21,7 @@ from interpreter.instructions import (
 )
 from interpreter.instructions import NO_REGISTER
 from interpreter.ir import CodeLabel
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.operator_kind import BinopKind
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
@@ -48,7 +49,7 @@ ARRAY_LIST_IR = (
     Branch(label=CodeLabel(_END_CLS)),
     Label_(label=CodeLabel(_CLS)),
     Label_(label=CodeLabel(_END_CLS)),
-    Const(result_reg=Register("%0"), value=_CLS),
+    Const.class_ref(Register("%0"), _CLS, class_type=UNKNOWN),
     DeclVar(name=VarName("ArrayList"), value_reg=Register("%0")),
     # ── __init__(this) — initialise self.elements as a heap array ─────────────
     # Also store length=0 on this so _method_length returns 0 before any add().
@@ -59,14 +60,14 @@ ARRAY_LIST_IR = (
     NewArray(result_reg=Register("%2"), type_hint="list", size_reg=NO_REGISTER),
     LoadVar(result_reg=Register("%3"), name=VarName("this")),
     StoreField(obj_reg=Register("%3"), field_name=_ELEMENTS, value_reg=Register("%2")),
-    Const(result_reg=Register("%4"), value="0"),
+    Const.int_(Register("%4"), 0),
     StoreField(
         obj_reg=Register("%3"), field_name=_LEN_SPECIAL, value_reg=Register("%4")
     ),
-    Const(result_reg=Register("%5"), value="None"),
+    Const.null_(Register("%5")),
     Return_(value_reg=Register("%5")),
     Label_(label=CodeLabel(_INIT_END)),
-    Const(result_reg=Register("%6"), value=_INIT_F),
+    Const.func_ref(Register("%6"), _INIT_F),
     DeclVar(name=VarName("__init__"), value_reg=Register("%6")),
     # ── add(this, element) → list_append to elements, update this.length ──────
     Branch(label=CodeLabel(_ADD_END)),
@@ -93,10 +94,10 @@ ARRAY_LIST_IR = (
     StoreField(
         obj_reg=Register("%14"), field_name=_LEN_SPECIAL, value_reg=Register("%13")
     ),
-    Const(result_reg=Register("%15"), value="True"),
+    Const.bool_(Register("%15"), True),
     Return_(value_reg=Register("%15")),
     Label_(label=CodeLabel(_ADD_END)),
-    Const(result_reg=Register("%16"), value=_ADD_F),
+    Const.func_ref(Register("%16"), _ADD_F),
     DeclVar(name=VarName("add"), value_reg=Register("%16")),
     # ── get(this, index) → elements[index] ────────────────────────────────────
     Branch(label=CodeLabel(_GET_END)),
@@ -115,7 +116,7 @@ ARRAY_LIST_IR = (
     ),
     Return_(value_reg=Register("%22")),
     Label_(label=CodeLabel(_GET_END)),
-    Const(result_reg=Register("%23"), value=_GET_F),
+    Const.func_ref(Register("%23"), _GET_F),
     DeclVar(name=VarName("get"), value_reg=Register("%23")),
     # ── size(this) → len(elements) via this.length (set by add) ──────────────
     # This stub is DEAD CODE at runtime — `_method_length` in Builtins.METHOD_TABLE
@@ -131,7 +132,7 @@ ARRAY_LIST_IR = (
     ),
     Return_(value_reg=Register("%26")),
     Label_(label=CodeLabel(_SIZE_END)),
-    Const(result_reg=Register("%27"), value=_SIZE_F),
+    Const.func_ref(Register("%27"), _SIZE_F),
     DeclVar(name=VarName("size"), value_reg=Register("%27")),
     # ── isEmpty(this) → this.length == 0 ──────────────────────────────────────
     Branch(label=CodeLabel(_EMPTY_END)),
@@ -142,7 +143,7 @@ ARRAY_LIST_IR = (
     LoadField(
         result_reg=Register("%30"), obj_reg=Register("%29"), field_name=_LEN_SPECIAL
     ),
-    Const(result_reg=Register("%31"), value="0"),
+    Const.int_(Register("%31"), 0),
     Binop(
         result_reg=Register("%32"),
         operator=BinopKind.EQ,
@@ -151,7 +152,7 @@ ARRAY_LIST_IR = (
     ),
     Return_(value_reg=Register("%32")),
     Label_(label=CodeLabel(_EMPTY_END)),
-    Const(result_reg=Register("%33"), value=_EMPTY_F),
+    Const.func_ref(Register("%33"), _EMPTY_F),
     DeclVar(name=VarName("isEmpty"), value_reg=Register("%33")),
 )
 

@@ -34,6 +34,11 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.c.node_types import CNodeType
 from interpreter.types.type_expr import UNKNOWN, EnumType, TypeExpr, scalar, pointer
+from interpreter.frontends.common.expressions import (
+    lower_null_literal,
+    lower_int_literal,
+    lower_default_return,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +131,7 @@ def lower_declaration(
                     node=node,
                 )
             else:
-                val_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Const(result_reg=val_reg, value=ctx.constants.none_literal)
-                )
+                val_reg = lower_null_literal(ctx, node)
             ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
             ctx.seed_var_type(var_name, effective_type)
 
@@ -190,8 +192,7 @@ def _lower_init_declarator(
             node=node,
         )
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        val_reg = lower_null_literal(ctx, node)
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, effective_type)
 
@@ -423,8 +424,7 @@ def lower_function_def_c(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -494,8 +494,7 @@ def lower_struct_field(
         fname = ctx.node_text(decl)
         this_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
-        default_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=default_reg, value="0"), node=node)
+        default_reg = lower_int_literal(ctx, node, text="0")
         ctx.emit_inst(
             StoreField(
                 obj_reg=this_reg, field_name=FieldName(fname), value_reg=default_reg
@@ -530,8 +529,7 @@ def lower_enum_def(
             if value_child:
                 val_reg = ctx.lower_expr(value_child)
             else:
-                val_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=val_reg, value=str(i)))
+                val_reg = lower_int_literal(ctx, enumerator, text=str(i))
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
@@ -626,10 +624,7 @@ def lower_preproc_function_def(
         val_reg = ctx.lower_expr(value_node)
         ctx.emit_inst(Return_(value_reg=val_reg))
     else:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
         ctx.emit_inst(Return_(value_reg=none_reg))
 
     ctx.emit_inst(Label_(label=end_label))

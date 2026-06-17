@@ -9,9 +9,9 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
-    Const,
     Return_,
 )
+from interpreter.frontends.common.expressions import lower_default_return
 from interpreter.frontends.ruby.expressions import lower_ruby_store_target
 from interpreter.frontends.ruby.node_types import RubyNodeType
 
@@ -28,10 +28,7 @@ def lower_ruby_return(
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=val_reg), node=node)
 
 

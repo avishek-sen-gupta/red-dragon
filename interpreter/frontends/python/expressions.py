@@ -13,7 +13,9 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_comparison as common_lower_comparison,
-    lower_const_literal,
+    lower_int_literal,
+    lower_string_literal,
+    lower_null_literal,
     lower_interpolated_string_parts,
     lower_store_target as common_lower_store_target,
 )
@@ -102,7 +104,7 @@ def lower_tuple_unpack(
         c for c in target.children if c.type != PythonNodeType.COMMA
     ):
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg)
@@ -195,7 +197,7 @@ def lower_tuple_literal(
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(Const.int_(size_reg, len(elems)))
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg, type_hint=scalar(TypeName("tuple")), size_reg=size_reg
@@ -205,7 +207,7 @@ def lower_tuple_literal(
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
@@ -264,7 +266,7 @@ def lower_list_comprehension(
     # Create result array
     result_arr = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value="0"))
+    ctx.emit_inst(Const.int_(size_reg, 0))
     ctx.emit_inst(
         NewArray(
             result_reg=result_arr, type_hint=scalar(TypeName("list")), size_reg=size_reg
@@ -274,7 +276,7 @@ def lower_list_comprehension(
 
     # Result index counter
     result_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=result_idx, value="0"))
+    ctx.emit_inst(Const.int_(result_idx, 0))
 
     end_label = ctx.fresh_label("comp_end")
 
@@ -309,7 +311,7 @@ def _lower_comprehension_loop(
 
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(Const.int_(init_idx, 0))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -383,7 +385,7 @@ def _lower_comprehension_loop(
             StoreIndex(arr_reg=result_arr, index_reg=result_idx, value_reg=val_reg)
         )
         one_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+        ctx.emit_inst(Const.int_(one_reg, 1))
         new_result_idx = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -435,7 +437,7 @@ def lower_dict_comprehension(
 
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(Const.int_(init_idx, 0))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -651,7 +653,7 @@ def lower_generator_expression(
 
     result_arr = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value="0"))
+    ctx.emit_inst(Const.int_(size_reg, 0))
     ctx.emit_inst(
         NewArray(
             result_reg=result_arr, type_hint=scalar(TypeName("list")), size_reg=size_reg
@@ -660,7 +662,7 @@ def lower_generator_expression(
     )
 
     result_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=result_idx, value="0"))
+    ctx.emit_inst(Const.int_(result_idx, 0))
 
     end_label = ctx.fresh_label("gen_end")
 
@@ -706,7 +708,7 @@ def lower_set_comprehension(
     )
 
     result_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=result_idx, value="0"))
+    ctx.emit_inst(Const.int_(result_idx, 0))
 
     end_label = ctx.fresh_label("setcomp_end")
 
@@ -749,7 +751,7 @@ def lower_set_literal(
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg))
     return obj_reg
 
@@ -825,7 +827,9 @@ def lower_python_subscript(
     obj_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     idx_node = node.child_by_field_name(ctx.constants.subscript_index_field)
     if obj_node is None or idx_node is None:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=reg, hint="malformed_subscript"), node=node)
+        return reg
     obj_reg = ctx.lower_expr(obj_node)
     if idx_node.type == PythonNodeType.SLICE:
         return _lower_slice_with_collection(ctx, idx_node, obj_reg)
@@ -906,7 +910,7 @@ def _lower_slice_with_collection(
 def _lower_slice_none(ctx: TreeSitterEmitContext) -> Register:
     """Emit a CONST('None') for a missing slice component."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(reg))
     return reg
 
 
@@ -918,7 +922,7 @@ def lower_noop_expr(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a no-op expression node (e.g. keyword_separator, positional_separator)."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal), node=node)
+    ctx.emit_inst(Const.null_(reg), node=node)
     return reg
 
 
@@ -941,7 +945,7 @@ def lower_list_pattern(
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(Const.int_(size_reg, len(elems)))
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg, type_hint=scalar(TypeName("list")), size_reg=size_reg
@@ -951,7 +955,7 @@ def lower_list_pattern(
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
@@ -998,6 +1002,73 @@ def lower_dict_pattern(
 # ── f-string / interpolated string ────────────────────────────
 
 
+def _unquote_python_string(raw: str) -> str:
+    """Strip Python string prefixes and surrounding quote characters.
+
+    Handles:
+      - Prefixes: b, r, f, u, rb, br, fr, rf (case-insensitive), and combinations.
+      - Triple-quoted: \"\"\"...\"\"\" or '''...'''
+      - Single-quoted: \"...\" or '...'
+
+    The returned value is the raw content between the delimiters.  Escape
+    sequences (\\n, \\t, etc.) are left as-is so the VM/runtime can decide
+    how to interpret them; this mirrors the previous behaviour of storing the
+    raw source text.
+    """
+    s = raw
+    # Strip string prefix letters (b, r, f, u, rb, br, fr, rf etc.)
+    i = 0
+    while i < len(s) and s[i].lower() in ("b", "r", "f", "u"):
+        i += 1
+    s = s[i:]
+    # Triple-quoted (must check before single-quoted)
+    if s.startswith('"""') and s.endswith('"""') and len(s) >= 6:
+        return s[3:-3]
+    if s.startswith("'''") and s.endswith("'''") and len(s) >= 6:
+        return s[3:-3]
+    # Single-quoted
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        return s[1:-1]
+    # Fallback: return as-is (malformed literal, best-effort)
+    return s
+
+
+def _lower_text_as_string(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Emit node text as a typed string CONST (no unquoting — text is already raw).
+
+    Used for token-level nodes whose text is already the final string value:
+    STRING_CONTENT, FORMAT_SPECIFIER, TYPE_CONVERSION, STRING_START, STRING_END.
+    """
+    return lower_string_literal(ctx, node, ctx.node_text(node))
+
+
+def lower_python_ellipsis(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower Python ``...`` (Ellipsis) as the string literal \"...\"."""
+    return lower_string_literal(ctx, node, "...")
+
+
+def lower_python_concatenated_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Python adjacent string literals (\"foo\" \"bar\") by concatenating parts.
+
+    Each child STRING node is unquoted and emitted as Const.string; parts are
+    then joined with BINOP '+'.  If there are no string children the node falls
+    back to an empty string literal.
+    """
+    string_children = [c for c in node.children if c.type == PythonNodeType.STRING]
+    if not string_children:
+        # Fallback: unquote the whole node text
+        return lower_string_literal(
+            ctx, node, _unquote_python_string(ctx.node_text(node))
+        )
+    parts: list[str] = []
+    for child in string_children:
+        raw = ctx.node_text(child)
+        parts.append(lower_string_literal(ctx, child, _unquote_python_string(raw)))
+    return lower_interpolated_string_parts(ctx, parts, node)
+
+
 def lower_python_string(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
@@ -1006,18 +1077,17 @@ def lower_python_string(
         c.type == PythonNodeType.INTERPOLATION for c in node.children
     )
     if not has_interpolation:
-        return lower_const_literal(ctx, node)
+        raw = ctx.node_text(node)
+        return lower_string_literal(ctx, node, _unquote_python_string(raw))
 
     parts: list[str] = []
     for child in node.children:
         if child.type == PythonNodeType.INTERPOLATION:
             parts.append(lower_interpolation(ctx, child))
         elif child.type == PythonNodeType.STRING_CONTENT:
-            frag_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
-            )
-            parts.append(frag_reg)
+            # STRING_CONTENT nodes in f-strings are already unquoted by
+            # tree-sitter (they are the raw content between delimiters).
+            parts.append(lower_string_literal(ctx, child, ctx.node_text(child)))
         # skip string_start, string_end delimiters
 
     return lower_interpolated_string_parts(ctx, parts, node)
@@ -1046,7 +1116,7 @@ def _emit_for_increment(
     ctx: TreeSitterEmitContext, idx_reg: str, loop_label: str
 ) -> None:
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(

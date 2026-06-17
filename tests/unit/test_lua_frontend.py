@@ -50,7 +50,7 @@ class TestLuaLocalVariables:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("10" in inst.operands for inst in consts)
+        assert any(10 in inst.operands for inst in consts)
 
     @covers(LuaFeature.LOCAL_VARIABLE_DECLARATION)
     def test_local_without_initializer_produces_no_ir(self):
@@ -72,7 +72,7 @@ class TestLuaLocalVariables:
         assert Opcode.CONST in opcodes
         assert Opcode.STORE_VAR in opcodes
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("None" in inst.operands for inst in consts)
+        assert any(None in inst.operands for inst in consts)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
@@ -103,19 +103,19 @@ class TestLuaExpressions:
     def test_nil_literal(self):
         instructions = _parse_lua("local x = nil")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("None" in inst.operands for inst in consts)
+        assert any(None in inst.operands for inst in consts)
 
     @covers(LuaFeature.ARITHMETIC)
     def test_boolean_true(self):
         instructions = _parse_lua("local x = true")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("True" in inst.operands for inst in consts)
+        assert any(True in inst.operands for inst in consts)
 
     @covers(LuaFeature.ARITHMETIC)
     def test_boolean_false(self):
         instructions = _parse_lua("local x = false")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("False" in inst.operands for inst in consts)
+        assert any(False in inst.operands for inst in consts)
 
 
 class TestLuaOperators:
@@ -196,7 +196,7 @@ class TestLuaFunctions:
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("None" in inst.operands for inst in consts)
+        assert any(None in inst.operands for inst in consts)
 
 
 class TestLuaTableAccess:
@@ -303,10 +303,10 @@ class TestLuaControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first elseif-branch value missing"
-        assert "30" in const_values, "second elseif-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first elseif-branch value missing"
+        assert 30 in const_values, "second elseif-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -845,6 +845,125 @@ class TestLuaDottedFunctionCall:
         assert (
             len(call_unknowns) >= 2
         ), f"Expected 2 CALL_UNKNOWN, got {len(call_unknowns)}"
+
+
+class TestLuaNumberLiterals:
+    """Tests for int-vs-float NUMBER literal classification."""
+
+    @covers(LuaFeature.ARITHMETIC)
+    def test_integer_decimal_emits_int_const(self):
+        """Plain decimal integer -> typed int CONST."""
+        instructions = _parse_lua("local x = 42")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == 42 for inst in consts for op in inst.operands
+        ), f"Expected int 42 in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.ARITHMETIC)
+    def test_hex_integer_emits_int_const(self):
+        """Hex integer 0xFF -> typed int CONST with value 255."""
+        instructions = _parse_lua("local x = 0xFF")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == 255 for inst in consts for op in inst.operands
+        ), f"Expected int 255 in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.ARITHMETIC)
+    def test_decimal_float_emits_float_const(self):
+        """Decimal float 3.14 -> typed float CONST."""
+        instructions = _parse_lua("local x = 3.14")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            abs(op - 3.14) < 1e-9
+            for inst in consts
+            for op in inst.operands
+            if isinstance(op, float)
+        ), f"Expected float ~3.14 in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.ARITHMETIC)
+    def test_trailing_dot_float_emits_float_const(self):
+        """Trailing-dot float 3. -> typed float CONST with value 3.0."""
+        instructions = _parse_lua("local x = 3.")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == 3.0 and isinstance(op, float)
+            for inst in consts
+            for op in inst.operands
+        ), f"Expected float 3.0 in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.ARITHMETIC)
+    def test_exponent_float_emits_float_const(self):
+        """Scientific notation 1e5 -> typed float CONST with value 100000.0."""
+        instructions = _parse_lua("local x = 1e5")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == 100000.0 and isinstance(op, float)
+            for inst in consts
+            for op in inst.operands
+        ), f"Expected float 100000.0 in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.ARITHMETIC)
+    def test_hex_float_emits_float_const(self):
+        """Hex float 0x1p4 -> typed float CONST with value 16.0."""
+        instructions = _parse_lua("local x = 0x1p4")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == 16.0 and isinstance(op, float)
+            for inst in consts
+            for op in inst.operands
+        ), f"Expected float 16.0 in CONST operands, got {[c.operands for c in consts]}"
+
+
+class TestLuaStringLiterals:
+    """Tests for string literal forms including long bracket strings."""
+
+    @covers(LuaFeature.STRING_ESCAPE)
+    def test_double_quoted_string(self):
+        """Double-quoted string strips quotes correctly."""
+        instructions = _parse_lua('local x = "hello"')
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == "hello" for inst in consts for op in inst.operands
+        ), f"Expected string 'hello' in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.STRING_ESCAPE)
+    def test_single_quoted_string(self):
+        """Single-quoted string strips quotes correctly."""
+        instructions = _parse_lua("local x = 'world'")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == "world" for inst in consts for op in inst.operands
+        ), f"Expected string 'world' in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.STRING_ESCAPE)
+    def test_long_bracket_double_bracket(self):
+        """[[...]] long bracket string strips delimiters."""
+        instructions = _parse_lua("local x = [[hello world]]")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == "hello world" for inst in consts for op in inst.operands
+        ), f"Expected string 'hello world' in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.STRING_ESCAPE)
+    def test_long_bracket_single_equals(self):
+        """[=[...]=] long bracket with one = strips delimiters."""
+        instructions = _parse_lua("local x = [=[foo bar]=]")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            op == "foo bar" for inst in consts for op in inst.operands
+        ), f"Expected string 'foo bar' in CONST operands, got {[c.operands for c in consts]}"
+
+    @covers(LuaFeature.STRING_ESCAPE)
+    def test_escape_newline_in_string(self):
+        """String with \\n escape produces actual newline in the string value."""
+        # Lua "a\nb" should unescape \n to an actual newline character
+        instructions = _parse_lua('local x = "a\\nb"')
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            isinstance(op, str) and "\n" in op
+            for inst in consts
+            for op in inst.operands
+        ), f"Expected string with newline in CONST operands, got {[c.operands for c in consts]}"
 
 
 class TestLuaBitwiseXor:

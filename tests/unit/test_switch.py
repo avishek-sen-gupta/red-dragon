@@ -135,7 +135,7 @@ class TestCSwitchLowering:
         # Default arm should store 99 into x
         decls = [s for s in _find_all(ir, Opcode.DECL_VAR) if "x" in s.operands]
         stores = [s for s in _find_all(ir, Opcode.STORE_VAR) if "x" in s.operands]
-        consts = [c for c in _find_all(ir, Opcode.CONST) if "99" in c.operands]
+        consts = [c for c in _find_all(ir, Opcode.CONST) if 99 in c.operands]
         assert len(consts) == 1, "default arm should produce CONST 99"
         assert len(decls) == 1, "should have DECL_VAR for parameter x"
         assert (

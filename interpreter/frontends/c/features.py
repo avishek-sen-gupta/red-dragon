@@ -77,5 +77,10 @@ class CFeature(Enum):
     MACRO_FUNCTION = "function-like macro definitions and expansions"
     EXTERN_C = 'extern "C" linkage specification blocks'
 
+    # Literals
+    NULL_POINTER = "NULL macro → integer 0 (typed Const.int_)"
+    IMPLICIT_RETURN = "implicit int-0 return at function fall-off-end"
+    NUMBER_LITERAL = "integer and floating-point numeric literals"
+
     # Infrastructure
     ENTRY_LABEL = "synthetic entry point label at function start"

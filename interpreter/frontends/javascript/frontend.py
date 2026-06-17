@@ -13,6 +13,13 @@ from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
 from interpreter.frontends.common import declarations as common_decl
 from interpreter.frontends.javascript import expressions as js_expr
+from interpreter.frontends.javascript.expressions import (
+    lower_js_number,
+    lower_js_string,
+    lower_js_string_fragment,
+    lower_js_regex,
+    lower_js_meta_property,
+)
 from interpreter.frontends.javascript import control_flow as js_cf
 from interpreter.frontends.javascript import declarations as js_decl
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
@@ -39,8 +46,8 @@ class JavaScriptFrontend(BaseFrontend):
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             JSN.IDENTIFIER: common_expr.lower_identifier,
-            JSN.NUMBER: common_expr.lower_const_literal,
-            JSN.STRING: common_expr.lower_const_literal,
+            JSN.NUMBER: lower_js_number,
+            JSN.STRING: lower_js_string,
             JSN.TEMPLATE_STRING: js_expr.lower_template_string,
             JSN.TEMPLATE_SUBSTITUTION: js_expr.lower_template_substitution,
             JSN.TRUE: common_expr.lower_canonical_true,
@@ -67,18 +74,18 @@ class JavaScriptFrontend(BaseFrontend):
             JSN.SHORTHAND_PROPERTY_IDENTIFIER: common_expr.lower_identifier,
             JSN.AWAIT_EXPRESSION: js_expr.lower_await_expression,
             JSN.YIELD_EXPRESSION: js_expr.lower_yield_expression,
-            JSN.REGEX: common_expr.lower_const_literal,
+            JSN.REGEX: lower_js_regex,
             JSN.SEQUENCE_EXPRESSION: js_expr.lower_sequence_expression,
             JSN.SPREAD_ELEMENT: js_expr.lower_spread_element,
             JSN.FUNCTION: js_expr.lower_function_expression,
             JSN.FUNCTION_EXPRESSION: js_expr.lower_function_expression,
             JSN.GENERATOR_FUNCTION: js_expr.lower_function_expression,
             JSN.GENERATOR_FUNCTION_DECLARATION: js_decl.lower_js_function_def,
-            JSN.STRING_FRAGMENT: common_expr.lower_const_literal,
+            JSN.STRING_FRAGMENT: lower_js_string_fragment,
             JSN.FIELD_DEFINITION: js_expr.lower_js_field_definition,
             JSN.EXPORT_CLAUSE: js_expr.lower_export_clause,
             JSN.EXPORT_SPECIFIER: common_expr.lower_paren,
-            JSN.META_PROPERTY: common_expr.lower_const_literal,
+            JSN.META_PROPERTY: lower_js_meta_property,
             JSN.CLASS: js_decl.lower_js_class_expression,
         }
 

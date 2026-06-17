@@ -593,13 +593,18 @@ def _infer_const(
             )
         return
     ctx.const_values[str(inst.result_reg)] = raw
-    inferred = _infer_const_type(
-        raw,
-        func_symbol_table=ctx.func_symbol_table,
-        class_symbol_table=ctx.class_symbol_table,
-    )
-    if inferred:
-        ctx.register_types[inst.result_reg] = inferred
+    # Typed literal: trust the Const's declared type_expr — no string re-inference.
+    te = inst.type_expr
+    # A null literal is typed Null, but TYPE INFERENCE currently treats it as
+    # UNKNOWN. Inferring it as Null propagates through implicit/default returns and
+    # makes nearly every dynamic-language function infer a Null/Optional return
+    # type — a return-type-inference semantic change that belongs to the
+    # option-style nullability work (red-dragon-x78r), not this mechanical Const
+    # refactor. Until then, preserve the established UNKNOWN behavior.
+    if isinstance(te, ScalarType) and te.name == FoundationTypeName.NULL:
+        te = UNKNOWN
+    if te:  # UNKNOWN is falsy — don't record it (mirrors prior behavior)
+        ctx.register_types[inst.result_reg] = te
 
 
 def _infer_load_var(
