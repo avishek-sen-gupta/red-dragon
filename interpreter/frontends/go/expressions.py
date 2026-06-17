@@ -14,9 +14,9 @@ from interpreter.frontends.common.expressions import (
     lower_int_literal,
     lower_float_literal,
     lower_null_literal,
-    lower_default_return,
     extract_call_args,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import ParameterizedType, scalar, array_of, map_of
@@ -38,7 +38,6 @@ from interpreter.instructions import (
     StoreVar,
     Branch,
     Label_,
-    Return_,
 )
 
 
@@ -407,8 +406,7 @@ def lower_func_literal(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
