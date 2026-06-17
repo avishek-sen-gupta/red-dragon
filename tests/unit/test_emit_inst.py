@@ -40,11 +40,11 @@ def _make_ctx() -> TreeSitterEmitContext:
 class TestEmitInst:
     def test_stores_typed_instruction(self):
         ctx = _make_ctx()
-        inst = Const(result_reg=Register("%0"), value="42")
+        inst = Const.int_(Register("%0"), 42)
         ctx.emit_inst(inst)
         assert len(ctx.instructions) == 1
         assert isinstance(ctx.instructions[0], Const)
-        assert ctx.instructions[0].value == "42"
+        assert ctx.instructions[0].value == 42
 
     def test_returns_the_typed_instruction(self):
         ctx = _make_ctx()
@@ -74,6 +74,6 @@ class TestEmitInst:
         tree-sitter node here, just verify the mechanism exists."""
         ctx = _make_ctx()
         loc = SourceLocation(start_line=5, start_col=0, end_line=5, end_col=10)
-        inst = Const(result_reg=Register("%0"), value="42", source_location=loc)
+        inst = Const.int_(Register("%0"), 42, source_location=loc)
         result = ctx.emit_inst(inst)
         assert result.source_location == loc
