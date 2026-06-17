@@ -118,7 +118,7 @@ class TestParseSingleInstruction:
         inst = _parse_single_instruction(raw)
         assert inst.opcode == Opcode.CONST
         assert inst.result_reg == Register("%0")
-        assert inst.operands == ["42"]
+        assert inst.operands == [42]
         assert not inst.label.is_present()
 
     def test_label_instruction(self):
