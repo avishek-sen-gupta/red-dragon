@@ -8,7 +8,7 @@ from interpreter.ir import Opcode, SpreadArguments
 from interpreter.instructions import InstructionBase
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from interpreter.frontends.javascript.features import JavaScriptFeature
-from tests.covers import covers, FeatureStatus
+from tests.covers import covers, FeatureStatus, NotLanguageFeature
 
 
 def _parse_js(source: str) -> list[InstructionBase]:
@@ -1464,3 +1464,12 @@ class TestAnonymousClassExpression:
         stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [s.operands[0] for s in stores if s.operands]
         assert "Foo" in store_names, f"Expected 'Foo' in STORE_VAR, got: {store_names}"
+
+
+class TestJavaScriptImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        instructions = _parse_js("function f() { return 42; }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)

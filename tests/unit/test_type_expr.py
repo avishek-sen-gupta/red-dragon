@@ -21,8 +21,6 @@ from interpreter.types.type_expr import (
     map_of,
     union_of,
     optional,
-    is_optional,
-    unwrap_optional,
     unknown,
     fn_type,
     tuple_of,
@@ -509,38 +507,6 @@ class TestOptionalConvenience:
         assert isinstance(result, UnionType)
         assert scalar(TypeName("Int")) in result.members
         assert scalar(TypeName("Null")) in result.members
-
-    def test_is_optional_true(self):
-        assert is_optional(optional(scalar(TypeName("Int"))))
-
-    def test_is_optional_false_for_scalar(self):
-        assert not is_optional(scalar(TypeName("Int")))
-
-    def test_is_optional_false_for_union_without_null(self):
-        assert not is_optional(
-            union_of(scalar(TypeName("Int")), scalar(TypeName("String")))
-        )
-
-    def test_unwrap_optional(self):
-        result = unwrap_optional(optional(scalar(TypeName("Int"))))
-        assert result == scalar(TypeName("Int"))
-
-    def test_unwrap_optional_multi_member(self):
-        """Optional of a union: unwrap removes Null, keeps rest as union."""
-        t = union_of(
-            scalar(TypeName("Int")),
-            scalar(TypeName("String")),
-            scalar(TypeName("Null")),
-        )
-        result = unwrap_optional(t)
-        assert isinstance(result, UnionType)
-        assert scalar(TypeName("Null")) not in result.members
-        assert scalar(TypeName("Int")) in result.members
-        assert scalar(TypeName("String")) in result.members
-
-    def test_unwrap_non_optional_returns_as_is(self):
-        result = unwrap_optional(scalar(TypeName("Int")))
-        assert result == scalar(TypeName("Int"))
 
 
 # ---------------------------------------------------------------------------

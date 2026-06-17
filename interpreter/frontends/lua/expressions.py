@@ -11,6 +11,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.common.expressions import (
     extract_call_args,
     lower_int_literal,
@@ -384,8 +385,7 @@ def lower_lua_function_definition(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()

@@ -7,7 +7,7 @@ from interpreter.frontends.typescript.features import TypeScriptFeature
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
@@ -34,6 +34,15 @@ def _find_all(
     instructions: list[InstructionBase], opcode: Opcode
 ) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
+
+
+class TestTypeScriptImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        instructions = _parse_ts("function f(): number { return 42; }")
+        returns = [i for i in instructions if i.opcode == Opcode.RETURN]
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)
 
 
 class TestTypeScriptSmoke:

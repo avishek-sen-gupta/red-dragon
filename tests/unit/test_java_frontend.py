@@ -9,7 +9,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_java(source: str) -> list[InstructionBase]:
@@ -1921,3 +1921,13 @@ class TestJavaSpreadParameter:
         decl_names = [str(inst.operands) for inst in decl_vars]
         assert any("prefix" in n for n in decl_names)
         assert any("vals" in n for n in decl_names)
+
+
+class TestJavaImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        src = "class A { int f() { return 42; } }"
+        instructions = _parse_java(src)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)
