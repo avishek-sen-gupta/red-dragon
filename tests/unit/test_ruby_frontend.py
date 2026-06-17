@@ -8,7 +8,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_expr import FunctionType
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
@@ -66,6 +66,17 @@ class TestRubyVariables:
         assert Opcode.STORE_VAR in opcodes
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
+
+
+class TestRubyImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        instructions = _parse_ruby("def f\n  return 42\nend\n")
+        returns = _find_all(instructions, Opcode.RETURN)
+        # The explicit `return 42` is a real return; the synthetic fall-off-the-end
+        # return appended after it is the implicit one.
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)
 
 
 class TestRubyExpressions:

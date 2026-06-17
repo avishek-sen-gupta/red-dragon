@@ -18,7 +18,7 @@ from interpreter.instructions import (
     Symbolic,
 )
 from interpreter import constants
-from interpreter.frontends.common.expressions import lower_default_return
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.ruby.expressions import lower_ruby_params
 from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.register import Register
@@ -95,8 +95,7 @@ def lower_ruby_method(
     if expr_reg:
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
-        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -207,8 +206,7 @@ def lower_ruby_singleton_method(
     if expr_reg:
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
-        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
