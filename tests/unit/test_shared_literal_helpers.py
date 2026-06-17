@@ -360,3 +360,32 @@ class TestLowerDefaultReturn:
         assert inst.value == "()"
         assert inst.type_expr == scalar(FoundationTypeName.STRING)
         assert reg == inst.result_reg
+
+
+# ── tests: emit_implicit_return ──────────────────────────────────────────────
+
+
+class TestEmitImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_emits_return_marked_implicit(self):
+        from interpreter.constants import Language
+        from interpreter.frontend_observer import NullFrontendObserver
+        from interpreter.frontends.context import (
+            GrammarConstants,
+            TreeSitterEmitContext,
+        )
+        from interpreter.frontends.common.declarations import emit_implicit_return
+        from interpreter.instructions import Return_
+        from interpreter.ir import Opcode
+
+        ctx = TreeSitterEmitContext(
+            language=Language.PYTHON,
+            source=b"",
+            observer=NullFrontendObserver(),
+            constants=GrammarConstants(),
+        )
+        emit_implicit_return(ctx, None)
+        returns = [i for i in ctx.instructions if i.opcode == Opcode.RETURN]
+        assert len(returns) == 1
+        assert isinstance(returns[0], Return_)
+        assert returns[0].implicit is True
