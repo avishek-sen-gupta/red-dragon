@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from interpreter.type_name import TypeName
 
-import pytest
-
 from interpreter.address import Address
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.var_name import VarName
@@ -27,11 +25,12 @@ def _run_rust(source: str, max_steps: int = 200):
 
 
 class TestRustRawStringLiteralExecution:
-    @pytest.mark.xfail(
-        reason="Rust raw string keeps r-prefix in value (red-dragon-9815)"
-    )
     def test_raw_string_assigned(self):
-        """let x = r\"hello\"; should store \"hello\" with prefix stripped."""
+        """let x = r\"hello\"; should store \"hello\" with prefix stripped.
+
+        Fixed by the typed-Const migration (red-dragon-9815): the Rust frontend
+        now strips the r-prefix/delimiters when lowering the string literal.
+        """
         _, local_vars = _run_rust('let x = r"hello";')
         assert local_vars[VarName("x")] == "hello"
 

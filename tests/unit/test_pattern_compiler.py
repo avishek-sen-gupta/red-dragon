@@ -351,9 +351,7 @@ class TestStarPattern:
             b for b in instrs if b.opcode == Opcode.BINOP and b.operands[0] == ">="
         ]
         assert len(gte_ops) >= 1, "expected >= length check for star-in-middle"
-        const_2 = [
-            c for c in instrs if c.opcode == Opcode.CONST and c.operands == [2]
-        ]
+        const_2 = [c for c in instrs if c.opcode == Opcode.CONST and c.operands == [2]]
         assert len(const_2) >= 1, "expected CONST 2 for fixed element count"
 
     def test_star_pattern_standalone_returns_true(self):
