@@ -8,7 +8,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:
@@ -1875,3 +1875,12 @@ for (int i = 0; i < 10; i++) {
         ir = _parse_and_lower(source)
         branches = _find_all(ir, Opcode.BRANCH)
         assert len(branches) >= 1
+
+
+class TestCSharpImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        ir = _parse_and_lower("class A { int F() { return 42; } }")
+        returns = _find_all(ir, Opcode.RETURN)
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)
