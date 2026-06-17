@@ -138,8 +138,7 @@ def lower_function_def(
         ctx.lower_block(body_node)
 
     # Implicit return at end of function — honour per-language default_return_value
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg), node=node)
+    emit_implicit_return(ctx, node)
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -209,7 +208,7 @@ def emit_synthetic_init(
 
     none_reg = ctx.fresh_reg()
     ctx.emit_inst(Const.null_(none_reg))
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Return_(value_reg=none_reg, implicit=True))
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
