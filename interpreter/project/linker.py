@@ -36,7 +36,12 @@ from interpreter.instructions import (
     Label_,
     ImportModule,
 )
-from interpreter.constants import Language
+from interpreter.constants import (
+    Language,
+    CLASS_LABEL_PREFIX,
+    PRELUDE_CLASS_LABEL_PREFIX,
+)
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
 from interpreter.path_name import PathName, NO_PATH_NAME
 from interpreter.refs.class_ref import ClassRef
@@ -269,11 +274,21 @@ def _transform_module(
                             # variable in scope, so we don't need to redeclare it.
                             pass  # Skip both LOAD_FIELD and DECL_VAR
                         else:
-                            # For functions/classes: emit CONST with the actual label, then DECL_VAR
+                            # For functions/classes: emit a typed CONST ref with the
+                            # actual label, then DECL_VAR. Class labels -> class_ref
+                            # (metatype), everything else -> func_ref (FunctionType),
+                            # so the VM resolves the symbol-table entry by type.
                             actual_label = import_source
-                            const_inst = Const(
-                                result_reg=load_field.result_reg, value=actual_label
-                            )
+                            if actual_label.startswith(
+                                CLASS_LABEL_PREFIX
+                            ) or actual_label.startswith(PRELUDE_CLASS_LABEL_PREFIX):
+                                const_inst = Const.class_ref(
+                                    load_field.result_reg, actual_label, UNKNOWN
+                                )
+                            else:
+                                const_inst = Const.func_ref(
+                                    load_field.result_reg, actual_label
+                                )
                             result.append(
                                 _transform_instruction(const_inst, prefix, reg_offset)
                             )
