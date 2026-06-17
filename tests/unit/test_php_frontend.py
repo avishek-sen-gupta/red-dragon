@@ -37,7 +37,7 @@ class TestPhpFrontendVariableAssignment:
     def test_variable_assignment_produces_const(self):
         ir = _parse_and_lower("<?php $x = 10; ?>")
         consts = _find_all(ir, Opcode.CONST)
-        ten_consts = [c for c in consts if "10" in c.operands]
+        ten_consts = [c for c in consts if 10 in c.operands]
         assert len(ten_consts) >= 1
 
 
@@ -812,7 +812,7 @@ function f() {
 ?>"""
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
 
 class TestPhpEnumDeclaration:
@@ -1163,7 +1163,7 @@ class TestPhpStringInterpolation:
         """Single-quoted 'hello' has no interpolation — remains CONST."""
         ir = _parse_and_lower("<?php $x = 'hello'; ?>")
         consts = _find_all(ir, Opcode.CONST)
-        assert any("'hello'" in inst.operands for inst in consts)
+        assert any("hello" in inst.operands for inst in consts)
         # No concatenation binops for a plain string
         binops = _find_all(ir, Opcode.BINOP)
         assert not any("+" in inst.operands for inst in binops)
@@ -1353,7 +1353,7 @@ class TestPhpPrintIntrinsic:
         print_calls = [c for c in calls if "print" in c.operands]
         assert len(print_calls) >= 1
         consts = _find_all(ir, Opcode.CONST)
-        assert any("'hello'" in inst.operands for inst in consts)
+        assert any("hello" in inst.operands for inst in consts)
 
     @covers(PhpFeature.PRINT)
     def test_print_result_is_stored(self):
@@ -1418,7 +1418,7 @@ class TestPhpConstDeclaration:
         """const X = 42; should emit CONST 42."""
         ir = _parse_and_lower("<?php const X = 42; ?>")
         consts = _find_all(ir, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
 
 class TestPhpErrorSuppression:
@@ -1607,3 +1607,57 @@ $obj = new class {
 ?>""")
         labels = [str(inst.label) for inst in ir if inst.opcode == Opcode.LABEL]
         assert any("greet" in (lbl or "") for lbl in labels)
+
+
+class TestPhpStringEscaping:
+    """Tests for single-vs-double quote escape rules (typed Const migration)."""
+
+    @covers(PhpFeature.STRING_INTERPOLATION)
+    def test_single_quoted_backslash_escape(self):
+        r"""Single-quoted: \\ → \ and \' → '."""
+        ir = _parse_and_lower(r"<?php $x = 'it\'s \\done'; ?>")
+        consts = _find_all(ir, Opcode.CONST)
+        # The three string_content fragments + one escape each
+        # Final value should contain literal apostrophe and backslash
+        all_values = [
+            op for inst in consts for op in inst.operands if isinstance(op, str)
+        ]
+        # it + ' + s \done fragments — check the escape decoded values appear
+        assert any("it" in v for v in all_values)
+        assert any("'" == v for v in all_values), f"Expected apostrophe in {all_values}"
+        assert any("\\" == v for v in all_values), f"Expected backslash in {all_values}"
+
+    @covers(PhpFeature.STRING_INTERPOLATION)
+    def test_double_quoted_newline_escape(self):
+        r"""Double-quoted: \n → newline character."""
+        ir = _parse_and_lower('<?php $x = "hello\\nworld"; ?>')
+        consts = _find_all(ir, Opcode.CONST)
+        all_values = [
+            op for inst in consts for op in inst.operands if isinstance(op, str)
+        ]
+        # escape_sequence \n should decode to actual newline
+        assert any("\n" == v for v in all_values), f"Expected newline in {all_values}"
+
+    @covers(PhpFeature.STRING_INTERPOLATION)
+    def test_double_quoted_dollar_escape(self):
+        r"""Double-quoted: \$ → literal dollar sign (no interpolation)."""
+        ir = _parse_and_lower('<?php $x = "price: \\$10"; ?>')
+        consts = _find_all(ir, Opcode.CONST)
+        all_values = [
+            op for inst in consts for op in inst.operands if isinstance(op, str)
+        ]
+        assert any("$" == v for v in all_values), f"Expected $ in {all_values}"
+
+    @covers(PhpFeature.STRING_INTERPOLATION)
+    def test_single_quoted_no_newline_decode(self):
+        r"""Single-quoted: \n is NOT a newline — it's literal backslash-n."""
+        ir = _parse_and_lower(r"<?php $x = 'no\nnewline'; ?>")
+        consts = _find_all(ir, Opcode.CONST)
+        all_values = [
+            op for inst in consts for op in inst.operands if isinstance(op, str)
+        ]
+        # \n in single-quoted PHP is NOT decoded — kept as literal \n string content
+        assert not any(
+            "\n" == v for v in all_values
+        ), f"Single-quoted \\n must not be decoded to newline; got {all_values}"
+        assert any("no" in v or "\\n" in v or "newline" in v for v in all_values)

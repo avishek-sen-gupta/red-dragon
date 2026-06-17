@@ -10,6 +10,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.constants import DEFAULT_EXCEPTION_TYPE
 from interpreter.ir import CodeLabel
 from interpreter.frontends.common.exceptions import lower_try_catch
+from interpreter.frontends.common.expressions import lower_default_return
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.operator_kind import resolve_binop
@@ -235,7 +236,7 @@ def lower_pascal_for(
     cur_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=cur_reg, name=VarName(var_name)))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     next_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -515,10 +516,7 @@ def lower_pascal_raise(
     if named_children:
         val_reg = ctx.lower_expr(named_children[0])
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
 
 
@@ -562,7 +560,7 @@ def lower_pascal_foreach(
 
     idx_var = f"__foreach_idx_{var_name}"
     zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=zero_reg, value="0"))
+    ctx.emit_inst(Const.int_(zero_reg, 0))
     ctx.emit_inst(DeclVar(name=VarName(idx_var), value_reg=zero_reg))
 
     len_reg = ctx.fresh_reg()
@@ -603,7 +601,7 @@ def lower_pascal_foreach(
     cur2_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=cur2_reg, name=VarName(idx_var)))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     next_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(

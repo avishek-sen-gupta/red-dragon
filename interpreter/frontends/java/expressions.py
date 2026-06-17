@@ -34,9 +34,16 @@ from interpreter.instructions import (
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     extract_call_args_unwrap,
-    lower_const_literal,
+    lower_default_return,
+    lower_float_literal,
+    lower_int_literal,
+    lower_null_literal,
+    lower_string_literal,
     lower_store_target,
 )
+
+# lower_const_literal is intentionally NOT imported — it now raises TypeError.
+# All literal sites must use the typed helpers above (gjoy.4 migration).
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
@@ -45,18 +52,22 @@ from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
 
 
-def _parse_java_integer(text: str) -> str:
-    """Parse a Java integer literal (hex/octal/binary/decimal) to a decimal string."""
-    # Strip trailing type suffixes (L, l)
-    clean = text.rstrip("Ll")
+def _parse_java_integer(text: str) -> int:
+    """Parse a Java integer literal (hex/octal/binary/decimal) to a Python int.
+
+    Strips trailing L/l long suffixes and underscore digit separators before
+    parsing.  hex/octal/binary/decimal are all handled.
+    """
+    # Strip trailing type suffixes (L, l) and digit separators
+    clean = text.rstrip("Ll").replace("_", "")
     if clean.startswith(("0x", "0X")):
-        return str(int(clean, 16))
+        return int(clean, 16)
     if clean.startswith(("0b", "0B")):
-        return str(int(clean, 2))
+        return int(clean, 2)
     # Octal: starts with 0 and has more digits (but not just "0")
     if len(clean) > 1 and clean.startswith("0") and clean.isdigit():
-        return str(int(clean, 8))
-    return text
+        return int(clean, 8)
+    return int(clean, 10)
 
 
 _JAVA_CHAR_ESCAPES: dict[str, str] = {
@@ -84,11 +95,9 @@ def _parse_java_char(text: str) -> int:
 
 
 def lower_java_char_literal(ctx: TreeSitterEmitContext, node: Any) -> Register:
-    """Lower a Java character literal to its integer ordinal value."""
-    reg = ctx.fresh_reg()
+    """Lower a Java character literal to its integer ordinal value (typed Const.int_)."""
     ordinal = _parse_java_char(ctx.node_text(node))
-    ctx.emit_inst(Const(result_reg=reg, value=str(ordinal)))
-    return reg
+    return lower_int_literal(ctx, node, text=str(ordinal))
 
 
 def _parse_java_hex_float(text: str) -> float:
@@ -100,25 +109,83 @@ def _parse_java_hex_float(text: str) -> float:
 def lower_java_hex_float_literal(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-    """Lower Java hex floating-point literal (e.g. 0x1.0p10 → 1024.0)."""
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(result_reg=reg, value=str(_parse_java_hex_float(ctx.node_text(node)))),
-        node=node,
+    """Lower Java hex floating-point literal (e.g. 0x1.0p10 → 1024.0) as typed Const.float_."""
+    return lower_float_literal(
+        ctx, node, text=str(_parse_java_hex_float(ctx.node_text(node)))
     )
-    return reg
 
 
 def lower_java_integer_literal(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-    """Lower Java integer literal, converting hex/octal/binary to decimal."""
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(result_reg=reg, value=_parse_java_integer(ctx.node_text(node))),
-        node=node,
+    """Lower Java integer literal, converting hex/octal/binary to a typed Const.int_."""
+    return lower_int_literal(
+        ctx, node, text=str(_parse_java_integer(ctx.node_text(node)))
     )
-    return reg
+
+
+_JAVA_STRING_ESCAPES: dict[str, str] = {
+    "\\n": "\n",
+    "\\t": "\t",
+    "\\r": "\r",
+    "\\\\": "\\",
+    "\\'": "'",
+    '\\"': '"',
+    "\\b": "\b",
+    "\\f": "\f",
+    "\\0": "\0",
+}
+
+
+def _unescape_java_string(s: str) -> str:
+    """Resolve Java string escape sequences in an already-unquoted string."""
+    import re
+
+    def replace_escape(m: re.Match) -> str:  # type: ignore[type-arg]
+        seq = m.group(0)
+        if seq in _JAVA_STRING_ESCAPES:
+            return _JAVA_STRING_ESCAPES[seq]
+        if seq.startswith("\\u") and len(seq) == 6:
+            return chr(int(seq[2:], 16))
+        # octal: \NNN
+        if seq.startswith("\\") and seq[1:].isdigit():
+            return chr(int(seq[1:], 8))
+        return seq
+
+    return re.sub(r'\\u[0-9a-fA-F]{4}|\\[0-7]{1,3}|\\[ntrb\\f\'"0]', replace_escape, s)
+
+
+def lower_java_float_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower Java decimal floating-point literal (e.g. 3.14, 3.14f, 1.5d) as typed Const.float_.
+
+    Strips trailing f/F (float) and d/D (double) suffixes; both map to Python float.
+    """
+    raw = ctx.node_text(node).rstrip("fFdD").replace("_", "")
+    return lower_float_literal(ctx, node, text=raw)
+
+
+def lower_java_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a Java string literal (regular or text block) as typed Const.string.
+
+    Strips surrounding double-quotes (or triple-quotes for text blocks) and
+    resolves escape sequences.
+    """
+    raw = ctx.node_text(node)
+    # Text block: triple-quoted string (Java 15+)
+    if raw.startswith('"""'):
+        inner = raw[3:]
+        if inner.endswith('"""'):
+            inner = inner[:-3]
+        value = _unescape_java_string(inner)
+    elif len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+        value = _unescape_java_string(raw[1:-1])
+    else:
+        value = raw
+    return lower_string_literal(ctx, node, value)
 
 
 def lower_method_invocation(
@@ -190,7 +257,7 @@ def lower_field_access(
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     field_node = node.child_by_field_name("field")
     if obj_node is None or field_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
@@ -258,10 +325,7 @@ def lower_lambda(
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
     if body_node and body_node.type == JavaNodeType.BLOCK:
         ctx.lower_block(body_node)
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
         ctx.emit_inst(Return_(value_reg=none_reg))
     elif body_node:
         body_reg = ctx.lower_expr(body_node)
@@ -303,7 +367,7 @@ def lower_array_access(
     arr_node = node.child_by_field_name("array")
     idx_node = node.child_by_field_name("index")
     if arr_node is None or idx_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     arr_reg = ctx.lower_expr(arr_node)
     idx_reg = ctx.lower_expr(idx_node)
     reg = ctx.fresh_reg()
@@ -334,7 +398,7 @@ def lower_array_creation(
     if node.type == JavaNodeType.ARRAY_INITIALIZER:
         elements = [c for c in node.children if c.is_named]
         size_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
+        ctx.emit_inst(Const.int_(size_reg, len(elements)))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
             NewArray(
@@ -347,7 +411,7 @@ def lower_array_creation(
         _emit_array_length(ctx, arr_reg, size_reg)
         for i, elem in enumerate(elements):
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            ctx.emit_inst(Const.int_(idx_reg, i))
             val_reg = ctx.lower_expr(elem)
             ctx.emit_inst(
                 StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg)
@@ -362,7 +426,7 @@ def lower_array_creation(
     if init_node is not None:
         elements = [c for c in init_node.children if c.is_named]
         size_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
+        ctx.emit_inst(Const.int_(size_reg, len(elements)))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
             NewArray(
@@ -375,7 +439,7 @@ def lower_array_creation(
         _emit_array_length(ctx, arr_reg, size_reg)
         for i, elem in enumerate(elements):
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            ctx.emit_inst(Const.int_(idx_reg, i))
             val_reg = ctx.lower_expr(elem)
             ctx.emit_inst(
                 StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg)
@@ -392,7 +456,7 @@ def lower_array_creation(
         size_reg = ctx.lower_expr(dim_children[0]) if dim_children else ctx.fresh_reg()
     else:
         size_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=size_reg, value="0"))
+        ctx.emit_inst(Const.int_(size_reg, 0))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
         NewArray(
@@ -509,9 +573,8 @@ def lower_instanceof(
     type_node = pattern_or_type_node
     binding_node = named_children[2] if len(named_children) > 2 else None
 
-    type_reg = ctx.fresh_reg()
     type_name = ctx.node_text(type_node) if type_node else "Object"
-    ctx.emit_inst(Const(result_reg=type_reg, value=type_name))
+    type_reg = lower_string_literal(ctx, type_node or node, type_name)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -582,10 +645,7 @@ def lower_throw_as_expr(
     if named_children:
         val_reg = ctx.lower_expr(named_children[0])
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
     return val_reg
 
@@ -628,7 +688,7 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 args_reg = ctx.fresh_reg()
                 ctx.emit_inst(LoadVar(result_reg=args_reg, name=VarName("arguments")))
                 idx_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=idx_reg, value=str(param_index)))
+                ctx.emit_inst(Const.int_(idx_reg, param_index))
                 rest_reg = ctx.fresh_reg()
                 ctx.emit_inst(
                     CallFunction(

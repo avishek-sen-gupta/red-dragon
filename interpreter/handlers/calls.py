@@ -35,7 +35,6 @@ from interpreter.vm.vm import (
     _resolve_reg,
     _heap_addr,
     _is_symbolic,
-    _parse_const,
 )
 from interpreter.vm.vm_types import BuiltinResult
 from interpreter.cfg import CFG

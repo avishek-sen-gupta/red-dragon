@@ -160,25 +160,15 @@ _APOSTROPHE_CASE: dict = next(
 
 
 class TestPascalApostropheLimitation:
-    """Document that Pascal's '' escape does not round-trip through _parse_const.
+    """Pascal's '' apostrophe escape round-trips correctly.
 
     Pascal string literals escape apostrophes by doubling them: 'I''m hungry!'
-    The VM's _parse_const strips the outer quotes (raw[1:-1]) but does not
-    un-escape inner doubled quotes, so the stored string contains '' instead
-    of ' and has the wrong length.  This causes reverse-string to produce
-    incorrect output for inputs containing apostrophes.
-
-    All other 14 languages handle this case correctly because they use
-    double-quoted strings where apostrophes need no escaping.
+    The Pascal frontend un-escapes the doubled apostrophes when lowering the
+    string literal, so the stored value is the true string. Reverse-string
+    therefore produces the correct output for inputs containing apostrophes
+    (red-dragon-mo11, fixed by the typed-Const migration retiring _parse_const).
     """
 
-    @pytest.mark.xfail(
-        reason=(
-            "_parse_const does not un-escape Pascal '' → ' inside "
-            "single-quoted string literals — red-dragon-mo11"
-        ),
-        strict=True,
-    )
     def test_pascal_apostrophe_reverse(self):
         """Reversing "I'm hungry!" should yield "!yrgnuh m'I" in Pascal."""
         fn_name = _function_name("pascal")

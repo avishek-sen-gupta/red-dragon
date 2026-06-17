@@ -27,6 +27,7 @@ from interpreter.frontends.common.exceptions import (
     lower_try_catch,
 )
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
+from interpreter.frontends.common.expressions import lower_null_literal
 from interpreter.register import Register
 
 
@@ -88,7 +89,7 @@ def lower_foreach(
     raw_name = ctx.node_text(left_node) if left_node else "__foreach_var"
 
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=idx_reg, value="0"))
+    ctx.emit_inst(Const.int_(idx_reg, 0))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(result_reg=len_reg, func_name=FuncName("len"), args=(iter_reg,))
@@ -126,7 +127,7 @@ def lower_foreach(
 
     ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -481,8 +482,7 @@ def lower_yield_stmt(
         if children:
             val_reg = ctx.lower_expr(children[0])
         else:
-            val_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+            val_reg = lower_null_literal(ctx, node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(result_reg=reg, func_name=FuncName("yield"), args=(val_reg,)),

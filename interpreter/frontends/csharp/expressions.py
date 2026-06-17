@@ -3,6 +3,7 @@
 from __future__ import annotations
 from interpreter.type_name import TypeName
 
+import re
 from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -37,8 +38,12 @@ from interpreter.instructions import (
 )
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
-    lower_const_literal,
+    lower_int_literal,
+    lower_float_literal,
+    lower_string_literal,
+    lower_null_literal,
     lower_interpolated_string_parts,
+    lower_default_return,
 )
 from interpreter.frontends.common.node_types import CommonNodeType
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
@@ -49,6 +54,128 @@ from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
 
 _BYREF_KEYWORDS = frozenset({"out", "ref", "in"})
+
+_CS_INT_SUFFIX_RE = re.compile(r"[uUlL]+$")
+_CS_FLOAT_SUFFIX_RE = re.compile(r"[fFdDmM]$")
+
+
+def lower_csharp_integer_literal(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower C# integer literal: strip U/L suffixes, handle hex/binary/underscores."""
+    text = ctx.node_text(node)
+    cleaned = _CS_INT_SUFFIX_RE.sub("", text).replace("_", "")
+    return lower_int_literal(ctx, node, text=cleaned)
+
+
+def lower_csharp_real_literal(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower C# real literal: strip f/d/m suffixes, handle underscores."""
+    text = ctx.node_text(node)
+    cleaned = _CS_FLOAT_SUFFIX_RE.sub("", text).replace("_", "")
+    return lower_float_literal(ctx, node, text=cleaned)
+
+
+def lower_csharp_string_literal(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower C# regular string literal: strip quotes and resolve escape sequences."""
+    text = ctx.node_text(node)
+    if text.startswith('"') and text.endswith('"'):
+        inner = text[1:-1]
+    else:
+        inner = text
+    value = _resolve_csharp_escapes(inner)
+    return lower_string_literal(ctx, node, value)
+
+
+def lower_csharp_verbatim_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:
+    """Lower C# verbatim string literal @"...": strip @" ", only "" → " unescaping."""
+    text = ctx.node_text(node)
+    if text.startswith('@"') and text.endswith('"'):
+        inner = text[2:-1]
+    elif text.startswith('"') and text.endswith('"'):
+        inner = text[1:-1]
+    else:
+        inner = text
+    value = inner.replace('""', '"')
+    return lower_string_literal(ctx, node, value)
+
+
+def lower_csharp_char_literal(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower C# character literal: 'x' → int ord."""
+    text = ctx.node_text(node)
+    if text.startswith("'") and text.endswith("'"):
+        inner = text[1:-1]
+    else:
+        inner = text
+    char_val = _resolve_csharp_char_escape(inner)
+    return lower_int_literal(ctx, node, text=str(ord(char_val)))
+
+
+def lower_csharp_constant_pattern(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower CONSTANT_PATTERN by re-dispatching its inner literal node."""
+    inner = next((c for c in node.children if c.is_named), node)
+    return ctx.lower_expr(inner)
+
+
+def lower_csharp_default_expression(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower default(T) / default — emit null."""
+    return lower_null_literal(ctx, node)
+
+
+def lower_csharp_sizeof_expression(ctx: TreeSitterEmitContext, node: Any) -> Register:
+    """Lower sizeof(T) — size unknown at IR level, emit int 0."""
+    return lower_int_literal(ctx, node, text="0")
+
+
+def _resolve_csharp_escapes(s: str) -> str:
+    """Resolve C# string escape sequences."""
+    return (
+        s.replace("\\\\", "\x00BACKSLASH\x00")
+        .replace('\\"', '"')
+        .replace("\\n", "\n")
+        .replace("\\r", "\r")
+        .replace("\\t", "\t")
+        .replace("\\0", "\0")
+        .replace("\\a", "\a")
+        .replace("\\b", "\b")
+        .replace("\\f", "\f")
+        .replace("\\v", "\v")
+        .replace("\x00BACKSLASH\x00", "\\")
+    )
+
+
+def _resolve_csharp_char_escape(inner: str) -> str:
+    """Resolve a C# char literal inner text to a single Python character."""
+    if len(inner) == 1:
+        return inner
+    if inner == "\\\\":
+        return "\\"
+    if inner == '\\"':
+        return '"'
+    if inner == "\\'":
+        return "'"
+    if inner == "\\n":
+        return "\n"
+    if inner == "\\r":
+        return "\r"
+    if inner == "\\t":
+        return "\t"
+    if inner == "\\0":
+        return "\0"
+    if inner == "\\a":
+        return "\a"
+    if inner == "\\b":
+        return "\b"
+    if inner == "\\f":
+        return "\f"
+    if inner == "\\v":
+        return "\v"
+    if inner.startswith("\\u") and len(inner) == 6:
+        return chr(int(inner[2:], 16))
+    if inner.startswith("\\U") and len(inner) == 10:
+        return chr(int(inner[2:], 16))
+    if inner.startswith("\\x"):
+        return chr(int(inner[2:], 16))
+    return inner[0] if inner else "\x00"
 
 
 def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
@@ -164,7 +291,9 @@ def lower_member_access(
     obj_node = node.child_by_field_name("expression")
     name_node = node.child_by_field_name("name")
     if obj_node is None or name_node is None:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=reg, hint="unknown_fallback"))
+        return reg
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(name_node)
     reg = ctx.fresh_reg()
@@ -206,7 +335,9 @@ def lower_element_access(
     obj_node = node.child_by_field_name("expression")
     bracket_node = node.child_by_field_name("subscript")
     if obj_node is None:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=reg, hint="unknown_fallback"))
+        return reg
     obj_reg = ctx.lower_expr(obj_node)
     if bracket_node is None:
         bracket_node = next(
@@ -236,7 +367,7 @@ def lower_initializer_expr(
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(Const.int_(size_reg, len(elems)))
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg, type_hint=scalar(TypeName("list")), size_reg=size_reg
@@ -246,7 +377,7 @@ def lower_initializer_expr(
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
@@ -270,7 +401,9 @@ def lower_cast_expr(
     children = [c for c in node.children if c.is_named]
     if len(children) >= 2:
         return ctx.lower_expr(children[-1])
-    return lower_const_literal(ctx, node)
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Symbolic(result_reg=reg, hint="unknown_fallback"))
+    return reg
 
 
 def lower_ternary(
@@ -314,7 +447,7 @@ def lower_typeof(
     )
     type_name = ctx.node_text(type_node) if type_node else "Object"
     type_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=type_reg, value=type_name))
+    ctx.emit_inst(Const.string(type_reg, type_name))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(result_reg=reg, func_name=FuncName("typeof"), args=(type_reg,)),
@@ -334,7 +467,7 @@ def lower_is_expr(
     obj_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     type_reg = ctx.fresh_reg()
     type_name = ctx.node_text(type_node) if type_node else "Object"
-    ctx.emit_inst(Const(result_reg=type_reg, value=type_name))
+    ctx.emit_inst(Const.string(type_reg, type_name))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -357,7 +490,9 @@ def lower_as_expr(
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[0])
-    return lower_const_literal(ctx, node)
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Symbolic(result_reg=reg, hint="unknown_fallback"))
+    return reg
 
 
 def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> Register:
@@ -424,7 +559,7 @@ def lower_declaration_expression(
     )
     var_name = ctx.node_text(name_node) if name_node else "__out_var"
     default_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=default_reg, value="0"))
+    ctx.emit_inst(Const.int_(default_reg, 0))
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=default_reg), node=node)
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(AddressOf(result_reg=result_reg, var_name=VarName(var_name)))
@@ -441,7 +576,7 @@ def lower_declaration_pattern(
 
     type_reg = ctx.fresh_reg()
     type_name = ctx.node_text(type_node) if type_node else "Object"
-    ctx.emit_inst(Const(result_reg=type_reg, value=type_name))
+    ctx.emit_inst(Const.string(type_reg, type_name))
 
     if designation:
         var_name = ctx.node_text(designation)
@@ -477,10 +612,7 @@ def lower_lambda(
 
     # Implicit return for block bodies (if no explicit return)
     if body_node and body_node.type == NT.BLOCK:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
         ctx.emit_inst(Return_(value_reg=none_reg))
 
     ctx.byref_params = saved_byref
@@ -506,7 +638,7 @@ def lower_array_creation(
     if init_node is not None:
         elements = [c for c in init_node.children if c.is_named]
         size_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
+        ctx.emit_inst(Const.int_(size_reg, len(elements)))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
             NewArray(
@@ -518,7 +650,7 @@ def lower_array_creation(
         )
         for i, elem in enumerate(elements):
             idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            ctx.emit_inst(Const.int_(idx_reg, i))
             val_reg = ctx.lower_expr(elem)
             ctx.emit_inst(
                 StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg)
@@ -537,7 +669,7 @@ def lower_array_creation(
         size_reg = ctx.lower_expr(size_node)
     else:
         size_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=size_reg, value="0"))
+        ctx.emit_inst(Const.int_(size_reg, 0))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
         NewArray(
@@ -554,7 +686,10 @@ def lower_csharp_interpolated_string(
     """Lower C# $\"...{expr}...\" into CONST + expr + BINOP '+' chain."""
     has_interpolation = any(c.type == NT.INTERPOLATION for c in node.children)
     if not has_interpolation:
-        return lower_const_literal(ctx, node)
+        content_parts = [
+            ctx.node_text(c) for c in node.children if c.type == NT.STRING_CONTENT
+        ]
+        return lower_string_literal(ctx, node, "".join(content_parts))
 
     _INTERPOLATION_NOISE = frozenset(
         {
@@ -568,9 +703,7 @@ def lower_csharp_interpolated_string(
     for child in node.children:
         if child.type == NT.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
-            )
+            ctx.emit_inst(Const.string(frag_reg, ctx.node_text(child)), node=child)
             parts.append(frag_reg)
         elif child.type == NT.INTERPOLATION:
             named = [
@@ -593,7 +726,7 @@ def lower_await_expr(
         inner_reg = ctx.lower_expr(children[0])
     else:
         inner_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=inner_reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(inner_reg))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(result_reg=reg, func_name=FuncName("await"), args=(inner_reg,)),
@@ -608,7 +741,9 @@ def lower_conditional_access(
     """Lower obj?.Field as LOAD_FIELD (null-safety is semantic)."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=reg, hint="unknown_fallback"))
+        return reg
     obj_reg = ctx.lower_expr(named[0])
     # The second named child is typically member_binding_expression
     binding_node = named[1]
@@ -652,7 +787,7 @@ def lower_tuple_expr(
     ]
 
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elem_regs))))
+    ctx.emit_inst(Const.int_(size_reg, len(elem_regs)))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
         NewArray(
@@ -662,7 +797,7 @@ def lower_tuple_expr(
     )
     for i, elem_reg in enumerate(elem_regs):
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(
             StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=elem_reg)
         )
@@ -682,7 +817,7 @@ def lower_is_pattern_expr(
     # Extract the type from the pattern
     type_name = ctx.node_text(pattern_node) if pattern_node else "Object"
     type_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=type_reg, value=type_name))
+    ctx.emit_inst(Const.string(type_reg, type_name))
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -813,7 +948,7 @@ def lower_linq_clause(
     """Lower LINQ clause (from/select/where) -- lower named children only."""
     named_children = [c for c in node.children if c.is_named]
     last_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=last_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(last_reg))
     for child in named_children:
         last_reg = ctx.lower_expr(child)
     return last_reg
@@ -943,11 +1078,11 @@ def lower_checked_expr(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower checked(expr) / unchecked(expr) — just lower the inner expression."""
     named_children = [c for c in node.children if c.is_named]
-    return (
-        ctx.lower_expr(named_children[0])
-        if named_children
-        else lower_const_literal(ctx, node)
-    )
+    if named_children:
+        return ctx.lower_expr(named_children[0])
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Symbolic(result_reg=reg, hint="unknown_fallback"))
+    return reg
 
 
 def lower_range_expr(
@@ -961,12 +1096,12 @@ def lower_range_expr(
     elif len(named_children) == 1:
         start_reg = ctx.lower_expr(named_children[0])
         end_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=end_reg, value=""))
+        ctx.emit_inst(Const.string(end_reg, ""))
     else:
         start_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=start_reg, value=""))
+        ctx.emit_inst(Const.string(start_reg, ""))
         end_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=end_reg, value=""))
+        ctx.emit_inst(Const.string(end_reg, ""))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(

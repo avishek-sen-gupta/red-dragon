@@ -7,7 +7,6 @@ from types import MappingProxyType
 from typing import Any
 
 from interpreter.address import Address, NO_ADDRESS
-from interpreter.constants import CanonicalLiteral, FoundationTypeName
 from interpreter.field_name import FieldName, FieldKind
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -373,28 +372,6 @@ def _resolve_reg(vm: VMState, operand: str | Register) -> TypedValue:
             return val
         return typed_from_runtime(val)
     return typed_from_runtime(operand)
-
-
-def _parse_const(raw: str) -> Any:
-    """Parse a constant literal string into a Python value."""
-    if raw == CanonicalLiteral.NONE:
-        return None
-    if raw == CanonicalLiteral.TRUE:
-        return True
-    if raw == CanonicalLiteral.FALSE:
-        return False
-    try:
-        return int(raw)
-    except (ValueError, TypeError):
-        pass
-    try:
-        return float(raw)
-    except (ValueError, TypeError):
-        pass
-    # String literal — strip quotes if present
-    if len(raw) >= 2 and raw[0] in ('"', "'") and raw[-1] == raw[0]:
-        return raw[1:-1]
-    return raw
 
 
 from interpreter.types.typed_value import runtime_type_name  # noqa: F401 — re-exported

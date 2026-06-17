@@ -49,7 +49,7 @@ class TestPascalAssignment:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("10" in inst.operands for inst in consts)
+        assert any(10 in inst.operands for inst in consts)
 
     @covers(PascalFeature.ASSIGNMENT)
     def test_arithmetic_assignment(self):
@@ -61,8 +61,8 @@ class TestPascalAssignment:
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("5" in inst.operands for inst in consts)
-        assert any("3" in inst.operands for inst in consts)
+        assert any(5 in inst.operands for inst in consts)
+        assert any(3 in inst.operands for inst in consts)
 
 
 class TestPascalExpressions:
@@ -70,13 +70,13 @@ class TestPascalExpressions:
     def test_number_literal(self):
         instructions = _parse_pascal("program M; begin x := 42; end.")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
     @covers(PascalFeature.ARITHMETIC)
     def test_string_literal(self):
         instructions = _parse_pascal("program M; begin x := 'hello'; end.")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("'hello'" in str(inst.operands) for inst in consts)
+        assert any("hello" in inst.operands for inst in consts)
 
     @covers(PascalFeature.ARITHMETIC)
     def test_binary_operator_greater_than(self):
@@ -198,10 +198,10 @@ class TestPascalControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -227,7 +227,7 @@ class TestPascalVariableDeclarations:
         assert any("x" in inst.operands for inst in stores)
         # The var decl should initialize x to None (canonical nil)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("None" in inst.operands for inst in consts)
+        assert any(None in inst.operands for inst in consts)
 
     @covers(PascalFeature.VARIABLE_DECLARATION)
     def test_var_declaration_then_assignment(self):
@@ -643,7 +643,7 @@ class TestPascalDeclConsts:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("MAX" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("100" in inst.operands for inst in consts)
+        assert any(100 in inst.operands for inst in consts)
 
     @covers(PascalFeature.CONST_DECLARATION)
     def test_multiple_consts(self):
@@ -667,7 +667,7 @@ class TestPascalParenthesizedExpression:
     def test_parenthesized_expression_evaluates(self):
         instructions = _parse_pascal("program M; begin x := (10); end.")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("10" in inst.operands for inst in consts)
+        assert any(10 in inst.operands for inst in consts)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
@@ -725,8 +725,8 @@ class TestPascalTry:
         ), f"expected >= 2 STORE_VAR for 'x' (try + except), got {len(x_stores)}"
         consts = _find_all(instructions, Opcode.CONST)
         const_vals = [c.operands[0] for c in consts]
-        assert "1" in const_vals, f"try body CONST '1' missing, got {const_vals}"
-        assert "0" in const_vals, f"except body CONST '0' missing, got {const_vals}"
+        assert 1 in const_vals, f"try body CONST 1 missing, got {const_vals}"
+        assert 0 in const_vals, f"except body CONST 0 missing, got {const_vals}"
 
 
 class TestPascalDeclUsesNoop:
@@ -1555,6 +1555,52 @@ begin end.""")
         assert "TColor" in decl_names
 
 
+class TestPascalTypedLiterals:
+    """Tests for Pascal-specific literal forms: hex $FF, char codes #65/#$41, '' escapes."""
+
+    @covers(PascalFeature.ARITHMETIC)
+    def test_hex_integer_dollar_prefix(self):
+        """$FF is a Pascal hex integer literal — should emit CONST 255."""
+        instructions = _parse_pascal("program M; begin x := $FF; end.")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(255 in inst.operands for inst in consts)
+
+    @covers(PascalFeature.ARITHMETIC)
+    def test_hex_integer_lowercase(self):
+        """$1a is also a valid hex integer — should emit CONST 26."""
+        instructions = _parse_pascal("program M; begin x := $1a; end.")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(26 in inst.operands for inst in consts)
+
+    @covers(PascalFeature.ARITHMETIC)
+    def test_string_with_escaped_quote(self):
+        """'it''s' — doubled single quote in Pascal strings becomes a single quote."""
+        instructions = _parse_pascal("program M; begin x := 'it''s'; end.")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("it's" in inst.operands for inst in consts)
+
+    @covers(PascalFeature.ARITHMETIC)
+    def test_char_code_decimal(self):
+        """#65 is chr(65) = 'A' — should emit CONST 'A'."""
+        instructions = _parse_pascal("program M; begin x := #65; end.")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("A" in inst.operands for inst in consts)
+
+    @covers(PascalFeature.ARITHMETIC)
+    def test_char_code_hex(self):
+        """#$41 is chr(0x41) = 'A' — should emit CONST 'A'."""
+        instructions = _parse_pascal("program M; begin x := #$41; end.")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("A" in inst.operands for inst in consts)
+
+    @covers(PascalFeature.ARITHMETIC)
+    def test_string_with_char_code_concat(self):
+        """'hi'#13#10 — quoted string concatenated with CR+LF char codes."""
+        instructions = _parse_pascal("program M; begin x := 'hi'#13#10; end.")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("hi\r\n" in inst.operands for inst in consts)
+
+
 class TestPascalFunctionResult:
     """Pascal functions return via the Result variable, not explicit return."""
 
@@ -1601,6 +1647,6 @@ class TestPascalFunctionResult:
             for inst in ir
             if inst.opcode == Opcode.CONST
             and str(inst.result_reg) == ret_reg
-            and inst.operands[0] == "None"
+            and inst.operands[0] is None
         ]
         assert len(const_none) == 1

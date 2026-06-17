@@ -2,6 +2,43 @@
 
 Extracted from BaseFrontend. Every function returns the register holding
 the expression's value.
+
+# Typed literal emission convention (KEYSTONE red-dragon-gjoy.1)
+#
+# Literal TYPE is per-language: numeric/string/char syntax differs per
+# language, so the frontend story picks the right typed helper once it
+# knows the literal kind.  The shared layer provides the building-block
+# helpers listed below.
+#
+# Typed helpers (call these from per-frontend dispatch tables):
+#
+#   lower_int_literal(ctx, node, *, text=None)
+#       Parse int with base + digit-separator handling (int(text, 0) after
+#       stripping `_` separators).  Pass text= if the frontend already
+#       stripped language-specific suffixes (Java L, C u/l, Rust i32/u64,
+#       Kotlin L/u, JS/TS bigint n, C++ apostrophe separators).
+#       Emits Const.int_.
+#
+#   lower_float_literal(ctx, node, *, text=None)
+#       Parse float.  Pass text= if caller stripped trailing suffix (e.g. f).
+#       Emits Const.float_.
+#
+#   lower_string_literal(ctx, node, value)
+#       `value` is ALREADY-UNQUOTED Python str.  Per-language unquoting
+#       (escape resolution, raw-string stripping, etc.) stays in the
+#       frontend story; this helper just wraps Const.string.
+#
+#   lower_null_literal(ctx, node)  → Const.null_
+#   lower_bool_literal(ctx, node, value: bool)  → Const.bool_
+#   lower_canonical_none/true/false(ctx, node)  → typed wrappers
+#
+# lower_const_literal fate:
+#   REMOVED — it cannot be typed without knowing the literal kind.  It now
+#   raises TypeError with a clear message directing callers to the typed
+#   helpers above.  Per-frontend stories MUST re-point their dispatch tables
+#   to the appropriate typed helper; they must NOT route through this shim.
+#   Fallback sites in java/cpp field-access/cast paths must also pick the
+#   right helper.
 """
 
 from __future__ import annotations
@@ -12,9 +49,10 @@ from typing import Any
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
+from interpreter.constants import CanonicalLiteral, FoundationTypeName
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.ir import SpreadArguments
-from interpreter.types.type_expr import scalar
+from interpreter.types.type_expr import scalar, NULL
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
@@ -42,57 +80,125 @@ from interpreter.instructions import (
 def lower_const_literal(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(
-            result_reg=reg,
-            value=ctx.node_text(node),
-        ),
-        node=node,
+    """REMOVED — raises TypeError to direct callers to the typed helpers.
+
+    Use lower_int_literal / lower_float_literal / lower_string_literal /
+    lower_null_literal / lower_bool_literal instead.  Per-frontend stories
+    must re-point their dispatch tables to the appropriate typed helper.
+    """
+    raise TypeError(
+        "lower_const_literal cannot be used after the typed-Const migration. "
+        "Use a typed helper instead: lower_int_literal, lower_float_literal, "
+        "lower_string_literal, lower_null_literal, or lower_bool_literal."
     )
+
+
+# ── typed building-block helpers ─────────────────────────────────────────────
+
+
+def lower_int_literal(
+    ctx: TreeSitterEmitContext,
+    node: Any,
+    *,
+    text: str | None = None,
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit a typed integer CONST.
+
+    Parses the integer with full base handling (hex/octal/binary/decimal via
+    ``int(text, 0)``) after stripping Python-style ``_`` digit separators.
+    Pass ``text=`` when the caller has already stripped language-specific
+    suffixes (Java ``L``, C/C++ ``u``/``l``/``ll``, Rust ``i32``/``u64``,
+    Kotlin ``L``/``u``, JS/TS bigint ``n``; C++14 apostrophe separators).
+    """
+    raw = text if text is not None else ctx.node_text(node)
+    cleaned = raw.replace("_", "")
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.int_(reg, int(cleaned, 0)), node=node)
     return reg
+
+
+def lower_float_literal(
+    ctx: TreeSitterEmitContext,
+    node: Any,
+    *,
+    text: str | None = None,
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit a typed float CONST.
+
+    Pass ``text=`` when the caller has stripped language-specific suffixes
+    (e.g. trailing ``f`` for C/Java floats).
+    """
+    raw = text if text is not None else ctx.node_text(node)
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.float_(reg, float(raw)), node=node)
+    return reg
+
+
+def lower_string_literal(
+    ctx: TreeSitterEmitContext,
+    node: Any,
+    value: str,
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit a typed string CONST.
+
+    ``value`` must be the ALREADY-UNQUOTED Python str.  Per-language
+    unquoting (escape resolution, raw-string stripping, interpolation
+    fragment handling, etc.) stays in the frontend story; this helper
+    just wraps Const.string.
+    """
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.string(reg, value), node=node)
+    return reg
+
+
+def lower_null_literal(
+    ctx: TreeSitterEmitContext,
+    node: Any,
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit a typed null CONST (Python None payload, NULL type_expr)."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.null_(reg), node=node)
+    return reg
+
+
+def lower_bool_literal(
+    ctx: TreeSitterEmitContext,
+    node: Any,
+    value: bool,
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit a typed boolean CONST."""
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.bool_(reg, value), node=node)
+    return reg
+
+
+# ── canonical helpers (language-agnostic null/true/false) ────────────────────
 
 
 def lower_canonical_none(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
-    """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
+    """Emit typed null CONST for any language's null/nil/undefined."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(
-            result_reg=reg,
-            value=ctx.constants.none_literal,
-        ),
-        node=node,
-    )
+    ctx.emit_inst(Const.null_(reg), node=node)
     return reg
 
 
 def lower_canonical_true(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit typed boolean True CONST."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(
-            result_reg=reg,
-            value=ctx.constants.true_literal,
-        ),
-        node=node,
-    )
+    ctx.emit_inst(Const.bool_(reg, True), node=node)
     return reg
 
 
 def lower_canonical_false(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit typed boolean False CONST."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Const(
-            result_reg=reg,
-            value=ctx.constants.false_literal,
-        ),
-        node=node,
-    )
+    ctx.emit_inst(Const.bool_(reg, False), node=node)
     return reg
 
 
@@ -104,6 +210,42 @@ def lower_canonical_bool(
     if text == "true":
         return lower_canonical_true(ctx, node)
     return lower_canonical_false(ctx, node)
+
+
+def lower_default_return(
+    ctx: TreeSitterEmitContext,
+    node: Any,
+    sentinel: str,
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit the implicit/empty return value as a typed Const.
+
+    Converts a ``default_return_value`` sentinel string into the same typed
+    Const that ``_parse_const`` would have produced, preserving each language's
+    semantics:
+
+      - ``"None"`` (CanonicalLiteral.NONE) → ``Const.null_``
+      - ``"0"``  (C bare ``return;``)      → ``Const.int_(0)``
+      - ``"()"`` (Scala/Rust fall-off-end) → ``Const.string("()")``
+
+    Classification mirrors ``interpreter.vm.vm._parse_const``:
+    None → bool (skipped here; no sentinel is bool) → int → float → str.
+    """
+    reg = ctx.fresh_reg()
+    if sentinel == CanonicalLiteral.NONE:
+        ctx.emit_inst(Const.null_(reg), node=node)
+        return reg
+    try:
+        ctx.emit_inst(Const.int_(reg, int(sentinel)), node=node)
+        return reg
+    except (ValueError, TypeError):
+        pass
+    try:
+        ctx.emit_inst(Const.float_(reg, float(sentinel)), node=node)
+        return reg
+    except (ValueError, TypeError):
+        pass
+    ctx.emit_inst(Const.string(reg, sentinel), node=node)
+    return reg
 
 
 def lower_identifier(
@@ -154,7 +296,9 @@ def lower_paren(
         None,
     )
     if inner is None:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=reg, hint="empty_paren"), node=node)
+        return reg
     return ctx.lower_expr(inner)
 
 
@@ -168,11 +312,11 @@ def lower_spread_arg(
     the VM unpacks the heap array into individual args at call time.
     """
     named_children = [c for c in node.children if c.is_named]
-    inner_reg = (
-        ctx.lower_expr(named_children[0])
-        if named_children
-        else lower_const_literal(ctx, node)
-    )
+    if named_children:
+        inner_reg = ctx.lower_expr(named_children[0])
+    else:
+        inner_reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=inner_reg, hint="empty_spread"), node=node)
     return SpreadArguments(register=inner_reg)
 
 
@@ -394,7 +538,9 @@ def lower_attribute(
     if attr_node is None:
         attr_node = node.children[-1] if len(node.children) > 1 else None
     if obj_node is None or attr_node is None:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=reg, hint="malformed_attribute"), node=node)
+        return reg
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(attr_node)
     reg = ctx.fresh_reg()
@@ -415,7 +561,9 @@ def lower_subscript(
     obj_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     idx_node = node.child_by_field_name(ctx.constants.subscript_index_field)
     if obj_node is None or idx_node is None:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=reg, hint="malformed_subscript"), node=node)
+        return reg
     obj_reg = ctx.lower_expr(obj_node)
     idx_reg = ctx.lower_expr(idx_node)
     reg = ctx.fresh_reg()
@@ -437,7 +585,7 @@ def lower_interpolated_string_parts(
 ) -> Register:
     """Chain a list of string-part registers with BINOP '+' concatenation."""
     if not parts:
-        return lower_const_literal(ctx, node)
+        return lower_string_literal(ctx, node, "")
     result = parts[0]
     for part in parts[1:]:
         new_reg = ctx.fresh_reg()
@@ -460,14 +608,16 @@ def lower_update_expr(
     """Lower i++ / i-- / ++i / --i update expressions."""
     children = [c for c in node.children if c.is_named]
     if not children:
-        return lower_const_literal(ctx, node)
+        reg = ctx.fresh_reg()
+        ctx.emit_inst(Symbolic(result_reg=reg, hint="malformed_update_expr"), node=node)
+        return reg
     operand = children[0]
     text = ctx.node_text(node)
     op = "+" if "++" in text else "-"
     is_prefix = text.startswith("++") or text.startswith("--")
     operand_reg = ctx.lower_expr(operand)
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -497,7 +647,7 @@ def lower_list_literal(
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(Const.int_(size_reg, len(elems)))
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg,
@@ -509,7 +659,7 @@ def lower_list_literal(
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         ctx.emit_inst(
             StoreIndex(
                 arr_reg=arr_reg,

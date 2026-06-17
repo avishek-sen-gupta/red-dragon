@@ -38,7 +38,7 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.var_scope_info import VarScopeInfo
-from interpreter.types.type_expr import TypeExpr
+from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
 
@@ -247,7 +247,7 @@ class TreeSitterEmitContext:
             name=FuncName(func_name), label=func_label
         )
         return self.emit_inst(
-            Const(result_reg=result_reg, value=str(func_label)),
+            Const.func_ref(result_reg=result_reg, value=str(func_label)),
             node=node,
         )
 
@@ -270,7 +270,9 @@ class TreeSitterEmitContext:
             parents=tuple(ClassName(p) for p in parents),
         )
         return self.emit_inst(
-            Const(result_reg=result_reg, value=str(class_label)),
+            Const.class_ref(
+                result_reg=result_reg, value=str(class_label), class_type=UNKNOWN
+            ),
             node=node,
         )
 

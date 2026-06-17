@@ -49,7 +49,10 @@ class TestLLMInterpreterBackend:
         )
         backend = LLMInterpreterBackend(llm_client=fake_client)
         inst = IRInstruction(
-            opcode=Opcode.CONST, result_reg=Register("%0"), operands=["42"]
+            opcode=Opcode.CONST,
+            result_reg=Register("%0"),
+            operands=["42"],
+            literal_type="Int",
         )
         vm = _make_vm_with_frame()
         update = backend.interpret_instruction(inst, vm)
@@ -66,7 +69,10 @@ class TestLLMInterpreterBackend:
         )
         backend = LLMInterpreterBackend(llm_client=fake_client)
         inst = IRInstruction(
-            opcode=Opcode.CONST, result_reg=Register("%0"), operands=["1"]
+            opcode=Opcode.CONST,
+            result_reg=Register("%0"),
+            operands=["1"],
+            literal_type="Int",
         )
         vm = _make_vm_with_frame()
         backend.interpret_instruction(inst, vm)
