@@ -12,7 +12,7 @@ from interpreter.var_name import VarName
 class TestOpcodeProperty:
     def test_every_typed_class_has_opcode(self):
         cases = [
-            (Const(value="42"), Opcode.CONST),
+            (Const.int_(NO_REGISTER, 42), Opcode.CONST),
             (LoadVar(name=VarName("x")), Opcode.LOAD_VAR),
             (DeclVar(name=VarName("x"), value_reg="%0"), Opcode.DECL_VAR),
             (StoreVar(name=VarName("x"), value_reg="%0"), Opcode.STORE_VAR),
@@ -100,7 +100,7 @@ class TestLabelDefault:
 
     def test_no_label_types(self):
         for inst in [
-            Const(value="42"),
+            Const.int_(NO_REGISTER, 42),
             Binop(operator=BinopKind.ADD),
             CallFunction(func_name=FuncName("f")),
             StoreVar(name=VarName("x"), value_reg="%0"),
@@ -113,7 +113,7 @@ class TestBranchTargetsDefault:
 
     def test_no_branch_targets(self):
         for inst in [
-            Const(value="42"),
+            Const.int_(NO_REGISTER, 42),
             Binop(operator=BinopKind.ADD),
             Return_(),
             Label_(label=CodeLabel("entry")),
@@ -127,7 +127,7 @@ class TestOperandsProperty:
     """Each typed instruction should expose operands matching the flat IR layout."""
 
     def test_const(self):
-        assert Const(value="42").operands == ["42"]
+        assert Const.int_(NO_REGISTER, 42).operands == [42]
 
     def test_binop(self):
         assert Binop(operator=BinopKind.ADD, left="%0", right="%1").operands == [

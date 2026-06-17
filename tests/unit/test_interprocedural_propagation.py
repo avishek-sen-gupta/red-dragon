@@ -41,7 +41,7 @@ def _build_caller_cfg_with_address_of() -> CFG:
       CALL_FUNCTION %7, set_val, %6
     """
     instructions = [
-        Const(result_reg=Register("%5"), value="10"),
+        Const.int_(Register("%5"), 10),
         DeclVar(name=VarName("x"), value_reg=Register("%5")),
         AddressOf(result_reg=Register("%6"), var_name=VarName("x")),
         CallFunction(
