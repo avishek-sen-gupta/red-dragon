@@ -47,7 +47,7 @@ class TestTypeScriptSmoke:
     def test_number_literal(self):
         instructions = _parse_ts("42;")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
 
 class TestTypeScriptTypedBasics:
@@ -238,10 +238,10 @@ class TestTypeScriptControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
