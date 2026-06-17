@@ -7,7 +7,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.frontends.php.features import PhpFeature
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:
@@ -1661,3 +1661,12 @@ class TestPhpStringEscaping:
             "\n" == v for v in all_values
         ), f"Single-quoted \\n must not be decoded to newline; got {all_values}"
         assert any("no" in v or "\\n" in v or "newline" in v for v in all_values)
+
+
+class TestPhpImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        instructions = _parse_and_lower("<?php function f() { return 42; }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)
