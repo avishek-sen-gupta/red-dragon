@@ -28,8 +28,8 @@ from interpreter.instructions import (
 from interpreter.frontends.common.expressions import (
     lower_null_literal,
     lower_string_literal,
-    lower_default_return,
 )
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter import constants
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
@@ -191,13 +191,9 @@ def lower_function_def(
         if expr_reg:
             ctx.emit_inst(Return_(value_reg=expr_reg))
         else:
-            none_reg = lower_default_return(
-                ctx, node, ctx.constants.default_return_value
-            )
-            ctx.emit_inst(Return_(value_reg=none_reg))
+            emit_implicit_return(ctx, node)
     else:
-        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
 
     ctx.emit_inst(Label_(label=end_label))
 
@@ -513,8 +509,7 @@ def lower_function_signature(
     if params_node:
         lower_rust_params(ctx, params_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
