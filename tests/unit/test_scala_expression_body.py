@@ -73,7 +73,7 @@ object M {
             if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
         ]
         assert len(consts) >= 1, "RETURN register should come from a CONST"
-        assert "42" in consts[0].operands, "CONST should hold literal 42"
+        assert 42 in consts[0].operands, "CONST should hold literal 42"
 
     @covers(ScalaFeature.FUNCTION_DECLARATION, ScalaFeature.IMPLICIT_RETURN)
     def test_no_default_return_value(self):
