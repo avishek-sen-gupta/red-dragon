@@ -1,6 +1,6 @@
 # Nullability Model — Decision Memo (red-dragon-x78r)
 
-**Status:** Decided (2026-06-17). Decision memo only — no implementation in this spike.
+**Status:** Implemented (2026-06-18) on branch `option1-nullability` — see plan `docs/superpowers/plans/2026-06-17-option1-nullability.md`. Model A shipped: `null`→UNKNOWN shim removed, nullability visible as `Union[T, Null]`, synthetic fall-through returns marked `Return_.implicit` and excluded from return inference, explicit returns unioned (annotation-wins preserved via `_seeded_func_return_labels`), dead `is_optional`/`unwrap_optional` deleted. Known limitation: branched-return functions remain orphaned from return-type inference (pre-existing `_infer_label` scoping behaviour, intentionally not changed — filed as a follow-up).
 **Driver:** Semantic cleanliness — the type system should not carry dead or
 ambiguous nullability machinery, and the type of a variable assigned `null`
 must be *retained*, not lost.
