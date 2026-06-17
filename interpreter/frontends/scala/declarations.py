@@ -36,9 +36,9 @@ from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
+    emit_implicit_return,
     emit_synthetic_init,
 )
-from interpreter.frontends.common.expressions import lower_default_return
 from interpreter.types.type_expr import EnumType, ScalarType, scalar
 from interpreter.register import Register
 
@@ -282,8 +282,7 @@ def lower_function_def(
             expr_returned = True
 
     if not expr_returned:
-        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -337,8 +336,7 @@ def _lower_auxiliary_constructor(
     elif body_node:
         ctx.lower_block(body_node)
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -501,8 +499,7 @@ def _emit_primary_constructor_init(
             StoreField(obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg)
         )
 
-    none_reg = lower_default_return(ctx, None, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, None)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -603,8 +600,7 @@ def lower_function_declaration(
     ctx.emit_inst(Branch(label=end_label), node=node)
     ctx.emit_inst(Label_(label=func_label))
 
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()

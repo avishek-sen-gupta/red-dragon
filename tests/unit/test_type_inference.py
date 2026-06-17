@@ -23,12 +23,14 @@ from interpreter.types.type_expr import (
     FunctionType,
     UNBOUND,
     UNKNOWN,
+    NULL,
     parse_type,
     scalar,
     union_of,
     fn_type,
     tuple_of,
 )
+from tests.covers import covers, NotLanguageFeature
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.func_name import FuncName
@@ -258,7 +260,8 @@ class TestConstInference:
         )
         assert env.register_types[Register("%0")] == FoundationTypeName.STRING
 
-    def test_const_none_not_typed(self):
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_const_none_typed_null(self):
         instructions = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg=Register("%0"), operands=["None"]),
@@ -268,7 +271,7 @@ class TestConstInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert Register("%0") not in env.register_types
+        assert env.register_types[Register("%0")] == NULL
 
     def test_const_func_ref_not_typed(self):
         instructions = [

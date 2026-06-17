@@ -11,7 +11,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter import constants
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.control_flow import lower_pascal_block
-from interpreter.frontends.common.expressions import lower_default_return
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
@@ -342,10 +342,9 @@ def lower_pascal_proc(
     if is_function:
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName("Result")))
-        ctx.emit_inst(Return_(value_reg=result_reg))
+        ctx.emit_inst(Return_(value_reg=result_reg, implicit=True))
     else:
-        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-        ctx.emit_inst(Return_(value_reg=none_reg))
+        emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -575,8 +574,7 @@ def _emit_synthetic_init_for_fields(
             StoreField(obj_reg=this_reg, field_name=FieldName(fname), value_reg=val_reg)
         )
 
-    none_reg = lower_default_return(ctx, None, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, None)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
@@ -633,8 +631,7 @@ def _lower_pascal_method(
         _lower_pascal_params(ctx, args_node)
 
     # Forward declarations have no body -- emit default return
-    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, node)
     ctx.emit_inst(Label_(label=end_label))
 
     # Do NOT emit func_ref here — forward declarations are placeholders.
@@ -785,8 +782,7 @@ def _emit_property_setter(
             )
         )
 
-    none_reg = lower_default_return(ctx, None, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=none_reg))
+    emit_implicit_return(ctx, None)
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
