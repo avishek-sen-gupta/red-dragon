@@ -46,13 +46,13 @@ class TestPythonSmoke:
     def test_integer_literal(self):
         instructions = _parse_python("42")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
     @covers(PythonFeature.VARIABLE_DECLARATION)
     def test_string_literal(self):
         instructions = _parse_python('x = "hello"')
         consts = _find_all(instructions, Opcode.CONST)
-        assert any('"hello"' in inst.operands for inst in consts)
+        assert any("hello" in inst.operands for inst in consts)
 
 
 class TestPythonVariables:
@@ -148,10 +148,10 @@ class TestPythonControlFlow:
         instructions = _parse_python(source)
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first elif-branch value missing"
-        assert "30" in const_values, "second elif-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first elif-branch value missing"
+        assert 30 in const_values, "second elif-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
     @covers(PythonFeature.IF_ELSE)
     def test_if_elif_elif_else_branch_structure(self):
@@ -188,8 +188,8 @@ class TestPythonControlFlow:
         instructions = _parse_python(source)
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "1" in const_values
-        assert "2" in const_values
+        assert 1 in const_values
+        assert 2 in const_values
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 2
 
