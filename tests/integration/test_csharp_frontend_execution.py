@@ -485,3 +485,15 @@ var p2 = p1 with { Age = 31 };
 var answer = p2.Name;
 """)
         assert locals_[VarName("answer")] == "Alice"
+
+
+class TestCSharpCharLiteralExecution:
+    def test_char_literal_lowered_to_ord(self):
+        """Character literal 'A' should lower to integer ordinal 65."""
+        locals_ = _run_csharp("int c = 'A';")
+        assert locals_[VarName("c")] == 65
+
+    def test_char_escape_newline(self):
+        """Character literal '\\n' should lower to integer ordinal 10."""
+        locals_ = _run_csharp("int c = '\\n';")
+        assert locals_[VarName("c")] == 10

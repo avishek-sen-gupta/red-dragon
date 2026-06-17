@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from interpreter.frontends.common.patterns import (
@@ -19,6 +20,7 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
+from interpreter.frontends.csharp.expressions import _resolve_csharp_char_escape
 
 
 def parse_csharp_pattern(
@@ -149,13 +151,17 @@ def _parse_const_value(
         case "null_literal":
             return None
         case "integer_literal":
-            return int(text)
+            cleaned = re.sub(r"[uUlL]+$", "", text).replace("_", "")
+            return int(cleaned, 0)
         case "real_literal":
-            return float(text)
+            cleaned = re.sub(r"[fFdDmM]$", "", text).replace("_", "")
+            return float(cleaned)
         case "string_literal":
-            return text.strip('"')
+            inner = text[1:-1] if text.startswith('"') and text.endswith('"') else text
+            return inner
         case "character_literal":
-            return text.strip("'")
+            inner = text[1:-1] if text.startswith("'") and text.endswith("'") else text
+            return _resolve_csharp_char_escape(inner)
         case "boolean_literal":
             return text == "true"
         case _:
