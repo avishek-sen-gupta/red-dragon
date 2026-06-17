@@ -109,15 +109,15 @@ class TestCfgToMermaidEscaping:
     def test_quotes_in_operands_are_escaped(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
-            (Opcode.CONST, {"result_reg": Register("t0"), "operands": ['"hello"']}),
+            (Opcode.CONST, {"result_reg": Register("t0"), "operands": ['say "hi"']}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
         mermaid = cfg_to_mermaid(cfg)
 
         # Raw quotes must not appear inside node labels
-        assert '"hello"' not in mermaid.split("\n", 1)[1]
-        assert "#quot;hello#quot;" in mermaid
+        assert 'say "hi"' not in mermaid.split("\n", 1)[1]
+        assert "say #quot;hi#quot;" in mermaid
 
     def test_angle_brackets_are_escaped_in_instructions(self):
         instructions = _make_instructions(
