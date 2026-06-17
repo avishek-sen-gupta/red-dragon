@@ -15,6 +15,7 @@ from interpreter.frontends.cpp import expressions as cpp_expr
 from interpreter.frontends.cpp import control_flow as cpp_cf
 from interpreter.frontends.cpp import declarations as cpp_decl
 from interpreter.frontends.cpp.node_types import CppNodeType
+from interpreter.frontends.c.node_types import CNodeType
 
 
 class CppFrontend(CFrontend):
@@ -61,6 +62,17 @@ class CppFrontend(CFrontend):
         dispatch = super()._build_expr_dispatch()
         dispatch.update(
             {
+                # ── typed literal overrides (replaces untyped C fallbacks) ────
+                CNodeType.NUMBER_LITERAL: cpp_expr.lower_cpp_number_literal,
+                CNodeType.STRING_LITERAL: cpp_expr.lower_cpp_string_literal,
+                CNodeType.CHAR_LITERAL: cpp_expr.lower_cpp_char_literal,
+                CNodeType.CONCATENATED_STRING: cpp_expr.lower_cpp_concatenated_string,
+                CNodeType.PREPROC_ARG: cpp_expr.lower_cpp_number_literal,
+                # ── C++-only literal types ───────────────────────────────────
+                CppNodeType.USER_DEFINED_LITERAL: cpp_expr.lower_cpp_user_defined_literal,
+                CppNodeType.RAW_STRING_LITERAL: cpp_expr.lower_cpp_raw_string_literal,
+                CppNodeType.NULLPTR: common_expr.lower_canonical_none,
+                # ── C++ expression types ─────────────────────────────────────
                 CppNodeType.NEW_EXPRESSION: cpp_expr.lower_new_expr,
                 CppNodeType.DELETE_EXPRESSION: cpp_expr.lower_delete_expr,
                 CppNodeType.LAMBDA_EXPRESSION: cpp_expr.lower_lambda,
@@ -71,9 +83,6 @@ class CppFrontend(CFrontend):
                 CppNodeType.CALL_EXPRESSION: cpp_expr.lower_cpp_call,
                 CppNodeType.THIS: common_expr.lower_identifier,
                 CppNodeType.CONDITION_CLAUSE: cpp_expr.lower_condition_clause,
-                CppNodeType.NULLPTR: common_expr.lower_canonical_none,
-                CppNodeType.USER_DEFINED_LITERAL: common_expr.lower_const_literal,
-                CppNodeType.RAW_STRING_LITERAL: common_expr.lower_const_literal,
                 CppNodeType.THROW_EXPRESSION: cpp_expr.lower_throw_expr,
                 CppNodeType.STATIC_CAST_EXPRESSION: cpp_expr.lower_cpp_cast,
                 CppNodeType.DYNAMIC_CAST_EXPRESSION: cpp_expr.lower_cpp_cast,
