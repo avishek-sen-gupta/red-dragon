@@ -38,6 +38,7 @@ from interpreter.frontends.common.declarations import (
     emit_field_initializers,
     emit_synthetic_init,
 )
+from interpreter.frontends.common.expressions import lower_default_return
 from interpreter.types.type_expr import EnumType, ScalarType, scalar
 from interpreter.register import Register
 
@@ -70,7 +71,7 @@ def lower_enum_def(
         ]
         for variant_name in variant_names:
             variant_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=variant_reg, value=variant_name))
+            ctx.emit_inst(Const.string(variant_reg, variant_name))
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
@@ -110,7 +111,7 @@ def _lower_scala_tuple_destructure(
     for i, child in enumerate(named_children):
         var_name = _extract_pattern_name(ctx, child)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
@@ -132,7 +133,7 @@ def _lower_val_or_var_def(
         val_reg = ctx.lower_expr(value_node)
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(val_reg))
 
     if pattern_node is not None and pattern_node.type == NT.TUPLE_PATTERN:
         _lower_scala_tuple_destructure(ctx, pattern_node, val_reg, node)
@@ -281,10 +282,7 @@ def lower_function_def(
             expr_returned = True
 
     if not expr_returned:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
         ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -339,8 +337,7 @@ def _lower_auxiliary_constructor(
     elif body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -504,8 +501,7 @@ def _emit_primary_constructor_init(
             StoreField(obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg)
         )
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, None, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -607,8 +603,7 @@ def lower_function_declaration(
     ctx.emit_inst(Branch(label=end_label), node=node)
     ctx.emit_inst(Label_(label=func_label))
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 

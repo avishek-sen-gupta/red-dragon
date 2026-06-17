@@ -60,12 +60,13 @@ class ScalaFrontend(BaseFrontend):
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             NT.IDENTIFIER: common_expr.lower_identifier,
-            NT.INTEGER_LITERAL: common_expr.lower_const_literal,
-            NT.FLOATING_POINT_LITERAL: common_expr.lower_const_literal,
-            NT.STRING: common_expr.lower_const_literal,
+            NT.INTEGER_LITERAL: scala_expr.lower_scala_integer_literal,
+            NT.FLOATING_POINT_LITERAL: scala_expr.lower_scala_float_literal,
+            NT.CHARACTER_LITERAL: scala_expr.lower_scala_char_literal,
+            NT.STRING: scala_expr.lower_scala_string_literal,
             NT.BOOLEAN_LITERAL: common_expr.lower_canonical_bool,
-            NT.NULL_LITERAL: common_expr.lower_canonical_none,
-            NT.UNIT: common_expr.lower_const_literal,
+            NT.NULL_LITERAL: common_expr.lower_null_literal,
+            NT.UNIT: scala_expr.lower_scala_unit_literal,
             NT.INFIX_EXPRESSION: common_expr.lower_binop,
             NT.PREFIX_EXPRESSION: common_expr.lower_unop,
             NT.PARENTHESIZED_EXPRESSION: common_expr.lower_paren,
@@ -79,7 +80,7 @@ class ScalaFrontend(BaseFrontend):
             NT.THIS: common_expr.lower_identifier,
             NT.SUPER: common_expr.lower_identifier,
             NT.TUPLE_EXPRESSION: scala_expr.lower_tuple_expr,
-            NT.STRING_LITERAL: common_expr.lower_const_literal,
+            NT.STRING_LITERAL: scala_expr.lower_scala_string_literal,
             NT.INTERPOLATED_STRING_EXPRESSION: scala_expr.lower_scala_interpolated_string,
             NT.INTERPOLATED_STRING: scala_expr.lower_scala_interpolated_string_body,
             NT.LAMBDA_EXPRESSION: scala_expr.lower_lambda_expr,
@@ -93,7 +94,9 @@ class ScalaFrontend(BaseFrontend):
             NT.DO_WHILE_EXPRESSION: scala_expr.lower_loop_as_expr,
             NT.BREAK_EXPRESSION: scala_expr.lower_break_as_expr,
             NT.CONTINUE_EXPRESSION: scala_expr.lower_continue_as_expr,
-            NT.OPERATOR_IDENTIFIER: common_expr.lower_const_literal,
+            NT.OPERATOR_IDENTIFIER: lambda ctx, node: common_expr.lower_string_literal(
+                ctx, node, ctx.node_text(node)
+            ),
             NT.ARGUMENTS: common_expr.lower_paren,
             NT.CASE_BLOCK: scala_expr.lower_block_expr,
             NT.GENERIC_FUNCTION: scala_expr.lower_generic_function,
