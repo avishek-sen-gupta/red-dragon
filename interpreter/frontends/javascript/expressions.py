@@ -10,7 +10,13 @@ if TYPE_CHECKING:
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter import constants
-from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.common.expressions import (
+    lower_int_literal,
+    lower_float_literal,
+    lower_string_literal,
+    lower_null_literal,
+    lower_default_return,
+)
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
@@ -40,6 +46,74 @@ from interpreter.instructions import (
 )
 
 
+def lower_js_number(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a JS number literal to a typed int or float CONST.
+
+    - BigInt suffix ``n`` is stripped; the value is lowered as int.
+    - Hex (0x), octal (0o/0), binary (0b) and decimal literals → int.
+    - Scientific notation (1e3, 1.5e-2) and fractional literals → float.
+    - Digit-separator underscores are stripped by lower_int_literal.
+    - NaN / Infinity are lowered as float.
+    """
+    raw = ctx.node_text(node)
+    # BigInt suffix
+    text = raw.rstrip("nN")
+    # NaN / Infinity are special identifiers; treat as float
+    if text in ("NaN", "Infinity", "-Infinity", "+Infinity"):
+        return lower_float_literal(ctx, node, text=text)
+    # Float if it contains '.', 'e' / 'E' (but not hex-floats like 0x1.fp10 — JS has none)
+    if "." in text or ("e" in text.lower() and not text.lower().startswith("0x")):
+        return lower_float_literal(ctx, node, text=text)
+    # Int (decimal, hex 0x, octal 0o / legacy 0NNN, binary 0b)
+    return lower_int_literal(ctx, node, text=text)
+
+
+def lower_js_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a JS quoted string literal (single or double quotes) to Const.string.
+
+    Strips the surrounding quote characters and passes the raw content to
+    lower_string_literal; escape resolution is deferred to the VM.
+    Template strings with substitutions are handled separately by
+    lower_template_string.
+    """
+    raw = ctx.node_text(node)
+    if len(raw) >= 2 and raw[0] in ('"', "'") and raw[-1] == raw[0]:
+        value = raw[1:-1]
+    else:
+        value = raw
+    return lower_string_literal(ctx, node, value)
+
+
+def lower_js_string_fragment(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a string_fragment node (content inside a quoted string).
+
+    string_fragment nodes inside a JS string or template literal are
+    ALREADY unquoted — tree-sitter strips the surrounding quotes.
+    Pass the raw text directly as the string value.
+    """
+    return lower_string_literal(ctx, node, ctx.node_text(node))
+
+
+def lower_js_regex(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a JS regex literal to Const.string (the full regex text)."""
+    return lower_string_literal(ctx, node, ctx.node_text(node))
+
+
+def lower_js_meta_property(
+    ctx: TreeSitterEmitContext, node: Any
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a JS meta_property (new.target, import.meta) to Const.string."""
+    return lower_string_literal(ctx, node, ctx.node_text(node))
+
+
 def _has_optional_chain(node) -> bool:
     """Check if a node contains an optional_chain (?.) child token."""
     return any(c.type == JSN.OPTIONAL_CHAIN for c in node.children)
@@ -53,7 +127,7 @@ def _emit_optional_guard(
     emit_access is a callable that emits the access IR and returns the result register.
     """
     null_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=null_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(null_reg))
     cmp_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -73,7 +147,7 @@ def _emit_optional_guard(
 
     ctx.emit_inst(Label_(label=null_label))
     none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(none_reg))
     ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=none_reg))
     ctx.emit_inst(Branch(label=end_label))
 
@@ -94,7 +168,7 @@ def lower_js_subscript(
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     idx_node = node.child_by_field_name("index")
     if obj_node is None or idx_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
 
     def emit_access():
@@ -116,7 +190,7 @@ def lower_js_attribute(
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     prop_node = node.child_by_field_name("property")
     if obj_node is None or prop_node is None:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(prop_node)
 
@@ -263,10 +337,14 @@ def lower_js_object_literal(
                     key_reg = (
                         ctx.lower_expr(inner_expr)
                         if inner_expr
-                        else lower_const_literal(ctx, key_node)
+                        else lower_string_literal(
+                            ctx, key_node, ctx.node_text(key_node)
+                        )
                     )
                 else:
-                    key_reg = lower_const_literal(ctx, key_node)
+                    key_reg = lower_string_literal(
+                        ctx, key_node, ctx.node_text(key_node)
+                    )
                 val_reg = ctx.lower_expr(val_node)
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
@@ -274,7 +352,7 @@ def lower_js_object_literal(
         elif child.type == JSN.SHORTHAND_PROPERTY_IDENTIFIER:
             from interpreter.frontends.common.expressions import lower_identifier
 
-            key_reg = lower_const_literal(ctx, child)
+            key_reg = lower_string_literal(ctx, child, ctx.node_text(child))
             val_reg = lower_identifier(ctx, child)
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
@@ -309,8 +387,7 @@ def lower_arrow_function(
             val_reg = ctx.lower_expr(body_node)
             ctx.emit_inst(Return_(value_reg=val_reg))
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -405,7 +482,7 @@ def lower_yield_expression(
         return reg
     # Bare yield
     none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(none_reg))
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(result_reg=reg, func_name=FuncName("yield"), args=(none_reg,)),
@@ -420,7 +497,7 @@ def lower_sequence_expression(
     """Lower `(a, b, c)` -> evaluate all, return last register."""
     children = [c for c in node.children if c.is_named]
     if not children:
-        return lower_const_literal(ctx, node)
+        return lower_null_literal(ctx, node)
     last_reg = ctx.lower_expr(children[0])
     for child in children[1:]:
         last_reg = ctx.lower_expr(child)
@@ -457,8 +534,7 @@ def lower_function_expression(
     if body_node:
         ctx.lower_block(body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -473,7 +549,11 @@ def lower_template_string(
     """Lower template string, descending into template_substitution children."""
     has_substitution = any(c.type == JSN.TEMPLATE_SUBSTITUTION for c in node.children)
     if not has_substitution:
-        return lower_const_literal(ctx, node)
+        # No substitutions: lower as a plain string (strip surrounding backticks)
+        raw = ctx.node_text(node)
+        if len(raw) >= 2 and raw[0] == "`" and raw[-1] == "`":
+            raw = raw[1:-1]
+        return lower_string_literal(ctx, node, raw)
 
     # Build by concatenating literal fragments and substitution expressions
     parts: list[str] = []
@@ -483,13 +563,12 @@ def lower_template_string(
         elif child.is_named:
             parts.append(ctx.lower_expr(child))
         elif child.type not in (JSN.BACKTICK,):
-            # String fragment
-            frag_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=frag_reg, value=ctx.node_text(child)))
+            # String fragment — already unquoted by tree-sitter
+            frag_reg = lower_string_literal(ctx, child, ctx.node_text(child))
             parts.append(frag_reg)
 
     if not parts:
-        return lower_const_literal(ctx, node)
+        return lower_string_literal(ctx, node, "")
     result = parts[0]
     for part in parts[1:]:
         new_reg = ctx.fresh_reg()
@@ -510,7 +589,7 @@ def lower_template_substitution(
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[0])
-    return lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_export_clause(
@@ -518,7 +597,7 @@ def lower_export_clause(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower `{ a, b }` export clause — lower inner export_specifiers."""
     last_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=last_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(Const.null_(last_reg))
     for child in node.children:
         if child.is_named:
             last_reg = ctx.lower_expr(child)
@@ -535,8 +614,7 @@ def lower_js_field_definition(
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        val_reg = lower_null_literal(ctx, node)
     ctx.emit_inst(DeclVar(name=VarName(field_name), value_reg=val_reg), node=node)
     # Return val_reg so this can be used in both stmt and expr contexts
     return val_reg
@@ -606,7 +684,7 @@ def _lower_rest_param(ctx: TreeSitterEmitContext, child, start_index: int) -> No
     args_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=args_reg, name=VarName("arguments")))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=idx_reg, value=str(start_index)))
+    ctx.emit_inst(Const.int_(idx_reg, start_index))
     rest_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
