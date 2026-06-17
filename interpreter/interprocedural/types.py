@@ -220,7 +220,9 @@ class InterproceduralResult:
 # 10. NO_DEFINITION sentinel
 # ---------------------------------------------------------------------------
 
-_SENTINEL_INSTRUCTION = IRInstruction(opcode=Opcode.CONST, operands=[])
+_SENTINEL_INSTRUCTION = IRInstruction(
+    opcode=Opcode.CONST, operands=[], literal_type="Null"
+)
 
 NO_DEFINITION = Definition(
     variable="",  # type: ignore[arg-type]  # sentinel str; StorageIdentifier boundary
