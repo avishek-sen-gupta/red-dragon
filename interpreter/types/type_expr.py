@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.constants import FoundationTypeName
 from interpreter.type_name import TypeName
 
 
@@ -343,7 +344,8 @@ def union_of(*types: TypeExpr) -> TypeExpr:
     return UnionType(frozenset(members))
 
 
-_NULL = ScalarType(TypeName("Null"))
+NULL = ScalarType(FoundationTypeName.NULL)
+_NULL = NULL  # alias kept for optional / is_optional / unwrap_optional helpers
 
 
 def optional(inner: TypeExpr) -> TypeExpr:

@@ -39,6 +39,7 @@ class ScalaFeature(Enum):
     METHOD_CALL = "obj.method(...) instance method call expressions"
     FUNCTION_CALL = "f(...) function call expressions"
     STRING_LITERAL = "string literal values"
+    CHARACTER_LITERAL = "'c' character literal values (lowered to integer ordinal)"
     BOOLEAN_LITERAL = "true and false boolean literal values"
     NULL_LITERAL = "null null value literal"
     STRING_INTERPOLATION = 's"...${expr}..." and f"..." string interpolation'

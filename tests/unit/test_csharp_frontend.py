@@ -149,10 +149,10 @@ else { y = 40; }
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -535,9 +535,9 @@ class TestCSharpEnumDeclaration:
         assert "Medium" in const_vals
         assert "High" in const_vals
         # Implicit ordinal values
-        assert "0" in const_vals
-        assert "1" in const_vals
-        assert "2" in const_vals
+        assert 0 in const_vals
+        assert 1 in const_vals
+        assert 2 in const_vals
 
 
 class TestCSharpTypeofAndIsCheck:
@@ -645,7 +645,7 @@ class TestCSharpPropertyDeclaration:
         assert any("X" in inst.operands for inst in store_fields)
         consts = _find_all(ir, Opcode.CONST)
         const_vals = [inst.operands[0] for inst in consts if inst.operands]
-        assert "42" in const_vals
+        assert 42 in const_vals
 
     @covers(CSharpFeature.PROPERTY)
     def test_property_with_accessor_body(self):

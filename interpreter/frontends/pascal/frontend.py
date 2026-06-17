@@ -69,8 +69,8 @@ class PascalFrontend(BaseFrontend):
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             PascalNodeType.IDENTIFIER: common_expr.lower_identifier,
-            PascalNodeType.LITERAL_NUMBER: common_expr.lower_const_literal,
-            PascalNodeType.LITERAL_STRING: common_expr.lower_const_literal,
+            PascalNodeType.LITERAL_NUMBER: pascal_expr.lower_pascal_number_literal,
+            PascalNodeType.LITERAL_STRING: pascal_expr.lower_pascal_string_literal,
             PascalNodeType.EXPR_BINARY: pascal_expr.lower_pascal_binop,
             PascalNodeType.EXPR_CALL: pascal_expr.lower_pascal_call,
             PascalNodeType.EXPR_PARENS: pascal_expr.lower_pascal_paren,
@@ -83,7 +83,7 @@ class PascalFrontend(BaseFrontend):
             PascalNodeType.K_NIL: common_expr.lower_canonical_none,
             PascalNodeType.RANGE: pascal_expr.lower_pascal_range,
             PascalNodeType.INHERITED: pascal_expr.lower_pascal_inherited_expr,
-            PascalNodeType.TYPEREF: common_expr.lower_const_literal,
+            PascalNodeType.TYPEREF: common_expr.lower_null_literal,
         }
 
     def _build_stmt_dispatch(

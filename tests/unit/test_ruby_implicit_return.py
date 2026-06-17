@@ -74,7 +74,8 @@ end
             if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
         ]
         assert len(consts) >= 1, "RETURN register should come from a CONST"
-        assert "5" in consts[0].operands, "CONST should hold literal 5"
+        # typed Const: int payload is a real Python int, not a string
+        assert 5 in consts[0].operands, "CONST should hold literal 5"
 
 
 class TestRubyImplicitReturnInstanceVar:
@@ -149,8 +150,8 @@ end
         default_consts = [
             i
             for i in func_body
-            if i.opcode == Opcode.CONST
-            and str(i.result_reg) == return_reg
-            and "None" in i.operands
+            if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
+            # typed Const.null_: payload is Python None, not the string "None"
+            and None in i.operands
         ]
         assert len(default_consts) >= 1, "assignment-ending method should return nil"

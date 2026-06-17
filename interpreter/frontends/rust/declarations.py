@@ -25,6 +25,11 @@ from interpreter.instructions import (
     StoreField,
     Symbolic,
 )
+from interpreter.frontends.common.expressions import (
+    lower_null_literal,
+    lower_string_literal,
+    lower_default_return,
+)
 from interpreter import constants
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
@@ -186,16 +191,12 @@ def lower_function_def(
         if expr_reg:
             ctx.emit_inst(Return_(value_reg=expr_reg))
         else:
-            none_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Const(result_reg=none_reg, value=ctx.constants.default_return_value)
+            none_reg = lower_default_return(
+                ctx, node, ctx.constants.default_return_value
             )
             ctx.emit_inst(Return_(value_reg=none_reg))
     else:
-        none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
         ctx.emit_inst(Return_(value_reg=none_reg))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -219,8 +220,7 @@ def lower_let_decl(
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        val_reg = lower_null_literal(ctx, node)
 
     if pattern_node is not None and pattern_node.type == RustNodeType.TUPLE_PATTERN:
         _lower_tuple_destructure(ctx, pattern_node, val_reg, node)
@@ -246,7 +246,7 @@ def _lower_tuple_destructure(
     ]
     for i, child in enumerate(named_children):
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
@@ -393,7 +393,7 @@ def lower_enum_item(
                 continue
             variant_name = ctx.node_text(child).split("(")[0].split("{")[0].strip()
             variant_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=variant_reg, value=variant_name))
+            ctx.emit_inst(Const.string(variant_reg, variant_name))
             ctx.emit_inst(
                 StoreField(
                     obj_reg=obj_reg,
@@ -421,8 +421,7 @@ def lower_const_item(
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        val_reg = lower_null_literal(ctx, node)
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, type_hint)
 
@@ -443,8 +442,7 @@ def lower_static_item(
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        val_reg = lower_null_literal(ctx, node)
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, type_hint)
 
@@ -461,8 +459,7 @@ def lower_type_item(
     alias_name = ctx.node_text(name_node) if name_node else "__type_alias"
     type_text = ctx.node_text(type_node) if type_node else "()"
 
-    val_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=val_reg, value=type_text), node=node)
+    val_reg = lower_string_literal(ctx, node, type_text)
     ctx.emit_inst(DeclVar(name=VarName(alias_name), value_reg=val_reg), node=node)
 
 
@@ -516,8 +513,7 @@ def lower_function_signature(
     if params_node:
         lower_rust_params(ctx, params_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 

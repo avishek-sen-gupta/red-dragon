@@ -252,12 +252,16 @@ def IRInstruction(
     label: CodeLabel = NO_LABEL,
     branch_targets: list[CodeLabel] = [],
     source_location: SourceLocation = NO_SOURCE_LOCATION,
+    literal_type: str | None = None,
 ) -> Any:
     """Factory: construct a typed instruction from flat (opcode, operands) form.
 
     Drop-in replacement for the old ``IRInstruction`` Pydantic class.
     Callers keep the same keyword interface; the return value is now a
     frozen dataclass from ``interpreter.instructions``.
+
+    ``literal_type`` is only meaningful for CONST instructions (one of
+    "Int", "Float", "String", "Bool", "Null", "FuncRef", "ClassRef").
     """
     # Import here to avoid circular imports (ir ← instructions ← ir)
     from interpreter.instructions import _to_typed
@@ -272,11 +276,19 @@ def IRInstruction(
             "label",
             "branch_targets",
             "source_location",
+            "literal_type",
         )
 
         def __init__(
-            self, opcode, result_reg, operands, label, branch_targets, source_location
-        ):
+            self,
+            opcode: Any,
+            result_reg: Any,
+            operands: Any,
+            label: Any,
+            branch_targets: Any,
+            source_location: Any,
+            literal_type: Any,
+        ) -> None:
             self.opcode = opcode
             self.result_reg = result_reg
             self.operands = operands
@@ -289,6 +301,15 @@ def IRInstruction(
                 t if isinstance(t, CodeLabel) else CodeLabel(t) for t in branch_targets
             ]
             self.source_location = source_location
+            self.literal_type = literal_type
 
-    flat = _Flat(opcode, result_reg, operands, label, branch_targets, source_location)
+    flat = _Flat(
+        opcode,
+        result_reg,
+        operands,
+        label,
+        branch_targets,
+        source_location,
+        literal_type,
+    )
     return _to_typed(flat)

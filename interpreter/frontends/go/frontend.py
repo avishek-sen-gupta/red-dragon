@@ -80,12 +80,12 @@ class GoFrontend(BaseFrontend):
     ) -> dict[str, Callable[[TreeSitterEmitContext, Any], Register]]:
         return {
             GoNodeType.IDENTIFIER: common_expr.lower_identifier,
-            GoNodeType.INT_LITERAL: common_expr.lower_const_literal,
-            GoNodeType.FLOAT_LITERAL: common_expr.lower_const_literal,
-            GoNodeType.INTERPRETED_STRING_LITERAL: common_expr.lower_const_literal,
-            GoNodeType.RAW_STRING_LITERAL: common_expr.lower_const_literal,
-            GoNodeType.RUNE_LITERAL: common_expr.lower_const_literal,
-            GoNodeType.BLANK_IDENTIFIER: common_expr.lower_const_literal,
+            GoNodeType.INT_LITERAL: common_expr.lower_int_literal,
+            GoNodeType.FLOAT_LITERAL: common_expr.lower_float_literal,
+            GoNodeType.INTERPRETED_STRING_LITERAL: go_expr.lower_go_interpreted_string_literal,
+            GoNodeType.RAW_STRING_LITERAL: go_expr.lower_go_raw_string_literal,
+            GoNodeType.RUNE_LITERAL: go_expr.lower_go_rune_literal,
+            GoNodeType.BLANK_IDENTIFIER: common_expr.lower_null_literal,
             GoNodeType.TRUE: common_expr.lower_canonical_true,
             GoNodeType.FALSE: common_expr.lower_canonical_false,
             GoNodeType.NIL: common_expr.lower_canonical_none,
@@ -103,9 +103,15 @@ class GoFrontend(BaseFrontend):
             GoNodeType.FUNC_LITERAL: go_expr.lower_func_literal,
             GoNodeType.TYPE_CONVERSION_EXPRESSION: go_expr.lower_type_conversion,
             GoNodeType.GENERIC_TYPE: go_expr.lower_generic_type,
-            GoNodeType.CHANNEL_TYPE: common_expr.lower_const_literal,
-            GoNodeType.SLICE_TYPE: common_expr.lower_const_literal,
-            GoNodeType.EXPRESSION_LIST: common_expr.lower_const_literal,
+            GoNodeType.CHANNEL_TYPE: lambda ctx, node: common_expr.lower_string_literal(
+                ctx, node, ctx.node_text(node)
+            ),
+            GoNodeType.SLICE_TYPE: lambda ctx, node: common_expr.lower_string_literal(
+                ctx, node, ctx.node_text(node)
+            ),
+            GoNodeType.EXPRESSION_LIST: lambda ctx, node: common_expr.lower_string_literal(
+                ctx, node, ctx.node_text(node)
+            ),
             GoNodeType.VARIADIC_ARGUMENT: common_expr.lower_paren,
             GoNodeType.IOTA: go_expr.lower_go_iota,
         }

@@ -33,8 +33,17 @@ from interpreter.ir import (
 )
 from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolve_unop
 from interpreter.register import NO_REGISTER, Register
+from interpreter.constants import FoundationTypeName
 from interpreter.type_name import TypeName
-from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
+from interpreter.types.type_expr import (
+    UNKNOWN,
+    TypeExpr,
+    FunctionType,
+    NULL,
+    fn_type,
+    metatype,
+    scalar,
+)
 from interpreter.field_name import FieldName, FieldKind, NO_FIELD_NAME
 from interpreter.func_name import FuncName, NO_FUNC_NAME
 from interpreter.storage_identifier import StorageIdentifier
@@ -200,10 +209,18 @@ class InstructionBase:
 
 @dataclass(frozen=True)
 class Const(InstructionBase):
-    """CONST: load a literal value into a register."""
+    """CONST: load a literal value into a register.
+
+    ``type_expr`` is required (keyword-only).  Use the typed factory classmethods
+    (``Const.int_``, ``Const.float_``, ``Const.string``, ``Const.bool_``,
+    ``Const.null_``, ``Const.func_ref``, ``Const.class_ref``) rather than
+    constructing ``Const`` directly.
+    """
 
     result_reg: Register = NO_REGISTER
     value: Any = ""
+    has_value: bool = True
+    type_expr: TypeExpr = field(kw_only=True)
 
     @property
     def opcode(self) -> Opcode:
@@ -211,7 +228,107 @@ class Const(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.value] if self.value != "" else []
+        return [self.value] if self.has_value else []
+
+    # ── Typed factory classmethods ─────────────────────────────────
+
+    @classmethod
+    def int_(cls, result_reg: Register, value: int, **kw: Any) -> "Const":
+        """Create an integer constant with a real Python int payload."""
+        return cls(
+            result_reg=result_reg,
+            value=int(value),
+            has_value=True,
+            type_expr=scalar(FoundationTypeName.INT),
+            **kw,
+        )
+
+    @classmethod
+    def float_(cls, result_reg: Register, value: float, **kw: Any) -> "Const":
+        """Create a float constant with a real Python float payload."""
+        return cls(
+            result_reg=result_reg,
+            value=float(value),
+            has_value=True,
+            type_expr=scalar(FoundationTypeName.FLOAT),
+            **kw,
+        )
+
+    @classmethod
+    def string(cls, result_reg: Register, value: str, **kw: Any) -> "Const":
+        """Create a string constant with a real Python str payload (no surrounding quotes)."""
+        return cls(
+            result_reg=result_reg,
+            value=str(value),
+            has_value=True,
+            type_expr=scalar(FoundationTypeName.STRING),
+            **kw,
+        )
+
+    @classmethod
+    def bool_(cls, result_reg: Register, value: bool, **kw: Any) -> "Const":
+        """Create a boolean constant with a real Python bool payload."""
+        return cls(
+            result_reg=result_reg,
+            value=bool(value),
+            has_value=True,
+            type_expr=scalar(FoundationTypeName.BOOL),
+            **kw,
+        )
+
+    @classmethod
+    def null_(cls, result_reg: Register, **kw: Any) -> "Const":
+        """Create a null constant with Python None as payload."""
+        return cls(
+            result_reg=result_reg,
+            value=None,
+            has_value=True,
+            type_expr=NULL,
+            **kw,
+        )
+
+    @classmethod
+    def func_ref(
+        cls,
+        result_reg: Register,
+        value: Any,
+        params: list[TypeExpr] | None = None,
+        return_type: TypeExpr = UNKNOWN,
+        **kw: Any,
+    ) -> "Const":
+        """Create a function-reference constant.
+
+        ``value`` is the function label string; ``_handle_const`` will resolve
+        it to a ``BoundFuncRef`` via the func_symbol_table.
+        """
+        return cls(
+            result_reg=result_reg,
+            value=str(value),
+            has_value=True,
+            type_expr=fn_type(params or [], return_type),
+            **kw,
+        )
+
+    @classmethod
+    def class_ref(
+        cls,
+        result_reg: Register,
+        value: Any,
+        class_type: TypeExpr,
+        **kw: Any,
+    ) -> "Const":
+        """Create a class-reference constant.
+
+        ``value`` is the class label string; ``_handle_const`` will resolve
+        it to a ``ClassRef`` via the class_symbol_table.
+        """
+        return cls(
+            result_reg=result_reg,
+            value=str(value),
+            has_value=True,
+            type_expr=metatype(class_type),
+            **kw,
+        )
 
 
 @dataclass(frozen=True)
@@ -1067,11 +1184,68 @@ Instruction = Union[
 
 
 def _const(inst: Any) -> Const:
-    return Const(
-        result_reg=inst.result_reg,
-        value=str(inst.operands[0]) if inst.operands else "",
-        source_location=inst.source_location,
-    )
+    """Convert a flat CONST instruction to a typed ``Const``.
+
+    The flat instruction must carry a ``literal_type`` field (one of
+    "Int", "Float", "String", "Bool", "Null", "FuncRef", "ClassRef").
+    Raises ``ValueError`` when the field is absent or unrecognised.
+    """
+    reg: Register = inst.result_reg
+    raw: Any = inst.operands[0] if inst.operands else None
+    sl: Any = inst.source_location
+    lit: Any = getattr(inst, "literal_type", None)
+
+    if lit == "Int":
+        return Const.int_(reg, int(raw), source_location=sl)
+    if lit == "Float":
+        return Const.float_(reg, float(raw), source_location=sl)
+    if lit == "String":
+        return Const.string(reg, str(raw), source_location=sl)
+    if lit == "Bool":
+        return Const.bool_(reg, str(raw) == "True", source_location=sl)
+    if lit == "Null":
+        return Const.null_(reg, source_location=sl)
+    if lit == "FuncRef":
+        return Const.func_ref(
+            reg,
+            str(raw),
+            source_location=sl,
+        )
+    if lit == "ClassRef":
+        return Const.class_ref(
+            reg,
+            str(raw),
+            class_type=UNKNOWN,
+            source_location=sl,
+        )
+    # Legacy / untyped flat CONST (no explicit literal_type): infer the type from
+    # the operand, mirroring the pre-typed wire convention. This is the single
+    # place where text->type decoding is inherent — legacy IR and hand-written IR
+    # fixtures. Structured frontends never reach here (they build typed Const
+    # directly via the factories), so this does not reintroduce the production
+    # type-ambiguity bug.
+    if raw is None:
+        return Const.null_(reg, source_location=sl)
+    s = str(raw)
+    if s == "None":
+        return Const.null_(reg, source_location=sl)
+    if s in ("True", "False"):
+        return Const.bool_(reg, s == "True", source_location=sl)
+    if s.startswith("func_") or s.startswith("<function:"):
+        return Const.func_ref(reg, s, source_location=sl)
+    if s.startswith("class_") or s.startswith("<class:"):
+        return Const.class_ref(reg, s, class_type=UNKNOWN, source_location=sl)
+    try:
+        return Const.int_(reg, int(s), source_location=sl)
+    except ValueError:
+        pass
+    try:
+        return Const.float_(reg, float(s), source_location=sl)
+    except ValueError:
+        pass
+    if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
+        return Const.string(reg, s[1:-1], source_location=sl)
+    return Const.string(reg, s, source_location=sl)
 
 
 def _load_var(inst: Any) -> LoadVar:

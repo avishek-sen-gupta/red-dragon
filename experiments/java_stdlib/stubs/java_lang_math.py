@@ -15,6 +15,7 @@ from interpreter.instructions import (
     Symbolic,
 )
 from interpreter.ir import CodeLabel
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.operator_kind import BinopKind
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
@@ -42,7 +43,7 @@ MATH_IR = (
     Branch(label=CodeLabel(_END_CLS)),
     Label_(label=CodeLabel(_CLS)),
     Label_(label=CodeLabel(_END_CLS)),
-    Const(result_reg=Register("%0"), value=_CLS),
+    Const.class_ref(Register("%0"), _CLS, class_type=UNKNOWN),
     DeclVar(name=VarName("Math"), value_reg=Register("%0")),
     # ── sqrt(x) → x ** 0.5 ──────────────────────────────────────────────────
     Branch(label=CodeLabel(_SQRT_END)),
@@ -50,7 +51,7 @@ MATH_IR = (
     Symbolic(result_reg=Register("%1"), hint="param:x"),
     DeclVar(name=VarName("x"), value_reg=Register("%1")),
     LoadVar(result_reg=Register("%2"), name=VarName("x")),
-    Const(result_reg=Register("%3"), value="0.5"),
+    Const.float_(Register("%3"), 0.5),
     Binop(
         result_reg=Register("%4"),
         operator=BinopKind.POWER,
@@ -59,7 +60,7 @@ MATH_IR = (
     ),
     Return_(value_reg=Register("%4")),
     Label_(label=CodeLabel(_SQRT_END)),
-    Const(result_reg=Register("%5"), value=_SQRT_F),
+    Const.func_ref(Register("%5"), _SQRT_F),
     DeclVar(name=VarName("sqrt"), value_reg=Register("%5")),
     # ── abs(x) → VM builtin "abs" ────────────────────────────────────────────
     Branch(label=CodeLabel(_ABS_END)),
@@ -74,7 +75,7 @@ MATH_IR = (
     ),
     Return_(value_reg=Register("%8")),
     Label_(label=CodeLabel(_ABS_END)),
-    Const(result_reg=Register("%9"), value=_ABS_F),
+    Const.func_ref(Register("%9"), _ABS_F),
     DeclVar(name=VarName("abs"), value_reg=Register("%9")),
     # ── pow(x, y) → x ** y ───────────────────────────────────────────────────
     Branch(label=CodeLabel(_POW_END)),
@@ -93,7 +94,7 @@ MATH_IR = (
     ),
     Return_(value_reg=Register("%14")),
     Label_(label=CodeLabel(_POW_END)),
-    Const(result_reg=Register("%15"), value=_POW_F),
+    Const.func_ref(Register("%15"), _POW_F),
     DeclVar(name=VarName("pow"), value_reg=Register("%15")),
     # ── min(x, y) → VM builtin "min" ─────────────────────────────────────────
     Branch(label=CodeLabel(_MIN_END)),
@@ -111,7 +112,7 @@ MATH_IR = (
     ),
     Return_(value_reg=Register("%20")),
     Label_(label=CodeLabel(_MIN_END)),
-    Const(result_reg=Register("%21"), value=_MIN_F),
+    Const.func_ref(Register("%21"), _MIN_F),
     DeclVar(name=VarName("min"), value_reg=Register("%21")),
     # ── max(x, y) → VM builtin "max" ─────────────────────────────────────────
     Branch(label=CodeLabel(_MAX_END)),
@@ -129,7 +130,7 @@ MATH_IR = (
     ),
     Return_(value_reg=Register("%26")),
     Label_(label=CodeLabel(_MAX_END)),
-    Const(result_reg=Register("%27"), value=_MAX_F),
+    Const.func_ref(Register("%27"), _MAX_F),
     DeclVar(name=VarName("max"), value_reg=Register("%27")),
 )
 

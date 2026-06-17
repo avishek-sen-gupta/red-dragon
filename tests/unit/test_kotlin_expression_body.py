@@ -69,7 +69,7 @@ class TestKotlinExpressionBodyLiteral:
             if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
         ]
         assert len(consts) >= 1, "RETURN register should come from a CONST"
-        assert "42" in consts[0].operands, "CONST should hold literal 42"
+        assert 42 in consts[0].operands, "CONST should hold literal 42"  # typed int
 
     @covers(KotlinFeature.FUNCTION_DECLARATION)
     def test_no_default_return_value(self):
@@ -84,7 +84,7 @@ class TestKotlinExpressionBodyLiteral:
             for i in func_body
             if i.opcode == Opcode.CONST
             and str(i.result_reg) == return_reg
-            and "None" in i.operands
+            and None in i.operands  # typed Const.null_ stores Python None
         ]
         assert len(default_consts) == 0, "RETURN should not use default None value"
 
@@ -107,4 +107,4 @@ class TestKotlinBlockBodyUnchanged:
             if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
         ]
         assert len(consts) >= 1, "RETURN register should come from a CONST"
-        assert "42" in consts[0].operands, "RETURN should carry literal 42"
+        assert 42 in consts[0].operands, "RETURN should carry literal 42"  # typed int

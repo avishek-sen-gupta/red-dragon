@@ -3,13 +3,19 @@
 from __future__ import annotations
 from interpreter.type_name import TypeName
 
+import re
 from typing import Any
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
-from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.common.expressions import (
+    lower_null_literal,
+    lower_string_literal,
+    lower_int_literal,
+    lower_float_literal,
+)
 from interpreter.frontends.c.node_types import CNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
@@ -43,6 +49,183 @@ from interpreter.instructions import (
 
 logger = logging.getLogger(__name__)
 
+# ── C typed literal lowerers ──────────────────────────────────────────────────
+
+# C integer suffixes: u/U, l/L, ll/LL (any combination)
+_C_INT_SUFFIX_RE = re.compile(r"[uUlL]+$")
+
+# C float suffixes: f/F (float), l/L (long double)
+_C_FLOAT_SUFFIX_RE = re.compile(r"[fFlL]$")
+
+# C char escape sequences (same as C++)
+_C_CHAR_ESCAPES: dict[str, str] = {
+    "\\n": "\n",
+    "\\t": "\t",
+    "\\r": "\r",
+    "\\\\": "\\",
+    "\\'": "'",
+    '\\"': '"',
+    "\\b": "\b",
+    "\\f": "\f",
+    "\\0": "\0",
+    "\\a": "\a",
+    "\\v": "\v",
+    "\\?": "?",
+}
+
+
+def _parse_c_char(text: str) -> int:
+    """Return the ordinal of a C char literal (e.g. \"'A'\" -> 65, \"'\\\\n'\" -> 10).
+
+    Handles:
+    - Simple chars:   'x'
+    - Common escapes: '\\\\n', '\\\\t', '\\\\r', '\\\\\\\\', etc.
+    - Hex escapes:    '\\\\xFF'
+    - Octal escapes:  '\\\\077'
+    """
+    # Strip surrounding single quotes
+    inner = text[1:-1]
+    if inner in _C_CHAR_ESCAPES:
+        return ord(_C_CHAR_ESCAPES[inner])
+    if inner.startswith("\\x"):
+        return int(inner[2:], 16)
+    if inner.startswith("\\") and len(inner) > 1 and inner[1].isdigit():
+        return int(inner[1:], 8)
+    return ord(inner)
+
+
+def _unescape_c_string(s: str) -> str:
+    """Resolve C string escape sequences in an already-unquoted string."""
+
+    def replace_escape(m: re.Match) -> str:  # type: ignore[type-arg]
+        seq = m.group(0)
+        if seq in _C_CHAR_ESCAPES:
+            return _C_CHAR_ESCAPES[seq]
+        if seq.startswith("\\x"):
+            return chr(int(seq[2:], 16))
+        if seq.startswith("\\") and seq[1:].isdigit():
+            return chr(int(seq[1:], 8))
+        return seq
+
+    return re.sub(
+        r"\\x[0-9a-fA-F]+|\\[0-7]{1,3}|\\[ntrb\\f'\"0av?]",
+        replace_escape,
+        s,
+    )
+
+
+def lower_c_number_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a C number literal to a typed int or float Const.
+
+    Handles:
+    - Integer suffixes: u/U/l/L/ll/LL (any combination), stripped before parse.
+    - All int bases via int(text, 0): decimal, hex 0x, octal 0, binary 0b.
+    - Float suffixes: f/F, l/L → stripped, then parsed as float.
+    - Float literals detected by '.' or 'e/E/p/P' in the suffix-stripped text.
+    """
+    raw = ctx.node_text(node)
+
+    # Detect float: first strip float suffix to check for '.', 'e', 'E', 'p', 'P'
+    float_suffix_stripped = _C_FLOAT_SUFFIX_RE.sub("", raw)
+    is_float = "." in float_suffix_stripped or any(
+        c in float_suffix_stripped for c in ("e", "E", "p", "P")
+    )
+
+    if is_float:
+        return lower_float_literal(ctx, node, text=float_suffix_stripped)
+
+    # Integer: strip suffixes
+    int_text = _C_INT_SUFFIX_RE.sub("", raw)
+    return lower_int_literal(ctx, node, text=int_text)
+
+
+def lower_c_char_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a C char literal to its integer ordinal value (typed Const.int_).
+
+    Examples: 'A' → 65, '\\\\n' → 10, '\\\\0' → 0.
+    """
+    ordinal = _parse_c_char(ctx.node_text(node))
+    return lower_int_literal(ctx, node, text=str(ordinal))
+
+
+def lower_c_string_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a C string literal as Const.string.
+
+    Strips surrounding double-quotes and resolves escape sequences.
+    For concatenated strings, returns the full text as-is.
+    """
+    raw = ctx.node_text(node)
+    if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+        inner = raw[1:-1]
+        value = _unescape_c_string(inner)
+    else:
+        value = raw
+    return lower_string_literal(ctx, node, value)
+
+
+def lower_c_concatenated_string(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a C concatenated string literal (e.g. \"hello\" \" world\") as Const.string."""
+    raw = ctx.node_text(node)
+    # Concatenated strings: just strip outer quotes from combined text if possible
+    # tree-sitter gives us the full source text; join all string_literal children
+    parts: list[str] = []
+    for child in node.children:
+        if child.is_named:
+            child_raw = ctx.node_text(child)
+            if len(child_raw) >= 2 and child_raw[0] == '"' and child_raw[-1] == '"':
+                parts.append(_unescape_c_string(child_raw[1:-1]))
+            else:
+                parts.append(child_raw)
+    if parts:
+        return lower_string_literal(ctx, node, "".join(parts))
+    return lower_string_literal(ctx, node, raw)
+
+
+def lower_c_preproc_arg(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
+    """Lower a preproc_arg (macro body) as a symbolic placeholder.
+
+    preproc_arg nodes contain raw macro body text (e.g. ``((a) > (b) ? (a) : (b))``).
+    Tree-sitter doesn't parse them as expression trees, so we emit a symbolic
+    to avoid crashing when the body isn't a plain numeric literal.
+    """
+    from interpreter.instructions import Symbolic
+
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Symbolic(result_reg=reg, hint=f"preproc_arg:{ctx.node_text(node)}"), node=node
+    )
+    return reg
+
+
+# ── fallback for unrecognized literal nodes ───────────────────────────────────
+
+
+def _lower_c_fallback_literal(
+    ctx: TreeSitterEmitContext, node: Any
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
+    """Emit a symbolic placeholder for an unrecognized C literal node.
+
+    Used as the fallback in field_expr, subscript_expr, cast_expr, and
+    initializer_pair when the normal child traversal finds nothing.
+    """
+    from interpreter.instructions import Symbolic
+
+    reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Symbolic(result_reg=reg, hint=f"c_literal_fallback:{node.type}"), node=node
+    )
+    return reg
+
 
 def lower_field_expr(
     ctx: TreeSitterEmitContext, node: Any
@@ -51,7 +234,7 @@ def lower_field_expr(
     obj_node = node.child_by_field_name("argument")
     field_node = node.child_by_field_name("field")
     if obj_node is None or field_node is None:
-        return lower_const_literal(ctx, node)
+        return _lower_c_fallback_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
@@ -69,7 +252,7 @@ def lower_subscript_expr(
     arr_node = node.child_by_field_name("argument")
     idx_node = node.child_by_field_name("index")
     if arr_node is None or idx_node is None:
-        return lower_const_literal(ctx, node)
+        return _lower_c_fallback_literal(ctx, node)
     arr_reg = ctx.lower_expr(arr_node)
     idx_reg = ctx.lower_expr(idx_node)
     reg = ctx.fresh_reg()
@@ -160,7 +343,7 @@ def lower_cast_expr(
     children = [c for c in node.children if c.is_named]
     if len(children) >= 2:
         return ctx.lower_expr(children[-1])
-    return lower_const_literal(ctx, node)
+    return _lower_c_fallback_literal(ctx, node)
 
 
 def lower_pointer_expr(
@@ -218,8 +401,7 @@ def lower_sizeof(
         None,
     )
     if type_node:
-        arg_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=arg_reg, value=ctx.node_text(type_node)))
+        arg_reg = lower_string_literal(ctx, type_node, ctx.node_text(type_node))
     else:
         expr_node = next(
             (c for c in node.children if c.is_named and c.type != CNodeType.SIZEOF),
@@ -271,8 +453,7 @@ def lower_comma_expr(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower comma expression (a, b) — evaluate both, return last."""
     children = [c for c in node.children if c.is_named]
-    reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
+    reg = lower_null_literal(ctx, node)
     for child in children:
         reg = ctx.lower_expr(child)
     return reg
@@ -298,8 +479,7 @@ def lower_compound_literal(
     if init_node:
         elements = [c for c in init_node.children if c.is_named]
         for i, elem in enumerate(elements):
-            idx_reg = ctx.fresh_reg()
-            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            idx_reg = lower_int_literal(ctx, elem, text=str(i))
             val_reg = ctx.lower_expr(elem)
             ctx.emit_inst(
                 StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg)
@@ -312,8 +492,7 @@ def lower_initializer_list(
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower initializer_list {a, b, c} as NEW_ARRAY + STORE_INDEX per element."""
     elements = [c for c in node.children if c.is_named]
-    size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
+    size_reg = lower_int_literal(ctx, node, text=str(len(elements)))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
         NewArray(
@@ -322,8 +501,7 @@ def lower_initializer_list(
         node=node,
     )
     for i, elem in enumerate(elements):
-        idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        idx_reg = lower_int_literal(ctx, elem, text=str(i))
         val_reg = ctx.lower_expr(elem)
         ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
@@ -343,4 +521,4 @@ def lower_initializer_pair(
     )
     if value_node:
         return ctx.lower_expr(value_node)
-    return lower_const_literal(ctx, node)
+    return _lower_c_fallback_literal(ctx, node)

@@ -61,7 +61,7 @@ class TestScalaDeclarations:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("10" in inst.operands for inst in consts)
+        assert any(10 in inst.operands for inst in consts)
 
 
 class TestScalaFunctions:
@@ -149,10 +149,10 @@ class TestScalaControlFlow:
         )
         consts = _find_all(instructions, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -216,13 +216,38 @@ class TestScalaExpressions:
     def test_string_literal(self):
         instructions = _parse_scala('object M { val s = "hello" }')
         consts = _find_all(instructions, Opcode.CONST)
-        assert any('"hello"' in inst.operands for inst in consts)
+        assert any("hello" in inst.operands for inst in consts)
 
     @covers(ScalaFeature.BOOLEAN_LITERAL)
     def test_boolean_literal(self):
         instructions = _parse_scala("object M { val b = true }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("True" in inst.operands for inst in consts)
+        assert any(True in inst.operands for inst in consts)
+
+    @covers(ScalaFeature.CHARACTER_LITERAL)
+    def test_char_literal_lowered_to_ord(self):
+        """Character literals 'a' → integer ordinal 97 (typed INT Const)."""
+        instructions = _parse_scala("object M { val c = 'a' }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            97 in inst.operands for inst in consts
+        ), "char 'a' should lower to integer ordinal 97"
+
+    @covers(ScalaFeature.CHARACTER_LITERAL)
+    def test_char_escape_lowered_to_ord(self):
+        """Escape char literals '\\n' → integer ordinal 10."""
+        instructions = _parse_scala("object M { val c = '\\n' }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            10 in inst.operands for inst in consts
+        ), "char '\\n' should lower to integer ordinal 10"
+
+    @covers(ScalaFeature.STRING_LITERAL)
+    def test_triple_quoted_string_raw(self):
+        """Triple-quoted strings are raw: backslash is not an escape."""
+        instructions = _parse_scala('object M { val s = """hello""" }')
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("hello" in inst.operands for inst in consts)
 
 
 class TestScalaSpecial:
@@ -270,7 +295,7 @@ class TestScalaSpecial:
     def test_null_literal(self):
         instructions = _parse_scala("object M { val n = null }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("None" in inst.operands for inst in consts)
+        assert any(None in inst.operands for inst in consts)
 
 
 def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
@@ -551,7 +576,7 @@ class TestScalaLazyValDefinition:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in inst.operands for inst in consts)
+        assert any(42 in inst.operands for inst in consts)
 
     @covers(ScalaFeature.LAZY_VAL)
     def test_lazy_val_with_expression(self):

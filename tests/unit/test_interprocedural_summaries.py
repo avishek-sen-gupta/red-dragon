@@ -40,10 +40,10 @@ def _build_set_val_cfg() -> tuple[CFG, FunctionEntry]:
     instructions = [
         Symbolic(result_reg=Register("%0"), hint=f"{PARAM_PREFIX}p"),
         DeclVar(name=VarName("p"), value_reg=Register("%0")),
-        Const(result_reg=Register("%1"), value="99"),
+        Const.int_(Register("%1"), 99),
         LoadVar(result_reg=Register("%2"), name=VarName("p")),
         StoreIndirect(ptr_reg=Register("%2"), value_reg=Register("%1")),
-        Const(result_reg=Register("%3"), value="0"),
+        Const.int_(Register("%3"), 0),
         Return_(value_reg=Register("%3")),
     ]
     block = BasicBlock(

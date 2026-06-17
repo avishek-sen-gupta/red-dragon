@@ -26,6 +26,12 @@ from interpreter.instructions import (
 )
 from interpreter import constants
 from interpreter.frontends.csharp.expressions import lower_csharp_params
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+    lower_null_literal,
+    lower_string_literal,
+    lower_int_literal,
+)
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
@@ -93,8 +99,7 @@ def _lower_csharp_declarator(
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        val_reg = lower_null_literal(ctx, node)
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, type_hint)
     if is_ref:
@@ -151,8 +156,7 @@ def lower_method_decl(
 
     ctx.byref_params = saved_byref
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -197,8 +201,7 @@ def lower_constructor_decl(
 
     ctx.byref_params = saved_byref
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -395,10 +398,7 @@ def lower_property_decl(
     if initializer_node:
         val_reg = ctx.lower_expr(initializer_node)
     else:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.none_literal), node=node
-        )
+        val_reg = lower_null_literal(ctx, node)
 
     ctx.emit_inst(
         StoreField(
@@ -494,9 +494,9 @@ def lower_enum_decl(
                     else ctx.node_text(child)
                 )
                 key_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=key_reg, value=member_name))
+                ctx.emit_inst(Const.string(key_reg, member_name))
                 val_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=val_reg, value=str(i)))
+                ctx.emit_inst(Const.int_(val_reg, i))
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
                 )
@@ -557,8 +557,7 @@ def lower_local_function_stmt(
 
     ctx.byref_params = saved_byref
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -584,8 +583,7 @@ def lower_event_decl(
     if not name_node:
         return
     event_name = ctx.node_text(name_node)
-    val_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=val_reg, value=f"event:{event_name}"), node=node)
+    val_reg = lower_string_literal(ctx, node, f"event:{event_name}")
     ctx.emit_inst(DeclVar(name=VarName(event_name), value_reg=val_reg), node=node)
 
 
@@ -601,8 +599,7 @@ def lower_delegate_declaration(
     ctx.emit_inst(Branch(label=end_label), node=node)
     ctx.emit_inst(Label_(label=func_label))
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    none_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 

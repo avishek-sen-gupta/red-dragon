@@ -134,7 +134,7 @@ def lower_for(
 
     iter_reg = ctx.lower_expr(right)
     init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(Const.int_(init_idx, 0))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(

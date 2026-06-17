@@ -23,7 +23,7 @@ from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
-from interpreter.types.type_expr import scalar
+from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.var_name import VarName
 
 _VALUE = FieldName("value")
@@ -52,7 +52,7 @@ STRING_IR = (
     Branch(label=CodeLabel(_END_CLS)),
     Label_(label=CodeLabel(_CLS)),
     Label_(label=CodeLabel(_END_CLS)),
-    Const(result_reg=Register("%0"), value=_CLS),
+    Const.class_ref(Register("%0"), _CLS, class_type=UNKNOWN),
     DeclVar(name=VarName("String"), value_reg=Register("%0")),
     # ── __init__(this, value) — store value + pre-compute length ──────────────
     # Pre-storing FieldName("length", FieldKind.SPECIAL) lets the VM's
@@ -75,10 +75,10 @@ STRING_IR = (
     StoreField(
         obj_reg=Register("%3"), field_name=_LEN_SPECIAL, value_reg=Register("%5")
     ),
-    Const(result_reg=Register("%6"), value="None"),
+    Const.null_(Register("%6")),
     Return_(value_reg=Register("%6")),
     Label_(label=CodeLabel(_INIT_END)),
-    Const(result_reg=Register("%7"), value=_INIT_F),
+    Const.func_ref(Register("%7"), _INIT_F),
     DeclVar(name=VarName("__init__"), value_reg=Register("%7")),
     # ── toUpperCase() → new String(str_upper(this.value)) ────────────────────
     Branch(label=CodeLabel(_UPPER_END)),
@@ -104,7 +104,7 @@ STRING_IR = (
     ),
     Return_(value_reg=Register("%12")),
     Label_(label=CodeLabel(_UPPER_END)),
-    Const(result_reg=Register("%14"), value=_UPPER_F),
+    Const.func_ref(Register("%14"), _UPPER_F),
     DeclVar(name=VarName("toUpperCase"), value_reg=Register("%14")),
     # ── toLowerCase() → new String(str_lower(this.value)) ────────────────────
     Branch(label=CodeLabel(_LOWER_END)),
@@ -130,7 +130,7 @@ STRING_IR = (
     ),
     Return_(value_reg=Register("%19")),
     Label_(label=CodeLabel(_LOWER_END)),
-    Const(result_reg=Register("%21"), value=_LOWER_F),
+    Const.func_ref(Register("%21"), _LOWER_F),
     DeclVar(name=VarName("toLowerCase"), value_reg=Register("%21")),
     # ── length() — note: s.length() is intercepted by the _method_length
     #   builtin which reads _LEN_SPECIAL from the heap object stored in __init__.
@@ -146,7 +146,7 @@ STRING_IR = (
     ),
     Return_(value_reg=Register("%24")),
     Label_(label=CodeLabel(_LEN_END)),
-    Const(result_reg=Register("%25"), value=_LEN_F),
+    Const.func_ref(Register("%25"), _LEN_F),
     DeclVar(name=VarName("length"), value_reg=Register("%25")),
     # ── trim() → new String(str_strip(this.value)) ───────────────────────────
     Branch(label=CodeLabel(_TRIM_END)),
@@ -172,7 +172,7 @@ STRING_IR = (
     ),
     Return_(value_reg=Register("%30")),
     Label_(label=CodeLabel(_TRIM_END)),
-    Const(result_reg=Register("%32"), value=_TRIM_F),
+    Const.func_ref(Register("%32"), _TRIM_F),
     DeclVar(name=VarName("trim"), value_reg=Register("%32")),
     # ── contains(s) → s.value in this.value via BinopKind.IN ─────────────────
     Branch(label=CodeLabel(_CONTAINS_END)),
@@ -193,7 +193,7 @@ STRING_IR = (
     ),
     Return_(value_reg=Register("%39")),
     Label_(label=CodeLabel(_CONTAINS_END)),
-    Const(result_reg=Register("%40"), value=_CONTAINS_F),
+    Const.func_ref(Register("%40"), _CONTAINS_F),
     DeclVar(name=VarName("contains"), value_reg=Register("%40")),
 )
 

@@ -41,6 +41,7 @@ class RustFeature(Enum):
     UNIT_EXPRESSION = "() unit value expressions"
     NEGATIVE_LITERAL = "negative numeric literals like -42"
     RAW_STRING_LITERAL = 'r"..." and r#"..."# raw string literals'
+    CHAR_LITERAL = "char literals like 'x' (lowered to Unicode code point / ord)"
     ARRAY_LITERAL = "[a, b, c] and [val; N] array expressions"
     STRUCT_LITERAL = "Foo { field: val } struct construction expressions"
     TUPLE_LITERAL = "(a, b, c) tuple expressions"

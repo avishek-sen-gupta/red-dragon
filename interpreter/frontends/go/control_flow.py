@@ -8,6 +8,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import CodeLabel
+from interpreter.frontends.common.expressions import lower_default_return
 from interpreter.frontends.go.expressions import (
     extract_expression_list,
     lower_expression_list,
@@ -174,7 +175,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     raw_names = extract_expression_list(ctx, left) if left else ["__range_var"]
 
     init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(Const.int_(init_idx, 0))
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -222,7 +223,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
 
     ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -291,7 +292,7 @@ def lower_go_inc(
     operand = children[0]
     operand_reg = ctx.lower_expr(operand)
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -314,7 +315,7 @@ def lower_go_dec(
     operand = children[0]
     operand_reg = ctx.lower_expr(operand)
     one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    ctx.emit_inst(Const.int_(one_reg, 1))
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -336,10 +337,7 @@ def lower_go_return(
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
     children = [c for c in node.children if c.type != GoNodeType.RETURN and c.is_named]
     if not children:
-        val_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
-        )
+        val_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
         ctx.emit_inst(Return_(value_reg=val_reg), node=node)
         return
     # If expression_list, lower each value
@@ -484,9 +482,24 @@ def lower_expression_switch(
 
 
 def _make_const_val(ctx: TreeSitterEmitContext, value: str) -> str:
-    """Emit a CONST and return its register."""
+    """Emit a typed CONST for a canonical literal string and return its register.
+
+    Used for switch fallback (true sentinel).  Handles True/False/None/int.
+    """
+    from interpreter.constants import CanonicalLiteral
+
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=reg, value=value))
+    if value == CanonicalLiteral.TRUE:
+        ctx.emit_inst(Const.bool_(reg, True))
+    elif value == CanonicalLiteral.FALSE:
+        ctx.emit_inst(Const.bool_(reg, False))
+    elif value == CanonicalLiteral.NONE:
+        ctx.emit_inst(Const.null_(reg))
+    else:
+        try:
+            ctx.emit_inst(Const.int_(reg, int(value)))
+        except (ValueError, TypeError):
+            ctx.emit_inst(Const.string(reg, value))
     return reg
 
 

@@ -153,10 +153,10 @@ void f() {
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         const_values = [op for inst in consts for op in inst.operands]
-        assert "10" in const_values, "if-branch value missing"
-        assert "20" in const_values, "first else-if-branch value missing"
-        assert "30" in const_values, "second else-if-branch value missing"
-        assert "40" in const_values, "else-branch value missing"
+        assert 10 in const_values, "if-branch value missing"
+        assert 20 in const_values, "first else-if-branch value missing"
+        assert 30 in const_values, "second else-if-branch value missing"
+        assert 40 in const_values, "else-branch value missing"
 
         branch_ifs = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 3
@@ -701,9 +701,9 @@ class TestCFrontendEnumSpecifier:
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         const_vals = [inst.operands[0] for inst in consts if inst.operands]
-        assert "0" in const_vals
-        assert "1" in const_vals
-        assert "2" in const_vals
+        assert 0 in const_vals
+        assert 1 in const_vals
+        assert 2 in const_vals
 
     @covers(CFeature.ENUM)
     def test_enum_with_explicit_values(self):
@@ -758,7 +758,8 @@ class TestCFrontendCharLiteral:
         source = "void f() { char c = 'A'; }"
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
-        assert any("'A'" in str(inst.operands) for inst in consts)
+        # 'A' → int ordinal 65 (typed Const.int_ migration)
+        assert any(65 in inst.operands for inst in consts)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("char_literal" in str(inst.operands) for inst in symbolics)
 
@@ -776,6 +777,66 @@ class TestCFrontendCharLiteral:
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("c" in inst.operands for inst in stores)
+
+    @covers(CFeature.CHAR_LITERAL)
+    def test_char_literal_a_is_97(self):
+        """'a' → typed Const.int_(97) — char→ord migration."""
+        source = "void f() { char c = 'a'; }"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            97 in inst.operands for inst in consts
+        ), "'a' should lower to int ordinal 97"
+
+    @covers(CFeature.CHAR_LITERAL)
+    def test_char_escape_newline_is_10(self):
+        r"""'\n' → typed Const.int_(10) — escape char→ord."""
+        source = r"void f() { char c = '\n'; }"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            10 in inst.operands for inst in consts
+        ), r"'\n' should lower to int ordinal 10"
+
+    @covers(CFeature.CHAR_LITERAL)
+    def test_char_nul_is_0(self):
+        r"""'\0' → typed Const.int_(0) — NUL escape."""
+        source = r"void f() { char c = '\0'; }"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            0 in inst.operands for inst in consts
+        ), r"'\0' should lower to int ordinal 0"
+
+
+class TestCImplicitReturn:
+    @covers(CFeature.IMPLICIT_RETURN)
+    def test_function_with_no_return_emits_int_0(self):
+        """A function that falls off the end emits CONST int 0 (not null)."""
+        source = "int f() { int x = 1; }"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        # The implicit default return value for C is int 0
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1, "Expected at least one RETURN"
+        # The const feeding the return should be int 0
+        all_const_values = [op for inst in consts for op in inst.operands]
+        assert 0 in all_const_values, "C implicit return should emit Const.int_(0)"
+        # Ensure it is NOT null (no Const.null_ emitted for the return value)
+        nulls = [inst for inst in consts if None in inst.operands]
+        assert len(nulls) == 0, "C implicit return must not emit Const.null_"
+
+
+class TestCNullPointer:
+    @covers(CFeature.NULL_POINTER)
+    def test_null_macro_lowers_to_canonical_none(self):
+        """NULL in C lowers to Const.null_ (canonical none) via lower_canonical_none."""
+        source = "void f() { int *p = NULL; }"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        # NULL is mapped to lower_canonical_none → Const.null_
+        null_consts = [inst for inst in consts if None in inst.operands]
+        assert len(null_consts) >= 1, "NULL should lower to Const.null_"
 
 
 class TestCFrontendInitializerList:
@@ -818,8 +879,8 @@ class TestCInitializerPair:
         source = "void f() { struct S s = {.x = 10, .y = 20}; }"
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
-        assert any("10" in inst.operands for inst in consts)
-        assert any("20" in inst.operands for inst in consts)
+        assert any(10 in inst.operands for inst in consts)
+        assert any(20 in inst.operands for inst in consts)
 
 
 class TestCFrontendPreprocFunctionDef:

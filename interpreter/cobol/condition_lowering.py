@@ -52,16 +52,14 @@ def _emit_88_value_reg(
         # sized to the parent field so equality holds against the decoded field.
         if not parent_is_alpha and raw.upper() in ("ZERO", "ZEROS", "ZEROES"):
             return ctx.const_to_reg(0)
-        return ctx.const_to_reg('"' + fill * max(parent_byte_length, 1) + '"')
+        return ctx.const_to_reg(fill * max(parent_byte_length, 1))
     if parent_is_alpha:
         # The parent decodes to its full byte width (no trailing-space trim), so
         # a VALUE shorter than the parent must be right-space-padded to that width
         # for the equality to hold — mirroring how SET <88> TO TRUE writes the
         # padded value. (CardDemo COCRDSLC: 88 FOUND-CARDS-FOR-ACCOUNT VALUE
         # '   Displaying...' on a PIC X(40) flag.)
-        return ctx.const_to_reg(
-            '"' + raw.ljust(max(parent_byte_length, len(raw))) + '"'
-        )
+        return ctx.const_to_reg(raw.ljust(max(parent_byte_length, len(raw))))
     return ctx.const_to_reg(ctx.parse_literal(raw))
 
 
@@ -193,7 +191,7 @@ def _expand_condition_name(
 
     if not value_regs:
         result = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=result, value="True"))
+        ctx.emit_inst(Const.bool_(result, True))
         return result
 
     return _emit_or_chain(ctx, value_regs)
@@ -399,7 +397,7 @@ def _lower_figurative(
     if length is None:
         length = _DEFAULT_FIGURATIVE_LEN
     literal = fill * length
-    return ctx.const_to_reg(f'"{literal}"')
+    return ctx.const_to_reg(literal)
 
 
 # Figuratives whose natural class is alphanumeric (character) rather than
@@ -574,7 +572,7 @@ def _lower_padded_char_literal(
     if width is None or width < len(content):
         width = len(content)
     padded = content.ljust(width)
-    return ctx.const_to_reg(f'"{padded}"')
+    return ctx.const_to_reg(padded)
 
 
 def _lower_relation_node(
@@ -622,7 +620,7 @@ def _lower_class_condition(
     if builtin is None:
         logger.warning("unknown class condition %r — never matching", class_name)
         result = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=result, value="False"))
+        ctx.emit_inst(Const.bool_(result, False))
         return result
 
     value_reg = _lower_expr_dict(ctx, node.get("operand", {}), materialised)
@@ -736,7 +734,9 @@ def _lower_expr_dict(
         return ctx.const_to_reg(f"UNRESOLVABLE__{name}")
 
     if kind == "lit":
-        return ctx.const_to_reg(ctx.parse_literal(expr.get("value", "")))
+        raw_val = expr.get("value", "")
+        parsed = ctx.parse_literal(raw_val)
+        return ctx.const_to_reg(parsed)
 
     if kind == "binop":
         left_reg = _lower_expr_dict(ctx, expr["left"], materialised)
@@ -875,7 +875,7 @@ def _lower_condition_str(
     # (Full CLASS/SIGN structuring is deferred — see red-dragon-z31u.)
     logger.warning("unparseable condition %r — never matching", condition)
     result = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=result, value="False"))
+    ctx.emit_inst(Const.bool_(result, False))
     return result
 
 
@@ -971,7 +971,7 @@ def lower_expr_node(
                 "Unsupported COBOL intrinsic FUNCTION %r — falling back to first argument",
                 node.name,
             )
-            return arg_regs[0] if arg_regs else ctx.const_to_reg('""')
+            return arg_regs[0] if arg_regs else ctx.const_to_reg("")
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(

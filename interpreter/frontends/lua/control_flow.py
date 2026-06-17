@@ -12,6 +12,7 @@ from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
+from interpreter.frontends.common.expressions import lower_int_literal
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -165,11 +166,10 @@ def _lower_lua_for_numeric(
 
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=start_reg))
 
-    step_reg = ctx.fresh_reg()
     if step_node:
         step_reg = ctx.lower_expr(step_node)
     else:
-        ctx.emit_inst(Const(result_reg=step_reg, value="1"))
+        step_reg = lower_int_literal(ctx, clause, text="1")
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
@@ -264,8 +264,7 @@ def _lower_lua_for_generic(
     iterable_node = _strip_iterator_wrapper(ctx, expr_list) if expr_list else None
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
 
-    init_idx = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    init_idx = lower_int_literal(ctx, for_node, text="0")
     ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -308,8 +307,7 @@ def _lower_lua_for_generic(
     ctx.pop_loop()
 
     ctx.emit_inst(Label_(label=update_label))
-    one_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+    one_reg = lower_int_literal(ctx, for_node, text="1")
     new_idx = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(

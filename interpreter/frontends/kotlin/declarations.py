@@ -72,7 +72,7 @@ def _lower_multi_variable_destructure(
         val_reg = ctx.lower_expr(value_node)
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(val_reg))
 
     var_decls = [
         c for c in multi_var_node.children if c.type == KNT.VARIABLE_DECLARATION
@@ -80,7 +80,7 @@ def _lower_multi_variable_destructure(
     for i, var_decl in enumerate(var_decls):
         var_name = _extract_property_name(ctx, var_decl)
         idx_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(Const.int_(idx_reg, i))
         elem_reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
@@ -126,7 +126,7 @@ def lower_property_decl(
         val_reg = ctx.lower_expr(value_node)
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+        ctx.emit_inst(Const.null_(val_reg))
     ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, type_hint)
 
@@ -261,9 +261,7 @@ def lower_function_decl(
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        ctx.emit_inst(Const.null_(none_reg))
         ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -323,9 +321,7 @@ def _emit_synthetic_getter(
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         none_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
-        )
+        ctx.emit_inst(Const.null_(none_reg))
         ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -376,7 +372,7 @@ def _emit_synthetic_setter(
     ctx._accessor_backing_field = prev_backing
 
     none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Const.null_(none_reg))
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -567,7 +563,7 @@ def _emit_primary_constructor_init(
         )
 
     none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Const.null_(none_reg))
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
@@ -621,7 +617,7 @@ def lower_secondary_constructor(
         ctx.lower_block(body_node)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Const.null_(none_reg))
     ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 

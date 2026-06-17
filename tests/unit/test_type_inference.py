@@ -38,19 +38,53 @@ from interpreter.register import Register, NO_REGISTER
 from interpreter.var_name import VarName
 
 
+def _derive_literal_type(operand) -> str:
+    """Classify a CONST fixture operand into a literal_type tag (test helper).
+
+    Mirrors the pre-typed-Const string conventions so existing CONST fixtures
+    (e.g. operands=["42"], ['"hi"'], ["None"], ["func_add_0"]) build valid typed
+    Const instructions via the _const builder.
+    """
+    s = str(operand)
+    if s.startswith("func_"):
+        return "FuncRef"
+    if s.startswith("class_"):
+        return "ClassRef"
+    if s in ("True", "False"):
+        return "Bool"
+    if s == "None":
+        return "Null"
+    try:
+        int(s)
+        return "Int"
+    except ValueError:
+        pass
+    try:
+        float(s)
+        return "Float"
+    except ValueError:
+        pass
+    return "String"
+
+
 def _make_inst(
     opcode,
     result_reg=NO_REGISTER,
     operands=None,
     label=NO_LABEL,
     branch_targets: list[CodeLabel] = [],
+    literal_type=None,
 ):
+    ops = operands or []
+    if opcode == Opcode.CONST and literal_type is None and ops:
+        literal_type = _derive_literal_type(ops[0])
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg,
-        operands=operands or [],
+        operands=ops,
         label=label,
         branch_targets=branch_targets,
+        literal_type=literal_type,
     )
 
 

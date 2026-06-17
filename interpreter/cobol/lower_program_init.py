@@ -40,6 +40,7 @@ from interpreter.instructions import (
     StoreVar,
 )
 from interpreter.ir import CodeLabel
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.var_name import VarName
 
 
@@ -72,13 +73,17 @@ def lower_program_init(
     )
 
     run_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=run_reg, value=str(proc_label)))
+    ctx.emit_inst(
+        Const.func_ref(run_reg, str(proc_label), params=[], return_type=UNKNOWN)
+    )
     ctx.emit_inst(
         StoreField(obj_reg=ptr_reg, field_name=FieldName("run"), value_reg=run_reg)
     )
 
     init_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const(result_reg=init_reg, value=str(init_params_label)))
+    ctx.emit_inst(
+        Const.func_ref(init_reg, str(init_params_label), params=[], return_type=UNKNOWN)
+    )
     ctx.emit_inst(
         StoreField(
             obj_reg=ptr_reg, field_name=FieldName("__init_params__"), value_reg=init_reg
