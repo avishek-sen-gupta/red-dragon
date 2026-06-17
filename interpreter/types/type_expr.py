@@ -345,29 +345,12 @@ def union_of(*types: TypeExpr) -> TypeExpr:
 
 
 NULL = ScalarType(FoundationTypeName.NULL)
-_NULL = NULL  # alias kept for optional / is_optional / unwrap_optional helpers
+_NULL = NULL  # alias kept for the optional() helper
 
 
 def optional(inner: TypeExpr) -> TypeExpr:
     """Create ``Optional[inner]`` = ``Union[inner, Null]``."""
     return union_of(inner, _NULL)
-
-
-def is_optional(t: TypeExpr) -> bool:
-    """Return True if *t* is a union containing Null."""
-    return isinstance(t, UnionType) and _NULL in t.members
-
-
-def unwrap_optional(t: TypeExpr) -> TypeExpr:
-    """Remove Null from a union type. Non-optional types returned as-is."""
-    if not isinstance(t, UnionType):
-        return t
-    remaining = t.members - {_NULL}
-    if not remaining:
-        return UNKNOWN
-    if len(remaining) == 1:
-        return next(iter(remaining))
-    return UnionType(frozenset(remaining))
 
 
 # ---------------------------------------------------------------------------
