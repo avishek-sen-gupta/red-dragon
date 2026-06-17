@@ -48,8 +48,8 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.IDENTIFIER: common_expr.lower_identifier,
             RubyNodeType.INSTANCE_VARIABLE: ruby_expr.lower_instance_variable,
             RubyNodeType.CONSTANT: common_expr.lower_identifier,
-            RubyNodeType.INTEGER: common_expr.lower_const_literal,
-            RubyNodeType.FLOAT: common_expr.lower_const_literal,
+            RubyNodeType.INTEGER: common_expr.lower_int_literal,
+            RubyNodeType.FLOAT: common_expr.lower_float_literal,
             RubyNodeType.STRING: ruby_expr.lower_ruby_string,
             RubyNodeType.TRUE: common_expr.lower_canonical_true,
             RubyNodeType.FALSE: common_expr.lower_canonical_false,
@@ -61,10 +61,12 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.ARRAY: common_expr.lower_list_literal,
             RubyNodeType.HASH: ruby_expr.lower_ruby_hash,
             RubyNodeType.ARGUMENT_LIST: ruby_expr.lower_ruby_argument_list,
-            RubyNodeType.SIMPLE_SYMBOL: common_expr.lower_const_literal,
-            RubyNodeType.HASH_KEY_SYMBOL: common_expr.lower_const_literal,
+            RubyNodeType.SIMPLE_SYMBOL: ruby_expr.lower_ruby_symbol,
+            RubyNodeType.HASH_KEY_SYMBOL: ruby_expr.lower_ruby_symbol,
             RubyNodeType.RANGE: ruby_expr.lower_ruby_range,
-            RubyNodeType.REGEX: common_expr.lower_const_literal,
+            RubyNodeType.REGEX: lambda ctx, node: common_expr.lower_string_literal(
+                ctx, node, ctx.node_text(node)
+            ),
             RubyNodeType.LAMBDA: ruby_expr.lower_ruby_lambda,
             RubyNodeType.STRING_ARRAY: ruby_expr.lower_ruby_word_array,
             RubyNodeType.SYMBOL_ARRAY: ruby_expr.lower_ruby_word_array,
@@ -72,11 +74,15 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.CLASS_VARIABLE: common_expr.lower_identifier,
             RubyNodeType.HEREDOC_BODY: ruby_expr.lower_ruby_heredoc_body,
             RubyNodeType.ELEMENT_REFERENCE: ruby_expr.lower_element_reference,
-            RubyNodeType.HEREDOC_BEGINNING: common_expr.lower_const_literal,
+            RubyNodeType.HEREDOC_BEGINNING: lambda ctx, node: common_expr.lower_string_literal(
+                ctx, node, ctx.node_text(node)
+            ),
             RubyNodeType.RIGHT_ASSIGNMENT_LIST: common_expr.lower_list_literal,
             RubyNodeType.PATTERN: ruby_expr.lower_ruby_pattern,
-            RubyNodeType.DELIMITED_SYMBOL: common_expr.lower_const_literal,
-            RubyNodeType.IN: common_expr.lower_const_literal,
+            RubyNodeType.DELIMITED_SYMBOL: ruby_expr.lower_ruby_symbol,
+            RubyNodeType.IN: lambda ctx, node: common_expr.lower_string_literal(
+                ctx, node, ctx.node_text(node)
+            ),
             RubyNodeType.CONDITIONAL: ruby_expr.lower_ruby_conditional,
             RubyNodeType.UNARY: common_expr.lower_unop,
             RubyNodeType.SELF: ruby_expr.lower_ruby_self,
