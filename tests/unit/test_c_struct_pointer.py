@@ -75,7 +75,7 @@ class TestArrowOperatorLowering:
             if inst.opcode == Opcode.CONST
         }
         arrow_store = field_stores[-1]  # arrow write is the second STORE_FIELD
-        assert consts.get(arrow_store.operands[2]) == "5"
+        assert consts.get(arrow_store.operands[2]) == 5
 
 
 # ── Executor: address-of on heap objects ─────────────────────────
