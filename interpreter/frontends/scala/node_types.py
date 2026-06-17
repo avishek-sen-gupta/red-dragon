@@ -10,6 +10,7 @@ class ScalaNodeType:
     TYPE_IDENTIFIER = "type_identifier"
     INTEGER_LITERAL = "integer_literal"
     FLOATING_POINT_LITERAL = "floating_point_literal"
+    CHARACTER_LITERAL = "character_literal"
     STRING = "string"
     STRING_LITERAL = "string_literal"
     BOOLEAN_LITERAL = "boolean_literal"
