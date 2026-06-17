@@ -10,7 +10,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_scala(source: str) -> list[InstructionBase]:
@@ -1187,6 +1187,21 @@ object M {
 
 class TestScalaImplicitReturn:
     """Scala functions return the last expression in a block body."""
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        """Synthetic fall-off-the-end return is marked implicit; explicit one is not."""
+        ir = _parse_scala("""\
+object M {
+    def f(): Int = {
+        return 42
+    }
+}""")
+        returns = _find_all(ir, Opcode.RETURN)
+        assert any(r.implicit for r in returns), "Expected a synthetic implicit RETURN"
+        assert any(
+            not r.implicit for r in returns
+        ), "Expected the explicit `return 42` to remain non-implicit"
 
     def test_block_body_returns_last_expr(self):
         """def f(): Int = { val x = 5; x } should RETURN x, not ()."""

@@ -355,7 +355,7 @@ def lower_ruby_lambda(
                 ctx.lower_stmt(child)
 
     nil_reg = lower_default_return(ctx, node, ctx.constants.default_return_value)
-    ctx.emit_inst(Return_(value_reg=nil_reg))
+    ctx.emit_inst(Return_(value_reg=nil_reg, implicit=True))
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()

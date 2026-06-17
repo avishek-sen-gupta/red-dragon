@@ -7,7 +7,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.frontends.pascal.features import PascalFeature
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_pascal(source: str) -> list[InstructionBase]:
@@ -1507,6 +1507,23 @@ end."""
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         this_params = [s for s in symbolics if s.operands == ["param:this"]]
         assert len(this_params) == 0, "Plain procedure should not have param:this"
+
+
+class TestPascalImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        """The synthetic fall-off-the-end return of a procedure is implicit."""
+        source = """\
+program M;
+procedure Greet;
+begin
+end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert returns, "expected a synthetic trailing RETURN"
+        assert any(r.implicit for r in returns)
 
 
 class TestPascalEnumDeclaration:

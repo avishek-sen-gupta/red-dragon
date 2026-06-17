@@ -18,7 +18,7 @@ from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.typed_value import unwrap
 from interpreter.var_name import VarName
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:
@@ -1200,3 +1200,12 @@ class TestCFrontendTernaryOperator:
         ]
         # At least one > for the condition, one * for compute(a)*2, one + for a+b, one - for compute(b)-1
         assert len(binops) >= 4
+
+
+class TestCImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        instructions = _parse_and_lower("int f() { return 42; }")
+        returns = [i for i in instructions if i.opcode == Opcode.RETURN]
+        assert any(r.implicit for r in returns)
+        assert any(not r.implicit for r in returns)

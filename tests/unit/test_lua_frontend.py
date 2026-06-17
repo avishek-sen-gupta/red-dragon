@@ -8,7 +8,7 @@ from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from interpreter.frontends.lua.features import LuaFeature
-from tests.covers import covers
+from tests.covers import covers, NotLanguageFeature
 
 
 def _parse_lua(source: str) -> list[InstructionBase]:
@@ -994,3 +994,14 @@ answer = c ~ 5
         )
         assert extract_answer(vm, "lua") == 13
         assert stats.llm_calls == 0
+
+
+class TestLuaImplicitReturn:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_trailing_return_is_marked_implicit(self):
+        instructions = _parse_lua("function f() return 42 end")
+        returns = _find_all(instructions, Opcode.RETURN)
+        # The synthetic fall-off-the-end return is marked implicit.
+        assert any(r.implicit for r in returns)
+        # The explicit `return 42` is NOT marked implicit.
+        assert any(not r.implicit for r in returns)
