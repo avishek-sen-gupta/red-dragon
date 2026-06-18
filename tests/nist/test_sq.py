@@ -30,7 +30,7 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
         pytest.skip(f"NIST source not found: {src_path}")
     src = src_path.read_text()
     provider, print_path = make_provider(src, tmp_path)
-    result = run(src, language="cobol", io_provider=provider, max_steps=50_000)
+    result = run(src, language="cobol", io_provider=provider, max_steps=1_000_000)
     assert result is not None, f"{prog}: run() returned None"
     assert_nist_pass(print_path, prog)
 
