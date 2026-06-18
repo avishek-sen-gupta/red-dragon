@@ -171,21 +171,41 @@ class CobolParagraph:
 
 
 @dataclass(frozen=True)
+class UseClause:
+    """A declarative's USE AFTER ERROR/EXCEPTION targeting."""
+
+    is_global: bool
+    target: str  # "FILE" | "INPUT" | "OUTPUT" | "I-O" | "EXTEND"
+    files: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class CobolSection:
     """A COBOL PROCEDURE DIVISION section containing paragraphs and bare statements."""
 
     name: str
     paragraphs: list[CobolParagraph] = field(default_factory=list)
     statements: list[CobolStatementType] = field(default_factory=list)
+    use: UseClause | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolSection:
+        use_d = data.get("use")
         return cls(
             name=data["name"],
             paragraphs=[
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
             ],
             statements=[parse_statement(s) for s in data.get("statements", [])],
+            use=(
+                UseClause(
+                    is_global=bool(use_d.get("global", False)),
+                    target=use_d.get("target", "FILE"),
+                    files=tuple(f.upper() for f in use_d.get("files", [])),
+                )
+                if use_d
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -194,6 +214,14 @@ class CobolSection:
             result["paragraphs"] = [p.to_dict() for p in self.paragraphs]
         if self.statements:
             result["statements"] = [s.to_dict() for s in self.statements]
+        if self.use:
+            use_dict: dict = {
+                "global": self.use.is_global,
+                "target": self.use.target,
+            }
+            if self.use.files:
+                use_dict["files"] = list(self.use.files)
+            result["use"] = use_dict
         return result
 
 
