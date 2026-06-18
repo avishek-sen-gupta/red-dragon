@@ -299,6 +299,9 @@ def _lower_condition_node(
     elif "class" in node:
         # Class condition: {"class": "NUMERIC"|"ALPHABETIC"|..., "operand": <expr>}
         inner = _lower_class_condition(ctx, node, materialised)
+    elif "sign" in node:
+        # Sign condition: {"sign": "POSITIVE"|"NEGATIVE"|"ZERO", "operand": <expr>}
+        inner = _lower_sign_condition(ctx, node, materialised)
     else:
         # Fallback: flat text (CLASS/SIGN conditions, EVALUATE/SEARCH callers)
         inner = _lower_condition_str(
@@ -633,6 +636,42 @@ def _lower_class_condition(
             result_reg=result,
             func_name=FuncName(builtin),
             args=(Register(str(value_str_reg)),),
+        )
+    )
+    return result
+
+
+_SIGN_OP: dict[str, str] = {"POSITIVE": ">", "NEGATIVE": "<", "ZERO": "=="}
+
+
+def _lower_sign_condition(
+    ctx: EmitContext,
+    node: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Lower a sign condition {"sign": "POSITIVE"|"NEGATIVE"|"ZERO", "operand": <expr>}
+    to a boolean: the decoded operand value compared against zero (>0 / <0 / ==0).
+
+    The enclosing ``not`` flag is applied by ``_lower_condition_node`` (the bridge
+    folds an inner ``NOT POSITIVE`` into that flag), so this emits the bare
+    comparison. An unknown sign never matches rather than evaluating TRUE.
+    """
+    sign = str(node.get("sign", "")).upper()
+    op = _SIGN_OP.get(sign)
+    if op is None:
+        logger.warning("unknown sign condition %r — never matching", sign)
+        result = ctx.fresh_reg()
+        ctx.emit_inst(Const.bool_(result, False))
+        return result
+    operand_reg = _lower_expr_dict(ctx, node.get("operand", {}), materialised)
+    zero_reg = ctx.const_to_reg(0)
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator=resolve_binop(op),
+            left=Register(str(operand_reg)),
+            right=Register(str(zero_reg)),
         )
     )
     return result

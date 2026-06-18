@@ -119,6 +119,7 @@ import io.proleap.cobol.asg.metamodel.valuestmt.relation.ArithmeticComparison;
 import io.proleap.cobol.asg.metamodel.valuestmt.relation.CombinedComparison;
 import io.proleap.cobol.asg.metamodel.valuestmt.relation.CombinedCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.relation.RelationalOperator;
+import io.proleap.cobol.asg.metamodel.valuestmt.relation.SignCondition;
 
 import io.proleap.cobol.asg.metamodel.impl.ASGElementImpl;
 import io.proleap.cobol.CobolParser;
@@ -2326,6 +2327,9 @@ public final class StatementSerializer {
                 } else {
                     obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
                 }
+            } else if (rel.getRelationConditionType()
+                    == RelationConditionValueStmt.RelationConditionType.SIGN) {
+                serializeSignCondition(obj, sc, not);
             } else {
                 obj.add("relation", serializeRelationCondition(rel));
             }
@@ -2385,6 +2389,46 @@ public final class StatementSerializer {
                 return "ALPHABETIC-LOWER";
             case ALPHABETIC_UPPER:
                 return "ALPHABETIC-UPPER";
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Populates {@code obj} for a SIGN relation condition (IF x IS POSITIVE /
+     * NEGATIVE / ZERO), emitting the structured
+     * {@code {"not": bool, "sign": "POSITIVE"|"NEGATIVE"|"ZERO", "operand": <expr>}}
+     * shape — mirroring class conditions. The effective negation is the XOR of the
+     * enclosing CombinableCondition's {@code not} and the sign condition's own
+     * {@code not}. Falls back to the text path for this node only if unsupported.
+     */
+    private static void serializeSignCondition(JsonObject obj, SimpleCondition sc, boolean ccNot) {
+        SignCondition sign = sc.getRelationCondition() != null
+                ? sc.getRelationCondition().getSignCondition()
+                : null;
+        String signStr = sign != null ? signConditionTypeToString(sign.getSignConditionType()) : null;
+        if (sign == null || signStr == null || sign.getArithmeticExpression() == null) {
+            obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
+            return;
+        }
+        boolean effectiveNot = ccNot ^ sign.getNot();
+        obj.addProperty("not", effectiveNot);
+        obj.addProperty("sign", signStr);
+        obj.add("operand", serializeArithmeticExpr(sign.getArithmeticExpression()));
+    }
+
+    /** Maps a ProLeap sign-condition type to its canonical string, or null if unsupported. */
+    private static String signConditionTypeToString(SignCondition.SignConditionType type) {
+        if (type == null) {
+            return null;
+        }
+        switch (type) {
+            case POSITIVE:
+                return "POSITIVE";
+            case NEGATIVE:
+                return "NEGATIVE";
+            case ZERO:
+                return "ZERO";
             default:
                 return null;
         }
