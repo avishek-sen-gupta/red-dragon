@@ -24,6 +24,10 @@ import io.proleap.cobol.asg.metamodel.procedure.Statement;
 import io.proleap.cobol.CobolParser;
 import io.proleap.cobol.asg.metamodel.procedure.declaratives.Declaratives;
 import io.proleap.cobol.asg.metamodel.procedure.declaratives.Declarative;
+import io.proleap.cobol.asg.metamodel.procedure.use.AfterOn;
+import io.proleap.cobol.asg.metamodel.procedure.use.UseAfterStatement;
+import io.proleap.cobol.asg.metamodel.procedure.use.UseStatement;
+import io.proleap.cobol.asg.metamodel.call.Call;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -269,6 +273,36 @@ public final class AsgSerializer {
             String name = ((CobolParser.ProcedureSectionHeaderContext)
                     d.getSectionHeader().getCtx()).sectionName().getText();
             secObj.addProperty("name", name);
+
+            UseStatement us = d.getUseStament();
+            // USE FOR DEBUGGING is out of scope; only AFTER ERROR/EXCEPTION is serialized.
+            if (us != null
+                    && us.getUseDebugStatement() == null
+                    && us.getUseAfterStatement() != null) {
+                UseAfterStatement ua = us.getUseAfterStatement();
+                AfterOn afterOn = ua.getAfterOn();
+                if (afterOn != null && afterOn.getAfterOnType() != null) {
+                    JsonObject useObj = new JsonObject();
+                    useObj.addProperty("global", ua.isGlobal());
+                    AfterOn.AfterOnType t = afterOn.getAfterOnType();
+                    String target = switch (t) {
+                        case FILE -> "FILE";
+                        case INPUT -> "INPUT";
+                        case OUTPUT -> "OUTPUT";
+                        case INPUT_OUTPUT -> "I-O";
+                        case EXTEND -> "EXTEND";
+                    };
+                    useObj.addProperty("target", target);
+                    if (t == AfterOn.AfterOnType.FILE && afterOn.getFileCalls() != null) {
+                        JsonArray files = new JsonArray();
+                        for (Call fc : afterOn.getFileCalls()) {
+                            files.add(StatementSerializer.extractCallName(fc));
+                        }
+                        useObj.add("files", files);
+                    }
+                    secObj.add("use", useObj);
+                }
+            }
 
             int start = d.getCtx().getStart().getLine();
             int stop = d.getCtx().getStop().getLine();
