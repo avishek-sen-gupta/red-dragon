@@ -70,3 +70,72 @@ class TestSubscriptedOccurrenceIncrement:
         region = _first_region(vm)
         offset = (sub - 1) * _ELEMENT_STRIDE + _XNUM_OFFSET_IN_ELEMENT
         assert _decode(region, offset, _XNUM_LEN) == 5
+
+
+# A 3-occurrence table whose element is 10 bytes; a sibling RESULT digit sits at
+# offset 30 (3 * 10) so it can be read back from the single REC region. Each
+# program sets occurrence 1 and 2 to *different* content, then compares
+# occurrence 2; RESULT=1 means the comparison read occurrence 2 (correct),
+# RESULT=9 means it read occurrence 1 (the subscript-dropping bug).
+_RESULT_OFFSET = 30
+
+
+def _relation_operand_program() -> list[str]:
+    # red-dragon-9cxh, L540: numeric USAGE-DISPLAY operand compared to an
+    # alphanumeric (char-literal) sibling takes the zoned-display branch of
+    # _lower_relation_operand, which dropped the subscript.
+    return [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. RELOCC.",
+        "DATA DIVISION.",
+        "WORKING-STORAGE SECTION.",
+        "01  REC.",
+        "    03  GRP OCCURS 3 TIMES.",
+        "        05  P1.",
+        "            07  FILLER PIC X(2).",
+        "            07  N      PIC 9(3).",
+        "            07  FILLER PIC X(5).",
+        "    03  RESULT PIC 9(1).",
+        "PROCEDURE DIVISION.",
+        "MAIN.",
+        "    MOVE 100 TO N (1).",
+        "    MOVE 200 TO N (2).",
+        '    IF N (2) = "200" MOVE 1 TO RESULT ELSE MOVE 9 TO RESULT.',
+        "    STOP RUN.",
+    ]
+
+
+def _ref_mod_operand_program() -> list[str]:
+    # red-dragon-9cxh, L668: a reference-modified operand FIELD(n)(s:l) in a
+    # condition went through _lower_ref_mod_operand, which dropped the subscript.
+    return [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. RMOCC.",
+        "DATA DIVISION.",
+        "WORKING-STORAGE SECTION.",
+        "01  REC.",
+        "    03  GRP OCCURS 3 TIMES.",
+        "        05  P1.",
+        "            07  FILLER PIC X(2).",
+        "            07  S      PIC X(5).",
+        "            07  FILLER PIC X(3).",
+        "    03  RESULT PIC 9(1).",
+        "PROCEDURE DIVISION.",
+        "MAIN.",
+        '    MOVE "AAAAA" TO S (1).',
+        '    MOVE "BBBBB" TO S (2).',
+        '    IF S (2) (1:1) = "B" MOVE 1 TO RESULT ELSE MOVE 9 TO RESULT.',
+        "    STOP RUN.",
+    ]
+
+
+class TestSubscriptedOccurrenceConditionOperands:
+    @covers(CobolFeature.OCCURS_FIXED)
+    def test_numeric_display_operand_vs_char_literal_reads_correct_occurrence(self):
+        region = _first_region(run_cobol(_relation_operand_program(), max_steps=4000))
+        assert _decode(region, _RESULT_OFFSET, 1) == 1
+
+    @covers(CobolFeature.OCCURS_FIXED)
+    def test_ref_mod_operand_reads_correct_occurrence(self):
+        region = _first_region(run_cobol(_ref_mod_operand_program(), max_steps=4000))
+        assert _decode(region, _RESULT_OFFSET, 1) == 1
