@@ -113,3 +113,38 @@ class TestUseDeclaratives:
             )
         ]
         assert _flag(lines, tmp_path) == 0
+
+    @covers(CobolFeature.DECLARATIVES)
+    def test_explicit_at_end_suppresses_use(self, tmp_path: Path) -> None:
+        # READ past EOF with an explicit AT END clause AND a USE on the file:
+        # the AT END branch runs (sets FLAG=2), the USE does NOT fire (would set FLAG=1).
+        lines = [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. USEP.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            "    SELECT F1 ASSIGN TO XXXXX001.",
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD  F1.",
+            "01  F1-REC PIC X(10).",
+            "WORKING-STORAGE SECTION.",
+            "01  FLAG PIC 9(1) VALUE 0.",
+            "PROCEDURE DIVISION.",
+            "DECLARATIVES.",
+            "D1 SECTION.",
+            "    USE AFTER STANDARD ERROR PROCEDURE ON F1.",
+            "D1-P.",
+            "    MOVE 1 TO FLAG.",
+            "END DECLARATIVES.",
+            "MAIN SECTION.",
+            "MAIN-P.",
+            "    OPEN OUTPUT F1.",
+            "    CLOSE F1.",
+            "    OPEN INPUT F1.",
+            "    READ F1 AT END MOVE 2 TO FLAG END-READ.",
+            "    CLOSE F1.",
+            "    STOP RUN.",
+        ]
+        assert _flag(lines, tmp_path) == 2
