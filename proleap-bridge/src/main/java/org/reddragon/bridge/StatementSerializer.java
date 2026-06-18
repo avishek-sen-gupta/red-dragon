@@ -1615,7 +1615,7 @@ public final class StatementSerializer {
     /**
      * Extracts a human-readable name from a ProLeap Call object.
      */
-    private static String extractCallName(Call call) {
+    static String extractCallName(Call call) {
         if (call == null) {
             return "";
         }
