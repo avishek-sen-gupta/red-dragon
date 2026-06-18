@@ -12,6 +12,7 @@ from interpreter.cobol.cobol_expression import (
     FunctionNode,
     LiteralNode,
     RefModNode,
+    expr_from_dict,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.cobol_types import CobolDataCategory
@@ -720,7 +721,8 @@ def _lower_expr_dict(
         if "ref_mod_start" in expr:
             return _lower_ref_mod_operand(ctx, expr, materialised)
         if ctx.has_field(name, materialised):
-            ref, rr = ctx.resolve_field_ref(name, materialised)
+            subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
+            ref, rr = ctx.resolve_field_ref(name, materialised, subscripts=subscripts)
             return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         # The bridge sometimes tags a numeric literal as a ref (e.g. an
         # abbreviated-condition operand "1"); parse it as the literal it is.
