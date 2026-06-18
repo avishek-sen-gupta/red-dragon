@@ -14,10 +14,20 @@ from interpreter.cobol.cobol_statements import (
     StartStatement,
     WriteStatement,
 )
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.continuation_name import ContinuationName
 from interpreter.func_name import FuncName
-from interpreter.instructions import Binop, Branch, BranchIf, CallFunction, Label_
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    Label_,
+    SetContinuation,
+)
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register, NO_REGISTER
 
@@ -31,6 +41,98 @@ def _select_to_record(ctx: EmitContext) -> dict[str, str]:
         if sel not in result:
             result[sel] = rec
     return result
+
+
+def _emit_conditional_use_perform(
+    ctx: EmitContext, status_reg: Register, section: str
+) -> None:
+    """Emit: if status is an error (first char != "0"), PERFORM the USE section
+    and return to the point of the I/O verb. A no-op on success."""
+    # err = status first char != "0" (status classes 1..9: AT END / INVALID KEY /
+    # permanent / implementor — i.e. anything not 0x successful/info).
+    first_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=first_reg,
+            func_name=FuncName(BuiltinName.STRING_SLICE),
+            args=(
+                Register(str(status_reg)),
+                Register(str(ctx.const_to_reg(0))),
+                Register(str(ctx.const_to_reg(1))),
+            ),
+        )
+    )
+    zero_reg = ctx.const_to_reg("0")
+    err_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=err_reg,
+            operator=resolve_binop("!="),
+            left=first_reg,
+            right=Register(str(zero_reg)),
+        )
+    )
+    use_lbl = ctx.fresh_label("use_proc")
+    skip_lbl = ctx.fresh_label("use_skip")
+    ctx.emit_inst(BranchIf(cond_reg=err_reg, branch_targets=(use_lbl, skip_lbl)))
+    ctx.emit_inst(Label_(label=use_lbl))
+    ret_lbl = ctx.fresh_label("use_return")
+    ctx.emit_inst(
+        SetContinuation(
+            name=ContinuationName(f"section_{section}_end"), target_label=ret_lbl
+        )
+    )
+    ctx.emit_inst(Branch(label=CodeLabel(f"section_{section}")))
+    ctx.emit_inst(Label_(label=ret_lbl))
+    ctx.emit_inst(Branch(label=skip_lbl))
+    ctx.emit_inst(Label_(label=skip_lbl))
+
+
+def emit_use_trigger(
+    ctx: EmitContext,
+    file_name: str,
+    status_reg: Register,
+    has_explicit_clause: bool,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """Inject a conditional PERFORM of the matching USE declarative when an I/O
+    verb returns an error/exception status and the statement has no explicit
+    AT END / INVALID KEY clause (COBOL precedence)."""
+    if has_explicit_clause:
+        return
+    section = ctx.use_by_file.get(file_name.upper()) or ctx.use_global
+    if section is not None:
+        _emit_conditional_use_perform(ctx, status_reg, section)
+        return
+    if not ctx.use_by_mode:
+        return
+    # Open-mode scoped: pick the USE section matching this file's CURRENT open
+    # mode — a runtime fact, queried via __cobol_file_open_mode.
+    mode_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=mode_reg,
+            func_name=FuncName("__cobol_file_open_mode"),
+            args=(Register(str(ctx.const_to_reg(file_name))),),
+        )
+    )
+    for mode_key, sec in ctx.use_by_mode.items():
+        match_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=match_reg,
+                operator=resolve_binop("=="),
+                left=mode_reg,
+                right=Register(str(ctx.const_to_reg(mode_key))),
+            )
+        )
+        do_lbl = ctx.fresh_label("use_mode_do")
+        next_lbl = ctx.fresh_label("use_mode_next")
+        ctx.emit_inst(BranchIf(cond_reg=match_reg, branch_targets=(do_lbl, next_lbl)))
+        ctx.emit_inst(Label_(label=do_lbl))
+        _emit_conditional_use_perform(ctx, status_reg, sec)
+        ctx.emit_inst(Branch(label=next_lbl))
+        ctx.emit_inst(Label_(label=next_lbl))
 
 
 def lower_accept(
@@ -125,6 +227,7 @@ def lower_open(
                 )
             )
             ctx.emit_file_status_update(filename, status_reg, materialised)
+            emit_use_trigger(ctx, filename, status_reg, False, materialised)
             logger.info("OPEN %s %s", mode.value, filename)
 
 
@@ -181,6 +284,15 @@ def lower_read(
         )
     )
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised)
+    emit_use_trigger(
+        ctx,
+        stmt.file_name,
+        status_reg,
+        bool(
+            stmt.at_end or stmt.not_at_end or stmt.invalid_key or stmt.not_invalid_key
+        ),
+        materialised,
+    )
 
     data_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -349,6 +461,13 @@ def lower_write(
         )
     )
     ctx.emit_file_status_update(file_name, status_reg, materialised)
+    emit_use_trigger(
+        ctx,
+        file_name,
+        status_reg,
+        bool(stmt.invalid_key or stmt.not_invalid_key),
+        materialised,
+    )
     after_label = ctx.fresh_label("write_after")
     _emit_invalid_key_branch(
         ctx,
@@ -391,6 +510,13 @@ def lower_rewrite(
         )
     )
     ctx.emit_file_status_update(file_name, status_reg, materialised)
+    emit_use_trigger(
+        ctx,
+        file_name,
+        status_reg,
+        bool(stmt.invalid_key or stmt.not_invalid_key),
+        materialised,
+    )
     after_label = ctx.fresh_label("rewrite_after")
     _emit_invalid_key_branch(
         ctx,
@@ -435,6 +561,13 @@ def lower_start(
         )
     )
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised)
+    emit_use_trigger(
+        ctx,
+        stmt.file_name,
+        status_reg,
+        bool(stmt.invalid_key or stmt.not_invalid_key),
+        materialised,
+    )
     after_label = ctx.fresh_label("start_after")
     _emit_invalid_key_branch(
         ctx,
@@ -473,6 +606,13 @@ def lower_delete(
         )
     )
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised)
+    emit_use_trigger(
+        ctx,
+        stmt.file_name,
+        status_reg,
+        bool(stmt.invalid_key or stmt.not_invalid_key),
+        materialised,
+    )
     after_label = ctx.fresh_label("delete_after")
     _emit_invalid_key_branch(
         ctx,
