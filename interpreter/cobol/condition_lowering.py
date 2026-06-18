@@ -537,7 +537,8 @@ def _lower_relation_operand(
         ctx, sibling, materialised
     ):
         name = expr.get("name", "")
-        ref, rr = ctx.resolve_field_ref(name, materialised)
+        subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
+        ref, rr = ctx.resolve_field_ref(name, materialised, subscripts=subscripts)
         return ctx.emit_decode_zoned_display(rr, ref.fl, ref.offset_reg)
     if (
         _is_alphanumeric_operand(expr)
@@ -665,7 +666,8 @@ def _lower_ref_mod_operand(
     if not ctx.has_field(name, materialised):
         return ctx.const_to_reg(ctx.parse_literal(name))
 
-    ref, rr = ctx.resolve_field_ref(name, materialised)
+    subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
+    ref, rr = ctx.resolve_field_ref(name, materialised, subscripts=subscripts)
     full_str_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
 
     start_1based_reg = _lower_expr_dict(ctx, expr["ref_mod_start"], materialised)
