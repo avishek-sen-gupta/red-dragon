@@ -115,6 +115,41 @@ class TestUseDeclaratives:
         assert _flag(lines, tmp_path) == 0
 
     @covers(CobolFeature.DECLARATIVES)
+    def test_open_mode_use_fires(self, tmp_path: Path) -> None:
+        # USE scoped to open mode INPUT (no named file): the WRITE on an
+        # INPUT-opened F1 errors (status 48); the file's CURRENT open mode is
+        # "INPUT", so __cobol_file_open_mode("F1") == "INPUT" selects D1 -> FLAG=1.
+        lines = [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. USEM.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            "    SELECT F1 ASSIGN TO XXXXX001.",
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD  F1.",
+            "01  F1-REC PIC X(10).",
+            "WORKING-STORAGE SECTION.",
+            "01  FLAG PIC 9(1) VALUE 0.",
+            "PROCEDURE DIVISION.",
+            "DECLARATIVES.",
+            "D1 SECTION.",
+            "    USE AFTER STANDARD ERROR PROCEDURE INPUT.",
+            "D1-P.",
+            "    MOVE 1 TO FLAG.",
+            "END DECLARATIVES.",
+            "MAIN SECTION.",
+            "MAIN-P.",
+            "    OPEN INPUT F1.",
+            '    MOVE "ABC" TO F1-REC.',
+            "    WRITE F1-REC.",
+            "    CLOSE F1.",
+            "    STOP RUN.",
+        ]
+        assert _flag(lines, tmp_path) == 1
+
+    @covers(CobolFeature.DECLARATIVES)
     def test_explicit_at_end_suppresses_use(self, tmp_path: Path) -> None:
         # READ past EOF with an explicit AT END clause AND a USE on the file:
         # the AT END branch runs (sets FLAG=2), the USE does NOT fire (would set FLAG=1).
