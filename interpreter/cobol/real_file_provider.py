@@ -44,6 +44,7 @@ class RealFileIOProvider(CobolIOProvider):
         }
         self._overrides: dict[str, Path] = path_overrides or {}
         self._drivers: dict[str, FileOrganizationDriver] = {}
+        self._open_modes: dict[str, str] = {}
 
     def _resolve_path(self, file_name: str, assign_to: str) -> Path:
         if file_name in self._overrides:
@@ -99,6 +100,7 @@ class RealFileIOProvider(CobolIOProvider):
             return IOResult("35", None)
 
         self._drivers[filename] = drv
+        self._open_modes[filename.upper()] = mode
         logger.info("OPEN %s mode=%s org=%s path=%s", filename, mode, org.value, path)
         return IOResult("00", None)
 
@@ -106,8 +108,12 @@ class RealFileIOProvider(CobolIOProvider):
         drv = self._drivers.pop(filename, None)
         if drv:
             drv.close()
+        self._open_modes.pop(filename.upper(), None)
         logger.info("CLOSE %s", filename)
         return IOResult("00", None)
+
+    def _open_mode(self, filename: Any) -> Any:
+        return self._open_modes.get(str(filename).upper(), "")
 
     def _read_record(self, filename: str, key: str) -> IOResult:
         drv = self._drivers.get(filename)
