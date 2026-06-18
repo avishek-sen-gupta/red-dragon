@@ -30,6 +30,21 @@ def lower_procedure_division(
     for section in asg.declaratives:
         ctx.section_paragraphs[section.name] = [p.name for p in section.paragraphs]
 
+    # Build the USE-declarative registry: map each registered USE to its
+    # declarative SECTION NAME so I/O verbs can fire the matching procedure on an
+    # unhandled error. Open-mode resolution (use_by_mode) is wired here but
+    # consumed in a later task; this task does named-file + GLOBAL only.
+    for section in asg.declaratives:
+        if section.use is None:
+            continue
+        if section.use.is_global:
+            ctx.use_global = section.name
+        elif section.use.target == "FILE":
+            for fname in section.use.files:
+                ctx.use_by_file[fname.upper()] = section.name
+        else:  # INPUT / OUTPUT / I-O / EXTEND
+            ctx.use_by_mode[section.use.target] = section.name
+
     for stmt in asg.statements:
         ctx.lower_statement(stmt, materialised)
 
