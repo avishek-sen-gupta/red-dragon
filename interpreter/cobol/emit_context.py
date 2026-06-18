@@ -117,6 +117,9 @@ class EmitContext:
         self._reg_counter: int = 0
         self._label_counter: int = 0
         self._section_paragraphs: dict[str, list[str]] = {}
+        self.use_by_file: dict[str, str] = {}
+        self.use_by_mode: dict[str, str] = {}
+        self.use_global: str | None = None
 
     # ── Properties ────────────────────────────────────────────────
 
