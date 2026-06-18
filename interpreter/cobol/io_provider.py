@@ -52,6 +52,7 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_delete_record"): "_delete_record",
     FuncName("__cobol_io_status"): "_io_status",
     FuncName("__cobol_io_data"): "_io_data",
+    FuncName("__cobol_file_open_mode"): "_open_mode",
 }
 
 
@@ -91,6 +92,10 @@ class CobolIOProvider(ABC):
         if isinstance(raw, IOResult):
             return raw.data or ""
         return _UNCOMPUTABLE
+
+    def _open_mode(self, filename: Any) -> Any:
+        """Current OPEN mode of a file ("INPUT"/"OUTPUT"/"I-O"/"EXTEND"), "" if closed."""
+        return ""
 
     @abstractmethod
     def _accept(
