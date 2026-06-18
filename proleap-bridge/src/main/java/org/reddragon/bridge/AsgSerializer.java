@@ -26,6 +26,7 @@ import io.proleap.cobol.asg.metamodel.procedure.declaratives.Declaratives;
 import io.proleap.cobol.asg.metamodel.procedure.declaratives.Declarative;
 import io.proleap.cobol.asg.metamodel.procedure.use.AfterOn;
 import io.proleap.cobol.asg.metamodel.procedure.use.UseAfterStatement;
+import io.proleap.cobol.asg.metamodel.procedure.use.UseStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 
 import java.util.ArrayList;
@@ -273,8 +274,11 @@ public final class AsgSerializer {
                     d.getSectionHeader().getCtx()).sectionName().getText();
             secObj.addProperty("name", name);
 
-            io.proleap.cobol.asg.metamodel.procedure.use.UseStatement us = d.getUseStament();
-            if (us != null && us.getUseAfterStatement() != null) {
+            UseStatement us = d.getUseStament();
+            // USE FOR DEBUGGING is out of scope; only AFTER ERROR/EXCEPTION is serialized.
+            if (us != null
+                    && us.getUseDebugStatement() == null
+                    && us.getUseAfterStatement() != null) {
                 UseAfterStatement ua = us.getUseAfterStatement();
                 AfterOn afterOn = ua.getAfterOn();
                 if (afterOn != null && afterOn.getAfterOnType() != null) {
