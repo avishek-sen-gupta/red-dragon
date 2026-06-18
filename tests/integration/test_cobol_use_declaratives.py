@@ -150,6 +150,54 @@ class TestUseDeclaratives:
         assert _flag(lines, tmp_path) == 1
 
     @covers(CobolFeature.DECLARATIVES)
+    def test_multi_file_use_fires_for_second_file(self, tmp_path: Path) -> None:
+        # USE ON F1 F2 with an I/O error on F2 (WRITE to INPUT-opened file -> status 48)
+        # must fire the declarative. F2 is pre-created so OPEN INPUT succeeds (status 00);
+        # the WRITE is the sole trigger.
+        lines = [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. USEMF.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            "    SELECT F1 ASSIGN TO XXXXX001.",
+            "    SELECT F2 ASSIGN TO XXXXX002.",
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD  F1.",
+            "01  F1-REC PIC X(10).",
+            "FD  F2.",
+            "01  F2-REC PIC X(10).",
+            "WORKING-STORAGE SECTION.",
+            "01  FLAG PIC 9(1) VALUE 0.",
+            "PROCEDURE DIVISION.",
+            "DECLARATIVES.",
+            "D1 SECTION.",
+            "    USE AFTER STANDARD ERROR PROCEDURE ON F1 F2.",
+            "D1-P.",
+            "    MOVE 1 TO FLAG.",
+            "END DECLARATIVES.",
+            "MAIN SECTION.",
+            "MAIN-P.",
+            "    OPEN INPUT F2.",
+            '    MOVE "ABC" TO F2-REC.',
+            "    WRITE F2-REC.",
+            "    CLOSE F2.",
+            "    STOP RUN.",
+        ]
+        f2_path = tmp_path / "f2.dat"
+        f2_path.write_bytes(b" " * 10)
+        provider = RealFileIOProvider(
+            base_dir=tmp_path,
+            file_control=[],
+            path_overrides={"F2": f2_path},
+        )
+        vm = run(
+            to_fixed(lines), language="cobol", io_provider=provider, max_steps=4000
+        )
+        assert _decode(_first_region(vm), 0, 1) == 1
+
+    @covers(CobolFeature.DECLARATIVES)
     def test_explicit_at_end_suppresses_use(self, tmp_path: Path) -> None:
         # READ past EOF with an explicit AT END clause AND a USE on the file:
         # the AT END branch runs (sets FLAG=2), the USE does NOT fire (would set FLAG=1).
