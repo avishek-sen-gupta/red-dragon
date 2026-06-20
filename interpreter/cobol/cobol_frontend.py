@@ -218,7 +218,9 @@ class CobolFrontend(Frontend):
         lower_ws_from_singleton(self._ctx, self._program_id)
 
         # Bind LINKAGE to __params_region (injected by handler); alloc fresh LS
-        materialised = lower_sectioned_data_division(self._ctx, sectioned)
+        materialised = lower_sectioned_data_division(
+            self._ctx, sectioned, self._program_id
+        )
         lower_procedure_division(self._ctx, asg, materialised)
 
         # Skip target — init block branches here to skip past procedure body
