@@ -650,7 +650,9 @@ def lower_arithmetic(
                 )
             )
     else:
-        src_decoded = ctx.const_to_reg(float(stmt.source.name))
+        src_decoded = ctx.const_to_reg(
+            float(translate_cobol_figurative(stmt.source.name))
+        )
 
     tgt_decoded = ctx.emit_decode_field(target_rr, target_ref.fl, target_ref.offset_reg)
 
@@ -794,7 +796,7 @@ def lower_arithmetic_giving(
                 return result
 
             return decoded
-        return ctx.const_to_reg(float(field_name))
+        return ctx.const_to_reg(float(translate_cobol_figurative(field_name)))
 
     left_reg = _decode_operand(stmt.source)
     right_reg = _decode_operand(stmt.target)
