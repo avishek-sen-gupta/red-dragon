@@ -239,14 +239,26 @@ def lower_close(
     """CLOSE file1 file2 ... — close files via __cobol_close_file."""
     for filename in stmt.files:
         fn_reg = ctx.const_to_reg(filename)
-        result_reg = ctx.fresh_reg()
+        raw_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=result_reg,
+                result_reg=raw_reg,
                 func_name=FuncName("__cobol_close_file"),
                 args=(Register(str(fn_reg)),),
             ),
         )
+        status_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=status_reg,
+                func_name=FuncName("__cobol_io_status"),
+                args=(Register(str(raw_reg)),),
+            )
+        )
+        ctx.emit_file_status_update(filename, status_reg, materialised)
+        # CLOSE has no AT END / INVALID KEY clause, so a USE declarative fires
+        # on a non-success close status (red-dragon-m0oa.8).
+        emit_use_trigger(ctx, filename, status_reg, False, materialised)
         logger.info("CLOSE %s", filename)
 
 
@@ -309,16 +321,18 @@ def lower_read(
     if rec_name:
         try:
             file_fl, file_rr = materialised.resolve(rec_name)
-            ctx.emit_encode_and_write(file_rr, file_fl, data_reg, NO_REGISTER)
+            # Byte-faithful: land the file's raw bytes into the FD record region
+            # verbatim (data_reg is a LATIN1 identity str of the record bytes),
+            # preserving binary subfields (red-dragon-zwzg).
+            ctx.emit_write_region_raw(file_rr, file_fl, data_reg, NO_REGISTER)
         except KeyError:
             pass
 
-    # INTO copy
+    # INTO copy — byte-faithful region move (record bytes → INTO receiver).
     if stmt.into and materialised.has_field(stmt.into):
         target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
-        str_reg = ctx.emit_to_string(data_reg)
-        ctx.emit_encode_and_write(
-            target_rr, target_ref.fl, str_reg, target_ref.offset_reg
+        ctx.emit_write_region_raw(
+            target_rr, target_ref.fl, data_reg, target_ref.offset_reg
         )
 
     after_label = ctx.fresh_label("read_after")
@@ -417,19 +431,33 @@ def _write_source_reg(
     record_name: str,
     materialised: MaterialisedSectionedLayout,
 ) -> Register:
-    """Resolve the data register for WRITE/REWRITE.
+    """Resolve the byte-faithful data register for WRITE/REWRITE.
 
-    `WRITE rec FROM fld` writes the contents of `fld`; a plain `WRITE rec`
-    writes the current contents of the record area `rec`. Both decode the
-    source field's bytes to its logical value. Only when neither names a known
-    field do we fall back to the bare name as a string constant.
+    The file holds the record area's raw byte-image (regions are EBCDIC), so the
+    data shipped to the provider is the record region's verbatim bytes — read via
+    LATIN1 identity so binary subfields (COMP-3/COMP) survive unchanged
+    (red-dragon-zwzg). `WRITE rec FROM fld` is COBOL `MOVE fld TO rec; WRITE rec`:
+    emit the MOVE into the record region first, then read the region raw.
+
+    Only when `record_name` is not a known FD record do we fall back to the bare
+    name as a string constant (defensive parity with the prior behaviour for
+    feeders that never register the record).
     """
-    source = from_field or record_name
-    if ctx.has_field(source, materialised):
-        ref, rr = ctx.resolve_field_ref(source, materialised)
-        decoded_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
-        return ctx.emit_to_string(decoded_reg)
-    return ctx.const_to_reg(source)
+    if not ctx.has_field(record_name, materialised):
+        return ctx.const_to_reg(from_field or record_name)
+    if from_field:
+        from interpreter.cobol.cobol_statements import MoveStatement
+        from interpreter.cobol.ref_mod import RefModOperand
+
+        ctx.lower_statement(
+            MoveStatement(
+                source=RefModOperand(name=from_field),
+                targets=[RefModOperand(name=record_name)],
+            ),
+            materialised,
+        )
+    ref, rr = ctx.resolve_field_ref(record_name, materialised)
+    return ctx.emit_read_region_raw(rr, ref.fl, ref.offset_reg)
 
 
 def lower_write(
