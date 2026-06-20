@@ -239,14 +239,26 @@ def lower_close(
     """CLOSE file1 file2 ... — close files via __cobol_close_file."""
     for filename in stmt.files:
         fn_reg = ctx.const_to_reg(filename)
-        result_reg = ctx.fresh_reg()
+        raw_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=result_reg,
+                result_reg=raw_reg,
                 func_name=FuncName("__cobol_close_file"),
                 args=(Register(str(fn_reg)),),
             ),
         )
+        status_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=status_reg,
+                func_name=FuncName("__cobol_io_status"),
+                args=(Register(str(raw_reg)),),
+            )
+        )
+        ctx.emit_file_status_update(filename, status_reg, materialised)
+        # CLOSE has no AT END / INVALID KEY clause, so a USE declarative fires
+        # on a non-success close status (red-dragon-m0oa.8).
+        emit_use_trigger(ctx, filename, status_reg, False, materialised)
         logger.info("CLOSE %s", filename)
 
 
