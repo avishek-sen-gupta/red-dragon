@@ -2297,16 +2297,24 @@ class TestCallAlterEntryCancelLowering:
         CobolFeature.USAGE_DISPLAY,
     )
     def test_write_from_field_decodes_source(self):
-        """WRITE FROM field should decode the source field."""
+        """WRITE rec FROM field == MOVE field TO rec; WRITE rec (red-dragon-zwzg).
+
+        The source field is loaded by the synthetic MOVE into the record area,
+        and the record area is then read raw (byte-faithful) for the write — so
+        both the receiving record and the source field must exist.
+        """
         fields = [
             CobolField(
                 name="WS-OUTPUT", level=77, pic="X(10)", usage="DISPLAY", offset=0
+            ),
+            CobolField(
+                name="CUST-REC", level=1, pic="X(10)", usage="DISPLAY", offset=10
             ),
         ]
         stmts = [WriteStatement(record_name="CUST-REC", from_field="WS-OUTPUT")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        # Should have LOAD_REGION for decoding the source field
+        # The source field is loaded by the MOVE into the record area.
         loads = _find_opcodes(instructions, Opcode.LOAD_REGION)
         assert len(loads) >= 1
         # And a CALL_FUNCTION for __cobol_write_record
