@@ -134,3 +134,22 @@ class TestRealFileIOProvider:
         r = prov2._read_record("SEQ", "")  # now EOF
         prov2._close_file("SEQ")
         assert r.status == "10"
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_override_resolves_by_assign_name(self, tmp_path: Path) -> None:
+        # SELECT IN-FILE ASSIGN TO INDD: the override is keyed by the ASSIGN
+        # name (the JCL DDname), not the SELECT name. The provider must resolve
+        # IN-FILE -> assign_to "INDD" -> the override path (red-dragon-3mmk).
+        data = tmp_path / "in.dat"
+        data.write_bytes(b"HELLO")
+        prov = RealFileIOProvider(
+            base_dir=tmp_path,
+            file_control=[
+                FileControlEntry.from_dict(
+                    {"file_name": "IN-FILE", "assign_to": "INDD"}
+                )
+            ],
+            path_overrides={"INDD": data},
+        )
+        r = prov._open_file("IN-FILE", "INPUT", 5, "SEQUENTIAL", 0, 0)
+        assert r.status == "00"
