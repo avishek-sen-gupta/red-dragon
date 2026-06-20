@@ -113,6 +113,9 @@ def _builtin_bytes_to_string(args: list[TypedValue], vm: VMState) -> BuiltinResu
         return BuiltinResult(value=ascii_bytes.decode("ascii", errors="replace"))
     if encoding == CobolEncoding.ASCII:
         return BuiltinResult(value=raw.decode("ascii", errors="replace"))
+    if encoding == CobolEncoding.LATIN1:
+        # Byte-faithful identity: every byte 0-255 maps 1:1 to a code point.
+        return BuiltinResult(value=raw.decode("latin-1"))
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
@@ -133,6 +136,9 @@ def _builtin_string_to_bytes(args: list[TypedValue], vm: VMState) -> BuiltinResu
         return BuiltinResult(value=list(ebcdic_bytes))
     if encoding == CobolEncoding.ASCII:
         return BuiltinResult(value=list(string.encode("ascii", errors="replace")))
+    if encoding == CobolEncoding.LATIN1:
+        # Byte-faithful identity: every code point 0-255 maps 1:1 to a byte.
+        return BuiltinResult(value=list(string.encode("latin-1")))
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
