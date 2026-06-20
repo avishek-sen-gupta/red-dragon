@@ -36,7 +36,7 @@ def _setup_with_fields(cobol_fields: list[CobolField]):
     )
     asg = CobolASG(data_fields=cobol_fields)
     sl = build_sectioned_layout(asg)
-    materialised = lower_sectioned_data_division(ctx, sl)
+    materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
     return ctx, materialised, condition_index
 
 

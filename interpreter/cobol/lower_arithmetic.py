@@ -67,7 +67,8 @@ logger = logging.getLogger(__name__)
 # (the bridge's placeholder), so we recognise both forms here.
 _SPECIAL_REGISTER_NAMES = frozenset(
     {
-        "RETURN-CODE",
+        # RETURN-CODE removed (red-dragon-o8uq): it now resolves to a dedicated SR
+        # region and lowers via the ordinary encode→WRITE_REGION MOVE path.
         "SORT-RETURN",
         "TALLY",
         "name=[null]",  # bridge placeholder for an unmodelled register operand

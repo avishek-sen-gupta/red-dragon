@@ -27,7 +27,7 @@ def _materialised_with_ws(
     asg = CobolASG(data_fields=[_make_field(field_name)])
     sl = build_sectioned_layout(asg)
     ctx = EmitContext(dispatch_fn=dispatch_statement)
-    materialised = lower_sectioned_data_division(ctx, sl)
+    materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
     return ctx, materialised
 
 
