@@ -41,7 +41,7 @@ def _make_materialised(
     asg = CobolASG(data_fields=ws_fields or [_make_field("WS-X")])
     sl = build_sectioned_layout(asg)
     ctx = EmitContext(dispatch_fn=dispatch_statement)
-    return lower_sectioned_data_division(ctx, sl)
+    return lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
 
 # ── EmitContext.has_field with MaterialisedSectionedLayout ─────────────────
@@ -53,7 +53,7 @@ class TestEmitContextHasField:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         assert ctx.has_field("WS-A", materialised) is True
 
@@ -62,7 +62,7 @@ class TestEmitContextHasField:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         assert ctx.has_field("WS-NONEXISTENT", materialised) is False
 
@@ -74,7 +74,7 @@ class TestEmitContextHasField:
         )
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         assert ctx.has_field("LK-B", materialised) is True
 
@@ -90,7 +90,7 @@ class TestEmitContextResolveFieldRef:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         result = ctx.resolve_field_ref("WS-A", materialised)
 
@@ -105,7 +105,7 @@ class TestEmitContextResolveFieldRef:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         _, rr = ctx.resolve_field_ref("WS-A", materialised)
         ws_reg = materialised.working_storage[1]
@@ -122,7 +122,7 @@ class TestEmitContextLowerStatement:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         ctx.lower_statement(StopRunStatement(), materialised)
 
@@ -136,7 +136,7 @@ class TestEmitContextLowerStatement:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         stmt = DisplayStatement(operands=(RefModOperand(name="HELLO"),))
         ctx.lower_statement(stmt, materialised)
@@ -154,7 +154,7 @@ class TestEmitContextLowerCondition:
         asg = CobolASG(data_fields=[_make_field("WS-A", pic="9(4)")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         condition = {
             "not": False,
@@ -180,7 +180,7 @@ class TestDispatchStatementWithMaterialised:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         dispatch_statement(ctx, StopRunStatement(), materialised)
 
@@ -200,7 +200,7 @@ class TestLowerMoveWithMaterialised:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         stmt = MoveStatement(
             source=RefModOperand(name="HELLO"),
@@ -227,7 +227,7 @@ class TestLowerArithmeticWithMaterialised:
         asg = CobolASG(data_fields=[_make_field("WS-A", pic="9(5)")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         stmt = ArithmeticStatement(
             op="ADD",
@@ -256,7 +256,7 @@ class TestLowerIoWithMaterialised:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         stmt = AcceptStatement(target="WS-A", from_device="SYSIN")
         lower_accept(ctx, stmt, materialised)
@@ -277,7 +277,7 @@ class TestLowerPerformWithMaterialised:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         stmt = PerformStatement(
             target="",
@@ -303,7 +303,7 @@ class TestLowerCallWithMaterialised:
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
         ctx = EmitContext(dispatch_fn=dispatch_statement)
-        materialised = lower_sectioned_data_division(ctx, sl)
+        materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         stmt = CallStatement(program="MY-PROG", using=[], giving="")
         lower_call(ctx, stmt, materialised)

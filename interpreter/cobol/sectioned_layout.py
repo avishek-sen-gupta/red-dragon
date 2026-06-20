@@ -33,6 +33,9 @@ class MaterialisedSectionedLayout:
     file: tuple[DataLayout, Register] = field(
         default_factory=lambda: (DataLayout(), NO_REGISTER)
     )
+    special_registers: tuple[DataLayout, Register] = field(
+        default_factory=lambda: (DataLayout(), NO_REGISTER)
+    )
 
     def resolve(
         self, name: str, qualifiers: tuple[str, ...] = ()
@@ -68,6 +71,11 @@ class MaterialisedSectionedLayout:
         if file_fl is not None:
             return file_fl, file_reg
 
+        sr_layout, sr_reg = self.special_registers
+        sr_fl = sr_layout.lookup_as_storage(name, qualifiers)
+        if sr_fl is not None:
+            return sr_fl, sr_reg
+
         raise KeyError(f"Field {name!r} not found in any DATA DIVISION section")
 
     def subscript_stride(self, name: str) -> int:
@@ -92,11 +100,13 @@ class MaterialisedSectionedLayout:
         ws_layout, _ = self.working_storage
         lk_layout, _ = self.linkage
         file_layout, _ = self.file
+        sr_layout, _ = self.special_registers
         return (
             ls_layout.lookup_as_storage(name) is not None
             or ws_layout.lookup_as_storage(name) is not None
             or lk_layout.lookup_as_storage(name) is not None
             or file_layout.lookup_as_storage(name) is not None
+            or sr_layout.lookup_as_storage(name) is not None
         )
 
     def group_leaf_names(self, group_name: str) -> list[str]:

@@ -10,7 +10,11 @@ from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     SectionedLayout,
 )
-from interpreter.instructions import AllocRegion, Const, LoadVar
+from interpreter.cobol.special_registers import (
+    RETURN_CODE_HANDLE,
+    SPECIAL_REGISTERS_LAYOUT,
+)
+from interpreter.instructions import AllocRegion, Const, LoadVar, StoreField
 from interpreter.register import NO_REGISTER, Register
 from interpreter.var_name import VarName
 
@@ -41,6 +45,7 @@ def lower_data_division(ctx: EmitContext, layout: DataLayout) -> Register:
 def lower_sectioned_data_division(
     ctx: EmitContext,
     layout: SectionedLayout,
+    program_id: str,
 ) -> MaterialisedSectionedLayout:
     """Bind WS to the persistent singleton region; allocate fresh LS per call.
 
@@ -69,12 +74,28 @@ def lower_sectioned_data_division(
     else:
         file_reg = NO_REGISTER
 
+    # RETURN-CODE (and future special registers) live in a dedicated region,
+    # allocated fresh per run and isolated from WS/LS/LINKAGE/FILE storage. Its
+    # handle is published on the program singleton under RETURN_CODE_HANDLE so the
+    # final value is recoverable from the returned VMState (see special_registers).
+    sr_reg = lower_data_division(ctx, SPECIAL_REGISTERS_LAYOUT)
+    singleton_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        LoadVar(result_reg=singleton_reg, name=VarName(f"__prog_{program_id.upper()}"))
+    )
+    ctx.emit_inst(
+        StoreField(
+            obj_reg=singleton_reg, field_name=RETURN_CODE_HANDLE, value_reg=sr_reg
+        )
+    )
+
     logger.debug(
-        "Sectioned data division: WS=%s LK=%s LS=%s FILE=%s",
+        "Sectioned data division: WS=%s LK=%s LS=%s FILE=%s SR=%s",
         ws_reg,
         lk_reg,
         ls_reg,
         file_reg,
+        sr_reg,
     )
 
     return MaterialisedSectionedLayout(
@@ -82,4 +103,5 @@ def lower_sectioned_data_division(
         linkage=(layout.linkage, lk_reg),
         local_storage=(layout.local_storage, ls_reg),
         file=(layout.file, file_reg),
+        special_registers=(SPECIAL_REGISTERS_LAYOUT, sr_reg),
     )

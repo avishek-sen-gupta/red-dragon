@@ -1631,7 +1631,28 @@ public final class StatementSerializer {
         }
 
         String name = call.getName();
-        return (name != null) ? name : call.toString();
+        if (name != null) {
+            return name;
+        }
+        // ProLeap does not model COBOL special registers (RETURN-CODE, SORT-RETURN,
+        // TALLY, ...) as data items, so the Call's getName() is null. Recover the
+        // verbatim source identifier from the parse-tree context (e.g. the literal
+        // text "RETURN-CODE") so the frontend can route it; without this the name
+        // degrades to the opaque call.toString() ("name=[null]"). (red-dragon-o8uq)
+        String ctxText = callContextText(unwrapped);
+        return (ctxText != null) ? ctxText : call.toString();
+    }
+
+    /** First parse-tree token text of a Call's grammar context, or null. */
+    private static String callContextText(Call call) {
+        if (!(call instanceof ASGElementImpl)) {
+            return null;
+        }
+        ParserRuleContext ctx = ((ASGElementImpl) call).getCtx();
+        if (ctx == null || ctx.getStart() == null) {
+            return null;
+        }
+        return ctx.getStart().getText();
     }
 
     /**
