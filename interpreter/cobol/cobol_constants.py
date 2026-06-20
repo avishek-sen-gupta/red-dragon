@@ -18,6 +18,7 @@ class CobolEncoding(StrEnum):
 
     EBCDIC = "ebcdic"
     ASCII = "ascii"
+    LATIN1 = "latin1"
 
 
 class TallyMode(StrEnum):

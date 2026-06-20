@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.run import run
@@ -57,5 +58,11 @@ class TestWriteRecordContents:
         assert vm is not None
         assert out_path.exists(), "OUT-FILE was never written"
         data = out_path.read_bytes()
-        assert b"HELLO" in data, f"record contents not written; got {data!r}"
-        assert b"OUT-REC" not in data, "WRITE wrote the record NAME, not its contents"
+        # Byte-faithful WRITE: the file holds the record's raw EBCDIC bytes
+        # (red-dragon-zwzg), not ASCII and not the record name.
+        assert (
+            bytes(EbcdicTable.ascii_to_ebcdic(b"HELLO")) in data
+        ), f"record contents not written; got {data!r}"
+        assert (
+            bytes(EbcdicTable.ascii_to_ebcdic(b"OUT-REC")) not in data
+        ), "WRITE wrote the record NAME, not its contents"
