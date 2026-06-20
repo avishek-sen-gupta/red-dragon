@@ -23,7 +23,7 @@ from interpreter.cobol.red_dragon_extension_strategy import (
     RedDragonExtensionLoweringStrategy,
 )
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
-from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
+from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_filters import align_decimal, left_adjust
@@ -667,6 +667,74 @@ class EmitContext:
         )
         ir = build_decode_alphanumeric_ir(f"dec_zoned_disp_{fl.name}")
         return self.inline_ir(ir, {"%p_data": data_reg})
+
+    # ── Byte-faithful (raw) region read/write ─────────────────────
+
+    def emit_read_region_raw(
+        self, region_reg: Register, fl: FieldLayout, offset_reg: Register = NO_REGISTER
+    ) -> Register:
+        """Read a region slot as its verbatim byte-image (LATIN1 identity).
+
+        Returns a latin-1 str whose code points are the raw region bytes 1:1, so
+        binary subfields (COMP-3 packed decimal, COMP binary) survive unchanged.
+        Used for byte-faithful WRITE/REWRITE of an FD record GROUP, where running
+        the group through the EBCDIC→ASCII alphanumeric decoder would mangle
+        packed bytes (red-dragon-zwzg).
+        """
+        if not offset_reg.is_present():
+            offset_reg = self.fresh_reg()
+            self.emit_inst(Const.int_(offset_reg, fl.offset))
+        data_reg = self.fresh_reg()
+        self.emit_inst(
+            LoadRegion(
+                result_reg=data_reg,
+                region_reg=region_reg,
+                offset_reg=offset_reg,
+                length=fl.byte_length,
+            ),
+        )
+        encoding_reg = self.const_to_reg(CobolEncoding.LATIN1.value)
+        result = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=result,
+                func_name=FuncName(BuiltinName.BYTES_TO_STRING),
+                args=(data_reg, encoding_reg),
+            ),
+        )
+        return result
+
+    def emit_write_region_raw(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        value_str_reg: Register,
+        offset_reg: Register = NO_REGISTER,
+    ) -> None:
+        """Write a latin-1 str's verbatim bytes into a region slot (no PICTURE
+        encode). The byte-faithful inverse of ``emit_read_region_raw``: used for
+        byte-faithful READ, landing the file's raw bytes into the FD record region
+        unchanged (red-dragon-zwzg)."""
+        encoding_reg = self.const_to_reg(CobolEncoding.LATIN1.value)
+        bytes_reg = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=bytes_reg,
+                func_name=FuncName(BuiltinName.STRING_TO_BYTES),
+                args=(value_str_reg, encoding_reg),
+            ),
+        )
+        if not offset_reg.is_present():
+            offset_reg = self.fresh_reg()
+            self.emit_inst(Const.int_(offset_reg, fl.offset))
+        self.emit_inst(
+            WriteRegion(
+                region_reg=region_reg,
+                offset_reg=offset_reg,
+                length=fl.byte_length,
+                value_reg=bytes_reg,
+            ),
+        )
 
     # ── String Conversion Helpers ─────────────────────────────────
 
