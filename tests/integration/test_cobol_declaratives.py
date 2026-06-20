@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.run import run
@@ -60,6 +61,7 @@ class TestDeclarativesEntryPoint:
         result = run(_SRC, language="cobol", io_provider=provider, max_steps=50_000)
         assert result is not None
         assert out_path.exists(), "OUT-FILE was never written — entry point wrong"
-        data = out_path.read_bytes().decode("latin-1")
-        assert "MAIN" in data
-        assert "DECL" not in data
+        # Byte-faithful WRITE: the file holds raw EBCDIC bytes (red-dragon-zwzg).
+        data = out_path.read_bytes()
+        assert bytes(EbcdicTable.ascii_to_ebcdic(b"MAIN")) in data
+        assert bytes(EbcdicTable.ascii_to_ebcdic(b"DECL")) not in data
