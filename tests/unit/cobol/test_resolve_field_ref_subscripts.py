@@ -58,7 +58,7 @@ def _occurs_ctx():
     )
     sl = build_sectioned_layout(asg)
     ctx = EmitContext(dispatch_fn=dispatch_statement)
-    materialised = lower_sectioned_data_division(ctx, sl)
+    materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
     return ctx, materialised
 
 

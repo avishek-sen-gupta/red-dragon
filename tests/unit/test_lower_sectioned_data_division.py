@@ -19,7 +19,7 @@ def test_lower_sectioned_data_division_returns_materialised():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     asg = CobolASG(data_fields=[_make_field("WS-X")])
     sl = build_sectioned_layout(asg)
-    result = lower_sectioned_data_division(ctx, sl)
+    result = lower_sectioned_data_division(ctx, sl, "TESTPGM")
     assert isinstance(result, MaterialisedSectionedLayout)
 
 
@@ -28,7 +28,7 @@ def test_lower_sectioned_emits_load_var_for_ws():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     asg = CobolASG(data_fields=[_make_field("WS-X")])
     sl = build_sectioned_layout(asg)
-    lower_sectioned_data_division(ctx, sl)
+    lower_sectioned_data_division(ctx, sl, "TESTPGM")
     load_var_insts = [i for i in ctx.instructions if isinstance(i, LoadVar)]
     names = [str(i.name) for i in load_var_insts]
     assert "__ws_region" in names
@@ -41,9 +41,11 @@ def test_lower_sectioned_no_alloc_region_for_ws():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     asg = CobolASG(data_fields=[_make_field("WS-X")])
     sl = build_sectioned_layout(asg)
-    lower_sectioned_data_division(ctx, sl)
+    lower_sectioned_data_division(ctx, sl, "TESTPGM")
     alloc_count = sum(1 for i in ctx.instructions if i.opcode == Opcode.ALLOC_REGION)
-    assert alloc_count == 0  # WS comes from singleton — no ALLOC_REGION
+    # WS comes from the singleton (LOAD_VAR, no ALLOC); the only alloc is the
+    # always-present special-registers region (RETURN-CODE). red-dragon-o8uq.
+    assert alloc_count == 1
 
 
 @covers(CobolFeature.SECTION_LINKAGE)
@@ -54,7 +56,7 @@ def test_lower_sectioned_emits_load_var_for_non_empty_linkage():
         linkage_fields=[_make_field("LK-Y")],
     )
     sl = build_sectioned_layout(asg)
-    lower_sectioned_data_division(ctx, sl)
+    lower_sectioned_data_division(ctx, sl, "TESTPGM")
     opcodes = [i.opcode for i in ctx.instructions]
     assert Opcode.LOAD_VAR in opcodes
 
@@ -64,7 +66,7 @@ def test_lower_sectioned_no_params_region_load_var_when_linkage_empty():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     asg = CobolASG(data_fields=[_make_field("WS-X")])
     sl = build_sectioned_layout(asg)
-    lower_sectioned_data_division(ctx, sl)
+    lower_sectioned_data_division(ctx, sl, "TESTPGM")
     load_var_insts = [i for i in ctx.instructions if isinstance(i, LoadVar)]
     names = [str(i.name) for i in load_var_insts]
     assert "__params_region" not in names
@@ -78,6 +80,7 @@ def test_lower_sectioned_emits_alloc_region_for_local_storage():
         local_storage_fields=[_make_field("LS-Z")],
     )
     sl = build_sectioned_layout(asg)
-    lower_sectioned_data_division(ctx, sl)
+    lower_sectioned_data_division(ctx, sl, "TESTPGM")
     alloc_count = sum(1 for i in ctx.instructions if i.opcode == Opcode.ALLOC_REGION)
-    assert alloc_count == 1  # LS only — WS comes from singleton
+    # LS region + the always-present special-registers region; WS is from singleton.
+    assert alloc_count == 2
