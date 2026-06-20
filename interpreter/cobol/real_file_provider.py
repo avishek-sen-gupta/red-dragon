@@ -49,6 +49,10 @@ class RealFileIOProvider(CobolIOProvider):
     def _resolve_path(self, file_name: str, assign_to: str) -> Path:
         if file_name in self._overrides:
             return self._overrides[file_name]
+        if (
+            assign_to and assign_to in self._overrides
+        ):  # red-dragon-3mmk: DDname binding
+            return self._overrides[assign_to]
         if assign_to:
             clean = assign_to.strip("'\"")
             # If it looks like a bare identifier (no path separators, no extension),
