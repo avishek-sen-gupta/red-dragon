@@ -130,16 +130,18 @@ class TestHelloWorldFixture:
         frontend = CobolFrontend(_FakeParser(asg))
         instructions = frontend.lower(b"")
 
+        # Two allocs: the WS region (11 bytes) and the always-present
+        # special-registers region (RETURN-CODE, 2 bytes). red-dragon-o8uq.
         allocs = [i for i in instructions if isinstance(i, AllocRegion)]
-        assert len(allocs) == 1
-        # The size is stored in a preceding CONST instruction
-        size_const = [
-            i
-            for i in instructions
-            if isinstance(i, Const) and i.result_reg == allocs[0].size_reg
-        ]
-        assert len(size_const) == 1
-        assert size_const[0].value == 11  # X(11)
+        assert len(allocs) == 2
+        # Each alloc's size is stored in a preceding CONST instruction.
+        alloc_sizes = {
+            const.value
+            for alloc in allocs
+            for const in instructions
+            if isinstance(const, Const) and const.result_reg == alloc.size_reg
+        }
+        assert 11 in alloc_sizes  # WS region: X(11)
 
     @covers(
         CobolFeature.PIC_CLAUSE,

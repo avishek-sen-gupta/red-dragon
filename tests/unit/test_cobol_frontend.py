@@ -117,14 +117,16 @@ class TestDataDivisionLowering:
         frontend = CobolFrontend(_FakeParser(asg))
         instructions = frontend.lower(b"")
 
+        # WS region + the always-present special-registers region. red-dragon-o8uq.
         allocs = [i for i in instructions if isinstance(i, AllocRegion)]
-        assert len(allocs) == 1
-        size_const = [
-            i
-            for i in instructions
-            if isinstance(i, Const) and i.result_reg == allocs[0].size_reg
-        ]
-        assert size_const[0].value == 5  # 5 bytes for 9(5)
+        assert len(allocs) == 2
+        alloc_sizes = {
+            const.value
+            for alloc in allocs
+            for const in instructions
+            if isinstance(const, Const) and const.result_reg == alloc.size_reg
+        }
+        assert 5 in alloc_sizes  # 5 bytes for 9(5)
 
     @covers(
         CobolFeature.PIC_CLAUSE,
@@ -2719,8 +2721,11 @@ class TestMoveCorrespondingLowering:
 
 class TestSectionedLayout:
     @covers(CobolFeature.SECTION_LOCAL_STORAGE)
-    def test_frontend_lower_produces_two_alloc_regions_for_ws_and_ls(self):
-        """CobolFrontend.lower() must emit one ALLOC_REGION for WS and one for LS."""
+    def test_frontend_lower_produces_alloc_regions_for_ws_ls_and_special_registers(
+        self,
+    ):
+        """CobolFrontend.lower() emits an ALLOC_REGION for WS, LS, and the
+        always-present special-registers region (RETURN-CODE). red-dragon-o8uq."""
         asg = CobolASG(
             data_fields=[
                 CobolField(name="WS-X", level=1, pic="X(5)", usage="DISPLAY", offset=0)
@@ -2733,7 +2738,9 @@ class TestSectionedLayout:
         instructions = frontend.lower(b"")
 
         alloc_count = sum(1 for i in instructions if i.opcode == Opcode.ALLOC_REGION)
-        assert alloc_count == 2, f"Expected 2 ALLOC_REGION (WS + LS), got {alloc_count}"
+        assert (
+            alloc_count == 3
+        ), f"Expected 3 ALLOC_REGION (WS + LS + special registers), got {alloc_count}"
 
 
 class TestSingletonInit:
