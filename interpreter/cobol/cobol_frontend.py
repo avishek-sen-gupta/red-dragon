@@ -42,6 +42,7 @@ from interpreter.path_name import PathName
 from interpreter.cobol.red_dragon_extension_strategy import (
     RedDragonExtensionLoweringStrategy,
 )
+from interpreter.cobol.cobol_statements import CicsTextParserFn, _cics_text_parser
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import CodeLabel
@@ -66,10 +67,14 @@ class CobolFrontend(Frontend):
         cobol_parser: CobolParser,
         observer: FrontendObserver = NullFrontendObserver(),
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
+        cics_text_parser: (
+            CicsTextParserFn | None
+        ) = None,  # must be set for CICS programs
     ):
         self._parser = cobol_parser
         self._observer = observer
         self._extension_strategies = tuple(extension_strategies)
+        self._cics_text_parser = cics_text_parser
         self._layout = DataLayout()
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
@@ -179,10 +184,14 @@ class CobolFrontend(Frontend):
                 data = strat.preprocess_program_dict(data)
             return data
 
-        asg = self._parser.parse(
-            source,
-            preprocessor=_chained_preprocess,
-        )
+        token = _cics_text_parser.set(self._cics_text_parser)
+        try:
+            asg = self._parser.parse(
+                source,
+                preprocessor=_chained_preprocess,
+            )
+        finally:
+            _cics_text_parser.reset(token)
         sectioned = build_sectioned_layout(asg)
         self._program_id = asg.program_id or "MAIN"
         logger.debug(
