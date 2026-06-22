@@ -260,38 +260,15 @@ class EmitContext:
         # import would cycle.
         from interpreter.cobol.condition_lowering import lower_expr_node
 
-        if subscripts:
-            if len(subscripts) > 1:
-                raise NotImplementedError(
-                    f"multi-dimensional subscript not supported for {name!r} "
-                    f"({len(subscripts)} subscripts); see red-dragon-cqwx"
-                )
-            subscript_node = next(iter(subscripts))
-        else:
-            subscript_node = None
         base_name = name
         fl, region_reg = materialised.resolve(base_name, qualifiers)
 
-        if subscript_node is None:
+        if not subscripts:
             offset_reg = self.fresh_reg()
             self.emit_inst(Const.int_(offset_reg, fl.offset))
             return ResolvedFieldRef(fl=fl, offset_reg=offset_reg), region_reg
 
-        # Evaluate the structured subscript expression to a 1-based index register.
-        idx_reg = lower_expr_node(self, subscript_node, materialised)
-
-        # Compute offset: fl.offset + (idx - 1) * element_size
-        one_reg = self.const_to_reg(1)
-        idx_minus_one = self.fresh_reg()
-        self.emit_inst(
-            Binop(
-                result_reg=idx_minus_one,
-                operator=resolve_binop("-"),
-                left=idx_reg,
-                right=one_reg,
-            ),
-        )
-
+        # ── subscripted access (1-D or multi-D) ──────────────────────────────
         # Subscript stride vs. accessed-element width.
         #  * stride: how far apart successive occurrences sit.
         #  * access_len: how many bytes one occurrence of THIS field spans.
@@ -301,33 +278,106 @@ class EmitContext:
         # whole CDEMO-MENU-OPT entry, 46 bytes) but accesses only the leaf's own
         # width (8 bytes for PGMNAME X(8)).
         if fl.occurs_count > 0 and fl.element_size > 0:
-            elem_size = fl.element_size
             access_len = fl.element_size
         else:
-            group_stride = materialised.subscript_stride(base_name)
             access_len = fl.byte_length
-            elem_size = group_stride if group_stride > 0 else fl.byte_length
-        elem_size_reg = self.const_to_reg(elem_size)
-        displacement = self.fresh_reg()
-        self.emit_inst(
-            Binop(
-                result_reg=displacement,
-                operator=resolve_binop("*"),
-                left=idx_minus_one,
-                right=elem_size_reg,
-            ),
-        )
 
-        base_offset_reg = self.const_to_reg(fl.offset)
-        final_offset_reg = self.fresh_reg()
-        self.emit_inst(
-            Binop(
-                result_reg=final_offset_reg,
-                operator=resolve_binop("+"),
-                left=base_offset_reg,
-                right=displacement,
-            ),
-        )
+        if len(subscripts) == 1:
+            # Single subscript — fast path: derive stride from fl or enclosing group.
+            if fl.occurs_count > 0 and fl.element_size > 0:
+                strides = [fl.element_size]
+            else:
+                group_stride = materialised.subscript_stride(base_name)
+                strides = [group_stride if group_stride > 0 else fl.byte_length]
+        else:
+            # Multi-dimensional subscript: collect all OCCURS strides for this field.
+            strides = materialised.subscript_strides(base_name)
+            if len(subscripts) > len(strides):
+                raise ValueError(
+                    f"subscript count {len(subscripts)} exceeds OCCURS dimensions "
+                    f"{len(strides)} for {name!r} (red-dragon-1wy3)"
+                )
+
+        one_reg = self.const_to_reg(1)
+
+        if len(subscripts) == 1:
+            # Single subscript — original 3-BINOP form: (idx-1)*stride + base.
+            idx_reg = lower_expr_node(self, subscripts[0], materialised)
+            idx_minus_one = self.fresh_reg()
+            self.emit_inst(
+                Binop(
+                    result_reg=idx_minus_one,
+                    operator=resolve_binop("-"),
+                    left=idx_reg,
+                    right=one_reg,
+                )
+            )
+            stride_reg = self.const_to_reg(strides[0])
+            displacement = self.fresh_reg()
+            self.emit_inst(
+                Binop(
+                    result_reg=displacement,
+                    operator=resolve_binop("*"),
+                    left=idx_minus_one,
+                    right=stride_reg,
+                )
+            )
+            base_offset_reg = self.const_to_reg(fl.offset)
+            final_offset_reg = self.fresh_reg()
+            self.emit_inst(
+                Binop(
+                    result_reg=final_offset_reg,
+                    operator=resolve_binop("+"),
+                    left=base_offset_reg,
+                    right=displacement,
+                )
+            )
+        else:
+            # Multi-dimensional: accumulate sum of (idx_k - 1) * stride_k, then
+            # add the field's base offset once at the end.
+            total_disp_reg = self.const_to_reg(0)
+            for sub_node, stride_k in zip(subscripts, strides):
+                idx_reg = lower_expr_node(self, sub_node, materialised)
+                idx_minus_one = self.fresh_reg()
+                self.emit_inst(
+                    Binop(
+                        result_reg=idx_minus_one,
+                        operator=resolve_binop("-"),
+                        left=idx_reg,
+                        right=one_reg,
+                    )
+                )
+                stride_reg = self.const_to_reg(stride_k)
+                disp_k = self.fresh_reg()
+                self.emit_inst(
+                    Binop(
+                        result_reg=disp_k,
+                        operator=resolve_binop("*"),
+                        left=idx_minus_one,
+                        right=stride_reg,
+                    )
+                )
+                new_total = self.fresh_reg()
+                self.emit_inst(
+                    Binop(
+                        result_reg=new_total,
+                        operator=resolve_binop("+"),
+                        left=total_disp_reg,
+                        right=disp_k,
+                    )
+                )
+                total_disp_reg = new_total
+
+            base_offset_reg = self.const_to_reg(fl.offset)
+            final_offset_reg = self.fresh_reg()
+            self.emit_inst(
+                Binop(
+                    result_reg=final_offset_reg,
+                    operator=resolve_binop("+"),
+                    left=base_offset_reg,
+                    right=total_disp_reg,
+                )
+            )
 
         # For subscripted access, use element-level FieldLayout
         element_fl = FieldLayout(
