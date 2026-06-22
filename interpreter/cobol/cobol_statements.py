@@ -355,20 +355,28 @@ class WhenStatement:
     for full conditional expressions (e.g. ``EVALUATE TRUE WHEN A = SPACES``), or a
     plain string for ``EVALUATE <subject> WHEN <value>`` (the value is prefixed
     with ``subject = `` during lowering) and ``WHEN ANY``.
+
+    ``also_conditions`` holds additional ALSO conditions from multi-subject
+    EVALUATE (e.g. ``WHEN x ALSO y`` → condition="x", also_conditions=("y",)).
     """
 
     condition: dict | str
+    also_conditions: tuple[dict | str, ...] = ()
     children: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> WhenStatement:
+        raw_also = data.get("also_conditions", [])
         return cls(
             condition=data.get("condition", ""),
+            also_conditions=tuple(raw_also),
             children=[parse_statement(c) for c in data.get("children", [])],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "WHEN", "condition": self.condition}
+        if self.also_conditions:
+            result["also_conditions"] = list(self.also_conditions)
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         return result
@@ -395,15 +403,21 @@ class WhenOtherStatement:
 
 @dataclass(frozen=True)
 class EvaluateStatement:
-    """EVALUATE subject WHEN ... END-EVALUATE."""
+    """EVALUATE subject [ALSO also_subject ...] WHEN ... END-EVALUATE.
+
+    ``also_subjects`` holds additional ALSO subjects for multi-subject EVALUATE
+    (e.g. ``EVALUATE a ALSO b`` → subject="a", also_subjects=("b",)).
+    """
 
     subject: str = ""
+    also_subjects: tuple[str, ...] = ()
     children: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> EvaluateStatement:
         return cls(
             subject=data.get("subject", ""),
+            also_subjects=tuple(data.get("also_subjects", [])),
             children=[parse_statement(c) for c in data.get("children", [])],
         )
 
@@ -411,6 +425,8 @@ class EvaluateStatement:
         result: dict = {"type": "EVALUATE"}
         if self.subject:
             result["subject"] = self.subject
+        if self.also_subjects:
+            result["also_subjects"] = list(self.also_subjects)
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         return result
