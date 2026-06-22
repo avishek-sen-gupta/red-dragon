@@ -1096,6 +1096,53 @@ def lower_evaluate(
                 cond_reg = _lower_condition_str(
                     ctx, child.condition, materialised, ctx._condition_index
                 )
+            # AND in also-subject=also-condition pairs (EVALUATE A ALSO B WHEN x ALSO y)
+            for also_subj, also_cond in zip(stmt.also_subjects, child.also_conditions):
+                if isinstance(also_cond, str) and also_cond.upper() == "ANY":
+                    continue
+                if isinstance(also_cond, dict) and "kind" in also_cond:
+                    also_val_reg = lower_expr_node(
+                        ctx, expr_from_dict(also_cond), materialised
+                    )
+                    if ctx.has_field(also_subj, materialised):
+                        also_ref, also_rr = ctx.resolve_field_ref(
+                            also_subj, materialised
+                        )
+                        also_subj_reg = ctx.emit_decode_field(
+                            also_rr, also_ref.fl, also_ref.offset_reg
+                        )
+                    else:
+                        also_subj_reg = ctx.const_to_reg(ctx.parse_literal(also_subj))
+                    also_cond_reg = ctx.fresh_reg()
+                    ctx.emit_inst(
+                        Binop(
+                            result_reg=also_cond_reg,
+                            operator=resolve_binop("=="),
+                            left=Register(str(also_subj_reg)),
+                            right=Register(str(also_val_reg)),
+                        )
+                    )
+                elif isinstance(also_cond, dict):
+                    also_cond_reg = ctx.lower_condition(also_cond, materialised)
+                else:
+                    relation = {
+                        "left": {"kind": "ref", "name": also_subj},
+                        "op": "==",
+                        "right": _when_operand_node(also_cond),
+                    }
+                    also_cond_reg = ctx.lower_condition(
+                        {"relation": relation}, materialised
+                    )
+                and_reg = ctx.fresh_reg()
+                ctx.emit_inst(
+                    Binop(
+                        result_reg=and_reg,
+                        operator=resolve_binop("&&"),
+                        left=Register(str(cond_reg)),
+                        right=Register(str(also_cond_reg)),
+                    )
+                )
+                cond_reg = and_reg
             when_true = ctx.fresh_label("when_true")
             when_false = ctx.fresh_label("when_false")
             ctx.emit_inst(
