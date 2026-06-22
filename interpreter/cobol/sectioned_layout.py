@@ -95,6 +95,21 @@ class MaterialisedSectionedLayout:
                 return layout.enclosing_occurs_element_size(name)
         return 0
 
+    def subscript_strides(self, name: str) -> list[int]:
+        """Return all OCCURS element_sizes from outermost to innermost for ``name``.
+
+        len() equals the number of subscript dimensions the field supports.
+        """
+        for layout, _reg in (
+            self.local_storage,
+            self.working_storage,
+            self.linkage,
+            self.file,
+        ):
+            if layout.lookup_as_storage(name) is not None:
+                return layout.all_enclosing_occurs_strides(name)
+        return []
+
     def has_field(self, name: str) -> bool:
         ls_layout, _ = self.local_storage
         ws_layout, _ = self.working_storage
