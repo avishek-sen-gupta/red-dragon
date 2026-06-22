@@ -9,8 +9,9 @@ discriminator.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Union
+from typing import Callable, Union
 
 from interpreter.cobol.ref_mod import (
     RefModOperand,
@@ -18,8 +19,36 @@ from interpreter.cobol.ref_mod import (
     is_function_operand,
 )
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict
-from interpreter.cobol.cics_parser import parse_exec_cics_text, CicsOperand
 from interpreter.cobol.file_enums import OpenMode, FileOrganization, AccessMode
+
+# ── CICS text parser injection ────────────────────────────────────
+# Set by CobolFrontend.lower() for the duration of each parse call.
+# Cicada injects parse_exec_cics_text from cics.cics_visitor via CobolFrontend.
+CicsTextParserFn = Callable[[str], "tuple[str, dict[str, CicsOperand | None]]"]
+_cics_text_parser: ContextVar[CicsTextParserFn | None] = ContextVar(
+    "_cics_text_parser", default=None
+)
+
+
+@dataclass(frozen=True)
+class CicsOperand:
+    """A parsed EXEC CICS option value.
+
+    is_literal=True  -> a quoted string literal (text is the inner content, no quotes).
+    is_literal=False -> a bare operand: data-name, subscripted/reference-modified ref,
+                        or numeric literal (text preserved verbatim).
+
+    ``subscripts`` carries each index as a structured :class:`ExprNode`:
+    a bare data-name becomes a ``FieldRefNode``, an unsigned integer becomes a
+    ``LiteralNode``. Arithmetic CICS subscripts raise ValueError at parse time.
+    """
+
+    text: str
+    is_literal: bool
+    subscripts: tuple[ExprNode, ...] = ()
+    ref_mod_start: ExprNode | None = None
+    ref_mod_length: ExprNode | None = None
+
 
 # ── PERFORM specs ────────────────────────────────────────────────
 
@@ -1137,8 +1166,13 @@ class ExecCicsStatement:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExecCicsStatement":
+        parser = _cics_text_parser.get()
+        if parser is None:
+            raise RuntimeError(
+                "No CICS text parser injected — pass cics_text_parser= to CobolFrontend"
+            )
         text = data.get("exec_cics_text", "")
-        verb, options = parse_exec_cics_text(text)
+        verb, options = parser(text)
         return cls(verb=verb, options=options)
 
     def to_dict(self) -> dict:
