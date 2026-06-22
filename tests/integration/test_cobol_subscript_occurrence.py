@@ -139,3 +139,58 @@ class TestSubscriptedOccurrenceConditionOperands:
     def test_ref_mod_operand_reads_correct_occurrence(self):
         region = _first_region(run_cobol(_ref_mod_operand_program(), max_steps=4000))
         assert _decode(region, _RESULT_OFFSET, 1) == 1
+
+
+# ── 2-D OCCURS (red-dragon-1wy3) ──────────────────────────────────────────────
+#
+# Layout:  01 GRID.
+#            03 GRID-ROW OCCURS 4 TIMES.   element_size = 3 × 2 = 6 bytes
+#               05 GRID-CELL PIC 99 OCCURS 3 TIMES.  element_size = 2 bytes
+#          RESULT PIC 99 follows at offset 4*6 = 24.
+#
+# GRID-CELL(r, c) byte offset = (r-1)*6 + (c-1)*2
+# The test writes distinct values to GRID-CELL(1,1), GRID-CELL(2,3),
+# GRID-CELL(4,2) then reads them back via RESULT and verifies each.
+
+_2D_GRID_ROW_STRIDE = 6  # 3 cells * 2 bytes
+_2D_RESULT_OFFSET = 4 * _2D_GRID_ROW_STRIDE  # = 24
+
+
+def _2d_grid_program(row: int, col: int, write_val: int) -> list[str]:
+    """Write write_val to GRID-CELL(row, col), copy to RESULT, STOP RUN."""
+    return [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. GRID2D.",
+        "DATA DIVISION.",
+        "WORKING-STORAGE SECTION.",
+        "01  GRID.",
+        "    03  GRID-ROW OCCURS 4 TIMES.",
+        "        05  GRID-CELL PIC 99 OCCURS 3 TIMES.",
+        "01  RESULT PIC 99.",
+        "PROCEDURE DIVISION.",
+        "MAIN.",
+        f"    MOVE {write_val} TO GRID-CELL ({row}, {col}).",
+        f"    MOVE GRID-CELL ({row}, {col}) TO RESULT.",
+        "    STOP RUN.",
+    ]
+
+
+class TestTwoDimensionalSubscript:
+    @pytest.fixture(autouse=True)
+    def _require_bridge_jar(self, bridge_jar):
+        """Enforce the required PROLEAP_BRIDGE_JAR."""
+
+    @pytest.mark.parametrize(
+        "row, col, val",
+        [(1, 1, 11), (2, 3, 23), (4, 2, 42)],
+    )
+    @covers(CobolFeature.OCCURS_FIXED)
+    def test_2d_subscript_reads_and_writes_correct_cell(
+        self, row: int, col: int, val: int
+    ):
+        vm = run_cobol(_2d_grid_program(row, col, val), max_steps=2000)
+        region = _first_region(vm)
+        result = _decode(region, _2D_RESULT_OFFSET, 2)
+        assert (
+            result == val
+        ), f"GRID-CELL({row},{col}) wrote {val} but RESULT decoded as {result}"
