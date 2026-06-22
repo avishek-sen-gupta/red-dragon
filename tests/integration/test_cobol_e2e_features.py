@@ -713,3 +713,100 @@ class TestLogicalOperators:
         )
         region = _first_region(vm)
         assert _decode(region, 4, 4) == 0
+
+
+# ── EVALUATE with ALSO (red-dragon-vbm4) ─────────────────────────────────────
+#
+# Layout for all tests:
+#   77 WS-A    PIC 9  offset=0
+#   77 WS-B    PIC 9  offset=1
+#   77 RESULT  PIC 9  offset=2
+
+
+class TestEvaluateAlso:
+    """EVALUATE subject ALSO subject WHEN val ALSO val END-EVALUATE."""
+
+    def _pgm(self, a: int, b: int, branches: list[str]) -> list[str]:
+        return [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. EVALSO.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            f"77 WS-A    PIC 9 VALUE {a}.",
+            f"77 WS-B    PIC 9 VALUE {b}.",
+            "77 RESULT  PIC 9 VALUE 0.",
+            "PROCEDURE DIVISION.",
+            "MAIN.",
+            "    EVALUATE WS-A ALSO WS-B",
+            *branches,
+            "    END-EVALUATE.",
+            "    STOP RUN.",
+        ]
+
+    @covers(CobolFeature.EVALUATE)
+    def test_both_subjects_match_executes_branch(self):
+        """WS-A=2, WS-B=3: WHEN 2 ALSO 3 matches → RESULT=1."""
+        vm = _run_cobol(
+            self._pgm(
+                2,
+                3,
+                [
+                    "        WHEN 2 ALSO 3",
+                    "            MOVE 1 TO RESULT",
+                    "        WHEN OTHER",
+                    "            MOVE 9 TO RESULT",
+                ],
+            )
+        )
+        assert _decode(_first_region(vm), 2, 1) == 1
+
+    @covers(CobolFeature.EVALUATE)
+    def test_second_subject_mismatch_falls_to_when_other(self):
+        """WS-A=2, WS-B=5: WHEN 2 ALSO 3 does NOT match (WS-B≠3) → WHEN OTHER → RESULT=9."""
+        vm = _run_cobol(
+            self._pgm(
+                2,
+                5,
+                [
+                    "        WHEN 2 ALSO 3",
+                    "            MOVE 1 TO RESULT",
+                    "        WHEN OTHER",
+                    "            MOVE 9 TO RESULT",
+                ],
+            )
+        )
+        assert _decode(_first_region(vm), 2, 1) == 9
+
+    @covers(CobolFeature.EVALUATE)
+    def test_first_subject_mismatch_falls_to_when_other(self):
+        """WS-A=7, WS-B=3: WHEN 2 ALSO 3 does NOT match (WS-A≠2) → WHEN OTHER → RESULT=9."""
+        vm = _run_cobol(
+            self._pgm(
+                7,
+                3,
+                [
+                    "        WHEN 2 ALSO 3",
+                    "            MOVE 1 TO RESULT",
+                    "        WHEN OTHER",
+                    "            MOVE 9 TO RESULT",
+                ],
+            )
+        )
+        assert _decode(_first_region(vm), 2, 1) == 9
+
+    @covers(CobolFeature.EVALUATE)
+    def test_also_any_skips_that_subject(self):
+        """WHEN 2 ALSO ANY: second subject is irrelevant → matches whenever WS-A=2."""
+        vm = _run_cobol(
+            self._pgm(
+                2,
+                7,
+                [
+                    "        WHEN 2 ALSO ANY",
+                    "            MOVE 1 TO RESULT",
+                    "        WHEN OTHER",
+                    "            MOVE 9 TO RESULT",
+                ],
+            )
+        )
+        assert _decode(_first_region(vm), 2, 1) == 1

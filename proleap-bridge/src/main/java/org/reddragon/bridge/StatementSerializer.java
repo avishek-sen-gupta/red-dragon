@@ -25,6 +25,8 @@ import io.proleap.cobol.asg.metamodel.procedure.divide.DivideStatement;
 import io.proleap.cobol.asg.metamodel.procedure.divide.Giving;
 import io.proleap.cobol.asg.metamodel.procedure.divide.GivingPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.divide.Into;
+import io.proleap.cobol.asg.metamodel.procedure.evaluate.AlsoCondition;
+import io.proleap.cobol.asg.metamodel.procedure.evaluate.AlsoSelect;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.EvaluateStatement;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.WhenPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.exit.ExitStatement;
@@ -802,6 +804,23 @@ public final class StatementSerializer {
                 obj.addProperty("subject", subject);
             }
 
+            // EVALUATE subject ALSO also_subject ... (multi-subject form)
+            List<AlsoSelect> alsoSelects = stmt.getAlsoSelects();
+            if (alsoSelects != null && !alsoSelects.isEmpty()) {
+                JsonArray alsoSubjectsArr = new JsonArray();
+                for (AlsoSelect alsoSelect : alsoSelects) {
+                    io.proleap.cobol.asg.metamodel.procedure.evaluate.Select alsoSel = alsoSelect.getSelect();
+                    if (alsoSel != null && alsoSel.getSelectValueStmt() != null) {
+                        String alsoSubject = qualifiedSubjectLeaf(alsoSel.getSelectValueStmt());
+                        if (alsoSubject == null) {
+                            alsoSubject = insertSpaces(extractValueStmtText(alsoSel.getSelectValueStmt()));
+                        }
+                        alsoSubjectsArr.add(alsoSubject);
+                    }
+                }
+                if (alsoSubjectsArr.size() > 0) obj.add("also_subjects", alsoSubjectsArr);
+            }
+
             // Each WhenPhrase is "WHEN c1 [WHEN c2 ...] statements": one or more
             // stacked conditions sharing a single body. Emit ONE WHEN child per
             // stacked condition, each carrying the (shared) body, so a match on
@@ -855,6 +874,38 @@ public final class StatementSerializer {
                         } else if (cond.getCtx() != null) {
                             whenObj.addProperty("condition", insertSpaces(cond.getCtx().getText()));
                         }
+                    }
+
+                    // WHEN val ALSO val ... (multi-subject form per-when conditions)
+                    List<AlsoCondition> alsoConditions = when.getAlsoConditions();
+                    if (alsoConditions != null && !alsoConditions.isEmpty()) {
+                        JsonArray alsoCondsArr = new JsonArray();
+                        for (AlsoCondition alsoCond : alsoConditions) {
+                            io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition aCond = alsoCond.getCondition();
+                            if (aCond != null) {
+                                io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType act = aCond.getConditionType();
+                                ValueStmt acvs = aCond.getConditionValueStmt();
+                                if (act == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.CONDITION
+                                        && acvs instanceof ConditionValueStmt) {
+                                    alsoCondsArr.add(serializeConditionNode((ConditionValueStmt) acvs));
+                                } else if (act == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.ANY) {
+                                    alsoCondsArr.add(new JsonPrimitive("ANY"));
+                                } else if (aCond.getValue() != null && aCond.getValue().getValueStmt() != null) {
+                                    ValueStmt alsoVs = aCond.getValue().getValueStmt();
+                                    JsonObject dfhAlso = serializeDfhrespFromVS(alsoVs);
+                                    if (dfhAlso != null) {
+                                        alsoCondsArr.add(dfhAlso);
+                                    } else {
+                                        alsoCondsArr.add(new JsonPrimitive(insertSpaces(extractValueStmtText(alsoVs))));
+                                    }
+                                } else if (acvs != null) {
+                                    alsoCondsArr.add(new JsonPrimitive(insertSpaces(extractValueStmtText(acvs))));
+                                } else if (aCond.getCtx() != null) {
+                                    alsoCondsArr.add(new JsonPrimitive(insertSpaces(aCond.getCtx().getText())));
+                                }
+                            }
+                        }
+                        if (alsoCondsArr.size() > 0) whenObj.add("also_conditions", alsoCondsArr);
                     }
 
                     // Attach the phrase's shared body to each stacked WHEN. Only
