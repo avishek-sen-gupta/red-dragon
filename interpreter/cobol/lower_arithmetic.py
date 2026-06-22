@@ -22,6 +22,7 @@ from interpreter.cobol.ref_mod import (
     FunctionCallOperand,
 )
 from interpreter.cobol.cobol_statements import (
+    ArithmeticCorrespondingStatement,
     ArithmeticStatement,
     ComputeStatement,
     ContinueStatement,
@@ -576,6 +577,69 @@ def lower_move_corresponding(
 
             dst_ref = ctx.resolve_field_ref_from(dst_fl, region_reg)
             ctx.emit_encode_and_write(region_reg, dst_fl, value_str, dst_ref.offset_reg)
+
+
+def _find_group_and_reg(
+    name: str, materialised: MaterialisedSectionedLayout
+) -> tuple[DataLayout, Register] | None:
+    """Return (group DataLayout, region Register) for the named group, or None."""
+    for layout, reg in (
+        materialised.local_storage,
+        materialised.working_storage,
+        materialised.linkage,
+        materialised.file,
+    ):
+        try:
+            grp = layout.lookup_group(name)
+            return grp, reg
+        except KeyError:
+            pass
+    return None
+
+
+def lower_arithmetic_corresponding(
+    ctx: EmitContext,
+    stmt: ArithmeticCorrespondingStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """ADD/SUBTRACT CORRESPONDING src TO/FROM dst.
+
+    For each field name present in both src and dst groups, emit the
+    equivalent of ADD src.field TO dst.field (or SUBTRACT).
+    """
+    op_str = "+" if stmt.op == "ADD" else "-"
+
+    src_result = _find_group_and_reg(stmt.source, materialised)
+    dst_result = _find_group_and_reg(stmt.target, materialised)
+
+    if src_result is None or dst_result is None:
+        return
+
+    src_group, src_rr = src_result
+    dst_group, dst_rr = dst_result
+
+    matching_names = src_group.fields.keys() & dst_group.fields.keys()
+    for name in matching_names:
+        src_fl = src_group.fields[name]
+        dst_fl = dst_group.fields[name]
+
+        src_ref = ctx.resolve_field_ref_from(src_fl, src_rr)
+        src_val = ctx.emit_decode_field(src_rr, src_fl, src_ref.offset_reg)
+
+        dst_ref = ctx.resolve_field_ref_from(dst_fl, dst_rr)
+        dst_val = ctx.emit_decode_field(dst_rr, dst_fl, dst_ref.offset_reg)
+
+        result_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=result_reg,
+                operator=resolve_binop(op_str),
+                left=Register(str(dst_val)),
+                right=Register(str(src_val)),
+            )
+        )
+        result_str = ctx.emit_to_string(result_reg)
+        ctx.emit_encode_and_write(dst_rr, dst_fl, result_str, dst_ref.offset_reg)
 
 
 def lower_arithmetic(

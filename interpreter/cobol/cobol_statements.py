@@ -102,6 +102,7 @@ CobolStatementType = Union[
     "ContinueStatement",
     "ExitStatement",
     "InitializeStatement",
+    "ArithmeticCorrespondingStatement",
     "SetStatement",
     "StringStatement",
     "UnstringStatement",
@@ -221,6 +222,31 @@ class MoveCorrespondingStatement:
         if self.targets:
             result["targets"] = list(self.targets)
         return result
+
+
+@dataclass(frozen=True)
+class ArithmeticCorrespondingStatement:
+    """ADD/SUBTRACT CORRESPONDING src TO/FROM dst."""
+
+    op: str  # "ADD" | "SUBTRACT"
+    source: str  # source group name
+    target: str  # target group name
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ArithmeticCorrespondingStatement":
+        op = "ADD" if data.get("type") == "ADD_CORRESPONDING" else "SUBTRACT"
+        return cls(
+            op=op,
+            source=data.get("source", ""),
+            target=data.get("target", ""),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "type": f"{self.op}_CORRESPONDING",
+            "source": self.source,
+            "target": self.target,
+        }
 
 
 @dataclass(frozen=True)
@@ -1333,6 +1359,8 @@ _ARITHMETIC_TYPES = frozenset({"ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"})
 _DISPATCH_TABLE: dict[str, type] = {
     "MOVE": MoveStatement,
     "MOVE_CORRESPONDING": MoveCorrespondingStatement,
+    "ADD_CORRESPONDING": ArithmeticCorrespondingStatement,
+    "SUBTRACT_CORRESPONDING": ArithmeticCorrespondingStatement,
     "ADD": ArithmeticStatement,
     "SUBTRACT": ArithmeticStatement,
     "MULTIPLY": ArithmeticStatement,

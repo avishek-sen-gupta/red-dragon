@@ -810,3 +810,59 @@ class TestEvaluateAlso:
             )
         )
         assert _decode(_first_region(vm), 2, 1) == 1
+
+
+class TestAddCorresponding:
+    """ADD/SUBTRACT CORRESPONDING — only matching direct children are operated on."""
+
+    _WS = [
+        "       WORKING-STORAGE SECTION.",
+        "       01 WS-GROUP-A.",
+        "           05 GA-X PIC 99.",
+        "           05 GA-Y PIC 99.",
+        "           05 GA-ONLY PIC 99.",
+        "       01 WS-GROUP-B.",
+        "           05 GA-X PIC 99.",
+        "           05 GA-Y PIC 99.",
+        "           05 GB-ONLY PIC 99.",
+    ]
+    # Layout (all zoned-decimal, 2 bytes each):
+    #   WS-GROUP-A: GA-X@0, GA-Y@2, GA-ONLY@4  (6 bytes)
+    #   WS-GROUP-B: GA-X@6, GA-Y@8, GB-ONLY@10 (6 bytes)
+
+    def _pgm(self, ax: int, ay: int, bx: int, by: int, corr_stmt: str) -> list[str]:
+        return [
+            "       IDENTIFICATION DIVISION.",
+            "       PROGRAM-ID. CORR-TEST.",
+            "       DATA DIVISION.",
+            *self._WS,
+            "       PROCEDURE DIVISION.",
+            f"           MOVE {ax} TO GA-X IN WS-GROUP-A.",
+            f"           MOVE {ay} TO GA-Y IN WS-GROUP-A.",
+            f"           MOVE {bx} TO GA-X IN WS-GROUP-B.",
+            f"           MOVE {by} TO GA-Y IN WS-GROUP-B.",
+            f"           {corr_stmt}",
+            "           STOP RUN.",
+        ]
+
+    @covers(CobolFeature.ADD)
+    def test_add_corresponding_matching_fields(self):
+        """ADD CORRESPONDING adds GA-X(A→B) and GA-Y(A→B); GA-ONLY and GB-ONLY untouched."""
+        vm = _run_cobol(
+            self._pgm(10, 20, 3, 4, "ADD CORRESPONDING WS-GROUP-A TO WS-GROUP-B.")
+        )
+        region = _first_region(vm)
+        assert _decode(region, 6, 2) == 13  # GA-X in WS-GROUP-B: 3+10=13
+        assert _decode(region, 8, 2) == 24  # GA-Y in WS-GROUP-B: 4+20=24
+
+    @covers(CobolFeature.SUBTRACT)
+    def test_subtract_corresponding_matching_fields(self):
+        """SUBTRACT CORRESPONDING subtracts GA-X(A) from GA-X(B) and GA-Y(A) from GA-Y(B)."""
+        vm = _run_cobol(
+            self._pgm(
+                3, 4, 10, 20, "SUBTRACT CORRESPONDING WS-GROUP-A FROM WS-GROUP-B."
+            )
+        )
+        region = _first_region(vm)
+        assert _decode(region, 6, 2) == 7  # GA-X in WS-GROUP-B: 10-3=7
+        assert _decode(region, 8, 2) == 16  # GA-Y in WS-GROUP-B: 20-4=16

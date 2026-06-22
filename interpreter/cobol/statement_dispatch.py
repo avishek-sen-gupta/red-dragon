@@ -7,6 +7,7 @@ import logging
 from interpreter.cobol.cobol_statements import (
     AcceptStatement,
     AlterStatement,
+    ArithmeticCorrespondingStatement,
     ArithmeticStatement,
     CallStatement,
     CancelStatement,
@@ -43,6 +44,7 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.lower_arithmetic import (
     lower_arithmetic,
+    lower_arithmetic_corresponding,
     lower_compute,
     lower_continue,
     lower_display,
@@ -97,6 +99,8 @@ def dispatch_statement(
         # MoveCorrespondingStatement still uses (layout, region_reg) — uses first WS section
         ws_layout, ws_reg = materialised.working_storage
         lower_move_corresponding(ctx, stmt, ws_layout, ws_reg)
+    elif isinstance(stmt, ArithmeticCorrespondingStatement):
+        lower_arithmetic_corresponding(ctx, stmt, materialised)
     elif isinstance(stmt, ArithmeticStatement):
         lower_arithmetic(ctx, stmt, materialised)
     elif isinstance(stmt, ComputeStatement):
