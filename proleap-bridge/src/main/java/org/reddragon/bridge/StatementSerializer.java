@@ -283,6 +283,19 @@ public final class StatementSerializer {
     }
 
     private static JsonObject serializeAdd(AddStatement stmt) {
+        // ADD CORRESPONDING src TO dst
+        io.proleap.cobol.asg.metamodel.procedure.add.AddCorrespondingStatement addCorr =
+            stmt.getAddCorrespondingStatement();
+        if (addCorr != null) {
+            JsonObject obj = newStatement("ADD_CORRESPONDING");
+            obj.addProperty("source", extractCallName(addCorr.getFromCall()));
+            io.proleap.cobol.asg.metamodel.procedure.add.To corrTo = addCorr.getTo();
+            if (corrTo != null) {
+                obj.addProperty("target", extractCallName(corrTo.getToCall()));
+            }
+            return obj;
+        }
+
         JsonObject obj = newStatement("ADD");
         JsonArray operands = new JsonArray();
 
@@ -325,6 +338,20 @@ public final class StatementSerializer {
     }
 
     private static JsonObject serializeSubtract(SubtractStatement stmt) {
+        // SUBTRACT CORRESPONDING src FROM dst
+        io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractCorrespondingStatement subCorr =
+            stmt.getSubtractCorrespondingStatement();
+        if (subCorr != null) {
+            JsonObject obj = newStatement("SUBTRACT_CORRESPONDING");
+            obj.addProperty("source", extractCallName(subCorr.getSubtrahendCall()));
+            io.proleap.cobol.asg.metamodel.procedure.subtract.MinuendCorresponding minCorr =
+                subCorr.getMinuend();
+            if (minCorr != null) {
+                obj.addProperty("target", extractCallName(minCorr.getMinuendCall()));
+            }
+            return obj;
+        }
+
         JsonObject obj = newStatement("SUBTRACT");
         JsonArray operands = new JsonArray();
 
