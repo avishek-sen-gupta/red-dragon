@@ -265,6 +265,44 @@ class DataLayout:
                 return found
         return None
 
+    def all_enclosing_occurs_strides(self, name: str) -> list[int]:
+        """Return all OCCURS element_sizes from outermost to innermost for ``name``.
+
+        For a leaf CELL nested inside ROW(OCCURS 5, stride=12) then
+        COL(OCCURS 3, stride=4), returns [12, 4].  The length equals the number
+        of subscript dimensions required.  Returns [] if ``name`` is not found or
+        has no enclosing OCCURS.
+        """
+        strides: list[int] = []
+        self._collect_occurs_strides(name, strides)
+        return strides
+
+    def _collect_occurs_strides(self, name: str, strides: list[int]) -> bool:
+        """DFS to find ``name``; appends each OCCURS element_size on the path.
+
+        Appends in outermost-first order.  Returns True when ``name`` is found
+        (whether or not any strides were appended).
+        """
+        leaf = _ci_get(self.fields, name)
+        if leaf is not None:
+            if leaf.occurs_count > 0 and leaf.element_size > 0:
+                strides.append(leaf.element_size)
+            return True
+        grp = _ci_get(self.groups, name)
+        if grp is not None:
+            if grp.occurs_count > 0 and grp.element_size > 0:
+                strides.append(grp.element_size)
+            return True
+        for child_grp in self.groups.values():
+            if child_grp.occurs_count > 0 and child_grp.element_size > 0:
+                strides.append(child_grp.element_size)
+            found = child_grp._collect_occurs_strides(name, strides)
+            if found:
+                return True
+            if child_grp.occurs_count > 0 and child_grp.element_size > 0:
+                strides.pop()
+        return False
+
     def lookup_as_storage(
         self, name: str, qualifiers: tuple[str, ...] = ()
     ) -> FieldLayout | None:
