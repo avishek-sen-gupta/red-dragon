@@ -93,6 +93,10 @@ CobolStatementType = Union[
     "EvaluateStatement",
     "DisplayStatement",
     "GotoStatement",
+    "ProcedureRef",
+    "SimpleGoto",
+    "ComputedGoto",
+    "AlteredGoto",
     "StopRunStatement",
     "GobackStatement",
     "ExitProgramStatement",
@@ -478,18 +482,73 @@ class DisplayStatement:
 
 
 @dataclass(frozen=True)
-class GotoStatement:
-    """GO TO target."""
+class ProcedureRef:
+    """A COBOL procedure-name: a paragraph, optionally qualified by a section.
+    A bare name has section="". Procedure-names are never subscripted or
+    reference-modified, so the surface is deliberately small."""
 
-    target: str
+    paragraph: str
+    section: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ProcedureRef":
+        return cls(paragraph=data.get("paragraph", ""), section=data.get("section", ""))
+
+    def to_dict(self) -> dict:
+        return {"paragraph": self.paragraph, "section": self.section}
+
+
+@dataclass(frozen=True)
+class SimpleGoto:
+    """GO TO single-paragraph."""
+
+    target: ProcedureRef
+
+
+@dataclass(frozen=True)
+class ComputedGoto:
+    """GO TO p1 … pN DEPENDING ON index (1-based selection)."""
+
+    targets: tuple[ProcedureRef, ...]
+    index: RefModOperand
+
+
+@dataclass(frozen=True)
+class AlteredGoto:
+    """GO TO. with no operand — target supplied by ALTER at runtime."""
+
+
+@dataclass(frozen=True)
+class GotoStatement:
+    """GO TO — one of three mutually exclusive forms."""
+
+    form: SimpleGoto | ComputedGoto | AlteredGoto
 
     @classmethod
     def from_dict(cls, data: dict) -> GotoStatement:
-        operands = data.get("operands", [])
-        return cls(target=operands[0] if operands else "")
+        form_kind = data.get("form")
+        if form_kind == "computed":
+            targets = tuple(ProcedureRef.from_dict(t) for t in data.get("targets", []))
+            index = RefModOperand.from_dict(data.get("index", {}))
+            return cls(form=ComputedGoto(targets=targets, index=index))
+        if form_kind == "altered":
+            return cls(form=AlteredGoto())
+        return cls(
+            form=SimpleGoto(target=ProcedureRef.from_dict(data.get("target", {})))
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "GOTO", "operands": [self.target]}
+        form = self.form
+        if isinstance(form, ComputedGoto):
+            return {
+                "type": "GOTO",
+                "form": "computed",
+                "targets": [t.to_dict() for t in form.targets],
+                "index": form.index.to_dict(),
+            }
+        if isinstance(form, AlteredGoto):
+            return {"type": "GOTO", "form": "altered"}
+        return {"type": "GOTO", "form": "simple", "target": form.target.to_dict()}
 
 
 @dataclass(frozen=True)

@@ -1494,7 +1494,11 @@ class TestGotoInsidePerform:
                         "name": "MAIN-PARA",
                         "statements": [
                             {"type": "ADD", "operands": ["10", "WS-VAL"]},
-                            {"type": "GOTO", "operands": ["SKIP-PARA"]},
+                            {
+                                "type": "GOTO",
+                                "form": "simple",
+                                "target": {"paragraph": "SKIP-PARA", "section": ""},
+                            },
                             {"type": "ADD", "operands": ["999", "WS-VAL"]},
                         ],
                     },
@@ -1550,7 +1554,11 @@ class TestGotoInsidePerform:
                         "name": "PARA-A",
                         "statements": [
                             {"type": "ADD", "operands": ["1", "WS-VAL"]},
-                            {"type": "GOTO", "operands": ["PARA-C"]},
+                            {
+                                "type": "GOTO",
+                                "form": "simple",
+                                "target": {"paragraph": "PARA-C", "section": ""},
+                            },
                         ],
                     },
                     {
@@ -1624,7 +1632,11 @@ class TestGotoInsidePerform:
                         "name": "WORK-PARA",
                         "statements": [
                             {"type": "ADD", "operands": ["10", "WS-VAL"]},
-                            {"type": "GOTO", "operands": ["EXIT-PARA"]},
+                            {
+                                "type": "GOTO",
+                                "form": "simple",
+                                "target": {"paragraph": "EXIT-PARA", "section": ""},
+                            },
                         ],
                     },
                     {
