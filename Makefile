@@ -1,5 +1,6 @@
 # Local development tasks.
 PROLEAP_BRIDGE_JAR ?= $(CURDIR)/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
+export PROLEAP_BRIDGE_JAR
 
 PYTEST      = uv run python -m pytest
 PYTEST_ARGS ?=

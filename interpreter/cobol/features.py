@@ -38,6 +38,9 @@ class CobolFeature(Enum):
     PERFORM_THRU = "PERFORM para THRU para2 paragraph range execution"
     PERFORM_INLINE = "PERFORM ... END-PERFORM inline procedure body"
     GO_TO = "GO TO paragraph unconditional control transfer"
+    GOTO_DEPENDING_ON = (
+        "GO TO p1 ... pN DEPENDING ON idx computed/indexed control transfer"
+    )
     ALTER = "ALTER paragraph TO PROCEED TO other paragraph redirection"
     STOP_RUN = "STOP RUN program termination"
     CONTINUE = "CONTINUE no-operation placeholder statement"
