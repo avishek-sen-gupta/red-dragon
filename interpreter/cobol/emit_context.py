@@ -252,9 +252,11 @@ class EmitContext:
         ``ExprNode``s (literal / field-ref / binop / ...); each is evaluated by the
         expression lowerer, so arithmetic and nested subscripts resolve to their
         real value rather than the old default-1 string-parse fallback
-        (red-dragon-l445). A single subscript is supported; two or more raise
-        ``NotImplementedError`` (multi-dimensional offset arithmetic is
-        red-dragon-cqwx). See red-dragon-6ddr.
+        (red-dragon-l445). One or more dimensions are supported: a single subscript
+        uses a fast ``(idx-1)*stride + base`` form, while multiple subscripts
+        accumulate per-dimension OCCURS strides (red-dragon-1wy3). A subscript count
+        exceeding the field's OCCURS dimensions raises ``ValueError``. See
+        red-dragon-6ddr.
         """
         # Deferred import: condition_lowering imports EmitContext, so a top-level
         # import would cycle.
