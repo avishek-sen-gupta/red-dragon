@@ -83,6 +83,38 @@ class TestComputedGoto:
         assert _decode(_first_region(vm), 1, 1) == 2
 
     @covers(CobolFeature.GOTO_DEPENDING_ON)
+    def test_depending_on_subscripted_index(self):
+        """The index is a subscripted table element (IDX-ELEM(2)); the subscript is
+        threaded through resolve_field_ref to select the 2nd target."""
+        vm = run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. CGOTOX.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 IDX-TBL.",
+                "   05 IDX-ELEM PIC 9 OCCURS 3 TIMES.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 2 TO IDX-ELEM (2).",
+                "    GO TO X1 X2 DEPENDING ON IDX-ELEM (2).",
+                "    MOVE 9 TO WS-R.",
+                "    STOP RUN.",
+                "X1.",
+                "    MOVE 1 TO WS-R.",
+                "    STOP RUN.",
+                "X2.",
+                "    MOVE 2 TO WS-R.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        # IDX-ELEM occupies offsets 0..2 (3 occurrences); WS-R at offset 3.
+        # IDX-ELEM(2)=2 selects the 2nd target X2, which sets WS-R=2.
+        assert _decode(_first_region(vm), 3, 1) == 2
+
+    @covers(CobolFeature.GOTO_DEPENDING_ON)
     def test_depending_on_section_qualified_target(self):
         """A target paragraph living inside a section still resolves and lands."""
         vm = run_cobol(
