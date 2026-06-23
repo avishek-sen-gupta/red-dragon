@@ -31,6 +31,7 @@ import io.proleap.cobol.asg.metamodel.procedure.evaluate.EvaluateStatement;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.WhenPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.exit.ExitStatement;
 import io.proleap.cobol.asg.metamodel.procedure.gotostmt.GoToStatement;
+import io.proleap.cobol.asg.metamodel.procedure.gotostmt.DependingOnPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.IfStatement;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.Then;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.Else;
@@ -794,20 +795,35 @@ public final class StatementSerializer {
 
     private static JsonObject serializeGoTo(GoToStatement stmt) {
         JsonObject obj = newStatement("GOTO");
-        JsonArray operands = new JsonArray();
-
         try {
-            if (stmt.getSimple() != null) {
-                Call procCall = stmt.getSimple().getProcedureCall();
-                if (procCall != null) {
-                    operands.add(extractCallName(procCall));
+            if (stmt.getGoToType() == GoToStatement.GoToType.DEPENDING_ON) {
+                obj.addProperty("form", "computed");
+                DependingOnPhrase dep = stmt.getDependingOnPhrase();
+                JsonArray targets = new JsonArray();
+                for (Call c : dep.getProcedureCalls()) {
+                    targets.add(serializeProcedureRef(c));
                 }
+                obj.add("targets", targets);
+                obj.add("index", serializeRef(dep.getDependingOnCall()));
+            } else if (stmt.getSimple() != null
+                    && stmt.getSimple().getProcedureCall() != null) {
+                obj.addProperty("form", "simple");
+                obj.add("target", serializeProcedureRef(stmt.getSimple().getProcedureCall()));
+            } else {
+                obj.addProperty("form", "altered");
             }
         } catch (Exception e) {
-            LOG.fine("Could not extract GOTO target: " + e.getMessage());
+            LOG.fine("Could not extract GOTO: " + e.getMessage());
+            obj.addProperty("form", "altered");
         }
+        return obj;
+    }
 
-        obj.add("operands", operands);
+    private static JsonObject serializeProcedureRef(Call call) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("paragraph", extractCallName(call));
+        JsonArray quals = extractQualifiers(call);
+        obj.addProperty("section", quals.size() > 0 ? quals.get(0).getAsString() : "");
         return obj;
     }
 

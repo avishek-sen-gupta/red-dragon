@@ -29,6 +29,8 @@ from interpreter.cobol.cobol_statements import (
     EntryStatement,
     ExitStatement,
     GotoStatement,
+    SimpleGoto,
+    ProcedureRef,
     IfStatement,
     InitializeStatement,
     InspectStatement,
@@ -536,7 +538,9 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [GotoStatement(target="OTHER-PARA")]
+        stmts = [
+            GotoStatement(form=SimpleGoto(target=ProcedureRef(paragraph="OTHER-PARA")))
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         branches = _find_opcodes(instructions, Opcode.BRANCH)

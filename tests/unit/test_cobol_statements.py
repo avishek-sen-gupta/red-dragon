@@ -20,6 +20,10 @@ from interpreter.cobol.cobol_statements import (
     EvaluateStatement,
     ExitStatement,
     GotoStatement,
+    SimpleGoto,
+    ComputedGoto,
+    AlteredGoto,
+    ProcedureRef,
     IfStatement,
     InitializeStatement,
     InspectStatement,
@@ -269,9 +273,16 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.GO_TO)
     def test_goto(self):
-        stmt = parse_statement({"type": "GOTO", "operands": ["OTHER-PARA"]})
+        stmt = parse_statement(
+            {
+                "type": "GOTO",
+                "form": "simple",
+                "target": {"paragraph": "OTHER-PARA", "section": ""},
+            }
+        )
         assert isinstance(stmt, GotoStatement)
-        assert stmt.target == "OTHER-PARA"
+        assert isinstance(stmt.form, SimpleGoto)
+        assert stmt.form.target.paragraph == "OTHER-PARA"
 
     @covers(CobolFeature.STOP_RUN)
     def test_stop_run(self):
@@ -833,7 +844,11 @@ class TestRoundTrip:
 
     @covers(CobolFeature.GO_TO)
     def test_goto_round_trip(self):
-        data = {"type": "GOTO", "operands": ["PARA-X"]}
+        data = {
+            "type": "GOTO",
+            "form": "simple",
+            "target": {"paragraph": "PARA-X", "section": ""},
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.STOP_RUN)
@@ -1285,3 +1300,41 @@ class TestStringRefModAst:
         assert isinstance(stmt.source, RefModOperand)
         assert stmt.source.name == "WS-SRC"
         assert stmt.source.ref_mod_start is None
+
+
+class TestGotoVariants:
+    def test_simple_goto_round_trip(self):
+        d = {
+            "type": "GOTO",
+            "form": "simple",
+            "target": {"paragraph": "REAL-PARA", "section": ""},
+        }
+        stmt = GotoStatement.from_dict(d)
+        assert isinstance(stmt.form, SimpleGoto)
+        assert stmt.form.target == ProcedureRef(paragraph="REAL-PARA", section="")
+        assert stmt.to_dict() == d
+
+    def test_altered_goto_round_trip(self):
+        d = {"type": "GOTO", "form": "altered"}
+        stmt = GotoStatement.from_dict(d)
+        assert isinstance(stmt.form, AlteredGoto)
+        assert stmt.to_dict() == d
+
+    def test_computed_goto_round_trip_with_structured_index(self):
+        d = {
+            "type": "GOTO",
+            "form": "computed",
+            "targets": [
+                {"paragraph": "PARA-1", "section": "SECT-A"},
+                {"paragraph": "MENU-RTN", "section": ""},
+            ],
+            "index": {"name": "WS-SEL", "qualifiers": ["WS-CTL"]},
+        }
+        stmt = GotoStatement.from_dict(d)
+        assert isinstance(stmt.form, ComputedGoto)
+        assert stmt.form.targets == (
+            ProcedureRef(paragraph="PARA-1", section="SECT-A"),
+            ProcedureRef(paragraph="MENU-RTN", section=""),
+        )
+        assert stmt.form.index == RefModOperand(name="WS-SEL", qualifiers=("WS-CTL",))
+        assert stmt.to_dict() == d
