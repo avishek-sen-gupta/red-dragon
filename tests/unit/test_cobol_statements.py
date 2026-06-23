@@ -1303,6 +1303,7 @@ class TestStringRefModAst:
 
 
 class TestGotoVariants:
+    @covers(CobolFeature.GO_TO)
     def test_simple_goto_round_trip(self):
         d = {
             "type": "GOTO",
@@ -1314,12 +1315,14 @@ class TestGotoVariants:
         assert stmt.form.target == ProcedureRef(paragraph="REAL-PARA", section="")
         assert stmt.to_dict() == d
 
+    @covers(CobolFeature.GO_TO)
     def test_altered_goto_round_trip(self):
         d = {"type": "GOTO", "form": "altered"}
         stmt = GotoStatement.from_dict(d)
         assert isinstance(stmt.form, AlteredGoto)
         assert stmt.to_dict() == d
 
+    @covers(CobolFeature.GO_TO)
     def test_computed_goto_round_trip_with_structured_index(self):
         d = {
             "type": "GOTO",
