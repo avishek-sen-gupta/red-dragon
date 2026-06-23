@@ -1562,6 +1562,37 @@ def lower_exit_program(
     ctx.emit_inst(Return_(value_reg=zero_reg))
 
 
+def _lower_computed_goto(
+    ctx: EmitContext,
+    computed: ComputedGoto,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """GO TO p1 ... pN DEPENDING ON idx — branch to the idx-th (1-based) target;
+    out-of-range (idx <= 0 or idx > N) falls through to the next statement."""
+    index = computed.index
+    ref, rr = ctx.resolve_field_ref(
+        index.name, materialised, index.qualifiers, subscripts=index.subscripts
+    )
+    idx_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+    for k, target in enumerate(computed.targets, start=1):
+        k_reg = ctx.const_to_reg(k)
+        cmp_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=cmp_reg,
+                operator=resolve_binop("=="),
+                left=Register(str(idx_reg)),
+                right=Register(str(k_reg)),
+            )
+        )
+        match_lbl = ctx.fresh_label("goto_dep_match")
+        next_lbl = ctx.fresh_label("goto_dep_next")
+        ctx.emit_inst(BranchIf(cond_reg=cmp_reg, branch_targets=(match_lbl, next_lbl)))
+        ctx.emit_inst(Label_(label=match_lbl))
+        ctx.emit_inst(Branch(label=CodeLabel(f"para_{target.paragraph}")))
+        ctx.emit_inst(Label_(label=next_lbl))
+
+
 def lower_goto(
     ctx: EmitContext,
     stmt: GotoStatement,
@@ -1572,8 +1603,6 @@ def lower_goto(
     if isinstance(form, SimpleGoto):
         ctx.emit_inst(Branch(label=CodeLabel(f"para_{form.target.paragraph}")))
     elif isinstance(form, ComputedGoto):
-        # Computed lowering implemented in Task 2; temporary no-op (matches the
-        # pre-fix fall-through behavior — no test exercises it yet).
-        pass
+        _lower_computed_goto(ctx, form, materialised)
     # AlteredGoto: GO TO. with target supplied by ALTER — no-op, behavior
     # intentionally unchanged (not exercised by any test).
