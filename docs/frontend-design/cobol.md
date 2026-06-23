@@ -90,6 +90,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `SUBTRACT X FROM Y` | Decode both → `BINOP -` → encode → write |
 | `MULTIPLY X BY Y` | Decode both → `BINOP *` → encode → write |
 | `DIVIDE X INTO Y` | Decode both → `BINOP /` → encode → write |
+| `ADD/SUBTRACT CORRESPONDING A TO/FROM B` | For each leaf name present in both groups: decode B.field and A.field → `BINOP +/-` → encode → write back to B.field. Non-matching fields untouched. |
 | `COMPUTE Y = expr` | Recursive expression lowering → encode → write |
 
 ### Control Flow (7 types)
@@ -97,7 +98,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | Statement | IR Pattern |
 |---|---|
 | `IF / ELSE` | `_lower_condition()` → `BRANCH_IF` → true/false blocks |
-| `EVALUATE / WHEN` | Chain of `BRANCH_IF` per WHEN, `WHEN OTHER` as fallthrough |
+| `EVALUATE / WHEN` | Chain of `BRANCH_IF` per WHEN, `WHEN OTHER` as fallthrough. `ALSO` (`EVALUATE a ALSO b WHEN x ALSO y`) ANDs each subject=condition pair together via `BINOP &&`; `ANY` in a WHEN position skips that dimension's comparison. |
 | `PERFORM` | Simple: `SET_CONTINUATION` + `BRANCH` to paragraph. TIMES/UNTIL/VARYING: loop with counter/condition. THRU: range of paragraphs. Section-level: all paragraphs in section. |
 | `GO TO` | `BRANCH` to paragraph label |
 | `STOP RUN` | `RETURN` |
@@ -301,6 +302,9 @@ Full-pipeline tests in `tests/integration/test_cobol_programs.py` exercise real 
 | UNSTRING | `TestUnstringStatement` | DELIMITED BY SPACES splitting into multiple targets |
 | Combined program | `TestCombinedProgram` | Arithmetic + IF + PERFORM TIMES + GO TO |
 | MOVE CORRESPONDING | `TestMoveCorresponding` | Group-to-group field matching by name |
+| ADD/SUBTRACT CORRESPONDING | `TestAddCorresponding` (2 tests, `test_cobol_e2e_features.py`) | Group arithmetic on matching leaf names; non-matching fields untouched |
+| EVALUATE ALSO | `TestEvaluateAlso` (4 tests, `test_cobol_e2e_features.py`) | Multi-subject `ALSO` switch ANDs each subject=condition pair; `ANY` skips a dimension |
+| Multi-dimensional subscripts | `TestTwoDimensionalSubscript` (3 tests, `test_cobol_subscript_occurrence.py`) | `TABLE(i, j)` offset = base + Σ (idxₖ-1)·strideₖ across nested OCCURS |
 | Figurative constants | `TestFigurativeConstants` | SPACES, ZEROS, HIGH-VALUES, LOW-VALUES, QUOTES |
 | Reference modification (MOVE) | `TestMoveRefMod` | Source and target `WS-FIELD(start:length)` slice semantics |
 | Reference modification (DISPLAY) | `TestDisplayRefMod` | `DISPLAY WS-FIELD(start:length)` operand slicing |
