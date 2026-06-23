@@ -32,6 +32,8 @@ from interpreter.cobol.cobol_statements import (
     ExitStatement,
     GobackStatement,
     GotoStatement,
+    SimpleGoto,
+    ComputedGoto,
     IfStatement,
     InitializeStatement,
     MoveCorrespondingStatement,
@@ -1565,5 +1567,13 @@ def lower_goto(
     stmt: GotoStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """GO TO paragraph-name."""
-    ctx.emit_inst(Branch(label=CodeLabel(f"para_{stmt.target}")))
+    """GO TO — simple, computed (DEPENDING ON), or altered."""
+    form = stmt.form
+    if isinstance(form, SimpleGoto):
+        ctx.emit_inst(Branch(label=CodeLabel(f"para_{form.target.paragraph}")))
+    elif isinstance(form, ComputedGoto):
+        # Computed lowering implemented in Task 2; temporary no-op (matches the
+        # pre-fix fall-through behavior — no test exercises it yet).
+        pass
+    # AlteredGoto: GO TO. with target supplied by ALTER — no-op, behavior
+    # intentionally unchanged (not exercised by any test).
