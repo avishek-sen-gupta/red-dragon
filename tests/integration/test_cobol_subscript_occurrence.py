@@ -194,3 +194,72 @@ class TestTwoDimensionalSubscript:
         assert (
             result == val
         ), f"GRID-CELL({row},{col}) wrote {val} but RESULT decoded as {result}"
+
+
+# ── Nested-leaf stride: GROUP element_size, not leaf width (red-dragon-592s) ──
+#
+# A leaf nested inside an OCCURS group must be subscripted with the *enclosing
+# group's* element_size as the stride, NOT the leaf's own byte_length. This is
+# the CardDemo COMEN02Y shape: CDEMO-MENU-OPT-PGMNAME(WS-OPTION) — an 8-char
+# program-name leaf preceded by a 2-char option field inside the OCCURS element.
+#
+#     01 REC.
+#        03 MENU-OPT OCCURS 3 TIMES.     element_size = 2 + 8 = 10
+#           05 OPT-NUM PIC X(2).
+#           05 OPT-PGM PIC X(8).         offset 2 within element (width 8)
+#        03 RESULT    PIC X(8).          offset 3 * 10 = 30
+#
+# OPT-PGM(2) sits at (2-1)*10 + 2 = 12. The bug strode by the leaf width (8),
+# computing (2-1)*8 + 2 = 10 — reading occurrence-1's tail + occurrence-2's
+# head (the reported "offset 45 'U02Accou' vs 83 'COACTUPC'" mojibake). The
+# program MOVEs distinct names into each occurrence, copies OPT-PGM(2) into a
+# top-level RESULT, and the test EBCDIC-decodes RESULT and asserts it is exactly
+# the occurrence-2 name — not a cross-occurrence smear.
+_NESTED_RESULT_OFFSET = 30
+_NESTED_RESULT_LEN = 8
+
+
+def _nested_leaf_program() -> list[str]:
+    return [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. NESTOCC.",
+        "DATA DIVISION.",
+        "WORKING-STORAGE SECTION.",
+        "01  REC.",
+        "    03  MENU-OPT OCCURS 3 TIMES.",
+        "        05  OPT-NUM PIC X(2).",
+        "        05  OPT-PGM PIC X(8).",
+        "    03  RESULT PIC X(8).",
+        "PROCEDURE DIVISION.",
+        "MAIN.",
+        '    MOVE "01" TO OPT-NUM (1).',
+        '    MOVE "PROG0001" TO OPT-PGM (1).',
+        '    MOVE "02" TO OPT-NUM (2).',
+        '    MOVE "PROG0002" TO OPT-PGM (2).',
+        '    MOVE "03" TO OPT-NUM (3).',
+        '    MOVE "PROG0003" TO OPT-PGM (3).',
+        "    MOVE OPT-PGM (2) TO RESULT.",
+        "    STOP RUN.",
+    ]
+
+
+class TestNestedLeafSubscriptStride:
+    @pytest.fixture(autouse=True)
+    def _require_bridge_jar(self, bridge_jar):
+        """Enforce the required PROLEAP_BRIDGE_JAR."""
+
+    @covers(CobolFeature.OCCURS_FIXED)
+    def test_nested_leaf_strides_by_group_element_size(self):
+        from interpreter.cobol.ebcdic_table import EbcdicTable
+
+        vm = run_cobol(_nested_leaf_program(), max_steps=2000)
+        region = _first_region(vm)
+        raw = bytes(
+            region[_NESTED_RESULT_OFFSET : _NESTED_RESULT_OFFSET + _NESTED_RESULT_LEN]
+        )
+        decoded = EbcdicTable.ebcdic_to_ascii(raw).decode("ascii")
+        assert decoded == "PROG0002", (
+            f"OPT-PGM(2) should stride by the group element_size (10) to read "
+            f"'PROG0002'; got {decoded!r} (leaf-width stride reads a "
+            f"cross-occurrence smear — red-dragon-592s)"
+        )
