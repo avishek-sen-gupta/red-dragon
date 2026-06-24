@@ -63,6 +63,15 @@ poetry run python -m pytest tests/                        # tests only
 - Keep external-codebase-specific context in untracked experiment directories only.
 - The consequences of leaking proprietary identifiers into public git history are catastrophic.
 
+### Beads issue graph (version-controlled)
+
+- `.beads/` (Dolt working DB) is **gitignored**; `beads/issues.jsonl` (no leading dot) is the **tracked** git source of truth for the issue graph (issues + all dependency edges).
+- **Before committing any issue change** (create/update/close/dep edits), regenerate and stage the snapshot — a deliberate manual step, NOT a git hook:
+  ```bash
+  bd export -o beads/issues.jsonl && git add beads/issues.jsonl
+  ```
+- On a fresh clone, `bd import beads/issues.jsonl` rebuilds the local DB. See `beads/README.md`. (Manual-export model — this canonical DB is not synced via a Dolt remote.)
+
 ### Documentation
 
 - Record salient architectural decisions as timestamped ADRs in `docs/architectural-design-decisions.md`.
