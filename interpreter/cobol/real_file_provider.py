@@ -129,7 +129,7 @@ class RealFileIOProvider(CobolIOProvider):
             drv.close()
         self._open_modes.pop(filename.upper(), None)
         logger.info("CLOSE %s", filename)
-        return IOResult("00", None)
+        return _to_ioresult(AccessResult(AccessCondition.OK))
 
     def _open_mode(self, filename: Any) -> Any:
         return self._open_modes.get(str(filename).upper(), "")
