@@ -8,16 +8,36 @@ import os
 from pathlib import Path
 from typing import Any
 
+from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.cobol_statements import FileControlEntry
 from interpreter.cobol.file_drivers import (
     FileOrganizationDriver,
-    IndexedDriver,
-    RelativeDriver,
-    SequentialDriver,
+    open_driver,
 )
 from interpreter.cobol.file_enums import FileOrganization, OpenMode
 from interpreter.cobol.io_provider import CobolIOProvider, IOResult
 from interpreter.vm.vm import Operators
+
+_FILE_STATUS: dict[AccessCondition, str] = {
+    AccessCondition.OK: "00",
+    AccessCondition.END_OF_FILE: "10",
+    AccessCondition.DUPLICATE_KEY: "22",
+    AccessCondition.NOT_FOUND: "23",
+    AccessCondition.FILE_NOT_FOUND: "35",
+    AccessCondition.NOT_OPEN: "47",
+    AccessCondition.WRITE_NOT_PERMITTED: "48",
+}
+
+
+def _file_status(condition: AccessCondition) -> str:
+    return _FILE_STATUS[condition]
+
+
+def _to_ioresult(result: AccessResult) -> IOResult:
+    # Bytes→str at the VM boundary, exactly as before (latin-1, byte-faithful).
+    data = result.data.decode("latin-1") if result.data is not None else None
+    return IOResult(_file_status(result.condition), data)
+
 
 logger = logging.getLogger(__name__)
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
@@ -87,26 +107,21 @@ class RealFileIOProvider(CobolIOProvider):
         path = self._resolve_path(filename, assign_to)
         open_mode = OpenMode(mode)
 
-        if org == FileOrganization.INDEXED:
-            drv: FileOrganizationDriver = IndexedDriver()
-        elif org == FileOrganization.RELATIVE:
-            drv = RelativeDriver()
-        else:
-            drv = SequentialDriver()
-
         try:
-            drv.open(path, open_mode, record_length, key_offset, key_length)
+            drv: FileOrganizationDriver = open_driver(
+                org, path, open_mode, record_length, key_offset, key_length
+            )
         except FileNotFoundError:
             logger.warning("OPEN %s: file not found at %s", filename, path)
-            return IOResult("35", None)
+            return _to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
         except OSError as exc:
             logger.warning("OPEN %s failed: %s", filename, exc)
-            return IOResult("35", None)
+            return _to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
 
         self._drivers[filename] = drv
         self._open_modes[filename.upper()] = mode
         logger.info("OPEN %s mode=%s org=%s path=%s", filename, mode, org.value, path)
-        return IOResult("00", None)
+        return _to_ioresult(AccessResult(AccessCondition.OK))
 
     def _close_file(self, filename: str) -> IOResult:
         drv = self._drivers.pop(filename, None)
@@ -122,32 +137,32 @@ class RealFileIOProvider(CobolIOProvider):
     def _read_record(self, filename: str, key: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return IOResult("47", None)
+            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
         if key:
-            return drv.read_key(key.encode("latin-1"))
-        return drv.read_seq()
+            return _to_ioresult(drv.read_key(key.encode("latin-1")))
+        return _to_ioresult(drv.read_seq())
 
     def _write_record(self, filename: str, data: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return IOResult("47", None)
-        return drv.write(data.encode("latin-1"))
+            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+        return _to_ioresult(drv.write(data.encode("latin-1")))
 
     def _rewrite_record(self, filename: str, data: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return IOResult("47", None)
-        return drv.rewrite(data.encode("latin-1"))
+            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+        return _to_ioresult(drv.rewrite(data.encode("latin-1")))
 
     def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return IOResult("47", None)
+            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
         key_bytes = key.encode("latin-1") if key else b""
-        return drv.start(key_bytes, relop or ">=")
+        return _to_ioresult(drv.start(key_bytes, relop or ">="))
 
     def _delete_record(self, filename: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return IOResult("47", None)
-        return drv.delete()
+            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+        return _to_ioresult(drv.delete())
