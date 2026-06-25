@@ -75,10 +75,29 @@ fidelity is the dataset model — and the COBOL adapter handles the byte↔str b
   jackal's REPRO assuming PS-LRECL == KSDS-record-size). Done *after* consolidation, in
   focused, individually-tested steps, so the structural refactor and behavior changes don't
   blur the test guard.
-- **cicada's `VsamEngine` migration** onto the engine (its storage core folds in; its CICS
-  semantics — EIBRESP mapping, FCT/enable-disable, task-scoped browse cursors,
-  last-read-for-update — stay as a cicada **CICS adapter**). The engine's neutral interface
-  makes this *possible*; doing it is cicada follow-on work with its own CICS suite.
+- **cicada's `VsamEngine` migration** onto the engine. Its CICS semantics (EIBRESP mapping,
+  FCT/enable-disable, task-scoped browse cursors, last-read-for-update) stay as a cicada
+  **CICS adapter** — those were never storage. But its **storage core does not simply "fold
+  in"**: `VsamEngine` and red-dragon's `IndexedDriver` are **two different access
+  architectures over the *same* on-disk format**:
+  - red-dragon's drivers are **file-resident** — records live on disk (a flat file of
+    fixed-length records, sorted by key; every op seeks the file).
+  - `VsamEngine` is **in-memory + a pluggable backend** — records live in a `SortedDict`,
+    with `FileBackend` write-through (or `InMemoryBackend`, never persisting).
+  - **The on-disk format is identical** (concatenation of fixed-length records;
+    `read_flat_file`/`write_flat_file` round-trips the same byte image the drivers read). So
+    the two are **data-compatible today** — that shared format is the merge anchor — but the
+    **access code is not reusable as-is**.
+
+  Merging them is therefore a real decision, **deferred to the cicada follow-on**: choose the
+  **canonical access architecture** (file-resident vs in-memory+backend) — a choice with CICS
+  implications (in-transaction record visibility, performance, write-through persistence
+  semantics), to be made with cicada's CICS suite as the guard. What makes the merge
+  *possible* is that **`FileOrganizationDriver` is an abstract Protocol — it dictates
+  *operations*, not file-resident-vs-in-memory** — so cicada's storage (kept in-memory, or
+  moved to file-resident) can become a `FileOrganizationDriver` implementation behind the same
+  neutral contract. **This first piece presumes neither architecture and touches none of
+  this** — jackal and COBOL are already both on the file-resident drivers.
 - The jackal **catalog** (`jackal-vxb`: DSN/DISP/GDG/PDS) — a jackal consumer of this engine.
 - New organizations **ESDS / AIX / PDS** — new drivers under the same contract, later.
 - **squall** adoption.
@@ -153,6 +172,13 @@ the neutral outcome to whatever it needs (IDCAMS uses MAXCC, derived from succes
   byte↔str boundary it currently relies on. The plan must keep the VM-facing data type stable.
 - **Scope creep into fidelity fixes.** Resist — this piece is *consolidation only*; faithfulness
   hardening is the explicit fast-follow so the test guard stays meaningful.
+- **The "merge" is not a merge — it's a canonical-architecture choice (deferred).** Do not
+  assume cicada's `VsamEngine` storage code is reusable: it is a different access architecture
+  (in-memory+backend) from the drivers (file-resident). They share only the on-disk format.
+  This first piece must NOT bake in "file-resident" as the only possible strategy — the
+  `FileOrganizationDriver` Protocol stays architecture-neutral so a future in-memory variant
+  can implement it. The actual unification (which architecture wins) is cicada follow-on work
+  with its own CICS-semantics tradeoffs and test guard; it is explicitly NOT decided here.
 
 ## Bookkeeping
 - This is a **red-dragon** epic (storage engine). `jackal-vxb` is **re-scoped** to "the jackal
