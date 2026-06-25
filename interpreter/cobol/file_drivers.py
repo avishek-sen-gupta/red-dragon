@@ -412,3 +412,77 @@ class RelativeDriver:
         self._fh.seek(self._pos(n))
         self._fh.write(_EMPTY)
         return AccessResult(condition=AccessCondition.OK)
+
+
+class AlternateKeyDriver:
+    """Read a flat fixed-length dataset by a key it is NOT sorted by, via linear scan.
+
+    Read-only. Used for alternate-key access (e.g. a CICS alternate index flattened
+    to a standalone dataset): the search key sits at ``key_offset`` inside each
+    record, but the file is sorted by a different (primary) key, so binary search
+    cannot apply. Every operation other than ``read_key`` raises.
+    """
+
+    def __init__(self) -> None:
+        self._fh: BinaryIO | None = None
+        self._rl = 0
+        self._koff = 0
+        self._klen = 0
+
+    def open(
+        self,
+        path: Path,
+        mode: OpenMode,
+        record_length: int,
+        key_offset: int,
+        key_length: int,
+    ) -> None:
+        self._rl = record_length
+        self._koff = key_offset
+        self._klen = key_length
+        # Read-only by construction; mode is accepted for FileOrganizationDriver
+        # uniformity. Write-side verbs raise regardless of mode.
+        self._fh = open(path, "rb")
+
+    def close(self) -> None:
+        if self._fh:
+            self._fh.close()
+            self._fh = None
+
+    def read_key(self, key: bytes) -> AccessResult:
+        assert self._fh is not None
+        self._fh.seek(0)
+        while True:
+            record = self._fh.read(self._rl)
+            if len(record) < self._rl:
+                return AccessResult(condition=AccessCondition.NOT_FOUND)
+            if record[self._koff : self._koff + self._klen] == key:
+                return AccessResult(condition=AccessCondition.OK, data=record)
+
+    def read_seq(self) -> AccessResult:
+        raise NotImplementedError("alternate-key datasets are read-only point lookups")
+
+    def start(self, key: bytes, relop: str) -> AccessResult:
+        raise NotImplementedError("alternate-key datasets are read-only point lookups")
+
+    def write(self, data: bytes, key: bytes = b"") -> AccessResult:
+        raise NotImplementedError("alternate-key datasets are read-only point lookups")
+
+    def rewrite(self, data: bytes, key: bytes = b"") -> AccessResult:
+        raise NotImplementedError("alternate-key datasets are read-only point lookups")
+
+    def delete(self, key: bytes = b"") -> AccessResult:
+        raise NotImplementedError("alternate-key datasets are read-only point lookups")
+
+
+def open_alternate_key_driver(
+    path: Path,
+    mode: OpenMode,
+    record_length: int,
+    key_offset: int,
+    key_length: int,
+) -> FileOrganizationDriver:
+    """Open an AlternateKeyDriver for read-by-a-non-sort-key (linear scan, read-only)."""
+    drv = AlternateKeyDriver()
+    drv.open(path, mode, record_length, key_offset, key_length)
+    return drv
