@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import BinaryIO, Protocol, runtime_checkable
 
 from interpreter.cobol.access_result import AccessCondition, AccessResult
-from interpreter.cobol.file_enums import OpenMode
+from interpreter.cobol.file_enums import FileOrganization, OpenMode
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,26 @@ class FileOrganizationDriver(Protocol):
     def write(self, data: bytes, key: bytes = b"") -> AccessResult: ...
     def rewrite(self, data: bytes, key: bytes = b"") -> AccessResult: ...
     def delete(self, key: bytes = b"") -> AccessResult: ...
+
+
+def open_driver(
+    org: FileOrganization,
+    path: Path,
+    mode: OpenMode,
+    record_length: int,
+    key_offset: int,
+    key_length: int,
+) -> FileOrganizationDriver:
+    """Select and open the driver for a file organization. The one door
+    every consumer (COBOL adapter, IDCAMS, …) uses to reach a dataset."""
+    if org == FileOrganization.INDEXED:
+        drv: FileOrganizationDriver = IndexedDriver()
+    elif org == FileOrganization.RELATIVE:
+        drv = RelativeDriver()
+    else:
+        drv = SequentialDriver()
+    drv.open(path, mode, record_length, key_offset, key_length)
+    return drv
 
 
 class SequentialDriver:
