@@ -36,6 +36,7 @@ class FileOrganizationDriver(Protocol):
     ) -> None: ...
     def close(self) -> None: ...
     def read_seq(self) -> AccessResult: ...
+    def read_prev(self) -> AccessResult: ...
     def read_key(self, key: bytes) -> AccessResult: ...
     def start(self, key: bytes, relop: str) -> AccessResult: ...
     def write(self, data: bytes, key: bytes = b"") -> AccessResult: ...
@@ -103,6 +104,9 @@ class SequentialDriver:
         if not data:
             return AccessResult(condition=AccessCondition.END_OF_FILE)
         return AccessResult(condition=AccessCondition.OK, data=data.ljust(self._rl))
+
+    def read_prev(self) -> AccessResult:
+        raise NotImplementedError("sequential files do not support READ PREVIOUS")
 
     def read_key(self, key: bytes) -> AccessResult:
         return AccessResult(condition=AccessCondition.NOT_FOUND)
@@ -208,6 +212,19 @@ class IndexedDriver:
         self._fh.seek(self._cursor)
         data = self._fh.read(self._rl)
         self._cursor += self._rl
+        return AccessResult(condition=AccessCondition.OK, data=data.ljust(self._rl))
+
+    def read_prev(self) -> AccessResult:
+        assert self._fh is not None
+        # Mirror of read_seq: retreat one record and read it. The cursor points
+        # one record past the last forward read, so the first READPREV after a
+        # READNEXT re-reads that record (CICS browse reversal). At BOF -> END_OF_FILE.
+        if self._cursor < self._rl:
+            return AccessResult(condition=AccessCondition.END_OF_FILE)
+        self._cursor -= self._rl
+        self._last_pos = self._cursor
+        self._fh.seek(self._cursor)
+        data = self._fh.read(self._rl)
         return AccessResult(condition=AccessCondition.OK, data=data.ljust(self._rl))
 
     def read_key(self, key: bytes) -> AccessResult:
@@ -368,6 +385,23 @@ class RelativeDriver:
                 return AccessResult(condition=AccessCondition.OK, data=data)
         return AccessResult(condition=AccessCondition.END_OF_FILE)
 
+    def read_prev(self) -> AccessResult:
+        assert self._fh is not None
+        # Mirror of read_seq: scan backward from one slot before the cursor,
+        # skipping empty slots. The cursor sits one slot past the last forward
+        # read, so the first READPREV after a READNEXT re-reads it (browse
+        # reversal). Past the first active slot -> END_OF_FILE.
+        while self._cursor > 0:
+            self._cursor -= 1
+            slot = self._cursor
+            self._fh.seek(slot * self._slot)
+            flag = self._fh.read(1)
+            if flag == _ACTIVE:
+                data = self._fh.read(self._rl)
+                self._last_slot = slot + 1
+                return AccessResult(condition=AccessCondition.OK, data=data)
+        return AccessResult(condition=AccessCondition.END_OF_FILE)
+
     def start(self, key: bytes, relop: str) -> AccessResult:
         n = self._n(key)
         self._cursor = n - 1
@@ -460,6 +494,9 @@ class AlternateKeyDriver:
                 return AccessResult(condition=AccessCondition.OK, data=record)
 
     def read_seq(self) -> AccessResult:
+        raise NotImplementedError("alternate-key datasets are read-only point lookups")
+
+    def read_prev(self) -> AccessResult:
         raise NotImplementedError("alternate-key datasets are read-only point lookups")
 
     def start(self, key: bytes, relop: str) -> AccessResult:
