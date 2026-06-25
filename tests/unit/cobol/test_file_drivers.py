@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import pytest
+from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_drivers import (
     IndexedDriver,
@@ -12,7 +13,6 @@ from interpreter.cobol.file_drivers import (
     SequentialDriver,
 )
 from interpreter.cobol.file_enums import OpenMode
-from interpreter.cobol.io_provider import IOResult
 from tests.covers import covers
 
 RL = 10  # record length for all tests
@@ -54,10 +54,22 @@ class TestSequentialDriver:
         r3 = drv2.read_seq()
         eof = drv2.read_seq()
         drv2.close()
-        assert r1.status == "00" and r1.data is not None and "AAAA" in r1.data
-        assert r2.status == "00" and r2.data is not None and "BBBB" in r2.data
-        assert r3.status == "00" and r3.data is not None and "CCCC" in r3.data
-        assert eof == IOResult("10", None)
+        assert (
+            r1.condition is AccessCondition.OK
+            and r1.data is not None
+            and b"AAAA" in r1.data
+        )
+        assert (
+            r2.condition is AccessCondition.OK
+            and r2.data is not None
+            and b"BBBB" in r2.data
+        )
+        assert (
+            r3.condition is AccessCondition.OK
+            and r3.data is not None
+            and b"CCCC" in r3.data
+        )
+        assert eof.condition is AccessCondition.END_OF_FILE
 
     @covers(CobolFeature.REWRITE)
     def test_rewrite_updates_last_read(self, tmp_path: Path) -> None:
@@ -78,7 +90,7 @@ class TestSequentialDriver:
         drv3.open(path, OpenMode.INPUT, RL, 0, 0)
         first = drv3.read_seq()
         drv3.close()
-        assert first.data is not None and "XXXX" in first.data
+        assert first.data is not None and b"XXXX" in first.data
 
     @covers(CobolFeature.WRITE)
     def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
@@ -92,7 +104,7 @@ class TestSequentialDriver:
         drv2.open(path, OpenMode.INPUT, RL, 0, 0)
         result = drv2.write(_b("BBBB"))
         drv2.close()
-        assert result == IOResult("48", None)
+        assert result.condition is AccessCondition.WRITE_NOT_PERMITTED
 
 
 class TestIndexedDriver:
@@ -113,8 +125,8 @@ class TestIndexedDriver:
         drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
         r = drv2.read_key(b"AAA")
         drv2.close()
-        assert r.status == "00"
-        assert r.data is not None and r.data[:3] == "AAA"
+        assert r.condition is AccessCondition.OK
+        assert r.data is not None and r.data[:3] == b"AAA"
 
     @covers(CobolFeature.WRITE)
     def test_duplicate_key_returns_22(self, tmp_path: Path) -> None:
@@ -124,7 +136,7 @@ class TestIndexedDriver:
         drv.write(_b("AAA"))
         result = drv.write(_b("AAA"))
         drv.close()
-        assert result.status == "22"
+        assert result.condition is AccessCondition.DUPLICATE_KEY
 
     @covers(CobolFeature.READ)
     def test_missing_key_returns_23(self, tmp_path: Path) -> None:
@@ -138,7 +150,7 @@ class TestIndexedDriver:
         drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
         r = drv2.read_key(b"ZZZ")
         drv2.close()
-        assert r.status == "23"
+        assert r.condition is AccessCondition.NOT_FOUND
 
     @covers(CobolFeature.DELETE_RECORD)
     def test_delete_compacts_file(self, tmp_path: Path) -> None:
@@ -160,7 +172,7 @@ class TestIndexedDriver:
         drv3.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
         r = drv3.read_key(b"BBB")
         drv3.close()
-        assert r.status == "23"
+        assert r.condition is AccessCondition.NOT_FOUND
 
     @covers(CobolFeature.WRITE)
     def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
@@ -174,7 +186,7 @@ class TestIndexedDriver:
         drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
         result = drv2.write(_b("BBB"))
         drv2.close()
-        assert result == IOResult("48", None)
+        assert result.condition is AccessCondition.WRITE_NOT_PERMITTED
 
     @covers(CobolFeature.START)
     def test_start_positions_for_seq_scan(self, tmp_path: Path) -> None:
@@ -191,8 +203,8 @@ class TestIndexedDriver:
         r1 = drv2.read_seq()
         r2 = drv2.read_seq()
         drv2.close()
-        assert r1.data is not None and r1.data[:3] == "BBB"
-        assert r2.data is not None and r2.data[:3] == "CCC"
+        assert r1.data is not None and r1.data[:3] == b"BBB"
+        assert r2.data is not None and r2.data[:3] == b"CCC"
 
 
 class TestRelativeDriver:
@@ -209,8 +221,8 @@ class TestRelativeDriver:
         drv2.open(path, OpenMode.INPUT, RL, 0, 0)
         r = drv2.read_key(k3)
         drv2.close()
-        assert r.status == "00"
-        assert r.data is not None and "SLOT3" in r.data
+        assert r.condition is AccessCondition.OK
+        assert r.data is not None and b"SLOT3" in r.data
 
     @covers(CobolFeature.READ)
     def test_empty_slot_returns_23(self, tmp_path: Path) -> None:
@@ -226,7 +238,7 @@ class TestRelativeDriver:
         drv2.open(path, OpenMode.INPUT, RL, 0, 0)
         r = drv2.read_key(k1)
         drv2.close()
-        assert r.status == "23"
+        assert r.condition is AccessCondition.NOT_FOUND
 
     @covers(CobolFeature.DELETE_RECORD)
     def test_delete_clears_flag(self, tmp_path: Path) -> None:
@@ -247,7 +259,7 @@ class TestRelativeDriver:
         drv3.open(path, OpenMode.INPUT, RL, 0, 0)
         r = drv3.read_key(k2)
         drv3.close()
-        assert r.status == "23"
+        assert r.condition is AccessCondition.NOT_FOUND
 
     @covers(CobolFeature.WRITE)
     def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
@@ -262,7 +274,7 @@ class TestRelativeDriver:
         drv2.open(path, OpenMode.INPUT, RL, 0, 0)
         result = drv2.write(_b("SLOT2"), key=(2).to_bytes(4, "big"))
         drv2.close()
-        assert result == IOResult("48", None)
+        assert result.condition is AccessCondition.WRITE_NOT_PERMITTED
 
     @covers(CobolFeature.READ)
     def test_seq_read_skips_empty_slots(self, tmp_path: Path) -> None:
@@ -281,6 +293,6 @@ class TestRelativeDriver:
         r2 = drv2.read_seq()
         eof = drv2.read_seq()
         drv2.close()
-        assert r1.data is not None and "SLOT1" in r1.data
-        assert r2.data is not None and "SLOT3" in r2.data
-        assert eof.status == "10"
+        assert r1.data is not None and b"SLOT1" in r1.data
+        assert r2.data is not None and b"SLOT3" in r2.data
+        assert eof.condition is AccessCondition.END_OF_FILE
