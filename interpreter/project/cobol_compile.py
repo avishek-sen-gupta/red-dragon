@@ -2,8 +2,9 @@
 """Shared single-module COBOL compile core.
 
 compile_cobol_module(): bytes → (CobolFrontend, ModuleUnit)
+compile_cobol(): bytes → (CobolFrontend, LinkedProgram)
 
-This is the canonical entry point for compiling a single COBOL source unit.
+This is the canonical entry point for compiling COBOL source.
 It knows about COBOL-specific injection points (parser, extension_strategies,
 cics_text_parser) abstractly — no CICS/SQL specifics live here.
 All frontend construction is routed through get_frontend (the factory).
@@ -11,16 +12,24 @@ All frontend construction is routed through get_frontend (the factory).
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
+from interpreter.cfg import build_cfg
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.ir import CodeLabel
 from interpreter.project.compiler import build_export_table
 from interpreter.project.imports import extract_imports
-from interpreter.project.types import ModuleUnit
+from interpreter.project.linker import link_modules
+from interpreter.project.resolver import get_resolver, topological_sort
+from interpreter.project.types import ImportKind, LinkedProgram, ModuleUnit
+from interpreter.registry import build_registry
 from interpreter import constants
+
+logger = logging.getLogger(__name__)
 
 
 def compile_cobol_module(
@@ -57,3 +66,190 @@ def compile_cobol_module(
         symbol_table=frontend.symbol_table,
     )
     return frontend, module
+
+
+def _resolve_call_sources(
+    main_source: bytes,
+    main_path: Path,
+    program_source_dir: Path,
+    source_transform: Callable[[str], str],
+) -> dict[Path, bytes]:
+    """Transitively resolve CALL targets reachable from the main program on disk.
+
+    Walks CALL edges via extract_imports + CobolImportResolver, reads each
+    resolved program source from program_source_dir, applies source_transform,
+    and returns {absolute_path: transformed_bytes} for every callee found.
+    Unresolvable CALL targets (no matching .cbl on disk) are skipped.
+    """
+    resolver = get_resolver(Language.COBOL)
+    resolved: dict[Path, bytes] = {}
+
+    pending: list[tuple[bytes, Path]] = [(main_source, main_path)]
+    seen_paths: set[Path] = {main_path.resolve()}
+
+    while pending:
+        src, path = pending.pop()
+        for ref in extract_imports(src, path, Language.COBOL):
+            if ref.kind != ImportKind.REQUIRE:
+                continue  # COPY (INCLUDE) is handled by the parser's copybook dirs
+            for hit in resolver.resolve(ref, program_source_dir):
+                if not hit.is_resolved():
+                    continue
+                target = hit.resolved_path.resolve()
+                if target in seen_paths:
+                    continue
+                seen_paths.add(target)
+                callee_src = source_transform(target.read_text()).encode()
+                resolved[target] = callee_src
+                pending.append((callee_src, target))
+
+    return resolved
+
+
+def compile_cobol(
+    source: bytes,
+    *,
+    parser: Any = None,
+    copybook_dirs: list[Path] | None = None,
+    extension_strategies: Sequence[Any] = (),
+    cics_text_parser: Any = None,
+    observer: FrontendObserver = NullFrontendObserver(),
+    program_source_dir: Path | None = None,
+    extra_subprogram_sources: dict[str, bytes] | None = None,
+    source_transform: Callable[[str], str] = lambda s: s,
+) -> tuple[Any, LinkedProgram]:
+    """Compile a COBOL program (single or multi-module) into a LinkedProgram.
+
+    With no subprograms (program_source_dir=None and extra_subprogram_sources=None),
+    produces a single-module LinkedProgram identical in shape to run()'s output.
+
+    With subprograms, resolves CALL targets transitively, compiles each callee via
+    compile_cobol_module (same parser/strategies), and links them via link_modules.
+    source_transform is applied to each callee's source text before compile.
+
+    Returns (main_frontend, linked) where main_frontend is the CobolFrontend for
+    the main program (carries data_layout, symbol_table, etc.).
+    """
+    main_path = Path("__main__.cbl")
+    main_frontend, main_module = compile_cobol_module(
+        source,
+        parser=parser,
+        copybook_dirs=copybook_dirs,
+        extension_strategies=extension_strategies,
+        cics_text_parser=cics_text_parser,
+        observer=observer,
+        path=main_path,
+    )
+
+    # Gather subprogram sources: resolved-on-disk CALL targets + explicit extras.
+    subprogram_sources: dict[Path, bytes] = {}
+    if program_source_dir is not None:
+        subprogram_sources.update(
+            _resolve_call_sources(
+                source, main_path, program_source_dir.resolve(), source_transform
+            )
+        )
+    if extra_subprogram_sources:
+        for prog_name, prog_src in extra_subprogram_sources.items():
+            base = program_source_dir or Path(".")
+            transformed_src = source_transform(prog_src.decode()).encode()
+            subprogram_sources.setdefault(
+                (base / f"{prog_name}.cbl").resolve(), transformed_src
+            )
+
+    if not subprogram_sources:
+        # No CALLs to link — single-module LinkedProgram (mirrors run.py:1319-1332).
+        instructions = list(main_module.ir)
+        cfg = build_cfg(instructions)
+        registry = build_registry(
+            instructions,
+            cfg,
+            func_symbol_table=main_frontend.func_symbol_table,
+            class_symbol_table=main_frontend.class_symbol_table,
+        )
+        return main_frontend, LinkedProgram(
+            modules={},
+            merged_ir=instructions,
+            merged_cfg=cfg,
+            merged_registry=registry,
+            language=Language.COBOL,
+            import_graph={},
+            type_env_builder=main_frontend.type_env_builder,
+            symbol_table=main_frontend.symbol_table,
+            data_layout=main_frontend.data_layout,
+            func_symbol_table=main_frontend.func_symbol_table,
+            class_symbol_table=main_frontend.class_symbol_table,
+        )
+
+    # Compile every subprogram module with the shared parser/strategies.
+    # A callee that fails to lower is skipped with a warning — its CALL then
+    # falls back to symbolic resolution, keeping the main program runnable.
+    modules: dict[Path, ModuleUnit] = {main_path: main_module}
+    for path, src in subprogram_sources.items():
+        try:
+            _, sub_module = compile_cobol_module(
+                src,
+                parser=parser,
+                copybook_dirs=copybook_dirs,
+                extension_strategies=extension_strategies,
+                cics_text_parser=cics_text_parser,
+                observer=observer,
+                path=path,
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "compile_cobol link: subprogram %s failed to compile — skipping "
+                "(its CALL will resolve symbolically)",
+                path.stem,
+                exc_info=True,
+            )
+            continue
+        modules[path] = sub_module
+
+    if len(modules) == 1:
+        # Every callee failed — fall back to single-module compile.
+        instructions = list(main_module.ir)
+        cfg = build_cfg(instructions)
+        registry = build_registry(
+            instructions,
+            cfg,
+            func_symbol_table=main_frontend.func_symbol_table,
+            class_symbol_table=main_frontend.class_symbol_table,
+        )
+        return main_frontend, LinkedProgram(
+            modules={},
+            merged_ir=instructions,
+            merged_cfg=cfg,
+            merged_registry=registry,
+            language=Language.COBOL,
+            import_graph={},
+            type_env_builder=main_frontend.type_env_builder,
+            symbol_table=main_frontend.symbol_table,
+            data_layout=main_frontend.data_layout,
+            func_symbol_table=main_frontend.func_symbol_table,
+            class_symbol_table=main_frontend.class_symbol_table,
+        )
+
+    # Build the import graph: main depends on all callees so linker processes
+    # callees first (their init blocks set up the __prog_<NAME> singletons).
+    import_graph: dict[Path, list[Path]] = {p: [] for p in modules}
+    import_graph[main_path] = [p for p in modules if p != main_path]
+    topo_order = topological_sort(import_graph)
+
+    linked = link_modules(
+        modules=modules,
+        import_graph=import_graph,
+        project_root=Path("/"),
+        topo_order=topo_order,
+        language=Language.COBOL,
+        type_env_builder=main_frontend.type_env_builder,
+        data_layout=main_frontend.data_layout,
+    )
+
+    # Record the namespaced entry function label for unambiguous dispatch.
+    # The linker prefixes labels relative to project_root="/", so __main__.cbl
+    # → prefix "__main__" → entry label "__main__.func_<progid>_0".
+    main_program_id: str = getattr(main_frontend, "program_id", "MAIN")
+    linked.entry_func_label = CodeLabel(f"__main__.func_{main_program_id.lower()}_0")
+
+    return main_frontend, linked
