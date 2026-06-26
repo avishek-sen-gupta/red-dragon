@@ -342,7 +342,12 @@ def build_decode_zoned_ir(
 
     # Apply decimal scaling
     if decimal_digits > 0:
-        divisor = 10**decimal_digits
+        # Use a float divisor so the division types as Float → Int (accumulated
+        # digits) / Float (divisor) = Float.  DefaultTypeConversionRules.resolve
+        # maps (Int, Int) / → result_type=Int with operator_override="//", which
+        # causes _coerce_typed_register to truncate the runtime float back to int
+        # (e.g. 1234.56 → 1234).  A float divisor avoids that path entirely.
+        divisor = float(10**decimal_digits)
         scaled = rc.next()
         divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
@@ -616,7 +621,9 @@ def build_decode_zoned_separate_ir(
 
     # Apply decimal scaling
     if decimal_digits > 0:
-        divisor = 10**decimal_digits
+        # Use a float divisor so the division types as Float — see the same fix
+        # in build_decode_zoned_ir for the full rationale.
+        divisor = float(10**decimal_digits)
         scaled = rc.next()
         divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
@@ -952,7 +959,9 @@ def build_decode_comp3_ir(
 
     # Apply decimal scaling
     if decimal_digits > 0:
-        divisor = 10**decimal_digits
+        # Use a float divisor so the division types as Float — see the same fix
+        # in build_decode_zoned_ir for the full rationale.
+        divisor = float(10**decimal_digits)
         scaled = rc.next()
         divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
