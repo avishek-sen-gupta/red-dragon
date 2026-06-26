@@ -7046,3 +7046,35 @@ class TestOccursDependingOn:
         assert _decode_alpha(region, 2, 1) == "A"
         # The trailing field sits AFTER the max-length ODO array: 2 + 256 = 258.
         assert _decode_alpha(region, 258, 4) == "ZZZZ"
+
+
+class TestComp3DecimalDecodeNoTruncation:
+    """Regression: decoding a COMP-3 field with decimal places must NOT truncate
+    the fraction. The decode IR scales by a divisor; an INTEGER divisor made
+    type inference treat the result as Int, so _coerce_typed_register truncated
+    1234.56 -> 1234 (the IF then compared False). The divisor is now a float."""
+
+    @covers(CobolFeature.USAGE_COMP_3)
+    def test_comp3_decimal_compare_preserves_fraction(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. C3DEC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-BAL  PIC S9(5)V99 COMP-3 VALUE 1234.56.",
+                "01 WS-FLAG PIC X VALUE 'N'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-BAL = 1234.56",
+                "        MOVE 'Y' TO WS-FLAG",
+                "    ELSE",
+                "        MOVE 'N' TO WS-FLAG",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-BAL S9(5)V99 COMP-3 = 7 digits -> 4 packed bytes (offset 0-3);
+        # WS-FLAG PIC X at offset 4. 'Y' proves 1234.56 decoded without truncation.
+        assert _decode_alpha(region, 4, 1) == "Y"
