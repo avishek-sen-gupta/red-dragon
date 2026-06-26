@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
@@ -78,7 +78,7 @@ def get_frontend(
     repair_client: Any = _NO_REPAIR_CLIENT,
     copybook_dirs: list[Path] | None = None,
     cobol_parser: Any = None,
-    extension_strategies: Any = (),
+    extension_strategies: Sequence[Any] = (),
     cics_text_parser: Any = None,
 ) -> Frontend:
     """Build a frontend for the given language.
