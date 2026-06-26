@@ -30,17 +30,32 @@ The divergence is about to bite: jackal can't get a `LinkedProgram` without eith
 the pipeline a fifth time or this API. Consolidating now (same pattern as the shared
 access-method storage engine) unifies the stack's compile entry and unblocks PARM.
 
-## The two injection points (the only real variation)
+## Origin: promote squall's helper (this is not a net-new design)
+squall's `tests/integration/squall_cobol_helpers.py::compile_cobol`, minus its two
+squall-specific inputs (`apply_sql_prepass`, `SqlLoweringStrategy`), IS the generic pipeline —
+it already does `CobolFrontend(parser, extension_strategies) → lower → build_cfg →
+build_registry → LinkedProgram` and already returns `(frontend, linked)`. This API is that
+helper **promoted into red-dragon and parameterized** at its injection points; squall then
+re-consumes its own now-public code. We are lifting working, tested code, not inventing.
+
+## The injection points (the only real variation)
 - **Extension lowering strategy** — `CobolFrontend(extension_strategies=[…])`. cicada passes
   `[CicsLoweringStrategy]`, squall `[SqlLoweringStrategy]`, run()/jackal `[]`. (Both implement
   `RedDragonExtensionLoweringStrategy`; the frontend already composes them.)
 - **Parser** — cicada/squall pass a pre-built ProLeap parser (because they prepass the source
   first); run() lets `get_frontend` build a default. The API accepts an optional parser.
+- **Per-callee source transform** (the ONLY "CICS glue" in the CALL-resolution) — cicada's
+  `_resolve_call_sources` is otherwise generic (it walks `CALL 'X'` edges via red-dragon's own
+  `interpreter.project.imports.extract_imports` + `interpreter.project.resolver`); its single
+  CICS-specific line is `apply_cics_prepass(callee_source)` per resolved callee. So the migrated
+  generic walk takes `source_transform: Callable[[str], str] = (lambda s: s)` — cicada injects
+  `apply_cics_prepass`, squall `apply_sql_prepass`, run()/jackal the identity. No CICS/SQL
+  specifics land in red-dragon.
 
 Everything else is shared. The **prepass** (CICS/SQL text rewriting) and **strategy
 construction** stay in the consumers — they are extension-specific. The API stays
-language-agnostic: it knows "extension strategies" and "a parser" abstractly, never
-"CICS"/"SQL".
+language-agnostic: it knows "extension strategies", "a parser", and "a source transform"
+abstractly, never "CICS"/"SQL".
 
 ## API (two tiers, in `interpreter/project/`)
 Alongside the existing file-based `compile_module()`/`compile_directory()`:
@@ -69,11 +84,16 @@ def compile_cobol(
     observer: FrontendObserver = NullFrontendObserver(),
     program_source_dir: Path | None = None,
     extra_subprogram_sources: dict[str, bytes] | None = None,
+    source_transform: Callable[[str], str] = lambda s: s,
 ) -> tuple[CobolFrontend, LinkedProgram]:
     """Compile the main module via compile_cobol_module, then OPTIONALLY resolve
     CALLed subprograms (program_source_dir / extra_subprogram_sources) and
     link_modules into a multi-module LinkedProgram. No subprograms → single-module
-    LinkedProgram. Returns (main frontend, linked)."""
+    LinkedProgram. Returns (main frontend, linked).
+
+    source_transform is applied to each resolved CALLed-callee's source before
+    compilation — the injection point for a consumer's prepass (cicada
+    apply_cics_prepass, squall apply_sql_prepass); identity for run()/jackal."""
 ```
 
 **Return shape `(frontend, linked)`** — matches squall's existing helper and serves every
@@ -85,9 +105,13 @@ frontend are convenient to hand back rather than re-derive.)
 ## Migration — CALL-resolution moves into red-dragon
 cicada's `_resolve_call_sources` + `topological_sort` + `link_modules` orchestration is
 **generic COBOL CALL linking**, not CICS-specific — it belongs in the language-agnostic
-substrate. `compile_cobol`'s subprogram path absorbs it, so jackal batch (CardDemo region
-CALLs) and squall can reuse it too. (`link_modules`/`topological_sort` already live in
-red-dragon `interpreter/project/`; only cicada's source-resolution glue migrates.)
+substrate. Verified: `_resolve_call_sources` already uses red-dragon's own `extract_imports` +
+`resolver` for the whole CALL-graph walk; its ONLY CICS-specific line is the per-callee
+`apply_cics_prepass`, which becomes the injected `source_transform` (identity default). So the
+migrated walk carries nothing CICS. `compile_cobol`'s subprogram path absorbs it, so jackal
+batch (CardDemo region CALLs) and squall can reuse it too. (`link_modules`/`topological_sort`
+already live in red-dragon `interpreter/project/`; only the now-generic resolution walk
+migrates.)
 
 ## Consumers refactor onto it (each behavior-preserving)
 - **`run()`** (COBOL branch): replace the ~40 inline compile lines with
@@ -96,9 +120,10 @@ red-dragon `interpreter/project/`; only cicada's source-resolution glue migrates
   untouched (this API is COBOL-only).
 - **cicada `compile_cics_program`**: becomes a thin wrapper —
   `compile_cobol(prepassed_source, extension_strategies=[strategy], parser=cics_parser,
-  cics_text_parser=parse_exec_cics_text, program_source_dir=…, extra_subprogram_sources=…)`;
-  delete its now-duplicated `_compile_cics_module`/`_resolve_call_sources`. Prepass + strategy
-  construction stay in cicada.
+  cics_text_parser=parse_exec_cics_text, program_source_dir=…, extra_subprogram_sources=…,
+  source_transform=apply_cics_prepass)`; delete its now-duplicated
+  `_compile_cics_module`/`_resolve_call_sources`. The main-program prepass + strategy
+  construction stay in cicada; the per-callee prepass rides in as `source_transform`.
 - **squall**: replace `tests/integration/squall_cobol_helpers.py::compile_cobol` with a thin
   call to the red-dragon API (`extension_strategies=[SqlLoweringStrategy]`, parser). Prepass +
   strategy stay squall's. (Promotes a test helper to a real dependency on the public API.)
