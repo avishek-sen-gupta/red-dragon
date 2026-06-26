@@ -56,3 +56,18 @@ def test_sequential_read_prev_raises(tmp_path: Path):
     with pytest.raises(NotImplementedError):
         drv.read_prev()
     drv.close()
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_indexed_startbr_past_end_then_read_prev_walks_back(tmp_path: Path):
+    # CICS seek-last idiom: STARTBR past all keys, then READPREV returns the LAST record.
+    p = tmp_path / "ksds"
+    p.write_bytes(b"AAA00001" + b"BBB00002" + b"CCC00003")
+    drv = IndexedDriver()
+    drv.open(p, OpenMode.INPUT, 8, 0, 3)
+    r = drv.start(b"\xff\xff\xff", ">=")
+    assert (
+        r.condition is AccessCondition.NOT_FOUND
+    )  # no GTEQ match — condition unchanged
+    assert drv.read_prev().data == b"CCC00003"  # but the cursor IS at EOF -> walks back
+    drv.close()

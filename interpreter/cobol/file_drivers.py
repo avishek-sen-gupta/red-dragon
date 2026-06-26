@@ -248,9 +248,13 @@ class IndexedDriver:
                 return AccessResult(condition=AccessCondition.NOT_FOUND)
             self._cursor = slot * self._rl
         else:  # >= or anything else
+            # Position the cursor at the GTEQ slot even when it is past end-of-file
+            # (slot == n): CICS seek-last browse (STARTBR past all keys, then
+            # READPREV) needs the cursor at EOF to walk back. The NOT_FOUND
+            # condition (COBOL START INVALID KEY) is unchanged.
+            self._cursor = slot * self._rl
             if slot >= n:
                 return AccessResult(condition=AccessCondition.NOT_FOUND)
-            self._cursor = slot * self._rl
         return AccessResult(condition=AccessCondition.OK)
 
     def write(self, data: bytes, key: bytes = b"") -> AccessResult:
