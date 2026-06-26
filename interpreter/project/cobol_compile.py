@@ -125,7 +125,10 @@ def compile_cobol(
 
     With subprograms, resolves CALL targets transitively, compiles each callee via
     compile_cobol_module (same parser/strategies), and links them via link_modules.
-    source_transform is applied to each callee's source text before compile.
+
+    source_transform is applied ONLY to callee sources the API resolves from disk
+    (program_source_dir). Caller-supplied `source` and `extra_subprogram_sources`
+    must already be in final (e.g. pre-passed) form — they are compiled as-is.
 
     Returns (main_frontend, linked) where main_frontend is the CobolFrontend for
     the main program (carries data_layout, symbol_table, etc.).
@@ -152,9 +155,9 @@ def compile_cobol(
     if extra_subprogram_sources:
         for prog_name, prog_src in extra_subprogram_sources.items():
             base = program_source_dir or Path(".")
-            transformed_src = source_transform(prog_src.decode()).encode()
+            # extra_subprogram_sources arrive in final form — no transform applied.
             subprogram_sources.setdefault(
-                (base / f"{prog_name}.cbl").resolve(), transformed_src
+                (base / f"{prog_name}.cbl").resolve(), prog_src
             )
 
     if not subprogram_sources:
@@ -249,7 +252,7 @@ def compile_cobol(
     # Record the namespaced entry function label for unambiguous dispatch.
     # The linker prefixes labels relative to project_root="/", so __main__.cbl
     # → prefix "__main__" → entry label "__main__.func_<progid>_0".
-    main_program_id = main_frontend.program_id
+    main_program_id: str = main_frontend.program_id
     linked.entry_func_label = CodeLabel(f"__main__.func_{main_program_id.lower()}_0")
 
     return main_frontend, linked
