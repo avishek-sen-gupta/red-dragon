@@ -90,6 +90,7 @@ from interpreter.trace_types import TraceStep, ExecutionTrace
 from interpreter.llm.backend import get_backend
 from interpreter import constants
 from interpreter.constants import LLMProvider
+from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.types import LinkedProgram
 
@@ -1267,69 +1268,79 @@ def run(
         def on_lower(self, duration: float) -> None:
             self._target.lower_time = duration
 
-    resolved_frontend_type = (
-        constants.FRONTEND_COBOL if lang == Language.COBOL else frontend_type
-    )
     observer: FrontendObserver = _StatsObserver(stats)
-    frontend = get_frontend(
-        lang,
-        frontend_type=resolved_frontend_type,
-        llm_provider=backend,
-        llm_client=llm_client,
-        observer=observer,
-        copybook_dirs=copybook_dirs,
-    )
-    instructions = frontend.lower(source.encode("utf-8"))
+    if lang == Language.COBOL:
+        # COBOL: compile via the shared compile_cobol API (behavior-preserving).
+        frontend, linked = compile_cobol(
+            source.encode("utf-8"),
+            copybook_dirs=copybook_dirs,
+            observer=observer,
+        )
+        stats.ir_instruction_count = len(linked.merged_ir)
+        stats.cfg_block_count = len(linked.merged_cfg.blocks)
+        stats.registry_functions = len(linked.merged_registry.func_params)
+        stats.registry_classes = len(linked.merged_registry.classes)
+    else:
+        resolved_frontend_type = frontend_type
+        frontend = get_frontend(
+            lang,
+            frontend_type=resolved_frontend_type,
+            llm_provider=backend,
+            llm_client=llm_client,
+            observer=observer,
+            copybook_dirs=copybook_dirs,
+        )
+        instructions = frontend.lower(source.encode("utf-8"))
 
-    stats.ir_instruction_count = len(instructions)
-    logger.debug(
-        "Frontend produced %d IR instructions in %.1fms",
-        stats.ir_instruction_count,
-        (stats.parse_time + stats.lower_time) * 1000,
-    )
+        stats.ir_instruction_count = len(instructions)
+        logger.debug(
+            "Frontend produced %d IR instructions in %.1fms",
+            stats.ir_instruction_count,
+            (stats.parse_time + stats.lower_time) * 1000,
+        )
 
-    if verbose:
-        logger.info("═══ IR ═══")
-        for inst in instructions:
-            logger.info("  %s", inst)
-        logger.info("")
+        if verbose:
+            logger.info("═══ IR ═══")
+            for inst in instructions:
+                logger.info("  %s", inst)
+            logger.info("")
 
-    # 2. Build CFG
-    t0 = time.perf_counter()
-    cfg = build_cfg(instructions)
-    stats.cfg_time = time.perf_counter() - t0
-    stats.cfg_block_count = len(cfg.blocks)
+        # 2. Build CFG
+        t0 = time.perf_counter()
+        cfg = build_cfg(instructions)
+        stats.cfg_time = time.perf_counter() - t0
+        stats.cfg_block_count = len(cfg.blocks)
 
-    if verbose:
-        logger.info("═══ CFG ═══")
-        logger.info("%s", cfg)
+        if verbose:
+            logger.info("═══ CFG ═══")
+            logger.info("%s", cfg)
 
-    # 3. Build function registry
-    t0 = time.perf_counter()
-    registry = build_registry(
-        instructions,
-        cfg,
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
-    )
-    stats.registry_time = time.perf_counter() - t0
-    stats.registry_functions = len(registry.func_params)
-    stats.registry_classes = len(registry.classes)
+        # 3. Build function registry
+        t0 = time.perf_counter()
+        registry = build_registry(
+            instructions,
+            cfg,
+            func_symbol_table=frontend.func_symbol_table,
+            class_symbol_table=frontend.class_symbol_table,
+        )
+        stats.registry_time = time.perf_counter() - t0
+        stats.registry_functions = len(registry.func_params)
+        stats.registry_classes = len(registry.classes)
 
-    # 4. Build single-module LinkedProgram
-    linked = LinkedProgram(
-        modules={},
-        merged_ir=list(instructions),
-        merged_cfg=cfg,
-        merged_registry=registry,
-        language=lang,
-        import_graph={},
-        type_env_builder=frontend.type_env_builder,
-        symbol_table=frontend.symbol_table,
-        data_layout=frontend.data_layout,
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
-    )
+        # 4. Build single-module LinkedProgram
+        linked = LinkedProgram(
+            modules={},
+            merged_ir=list(instructions),
+            merged_cfg=cfg,
+            merged_registry=registry,
+            language=lang,
+            import_graph={},
+            type_env_builder=frontend.type_env_builder,
+            symbol_table=frontend.symbol_table,
+            data_layout=frontend.data_layout,
+            func_symbol_table=frontend.func_symbol_table,
+            class_symbol_table=frontend.class_symbol_table,
+        )
 
     # For COBOL, when using the default top-level entry point, switch to
     # function-entry mode so run_linked runs the init block first (phase 1)
