@@ -77,6 +77,9 @@ def get_frontend(
     observer: FrontendObserver = NullFrontendObserver(),
     repair_client: Any = _NO_REPAIR_CLIENT,
     copybook_dirs: list[Path] | None = None,
+    cobol_parser: Any = None,
+    extension_strategies: Any = (),
+    cics_text_parser: Any = None,
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -90,6 +93,11 @@ def get_frontend(
             a deterministic frontend, wraps it in RepairingFrontendDecorator.
         copybook_dirs: COBOL copybook search directories, passed to the
             ProLeap parser for COPY resolution. Ignored by other languages.
+        cobol_parser: Pre-built CobolParser for DI/testing. When provided,
+            skips ProLeapCobolParser construction. COBOL only.
+        extension_strategies: Extension lowering strategies (e.g. CICS/SQL).
+            Passed to CobolFrontend. COBOL only.
+        cics_text_parser: Optional CICS text parser fn. COBOL only.
 
     Returns:
         A Frontend instance.
@@ -101,18 +109,26 @@ def get_frontend(
         from interpreter.cobol.cobol_parser import ProLeapCobolParser
         from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 
-        # Canonical JAR location is the build.sh output — always freshly built
-        # from source and gitignored, so it can never go stale. The old tracked
-        # root "proleap-bridge.jar" was a cached binary that build.sh did not
-        # regenerate; it has been removed. Override with PROLEAP_BRIDGE_JAR.
-        bridge_jar = os.environ.get(
-            "PROLEAP_BRIDGE_JAR",
-            "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
+        if cobol_parser is None:
+            # Canonical JAR location is the build.sh output — always freshly built
+            # from source and gitignored, so it can never go stale. The old tracked
+            # root "proleap-bridge.jar" was a cached binary that build.sh did not
+            # regenerate; it has been removed. Override with PROLEAP_BRIDGE_JAR.
+            bridge_jar = os.environ.get(
+                "PROLEAP_BRIDGE_JAR",
+                "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
+            )
+            resolved_parser = ProLeapCobolParser(
+                RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
+            )
+        else:
+            resolved_parser = cobol_parser
+        return CobolFrontend(
+            resolved_parser,
+            observer=observer,
+            extension_strategies=list(extension_strategies),
+            cics_text_parser=cics_text_parser,
         )
-        parser = ProLeapCobolParser(
-            RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
-        )
-        return CobolFrontend(parser, observer=observer)
 
     if frontend_type == constants.FRONTEND_DETERMINISTIC:
         from interpreter.frontends import get_deterministic_frontend
