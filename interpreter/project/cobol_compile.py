@@ -249,7 +249,7 @@ def compile_cobol(
     # Record the namespaced entry function label for unambiguous dispatch.
     # The linker prefixes labels relative to project_root="/", so __main__.cbl
     # → prefix "__main__" → entry label "__main__.func_<progid>_0".
-    main_program_id: str = getattr(main_frontend, "program_id", "MAIN")
+    main_program_id = main_frontend.program_id
     linked.entry_func_label = CodeLabel(f"__main__.func_{main_program_id.lower()}_0")
 
     return main_frontend, linked
