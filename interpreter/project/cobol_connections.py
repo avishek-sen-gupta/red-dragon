@@ -13,7 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
+from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.project.cobol_compile import compile_cobol
+from interpreter.project.imports import extract_imports
 from interpreter.project.types import ImportKind, ImportRef
 
 
@@ -70,10 +73,6 @@ def extract_cobol_connections(
     COPY target file paths are always None (copybooks are inlined by ProLeap
     before red-dragon sees the ASG; the name is extracted from raw source).
     """
-    from interpreter.project.cobol_compile import compile_cobol
-    from interpreter.project.imports import extract_imports
-    from interpreter.constants import Language
-
     main_path = Path("__main__.cbl")
 
     main_frontend, linked = compile_cobol(
