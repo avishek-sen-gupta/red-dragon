@@ -11,11 +11,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Sequence
-
-from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.project.cobol_compile import compile_cobol
-from interpreter.project.types import ImportKind
 
 
 @dataclass(frozen=True)
