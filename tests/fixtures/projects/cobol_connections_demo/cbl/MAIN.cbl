@@ -1,0 +1,9 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. MAIN.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+           COPY CUSTREC.
+       PROCEDURE DIVISION.
+           CALL 'VALIDATE'.
+           CALL 'RPTPROG'.
+           GOBACK.

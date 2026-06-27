@@ -2,6 +2,9 @@
 
 Tests use inline COBOL source (extra_subprogram_sources) for CALL connections
 and tmp_path fixture files for COPY connections (ProLeap resolves COPY on disk).
+
+TestFixtureProject exercises the full on-disk pipeline against
+tests/fixtures/projects/cobol_connections_demo/ — the durable e2e case.
 """
 
 import json
@@ -110,6 +113,62 @@ class TestCallConnections:
         )
         call_conns = [c for c in conns if c.kind == "CALL"]
         assert call_conns[0].source.file_path == Path("__main__.cbl")
+
+
+_FIXTURE = (
+    Path(__file__).parent.parent.parent
+    / "fixtures"
+    / "projects"
+    / "cobol_connections_demo"
+)
+
+
+class TestFixtureProject:
+    """E2E test using on-disk fixture: tests/fixtures/projects/cobol_connections_demo/"""
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_fixture_produces_expected_connections(self):
+        cbl = _FIXTURE / "cbl"
+        cpy = _FIXTURE / "cpy"
+        conns = extract_cobol_connections(
+            (cbl / "MAIN.cbl").read_bytes(),
+            copybook_dirs=[cpy],
+            program_source_dir=cbl,
+        )
+
+        kinds = [(c.kind, c.source.name, c.target.name) for c in conns]
+        assert ("COPY", "MAIN", "CUSTREC") in kinds
+        assert ("CALL", "MAIN", "VALIDATE") in kinds
+        assert ("CALL", "MAIN", "RPTPROG") in kinds
+        assert ("COPY", "VALIDATE", "CUSTREC") in kinds
+        assert ("CALL", "VALIDATE", "LOGERR") in kinds
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_fixture_call_file_paths_resolved(self):
+        cbl = _FIXTURE / "cbl"
+        cpy = _FIXTURE / "cpy"
+        conns = extract_cobol_connections(
+            (cbl / "MAIN.cbl").read_bytes(),
+            copybook_dirs=[cpy],
+            program_source_dir=cbl,
+        )
+        call_conns = {c.target.name: c for c in conns if c.kind == "CALL"}
+        assert (
+            call_conns["VALIDATE"].target.file_path == (cbl / "VALIDATE.cbl").resolve()
+        )
+        assert call_conns["RPTPROG"].target.file_path == (cbl / "RPTPROG.cbl").resolve()
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_fixture_copy_target_file_path_is_none(self):
+        cbl = _FIXTURE / "cbl"
+        cpy = _FIXTURE / "cpy"
+        conns = extract_cobol_connections(
+            (cbl / "MAIN.cbl").read_bytes(),
+            copybook_dirs=[cpy],
+            program_source_dir=cbl,
+        )
+        copy_conns = [c for c in conns if c.kind == "COPY"]
+        assert all(c.target.file_path is None for c in copy_conns)
 
 
 class TestCopyConnections:
