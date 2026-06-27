@@ -4,6 +4,7 @@ Tests use inline COBOL source (extra_subprogram_sources) for CALL connections
 and tmp_path fixture files for COPY connections (ProLeap resolves COPY on disk).
 """
 
+import json
 from pathlib import Path
 
 from tests.covers import covers, NotLanguageFeature
@@ -92,6 +93,23 @@ class TestCallConnections:
         names = {(c.source.name.upper(), c.target.name.upper()) for c in call_conns}
         assert ("PROGA", "PROGB") in names
         assert ("PROGB", "PROGC") in names
+        # import_graph is flat: only main→direct-callees are resolved; B→C has no path
+        b_to_c = next(c for c in call_conns if c.source.name.upper() == "PROGB")
+        assert (
+            b_to_c.target.file_path is None
+        )  # flat import_graph — indirect callee path not resolved
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_main_source_file_path_is_sentinel(self):
+        # compile_cobol() uses Path("__main__.cbl") as the main module path;
+        # callers should not rely on source.file_path being a real filesystem path
+        # when source is passed as bytes (no source_file argument).
+        conns = extract_cobol_connections(
+            _MAIN_CALL,
+            extra_subprogram_sources={"HELPER": _HELPER},
+        )
+        call_conns = [c for c in conns if c.kind == "CALL"]
+        assert call_conns[0].source.file_path == Path("__main__.cbl")
 
 
 class TestCopyConnections:
@@ -133,8 +151,6 @@ class TestCopyConnections:
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_to_json_roundtrips_for_copy(self, tmp_path: Path):
-        import json
-
         cpy_file = tmp_path / "MYREC.cpy"
         cpy_file.write_text("       01 MY-FIELD PIC X(10).\n")
 
