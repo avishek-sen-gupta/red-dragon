@@ -391,6 +391,7 @@ class TestByteBuiltinsRegistration:
             "__cobol_apply_edit_picture",
             "__string_slice",
             "__string_splice",
+            "__string_zfill",
             "__upper_case",
             "__lower_case",
             "__cobol_trim",
