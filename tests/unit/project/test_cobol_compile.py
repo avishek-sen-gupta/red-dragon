@@ -1,6 +1,11 @@
+import json
 from pathlib import Path
 
-from interpreter.project.cobol_compile import compile_cobol, compile_cobol_module
+from interpreter.project.cobol_compile import (
+    compile_cobol,
+    compile_cobol_module,
+    parallel_parse_to_cache,
+)
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.run import EntryPoint, run_linked
 from tests.covers import covers, NotLanguageFeature
@@ -120,3 +125,52 @@ def test_source_transform_applied_to_on_disk_callees_only(tmp_path: Path):
     assert not any(
         "EXTRA" in t for t in transformed_texts
     ), "source_transform must NOT be applied to extra_subprogram_sources"
+
+
+_MINIMAL_ASG_JSON = json.dumps(
+    {
+        "program_id": "PROG",
+        "data_fields": [],
+        "sections": [],
+        "paragraphs": [{"name": "MAIN", "statements": [{"type": "STOP_RUN"}]}],
+    }
+)
+
+
+class _FakeParseToFileParser:
+    """Duck-typed fake: writes a fixed JSON string to out_path."""
+
+    def parse_to_file(self, source: bytes, out_path: Path) -> Path:
+        out_path.write_text(_MINIMAL_ASG_JSON, encoding="utf-8")
+        return out_path
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parallel_parse_to_cache_writes_one_file_per_source(tmp_path):
+    sources = {
+        Path("prog_a.cbl"): b"source a",
+        Path("prog_b.cbl"): b"source b",
+        Path("prog_c.cbl"): b"source c",
+    }
+    result = parallel_parse_to_cache(sources, _FakeParseToFileParser(), tmp_path)
+    assert set(result.keys()) == set(sources.keys())
+    for src_path, ast_path in result.items():
+        assert ast_path == tmp_path / f"{src_path.stem}.ast.json"
+        assert ast_path.exists()
+        assert json.loads(ast_path.read_text())["program_id"] == "PROG"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parallel_parse_to_cache_creates_cache_dir(tmp_path):
+    cache_dir = tmp_path / "nested" / "cache"
+    assert not cache_dir.exists()
+    parallel_parse_to_cache(
+        {Path("x.cbl"): b"src"}, _FakeParseToFileParser(), cache_dir
+    )
+    assert cache_dir.is_dir()
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parallel_parse_to_cache_empty_sources(tmp_path):
+    result = parallel_parse_to_cache({}, _FakeParseToFileParser(), tmp_path)
+    assert result == {}

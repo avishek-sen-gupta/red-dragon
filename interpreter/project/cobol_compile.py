@@ -13,6 +13,7 @@ All frontend construction is routed through get_frontend (the factory).
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -30,6 +31,38 @@ from interpreter.registry import build_registry
 from interpreter import constants
 
 logger = logging.getLogger(__name__)
+
+
+def parallel_parse_to_cache(
+    sources: dict[Path, bytes],
+    parser: Any,
+    cache_dir: Path,
+    *,
+    max_workers: int = 4,
+) -> dict[Path, Path]:
+    """Parse all sources in parallel, writing raw bridge JSON to cache_dir.
+
+    Each worker calls parser.parse_to_file(), which writes to disk and frees
+    the JSON string immediately — ASTs never accumulate in memory across workers.
+    Returns {source_path: ast_json_path}. cache_dir is created if absent.
+    """
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _parse_one(item: tuple[Path, bytes]) -> tuple[Path, Path]:
+        src_path, source = item
+        out_path = cache_dir / f"{src_path.stem}.ast.json"
+        parser.parse_to_file(source, out_path)
+        return src_path, out_path
+
+    result: dict[Path, Path] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_parse_one, item): item[0] for item in sources.items()
+        }
+        for future in as_completed(futures):
+            src_path, ast_path = future.result()
+            result[src_path] = ast_path
+    return result
 
 
 def compile_cobol_module(
