@@ -53,15 +53,19 @@ class ProLeapCobolParser(CobolParser):
         self._bridge_jar = bridge_jar
         self._copybook_dirs: list[Path] = list(copybook_dirs or [])
 
+    def _build_command(self) -> list[str]:
+        command = ["java", "-jar", self._bridge_jar]
+        for d in self._copybook_dirs:
+            command += ["-copybook-dir", str(d)]
+        return command
+
     def parse(
         self,
         source: bytes,
         preprocessor: Callable[[dict], dict] = _IDENTITY,
     ) -> CobolASG:
         logger.debug("Parsing COBOL source (%d bytes) via ProLeap bridge", len(source))
-        command = ["java", "-jar", self._bridge_jar]
-        for d in self._copybook_dirs:
-            command += ["-copybook-dir", str(d)]
+        command = self._build_command()
         try:
             json_str = self._runner.run(command, source.decode("utf-8"))
         except CobolParseError as e:
@@ -83,9 +87,7 @@ class ProLeapCobolParser(CobolParser):
         The JSON string is freed immediately after writing — never returned —
         so callers cannot accumulate it when running in parallel.
         """
-        command = ["java", "-jar", self._bridge_jar]
-        for d in self._copybook_dirs:
-            command += ["-copybook-dir", str(d)]
+        command = self._build_command()
         try:
             json_str = self._runner.run(command, source.decode("utf-8"))
         except CobolParseError as e:
