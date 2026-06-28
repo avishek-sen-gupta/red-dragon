@@ -174,3 +174,68 @@ def test_parallel_parse_to_cache_creates_cache_dir(tmp_path):
 def test_parallel_parse_to_cache_empty_sources(tmp_path):
     result = parallel_parse_to_cache({}, _FakeParseToFileParser(), tmp_path)
     assert result == {}
+
+
+_HELLO = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. HELLO.
+       PROCEDURE DIVISION.
+           DISPLAY 'HI'.
+           GOBACK.
+"""
+
+_CALLER = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. CALLER.
+       PROCEDURE DIVISION.
+           CALL 'CALLEE'.
+           GOBACK.
+"""
+
+_CALLEE = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. CALLEE.
+       PROCEDURE DIVISION.
+           DISPLAY 'IN CALLEE'.
+           GOBACK.
+"""
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_compile_cobol_ast_cache_dir_single_module_writes_json(tmp_path):
+    cache = tmp_path / "ast-cache"
+    _, linked = compile_cobol(
+        _HELLO, parser=_FakeParseToFileParser(), ast_cache_dir=cache
+    )
+    assert isinstance(linked, LinkedProgram)
+    assert cache.is_dir()
+    assert len(list(cache.glob("*.ast.json"))) == 1
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_compile_cobol_ast_cache_dir_multi_module_writes_one_json_per_module(tmp_path):
+    cache = tmp_path / "ast-cache"
+    _, linked = compile_cobol(
+        _CALLER,
+        parser=_FakeParseToFileParser(),
+        extra_subprogram_sources={"CALLEE": _CALLEE},
+        ast_cache_dir=cache,
+    )
+    assert isinstance(linked, LinkedProgram)
+    assert len(list(cache.glob("*.ast.json"))) == 2
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_compile_cobol_ast_cache_dir_produces_runnable_program(tmp_path):
+    _, linked = compile_cobol(
+        _HELLO, parser=_FakeParseToFileParser(), ast_cache_dir=tmp_path / "cache"
+    )
+    vm = run_linked(linked, entry_point=EntryPoint.top_level(), max_steps=10_000)
+    assert vm is not None
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_compile_cobol_without_ast_cache_dir_unchanged():
+    _, linked = compile_cobol(_HELLO)
+    assert isinstance(linked, LinkedProgram)
+    assert linked.merged_cfg is not None
