@@ -1410,9 +1410,21 @@ def _set_condition_name(
     entry = ctx._condition_index.lookup(condition_name)
 
     if truth == "FALSE":
-        logger.warning(
-            "SET %s TO FALSE unsupported (no FALSE value captured) — skipping",
-            condition_name,
+        if not entry.parent_field_name:
+            logger.warning(
+                "SET %s TO FALSE: condition not in index — skipping", condition_name
+            )
+            return
+        parent_ref, parent_rr = ctx.resolve_field_ref(
+            entry.parent_field_name, materialised
+        )
+        if parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC:
+            # WHEN SET TO FALSE IS not in scope — write SPACES (field-length fill)
+            false_val: object = " " * max(parent_ref.fl.byte_length, 1)
+        else:
+            false_val = 0
+        ctx.emit_encode_and_write(
+            parent_rr, parent_ref.fl, ctx.const_to_reg(false_val), parent_ref.offset_reg
         )
         return
 
