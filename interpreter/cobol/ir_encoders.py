@@ -1389,18 +1389,24 @@ def build_encode_alphanumeric_justified_ir(
     return instructions
 
 
-def build_decode_alphanumeric_ir(func_name: str) -> list[InstructionBase]:
-    """Generate IR for alphanumeric EBCDIC decoding.
+def build_decode_alphanumeric_ir(
+    func_name: str,
+    encoding: CobolEncoding = CobolEncoding.EBCDIC,
+) -> list[InstructionBase]:
+    """Generate IR for alphanumeric decoding.
 
-    Inputs: %p_data (list[int] of EBCDIC bytes)
+    Inputs: %p_data (list[int] of bytes in `encoding`)
     Output: str
+
+    `encoding` is EBCDIC for WS/LS/LK fields (default) and LATIN1 for FILE
+    SECTION fields, which store raw file bytes via emit_write_region_raw.
     """
     rc = _RegCounter(func_name)
     instructions: list[InstructionBase] = []
     p_data = Register("%p_data")
 
     result = rc.next()
-    encoding_reg = _lit(rc, instructions, CobolEncoding.EBCDIC)
+    encoding_reg = _lit(rc, instructions, encoding)
     instructions.append(
         CallFunction(
             result_reg=result,
