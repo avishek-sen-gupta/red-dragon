@@ -1150,12 +1150,45 @@ def lower_evaluate(
                 # path split on whitespace (destroying quoted spaces) and treated
                 # figuratives (SPACES / LOW-VALUES) as the literal text, so
                 # WHEN SPACES / WHEN ' ' never matched a blank field (red-dragon-z6ad).
-                relation = {
-                    "left": {"kind": "ref", "name": stmt.subject},
-                    "op": "==",
-                    "right": _when_operand_node(child.condition),
-                }
-                cond_reg = ctx.lower_condition({"relation": relation}, materialised)
+                subj_node: dict = {"kind": "ref", "name": stmt.subject}
+                if child.condition_thru is not None:
+                    # WHEN <from> THRU <to>: emit (subject >= from) AND (subject <= to)
+                    ge_reg = ctx.lower_condition(
+                        {
+                            "relation": {
+                                "left": subj_node,
+                                "op": ">=",
+                                "right": _when_operand_node(child.condition),
+                            }
+                        },
+                        materialised,
+                    )
+                    le_reg = ctx.lower_condition(
+                        {
+                            "relation": {
+                                "left": subj_node,
+                                "op": "<=",
+                                "right": _when_operand_node(child.condition_thru),
+                            }
+                        },
+                        materialised,
+                    )
+                    cond_reg = ctx.fresh_reg()
+                    ctx.emit_inst(
+                        Binop(
+                            result_reg=cond_reg,
+                            operator=resolve_binop("&&"),
+                            left=Register(str(ge_reg)),
+                            right=Register(str(le_reg)),
+                        )
+                    )
+                else:
+                    relation = {
+                        "left": subj_node,
+                        "op": "==",
+                        "right": _when_operand_node(child.condition),
+                    }
+                    cond_reg = ctx.lower_condition({"relation": relation}, materialised)
             else:
                 # subject is TRUE with a flat string condition (e.g. a level-88
                 # name): keep the text-condition path.
@@ -1186,6 +1219,42 @@ def lower_evaluate(
                             operator=resolve_binop("=="),
                             left=Register(str(also_subj_reg)),
                             right=Register(str(also_val_reg)),
+                        )
+                    )
+                elif (
+                    isinstance(also_cond, dict)
+                    and "from" in also_cond
+                    and "thru" in also_cond
+                ):
+                    # WHEN ... ALSO <from> THRU <to>: emit range comparison
+                    also_subj_node: dict = {"kind": "ref", "name": also_subj}
+                    also_ge_reg = ctx.lower_condition(
+                        {
+                            "relation": {
+                                "left": also_subj_node,
+                                "op": ">=",
+                                "right": _when_operand_node(also_cond["from"]),
+                            }
+                        },
+                        materialised,
+                    )
+                    also_le_reg = ctx.lower_condition(
+                        {
+                            "relation": {
+                                "left": also_subj_node,
+                                "op": "<=",
+                                "right": _when_operand_node(also_cond["thru"]),
+                            }
+                        },
+                        materialised,
+                    )
+                    also_cond_reg = ctx.fresh_reg()
+                    ctx.emit_inst(
+                        Binop(
+                            result_reg=also_cond_reg,
+                            operator=resolve_binop("&&"),
+                            left=Register(str(also_ge_reg)),
+                            right=Register(str(also_le_reg)),
                         )
                     )
                 elif isinstance(also_cond, dict):

@@ -982,6 +982,111 @@ class TestEvaluateWhen:
         )
         assert bytes(_first_region(vm)[1:5]).decode("cp037") == "HIT "
 
+    @covers(CobolFeature.EVALUATE_WHEN_THRU)
+    def test_evaluate_when_thru_hits_in_range(self):
+        """EVALUATE WHEN 10 THRU 20 must match a value inside the range."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVALTHRU1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 15.",
+                "77 WS-R PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    EVALUATE WS-A",
+                "        WHEN 10 THRU 20",
+                "            MOVE 'HIT ' TO WS-R",
+                "        WHEN OTHER",
+                "            MOVE 'OTH ' TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        assert bytes(_first_region(vm)[4:8]).decode("cp037") == "HIT "
+
+    @covers(CobolFeature.EVALUATE_WHEN_THRU)
+    def test_evaluate_when_thru_misses_outside_range(self):
+        """EVALUATE WHEN 10 THRU 20 must NOT match a value outside the range."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVALTHRU2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 25.",
+                "77 WS-R PIC X(4) VALUE 'NONE'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    EVALUATE WS-A",
+                "        WHEN 10 THRU 20",
+                "            MOVE 'HIT ' TO WS-R",
+                "        WHEN OTHER",
+                "            MOVE 'OTH ' TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        assert bytes(_first_region(vm)[4:8]).decode("cp037") == "OTH "
+
+    @covers(CobolFeature.EVALUATE_WHEN_THRU)
+    def test_evaluate_when_thru_boundary_values(self):
+        """WHEN 10 THRU 20 must match exactly at the lower and upper bounds."""
+        for value, expected in [
+            ("10", "HIT "),
+            ("20", "HIT "),
+            ("9", "OTH "),
+            ("21", "OTH "),
+        ]:
+            vm = _run_cobol(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. TEST-EVALTHRU3.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    f"77 WS-A PIC 9(4) VALUE {value}.",
+                    "77 WS-R PIC X(4) VALUE 'NONE'.",
+                    "PROCEDURE DIVISION.",
+                    "MAIN-PARA.",
+                    "    EVALUATE WS-A",
+                    "        WHEN 10 THRU 20",
+                    "            MOVE 'HIT ' TO WS-R",
+                    "        WHEN OTHER",
+                    "            MOVE 'OTH ' TO WS-R",
+                    "    END-EVALUATE.",
+                    "    STOP RUN.",
+                ]
+            )
+            assert bytes(_first_region(vm)[4:8]).decode("cp037") == expected
+
+    @covers(CobolFeature.EVALUATE_WHEN_THRU)
+    def test_evaluate_when_thru_and_exact_when_in_same_evaluate(self):
+        """Mix of THRU range and exact WHEN in same EVALUATE — each branch works."""
+        for value, expected in [("5", "LOW "), ("15", "MID "), ("99", "OTH ")]:
+            vm = _run_cobol(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. TEST-EVALTHRU4.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    f"77 WS-A PIC 9(4) VALUE {value}.",
+                    "77 WS-R PIC X(4) VALUE 'NONE'.",
+                    "PROCEDURE DIVISION.",
+                    "MAIN-PARA.",
+                    "    EVALUATE WS-A",
+                    "        WHEN 1 THRU 9",
+                    "            MOVE 'LOW ' TO WS-R",
+                    "        WHEN 10 THRU 20",
+                    "            MOVE 'MID ' TO WS-R",
+                    "        WHEN OTHER",
+                    "            MOVE 'OTH ' TO WS-R",
+                    "    END-EVALUATE.",
+                    "    STOP RUN.",
+                ]
+            )
+            assert bytes(_first_region(vm)[4:8]).decode("cp037") == expected
+
 
 class TestNumericFigurativeComparison:
     """A numeric field compared to the ZERO/ZEROS figurative must compare by
