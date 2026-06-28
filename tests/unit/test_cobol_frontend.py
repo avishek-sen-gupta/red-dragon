@@ -567,7 +567,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [StopRunStatement()]
+        stmts: list[CobolStatementType] = [StopRunStatement()]
 
         data = CobolASG(
             data_fields=fields,
@@ -612,7 +612,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [StopRunStatement()]
+        stmts: list[CobolStatementType] = [StopRunStatement()]
 
         data = CobolASG(
             data_fields=fields,
@@ -862,12 +862,13 @@ class TestPerformLoopLowering:
     def _lower_with_field_and_stmts(
         self,
         fields: list[CobolField],
-        stmts: list[CobolStatementType],
+        stmts: Sequence[CobolStatementType],
         paragraphs: list[CobolParagraph] = [],
     ) -> list[InstructionBase]:
         data = CobolASG(
             data_fields=fields,
-            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)] + paragraphs,
+            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))]
+            + paragraphs,
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
         return frontend.lower_from_ast_dict(data)
@@ -2555,10 +2556,10 @@ class TestMoveCorrespondingLowering:
     """Tests for MOVE CORRESPONDING statement lowering."""
 
     def _lower_with_field_and_stmts(
-        self, fields: list[CobolField], stmts: list[CobolStatementType]
+        self, fields: list[CobolField], stmts: Sequence[CobolStatementType]
     ) -> list[InstructionBase]:
         """Helper to lower a COBOL program with given fields and statements."""
-        paragraphs = [CobolParagraph(name="MAIN-PARA", statements=stmts)]
+        paragraphs = [CobolParagraph(name="MAIN-PARA", statements=list(stmts))]
         section = CobolSection(name="PROC", paragraphs=paragraphs)
         data = CobolASG(data_fields=fields, sections=[section]).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
