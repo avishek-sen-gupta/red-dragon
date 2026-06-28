@@ -1,13 +1,14 @@
 """Tests for COBOL parser subprocess bridge."""
 
+import json
 from pathlib import Path
+
+import pytest
 
 from interpreter.cobol.cobol_parser import ProLeapCobolParser, make_cobol_parser
 from interpreter.cobol.subprocess_runner import CobolParseError
 from interpreter.cobol.features import CobolFeature
 from tests.covers import NotLanguageFeature, covers
-
-import pytest
 
 _MINIMAL = b"""\
        IDENTIFICATION DIVISION.
@@ -75,8 +76,6 @@ def test_parse_to_file_writes_valid_json(tmp_path):
     result = parser.parse_to_file(_MINIMAL, out)
     assert result == out
     assert out.exists()
-    import json
-
     data = json.loads(out.read_text())
     assert (
         "paragraphs" in data
