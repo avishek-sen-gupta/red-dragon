@@ -31,7 +31,7 @@ def test_compile_cobol_module_returns_frontend_and_module():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_compile_cobol_single_module_runs():
-    frontend, linked = compile_cobol(_SRC)
+    _, linked = compile_cobol(_SRC)
     assert isinstance(linked, LinkedProgram)
     assert linked.merged_cfg is not None
     # round-trips through run_linked (top-level COBOL entry)
@@ -53,9 +53,7 @@ def test_compile_cobol_links_extra_subprogram():
            DISPLAY 'IN CALLEE'.
            GOBACK.
 """
-    frontend, linked = compile_cobol(
-        caller, extra_subprogram_sources={"CALLEE": callee}
-    )
+    _, linked = compile_cobol(caller, extra_subprogram_sources={"CALLEE": callee})
     # CALLEE linked as a second module — merged_ir must contain callee's prefixed
     # labels (e.g. "...func_callee_0"), proving the callee IR was linked in.
     callee_label_instrs = [
@@ -142,6 +140,7 @@ class _FakeParseToFileParser:
     """Duck-typed fake: writes a fixed JSON string to out_path."""
 
     def parse_to_file(self, source: bytes, out_path: Path) -> Path:
+        del source  # fake: ignores the input, writes fixed JSON
         out_path.write_text(_MINIMAL_ASG_JSON, encoding="utf-8")
         return out_path
 
