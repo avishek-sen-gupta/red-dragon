@@ -143,3 +143,18 @@ def test_parse_to_file_does_not_hold_json_string_after_return(tmp_path):
     parser = ProLeapCobolParser(runner, "fake.jar")
     result = parser.parse_to_file(b"source", out)
     assert isinstance(result, Path)
+
+
+from interpreter.cobol.cobol_parser import make_cobol_parser
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_make_cobol_parser_returns_proleap_parser():
+    parser = make_cobol_parser()
+    assert isinstance(parser, ProLeapCobolParser)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_make_cobol_parser_with_copybook_dirs_passes_them_through(tmp_path):
+    parser = make_cobol_parser(copybook_dirs=[tmp_path])
+    assert isinstance(parser, ProLeapCobolParser)
