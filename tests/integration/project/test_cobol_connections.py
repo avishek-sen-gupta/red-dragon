@@ -10,7 +10,10 @@ tests/fixtures/projects/cobol_connections_demo/ — the durable e2e case.
 import json
 from pathlib import Path
 
+import pytest
+
 from tests.covers import covers, NotLanguageFeature
+from interpreter.cobol.cobol_parser import make_cobol_parser
 from interpreter.project.cobol_connections import Connection, extract_cobol_connections
 
 _MAIN_CALL = b"""       IDENTIFICATION DIVISION.
@@ -27,12 +30,19 @@ _HELPER = b"""       IDENTIFICATION DIVISION.
 """
 
 
+@pytest.fixture
+def cobol_parser():
+    """Fixture providing a COBOL parser for all tests."""
+    return make_cobol_parser()
+
+
 class TestCallConnections:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_call_connection_detected(self):
+    def test_call_connection_detected(self, cobol_parser):
         conns = extract_cobol_connections(
             _MAIN_CALL,
             extra_subprogram_sources={"HELPER": _HELPER},
+            parser=cobol_parser,
         )
         call_conns = [c for c in conns if c.kind == "CALL"]
         assert len(call_conns) == 1
@@ -40,36 +50,38 @@ class TestCallConnections:
         assert call_conns[0].target.name == "HELPER"
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_call_target_file_path_resolved(self):
+    def test_call_target_file_path_resolved(self, cobol_parser):
         conns = extract_cobol_connections(
             _MAIN_CALL,
             extra_subprogram_sources={"HELPER": _HELPER},
+            parser=cobol_parser,
         )
         call_conns = [c for c in conns if c.kind == "CALL"]
         assert call_conns[0].target.file_path is not None
         assert call_conns[0].target.file_path.stem.upper() == "HELPER"
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_no_connections_for_standalone_program(self):
+    def test_no_connections_for_standalone_program(self, cobol_parser):
         src = b"""       IDENTIFICATION DIVISION.
        PROGRAM-ID. STANDALONE.
        PROCEDURE DIVISION.
            GOBACK.
 """
-        conns = extract_cobol_connections(src)
+        conns = extract_cobol_connections(src, parser=cobol_parser)
         assert conns == []
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_returns_list_of_connection_objects(self):
+    def test_returns_list_of_connection_objects(self, cobol_parser):
         conns = extract_cobol_connections(
             _MAIN_CALL,
             extra_subprogram_sources={"HELPER": _HELPER},
+            parser=cobol_parser,
         )
         assert isinstance(conns, list)
         assert all(isinstance(c, Connection) for c in conns)
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_transitive_calls_included(self):
+    def test_transitive_calls_included(self, cobol_parser):
         """A calls B, B calls C — all three connections returned."""
         prog_a = b"""       IDENTIFICATION DIVISION.
        PROGRAM-ID. PROGA.
@@ -91,6 +103,7 @@ class TestCallConnections:
         conns = extract_cobol_connections(
             prog_a,
             extra_subprogram_sources={"PROGB": prog_b, "PROGC": prog_c},
+            parser=cobol_parser,
         )
         call_conns = [c for c in conns if c.kind == "CALL"]
         names = {(c.source.name.upper(), c.target.name.upper()) for c in call_conns}
@@ -103,13 +116,14 @@ class TestCallConnections:
         )  # flat import_graph — indirect callee path not resolved
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_main_source_file_path_is_sentinel(self):
+    def test_main_source_file_path_is_sentinel(self, cobol_parser):
         # compile_cobol() uses Path("__main__.cbl") as the main module path;
         # callers should not rely on source.file_path being a real filesystem path
         # when source is passed as bytes (no source_file argument).
         conns = extract_cobol_connections(
             _MAIN_CALL,
             extra_subprogram_sources={"HELPER": _HELPER},
+            parser=cobol_parser,
         )
         call_conns = [c for c in conns if c.kind == "CALL"]
         assert call_conns[0].source.file_path == Path("__main__.cbl")
@@ -130,10 +144,12 @@ class TestFixtureProject:
     def test_fixture_produces_expected_connections(self):
         cbl = _FIXTURE / "cbl"
         cpy = _FIXTURE / "cpy"
+        parser = make_cobol_parser(copybook_dirs=[cpy])
         conns = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
             program_source_dir=cbl,
+            parser=parser,
         )
 
         kinds = [(c.kind, c.source.name, c.target.name) for c in conns]
@@ -147,10 +163,12 @@ class TestFixtureProject:
     def test_fixture_call_file_paths_resolved(self):
         cbl = _FIXTURE / "cbl"
         cpy = _FIXTURE / "cpy"
+        parser = make_cobol_parser(copybook_dirs=[cpy])
         conns = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
             program_source_dir=cbl,
+            parser=parser,
         )
         call_conns = {c.target.name: c for c in conns if c.kind == "CALL"}
         assert (
@@ -162,10 +180,12 @@ class TestFixtureProject:
     def test_fixture_copy_target_file_path_is_none(self):
         cbl = _FIXTURE / "cbl"
         cpy = _FIXTURE / "cpy"
+        parser = make_cobol_parser(copybook_dirs=[cpy])
         conns = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
             program_source_dir=cbl,
+            parser=parser,
         )
         copy_conns = [c for c in conns if c.kind == "COPY"]
         assert all(c.target.file_path is None for c in copy_conns)
@@ -185,7 +205,8 @@ class TestCopyConnections:
        PROCEDURE DIVISION.
            GOBACK.
 """
-        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path])
+        parser = make_cobol_parser(copybook_dirs=[tmp_path])
+        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path], parser=parser)
         copy_conns = [c for c in conns if c.kind == "COPY"]
         assert len(copy_conns) == 1
         assert copy_conns[0].source.name == "MAINPROG"
@@ -204,7 +225,8 @@ class TestCopyConnections:
        PROCEDURE DIVISION.
            GOBACK.
 """
-        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path])
+        parser = make_cobol_parser(copybook_dirs=[tmp_path])
+        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path], parser=parser)
         copy_conns = [c for c in conns if c.kind == "COPY"]
         assert copy_conns[0].target.file_path is None
 
@@ -221,7 +243,8 @@ class TestCopyConnections:
        PROCEDURE DIVISION.
            GOBACK.
 """
-        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path])
+        parser = make_cobol_parser(copybook_dirs=[tmp_path])
+        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path], parser=parser)
         copy_conns = [c for c in conns if c.kind == "COPY"]
         data = json.loads(copy_conns[0].to_json())
         assert data["kind"] == "COPY"
