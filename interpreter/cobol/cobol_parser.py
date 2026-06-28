@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Callable
 
 from interpreter.cobol.asg_types import CobolASG
-from interpreter.cobol.subprocess_runner import SubprocessRunner, CobolParseError
+from interpreter.cobol.subprocess_runner import (
+    SubprocessRunner,
+    CobolParseError,
+    RealSubprocessRunner,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -111,3 +116,19 @@ class ProLeapCobolParser(CobolParser):
             f"Copybook not found (searched directories: {searched}). "
             f"Underlying parser error: {msg}"
         )
+
+
+def make_cobol_parser(
+    copybook_dirs: list[Path] | None = None,
+) -> ProLeapCobolParser:
+    """Construct a ProLeapCobolParser from PROLEAP_BRIDGE_JAR env var.
+
+    Falls back to the canonical build output path when the env var is unset.
+    """
+    bridge_jar = os.environ.get(
+        "PROLEAP_BRIDGE_JAR",
+        "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
+    )
+    return ProLeapCobolParser(
+        RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
+    )
