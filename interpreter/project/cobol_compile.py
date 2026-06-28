@@ -12,6 +12,7 @@ All frontend construction is routed through get_frontend (the factory).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -51,7 +52,8 @@ def parallel_parse_to_cache(
 
     def _parse_one(item: tuple[Path, bytes]) -> tuple[Path, Path]:
         src_path, source = item
-        out_path = cache_dir / f"{src_path.stem}.ast.json"
+        path_hash = hashlib.md5(str(src_path).encode()).hexdigest()[:8]
+        out_path = cache_dir / f"{src_path.stem}-{path_hash}.ast.json"
         parser.parse_to_file(source, out_path)
         return src_path, out_path
 
@@ -178,6 +180,10 @@ def compile_cobol(
     the main program (carries data_layout, symbol_table, etc.).
     """
     if ast_cache_dir is not None and parser is not None:
+        # Note: program_source_dir disk resolution is intentionally excluded from the
+        # ast-cache path — only extra_subprogram_sources are cached. This is a known
+        # scope limitation: callers using program_source_dir + ast_cache_dir together
+        # will get a LinkedProgram without disk-resolved callees.
         main_path = Path("__main__.cbl")
         base = program_source_dir or Path(".")
 
@@ -193,7 +199,8 @@ def compile_cobol(
         cache_dir = ast_cache_dir  # pin non-None value for closure
 
         def _ast_path(src_path: Path) -> Path:
-            return cache_dir / f"{src_path.stem}.ast.json"
+            path_hash = hashlib.md5(str(src_path).encode()).hexdigest()[:8]
+            return cache_dir / f"{src_path.stem}-{path_hash}.ast.json"
 
         # Phase 2: sequential lower — one AST in memory at a time.
         main_frontend, main_module = compile_cobol_module(
