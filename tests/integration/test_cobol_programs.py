@@ -6251,6 +6251,54 @@ class TestSetConditionNameToTrue:
         # FLG-OK set to TRUE writes '1' → IF FLG-OK must be TRUE → WS-R == 1.
         assert _decode_zoned_unsigned(region, 1, 1) == 1
 
+    @covers(CobolFeature.SET_88_TO_FALSE, CobolFeature.LEVEL_88_CONDITION)
+    def test_set_88_to_false_clears_alpha_flag(self):
+        """SET <88-name> TO FALSE writes SPACES into a PIC X parent field."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET88F.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLG PIC X VALUE 'Y'.",
+                "   88 FLG-ON  VALUE 'Y'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET FLG-ON TO FALSE.",
+                "    IF FLG-ON MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # SET FLG-ON TO FALSE writes ' ' → FLG-ON ('Y') is false → WS-R == 2.
+        assert _decode_zoned_unsigned(region, 1, 1) == 2
+
+    @covers(CobolFeature.SET_88_TO_FALSE, CobolFeature.LEVEL_88_CONDITION)
+    def test_set_88_to_false_then_true_roundtrip(self):
+        """SET FALSE then TRUE: the flag must read true after the TRUE restore."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET88FT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-FLG PIC X VALUE 'Y'.",
+                "   88 FLG-ON  VALUE 'Y'.",
+                "01 WS-R PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET FLG-ON TO FALSE.",
+                "    SET FLG-ON TO TRUE.",
+                "    IF FLG-ON MOVE 1 TO WS-R ELSE MOVE 2 TO WS-R END-IF.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 1, 1) == 1
+
 
 class TestClassConditions:
     """IS [NOT] NUMERIC / ALPHABETIC class tests (red-dragon-pz9g.20)."""
