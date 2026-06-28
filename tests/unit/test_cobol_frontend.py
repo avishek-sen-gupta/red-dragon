@@ -1,6 +1,6 @@
 """Tests for COBOL frontend — Data Division and Procedure Division lowering."""
 
-from typing import Any, Sequence
+from typing import Sequence
 
 from interpreter.cobol.asg_types import (
     CobolASG,
@@ -1042,7 +1042,6 @@ class TestPerformLoopLowering:
 
         # For TEST AFTER, body comes before condition check
         # Find the print call (body) and the BRANCH_IF (condition)
-        all_ops = [(i, inst.opcode) for i, inst in enumerate(instructions)]
         print_indices = [
             i
             for i, inst in enumerate(instructions)
@@ -2576,7 +2575,7 @@ class TestMoveCorrespondingLowering:
             CobolField(
                 name="WS-SOURCE",
                 level=1,
-                pic=None,
+                pic="",
                 usage="DISPLAY",
                 offset=0,
                 children=[
@@ -2591,7 +2590,7 @@ class TestMoveCorrespondingLowering:
             CobolField(
                 name="WS-TARGET",
                 level=1,
-                pic=None,
+                pic="",
                 usage="DISPLAY",
                 offset=5,
                 children=[
@@ -2622,7 +2621,7 @@ class TestMoveCorrespondingLowering:
             CobolField(
                 name="WS-SOURCE",
                 level=1,
-                pic=None,
+                pic="",
                 usage="DISPLAY",
                 offset=0,
                 children=[
@@ -2634,7 +2633,7 @@ class TestMoveCorrespondingLowering:
             CobolField(
                 name="WS-TARGET1",
                 level=1,
-                pic=None,
+                pic="",
                 usage="DISPLAY",
                 offset=1,
                 children=[
@@ -2646,7 +2645,7 @@ class TestMoveCorrespondingLowering:
             CobolField(
                 name="WS-TARGET2",
                 level=1,
-                pic=None,
+                pic="",
                 usage="DISPLAY",
                 offset=2,
                 children=[
@@ -2678,7 +2677,7 @@ class TestMoveCorrespondingLowering:
             CobolField(
                 name="WS-SOURCE",
                 level=1,
-                pic=None,
+                pic="",
                 usage="DISPLAY",
                 offset=0,
                 children=[
@@ -2693,7 +2692,7 @@ class TestMoveCorrespondingLowering:
             CobolField(
                 name="WS-TARGET",
                 level=1,
-                pic=None,
+                pic="",
                 usage="DISPLAY",
                 offset=2,
                 children=[
