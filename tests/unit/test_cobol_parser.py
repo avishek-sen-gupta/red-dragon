@@ -1,13 +1,14 @@
 """Tests for COBOL parser subprocess bridge."""
 
 import json
+from pathlib import Path
 
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.cobol_statements import DisplayStatement
 from interpreter.cobol.subprocess_runner import CobolParseError, SubprocessRunner
 from interpreter.cobol.features import CobolFeature
-from tests.covers import covers
+from tests.covers import NotLanguageFeature, covers
 
 import pytest
 
@@ -112,3 +113,33 @@ class TestProLeapCobolParser:
         parser.parse(b"IDENTIFICATION DIVISION.\nPROGRAM-ID. TEST.")
 
         assert runner.captured_input == "IDENTIFICATION DIVISION.\nPROGRAM-ID. TEST."
+
+
+_MINIMAL_ASG = {
+    "program_id": "PROG",
+    "data_fields": [],
+    "sections": [],
+    "paragraphs": [{"name": "MAIN", "statements": [{"type": "STOP_RUN"}]}],
+}
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_to_file_writes_raw_json(tmp_path):
+    out = tmp_path / "prog.ast.json"
+    runner = FakeSubprocessRunner(json.dumps(_MINIMAL_ASG))
+    parser = ProLeapCobolParser(runner, "fake.jar")
+    result = parser.parse_to_file(b"irrelevant", out)
+    assert result == out
+    assert out.exists()
+    assert json.loads(out.read_text())["program_id"] == "PROG"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_parse_to_file_does_not_hold_json_string_after_return(tmp_path):
+    # Verify parse_to_file returns Path, not JSON — caller cannot accidentally
+    # accumulate the string by capturing the return value.
+    out = tmp_path / "prog.ast.json"
+    runner = FakeSubprocessRunner(json.dumps(_MINIMAL_ASG))
+    parser = ProLeapCobolParser(runner, "fake.jar")
+    result = parser.parse_to_file(b"source", out)
+    assert isinstance(result, Path)

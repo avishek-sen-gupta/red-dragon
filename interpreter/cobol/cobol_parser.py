@@ -77,6 +77,22 @@ class ProLeapCobolParser(CobolParser):
         )
         return asg
 
+    def parse_to_file(self, source: bytes, out_path: Path) -> Path:
+        """Run the bridge and write raw JSON to out_path. Returns out_path.
+
+        The JSON string is freed immediately after writing — never returned —
+        so callers cannot accumulate it when running in parallel.
+        """
+        command = ["java", "-jar", self._bridge_jar]
+        for d in self._copybook_dirs:
+            command += ["-copybook-dir", str(d)]
+        try:
+            json_str = self._runner.run(command, source.decode("utf-8"))
+        except CobolParseError as e:
+            raise self._enrich_copybook_error(e) from e
+        out_path.write_text(json_str, encoding="utf-8")
+        return out_path
+
     def _enrich_copybook_error(self, error: CobolParseError) -> CobolParseError:
         """Add the searched copybook directories to a 'copy book not found' error.
 
