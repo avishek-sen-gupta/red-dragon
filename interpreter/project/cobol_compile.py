@@ -190,8 +190,10 @@ def compile_cobol(
         # Phase 1: parallel parse — each worker writes JSON to disk and frees it.
         parallel_parse_to_cache(all_sources, parser, ast_cache_dir)
 
+        cache_dir = ast_cache_dir  # pin non-None value for closure
+
         def _ast_path(src_path: Path) -> Path:
-            return ast_cache_dir / f"{src_path.stem}.ast.json"
+            return cache_dir / f"{src_path.stem}.ast.json"
 
         # Phase 2: sequential lower — one AST in memory at a time.
         main_frontend, main_module = compile_cobol_module(
