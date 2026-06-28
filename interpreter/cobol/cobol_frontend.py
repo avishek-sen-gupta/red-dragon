@@ -16,6 +16,7 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
@@ -50,7 +51,6 @@ from interpreter.register import Register
 
 if TYPE_CHECKING:
     from interpreter.cobol.cobol_expression import ExprNode
-    from interpreter.cobol.asg_types import CobolASG
 
 logger = logging.getLogger(__name__)
 
@@ -203,14 +203,12 @@ class CobolFrontend(Frontend):
         try:
             for strat in self._extension_strategies:
                 data = strat.preprocess_program_dict(data)
-            from interpreter.cobol.asg_types import CobolASG as _CobolASG
-
-            asg = _CobolASG.from_dict(data)
+            asg = CobolASG.from_dict(data)
         finally:
             _cics_text_parser.reset(token)
         return self._lower_asg(asg)
 
-    def _lower_asg(self, asg: "CobolASG") -> list[InstructionBase]:  # type: ignore[name-defined]
+    def _lower_asg(self, asg: CobolASG) -> list[InstructionBase]:
         """Shared lowering core: ASG → IR. Called by lower() and lower_from_ast_dict()."""
         sectioned = build_sectioned_layout(asg)
         self._program_id = asg.program_id or "MAIN"
