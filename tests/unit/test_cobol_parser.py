@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from interpreter.cobol.asg_types import CobolASG
-from interpreter.cobol.cobol_parser import ProLeapCobolParser
+from interpreter.cobol.cobol_parser import ProLeapCobolParser, make_cobol_parser
 from interpreter.cobol.cobol_statements import DisplayStatement
 from interpreter.cobol.subprocess_runner import CobolParseError, SubprocessRunner
 from interpreter.cobol.features import CobolFeature
@@ -143,9 +143,6 @@ def test_parse_to_file_does_not_hold_json_string_after_return(tmp_path):
     parser = ProLeapCobolParser(runner, "fake.jar")
     result = parser.parse_to_file(b"source", out)
     assert isinstance(result, Path)
-
-
-from interpreter.cobol.cobol_parser import make_cobol_parser
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
