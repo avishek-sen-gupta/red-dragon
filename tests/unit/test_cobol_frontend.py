@@ -9,7 +9,7 @@ from interpreter.cobol.asg_types import (
     CobolSection,
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from interpreter.cobol.cobol_parser import CobolParser
+from interpreter.cobol.cobol_parser import make_cobol_parser
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import InstructionBase, AllocRegion, Const
 from interpreter.cobol.cobol_statements import (
@@ -62,16 +62,6 @@ from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 
-class _FakeParser(CobolParser):
-    """Fake parser that returns a pre-built CobolASG."""
-
-    def __init__(self, asg: CobolASG):
-        self._asg = asg
-
-    def parse(self, source: bytes, preprocessor=None) -> CobolASG:  # type: ignore[override]
-        return self._asg
-
-
 def _find_opcodes(
     instructions: list[InstructionBase], opcode: Opcode
 ) -> list[InstructionBase]:
@@ -109,15 +99,15 @@ class TestDataDivisionLowering:
         CobolFeature.DATA_LAYOUT_ENGINE,
     )
     def test_alloc_region_size(self):
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=[
                 CobolField(
                     name="WS-A", level=77, pic="9(5)", usage="DISPLAY", offset=0
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         # WS region + the always-present special-registers region. red-dragon-o8uq.
         allocs = [i for i in instructions if isinstance(i, AllocRegion)]
@@ -137,7 +127,7 @@ class TestDataDivisionLowering:
         CobolFeature.DATA_LAYOUT_ENGINE,
     )
     def test_initial_value_encoding(self):
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=[
                 CobolField(
                     name="WS-A",
@@ -148,9 +138,9 @@ class TestDataDivisionLowering:
                     value="123",
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) == 1  # Exactly one WRITE_REGION for initial value
@@ -166,15 +156,15 @@ class TestDataDivisionLowering:
         CobolFeature.FRONTEND_IDEMPOTENCY,
     )
     def test_entry_label_emitted(self):
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=[
                 CobolField(
                     name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         labels = _find_opcodes(instructions, Opcode.LABEL)
         label_names = [str(inst.label) for inst in labels]
@@ -187,7 +177,7 @@ class TestDataDivisionLowering:
         CobolFeature.DATA_LAYOUT_ENGINE,
     )
     def test_group_field_total_bytes(self):
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=[
                 CobolField(
                     name="WS-REC",
@@ -205,9 +195,9 @@ class TestDataDivisionLowering:
                     ],
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         allocs = [i for i in instructions if isinstance(i, AllocRegion)]
         size_const = [
@@ -221,7 +211,7 @@ class TestDataDivisionLowering:
         CobolFeature.PIC_CLAUSE, CobolFeature.VALUE_CLAUSE, CobolFeature.USAGE_DISPLAY
     )
     def test_multiple_fields_with_values(self):
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=[
                 CobolField(
                     name="WS-A",
@@ -240,9 +230,9 @@ class TestDataDivisionLowering:
                     value="HELLO",
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) == 2  # One for each field with a VALUE
@@ -254,12 +244,12 @@ class TestProcedureDivisionLowering:
         fields: list[CobolField],
         stmts: list[CobolStatementType],
     ) -> list[InstructionBase]:
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        return frontend.lower_from_ast_dict(data)
 
     @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_move_literal_to_field(self):
@@ -579,12 +569,12 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [StopRunStatement()]
 
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
         assert len(resume_conts) >= 1
@@ -624,12 +614,12 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [StopRunStatement()]
 
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         labels = _find_opcodes(instructions, Opcode.LABEL)
         label_names = [str(inst.label) for inst in labels]
@@ -644,12 +634,12 @@ class TestComputeLowering:
         fields: list[CobolField],
         stmts: list[CobolStatementType],
     ) -> list[InstructionBase]:
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        return frontend.lower_from_ast_dict(data)
 
     @covers(
         CobolFeature.COMPUTE,
@@ -875,12 +865,12 @@ class TestPerformLoopLowering:
         stmts: list[CobolStatementType],
         paragraphs: list[CobolParagraph] = [],
     ) -> list[InstructionBase]:
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)] + paragraphs,
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        return frontend.lower_from_ast_dict(data)
 
     @covers(
         CobolFeature.PERFORM,
@@ -1282,7 +1272,7 @@ class TestSectionPerform:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[
                 CobolParagraph(
@@ -1308,9 +1298,9 @@ class TestSectionPerform:
                     ],
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         # Should branch to section_WORK-SECTION
         branches = _find_opcodes(instructions, Opcode.BRANCH)
@@ -1335,7 +1325,7 @@ class TestSectionPerform:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             sections=[
                 CobolSection(
@@ -1348,9 +1338,9 @@ class TestSectionPerform:
                     ],
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
         resume_names = [inst.operands[0] for inst in resume_conts]
@@ -1365,12 +1355,12 @@ class TestTier1Lowering:
         fields: list[CobolField],
         stmts: list[CobolStatementType],
     ) -> list[InstructionBase]:
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        return frontend.lower_from_ast_dict(data)
 
     @covers(CobolFeature.CONTINUE, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_continue_emits_nothing(self):
@@ -1589,12 +1579,12 @@ class TestTier2Lowering:
         fields: list[CobolField],
         stmts: list[CobolStatementType],
     ) -> list[InstructionBase]:
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        return frontend.lower_from_ast_dict(data)
 
     @covers(
         CobolFeature.STRING_VERB,
@@ -1837,12 +1827,12 @@ class TestSearchLowering:
         fields: list[CobolField],
         stmts: list[CobolStatementType],
     ) -> list[InstructionBase]:
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        return frontend.lower_from_ast_dict(data)
 
     @covers(
         CobolFeature.SEARCH_LINEAR,
@@ -2016,12 +2006,12 @@ class TestCallAlterEntryCancelLowering:
         fields: list[CobolField],
         stmts: list[CobolStatementType],
     ) -> list[InstructionBase]:
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        return frontend.lower_from_ast_dict(data)
 
     @covers(
         CobolFeature.CALL,
@@ -2405,7 +2395,7 @@ class TestBareStatements:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             statements=[
                 ComputeStatement(
@@ -2414,9 +2404,9 @@ class TestBareStatements:
                 ),
                 DisplayStatement(operands=(RefModOperand(name="WS-A"),)),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         # COMPUTE produces a BINOP + WRITE_REGION
         binops = _find_opcodes(instructions, Opcode.BINOP)
@@ -2438,7 +2428,7 @@ class TestBareStatements:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             sections=[
                 CobolSection(
@@ -2448,9 +2438,9 @@ class TestBareStatements:
                     ],
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         # Should have a section LABEL
         labels = _find_opcodes(instructions, Opcode.LABEL)
@@ -2476,7 +2466,7 @@ class TestBareStatements:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=fields,
             statements=[DisplayStatement(operands=(RefModOperand(name="WS-A"),))],
             paragraphs=[
@@ -2485,9 +2475,9 @@ class TestBareStatements:
                     statements=[StopRunStatement()],
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         # Find indices of first print (from bare DISPLAY) and first paragraph LABEL
         print_idx = next(
@@ -2519,8 +2509,7 @@ class TestDataLayout:
     @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_data_layout_empty_before_lower(self):
         """data_layout returns empty dict before lower() is called."""
-        asg = CobolASG(data_fields=[])
-        frontend = CobolFrontend(_FakeParser(asg))
+        frontend = CobolFrontend(make_cobol_parser())
         assert frontend.data_layout == {}
 
     @covers(
@@ -2530,7 +2519,7 @@ class TestDataLayout:
     )
     def test_data_layout_after_lower(self):
         """data_layout exposes correct field metadata after lower()."""
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=[
                 CobolField(
                     name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0
@@ -2543,9 +2532,9 @@ class TestDataLayout:
                     offset=3,
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        frontend.lower_from_ast_dict(data)
 
         layout = frontend.data_layout
         assert "WS-A" in layout
@@ -2565,22 +2554,15 @@ class TestDataLayout:
 class TestMoveCorrespondingLowering:
     """Tests for MOVE CORRESPONDING statement lowering."""
 
-    class _FakeParserWithStmts(CobolParser):
-        def __init__(self, asg: CobolASG):
-            self._asg = asg
-
-        def parse(self, source: bytes, preprocessor=None) -> CobolASG:  # type: ignore[override]
-            return self._asg
-
     def _lower_with_field_and_stmts(
         self, fields: list[CobolField], stmts: list[CobolStatementType]
     ) -> list[InstructionBase]:
         """Helper to lower a COBOL program with given fields and statements."""
         paragraphs = [CobolParagraph(name="MAIN-PARA", statements=stmts)]
         section = CobolSection(name="PROC", paragraphs=paragraphs)
-        asg = CobolASG(data_fields=fields, sections=[section])
-        frontend = CobolFrontend(self._FakeParserWithStmts(asg))
-        return frontend.lower(b"")
+        data = CobolASG(data_fields=fields, sections=[section]).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        return frontend.lower_from_ast_dict(data)
 
     @covers(
         CobolFeature.MOVE_CORRESPONDING,
@@ -2738,16 +2720,16 @@ class TestSectionedLayout:
     ):
         """CobolFrontend.lower() emits an ALLOC_REGION for WS, LS, and the
         always-present special-registers region (RETURN-CODE). red-dragon-o8uq."""
-        asg = CobolASG(
+        data = CobolASG(
             data_fields=[
                 CobolField(name="WS-X", level=1, pic="X(5)", usage="DISPLAY", offset=0)
             ],
             local_storage_fields=[
                 CobolField(name="LS-Y", level=1, pic="X(3)", usage="DISPLAY", offset=0)
             ],
-        )
-        frontend = CobolFrontend(cobol_parser=_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(cobol_parser=make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         alloc_count = sum(1 for i in instructions if i.opcode == Opcode.ALLOC_REGION)
         assert (
@@ -2761,16 +2743,16 @@ class TestSingletonInit:
     @covers(CobolFeature.SECTION_WORKING_STORAGE)
     def test_frontend_lower_emits_func_proc_label(self):
         """lower() must wrap the procedure division in func_<pid>_0 label."""
-        asg = CobolASG(
+        data = CobolASG(
             program_id="TEST-INIT",
             data_fields=[
                 CobolField(
                     name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         labels = [
             str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL
@@ -2782,14 +2764,14 @@ class TestSingletonInit:
     @covers(CobolFeature.SECTION_WORKING_STORAGE)
     def test_frontend_exposes_program_id(self):
         """frontend.program_id must return the PROGRAM-ID after lower()."""
-        asg = CobolASG(
+        data = CobolASG(
             program_id="TEST-INIT",
             data_fields=[
                 CobolField(
                     name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0
                 ),
             ],
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        frontend.lower(b"")
+        ).to_dict()
+        frontend = CobolFrontend(make_cobol_parser())
+        frontend.lower_from_ast_dict(data)
         assert frontend.program_id == "TEST-INIT"
