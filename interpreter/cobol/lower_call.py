@@ -50,6 +50,13 @@ def lower_call(
     if stmt.using:
         # Resolve field layouts for all USING params (all are in WS).
         for param in stmt.using:
+            if param.omitted:
+                # OMITTED: no value passed — skip entirely (red-dragon-i1rb).
+                continue
+            if param.is_literal:
+                # Literal BY CONTENT/VALUE: no WS field to resolve.  Skip for
+                # static analysis — the callee's LINKAGE slot gets no write.
+                continue
             fl, _ = materialised.resolve(param.name)
             param_fls.append((param, fl))
 
