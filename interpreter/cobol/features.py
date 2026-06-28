@@ -153,6 +153,9 @@ class CobolFeature(Enum):
     # ---------------------------------------------------------------------------
     GROUP_ITEM = "Level 01–49 group record items containing subordinate fields"
     LEVEL_88_CONDITION = "Level-88 condition name declarations"
+    SET_88_TO_FALSE = (
+        "SET <88-name> TO FALSE clears the condition (writes spaces/zeros)"
+    )
     CONDITION_VALUES_THRU = "88-level VALUE x THRU y range condition name clauses"
     SECTION_WORKING_STORAGE = "WORKING-STORAGE SECTION persistent data declarations"
     SECTION_LOCAL_STORAGE = "LOCAL-STORAGE SECTION per-call local data declarations"
