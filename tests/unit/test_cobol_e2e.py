@@ -10,7 +10,6 @@ from typing import Any
 
 from interpreter.address import Address
 from interpreter.cfg import build_cfg
-from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.subprocess_runner import SubprocessRunner
 from interpreter.instructions import InstructionBase, AllocRegion, Const
@@ -25,27 +24,16 @@ from interpreter.vm.executor import (
     HandlerContext,
     _default_handler_context,
 )
-from interpreter.cobol.cobol_parser import CobolParser
+from interpreter.cobol.cobol_parser import make_cobol_parser
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "cobol"
 
 
-class _FakeParser(CobolParser):
-    """Returns a pre-built CobolASG."""
-
-    def __init__(self, asg: CobolASG):
-        self._asg = asg
-
-    def parse(self, source: bytes, preprocessor=None) -> CobolASG:  # type: ignore[override]
-        return self._asg
-
-
-def _load_fixture(name: str) -> CobolASG:
+def _load_fixture(name: str) -> dict:
     fixture_path = FIXTURE_DIR / name
-    data = json.loads(fixture_path.read_text())
-    return CobolASG.from_dict(data)
+    return json.loads(fixture_path.read_text())
 
 
 def _execute_straight_line(
@@ -112,9 +100,9 @@ class TestHelloWorldFixture:
         CobolFeature.DATA_LAYOUT_ENGINE,
     )
     def test_produces_ir(self):
-        asg = _load_fixture("hello_world.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("hello_world.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         assert len(instructions) > 0
         labels = [i for i in instructions if i.opcode == Opcode.LABEL]
@@ -126,9 +114,9 @@ class TestHelloWorldFixture:
         CobolFeature.DATA_LAYOUT_ENGINE,
     )
     def test_data_division_allocs_11_bytes(self):
-        asg = _load_fixture("hello_world.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("hello_world.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         # Two allocs: the WS region (11 bytes) and the always-present
         # special-registers region (RETURN-CODE, 2 bytes). red-dragon-o8uq.
@@ -151,9 +139,9 @@ class TestHelloWorldFixture:
     )
     def test_initial_value_written_to_region(self):
         """Verify that the initial VALUE "HELLO WORLD" is written into the region."""
-        asg = _load_fixture("hello_world.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("hello_world.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         vm = _execute_straight_line(instructions)
 
@@ -175,9 +163,9 @@ class TestHelloWorldFixture:
 class TestMoveFieldsFixture:
     @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE, CobolFeature.DATA_LAYOUT_ENGINE)
     def test_produces_load_and_write_region(self):
-        asg = _load_fixture("move_fields.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("move_fields.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         loads = [i for i in instructions if i.opcode == Opcode.LOAD_REGION]
         writes = [i for i in instructions if i.opcode == Opcode.WRITE_REGION]
@@ -186,9 +174,9 @@ class TestMoveFieldsFixture:
 
     @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE, CobolFeature.DATA_LAYOUT_ENGINE)
     def test_data_division_allocs_6_bytes(self):
-        asg = _load_fixture("move_fields.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("move_fields.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         allocs = [i for i in instructions if isinstance(i, AllocRegion)]
         size_const = [
@@ -207,9 +195,9 @@ class TestArithmeticFixture:
         CobolFeature.NUMERIC_EXECUTION,
     )
     def test_produces_binops(self):
-        asg = _load_fixture("arithmetic.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("arithmetic.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         binops = [i for i in instructions if i.opcode == Opcode.BINOP]
         ops = [b.operands[0] for b in binops]
@@ -226,9 +214,9 @@ class TestArithmeticFixture:
     )
     def test_initial_value_100_in_region(self):
         """Verify initial VALUE "100" is correctly encoded as zoned decimal."""
-        asg = _load_fixture("arithmetic.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("arithmetic.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         vm = _execute_straight_line(instructions, stop_before_procedure=True)
 
@@ -249,9 +237,9 @@ class TestArithmeticFixture:
     )
     def test_arithmetic_produces_correct_result(self):
         """Full execution: 100 + 50 - 25 = 125 in zoned decimal region."""
-        asg = _load_fixture("arithmetic.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("arithmetic.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         vm = _execute_straight_line(instructions)
 
@@ -274,9 +262,9 @@ class TestPerformReturnFixture:
     )
     def test_perform_returns_to_caller(self):
         """MAIN PERFORMs WORK, WORK does MOVE, execution returns to MAIN and hits STOP RUN."""
-        asg = _load_fixture("perform_return.json")
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = _load_fixture("perform_return.json")
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -300,45 +288,43 @@ class TestPerformReturnFixture:
     )
     def test_nested_perform(self):
         """MAIN PERFORMs PARA-A, PARA-A PERFORMs PARA-B, both return correctly."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-VAL",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "PERFORM", "operands": ["PARA-A"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                    {
-                        "name": "PARA-A",
-                        "statements": [
-                            {"type": "MOVE", "operands": ["10", "WS-VAL"]},
-                            {"type": "PERFORM", "operands": ["PARA-B"]},
-                            {"type": "MOVE", "operands": ["42", "WS-VAL"]},
-                        ],
-                    },
-                    {
-                        "name": "PARA-B",
-                        "statements": [
-                            {"type": "MOVE", "operands": ["99", "WS-VAL"]},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-VAL",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "PERFORM", "operands": ["PARA-A"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+                {
+                    "name": "PARA-A",
+                    "statements": [
+                        {"type": "MOVE", "operands": ["10", "WS-VAL"]},
+                        {"type": "PERFORM", "operands": ["PARA-B"]},
+                        {"type": "MOVE", "operands": ["42", "WS-VAL"]},
+                    ],
+                },
+                {
+                    "name": "PARA-B",
+                    "statements": [
+                        {"type": "MOVE", "operands": ["99", "WS-VAL"]},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -359,37 +345,35 @@ class TestPerformReturnFixture:
     )
     def test_fall_through_without_perform(self):
         """Two paragraphs, no PERFORM — verify sequential execution."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "FIRST-PARA",
-                        "statements": [
-                            {"type": "MOVE", "operands": ["1", "WS-A"]},
-                        ],
-                    },
-                    {
-                        "name": "SECOND-PARA",
-                        "statements": [
-                            {"type": "MOVE", "operands": ["2", "WS-A"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "FIRST-PARA",
+                    "statements": [
+                        {"type": "MOVE", "operands": ["1", "WS-A"]},
+                    ],
+                },
+                {
+                    "name": "SECOND-PARA",
+                    "statements": [
+                        {"type": "MOVE", "operands": ["2", "WS-A"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -410,12 +394,12 @@ class TestCobolFrontendIdempotency:
         CobolFeature.VALUE_CLAUSE,
     )
     def test_lower_twice_produces_same_ir(self):
-        """Calling lower() twice should reset state and produce identical IR."""
-        asg = _load_fixture("hello_world.json")
-        frontend = CobolFrontend(_FakeParser(asg))
+        """Calling lower_from_ast_dict() twice should reset state and produce identical IR."""
+        data = _load_fixture("hello_world.json")
+        frontend = CobolFrontend(make_cobol_parser())
 
-        ir1 = frontend.lower(b"")
-        ir2 = frontend.lower(b"")
+        ir1 = frontend.lower_from_ast_dict(data)
+        ir2 = frontend.lower_from_ast_dict(data)
 
         assert len(ir1) == len(ir2)
         for i, (a, b) in enumerate(zip(ir1, ir2)):
@@ -435,38 +419,36 @@ class TestMultipleStatementTypes:
     )
     def test_mixed_statements(self):
         """Test a program with MOVE, DISPLAY, and STOP RUN."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                    {
-                        "name": "WS-B",
-                        "level": 77,
-                        "pic": "X(5)",
-                        "offset": 0,
-                        "value": "HELLO",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN",
-                        "statements": [
-                            {"type": "MOVE", "operands": ["42", "WS-A"]},
-                            {"type": "DISPLAY", "operands": ["WS-B"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "offset": 0,
+                    "value": "0",
+                },
+                {
+                    "name": "WS-B",
+                    "level": 77,
+                    "pic": "X(5)",
+                    "offset": 0,
+                    "value": "HELLO",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN",
+                    "statements": [
+                        {"type": "MOVE", "operands": ["42", "WS-A"]},
+                        {"type": "DISPLAY", "operands": ["WS-B"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         opcodes = {i.opcode for i in instructions}
         assert Opcode.ALLOC_REGION in opcodes
@@ -488,55 +470,53 @@ class TestIfElseExecution:
     )
     def test_if_true_branch_taken(self):
         """IF WS-A > 0 should take the THEN branch when WS-A = 5."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "5",
-                    },
-                    {
-                        "name": "WS-RESULT",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 3,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {
-                                "type": "IF",
-                                "condition": {
-                                    "not": False,
-                                    "relation": {
-                                        "left": {"kind": "ref", "name": "WS-A"},
-                                        "op": ">",
-                                        "right": {"kind": "lit", "value": "0"},
-                                    },
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "5",
+                },
+                {
+                    "name": "WS-RESULT",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 3,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "IF",
+                            "condition": {
+                                "not": False,
+                                "relation": {
+                                    "left": {"kind": "ref", "name": "WS-A"},
+                                    "op": ">",
+                                    "right": {"kind": "lit", "value": "0"},
                                 },
-                                "children": [
-                                    {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
-                                ],
-                                "else_children": [
-                                    {"type": "MOVE", "operands": ["2", "WS-RESULT"]},
-                                ],
                             },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+                            "children": [
+                                {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
+                            ],
+                            "else_children": [
+                                {"type": "MOVE", "operands": ["2", "WS-RESULT"]},
+                            ],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -557,55 +537,53 @@ class TestIfElseExecution:
     )
     def test_if_false_branch_taken(self):
         """IF WS-A > 10 should take the ELSE branch when WS-A = 5."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "5",
-                    },
-                    {
-                        "name": "WS-RESULT",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 3,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {
-                                "type": "IF",
-                                "condition": {
-                                    "not": False,
-                                    "relation": {
-                                        "left": {"kind": "ref", "name": "WS-A"},
-                                        "op": ">",
-                                        "right": {"kind": "lit", "value": "10"},
-                                    },
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "5",
+                },
+                {
+                    "name": "WS-RESULT",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 3,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "IF",
+                            "condition": {
+                                "not": False,
+                                "relation": {
+                                    "left": {"kind": "ref", "name": "WS-A"},
+                                    "op": ">",
+                                    "right": {"kind": "lit", "value": "10"},
                                 },
-                                "children": [
-                                    {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
-                                ],
-                                "else_children": [
-                                    {"type": "MOVE", "operands": ["2", "WS-RESULT"]},
-                                ],
                             },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+                            "children": [
+                                {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
+                            ],
+                            "else_children": [
+                                {"type": "MOVE", "operands": ["2", "WS-RESULT"]},
+                            ],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -629,38 +607,36 @@ class TestPerformTimesExecution:
     )
     def test_perform_times_inline_executes_body_n_times(self):
         """Inline PERFORM 3 TIMES with ADD 1 TO WS-CTR should result in WS-CTR = 3."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-CTR",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {
-                                "type": "PERFORM",
-                                "perform_type": "TIMES",
-                                "times": "3",
-                                "children": [
-                                    {"type": "ADD", "operands": ["1", "WS-CTR"]},
-                                ],
-                            },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-CTR",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "PERFORM",
+                            "perform_type": "TIMES",
+                            "times": "3",
+                            "children": [
+                                {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                            ],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -687,46 +663,44 @@ class TestPerformUntilExecution:
     )
     def test_perform_until_test_before(self):
         """PERFORM UNTIL WS-A > 2 with ADD 1 should loop until WS-A reaches 3."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {
-                                "type": "PERFORM",
-                                "perform_type": "UNTIL",
-                                "until": {
-                                    "not": False,
-                                    "relation": {
-                                        "left": {"kind": "ref", "name": "WS-A"},
-                                        "op": ">",
-                                        "right": {"kind": "lit", "value": "2"},
-                                    },
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "PERFORM",
+                            "perform_type": "UNTIL",
+                            "until": {
+                                "not": False,
+                                "relation": {
+                                    "left": {"kind": "ref", "name": "WS-A"},
+                                    "op": ">",
+                                    "right": {"kind": "lit", "value": "2"},
                                 },
-                                "test_before": True,
-                                "children": [
-                                    {"type": "ADD", "operands": ["1", "WS-A"]},
-                                ],
                             },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+                            "test_before": True,
+                            "children": [
+                                {"type": "ADD", "operands": ["1", "WS-A"]},
+                            ],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -752,60 +726,58 @@ class TestPerformVaryingExecution:
     )
     def test_perform_varying_inline(self):
         """PERFORM VARYING WS-IDX FROM 1 BY 1 UNTIL WS-IDX > 3."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-IDX",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                    {
-                        "name": "WS-SUM",
-                        "level": 77,
-                        "pic": "9(5)",
-                        "usage": "DISPLAY",
-                        "offset": 3,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {
-                                "type": "PERFORM",
-                                "perform_type": "VARYING",
-                                "varying_var": "WS-IDX",
-                                "varying_from": "1",
-                                "varying_by": "1",
-                                "until": {
-                                    "not": False,
-                                    "relation": {
-                                        "left": {"kind": "ref", "name": "WS-IDX"},
-                                        "op": ">",
-                                        "right": {"kind": "lit", "value": "3"},
-                                    },
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-IDX",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+                {
+                    "name": "WS-SUM",
+                    "level": 77,
+                    "pic": "9(5)",
+                    "usage": "DISPLAY",
+                    "offset": 3,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "PERFORM",
+                            "perform_type": "VARYING",
+                            "varying_var": "WS-IDX",
+                            "varying_from": "1",
+                            "varying_by": "1",
+                            "until": {
+                                "not": False,
+                                "relation": {
+                                    "left": {"kind": "ref", "name": "WS-IDX"},
+                                    "op": ">",
+                                    "right": {"kind": "lit", "value": "3"},
                                 },
-                                "test_before": True,
-                                "children": [
-                                    {
-                                        "type": "ADD",
-                                        "operands": ["WS-IDX", "WS-SUM"],
-                                    },
-                                ],
                             },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+                            "test_before": True,
+                            "children": [
+                                {
+                                    "type": "ADD",
+                                    "operands": ["WS-IDX", "WS-SUM"],
+                                },
+                            ],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -840,31 +812,29 @@ class TestNumericValueVerification:
     )
     def test_move_literal_value(self):
         """MOVE 42 TO WS-A → WS-A should decode to 42."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "MOVE", "operands": ["42", "WS-A"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "MOVE", "operands": ["42", "WS-A"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -881,39 +851,37 @@ class TestNumericValueVerification:
     )
     def test_add_two_values(self):
         """WS-A=10, WS-B=5, ADD WS-A WS-B → WS-B should be 15."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "10",
-                    },
-                    {
-                        "name": "WS-B",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 4,
-                        "value": "5",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["WS-A", "WS-B"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "10",
+                },
+                {
+                    "name": "WS-B",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 4,
+                    "value": "5",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["WS-A", "WS-B"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -931,39 +899,37 @@ class TestNumericValueVerification:
     )
     def test_subtract_values(self):
         """WS-A=10, WS-B=3, SUBTRACT WS-B FROM WS-A → WS-A should be 7."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "10",
-                    },
-                    {
-                        "name": "WS-B",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 4,
-                        "value": "3",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "SUBTRACT", "operands": ["WS-B", "WS-A"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "10",
+                },
+                {
+                    "name": "WS-B",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 4,
+                    "value": "3",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "SUBTRACT", "operands": ["WS-B", "WS-A"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -980,31 +946,29 @@ class TestNumericValueVerification:
     )
     def test_add_literal_to_field(self):
         """WS-A=0, ADD 25 TO WS-A → WS-A should be 25."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["25", "WS-A"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["25", "WS-A"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1023,38 +987,36 @@ class TestNumericValueVerification:
     )
     def test_perform_times_accumulation(self):
         """PERFORM 3 TIMES with ADD 1 TO WS-CTR → WS-CTR should be 3."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-CTR",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {
-                                "type": "PERFORM",
-                                "perform_type": "TIMES",
-                                "times": "3",
-                                "children": [
-                                    {"type": "ADD", "operands": ["1", "WS-CTR"]},
-                                ],
-                            },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-CTR",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "PERFORM",
+                            "perform_type": "TIMES",
+                            "times": "3",
+                            "children": [
+                                {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                            ],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1072,30 +1034,28 @@ class TestNumericValueVerification:
     )
     def test_initial_value_encoding(self):
         """Initial VALUE 123 should encode correctly in the region."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "123",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "123",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1112,32 +1072,30 @@ class TestNumericValueVerification:
     )
     def test_multiple_adds_accumulate(self):
         """WS-R=0, ADD 10 TO WS-R, ADD 5 TO WS-R → WS-R should be 15."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-R",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["10", "WS-R"]},
-                            {"type": "ADD", "operands": ["5", "WS-R"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-R",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["10", "WS-R"]},
+                        {"type": "ADD", "operands": ["5", "WS-R"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1160,42 +1118,40 @@ class TestNumericValueVerification:
         Tests paragraph-level PERFORM TIMES (not inline) to verify the loop
         counter works correctly when the body is a separate paragraph.
         """
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-SUM",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {
-                                "type": "PERFORM",
-                                "perform_type": "TIMES",
-                                "times": "3",
-                                "operands": ["ADD-PARA"],
-                            },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                    {
-                        "name": "ADD-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["10", "WS-SUM"]},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-SUM",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "PERFORM",
+                            "perform_type": "TIMES",
+                            "times": "3",
+                            "operands": ["ADD-PARA"],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+                {
+                    "name": "ADD-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1219,43 +1175,41 @@ class TestNumericValueVerification:
         Tests that MOVE literal followed by paragraph PERFORM TIMES produces
         correct cumulative result, requiring sufficient step budget.
         """
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-SUM",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "MOVE", "operands": ["100", "WS-SUM"]},
-                            {
-                                "type": "PERFORM",
-                                "perform_type": "TIMES",
-                                "times": "3",
-                                "operands": ["ADD-PARA"],
-                            },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                    {
-                        "name": "ADD-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["10", "WS-SUM"]},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-SUM",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "MOVE", "operands": ["100", "WS-SUM"]},
+                        {
+                            "type": "PERFORM",
+                            "perform_type": "TIMES",
+                            "times": "3",
+                            "operands": ["ADD-PARA"],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+                {
+                    "name": "ADD-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1277,42 +1231,40 @@ class TestSectionFallThrough:
     )
     def test_section_paragraphs_fall_through(self):
         """Two paragraphs in a section, no PERFORM — verify sequential execution."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-A",
-                        "level": 77,
-                        "pic": "9(3)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "sections": [
-                    {
-                        "name": "MAIN-SECTION",
-                        "paragraphs": [
-                            {
-                                "name": "FIRST-PARA",
-                                "statements": [
-                                    {"type": "MOVE", "operands": ["1", "WS-A"]},
-                                ],
-                            },
-                            {
-                                "name": "SECOND-PARA",
-                                "statements": [
-                                    {"type": "MOVE", "operands": ["2", "WS-A"]},
-                                    {"type": "STOP_RUN"},
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-A",
+                    "level": 77,
+                    "pic": "9(3)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "sections": [
+                {
+                    "name": "MAIN-SECTION",
+                    "paragraphs": [
+                        {
+                            "name": "FIRST-PARA",
+                            "statements": [
+                                {"type": "MOVE", "operands": ["1", "WS-A"]},
+                            ],
+                        },
+                        {
+                            "name": "SECOND-PARA",
+                            "statements": [
+                                {"type": "MOVE", "operands": ["2", "WS-A"]},
+                                {"type": "STOP_RUN"},
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1342,45 +1294,43 @@ class TestNestedPerformNumericValues:
         INNER: ADD 10
         Expected: 0 + 100 + 10 + 1 = 111
         """
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-SUM",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "PERFORM", "operands": ["OUTER-PARA"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                    {
-                        "name": "OUTER-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["100", "WS-SUM"]},
-                            {"type": "PERFORM", "operands": ["INNER-PARA"]},
-                            {"type": "ADD", "operands": ["1", "WS-SUM"]},
-                        ],
-                    },
-                    {
-                        "name": "INNER-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["10", "WS-SUM"]},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-SUM",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "PERFORM", "operands": ["OUTER-PARA"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+                {
+                    "name": "OUTER-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["100", "WS-SUM"]},
+                        {"type": "PERFORM", "operands": ["INNER-PARA"]},
+                        {"type": "ADD", "operands": ["1", "WS-SUM"]},
+                    ],
+                },
+                {
+                    "name": "INNER-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1404,53 +1354,51 @@ class TestNestedPerformNumericValues:
         INNER body: ADD 1 TO WS-CTR
         Expected: 2 * 3 = 6
         """
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-CTR",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {
-                                "type": "PERFORM",
-                                "perform_type": "TIMES",
-                                "times": "2",
-                                "operands": ["OUTER-PARA"],
-                            },
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                    {
-                        "name": "OUTER-PARA",
-                        "statements": [
-                            {
-                                "type": "PERFORM",
-                                "perform_type": "TIMES",
-                                "times": "3",
-                                "operands": ["INNER-PARA"],
-                            },
-                        ],
-                    },
-                    {
-                        "name": "INNER-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["1", "WS-CTR"]},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-CTR",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "PERFORM",
+                            "perform_type": "TIMES",
+                            "times": "2",
+                            "operands": ["OUTER-PARA"],
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+                {
+                    "name": "OUTER-PARA",
+                    "statements": [
+                        {
+                            "type": "PERFORM",
+                            "perform_type": "TIMES",
+                            "times": "3",
+                            "operands": ["INNER-PARA"],
+                        },
+                    ],
+                },
+                {
+                    "name": "INNER-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1477,43 +1425,41 @@ class TestGotoInsidePerform:
         SKIP-PARA: ADD 1
         Expected: 0 + 10 + 1 = 11 (the ADD 999 is skipped)
         """
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-VAL",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["10", "WS-VAL"]},
-                            {
-                                "type": "GOTO",
-                                "form": "simple",
-                                "target": {"paragraph": "SKIP-PARA", "section": ""},
-                            },
-                            {"type": "ADD", "operands": ["999", "WS-VAL"]},
-                        ],
-                    },
-                    {
-                        "name": "SKIP-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["1", "WS-VAL"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-VAL",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                        {
+                            "type": "GOTO",
+                            "form": "simple",
+                            "target": {"paragraph": "SKIP-PARA", "section": ""},
+                        },
+                        {"type": "ADD", "operands": ["999", "WS-VAL"]},
+                    ],
+                },
+                {
+                    "name": "SKIP-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1537,48 +1483,46 @@ class TestGotoInsidePerform:
         PARA-C: ADD 10, STOP RUN
         Expected: 0 + 1 + 10 = 11
         """
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-VAL",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "PARA-A",
-                        "statements": [
-                            {"type": "ADD", "operands": ["1", "WS-VAL"]},
-                            {
-                                "type": "GOTO",
-                                "form": "simple",
-                                "target": {"paragraph": "PARA-C", "section": ""},
-                            },
-                        ],
-                    },
-                    {
-                        "name": "PARA-B",
-                        "statements": [
-                            {"type": "ADD", "operands": ["100", "WS-VAL"]},
-                        ],
-                    },
-                    {
-                        "name": "PARA-C",
-                        "statements": [
-                            {"type": "ADD", "operands": ["10", "WS-VAL"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-VAL",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "PARA-A",
+                    "statements": [
+                        {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                        {
+                            "type": "GOTO",
+                            "form": "simple",
+                            "target": {"paragraph": "PARA-C", "section": ""},
+                        },
+                    ],
+                },
+                {
+                    "name": "PARA-B",
+                    "statements": [
+                        {"type": "ADD", "operands": ["100", "WS-VAL"]},
+                    ],
+                },
+                {
+                    "name": "PARA-C",
+                    "statements": [
+                        {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1607,49 +1551,47 @@ class TestGotoInsidePerform:
         after the PERFORM in MAIN may or may not execute depending on
         continuation mechanics.
         """
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-VAL",
-                        "level": 77,
-                        "pic": "9(4)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "0",
-                    },
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "PERFORM", "operands": ["WORK-PARA"]},
-                            {"type": "ADD", "operands": ["1", "WS-VAL"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    },
-                    {
-                        "name": "WORK-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["10", "WS-VAL"]},
-                            {
-                                "type": "GOTO",
-                                "form": "simple",
-                                "target": {"paragraph": "EXIT-PARA", "section": ""},
-                            },
-                        ],
-                    },
-                    {
-                        "name": "EXIT-PARA",
-                        "statements": [
-                            {"type": "ADD", "operands": ["100", "WS-VAL"]},
-                        ],
-                    },
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-VAL",
+                    "level": 77,
+                    "pic": "9(4)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "PERFORM", "operands": ["WORK-PARA"]},
+                        {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+                {
+                    "name": "WORK-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                        {
+                            "type": "GOTO",
+                            "form": "simple",
+                            "target": {"paragraph": "EXIT-PARA", "section": ""},
+                        },
+                    ],
+                },
+                {
+                    "name": "EXIT-PARA",
+                    "statements": [
+                        {"type": "ADD", "operands": ["100", "WS-VAL"]},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1677,25 +1619,21 @@ class TestPicXDigitOnlyValue:
     @covers(CobolFeature.VALUE_CLAUSE, CobolFeature.PIC_CLAUSE)
     def test_pic_x_value_digit_string_stored_as_text(self):
         """PIC X(5) VALUE '12345' must store EBCDIC '12345', not zeros."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-TEXT",
-                        "level": 77,
-                        "pic": "X(5)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                        "value": "12345",
-                    }
-                ],
-                "paragraphs": [
-                    {"name": "MAIN-PARA", "statements": [{"type": "STOP_RUN"}]}
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-TEXT",
+                    "level": 77,
+                    "pic": "X(5)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "12345",
+                }
+            ],
+            "paragraphs": [{"name": "MAIN-PARA", "statements": [{"type": "STOP_RUN"}]}],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
 
         vm = _execute_straight_line(instructions)
         raw = vm.region_get(list(vm.region_keys())[0])
@@ -1709,30 +1647,28 @@ class TestPicXDigitOnlyValue:
     @covers(CobolFeature.MOVE, CobolFeature.PIC_CLAUSE)
     def test_move_digit_literal_to_pic_x(self):
         """MOVE '67890' TO WS-DEST (PIC X) must write EBCDIC '67890', not zeros."""
-        asg = CobolASG.from_dict(
-            {
-                "data_fields": [
-                    {
-                        "name": "WS-DEST",
-                        "level": 77,
-                        "pic": "X(5)",
-                        "usage": "DISPLAY",
-                        "offset": 0,
-                    }
-                ],
-                "paragraphs": [
-                    {
-                        "name": "MAIN-PARA",
-                        "statements": [
-                            {"type": "MOVE", "operands": ["67890", "WS-DEST"]},
-                            {"type": "STOP_RUN"},
-                        ],
-                    }
-                ],
-            }
-        )
-        frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(b"")
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-DEST",
+                    "level": 77,
+                    "pic": "X(5)",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                }
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {"type": "MOVE", "operands": ["67890", "WS-DEST"]},
+                        {"type": "STOP_RUN"},
+                    ],
+                }
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
