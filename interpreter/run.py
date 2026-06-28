@@ -90,6 +90,7 @@ from interpreter.trace_types import TraceStep, ExecutionTrace
 from interpreter.llm.backend import get_backend
 from interpreter import constants
 from interpreter.constants import LLMProvider
+from interpreter.frontend import make_cobol_parser
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.types import LinkedProgram
@@ -1273,6 +1274,7 @@ def run(
         # COBOL: compile via the shared compile_cobol API (behavior-preserving).
         frontend, linked = compile_cobol(
             source.encode("utf-8"),
+            parser=make_cobol_parser(),
             copybook_dirs=copybook_dirs,
             observer=observer,
         )
