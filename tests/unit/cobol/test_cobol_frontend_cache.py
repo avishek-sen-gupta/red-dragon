@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_parser import make_cobol_parser
@@ -54,17 +53,17 @@ def test_lower_from_ast_dict_applies_preprocessor():
     calls: list[dict] = []
 
     class _SpyStrategy:
-        def handles(self, stmt) -> bool:
+        def handles(self, stmt) -> bool:  # noqa: ARG002
             return False
 
         def preprocess_program_dict(self, data: dict) -> dict:
             calls.append(data)
             return data
 
-        def on_procedure_entry(self, ctx, materialised) -> None:
+        def on_procedure_entry(self, ctx, materialised) -> None:  # noqa: ARG002
             pass
 
-        def lower(self, ctx, stmt, materialised) -> None:
+        def lower(self, ctx, stmt, materialised) -> None:  # noqa: ARG002
             pass
 
     frontend = CobolFrontend(make_cobol_parser(), extension_strategies=[_SpyStrategy()])
