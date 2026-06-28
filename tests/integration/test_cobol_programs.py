@@ -7281,3 +7281,62 @@ class TestComp3DecimalDecodeNoTruncation:
         # WS-BAL S9(5)V99 COMP-3 = 7 digits -> 4 packed bytes (offset 0-3);
         # WS-FLAG PIC X at offset 4. 'Y' proves 1234.56 decoded without truncation.
         assert _decode_alpha(region, 4, 1) == "Y"
+
+
+class TestCallUsingOmittedAndLiteral:
+    """CALL USING OMITTED and CALL USING literal arguments (red-dragon-i1rb)."""
+
+    @covers(CobolFeature.CALL_USING_OMITTED)
+    def test_call_using_omitted_does_not_crash(self):
+        """CALL with an OMITTED arg alongside a real arg does not crash.
+
+        A single-module program calls a non-existent subprogram (symbolic CALL)
+        with one real arg and one OMITTED placeholder.  The CALL is a no-op
+        (callee unresolved), but lowering the CALL USING OMITTED must not raise
+        KeyError when trying to resolve "OMITTED" as a WS field.
+        Execution must continue past the CALL (WS-AFTER becomes 99).
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MAIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A     PIC 9(4) VALUE 7.",
+                "77 WS-AFTER PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "    CALL 'NONEXIST' USING BY REFERENCE WS-A OMITTED.",
+                "    MOVE 99 TO WS-AFTER.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A at offset 0 (4 bytes) — symbolic call, unchanged.
+        assert _decode_zoned_unsigned(region, 0, 4) == 7
+        # WS-AFTER at offset 4 (4 bytes) — execution continued past the CALL.
+        assert _decode_zoned_unsigned(region, 4, 4) == 99
+
+    @covers(CobolFeature.CALL_USING_LITERAL)
+    def test_call_using_by_content_literal_does_not_crash(self):
+        """CALL with a BY CONTENT literal arg does not crash.
+
+        Passing a literal value (not a data-name) as a USING argument must not
+        raise KeyError when lower_call tries to resolve it as a WS field.
+        Execution must continue past the CALL (WS-AFTER becomes 77).
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MAIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-AFTER PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "    CALL 'NONEXIST' USING BY CONTENT 42.",
+                "    MOVE 77 TO WS-AFTER.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-AFTER at offset 0 (4 bytes) — execution continued past the CALL.
+        assert _decode_zoned_unsigned(region, 0, 4) == 77
