@@ -898,9 +898,7 @@ class TestRoundTrip:
             ),
             "targets": ["WS-RESULT"],
         }
-        # to_dict() only returns type and targets (expression is not serialized)
-        expected = {"type": "COMPUTE", "targets": ["WS-RESULT"]}
-        assert self._round_trip(data) == expected
+        assert self._round_trip(data) == data
 
     @covers(CobolFeature.COMPUTE)
     def test_compute_multiple_targets_round_trip(self):
@@ -911,9 +909,7 @@ class TestRoundTrip:
             ),
             "targets": ["WS-C", "WS-D"],
         }
-        # to_dict() only returns type and targets (expression is not serialized)
-        expected = {"type": "COMPUTE", "targets": ["WS-C", "WS-D"]}
-        assert self._round_trip(data) == expected
+        assert self._round_trip(data) == data
 
     @covers(CobolFeature.PERFORM)
     def test_perform_procedure_round_trip(self):
