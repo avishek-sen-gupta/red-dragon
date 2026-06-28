@@ -50,6 +50,7 @@ from interpreter.register import Register
 
 if TYPE_CHECKING:
     from interpreter.cobol.cobol_expression import ExprNode
+    from interpreter.cobol.asg_types import CobolASG
 
 logger = logging.getLogger(__name__)
 
@@ -186,12 +187,31 @@ class CobolFrontend(Frontend):
 
         token = _cics_text_parser.set(self._cics_text_parser)
         try:
-            asg = self._parser.parse(
-                source,
-                preprocessor=_chained_preprocess,
-            )
+            asg = self._parser.parse(source, preprocessor=_chained_preprocess)
         finally:
             _cics_text_parser.reset(token)
+        return self._lower_asg(asg)
+
+    def lower_from_ast_dict(self, data: dict) -> list[InstructionBase]:
+        """Lower from a raw bridge JSON dict — no subprocess, no source bytes.
+
+        Applies extension strategy preprocessors (same as lower()) then lowers
+        the resulting ASG to IR. Use this in Phase 2 of the AST cache pipeline
+        after parse_to_file has written ASTs to disk.
+        """
+        token = _cics_text_parser.set(self._cics_text_parser)
+        try:
+            for strat in self._extension_strategies:
+                data = strat.preprocess_program_dict(data)
+            from interpreter.cobol.asg_types import CobolASG as _CobolASG
+
+            asg = _CobolASG.from_dict(data)
+        finally:
+            _cics_text_parser.reset(token)
+        return self._lower_asg(asg)
+
+    def _lower_asg(self, asg: "CobolASG") -> list[InstructionBase]:  # type: ignore[name-defined]
+        """Shared lowering core: ASG → IR. Called by lower() and lower_from_ast_dict()."""
         sectioned = build_sectioned_layout(asg)
         self._program_id = asg.program_id or "MAIN"
         logger.debug(
