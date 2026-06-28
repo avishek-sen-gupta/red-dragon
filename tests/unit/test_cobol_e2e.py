@@ -1152,7 +1152,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=1000)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=1000)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 30
@@ -1210,7 +1210,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=1000)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=1000)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 130
