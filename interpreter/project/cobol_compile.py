@@ -78,7 +78,7 @@ def compile_cobol_module(
     ast_path: Path | None = None,
 ) -> tuple[Any, ModuleUnit]:
     """Lower one COBOL source into a (frontend, ModuleUnit). The shared core."""
-    frontend = get_frontend(
+    frontend: Any = get_frontend(
         Language.COBOL,
         frontend_type=constants.FRONTEND_COBOL,
         observer=observer,
