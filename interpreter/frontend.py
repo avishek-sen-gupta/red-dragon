@@ -7,6 +7,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Sequence
 
+from interpreter.cobol.cobol_parser import (
+    make_cobol_parser as make_cobol_parser,
+)  # noqa: F401 — re-exported for callers outside interpreter.cobol
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
