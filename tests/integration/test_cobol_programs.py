@@ -4896,6 +4896,56 @@ class TestArithmeticRefMod:
         # WS-FIELD: 6 bytes at offset 0; WS-TOTAL: 5 bytes at offset 6
         assert _decode_zoned_unsigned(region, 6, 5) == 300
 
+    @covers(CobolFeature.ARITHMETIC_TARGET_REF_MOD, CobolFeature.ADD)
+    def test_add_to_target_ref_mod_updates_substring(self):
+        """ADD 5 TO WS-FIELD(4:2) splices the result into the target substring.
+
+        WS-FIELD = 'ABCDE' (5 chars); ADD 5 TO WS-FIELD(4:2) should update
+        bytes 4-5 with str(ord('D')+'E' as num + 5) — actually: decode
+        WS-FIELD(4:2) as alpha → '45' (initial value), add 5 → 50, splice
+        back into position 4.  Use explicit numeric sub-field VALUE for clarity.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ARTRM1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-BUF PIC X(8) VALUE 'AAA010BBB'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 5 TO WS-BUF(4:3).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-BUF(4:3) = '010' → 10 + 5 = 15 → splice → 'AAA015BBB' (only 8 chars fit)
+        result = bytes(region[0:8]).decode("cp037")
+        assert result == "AAA015BB"
+
+    @covers(CobolFeature.ARITHMETIC_TARGET_REF_MOD, CobolFeature.ADD)
+    def test_add_giving_target_ref_mod_updates_substring(self):
+        """ADD a GIVING WS-FIELD(start:len) splices the GIVING result into the substring."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ARTRM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(3) VALUE 100.",
+                "01 WS-BUF PIC X(9) VALUE 'XXXYYYZZZ'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 23 TO WS-A GIVING WS-BUF(4:3).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A stays 100; GIVING target is WS-BUF(4:3): splice '123' into bytes 4-6
+        # WS-A is 3 bytes, WS-BUF is 9 bytes starting at offset 3
+        result = bytes(region[3:12]).decode("cp037")
+        assert result == "XXX123ZZZ"
+
 
 class TestSectionedDataDivision:
     @covers(CobolFeature.SECTION_LINKAGE)
