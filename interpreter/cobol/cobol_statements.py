@@ -18,7 +18,7 @@ from interpreter.cobol.ref_mod import (
     FunctionCallOperand,
     is_function_operand,
 )
-from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict
+from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
 from interpreter.cobol.file_enums import OpenMode, FileOrganization, AccessMode
 
 # ── CICS text parser injection ────────────────────────────────────
@@ -218,7 +218,7 @@ class MoveCorrespondingStatement:
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "MOVE_CORRESPONDING", "operands": [self.source]}
+        result: dict = {"type": "MOVE_CORRESPONDING", "source": self.source}
         if self.targets:
             result["targets"] = list(self.targets)
         return result
@@ -342,9 +342,13 @@ class ComputeStatement:
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "COMPUTE"}
+        result: dict = {"type": "COMPUTE", "expression": expr_to_dict(self.expression)}
         if self.targets:
             result["targets"] = list(self.targets)
+        if self.on_size_error:
+            result["on_size_error"] = [c.to_dict() for c in self.on_size_error]
+        if self.not_on_size_error:
+            result["not_on_size_error"] = [c.to_dict() for c in self.not_on_size_error]
         return result
 
 
