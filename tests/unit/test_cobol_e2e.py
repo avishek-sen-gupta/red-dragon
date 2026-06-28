@@ -8,10 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from interpreter.address import Address
 from interpreter.cfg import build_cfg
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from interpreter.cobol.subprocess_runner import SubprocessRunner
 from interpreter.instructions import InstructionBase, AllocRegion, Const
 from interpreter.ir import Opcode
 from interpreter.registry import build_registry
@@ -21,7 +19,6 @@ from interpreter.vm.vm_types import StackFrame
 from interpreter.func_name import FuncName
 from interpreter.vm.executor import (
     LocalExecutor,
-    HandlerContext,
     _default_handler_context,
 )
 from interpreter.cobol.cobol_parser import make_cobol_parser
@@ -268,7 +265,7 @@ class TestPerformReturnFixture:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         # Execution should have completed (hit STOP RUN)
         assert vm.region_count() >= 1
@@ -838,7 +835,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 3) == 42
@@ -885,7 +882,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 10  # WS-A unchanged
@@ -933,7 +930,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 7  # WS-A = 10 - 3
@@ -972,7 +969,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 25
@@ -1020,7 +1017,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 3
@@ -1059,7 +1056,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 123
@@ -1099,7 +1096,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 15
@@ -1334,7 +1331,7 @@ class TestNestedPerformNumericValues:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 111
@@ -1402,7 +1399,7 @@ class TestNestedPerformNumericValues:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=2000)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=2000)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 6
@@ -1463,7 +1460,7 @@ class TestGotoInsidePerform:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 11
@@ -1526,7 +1523,7 @@ class TestGotoInsidePerform:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         assert _decode_zoned_unsigned(region, 0, 4) == 11
@@ -1595,7 +1592,7 @@ class TestGotoInsidePerform:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = _execute_cobol_program(cfg, registry, max_steps=500)
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
         region = vm.region_get(list(vm.region_keys())[0])
         # WORK-PARA adds 10, GO TO jumps to EXIT-PARA which adds 100.
