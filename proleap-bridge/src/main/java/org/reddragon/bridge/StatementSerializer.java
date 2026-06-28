@@ -1296,7 +1296,15 @@ public final class StatementSerializer {
                         for (ByReference br : param.getByReferencePhrase().getByReferences()) {
                             JsonObject paramObj = new JsonObject();
                             paramObj.addProperty("type", "REFERENCE");
-                            paramObj.addProperty("name", extractValueStmtText(br.getValueStmt()));
+                            if (br.getByReferenceType() == ByReference.ByReferenceType.OMITTED) {
+                                paramObj.addProperty("omitted", true);
+                            } else {
+                                paramObj.addProperty("name", extractValueStmtText(br.getValueStmt()));
+                                if (br.getByReferenceType() == ByReference.ByReferenceType.STRING
+                                        || br.getByReferenceType() == ByReference.ByReferenceType.INTEGER) {
+                                    paramObj.addProperty("is_literal", true);
+                                }
+                            }
                             params.add(paramObj);
                         }
                     } else if (param.getByContentPhrase() != null
@@ -1305,6 +1313,9 @@ public final class StatementSerializer {
                             JsonObject paramObj = new JsonObject();
                             paramObj.addProperty("type", "CONTENT");
                             paramObj.addProperty("name", extractValueStmtText(bc.getValueStmt()));
+                            if (bc.getValueStmt() instanceof io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt) {
+                                paramObj.addProperty("is_literal", true);
+                            }
                             params.add(paramObj);
                         }
                     } else if (param.getByValuePhrase() != null
@@ -1313,6 +1324,9 @@ public final class StatementSerializer {
                             JsonObject paramObj = new JsonObject();
                             paramObj.addProperty("type", "VALUE");
                             paramObj.addProperty("name", extractValueStmtText(bv.getValueStmt()));
+                            if (bv.getValueStmt() instanceof io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt) {
+                                paramObj.addProperty("is_literal", true);
+                            }
                             params.add(paramObj);
                         }
                     }
