@@ -912,6 +912,13 @@ public final class StatementSerializer {
                                 whenObj.addProperty("condition",
                                         insertSpaces(extractValueStmtText(whenVs)));
                             }
+                            // WHEN <value> THRU <value2> range — emit the upper bound separately.
+                            if (cond.getThrough() != null && cond.getThrough().getValue() != null
+                                    && cond.getThrough().getValue().getValueStmt() != null) {
+                                whenObj.addProperty("condition_thru",
+                                        insertSpaces(extractValueStmtText(
+                                                cond.getThrough().getValue().getValueStmt())));
+                            }
                         } else if (cvs != null) {
                             whenObj.addProperty("condition", insertSpaces(extractValueStmtText(cvs)));
                         } else if (cond.getCtx() != null) {
@@ -938,6 +945,14 @@ public final class StatementSerializer {
                                     JsonObject dfhAlso = serializeDfhrespFromVS(alsoVs);
                                     if (dfhAlso != null) {
                                         alsoCondsArr.add(dfhAlso);
+                                    } else if (aCond.getThrough() != null && aCond.getThrough().getValue() != null
+                                            && aCond.getThrough().getValue().getValueStmt() != null) {
+                                        // WHEN ... ALSO <from> THRU <to>
+                                        JsonObject rangeObj = new JsonObject();
+                                        rangeObj.addProperty("from", insertSpaces(extractValueStmtText(alsoVs)));
+                                        rangeObj.addProperty("thru", insertSpaces(extractValueStmtText(
+                                                aCond.getThrough().getValue().getValueStmt())));
+                                        alsoCondsArr.add(rangeObj);
                                     } else {
                                         alsoCondsArr.add(new JsonPrimitive(insertSpaces(extractValueStmtText(alsoVs))));
                                     }

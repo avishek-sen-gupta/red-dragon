@@ -393,6 +393,7 @@ class WhenStatement:
     condition: dict | str
     also_conditions: tuple[dict | str, ...] = ()
     children: list[CobolStatementType] = field(default_factory=list)
+    condition_thru: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> WhenStatement:
@@ -401,10 +402,13 @@ class WhenStatement:
             condition=data.get("condition", ""),
             also_conditions=tuple(raw_also),
             children=[parse_statement(c) for c in data.get("children", [])],
+            condition_thru=data.get("condition_thru"),
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "WHEN", "condition": self.condition}
+        if self.condition_thru is not None:
+            result["condition_thru"] = self.condition_thru
         if self.also_conditions:
             result["also_conditions"] = list(self.also_conditions)
         if self.children:
