@@ -1,6 +1,6 @@
 """Tests for COBOL frontend — Data Division and Procedure Division lowering."""
 
-from typing import Any
+from typing import Any, Sequence
 
 from interpreter.cobol.asg_types import (
     CobolASG,
@@ -242,11 +242,11 @@ class TestProcedureDivisionLowering:
     def _lower_with_field_and_stmts(
         self,
         fields: list[CobolField],
-        stmts: list[CobolStatementType],
+        stmts: Sequence[CobolStatementType],
     ) -> list[InstructionBase]:
         data = CobolASG(
             data_fields=fields,
-            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))],
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
         return frontend.lower_from_ast_dict(data)
@@ -632,11 +632,11 @@ class TestComputeLowering:
     def _lower_with_field_and_stmts(
         self,
         fields: list[CobolField],
-        stmts: list[CobolStatementType],
+        stmts: Sequence[CobolStatementType],
     ) -> list[InstructionBase]:
         data = CobolASG(
             data_fields=fields,
-            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))],
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
         return frontend.lower_from_ast_dict(data)
@@ -1353,11 +1353,11 @@ class TestTier1Lowering:
     def _lower_with_field_and_stmts(
         self,
         fields: list[CobolField],
-        stmts: list[CobolStatementType],
+        stmts: Sequence[CobolStatementType],
     ) -> list[InstructionBase]:
         data = CobolASG(
             data_fields=fields,
-            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))],
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
         return frontend.lower_from_ast_dict(data)
@@ -1577,11 +1577,11 @@ class TestTier2Lowering:
     def _lower_with_field_and_stmts(
         self,
         fields: list[CobolField],
-        stmts: list[CobolStatementType],
+        stmts: Sequence[CobolStatementType],
     ) -> list[InstructionBase]:
         data = CobolASG(
             data_fields=fields,
-            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))],
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
         return frontend.lower_from_ast_dict(data)
@@ -1825,11 +1825,11 @@ class TestSearchLowering:
     def _lower_with_field_and_stmts(
         self,
         fields: list[CobolField],
-        stmts: list[CobolStatementType],
+        stmts: Sequence[CobolStatementType],
     ) -> list[InstructionBase]:
         data = CobolASG(
             data_fields=fields,
-            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))],
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
         return frontend.lower_from_ast_dict(data)
@@ -2004,11 +2004,11 @@ class TestCallAlterEntryCancelLowering:
     def _lower_with_field_and_stmts(
         self,
         fields: list[CobolField],
-        stmts: list[CobolStatementType],
+        stmts: Sequence[CobolStatementType],
     ) -> list[InstructionBase]:
         data = CobolASG(
             data_fields=fields,
-            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))],
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
         return frontend.lower_from_ast_dict(data)
