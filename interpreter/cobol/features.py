@@ -27,6 +27,7 @@ class CobolFeature(Enum):
     # ---------------------------------------------------------------------------
     IF_ELSE = "IF cond ... ELSE ... END-IF conditional statements"
     EVALUATE = "EVALUATE expr WHEN val ... END-EVALUATE multi-branch statements"
+    EVALUATE_WHEN_THRU = "EVALUATE WHEN <from> THRU <to> range condition"
     EVALUATE_WHEN_OTHER = "WHEN OTHER default clause in EVALUATE statements"
     PERFORM = "PERFORM paragraph procedure invocation"
     PERFORM_TIMES = "PERFORM n TIMES loop statements"
