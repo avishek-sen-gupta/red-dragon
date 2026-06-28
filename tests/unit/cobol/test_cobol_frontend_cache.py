@@ -4,8 +4,7 @@ import json
 from pathlib import Path
 
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from interpreter.cobol.cobol_parser import ProLeapCobolParser
-from interpreter.cobol.subprocess_runner import SubprocessRunner
+from interpreter.cobol.cobol_parser import make_cobol_parser
 from interpreter.instructions import InstructionBase
 from tests.covers import NotLanguageFeature, covers
 
@@ -16,19 +15,17 @@ _MINIMAL_ASG = {
     "paragraphs": [{"name": "MAIN", "statements": [{"type": "STOP_RUN"}]}],
 }
 
-
-class _FakeRunner(SubprocessRunner):
-    def __init__(self, output: str) -> None:
-        self._output = output
-
-    def run(self, command, input_data=""):
-        return self._output
+_MINIMAL_SRC = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. PROG.
+       PROCEDURE DIVISION.
+           GOBACK.
+"""
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_lower_from_ast_dict_returns_instructions():
-    parser = ProLeapCobolParser(_FakeRunner(json.dumps(_MINIMAL_ASG)), "fake.jar")
-    frontend = CobolFrontend(parser)
+    frontend = CobolFrontend(make_cobol_parser())
     ir = frontend.lower_from_ast_dict(dict(_MINIMAL_ASG))
     assert isinstance(ir, list)
     assert len(ir) > 0
@@ -36,15 +33,18 @@ def test_lower_from_ast_dict_returns_instructions():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_lower_from_ast_dict_matches_lower():
-    """lower_from_ast_dict with the same dict must produce equivalent IR to lower()."""
-    parser = ProLeapCobolParser(_FakeRunner(json.dumps(_MINIMAL_ASG)), "fake.jar")
+def test_lower_from_ast_dict_matches_lower(tmp_path):
+    """lower_from_ast_dict with the real bridge dict must produce equivalent IR to lower()."""
+    parser = make_cobol_parser()
+    ast_path = tmp_path / "prog.ast.json"
+    parser.parse_to_file(_MINIMAL_SRC, ast_path)
+    data = json.loads(ast_path.read_text())
 
-    frontend1 = CobolFrontend(parser)
-    ir_from_source = frontend1.lower(b"ignored - fake runner ignores it")
+    frontend1 = CobolFrontend(make_cobol_parser())
+    ir_from_dict = frontend1.lower_from_ast_dict(data)
 
-    frontend2 = CobolFrontend(parser)
-    ir_from_dict = frontend2.lower_from_ast_dict(dict(_MINIMAL_ASG))
+    frontend2 = CobolFrontend(make_cobol_parser())
+    ir_from_source = frontend2.lower(_MINIMAL_SRC)
 
     assert len(ir_from_source) == len(ir_from_dict)
 
@@ -67,7 +67,6 @@ def test_lower_from_ast_dict_applies_preprocessor():
         def lower(self, ctx, stmt, materialised) -> None:
             pass
 
-    parser = ProLeapCobolParser(_FakeRunner(json.dumps(_MINIMAL_ASG)), "fake.jar")
-    frontend = CobolFrontend(parser, extension_strategies=[_SpyStrategy()])
+    frontend = CobolFrontend(make_cobol_parser(), extension_strategies=[_SpyStrategy()])
     frontend.lower_from_ast_dict(dict(_MINIMAL_ASG))
     assert len(calls) == 1
