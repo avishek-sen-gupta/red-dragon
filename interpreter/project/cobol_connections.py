@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from interpreter.constants import Language
-from interpreter.frontend import make_cobol_parser
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.imports import extract_imports
@@ -59,7 +58,7 @@ def extract_cobol_connections(
     copybook_dirs: list[Path] | None = None,
     program_source_dir: Path | None = None,
     extra_subprogram_sources: dict[str, bytes] | None = None,
-    parser: Any = None,
+    parser: Any,
     extension_strategies: Sequence[Any] = (),
     cics_text_parser: Any = None,
     observer: FrontendObserver = NullFrontendObserver(),
@@ -76,12 +75,9 @@ def extract_cobol_connections(
     """
     main_path = Path("__main__.cbl")
 
-    _parser = (
-        parser if parser is not None else make_cobol_parser(copybook_dirs=copybook_dirs)
-    )
     main_frontend, linked = compile_cobol(
         source,
-        parser=_parser,
+        parser=parser,
         copybook_dirs=copybook_dirs,
         extension_strategies=extension_strategies,
         cics_text_parser=cics_text_parser,
