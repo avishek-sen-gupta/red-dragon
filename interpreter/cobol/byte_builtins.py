@@ -551,6 +551,21 @@ def _builtin_string_splice(args: list[TypedValue], vm: VMState) -> BuiltinResult
     return BuiltinResult(value=value[:start] + replacement + value[start + length :])
 
 
+def _builtin_string_zfill(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Zero-pad a string on the left to the given width.
+
+    Args: [value: str, width: int]
+    Returns: str — value.zfill(width) but never truncates if longer
+    """
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    width = int(args[1].value)
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value.zfill(width))
+
+
 def _builtin_upper_case(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION UPPER-CASE: uppercase a string value.
 
@@ -975,6 +990,7 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         ): _builtin_cobol_apply_edit_picture,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
+        FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,
         FuncName(BuiltinName.UPPER_CASE): _builtin_upper_case,
         FuncName(BuiltinName.LOWER_CASE): _builtin_lower_case,
         FuncName(BuiltinName.TRIM): _builtin_cobol_trim,

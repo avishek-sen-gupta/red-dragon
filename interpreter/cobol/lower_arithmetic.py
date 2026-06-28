@@ -47,6 +47,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.cobol_expression import expr_from_dict
 from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop, BinopKind
@@ -644,6 +645,91 @@ def lower_arithmetic_corresponding(
         ctx.emit_encode_and_write(dst_rr, dst_fl, result_str, dst_ref.offset_reg)
 
 
+def _emit_arithmetic_writeback(
+    ctx: EmitContext,
+    target_op: RefModOperand,
+    target_ref: ResolvedFieldRef,
+    target_rr: Register,
+    result_str_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """Write arithmetic result into target, applying target ref-mod if present.
+
+    Plain write: encode result_str_reg into the target field.
+    Ref-mod write (ARITHMETIC TARGET REF-MOD): decode existing target value,
+    splice the result string into the requested substring position, then encode
+    and write back the spliced whole — identical to the MOVE target ref-mod path.
+    """
+    fl = target_ref.fl
+    offset_reg = target_ref.offset_reg
+
+    if target_op.ref_mod_start is not None:
+        target_decoded = ctx.emit_decode_field(target_rr, fl, offset_reg)
+        target_str_reg = ctx.emit_to_string(target_decoded)
+
+        tgt_start_reg = eval_ref_mod_expr(ctx, target_op.ref_mod_start, materialised)
+        one_reg = ctx.const_to_reg(1)
+        tgt_start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                operator=BinopKind.SUB,
+                left=tgt_start_reg,
+                right=one_reg,
+                result_reg=tgt_start_0indexed_reg,
+            )
+        )
+
+        if target_op.ref_mod_length is not None:
+            tgt_length_reg = eval_ref_mod_expr(
+                ctx, target_op.ref_mod_length, materialised
+            )
+        else:
+            tgt_length_reg = ctx.const_to_reg(999999)
+
+        # Normalise float arithmetic results (e.g. 15.0) → int → zero-padded
+        # string ('015') before splicing to fill the exact ref-mod width.
+        float_norm = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=float_norm,
+                func_name=FuncName("float"),
+                args=(result_str_reg,),
+            )
+        )
+        int_norm = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=int_norm, func_name=FuncName("int"), args=(float_norm,)
+            )
+        )
+        int_str_reg = ctx.emit_to_string(int_norm)
+        padded_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=padded_reg,
+                func_name=FuncName(BuiltinName.STRING_ZFILL),
+                args=(int_str_reg, tgt_length_reg),
+            )
+        )
+
+        spliced_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=spliced_reg,
+                func_name=FuncName(BuiltinName.STRING_SPLICE),
+                args=(
+                    target_str_reg,
+                    tgt_start_0indexed_reg,
+                    tgt_length_reg,
+                    padded_reg,
+                ),
+            )
+        )
+        ctx.emit_encode_and_write(target_rr, fl, spliced_reg, offset_reg)
+    else:
+        ctx.emit_encode_and_write(target_rr, fl, result_str_reg, offset_reg)
+
+
 def lower_arithmetic(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
@@ -722,6 +808,44 @@ def lower_arithmetic(
 
     tgt_decoded = ctx.emit_decode_field(target_rr, target_ref.fl, target_ref.offset_reg)
 
+    # Apply target ref-mod on the READ side: ADD 5 TO Y(4:3) should add to
+    # the Y(4:3) substring value, not to the entire Y field.
+    if stmt.target.ref_mod_start is not None:
+        tgt_str = ctx.emit_to_string(tgt_decoded)
+        tgt_rm_start = eval_ref_mod_expr(ctx, stmt.target.ref_mod_start, materialised)
+        one_reg2 = ctx.const_to_reg(1)
+        tgt_rm_start_0idx = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                operator=BinopKind.SUB,
+                left=tgt_rm_start,
+                right=one_reg2,
+                result_reg=tgt_rm_start_0idx,
+            )
+        )
+        tgt_rm_len = (
+            eval_ref_mod_expr(ctx, stmt.target.ref_mod_length, materialised)
+            if stmt.target.ref_mod_length is not None
+            else ctx.const_to_reg(999999)
+        )
+        tgt_sliced = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=tgt_sliced,
+                func_name=FuncName(BuiltinName.STRING_SLICE),
+                args=(tgt_str, tgt_rm_start_0idx, tgt_rm_len),
+            )
+        )
+        tgt_decoded_as_num = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=tgt_decoded_as_num,
+                func_name=FuncName("int"),
+                args=(tgt_sliced,),
+            )
+        )
+        tgt_decoded = tgt_decoded_as_num
+
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 
     if not has_clause:
@@ -736,8 +860,8 @@ def lower_arithmetic(
             )
         )
         result_str_reg = ctx.emit_to_string(result_reg)
-        ctx.emit_encode_and_write(
-            target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
+        _emit_arithmetic_writeback(
+            ctx, stmt.target, target_ref, target_rr, result_str_reg, materialised
         )
         return
 
@@ -793,8 +917,8 @@ def lower_arithmetic(
 
     ctx.emit_inst(Label_(label=not_on_size_err_label))
     result_str_reg = ctx.emit_to_string(result_reg)
-    ctx.emit_encode_and_write(
-        target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
+    _emit_arithmetic_writeback(
+        ctx, stmt.target, target_ref, target_rr, result_str_reg, materialised
     )
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
@@ -916,18 +1040,23 @@ def lower_arithmetic_giving(
                 subscripts=giving_op.subscripts,
             )
             result_str_reg = ctx.emit_to_string(result_reg)
-            ctx.emit_encode_and_write(
-                giving_rr, giving_ref.fl, result_str_reg, giving_ref.offset_reg
+            _emit_arithmetic_writeback(
+                ctx, giving_op, giving_ref, giving_rr, result_str_reg, materialised
             )
         return
 
-    # Compute combined overflow flag across all GIVING fields
-    giving_pairs = [
-        ctx.resolve_field_ref(
-            g.name, materialised, g.qualifiers, subscripts=g.subscripts
+    # Compute combined overflow flag across all GIVING fields.
+    # Keep the giving_op alongside (ref, rr) so ref-mod write-back has it.
+    giving_triples = [
+        (
+            g,
+            *ctx.resolve_field_ref(
+                g.name, materialised, g.qualifiers, subscripts=g.subscripts
+            ),
         )
         for g in stmt.giving
     ]
+    giving_pairs = [(ref, rr) for (_, ref, rr) in giving_triples]
     overflow_flags = [
         _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
         for ref, _ in giving_pairs
@@ -958,9 +1087,9 @@ def lower_arithmetic_giving(
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=not_on_size_err_label))
-    for ref, rr in giving_pairs:
+    for g_op, ref, rr in giving_triples:
         result_str_reg = ctx.emit_to_string(result_reg)
-        ctx.emit_encode_and_write(rr, ref.fl, result_str_reg, ref.offset_reg)
+        _emit_arithmetic_writeback(ctx, g_op, ref, rr, result_str_reg, materialised)
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))

@@ -86,6 +86,7 @@ class BuiltinName:
     COBOL_APPLY_EDIT_PICTURE = "__cobol_apply_edit_picture"
     STRING_SLICE = "__string_slice"
     STRING_SPLICE = "__string_splice"
+    STRING_ZFILL = "__string_zfill"
     UPPER_CASE = "__upper_case"
     LOWER_CASE = "__lower_case"
     TRIM = "__cobol_trim"
