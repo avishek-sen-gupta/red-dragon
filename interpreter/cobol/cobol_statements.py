@@ -887,16 +887,25 @@ class CallUsingParam:
 
     name: str
     param_type: str = "REFERENCE"  # REFERENCE, CONTENT, or VALUE
+    omitted: bool = False
+    is_literal: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> CallUsingParam:
         return cls(
             name=data.get("name", ""),
             param_type=data.get("type", "REFERENCE"),
+            omitted=data.get("omitted", False),
+            is_literal=data.get("is_literal", False),
         )
 
     def to_dict(self) -> dict:
-        return {"name": self.name, "type": self.param_type}
+        result: dict = {"name": self.name, "type": self.param_type}
+        if self.omitted:
+            result["omitted"] = True
+        if self.is_literal:
+            result["is_literal"] = True
+        return result
 
 
 @dataclass(frozen=True)
