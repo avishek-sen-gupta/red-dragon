@@ -3129,6 +3129,38 @@ class TestReadStatement:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 5) == 99999
 
+    @covers(
+        CobolFeature.READ,
+        CobolFeature.SECTION_FILE,
+        CobolFeature.OPEN,
+        CobolFeature.CLOSE,
+        CobolFeature.IO_PROVIDER,
+    )
+    def test_read_populates_fd_record_field(self):
+        """READ (no INTO) lands data in the FD record; MOVE to WS gives the right string."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        record = "HELLO               "  # 20 chars to match PIC X(20)
+        provider = StubIOProvider(files={"CUSTFILE": {"records": [record]}})
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SEC-FILE.",
+                *_file_section_preamble("CUSTFILE"),
+                "01 WS-DATA  PIC X(5).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    OPEN INPUT CUSTFILE.",
+                "    READ CUSTFILE.",
+                "    MOVE CUSTFILE-REC(1:5) TO WS-DATA.",
+                "    CLOSE CUSTFILE.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 5) == "HELLO"
+
 
 class TestStartStatement:
     @covers(

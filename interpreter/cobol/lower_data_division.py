@@ -71,6 +71,7 @@ def lower_sectioned_data_division(
 
     if layout.file.total_bytes > 0:
         file_reg = lower_data_division(ctx, layout.file)
+        ctx.set_file_region_reg(file_reg)
     else:
         file_reg = NO_REGISTER
 

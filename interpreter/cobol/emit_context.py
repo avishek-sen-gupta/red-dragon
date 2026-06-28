@@ -120,6 +120,7 @@ class EmitContext:
         self.use_by_file: dict[str, str] = {}
         self.use_by_mode: dict[str, str] = {}
         self.use_global: str | None = None
+        self._file_region_reg: Register = NO_REGISTER
 
     # ── Properties ────────────────────────────────────────────────
 
@@ -138,6 +139,15 @@ class EmitContext:
     @property
     def extension_strategies(self) -> tuple[RedDragonExtensionLoweringStrategy, ...]:
         return self._extension_strategies
+
+    def set_file_region_reg(self, reg: Register) -> None:
+        """Record the FILE SECTION region register.
+
+        Used by emit_decode_field to choose LATIN-1 (raw bytes) decoding for
+        alphanumeric FD record fields, which store file bytes verbatim via
+        emit_write_region_raw, rather than EBCDIC like WS/LS/LK fields.
+        """
+        self._file_region_reg = reg
 
     # ── Core Primitives ───────────────────────────────────────────
 
@@ -658,9 +668,17 @@ class EmitContext:
             CobolDataCategory.ALPHANUMERIC,
             CobolDataCategory.NUMERIC_EDITED,
         ):
-            # A numeric-edited field's stored content is its formatted character
-            # string; read it back as characters (its display form).
-            ir = build_decode_alphanumeric_ir(f"dec_alpha_{fl.name}")
+            # FILE section stores raw (LATIN-1) bytes via emit_write_region_raw;
+            # WS/LS/LK use EBCDIC. Choose encoding accordingly so MOVE from FD
+            # record fields decodes correctly (red-dragon-4q25.32).
+            is_file_field = (
+                self._file_region_reg.is_present()
+                and region_reg == self._file_region_reg
+            )
+            alpha_encoding = (
+                CobolEncoding.LATIN1 if is_file_field else CobolEncoding.EBCDIC
+            )
+            ir = build_decode_alphanumeric_ir(f"dec_alpha_{fl.name}", alpha_encoding)
         elif td.category == CobolDataCategory.ZONED_DECIMAL:
             if td.sign_separate:
                 ir = build_decode_zoned_separate_ir(
