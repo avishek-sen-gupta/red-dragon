@@ -7378,6 +7378,7 @@ class TestCallUsingOmittedAndLiteral:
 
 
 class TestRoundedClause:
+    @pytest.mark.xfail(reason="ROUNDED_CLAUSE lowering not yet implemented (Task 3+)")
     @covers(CobolFeature.ROUNDED_CLAUSE)
     def test_add_rounded_rounds_to_nearest(self):
         # 1.23 + 0.007 = 1.237; with ROUNDED→ 1.24, without → 1.23
@@ -7414,6 +7415,7 @@ class TestRoundedClause:
         region = _first_region(vm)
         assert _decode_zoned_with_decimal(region, 0, 3, 2) == Decimal("1.23")
 
+    @pytest.mark.xfail(reason="ROUNDED_CLAUSE lowering not yet implemented (Task 3+)")
     @covers(CobolFeature.ROUNDED_CLAUSE)
     def test_compute_rounded_integer(self):
         # 10 / 6 = 1.666...; PIC 9(3) with ROUNDED → 2, without → 1

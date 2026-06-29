@@ -21,6 +21,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_float_to_bytes,
     _builtin_bytes_to_float,
     _builtin_cobol_blank_when_zero,
+    _builtin_cobol_round,
     _builtin_string_find,
     _builtin_string_split,
     _builtin_string_count,
@@ -388,6 +389,7 @@ class TestByteBuiltinsRegistration:
             "__float_to_bytes",
             "__bytes_to_float",
             "__cobol_blank_when_zero",
+            "__cobol_round",
             "__cobol_apply_edit_picture",
             "__string_slice",
             "__string_splice",
@@ -1995,3 +1997,48 @@ class TestIntegerOfDate:
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.INTEGER_OF_DATE) in BYTE_BUILTINS
+
+
+class TestCobolRound:
+    """COBOL ROUNDED clause — half-away-from-zero rounding."""
+
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    def test_rounds_up_at_halfway(self):
+        result = _builtin_cobol_round(
+            [typed_from_runtime("1.235"), typed_from_runtime(2)], None
+        )
+        assert result.value == "1.24"
+
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    def test_rounds_down_below_halfway(self):
+        result = _builtin_cobol_round(
+            [typed_from_runtime("1.234"), typed_from_runtime(2)], None
+        )
+        assert result.value == "1.23"
+
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    def test_rounds_away_from_zero_for_negatives(self):
+        result = _builtin_cobol_round(
+            [typed_from_runtime("-1.235"), typed_from_runtime(2)], None
+        )
+        assert result.value == "-1.24"
+
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    def test_zero_decimal_digits_rounds_to_integer(self):
+        result = _builtin_cobol_round(
+            [typed_from_runtime("2.7"), typed_from_runtime(0)], None
+        )
+        assert result.value == "3"
+
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    def test_zero_decimal_digits_rounds_down(self):
+        result = _builtin_cobol_round(
+            [typed_from_runtime("2.3"), typed_from_runtime(0)], None
+        )
+        assert result.value == "2"
+
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    def test_symbolic_returns_uncomputable(self):
+        sym = typed_from_runtime(Operators.UNCOMPUTABLE)
+        result = _builtin_cobol_round([sym, typed_from_runtime(2)], None)
+        assert result.value == _UNCOMPUTABLE
