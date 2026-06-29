@@ -43,6 +43,23 @@ def decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
     return sum(d * (10 ** (length - 1 - i)) for i, d in enumerate(digits))
 
 
+def decode_zoned_with_decimal(
+    region: bytearray, offset: int, integer_digits: int, decimal_digits: int
+) -> "Decimal":
+    """Decode zoned decimal with fixed-point (integer.fractional) parts.
+
+    Extracts (integer_digits + decimal_digits) zoned decimal bytes, then
+    divides by 10^decimal_digits to place the decimal point.
+    E.g., 3 integer + 2 decimal digits reads 5 bytes and divides by 100.
+    """
+    from decimal import Decimal
+
+    n = integer_digits + decimal_digits
+    digits = [region[offset + i] & 0x0F for i in range(n)]
+    raw = sum(d * (10 ** (n - 1 - i)) for i, d in enumerate(digits))
+    return Decimal(raw) / Decimal(10**decimal_digits)
+
+
 def run_cobol(lines: list[str], max_steps: int = 1000):
     """Run short-form COBOL lines through the full pipeline; return the VMState."""
     source = to_fixed(lines)
