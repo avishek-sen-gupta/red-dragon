@@ -13,6 +13,7 @@ from interpreter.cobol.cobol_statements import (
     CancelStatement,
     CloseStatement,
     ComputeStatement,
+    ComputeTarget,
     ContinueStatement,
     DeleteStatement,
     DisplayStatement,
@@ -150,7 +151,7 @@ class TestParseStatementDispatch:
         from interpreter.cobol.cobol_expression import BinOpNode, FieldRefNode
 
         assert isinstance(stmt.expression, BinOpNode)
-        assert stmt.targets == ["WS-RESULT"]
+        assert stmt.targets == [ComputeTarget(name="WS-RESULT")]
 
     @covers(CobolFeature.COMPUTE)
     def test_compute_multiple_targets(self):
@@ -896,7 +897,7 @@ class TestRoundTrip:
             "expression": _binop(
                 "+", _ref("WS-A"), _binop("*", _ref("WS-B"), _lit("2"))
             ),
-            "targets": ["WS-RESULT"],
+            "targets": [{"name": "WS-RESULT"}],
         }
         assert self._round_trip(data) == data
 
@@ -907,7 +908,7 @@ class TestRoundTrip:
             "expression": _binop(
                 "*", _binop("+", _ref("WS-A"), _ref("WS-B")), _lit("100")
             ),
-            "targets": ["WS-C", "WS-D"],
+            "targets": [{"name": "WS-C"}, {"name": "WS-D"}],
         }
         assert self._round_trip(data) == data
 
