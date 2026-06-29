@@ -8,6 +8,8 @@ Requires the ProLeap bridge JAR to be available (set PROLEAP_BRIDGE_JAR env var
 or have it at the default path). Tests skip gracefully when the JAR is absent.
 """
 
+from decimal import Decimal
+
 import pytest
 
 from interpreter.address import Address
@@ -23,6 +25,7 @@ from tests.covers import covers, NotLanguageFeature
 from tests.integration.cobol_helpers import (
     bridge_jar,
     decode_zoned_unsigned as _decode_zoned_unsigned,
+    decode_zoned_with_decimal as _decode_zoned_with_decimal,
     to_fixed as _to_fixed,
 )
 
@@ -7372,3 +7375,80 @@ class TestCallUsingOmittedAndLiteral:
         region = _first_region(vm)
         # WS-AFTER at offset 0 (4 bytes) — execution continued past the CALL.
         assert _decode_zoned_unsigned(region, 0, 4) == 77
+
+
+class TestRoundedClause:
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    @pytest.mark.xfail(reason="ROUNDED_CLAUSE not yet implemented (red-dragon-4q25.4)")
+    def test_add_rounded_rounds_to_nearest(self):
+        # 1.23 + 0.007 = 1.237; with ROUNDED→ 1.24, without → 1.23
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. ROUNDED-TEST.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC 9(3)V9(2) VALUE 1.23.",
+                "PROCEDURE DIVISION.",
+                "MAIN.",
+                "    ADD 0.007 TO WS-X ROUNDED.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_with_decimal(region, 0, 3, 2) == Decimal("1.24")
+
+    @covers(CobolFeature.ADD)
+    def test_add_without_rounded_truncates(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. ROUNDED-TEST.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC 9(3)V9(2) VALUE 1.23.",
+                "PROCEDURE DIVISION.",
+                "MAIN.",
+                "    ADD 0.007 TO WS-X.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_with_decimal(region, 0, 3, 2) == Decimal("1.23")
+
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    @pytest.mark.xfail(reason="ROUNDED_CLAUSE not yet implemented (red-dragon-4q25.4)")
+    def test_compute_rounded_integer(self):
+        # 10 / 6 = 1.666...; PIC 9(3) with ROUNDED → 2, without → 1
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. ROUNDED-TEST.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN.",
+                "    COMPUTE WS-X ROUNDED = 10 / 6.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 3) == 2
+
+    def test_compute_without_rounded_truncates(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. ROUNDED-TEST.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN.",
+                "    COMPUTE WS-X = 10 / 6.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 3) == 1
