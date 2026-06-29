@@ -23,6 +23,7 @@ from interpreter.cobol.cobol_statements import (
     CloseStatement,
     CobolStatementType,
     ComputeStatement,
+    ComputeTarget,
     ContinueStatement,
     DeleteStatement,
     DisplayStatement,
@@ -669,7 +670,7 @@ class TestComputeLowering:
         stmts = [
             ComputeStatement(
                 expression=_build_expr(_binop("+", _ref("WS-A"), _ref("WS-B"))),
-                targets=["WS-RESULT"],
+                targets=[ComputeTarget(name="WS-RESULT")],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -717,7 +718,7 @@ class TestComputeLowering:
                 expression=_build_expr(
                     _binop("+", _ref("WS-A"), _binop("*", _ref("WS-B"), _lit("2")))
                 ),
-                targets=["WS-RESULT"],
+                targets=[ComputeTarget(name="WS-RESULT")],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -764,7 +765,7 @@ class TestComputeLowering:
                 expression=_build_expr(
                     _binop("*", _binop("+", _ref("WS-A"), _ref("WS-B")), _lit("3"))
                 ),
-                targets=["WS-RESULT"],
+                targets=[ComputeTarget(name="WS-RESULT")],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -801,7 +802,7 @@ class TestComputeLowering:
         stmts = [
             ComputeStatement(
                 expression=_build_expr(_binop("*", _ref("WS-A"), _lit("5"))),
-                targets=["WS-C", "WS-D"],
+                targets=[ComputeTarget(name="WS-C"), ComputeTarget(name="WS-D")],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -846,7 +847,7 @@ class TestComputeLowering:
         stmts = [
             ComputeStatement(
                 expression=_build_expr(_binop("+", _lit("10"), _lit("5"))),
-                targets=["WS-RESULT"],
+                targets=[ComputeTarget(name="WS-RESULT")],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -2399,7 +2400,7 @@ class TestBareStatements:
             data_fields=fields,
             statements=[
                 ComputeStatement(
-                    targets=["WS-A"],
+                    targets=[ComputeTarget(name="WS-A")],
                     expression=_build_expr(_binop("+", _ref("WS-A"), _lit("50"))),
                 ),
                 DisplayStatement(operands=(RefModOperand(name="WS-A"),)),
