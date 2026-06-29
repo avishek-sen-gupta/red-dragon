@@ -940,6 +940,21 @@ def lower_expr_node(
     if isinstance(node, BinOpNode):
         left_reg = lower_expr_node(ctx, node.left, materialised)
         right_reg = lower_expr_node(ctx, node.right, materialised)
+        # For division: force the right operand to float so the division is
+        # typed Int/Float=Float (or Float/Float=Float) rather than Int/Int=Int.
+        # Without this, _coerce_typed_register truncates 1.666...→1 before
+        # __cobol_round sees the value, making ROUNDED give wrong results.
+        # Mirrors the float-divisor pattern in ir_encoders.py (decimal scaling).
+        if node.op == "/":
+            float_right_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=float_right_reg,
+                    func_name=FuncName("float"),
+                    args=(Register(str(right_reg)),),
+                )
+            )
+            right_reg = float_right_reg
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
