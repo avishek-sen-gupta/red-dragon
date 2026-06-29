@@ -1125,8 +1125,22 @@ def lower_compute(
                 logger.warning("COMPUTE target %s not found in layout", target.name)
                 continue
             target_ref, target_rr = ctx.resolve_field_ref(target.name, materialised)
+            write_reg = result_str_reg
+            if target.rounded:
+                dec_digits_reg = ctx.const_to_reg(
+                    target_ref.fl.type_descriptor.decimal_digits
+                )
+                rounded_reg = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=rounded_reg,
+                        func_name=FuncName(BuiltinName.COBOL_ROUND),
+                        args=(write_reg, dec_digits_reg),
+                    )
+                )
+                write_reg = rounded_reg
             ctx.emit_encode_and_write(
-                target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
+                target_rr, target_ref.fl, write_reg, target_ref.offset_reg
             )
         return
 
@@ -1180,8 +1194,20 @@ def lower_compute(
 
     ctx.emit_inst(Label_(label=not_on_size_err_label))
     result_str_reg = ctx.emit_to_string(result_reg)
-    for ref, rr, _ in target_triples:
-        ctx.emit_encode_and_write(rr, ref.fl, result_str_reg, ref.offset_reg)
+    for ref, rr, target in target_triples:
+        write_reg = result_str_reg
+        if target.rounded:
+            dec_digits_reg = ctx.const_to_reg(ref.fl.type_descriptor.decimal_digits)
+            rounded_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=rounded_reg,
+                    func_name=FuncName(BuiltinName.COBOL_ROUND),
+                    args=(write_reg, dec_digits_reg),
+                )
+            )
+            write_reg = rounded_reg
+        ctx.emit_encode_and_write(rr, ref.fl, write_reg, ref.offset_reg)
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
