@@ -7379,7 +7379,6 @@ class TestCallUsingOmittedAndLiteral:
 
 class TestRoundedClause:
     @covers(CobolFeature.ROUNDED_CLAUSE)
-    @pytest.mark.xfail(reason="ROUNDED_CLAUSE not yet implemented (red-dragon-4q25.4)")
     def test_add_rounded_rounds_to_nearest(self):
         # 1.23 + 0.007 = 1.237; with ROUNDED→ 1.24, without → 1.23
         vm = _run_cobol(
@@ -7398,7 +7397,6 @@ class TestRoundedClause:
         region = _first_region(vm)
         assert _decode_zoned_with_decimal(region, 0, 3, 2) == Decimal("1.24")
 
-    @covers(CobolFeature.ADD)
     def test_add_without_rounded_truncates(self):
         vm = _run_cobol(
             [
@@ -7417,7 +7415,6 @@ class TestRoundedClause:
         assert _decode_zoned_with_decimal(region, 0, 3, 2) == Decimal("1.23")
 
     @covers(CobolFeature.ROUNDED_CLAUSE)
-    @pytest.mark.xfail(reason="ROUNDED_CLAUSE not yet implemented (red-dragon-4q25.4)")
     def test_compute_rounded_integer(self):
         # 10 / 6 = 1.666...; PIC 9(3) with ROUNDED → 2, without → 1
         vm = _run_cobol(
