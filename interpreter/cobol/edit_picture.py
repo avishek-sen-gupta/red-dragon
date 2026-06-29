@@ -28,7 +28,7 @@ from decimal import Decimal, InvalidOperation
 # alphanumeric). The presence of any of these — or an actual '.' decimal point —
 # makes the PIC a numeric-edited item.
 _SIGN_SYMS = frozenset("+-")
-_EDIT_SYMS = frozenset("Z+-,.")
+_EDIT_SYMS = frozenset("Z+-,.B0/")
 
 
 def _expand(pic: str) -> list[str]:
@@ -220,8 +220,10 @@ def format_edited(value: str, pic: str) -> str:
             out.append(".")
             past_decimal = True
             suppressing = False
+        elif sym == "B":
+            out.append(" ")
         else:
-            # Unsupported symbol — emit verbatim so the failure is visible.
+            # Insertion symbol (0, /) or unknown — emit verbatim.
             out.append(sym)
 
     return "".join(out)

@@ -124,3 +124,32 @@ class TestFormatAllZeroSuppressible:
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_negative_nonzero_suppresses_only_left_of_decimal(self):
         assert format_edited("-1234.50", "-ZZZ,ZZZ,ZZZ.ZZ") == "-      1,234.50"
+
+
+class TestInsertionEditSymbols:
+    """B / 0 / slash insertion symbols in numeric-edited PIC (red-dragon-r9s9)."""
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_is_numeric_edited_slash_date(self):
+        """PIC 99/99/9999 is recognised as numeric-edited."""
+        assert is_numeric_edited("99/99/9999") is True
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_is_numeric_edited_blank_insertion(self):
+        """PIC 9(5)BB9 is recognised as numeric-edited."""
+        assert is_numeric_edited("9(5)BB9") is True
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_is_numeric_edited_zero_insertion(self):
+        """PIC 9(3)09 is recognised as numeric-edited."""
+        assert is_numeric_edited("9(3)09") is True
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_format_edited_slash_date(self):
+        """format_edited formats a date value into 99/99/9999 template."""
+        assert format_edited("12311994", "99/99/9999") == "12/31/1994"
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_format_edited_blank_insertion(self):
+        """format_edited emits a space for B insertion positions."""
+        assert format_edited("123456", "9(5)BB9") == "12345  6"

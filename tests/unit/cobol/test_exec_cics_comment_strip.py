@@ -1,8 +1,11 @@
 """Unit tests for *> comment stripping in ExecCicsStatement.from_dict (red-dragon-kn0n)."""
 
 from __future__ import annotations
-import pytest
-from interpreter.cobol.cobol_statements import ExecCicsStatement, _cics_text_parser
+from interpreter.cobol.cobol_statements import (
+    CicsOperand,
+    ExecCicsStatement,
+    _cics_text_parser,
+)
 from tests.covers import NotLanguageFeature, covers
 
 
@@ -12,7 +15,7 @@ class TestExecCicsCommentStrip:
         """*> inline comment is stripped from exec_cics_text before parsing."""
         received: list[str] = []
 
-        def capturing_parser(text: str):
+        def capturing_parser(text: str) -> tuple[str, dict[str, CicsOperand | None]]:
             received.append(text)
             return ("RETURN", {})
 
@@ -31,7 +34,7 @@ class TestExecCicsCommentStrip:
         """exec_cics_text without *> reaches the parser unchanged."""
         received: list[str] = []
 
-        def capturing_parser(text: str):
+        def capturing_parser(text: str) -> tuple[str, dict[str, CicsOperand | None]]:
             received.append(text)
             return ("SEND", {"MAP": None})
 
@@ -48,7 +51,7 @@ class TestExecCicsCommentStrip:
         """*> comment on its own line is stripped; remaining lines are joined."""
         received: list[str] = []
 
-        def capturing_parser(text: str):
+        def capturing_parser(text: str) -> tuple[str, dict[str, CicsOperand | None]]:
             received.append(text)
             return ("RETURN", {})
 
