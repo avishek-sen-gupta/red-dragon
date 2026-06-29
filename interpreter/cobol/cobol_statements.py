@@ -9,6 +9,7 @@ discriminator.
 
 from __future__ import annotations
 
+import re
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Callable, Union
@@ -1306,6 +1307,7 @@ class ExecCicsStatement:
                 "No CICS text parser injected — pass cics_text_parser= to CobolFrontend"
             )
         text = data.get("exec_cics_text", "")
+        text = re.sub(r"\*>.*", "", text, flags=re.MULTILINE).strip()
         verb, options = parser(text)
         return cls(verb=verb, options=options)
 
