@@ -2804,3 +2804,13 @@ The ProLeap bridge serializes each USING operand individually: a `BY REFERENCE W
 **Decision:** Add `GobackStatement` and `ExitProgramStatement` to the Python statement model; `lower_goback` and `lower_exit_program` emit `Return_` (identical IR to `lower_stop_run`). The ProLeap bridge serializes `GO_BACK` → `"GOBACK"`, and `serializeExit` checks `ExitStatementContext.PROGRAM()` to emit `"EXIT_PROGRAM"` for `EXIT PROGRAM` versus `"EXIT"` for the plain no-op form.
 
 **Consequences:** Subprograms ending in `GOBACK` or `EXIT PROGRAM` return control to the caller, which continues executing after the `CALL`. At the IR level all three exit verbs collapse to `RETURN`; the distinction between main-program termination and subprogram return is handled by the VM's call-stack unwinding, not by the lowering. Adds `CobolFeature.GOBACK` and `CobolFeature.EXIT_PROGRAM` (114 enumerated features total).
+
+---
+
+### ADR-146: COBOL ROUNDED CLAUSE — pre-round via `__cobol_round` builtin (2026-06-29)
+
+**Context:** The COBOL `ROUNDED` modifier on arithmetic targets requires half-away-from-zero rounding of the computed result before it is stored to the target field. The existing encode pipeline (`align_decimal`, `__cobol_prepare_digits`) performs truncation by design. Three approaches were considered: (A) a new `ROUND_HALF_UP` mode threaded through `align_decimal`; (B) a standalone `__cobol_round` builtin injected before `emit_encode_and_write`; (C) post-encode integer arithmetic.
+
+**Decision:** Approach B — inject a `__cobol_round(value_str, decimal_digits)` call in `_emit_arithmetic_writeback` and `lower_compute` when `target.rounded = True`. The builtin uses Python's `decimal.ROUND_HALF_UP`. The encode pipeline is not touched. `RefModOperand` gains `rounded: bool`; `ComputeStatement.targets` migrates to `list[ComputeTarget]` to carry the per-target flag. The ProLeap bridge serializes `isRounded()` from the ASG for all arithmetic verb targets.
+
+**Consequences:** The encode pipeline remains stable; adding ROUNDED support to any future arithmetic verb only requires plumbing `rounded` through its target operand type and calling `__cobol_round` before the existing writeback. The `decimal` import is deferred to call time to avoid module-level overhead. `ComputeStatement.targets` is now `list[ComputeTarget]` — a narrow breaking change within `lower_arithmetic.py` (no external callers).
