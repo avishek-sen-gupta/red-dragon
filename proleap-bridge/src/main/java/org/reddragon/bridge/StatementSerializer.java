@@ -307,7 +307,9 @@ public final class StatementSerializer {
                 operands.add(serializeArithSource(vs));
             }
             for (To to : addTo.getTos()) {
-                operands.add(serializeRef(to.getToCall()));
+                JsonObject t = serializeRef(to.getToCall());
+                t.addProperty("rounded", to.isRounded());
+                operands.add(t);
             }
         } else {
             AddToGivingStatement addGiving = stmt.getAddToGivingStatement();
@@ -320,7 +322,9 @@ public final class StatementSerializer {
                 }
                 JsonArray givingTargets = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.add.Giving g : addGiving.getGivings()) {
-                    givingTargets.add(serializeRef(g.getGivingCall()));
+                    JsonObject gt = serializeRef(g.getGivingCall());
+                    gt.addProperty("rounded", g.isRounded());
+                    givingTargets.add(gt);
                 }
                 if (givingTargets.size() > 0) {
                     obj.add("giving", givingTargets);
@@ -363,7 +367,9 @@ public final class StatementSerializer {
                 operands.add(serializeArithSource(vs));
             }
             for (Minuend min : subtractFrom.getMinuends()) {
-                operands.add(serializeRef(min.getMinuendCall()));
+                JsonObject t = serializeRef(min.getMinuendCall());
+                t.addProperty("rounded", min.isRounded());
+                operands.add(t);
             }
         } else {
             SubtractFromGivingStatement subtractGiving = stmt.getSubtractFromGivingStatement();
@@ -380,7 +386,9 @@ public final class StatementSerializer {
                 }
                 JsonArray givingTargets = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.subtract.Giving g : subtractGiving.getGivings()) {
-                    givingTargets.add(serializeRef(g.getGivingCall()));
+                    JsonObject gt = serializeRef(g.getGivingCall());
+                    gt.addProperty("rounded", g.isRounded());
+                    givingTargets.add(gt);
                 }
                 if (givingTargets.size() > 0) {
                     obj.add("giving", givingTargets);
@@ -424,7 +432,9 @@ public final class StatementSerializer {
                     for (io.proleap.cobol.asg.metamodel.procedure.multiply.GivingResult gr : givingPhrase.getGivingResults()) {
                         Call resultCall = gr.getResultCall();
                         if (resultCall != null) {
-                            givingTargets.add(serializeRef(resultCall));
+                            JsonObject gt = serializeRef(resultCall);
+                            gt.addProperty("rounded", gr.isRounded());
+                            givingTargets.add(gt);
                         }
                     }
                     if (givingTargets.size() > 0) {
@@ -438,7 +448,9 @@ public final class StatementSerializer {
                     for (ByOperand byOp : byPhrase.getByOperands()) {
                         Call targetCall = byOp.getOperandCall();
                         if (targetCall != null) {
-                            operands.add(serializeRef(targetCall));
+                            JsonObject t = serializeRef(targetCall);
+                            t.addProperty("rounded", byOp.isRounded());
+                            operands.add(t);
                         }
                     }
                 }
@@ -481,7 +493,9 @@ public final class StatementSerializer {
                         for (Giving g : gp.getGivings()) {
                             Call givingCall = g.getGivingCall();
                             if (givingCall != null) {
-                                givingTargets.add(serializeRef(givingCall));
+                                JsonObject gt = serializeRef(givingCall);
+                                gt.addProperty("rounded", g.isRounded());
+                                givingTargets.add(gt);
                             }
                         }
                         if (givingTargets.size() > 0) {
@@ -502,7 +516,9 @@ public final class StatementSerializer {
                         for (Giving g : gp.getGivings()) {
                             Call givingCall = g.getGivingCall();
                             if (givingCall != null) {
-                                givingTargets.add(serializeRef(givingCall));
+                                JsonObject gt = serializeRef(givingCall);
+                                gt.addProperty("rounded", g.isRounded());
+                                givingTargets.add(gt);
                             }
                         }
                         if (givingTargets.size() > 0) {
@@ -517,7 +533,9 @@ public final class StatementSerializer {
                     for (Into into : intoStmt.getIntos()) {
                         Call targetCall = into.getGivingCall();
                         if (targetCall != null) {
-                            operands.add(serializeRef(targetCall));
+                            JsonObject t = serializeRef(targetCall);
+                            t.addProperty("rounded", into.isRounded());
+                            operands.add(t);
                         }
                     }
                 }
@@ -548,7 +566,10 @@ public final class StatementSerializer {
         for (Store store : stmt.getStores()) {
             Call storeCall = store.getStoreCall();
             if (storeCall != null) {
-                targets.add(extractCallName(storeCall));
+                JsonObject t = new JsonObject();
+                t.addProperty("name", extractCallName(storeCall));
+                t.addProperty("rounded", store.isRounded());
+                targets.add(t);
             }
         }
 
