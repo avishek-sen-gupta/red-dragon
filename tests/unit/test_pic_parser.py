@@ -194,3 +194,17 @@ class TestParsePicBlankWhenZero:
         """BLANK WHEN ZERO on alphanumeric is ignored (not propagated)."""
         result = parse_pic("X(10)", blank_when_zero=True)
         assert result.blank_when_zero is False  # alphanumeric path doesn't set it
+
+
+def test_parse_pic_slash_date_no_valueerror():
+    """parse_pic("99/99/9999") must not raise ValueError (red-dragon-r9s9)."""
+    td = parse_pic("99/99/9999")
+    assert td.category == CobolDataCategory.NUMERIC_EDITED
+    assert td.byte_length == 10
+
+
+def test_parse_pic_blank_insertion_no_valueerror():
+    """parse_pic("9(5)BB9") must not raise ValueError (red-dragon-r9s9)."""
+    td = parse_pic("9(5)BB9")
+    assert td.category == CobolDataCategory.NUMERIC_EDITED
+    assert td.byte_length == 8
