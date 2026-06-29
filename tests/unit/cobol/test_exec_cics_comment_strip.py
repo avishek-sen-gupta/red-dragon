@@ -66,3 +66,25 @@ class TestExecCicsCommentStrip:
             _cics_text_parser.reset(token)
 
         assert "*>" not in received[0]
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_cotrn02c_pattern_no_valueerror(self):
+        """Reproduces the exact COTRN02C exec_cics_text that raised ValueError (kn0n)."""
+
+        def parser(text: str) -> tuple[str, dict[str, CicsOperand | None]]:
+            return ("RETURN", {})
+
+        token = _cics_text_parser.set(parser)
+        try:
+            # This exact text from COTRN02C used to raise ValueError
+            ExecCicsStatement.from_dict(
+                {
+                    "exec_cics_text": (
+                        "RETURN TRANSID (WS-TRANID) COMMAREA (CARDDEMO-COMMAREA)"
+                        " *>  LENGTH(LENGTH OF CARDDEMO-COMMAREA)"
+                    )
+                }
+            )
+        finally:
+            _cics_text_parser.reset(token)
+        # No exception = pass
