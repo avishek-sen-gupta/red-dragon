@@ -8,6 +8,7 @@ defined exactly once.
 from __future__ import annotations
 
 import os
+from decimal import Decimal
 
 import pytest
 
@@ -45,15 +46,13 @@ def decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
 
 def decode_zoned_with_decimal(
     region: bytearray, offset: int, integer_digits: int, decimal_digits: int
-) -> "Decimal":
+) -> Decimal:
     """Decode zoned decimal with fixed-point (integer.fractional) parts.
 
     Extracts (integer_digits + decimal_digits) zoned decimal bytes, then
     divides by 10^decimal_digits to place the decimal point.
     E.g., 3 integer + 2 decimal digits reads 5 bytes and divides by 100.
     """
-    from decimal import Decimal
-
     n = integer_digits + decimal_digits
     digits = [region[offset + i] & 0x0F for i in range(n)]
     raw = sum(d * (10 ** (n - 1 - i)) for i, d in enumerate(digits))
