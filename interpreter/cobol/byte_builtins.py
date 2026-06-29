@@ -502,6 +502,26 @@ def _builtin_cobol_blank_when_zero(
     )
 
 
+def _builtin_cobol_round(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Round a numeric value using COBOL ROUNDED semantics (half-away-from-zero).
+
+    Args: [value_str: str, decimal_digits: int]
+    Returns: str — the rounded value as a string.
+    """
+    if (
+        len(args) < 2
+        or any(_is_symbolic(a.value) for a in args)
+        or any(a.value is _UNCOMPUTABLE for a in args)
+    ):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from decimal import Decimal, ROUND_HALF_UP
+
+    decimal_digits = int(args[1].value)
+    quantizer = Decimal(10) ** -decimal_digits
+    d = Decimal(str(args[0].value)).quantize(quantizer, rounding=ROUND_HALF_UP)
+    return BuiltinResult(value=str(d))
+
+
 def _builtin_cobol_apply_edit_picture(
     args: list[TypedValue], vm: VMState
 ) -> BuiltinResult:
@@ -985,6 +1005,7 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.FLOAT_TO_BYTES): _builtin_float_to_bytes,
         FuncName(BuiltinName.BYTES_TO_FLOAT): _builtin_bytes_to_float,
         FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,
+        FuncName(BuiltinName.COBOL_ROUND): _builtin_cobol_round,
         FuncName(
             BuiltinName.COBOL_APPLY_EDIT_PICTURE
         ): _builtin_cobol_apply_edit_picture,
