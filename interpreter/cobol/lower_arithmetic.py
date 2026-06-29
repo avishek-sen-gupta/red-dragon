@@ -727,6 +727,17 @@ def _emit_arithmetic_writeback(
         )
         ctx.emit_encode_and_write(target_rr, fl, spliced_reg, offset_reg)
     else:
+        if target_op.rounded:
+            dec_digits_reg = ctx.const_to_reg(fl.type_descriptor.decimal_digits)
+            rounded_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=rounded_reg,
+                    func_name=FuncName(BuiltinName.COBOL_ROUND),
+                    args=(result_str_reg, dec_digits_reg),
+                )
+            )
+            result_str_reg = rounded_reg
         ctx.emit_encode_and_write(target_rr, fl, result_str_reg, offset_reg)
 
 
