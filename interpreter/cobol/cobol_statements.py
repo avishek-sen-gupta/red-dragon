@@ -322,11 +322,31 @@ class ArithmeticStatement:
 
 
 @dataclass(frozen=True)
+class ComputeTarget:
+    """A single target variable in a COMPUTE statement, with optional ROUNDED."""
+
+    name: str
+    rounded: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict | str) -> "ComputeTarget":
+        if isinstance(data, str):
+            return cls(name=data)
+        return cls(name=data["name"], rounded=data.get("rounded", False))
+
+    def to_dict(self) -> dict:
+        d: dict = {"name": self.name}
+        if self.rounded:
+            d["rounded"] = True
+        return d
+
+
+@dataclass(frozen=True)
 class ComputeStatement:
     """COMPUTE target = arithmetic-expression."""
 
     expression: ExprNode  # structured expression tree
-    targets: list[str] = field(default_factory=list)  # target variable names
+    targets: list[ComputeTarget] = field(default_factory=list)  # target variable names
     on_size_error: list[CobolStatementType] = field(default_factory=list)
     not_on_size_error: list[CobolStatementType] = field(default_factory=list)
 
@@ -334,7 +354,7 @@ class ComputeStatement:
     def from_dict(cls, data: dict) -> ComputeStatement:
         return cls(
             expression=expr_from_dict(data["expression"]),
-            targets=data.get("targets", []),
+            targets=[ComputeTarget.from_dict(t) for t in data.get("targets", [])],
             on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
             not_on_size_error=[
                 parse_statement(c) for c in data.get("not_on_size_error", [])
@@ -344,7 +364,7 @@ class ComputeStatement:
     def to_dict(self) -> dict:
         result: dict = {"type": "COMPUTE", "expression": expr_to_dict(self.expression)}
         if self.targets:
-            result["targets"] = list(self.targets)
+            result["targets"] = [t.to_dict() for t in self.targets]
         if self.on_size_error:
             result["on_size_error"] = [c.to_dict() for c in self.on_size_error]
         if self.not_on_size_error:

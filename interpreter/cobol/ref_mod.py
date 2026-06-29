@@ -148,6 +148,7 @@ class RefModOperand:
     length_of: str = ""
     qualifiers: tuple[str, ...] = ()
     subscripts: tuple[ExprNode, ...] = ()
+    rounded: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> RefModOperand:
@@ -184,6 +185,7 @@ class RefModOperand:
 
         qualifiers = tuple(data.get("qualifiers", ()))
         subscripts = tuple(expr_from_dict(s) for s in data.get("subscripts", []))
+        rounded = data.get("rounded", False) if isinstance(data, dict) else False
 
         return cls(
             name=name,
@@ -191,6 +193,7 @@ class RefModOperand:
             ref_mod_length=ref_mod_length,
             qualifiers=qualifiers,
             subscripts=subscripts,
+            rounded=rounded,
         )
 
     def to_dict(self) -> dict:
@@ -206,4 +209,6 @@ class RefModOperand:
             result["qualifiers"] = list(self.qualifiers)
         if self.subscripts:
             result["subscripts"] = [expr_to_dict(s) for s in self.subscripts]
+        if self.rounded:
+            result["rounded"] = True
         return result

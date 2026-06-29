@@ -1109,11 +1109,11 @@ def lower_compute(
 
     if not has_clause:
         result_str_reg = ctx.emit_to_string(result_reg)
-        for target_name in stmt.targets:
-            if not ctx.has_field(target_name, materialised):
-                logger.warning("COMPUTE target %s not found in layout", target_name)
+        for target in stmt.targets:
+            if not ctx.has_field(target.name, materialised):
+                logger.warning("COMPUTE target %s not found in layout", target.name)
                 continue
-            target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
+            target_ref, target_rr = ctx.resolve_field_ref(target.name, materialised)
             ctx.emit_encode_and_write(
                 target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
             )
@@ -1124,22 +1124,23 @@ def lower_compute(
     end_label = ctx.fresh_label("size_err_end")
 
     # Resolve all valid targets up front
-    target_pairs: list[tuple] = []
-    for target_name in stmt.targets:
-        if not ctx.has_field(target_name, materialised):
-            logger.warning("COMPUTE target %s not found in layout", target_name)
+    target_triples: list[tuple] = []
+    for target in stmt.targets:
+        if not ctx.has_field(target.name, materialised):
+            logger.warning("COMPUTE target %s not found in layout", target.name)
             continue
-        target_pairs.append(ctx.resolve_field_ref(target_name, materialised))
+        ref, rr = ctx.resolve_field_ref(target.name, materialised)
+        target_triples.append((ref, rr, target))
 
     # Guard: no valid targets means no writes and no overflow check — execute
     # not_on_size_error path (same as fast path: silent skip).
-    if not target_pairs:
+    if not target_triples:
         return
 
     # OR overflow flags across all targets (all-or-nothing semantics)
     overflow_flags = [
         _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
-        for ref, _ in target_pairs
+        for ref, rr, _ in target_triples
     ]
     combined_flag = overflow_flags[0]
     for flag in overflow_flags[1:]:
@@ -1168,7 +1169,7 @@ def lower_compute(
 
     ctx.emit_inst(Label_(label=not_on_size_err_label))
     result_str_reg = ctx.emit_to_string(result_reg)
-    for ref, rr in target_pairs:
+    for ref, rr, _ in target_triples:
         ctx.emit_encode_and_write(rr, ref.fl, result_str_reg, ref.offset_reg)
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
