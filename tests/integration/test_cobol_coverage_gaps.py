@@ -136,10 +136,7 @@ class TestIntrinsicFunctions:
         )
         assert _decode(_first_region(vm), 0, 2) == 3
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="red-dragon-clpn: FUNCTION MOD not implemented (returns arg 1)",
-    )
+    # red-dragon-clpn: MOD implemented (used in CardDemo). Was xfail; now green.
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_mod(self):
         """FUNCTION MOD(17 5) must yield 2."""
@@ -157,6 +154,26 @@ class TestIntrinsicFunctions:
             ]
         )
         assert _decode(_first_region(vm), 0, 2) == 2
+
+    # red-dragon-clpn: DATE-OF-INTEGER implemented (used in CardDemo).
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_date_of_integer(self):
+        """FUNCTION DATE-OF-INTEGER(154498) must yield 20240101 (inverse of
+        INTEGER-OF-DATE; day 154498 after the 1600-12-31 epoch)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNDOI.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-D PIC 9(8) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-D = FUNCTION DATE-OF-INTEGER(154498).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 8) == 20240101
 
 
 # ── red-dragon-frdu: arithmetic target ref-mod for SUBTRACT/MULTIPLY/DIVIDE ────

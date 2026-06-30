@@ -947,6 +947,64 @@ def _builtin_integer_of_date(args: list[TypedValue], vm: VMState) -> BuiltinResu
     return BuiltinResult(value=(target - epoch).days)
 
 
+def _coerce_intrinsic_int(raw: object) -> int | None:
+    """Coerce a builtin argument value to an int, or None if not integer-valued.
+
+    Accepts ints, integer-valued floats, and numeric strings (optional sign).
+    """
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        return int(raw) if raw == int(raw) else None
+    if isinstance(raw, str):
+        s = raw.strip()
+        digits = s.lstrip("+-")
+        if digits.isdigit():
+            return -int(digits) if s.startswith("-") else int(digits)
+    return None
+
+
+def _builtin_mod(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION MOD(x, y): x modulo y.
+
+    Defined as x - y * FUNCTION INTEGER(x / y), i.e. a floored modulo whose
+    result carries the sign of the divisor y — which is exactly Python's ``%``
+    for integers (MOD(-7, 3) == 2, MOD(7, -3) == -2). Arguments are integers; a
+    zero divisor or a non-integer/symbolic argument yields UNCOMPUTABLE.
+    """
+    if len(args) < 2 or _is_symbolic(args[0].value) or _is_symbolic(args[1].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_int(args[0].value)
+    y = _coerce_intrinsic_int(args[1].value)
+    if x is None or y is None or y == 0:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=x % y)
+
+
+def _builtin_date_of_integer(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION DATE-OF-INTEGER(n): the Gregorian date as a CCYYMMDD integer.
+
+    Inverse of INTEGER-OF-DATE: n is the number of days after the COBOL standard
+    epoch (1600-12-31), so 1 -> 16010101 and 154498 -> 20240101. A non-positive,
+    out-of-range, non-integer, or symbolic argument yields UNCOMPUTABLE.
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from datetime import date, timedelta
+
+    n = _coerce_intrinsic_int(args[0].value)
+    if n is None or n < 1:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    epoch = date(1600, 12, 31)
+    try:
+        d = epoch + timedelta(days=n)
+    except (OverflowError, ValueError):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=d.year * 10000 + d.month * 100 + d.day)
+
+
 def _builtin_string_convert(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """INSPECT ... CONVERTING from TO to: positional per-character translate.
 
@@ -1026,6 +1084,8 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.TEST_NUMVAL): _builtin_test_numval,
         FuncName(BuiltinName.TEST_NUMVAL_C): _builtin_test_numval_c,
         FuncName(BuiltinName.INTEGER_OF_DATE): _builtin_integer_of_date,
+        FuncName(BuiltinName.DATE_OF_INTEGER): _builtin_date_of_integer,
+        FuncName(BuiltinName.MOD): _builtin_mod,
         FuncName(BuiltinName.STRING_CONVERT): _builtin_string_convert,
     }
 )
