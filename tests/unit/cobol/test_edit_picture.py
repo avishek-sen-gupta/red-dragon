@@ -28,6 +28,18 @@ class TestIsNumericEdited:
         assert not is_numeric_edited("9(9)V99")
 
     @covers(CobolFeature.NUMERIC_EDITED)
+    def test_repeat_count_zero_is_not_an_insertion_symbol(self):
+        """A '0' inside a repeat count (e.g. the 0 in '9(10)') is a digit count,
+        NOT a PIC '0' zero-insertion symbol — so wide plain-numeric pictures
+        must not be classified as numeric-edited (red-dragon-r9s9 regression)."""
+        assert not is_numeric_edited("9(10)")
+        assert not is_numeric_edited("S9(10)V99")
+        assert not is_numeric_edited("9(20)")
+        assert not is_numeric_edited("9(100)")
+        # a genuine trailing '0' insertion is still edited
+        assert is_numeric_edited("9(3)09")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
     def test_alphanumeric_is_not_edited(self):
         assert not is_numeric_edited("X(8)")
         assert not is_numeric_edited("X(16)")
