@@ -70,7 +70,15 @@ def is_numeric_edited(pic: str) -> bool:
     has_digit = "9" in upper or "Z" in upper
     if not has_digit:
         return False
-    return any(c in _EDIT_SYMS for c in upper)
+    # Scan the EXPANDED positions, not the raw string: a digit inside a repeat
+    # count (e.g. the '0' in "9(10)") is a count, not a PIC '0' zero-insertion
+    # symbol. _expand consumes "(10)" into ten '9's, while a genuine insertion
+    # '0' (as in "9(3)09") survives as its own position (red-dragon-r9s9).
+    try:
+        positions = _expand(upper)
+    except ValueError:
+        positions = list(upper)
+    return any(c in _EDIT_SYMS for c in positions)
 
 
 @dataclass(frozen=True)
