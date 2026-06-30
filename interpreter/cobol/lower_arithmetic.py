@@ -232,6 +232,8 @@ _INTRINSIC_FUNCTIONS = {
     "TEST-NUMVAL": BuiltinName.TEST_NUMVAL,
     "TEST-NUMVAL-C": BuiltinName.TEST_NUMVAL_C,
     "INTEGER-OF-DATE": BuiltinName.INTEGER_OF_DATE,
+    "DATE-OF-INTEGER": BuiltinName.DATE_OF_INTEGER,
+    "MOD": BuiltinName.MOD,
 }
 
 

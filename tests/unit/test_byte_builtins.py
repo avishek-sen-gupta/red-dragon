@@ -45,6 +45,8 @@ from interpreter.cobol.byte_builtins import (
     _builtin_test_numval,
     _builtin_test_numval_c,
     _builtin_integer_of_date,
+    _builtin_mod,
+    _builtin_date_of_integer,
     BYTE_BUILTINS,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
@@ -408,6 +410,8 @@ class TestByteBuiltinsRegistration:
             "__test_numval",
             "__test_numval_c",
             "__integer_of_date",
+            "__date_of_integer",
+            "__mod",
             "__string_convert",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
@@ -1997,6 +2001,100 @@ class TestIntegerOfDate:
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.INTEGER_OF_DATE) in BYTE_BUILTINS
+
+
+class TestMod:
+    """FUNCTION MOD(x, y) -> floored modulo; result carries the sign of y."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_mod([typed_from_runtime(17), typed_from_runtime(5)], None).value
+            == 2
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_dividend_floored(self):
+        # COBOL MOD = x - y * FUNCTION INTEGER(x / y); MOD(-7, 3) = 2.
+        assert (
+            _builtin_mod([typed_from_runtime(-7), typed_from_runtime(3)], None).value
+            == 2
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_divisor(self):
+        assert (
+            _builtin_mod([typed_from_runtime(7), typed_from_runtime(-3)], None).value
+            == -2
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_string_args(self):
+        assert (
+            _builtin_mod(
+                [typed_from_runtime("17"), typed_from_runtime("5")], None
+            ).value
+            == 2
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_divisor_zero_uncomputable(self):
+        assert (
+            _builtin_mod([typed_from_runtime(5), typed_from_runtime(0)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_mod([typed_from_runtime(sym), typed_from_runtime(5)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.MOD) in BYTE_BUILTINS
+
+
+class TestDateOfInteger:
+    """FUNCTION DATE-OF-INTEGER(n) -> CCYYMMDD; inverse of INTEGER-OF-DATE."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_known_reference(self):
+        # Day 154498 after the 1600-12-31 COBOL epoch is 2024-01-01.
+        assert (
+            _builtin_date_of_integer([typed_from_runtime(154498)], None).value
+            == 20240101
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_epoch_plus_one(self):
+        assert _builtin_date_of_integer([typed_from_runtime(1)], None).value == 16010101
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_round_trip_with_integer_of_date(self):
+        n = _builtin_integer_of_date([typed_from_runtime(20240101)], None).value
+        assert _builtin_date_of_integer([typed_from_runtime(n)], None).value == 20240101
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_string_arg(self):
+        assert (
+            _builtin_date_of_integer([typed_from_runtime("154498")], None).value
+            == 20240101
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_date_of_integer([typed_from_runtime(sym)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.DATE_OF_INTEGER) in BYTE_BUILTINS
 
 
 class TestCobolRound:

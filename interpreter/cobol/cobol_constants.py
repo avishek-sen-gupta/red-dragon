@@ -102,6 +102,8 @@ class BuiltinName:
     TEST_NUMVAL = "__test_numval"
     TEST_NUMVAL_C = "__test_numval_c"
     INTEGER_OF_DATE = "__integer_of_date"
+    DATE_OF_INTEGER = "__date_of_integer"
+    MOD = "__mod"
     STRING_CONVERT = "__string_convert"
 
 
