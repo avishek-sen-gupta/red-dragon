@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Union
 
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
+from interpreter.cobol.intrinsic_arity import resolve_intrinsic_args
 
 
 @dataclass(frozen=True)
@@ -123,8 +124,10 @@ class FunctionCallOperand:
 
     @classmethod
     def from_dict(cls, data: dict) -> FunctionCallOperand:
-        raw_args = data.get("args", []) or []
-        return cls(name=data.get("name", ""), args=tuple(raw_args))
+        name = data.get("name", "")
+        # Route raw args through the single disambiguator (red-dragon-zgwl).
+        raw_args = resolve_intrinsic_args(name, data.get("args", []) or [])
+        return cls(name=name, args=tuple(raw_args))
 
 
 def is_function_operand(data: object) -> bool:
