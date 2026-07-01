@@ -784,7 +784,12 @@ def _lower_expr_dict(
     if kind == "binop":
         left_reg = _lower_expr_dict(ctx, expr["left"], materialised)
         right_reg = _lower_expr_dict(ctx, expr["right"], materialised)
-        op = _OP_MAP.get(expr.get("op", "+"), "+")
+        # Preserve the operator; _OP_MAP is identity for its comparison keys, so
+        # the only effect of a default-to-"+" here was to silently corrupt every
+        # arithmetic "-"/"*"/"/" into "+" (red-dragon-kt70). resolve_binop handles
+        # the arithmetic operators directly.
+        raw_op = expr.get("op", "+")
+        op = _OP_MAP.get(raw_op, raw_op)
         result = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
