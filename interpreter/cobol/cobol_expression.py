@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from interpreter.cobol.intrinsic_arity import resolve_intrinsic_args
-
 # ── Expression tree nodes (frozen, immutable) ────────────────────
 
 
@@ -107,13 +105,9 @@ def expr_from_dict(d: dict) -> ExprNode:
             right=expr_from_dict(d["expr"]),
         )
     if kind == "function":
-        name = d.get("name", "")
-        # Route raw args through the single disambiguator so an over-split
-        # arithmetic argument F(a - b) -> [a, neg(b)] is repaired (red-dragon-zgwl).
-        raw_args = resolve_intrinsic_args(name, d.get("args", []) or [])
         return FunctionNode(
-            name=name,
-            args=tuple(expr_from_dict(a) for a in raw_args),
+            name=d.get("name", ""),
+            args=tuple(expr_from_dict(a) for a in d.get("args", []) or []),
         )
     raise ValueError(f"Unknown expression node kind: {kind!r}")
 
