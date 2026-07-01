@@ -214,3 +214,79 @@ class TestArithmeticTargetRefModNonAdd:
         """DIVIDE WS-A BY 4 GIVING WS-BUF(4:3): 100/4=25 → splice '025'."""
         vm = _run(self._buf_program("DIVIDE WS-A BY 4 GIVING WS-BUF(4:3)."))
         assert bytes(_first_region(vm)[3:12]).decode("cp037") == "XXX025ZZZ"
+
+
+# ── red-dragon-zgwl: arithmetic expression as an intrinsic-function argument ───
+# F(g(x) - 1) must be ONE argument, not split by the bridge into [g(x), -1].
+
+
+class TestFunctionArgArithmetic:
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_date_of_integer_of_nested_minus_one_is_yesterday(self):
+        """DATE-OF-INTEGER(INTEGER-OF-DATE(20240101) - 1) must be 20231231
+        (yesterday), not 20240101 — the '- 1' must not be dropped.
+
+        red-dragon-zgwl: the ProLeap bridge splits the single arithmetic argument
+        'INTEGER-OF-DATE(WS-N) - 1' into two args [INTEGER-OF-DATE(WS-N), -1], so
+        the subtraction is lost and DATE-OF-INTEGER round-trips the input unchanged.
+        This is the real CardDemo report usage shape.
+        """
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNARG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-N   PIC 9(8) VALUE 20240101.",
+                "01 WS-OUT PIC 9(8) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-OUT = FUNCTION DATE-OF-INTEGER(",
+                "            FUNCTION INTEGER-OF-DATE(WS-N) - 1).",
+                "    STOP RUN.",
+            ]
+        )
+        # WS-N 8 bytes @0, WS-OUT @8.
+        assert _decode(_first_region(vm), 8, 8) == 20231231
+
+
+# ── red-dragon-kt70: arithmetic operators in a relation/expression operand ─────
+# _lower_expr_dict must honour '-'/'*'/'/' rather than defaulting them to '+'.
+
+
+class TestRelationArithmeticOperators:
+    def _cmp(self, relation: str) -> str:
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. RELOP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC 9(2) VALUE 10.",
+                "01 WS-R PIC X(3) VALUE 'xxx'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                f"    IF {relation}",
+                "        MOVE 'YES' TO WS-R",
+                "    ELSE",
+                "        MOVE 'NO ' TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        return bytes(_first_region(vm)[2:5]).decode("cp037")
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_subtraction_in_relation_operand(self):
+        # 10 - 1 = 9 must be TRUE (not 10 + 1 = 11).
+        assert self._cmp("WS-A - 1 = 9") == "YES"
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_multiplication_in_relation_operand(self):
+        # 10 * 2 = 20 must be TRUE (not 10 + 2 = 12).
+        assert self._cmp("WS-A * 2 = 20") == "YES"
+
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_division_in_relation_operand(self):
+        # 10 / 2 = 5 must be TRUE (not 10 + 2 = 12).
+        assert self._cmp("WS-A / 2 = 5") == "YES"
