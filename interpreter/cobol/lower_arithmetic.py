@@ -1049,6 +1049,54 @@ def lower_arithmetic_giving(
         )
     )
 
+    def _emit_remainder_writeback() -> None:
+        # DIVIDE ... GIVING ... REMAINDER r: r = dividend - trunc(quotient) * divisor,
+        # using the SAME left_reg/right_reg the quotient (result_reg) was computed
+        # from, so REMAINDER stays consistent with whatever value GIVING writes
+        # (red-dragon-w0wp).
+        if stmt.op != "DIVIDE" or stmt.remainder is None:
+            return
+        trunc_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=trunc_reg, func_name=FuncName("int"), args=(result_reg,)
+            )
+        )
+        product_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=product_reg,
+                operator=resolve_binop("*"),
+                left=trunc_reg,
+                right=right_reg,
+            )
+        )
+        remainder_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=remainder_reg,
+                operator=resolve_binop("-"),
+                left=left_reg,
+                right=product_reg,
+            )
+        )
+        remainder_op = stmt.remainder
+        remainder_ref, remainder_rr = ctx.resolve_field_ref(
+            remainder_op.name,
+            materialised,
+            remainder_op.qualifiers,
+            subscripts=remainder_op.subscripts,
+        )
+        remainder_str_reg = ctx.emit_to_string(remainder_reg)
+        _emit_arithmetic_writeback(
+            ctx,
+            remainder_op,
+            remainder_ref,
+            remainder_rr,
+            remainder_str_reg,
+            materialised,
+        )
+
     if not has_clause:
         for giving_op in stmt.giving:
             giving_ref, giving_rr = ctx.resolve_field_ref(
@@ -1061,6 +1109,7 @@ def lower_arithmetic_giving(
             _emit_arithmetic_writeback(
                 ctx, giving_op, giving_ref, giving_rr, result_str_reg, materialised
             )
+        _emit_remainder_writeback()
         return
 
     # Compute combined overflow flag across all GIVING fields.
@@ -1108,6 +1157,7 @@ def lower_arithmetic_giving(
     for g_op, ref, rr in giving_triples:
         result_str_reg = ctx.emit_to_string(result_reg)
         _emit_arithmetic_writeback(ctx, g_op, ref, rr, result_str_reg, materialised)
+    _emit_remainder_writeback()
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
