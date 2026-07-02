@@ -227,3 +227,22 @@ class TestExecuteCfgBasic:
 
         assert "step" in verbose_log.lower()
         assert len(verbose_log) > len(quiet_log)
+
+
+class TestExecuteCfgHalt:
+    def test_halt_stops_execution_before_later_instructions_run(self):
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [1]}),
+            (Opcode.STORE_VAR, {"operands": ["before_halt", "%0"]}),
+            (Opcode.HALT, {}),
+            (Opcode.CONST, {"result_reg": Register("%1"), "operands": [2]}),
+            (Opcode.STORE_VAR, {"operands": ["after_halt", "%1"]}),
+            (Opcode.RETURN, {"operands": ["%1"]}),
+        )
+        cfg, registry = _build_simple_cfg(instructions)
+
+        vm, stats = execute_cfg(cfg, "entry", registry)
+
+        assert unwrap(vm.current_frame.local_vars[VarName("before_halt")]) == 1
+        assert VarName("after_halt") not in vm.current_frame.local_vars
