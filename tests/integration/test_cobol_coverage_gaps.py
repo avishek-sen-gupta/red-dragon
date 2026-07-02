@@ -221,13 +221,6 @@ class TestArithmeticTargetRefModNonAdd:
 
 
 class TestFunctionArgArithmetic:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="red-dragon-zgwl: ProLeap over-splits an arithmetic function "
-        "argument F(a - b) into [a, neg(b)]. Awaiting the correct grammar-level "
-        "fix (shift-preference in the functionCall rule); the arity-recovery "
-        "workaround was rolled back.",
-    )
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_date_of_integer_of_nested_minus_one_is_yesterday(self):
         """DATE-OF-INTEGER(INTEGER-OF-DATE(20240101) - 1) must be 20231231
