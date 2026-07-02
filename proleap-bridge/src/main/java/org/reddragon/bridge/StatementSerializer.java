@@ -25,6 +25,7 @@ import io.proleap.cobol.asg.metamodel.procedure.divide.DivideStatement;
 import io.proleap.cobol.asg.metamodel.procedure.divide.Giving;
 import io.proleap.cobol.asg.metamodel.procedure.divide.GivingPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.divide.Into;
+import io.proleap.cobol.asg.metamodel.procedure.divide.Remainder;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.AlsoCondition;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.AlsoSelect;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.EvaluateStatement;
@@ -476,6 +477,11 @@ public final class StatementSerializer {
             ValueStmt operandVs = stmt.getOperandValueStmt();
             if (operandVs != null) {
                 operands.add(serializeArithSource(operandVs));
+            }
+
+            Remainder remainder = stmt.getRemainder();
+            if (remainder != null && remainder.getRemainderCall() != null) {
+                obj.add("remainder", serializeRef(remainder.getRemainderCall()));
             }
 
             DivideStatement.DivideType divideType = stmt.getDivideType();
