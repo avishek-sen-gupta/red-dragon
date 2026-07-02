@@ -215,3 +215,24 @@ class TestExecuteCfgTraced:
         assert VarName("preexisting") in vm_out.current_frame.local_vars
         assert vm_out.current_frame.local_vars[VarName("preexisting")].value == "hello"
         assert VarName("x") in vm_out.current_frame.local_vars
+
+
+class TestExecuteCfgTracedHalt:
+    def test_halt_stops_trace_before_later_instructions(self):
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [1]}),
+            (Opcode.STORE_VAR, {"operands": ["before_halt", "%0"]}),
+            (Opcode.HALT, {}),
+            (Opcode.CONST, {"result_reg": Register("%1"), "operands": [2]}),
+            (Opcode.STORE_VAR, {"operands": ["after_halt", "%1"]}),
+            (Opcode.RETURN, {"operands": ["%1"]}),
+        )
+        cfg, registry = _build_simple_cfg(instructions)
+
+        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+
+        # CONST, STORE_VAR, HALT executed; the two instructions after HALT never run.
+        assert len(trace.steps) == 3
+        assert unwrap(vm.current_frame.local_vars[VarName("before_halt")]) == 1
+        assert VarName("after_halt") not in vm.current_frame.local_vars

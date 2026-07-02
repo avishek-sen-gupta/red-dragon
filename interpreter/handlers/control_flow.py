@@ -15,6 +15,7 @@ from interpreter.instructions import (
     Branch,
     BranchIf,
     Return_,
+    Halt_,
     Throw_,
     TryPush,
     TryPop,
@@ -97,6 +98,14 @@ def _handle_return(
             reasoning=f"return {tv.value!r}",
         )
     )
+
+
+def _handle_halt(
+    inst: InstructionBase, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
+    t = inst
+    assert isinstance(t, Halt_)
+    return ExecutionResult.success(StateUpdate(reasoning="STOP RUN — halt run unit"))
 
 
 def _handle_throw(
