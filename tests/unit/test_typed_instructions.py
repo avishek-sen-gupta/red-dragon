@@ -24,6 +24,7 @@ from interpreter.instructions import InstructionBase
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.register import NO_REGISTER, Register
+from tests.covers import covers, NotLanguageFeature
 
 
 def _loc() -> SourceLocation:
@@ -398,6 +399,12 @@ class TestThrowToTyped:
 
     def test_bare(self):
         _assert_to_typed(IRInstruction(opcode=Opcode.THROW, operands=[]))
+
+
+class TestHaltToTyped:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_bare(self):
+        _assert_to_typed(IRInstruction(opcode=Opcode.HALT, operands=[]))
 
 
 # ── Exceptions ───────────────────────────────────────────────────

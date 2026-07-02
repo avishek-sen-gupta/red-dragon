@@ -925,6 +925,29 @@ class Return_(InstructionBase):
 
 
 @dataclass(frozen=True)
+class Halt_(InstructionBase):
+    """HALT: unconditionally terminate the entire run unit (COBOL STOP RUN).
+
+    Distinct from Return_ — a halt never returns a value to a caller and is
+    invisible to return-type inference (which dispatches on exact type).
+    """
+
+    def writes(self) -> StorageIdentifier | None:
+        return None
+
+    def reads(self) -> list[StorageIdentifier]:
+        return []
+
+    @property
+    def opcode(self) -> Opcode:
+        return Opcode.HALT
+
+    @property
+    def operands(self) -> list[Any]:
+        return []
+
+
+@dataclass(frozen=True)
 class Throw_(InstructionBase):
     """THROW: raise an exception."""
 
@@ -1500,6 +1523,10 @@ def _return(inst: Any) -> Return_:
     )
 
 
+def _halt(inst: Any) -> Halt_:
+    return Halt_(source_location=inst.source_location)
+
+
 def _throw(inst: Any) -> Throw_:
     return Throw_(
         value_reg=Register(str(inst.operands[0])) if inst.operands else None,
@@ -1627,6 +1654,7 @@ _TO_TYPED: dict[Opcode, Callable[[Any], Instruction]] = {
     Opcode.BRANCH: _branch,
     Opcode.BRANCH_IF: _branch_if,
     Opcode.RETURN: _return,
+    Opcode.HALT: _halt,
     Opcode.THROW: _throw,
     Opcode.TRY_PUSH: _try_push,
     Opcode.TRY_POP: _try_pop,
