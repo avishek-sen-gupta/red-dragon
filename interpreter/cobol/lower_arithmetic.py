@@ -1286,7 +1286,15 @@ def lower_evaluate(
 
     for child in stmt.children:
         if isinstance(child, WhenStatement) and child.condition:
-            if isinstance(child.condition, dict):
+            if (
+                isinstance(child.condition, str)
+                and child.condition.strip().upper() == "ANY"
+            ):
+                # WHEN ANY on the primary subject is a wildcard that always
+                # matches (mirrors the existing ANY handling for ALSO
+                # conditions below) — red-dragon-9j01.
+                cond_reg = ctx.const_to_reg(True)
+            elif isinstance(child.condition, dict):
                 cond_dict = child.condition
                 if "kind" in cond_dict:
                     # Expression-kind dict (e.g. lit, ref, binop) — the CICS prepass
