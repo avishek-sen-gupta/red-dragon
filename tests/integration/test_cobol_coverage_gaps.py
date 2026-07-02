@@ -290,3 +290,51 @@ class TestRelationArithmeticOperators:
     def test_division_in_relation_operand(self):
         # 10 / 2 = 5 must be TRUE (not 10 + 2 = 12).
         assert self._cmp("WS-A / 2 = 5") == "YES"
+
+
+# ── red-dragon-apoq: ROUNDED must not force integer division to float ──────────
+# COBOL integer division truncates; the mod idiom A - (A / B) * B relies on it.
+
+
+class TestIntegerDivisionSemantics:
+    @covers(CobolFeature.COMPUTE)
+    def test_mod_idiom_integer_division_truncates(self):
+        """WS-Y - (WS-Y / 4 * 4) is the COBOL 'WS-Y mod 4' idiom: 2023/4=505
+        (truncated), *4=2020, 2023-2020=3. red-dragon-apoq: the ROUNDED work
+        forced ALL division to float (505.75*4=2023 -> 0), breaking this."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. IDIV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-Y PIC 9(4) VALUE 2023.",
+                "01 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = WS-Y - (WS-Y / 4 * 4).",
+                "    STOP RUN.",
+            ]
+        )
+        # WS-Y 4 bytes @0, WS-R @4.
+        assert _decode(_first_region(vm), 4, 4) == 3
+
+    @covers(CobolFeature.COMPUTE, CobolFeature.ROUNDED_CLAUSE)
+    def test_rounded_division_still_rounds(self):
+        """Guard the interaction: COMPUTE X ROUNDED = 10 / 3 must still round the
+        fraction (3.33 -> 3) — i.e. the fix keeps float division for ROUNDED."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. RDIV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-X ROUNDED = 20 / 3.",
+                "    STOP RUN.",
+            ]
+        )
+        # 20/3 = 6.667 -> ROUNDED -> 7.
+        assert _decode(_first_region(vm), 0, 3) == 7

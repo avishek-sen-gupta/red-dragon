@@ -1116,7 +1116,12 @@ def lower_compute(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
-    result_reg = lower_expr_node(ctx, stmt.expression, materialised)
+    # Preserve division fractions only when a target is ROUNDED; otherwise COBOL
+    # integer division truncates (the mod idiom A - (A / B) * B; red-dragon-apoq).
+    rounded_target = any(t.rounded for t in stmt.targets)
+    result_reg = lower_expr_node(
+        ctx, stmt.expression, materialised, force_division_float=rounded_target
+    )
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 

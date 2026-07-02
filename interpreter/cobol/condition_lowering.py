@@ -931,8 +931,18 @@ def lower_expr_node(
     ctx: EmitContext,
     node: ExprNode,
     materialised: MaterialisedSectionedLayout,
+    force_division_float: bool = False,
 ) -> Register:
-    """Walk an expression tree node and emit IR. Returns result register."""
+    """Walk an expression tree node and emit IR. Returns result register.
+
+    ``force_division_float`` controls division typing. COBOL integer division
+    truncates (int/int -> int), which the common mod idiom ``A - (A / B) * B``
+    relies on; the VM's ``_coerce_typed_register`` delivers that when both
+    operands are Int. Only when the result feeds a ROUNDED target must the
+    fraction survive division so ``__cobol_round`` can round it — callers set
+    this flag then. Forcing it unconditionally corrupts integer division
+    (2023 / 4 * 4 -> 2023.0 instead of 2020; red-dragon-apoq).
+    """
     if isinstance(node, LiteralNode):
         return ctx.const_to_reg(ctx.parse_literal(node.value))
     if isinstance(node, FieldRefNode):
@@ -943,14 +953,14 @@ def lower_expr_node(
             return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
         return ctx.const_to_reg(ctx.parse_literal(node.name))
     if isinstance(node, BinOpNode):
-        left_reg = lower_expr_node(ctx, node.left, materialised)
-        right_reg = lower_expr_node(ctx, node.right, materialised)
-        # For division: force the right operand to float so the division is
-        # typed Int/Float=Float (or Float/Float=Float) rather than Int/Int=Int.
-        # Without this, _coerce_typed_register truncates 1.666...→1 before
-        # __cobol_round sees the value, making ROUNDED give wrong results.
-        # Mirrors the float-divisor pattern in ir_encoders.py (decimal scaling).
-        if node.op == "/":
+        left_reg = lower_expr_node(ctx, node.left, materialised, force_division_float)
+        right_reg = lower_expr_node(ctx, node.right, materialised, force_division_float)
+        # Preserve the division fraction only for a ROUNDED result (see the
+        # force_division_float docstring): force the right operand to float so the
+        # division is typed Int/Float=Float rather than Int/Int=Int, keeping
+        # 1.666… intact for __cobol_round. Non-ROUNDED division stays integer
+        # (COBOL truncation), so the mod idiom works (red-dragon-apoq).
+        if node.op == "/" and force_division_float:
             float_right_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
