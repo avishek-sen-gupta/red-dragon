@@ -654,6 +654,71 @@ class TestDivideRemainder:
         assert _decode_zoned_unsigned(region, 0, 4) == 14, "WS-Q should be 14"
 
 
+class TestDivideIntoGivingOperandOrder:
+    """red-dragon-swdf: DIVIDE X INTO Y GIVING Z must compute Y/X, not X/Y."""
+
+    @covers(CobolFeature.DIVIDE, CobolFeature.GIVING_CLAUSE)
+    def test_divide_into_giving_computes_dividend_over_divisor(self):
+        """DIVIDE 7 INTO 100 GIVING Q => Q = 100/7 = 14, not 7/100 = 0."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DIVINTOG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-Q PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DIVIDE 7 INTO 100 GIVING WS-Q.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 14, "WS-Q should be 14 (100/7)"
+
+    @covers(
+        CobolFeature.DIVIDE, CobolFeature.GIVING_CLAUSE, CobolFeature.DIVIDE_REMAINDER
+    )
+    def test_divide_into_giving_remainder_computes_dividend_over_divisor(self):
+        """DIVIDE 7 INTO 100 GIVING Q REMAINDER R => Q=14, R=2 (100 = 14*7 + 2)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DIVINTOGR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-Q PIC 9(4) VALUE 0.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DIVIDE 7 INTO 100 GIVING WS-Q REMAINDER WS-R.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 14, "WS-Q should be 14"
+        assert _decode_zoned_unsigned(region, 4, 4) == 2, "WS-R should be 2"
+
+    @covers(CobolFeature.DIVIDE, CobolFeature.GIVING_CLAUSE)
+    def test_divide_by_giving_unaffected_regression(self):
+        """DIVIDE 100 BY 7 GIVING Q must still correctly yield 14 (regression guard)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DIVBYGREG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-Q PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DIVIDE 100 BY 7 GIVING WS-Q.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 14, "WS-Q should be 14"
+
+
 class TestComputeExpression:
     @covers(CobolFeature.COMPUTE, CobolFeature.ARITHMETIC_EXPRESSION)
     def test_compute_expression(self):
