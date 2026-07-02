@@ -811,6 +811,59 @@ class TestEvaluateAlso:
         )
         assert _decode(_first_region(vm), 2, 1) == 1
 
+    @covers(CobolFeature.EVALUATE)
+    def test_single_subject_when_any_always_matches(self):
+        """EVALUATE WS-A WHEN ANY: primary WHEN ANY must match regardless of WS-A's value.
+
+        red-dragon-9j01: WHEN ANY on the primary subject is a wildcard per the
+        COBOL spec, but was silently treated as a literal comparison against a
+        field named ANY, so the branch never fired.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. EVALANY.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A    PIC 9 VALUE 7.",
+                "77 RESULT  PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN.",
+                "    EVALUATE WS-A",
+                "        WHEN ANY",
+                "            MOVE 1 TO RESULT",
+                "        WHEN OTHER",
+                "            MOVE 9 TO RESULT",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 1, 1) == 1
+
+    @covers(CobolFeature.EVALUATE)
+    def test_evaluate_true_when_any_matches_as_catch_all(self):
+        """EVALUATE TRUE WHEN ANY: primary WHEN ANY under EVALUATE TRUE always matches."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. EVALTRUEANY.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A    PIC 9 VALUE 3.",
+                "77 RESULT  PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN.",
+                "    EVALUATE TRUE",
+                "        WHEN WS-A = 9",
+                "            MOVE 2 TO RESULT",
+                "        WHEN ANY",
+                "            MOVE 1 TO RESULT",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 1, 1) == 1
+
 
 class TestAddCorresponding:
     """ADD/SUBTRACT CORRESPONDING — only matching direct children are operated on."""
