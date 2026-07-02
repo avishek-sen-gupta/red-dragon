@@ -4172,6 +4172,76 @@ class TestComputeOnSizeError:
         )
         assert vm is not None
 
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_compute_decimal_pic_overflow_fires_on_size_error(self):
+        """COMPUTE into PIC 9(3)V99 that exceeds integer-digit capacity fires ON SIZE ERROR.
+
+        red-dragon-oiec: the overflow threshold must be based on the field's
+        INTEGER digit capacity (3 digits -> max 999.99), not its total digit
+        count (5 digits -> a stale threshold of 99999.99). 1500.00 exceeds the
+        3-digit integer capacity and must trip ON SIZE ERROR.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-DEC-OSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-AMOUNT PIC 9(3)V99 VALUE 0.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-AMOUNT = 1500.00",
+                "        ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-COMPUTE.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[5] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[5])}"
+        assert list(region[:5]) == [
+            0xF0,
+            0xF0,
+            0xF0,
+            0xF0,
+            0xF0,
+        ], f"WS-AMOUNT should be unchanged (000.00), got {[hex(b) for b in region[:5]]}"
+
+    @covers(CobolFeature.ON_SIZE_ERROR)
+    def test_compute_decimal_pic_in_range_no_size_error(self):
+        """COMPUTE into PIC 9(3)V99 within integer-digit capacity does not fire ON SIZE ERROR.
+
+        Regression guard for red-dragon-oiec: 500.00 fits within 3 integer
+        digits, so ON SIZE ERROR must not fire.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COMP-DEC-NOSE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-AMOUNT PIC 9(3)V99 VALUE 0.",
+                "01 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-AMOUNT = 500.00",
+                "        NOT ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-COMPUTE.",
+                "    STOP RUN.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert region[5] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[5])}"
+        assert list(region[:5]) == [
+            0xF5,
+            0xF0,
+            0xF0,
+            0xF0,
+            0xF0,
+        ], f"WS-AMOUNT should be 500.00, got {[hex(b) for b in region[:5]]}"
+
 
 class TestComputeRefMod:
     """Integration tests for COMPUTE with reference modification (substring in expressions)."""
