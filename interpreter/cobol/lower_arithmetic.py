@@ -103,7 +103,12 @@ def _compute_overflow_flag(
     Returns the register holding True iff result_reg overflows td's bounds.
     Does NOT emit a branch — caller decides what to branch on.
     """
-    max_val = 10**td.total_digits - 1
+    # result_reg holds the unscaled value (e.g. 999.99, not 99999), so the
+    # overflow threshold must be sized by integer-digit capacity only —
+    # td.total_digits includes decimal positions and would otherwise be off
+    # by a factor of 10**decimal_digits (red-dragon-oiec).
+    integer_digits = td.total_digits - td.decimal_digits
+    max_val = 10**integer_digits - 1
     max_reg = ctx.const_to_reg(max_val)
     over_max = ctx.fresh_reg()
     ctx.emit_inst(
