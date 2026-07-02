@@ -571,6 +571,89 @@ class TestMultiplyDivide:
         assert _decode_zoned_unsigned(region, 12, 4) == 6
 
 
+class TestDivideRemainder:
+    """Uses DIVIDE ... BY ... GIVING ... (dividend BY divisor), not INTO GIVING —
+    INTO GIVING has a separate, pre-existing operand-order bug (red-dragon-swdf)
+    that reverses the quotient; out of scope here (red-dragon-w0wp is REMAINDER
+    only)."""
+
+    @covers(
+        CobolFeature.DIVIDE, CobolFeature.GIVING_CLAUSE, CobolFeature.DIVIDE_REMAINDER
+    )
+    def test_divide_by_giving_remainder(self):
+        """DIVIDE 100 BY 7 GIVING Q REMAINDER R yields Q=14, R=2 (100 = 14*7 + 2).
+
+        red-dragon-w0wp: the REMAINDER phrase was not serialized by the bridge
+        at all, so R silently kept its stale prior value.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DIVREM2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-Q PIC 9(4) VALUE 0.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DIVIDE 100 BY 7 GIVING WS-Q REMAINDER WS-R.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 14, "WS-Q should be 14"
+        assert _decode_zoned_unsigned(region, 4, 4) == 2, "WS-R should be 2"
+
+    @covers(
+        CobolFeature.DIVIDE,
+        CobolFeature.GIVING_CLAUSE,
+        CobolFeature.DIVIDE_REMAINDER,
+        CobolFeature.ON_SIZE_ERROR,
+    )
+    def test_divide_by_giving_remainder_with_not_on_size_error(self):
+        """REMAINDER is also written on the NOT ON SIZE ERROR path (in-range divide)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DIVREM3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-Q PIC 9(4) VALUE 0.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "77 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DIVIDE 100 BY 7 GIVING WS-Q REMAINDER WS-R",
+                "        NOT ON SIZE ERROR MOVE 1 TO WS-FLAG",
+                "    END-DIVIDE.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 14, "WS-Q should be 14"
+        assert _decode_zoned_unsigned(region, 4, 4) == 2, "WS-R should be 2"
+        assert region[8] == 0xF1, f"Expected WS-FLAG=1 (0xF1), got {hex(region[8])}"
+
+    @covers(CobolFeature.DIVIDE, CobolFeature.GIVING_CLAUSE)
+    def test_divide_by_giving_without_remainder_unaffected(self):
+        """DIVIDE without REMAINDER still works and no stray field is touched."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DIVNOREM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-Q PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DIVIDE 100 BY 7 GIVING WS-Q.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 14, "WS-Q should be 14"
+
+
 class TestComputeExpression:
     @covers(CobolFeature.COMPUTE, CobolFeature.ARITHMETIC_EXPRESSION)
     def test_compute_expression(self):
