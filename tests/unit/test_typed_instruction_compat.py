@@ -46,6 +46,7 @@ class TestOpcodeProperty:
             (BranchIf(cond_reg="%0"), Opcode.BRANCH_IF),
             (Return_(value_reg="%0"), Opcode.RETURN),
             (Throw_(value_reg="%0"), Opcode.THROW),
+            (Halt_(), Opcode.HALT),
             (TryPush(catch_labels=(CodeLabel("c"),)), Opcode.TRY_PUSH),
             (TryPop(), Opcode.TRY_POP),
             (AllocRegion(size_reg="%0"), Opcode.ALLOC_REGION),
@@ -84,6 +85,7 @@ class TestResultRegDefault:
             BranchIf(cond_reg="%0"),
             Return_(value_reg="%0"),
             Throw_(value_reg="%0"),
+            Halt_(),
             TryPush(),
             TryPop(),
             WriteRegion(region_reg="%0", offset_reg="%1", length=4, value_reg="%2"),
@@ -116,6 +118,7 @@ class TestBranchTargetsDefault:
             Const.int_(NO_REGISTER, 42),
             Binop(operator=BinopKind.ADD),
             Return_(),
+            Halt_(),
             Label_(label=CodeLabel("entry")),
         ]:
             assert (
@@ -154,6 +157,9 @@ class TestOperandsProperty:
 
     def test_return_value(self):
         assert Return_(value_reg="%0").operands == ["%0"]
+
+    def test_halt_operands(self):
+        assert Halt_().operands == []
 
     def test_try_push(self):
         ops = TryPush(
