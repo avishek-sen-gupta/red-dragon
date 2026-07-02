@@ -3143,7 +3143,10 @@ class TestReadStatement:
         """READ (no INTO) lands data in the FD record; MOVE to WS gives the right string."""
         from interpreter.cobol.io_provider import StubIOProvider
 
-        record = "HELLO               "  # 20 chars to match PIC X(20)
+        # A real dataset is EBCDIC, so seed the stub with EBCDIC record bytes
+        # (viewed as latin-1 so emit_write_region_raw lands them verbatim); the
+        # FD alphanumeric field then decodes as EBCDIC like WS/LS/LK.
+        record = "HELLO               ".encode("cp037").decode("latin-1")  # 20B
         provider = StubIOProvider(files={"CUSTFILE": {"records": [record]}})
         vm = _run_cobol_with_io(
             [
@@ -3156,6 +3159,44 @@ class TestReadStatement:
                 "    OPEN INPUT CUSTFILE.",
                 "    READ CUSTFILE.",
                 "    MOVE CUSTFILE-REC(1:5) TO WS-DATA.",
+                "    CLOSE CUSTFILE.",
+                "    STOP RUN.",
+            ],
+            io_provider=provider,
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 5) == "HELLO"
+
+    @covers(
+        CobolFeature.READ,
+        CobolFeature.SECTION_FILE,
+        CobolFeature.INTRINSIC_FUNCTION,
+        CobolFeature.IO_PROVIDER,
+    )
+    def test_read_fd_record_through_intrinsic_decodes_ebcdic(self):
+        """A real dataset is EBCDIC, so an FD alphanumeric field READ from disk
+        must decode as EBCDIC — including when fed to an intrinsic. Mirrors
+        jackal's COPYUP (READ then FUNCTION UPPER-CASE of the FD record).
+        red-dragon-uxpp: f6d84cfb decoded FD alpha as LATIN-1, so real EBCDIC
+        bytes were mangled and UPPER-CASE produced garbage."""
+        from interpreter.cobol.io_provider import StubIOProvider
+
+        # Simulate a real EBCDIC dataset: the on-disk record bytes are EBCDIC
+        # (viewed as latin-1 so emit_write_region_raw lands them verbatim into
+        # the FD region), exactly like the real file backend jackal uses.
+        record = "hello               ".encode("cp037").decode("latin-1")
+        provider = StubIOProvider(files={"CUSTFILE": {"records": [record]}})
+        vm = _run_cobol_with_io(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SEC-FN.",
+                *_file_section_preamble("CUSTFILE"),
+                "01 WS-DATA  PIC X(5).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    OPEN INPUT CUSTFILE.",
+                "    READ CUSTFILE.",
+                "    MOVE FUNCTION UPPER-CASE(CUSTFILE-REC) TO WS-DATA.",
                 "    CLOSE CUSTFILE.",
                 "    STOP RUN.",
             ],
