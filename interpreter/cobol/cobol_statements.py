@@ -264,6 +264,7 @@ class ArithmeticStatement:
     source: RefModOperand
     target: RefModOperand
     giving: list[RefModOperand] = field(default_factory=list)
+    remainder: RefModOperand | None = None
     on_size_error: list[CobolStatementType] = field(default_factory=list)
     not_on_size_error: list[CobolStatementType] = field(default_factory=list)
 
@@ -297,11 +298,19 @@ class ArithmeticStatement:
             else:
                 giving.append(RefModOperand.from_dict(g))
 
+        remainder_data = data.get("remainder")
+        remainder = (
+            RefModOperand.from_dict(remainder_data)
+            if isinstance(remainder_data, dict)
+            else RefModOperand(name=remainder_data) if remainder_data else None
+        )
+
         return cls(
             op=data["type"],
             source=source,
             target=target,
             giving=giving,
+            remainder=remainder,
             on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
             not_on_size_error=[
                 parse_statement(c) for c in data.get("not_on_size_error", [])
@@ -315,6 +324,8 @@ class ArithmeticStatement:
         }
         if self.giving:
             result["giving"] = [g.to_dict() for g in self.giving]
+        if self.remainder is not None:
+            result["remainder"] = self.remainder.to_dict()
         if self.on_size_error:
             result["on_size_error"] = [c.to_dict() for c in self.on_size_error]
         if self.not_on_size_error:

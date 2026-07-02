@@ -16,6 +16,7 @@ class CobolFeature(Enum):
     SUBTRACT = "SUBTRACT a FROM b arithmetic subtraction verb"
     MULTIPLY = "MULTIPLY a BY b arithmetic multiplication verb"
     DIVIDE = "DIVIDE a INTO b arithmetic division verb"
+    DIVIDE_REMAINDER = "REMAINDER clause on DIVIDE ... GIVING"
     COMPUTE = "COMPUTE x = expr arithmetic expression assignment verb"
     GIVING_CLAUSE = "GIVING target clause in arithmetic statements"
     ROUNDED_CLAUSE = "ROUNDED modifier on arithmetic result fields"
