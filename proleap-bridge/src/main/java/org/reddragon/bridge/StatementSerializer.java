@@ -473,11 +473,13 @@ public final class StatementSerializer {
         JsonObject obj = newStatement("DIVIDE");
         JsonArray operands = new JsonArray();
         try {
-            // Source operand (the divisor or dividend depending on form)
+            // The single "operand" the grammar attaches to the DIVIDE statement
+            // itself (X in both "DIVIDE X INTO ..." and "DIVIDE X BY ..."). Its
+            // ROLE (divisor vs dividend) differs by form, so operand ORDER is
+            // decided per-branch below rather than emitted here — the Python
+            // lowering treats "operands" generically as [dividend, divisor]
+            // (red-dragon-swdf).
             ValueStmt operandVs = stmt.getOperandValueStmt();
-            if (operandVs != null) {
-                operands.add(serializeArithSource(operandVs));
-            }
 
             Remainder remainder = stmt.getRemainder();
             if (remainder != null && remainder.getRemainderCall() != null) {
@@ -487,11 +489,16 @@ public final class StatementSerializer {
             DivideStatement.DivideType divideType = stmt.getDivideType();
 
             if (divideType == DivideStatement.DivideType.INTO_GIVING) {
-                // DIVIDE X INTO Y GIVING Z => Z = Y / X
+                // DIVIDE X INTO Y GIVING Z => Z = Y / X. X is the divisor (the
+                // statement-level operand); Y (the INTO value) is the dividend.
+                // Emit [dividend, divisor] to match BY_GIVING's convention.
                 DivideIntoGivingStatement intoGiving = stmt.getDivideIntoGivingStatement();
                 if (intoGiving != null) {
                     if (intoGiving.getIntoValueStmt() != null) {
                         operands.add(serializeArithSource(intoGiving.getIntoValueStmt()));
+                    }
+                    if (operandVs != null) {
+                        operands.add(serializeArithSource(operandVs));
                     }
                     GivingPhrase gp = intoGiving.getGivingPhrase();
                     if (gp != null) {
@@ -510,9 +517,13 @@ public final class StatementSerializer {
                     }
                 }
             } else if (divideType == DivideStatement.DivideType.BY_GIVING) {
-                // DIVIDE X BY Y GIVING Z => Z = X / Y
+                // DIVIDE X BY Y GIVING Z => Z = X / Y. X (the statement-level
+                // operand) is the dividend, already first — [dividend, divisor].
                 DivideByGivingStatement byGiving = stmt.getDivideByGivingStatement();
                 if (byGiving != null) {
+                    if (operandVs != null) {
+                        operands.add(serializeArithSource(operandVs));
+                    }
                     if (byGiving.getByValueStmt() != null) {
                         operands.add(serializeArithSource(byGiving.getByValueStmt()));
                     }
@@ -533,8 +544,14 @@ public final class StatementSerializer {
                     }
                 }
             } else {
-                // DIVIDE X INTO Y (in-place: Y = Y / X)
+                // DIVIDE X INTO Y (in-place: Y = Y / X). X (the statement-level
+                // operand, the divisor) stays operands[0] — this in-place form's
+                // Python lowering resolves it as the divisor, unrelated to the
+                // GIVING forms' [dividend, divisor] convention above.
                 DivideIntoStatement intoStmt = stmt.getDivideIntoStatement();
+                if (operandVs != null) {
+                    operands.add(serializeArithSource(operandVs));
+                }
                 if (intoStmt != null) {
                     for (Into into : intoStmt.getIntos()) {
                         Call targetCall = into.getGivingCall();
