@@ -2267,30 +2267,16 @@ public final class StatementSerializer {
         if (arg == null) {
             return litNode("");
         }
-        // Nested intrinsic FUNCTION argument (e.g. UPPER-CASE(TRIM(x))): probe the
-        // argument subtree for a functionCall rule before treating it as a plain
-        // ref/arith expression (red-dragon-ge72).
-        CobolParser.FunctionCallContext nestedFn = findFunctionCallCtxInSubtree(arg);
-        if (nestedFn != null) {
-            JsonObject fn = serializeFunctionNodeFromCtx(nestedFn);
-            if (fn != null) {
-                return fn;
-            }
-        }
+        // Every argument is now an arithmeticExpression (grammar:
+        // argument : arithmeticExpression | qualifiedDataName ... | indexName ...).
+        // serializeArithExprCtx -> ... -> serializeBasisCtx recursively handles
+        // nested FUNCTION calls (red-dragon-ge72), reference modification
+        // (red-dragon-74qu), LENGTH OF, figuratives, and builds the +/- and */÷
+        // binop tree. So an arithmetic argument like F(a - 1) serialises as a
+        // binop with the nested function inside it, instead of being collapsed to
+        // just its inner function (red-dragon-zgwl). No subtree short-circuit.
         if (arg.arithmeticExpression() != null) {
             return serializeArithExprCtx(arg.arithmeticExpression());
-        }
-        if (arg.identifier() != null) {
-            // Preserve a reference modifier (WS-FLD(1:LEN)) structurally rather
-            // than gluing the slice into the name. (red-dragon-74qu)
-            JsonObject refMod = serializeRefModIdentifier(arg.identifier());
-            if (refMod != null) {
-                return refMod;
-            }
-            JsonObject ref = new JsonObject();
-            ref.addProperty("kind", "ref");
-            ref.addProperty("name", leafDataName(arg.identifier()));
-            return ref;
         }
         if (arg.qualifiedDataName() != null) {
             JsonObject ref = new JsonObject();
