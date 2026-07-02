@@ -46,6 +46,7 @@ class Opcode(str, Enum):
     BRANCH = "BRANCH"
     RETURN = "RETURN"
     THROW = "THROW"
+    HALT = "HALT"
     TRY_PUSH = "TRY_PUSH"
     TRY_POP = "TRY_POP"
     # Special
