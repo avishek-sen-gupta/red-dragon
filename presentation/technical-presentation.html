@@ -311,7 +311,7 @@
   <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
   <h2 style="color: #90a4ae;">Multi-language LLM-assisted symbolic execution and dataflow analysis</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
-  <p class="small dim" style="margin-top: 40px;">~85K LOC &middot; 33 opcodes &middot; 16 frontends &middot; 13,400+ tests &middot; 4 LLM providers</p>
+  <p class="small dim" style="margin-top: 40px;">~85K LOC &middot; 37 opcodes &middot; 16 frontends &middot; 13,400+ tests &middot; 4 LLM providers</p>
   <aside class="notes">
     This is an end-to-end technical deep dive into RedDragon's architecture.
     The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
@@ -376,7 +376,7 @@
     <span class="arch-arrow fragment" data-fragment-index="3">&rarr;</span>
     <div class="arch-box green fragment" data-fragment-index="3">Lower<br><span class="small dim">Frontend</span></div>
     <span class="arch-arrow fragment" data-fragment-index="4">&rarr;</span>
-    <div class="arch-box green fragment" data-fragment-index="4">IR<br><span class="small dim">33 opcodes</span></div>
+    <div class="arch-box green fragment" data-fragment-index="4">IR<br><span class="small dim">37 opcodes</span></div>
     <span class="arch-arrow fragment" data-fragment-index="5">&rarr;</span>
     <div class="arch-box fragment" data-fragment-index="5">Link<br><span class="small dim">multi-file</span></div>
     <span class="arch-arrow fragment" data-fragment-index="6">&rarr;</span>
@@ -406,7 +406,7 @@
   <p>Flat <strong class="accent">3-address code</strong> with infinite virtual registers</p>
   <div class="two-col" style="margin-top: 20px;">
     <div>
-      <h3>Value Producers (12)</h3>
+      <h3>Value Producers (13)</h3>
       <span class="opcode-cat value">CONST</span>
       <span class="opcode-cat value">LOAD_VAR</span>
       <span class="opcode-cat value">LOAD_FIELD</span>
@@ -419,9 +419,10 @@
       <span class="opcode-cat value">CALL_METHOD</span>
       <span class="opcode-cat value">CALL_UNKNOWN</span>
       <span class="opcode-cat value">CALL_CTOR</span>
+      <span class="opcode-cat value">CALL_WITH_MEMORY</span>
     </div>
     <div>
-      <h3>Control &amp; Storage (10)</h3>
+      <h3>Control &amp; Storage (11)</h3>
       <span class="opcode-cat control">DECL_VAR</span>
       <span class="opcode-cat control">STORE_VAR</span>
       <span class="opcode-cat control">STORE_FIELD</span>
@@ -430,6 +431,7 @@
       <span class="opcode-cat control">BRANCH</span>
       <span class="opcode-cat control">RETURN</span>
       <span class="opcode-cat control">THROW</span>
+      <span class="opcode-cat control">HALT</span>
       <span class="opcode-cat control">TRY_PUSH</span>
       <span class="opcode-cat control">TRY_POP</span>
       <h3 style="margin-top: 15px;">Pointer (4)</h3>
@@ -437,7 +439,7 @@
       <span class="opcode-cat special">LOAD_INDIRECT</span>
       <span class="opcode-cat special">LOAD_FIELD_INDIRECT</span>
       <span class="opcode-cat special">STORE_INDIRECT</span>
-      <h3 style="margin-top: 15px;">Special &amp; Region (7)</h3>
+      <h3 style="margin-top: 15px;">Special &amp; Region (9)</h3>
       <span class="opcode-cat special">SYMBOLIC</span>
       <span class="opcode-cat special">LABEL</span>
       <span class="opcode-cat special">ALLOC_REGION</span>
@@ -445,13 +447,15 @@
       <span class="opcode-cat special">LOAD_REGION</span>
       <span class="opcode-cat special">SET_CONTINUATION</span>
       <span class="opcode-cat special">RESUME_CONTINUATION</span>
+      <span class="opcode-cat special">SUSPEND</span>
+      <span class="opcode-cat special">IMPORT_MODULE</span>
     </div>
   </div>
   <p class="fragment small dim" style="margin-top: 15px;">
     No expression trees. No register allocation. Each instruction has an explicit destination register.
   </p>
   <aside class="notes">
-    33 opcodes total. The IR is deliberately flat — no nested expressions.
+    37 opcodes total. The IR is deliberately flat — no nested expressions.
     Every value has a named register. This makes dataflow analysis trivial.
   </aside>
 </section>
@@ -538,7 +542,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     <div class="lang-cell" style="border-color: var(--accent3);"><strong>COBOL</strong><br><span class="small dim">ProLeap</span></div>
   </div>
   <p class="fragment">15 tree-sitter frontends share the same <code class="accent">BaseFrontend</code> architecture; COBOL uses a <code class="accent3">ProLeap bridge</code></p>
-  <p class="fragment">All lower to the same <code class="accent2">33-opcode IR</code></p>
+  <p class="fragment">All lower to the same <code class="accent2">37-opcode IR</code></p>
   <p class="fragment small dim">+ <code>LLMFrontend</code>: language-agnostic, sends raw source to LLM &rarr; IR JSON</p>
   <aside class="notes">
     Every frontend produces identical IR. The VM doesn't know or care what
@@ -642,7 +646,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     <div>
       <h3>The Prompt Contract</h3>
       <ul style="font-size: 0.75em;">
-        <li class="fragment">System prompt is a <strong>full IR specification</strong>: all 33 opcodes with their operand schemas</li>
+        <li class="fragment">System prompt is a <strong>full IR specification</strong>: all 37 opcodes with their operand schemas</li>
         <li class="fragment">Includes <strong>exact patterns</strong> for functions, classes, if/else, loops &mdash; not prose descriptions, but concrete JSON examples</li>
         <li class="fragment">Full worked example: <code>fib(n)</code> &rarr; 30-instruction IR listing</li>
         <li class="fragment">User prompt is just: <em>"Lower this {language} source into IR"</em></li>
@@ -1468,7 +1472,7 @@ class SymbolicValue:
 <!-- Slide 20: LocalExecutor -->
 <section>
   <h2>LocalExecutor</h2>
-  <p>Full dispatch table: <strong class="accent">33 opcode handlers + 10 builtins</strong></p>
+  <p>Full dispatch table: <strong class="accent">37 opcode handlers + 10 builtins</strong></p>
   <div class="two-col" style="font-size: 0.85em;">
     <div>
       <pre><code class="language-python">DISPATCH = {
@@ -1711,7 +1715,7 @@ CALL_METHOD "fill"      &larr; concrete</code></pre>
     </div>
     <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
       <strong class="accent4">Language-agnostic</strong><br>
-      <span class="small dim">Same 33 opcodes for all 16 languages &rarr; one VM, one analysis framework</span>
+      <span class="small dim">Same 37 opcodes for all 16 languages &rarr; one VM, one analysis framework</span>
     </div>
   </div>
 </section>
@@ -1786,7 +1790,7 @@ class SourceLocation:
     end_col: int
 
 @dataclass(frozen=True)
-class InstructionBase:          # 33 per-opcode frozen subclasses
+class InstructionBase:          # 37 per-opcode frozen subclasses
     source_location: SourceLocation
     # e.g. Binop(result_reg, operator, left, right, ...)</code></pre>
   <ul style="margin-top: 15px;">
@@ -1838,7 +1842,7 @@ vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
       <div class="label">lines of code</div>
     </div>
     <div class="stat-card">
-      <div class="number">33</div>
+      <div class="number">37</div>
       <div class="label">IR opcodes</div>
     </div>
     <div class="stat-card">

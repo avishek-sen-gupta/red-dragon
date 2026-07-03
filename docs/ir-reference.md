@@ -439,6 +439,18 @@ Pops the call frame and delivers the value to the caller's result register.
 return %result
 ```
 
+### HALT
+
+Unconditionally terminate the entire run unit. COBOL-only — emitted exclusively by `lower_stop_run` for `STOP RUN`, which must halt the whole program from any call depth (unlike `RETURN`/`GOBACK`/`EXIT PROGRAM`, which resume the caller one frame at a time).
+
+_(no fields — carries no operands beyond the `InstructionBase` defaults: `result_reg`, `label`, `branch_targets`, `source_location`)_
+
+Both step loops (`_run_loop` and `execute_cfg_traced`) treat `HALT` as an unconditional `break`, bypassing `_handle_return_flow()` entirely regardless of how many frames are on the call stack. Kept as a distinct instruction type (not a flag on `RETURN`) so it is invisible to return-type inference, which dispatches on exact instruction type.
+
+```
+halt
+```
+
 ### THROW
 
 Throw an exception.

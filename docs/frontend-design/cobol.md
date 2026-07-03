@@ -90,6 +90,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `SUBTRACT X FROM Y` | Decode both → `BINOP -` → encode → write |
 | `MULTIPLY X BY Y` | Decode both → `BINOP *` → encode → write |
 | `DIVIDE X INTO Y` | Decode both → `BINOP /` → encode → write |
+| `DIVIDE ... GIVING ... REMAINDER r` | `remainder = dividend - trunc(quotient) * divisor`, using the same operands the GIVING quotient was computed from, written back alongside the quotient. `DIVIDE X INTO Y GIVING Z` computes `Z = Y / X` (dividend/divisor); `DIVIDE X BY Y GIVING Z` computes `Z = X / Y` — the bridge normalizes both forms to a `[dividend, divisor]` operand order before lowering. |
 | `ADD/SUBTRACT CORRESPONDING A TO/FROM B` | For each leaf name present in both groups: decode B.field and A.field → `BINOP +/-` → encode → write back to B.field. Non-matching fields untouched. |
 | `COMPUTE Y = expr` | Recursive expression lowering → encode → write |
 
@@ -98,11 +99,11 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | Statement | IR Pattern |
 |---|---|
 | `IF / ELSE` | `_lower_condition()` → `BRANCH_IF` → true/false blocks |
-| `EVALUATE / WHEN` | Chain of `BRANCH_IF` per WHEN, `WHEN OTHER` as fallthrough. `ALSO` (`EVALUATE a ALSO b WHEN x ALSO y`) ANDs each subject=condition pair together via `BINOP &&`; `ANY` in a WHEN position skips that dimension's comparison. |
+| `EVALUATE / WHEN` | Chain of `BRANCH_IF` per WHEN, `WHEN OTHER` as fallthrough. Primary (non-`ALSO`) `WHEN ANY` short-circuits to an always-true wildcard match. `ALSO` (`EVALUATE a ALSO b WHEN x ALSO y`) ANDs each subject=condition pair together via `BINOP &&`; `ANY` in a WHEN position skips that dimension's comparison. |
 | `PERFORM` | Simple: `SET_CONTINUATION` + `BRANCH` to paragraph. TIMES/UNTIL/VARYING: loop with counter/condition. THRU: range of paragraphs. Section-level: all paragraphs in section. |
 | `GO TO` | `BRANCH` to paragraph label |
-| `STOP RUN` | `RETURN` |
-| `GOBACK` | `RETURN` — returns control to the caller (subprogram) or terminates (main program). Same IR as STOP RUN. |
+| `STOP RUN` | `HALT` — unconditionally terminates the entire run unit. Emitted by `lower_stop_run` as a dedicated `Halt_` IR instruction (`interpreter/instructions.py`), distinct from `RETURN`/`Return_`. Previously (fixed red-dragon-mjin) STOP RUN lowered to the same `Return_` as GOBACK/EXIT PROGRAM, so a callee's STOP RUN incorrectly returned control to the caller instead of halting the whole program. |
+| `GOBACK` | `RETURN` — returns control to the caller (subprogram) or terminates (main program). No longer the same IR as STOP RUN (see above). |
 | `EXIT PROGRAM` | `RETURN` — returns control to the caller. Distinguished from plain `EXIT` (no-op) by the bridge via `ExitStatementContext.PROGRAM()`. |
 
 ### No-ops (2 types)
@@ -234,6 +235,16 @@ Conditions are serialized by the Java bridge as recursive JSON trees (not raw so
 - `{"kind": "condition_name", "name": "COND-88-NAME"}` — 88-level condition name test
 
 `_lower_condition()` deserializes this tree and recursively emits IR: leaf relation nodes produce a `BINOP` comparison; compound nodes chain via `BRANCH_IF` with short-circuit blocks.
+
+## Known Gaps
+
+- **All arithmetic routes through Python `float`** for decimal/fixed-point fields, not true fixed-point/decimal arithmetic (red-dragon-4q25.1, P0 — the largest remaining gap).
+- **SORT/MERGE/RELEASE/RETURN are entirely unlowered** (red-dragon-429q).
+- **CANCEL is a no-op** — doesn't reset the cancelled subprogram's WORKING-STORAGE on next CALL (red-dragon-8dpn).
+- **BY REFERENCE parameter writes are lost if the callee halts via STOP RUN** instead of returning normally — a direct consequence of the STOP RUN/`Halt_` fix above: caller-emitted copy-back IR for `CALL ... USING BY REFERENCE` only runs on normal return (`Return_`), never on `Halt_` (red-dragon-zerg).
+- **SEARCH is lowered as a linear scan**, not true binary search, even for `SEARCH ALL` (red-dragon-c32s).
+- **`USAGE IS INDEX` / `INDEXED BY` are not modeled** as a distinct type (red-dragon-zm9w).
+- **Most intrinsic `FUNCTION`s fall back to their first argument** instead of being implemented (red-dragon-clpn, deprioritized — `MOD` and `DATE-OF-INTEGER` are implemented, the only ones observed in real corpora so far).
 
 ## Differences from Tree-Sitter Frontends
 

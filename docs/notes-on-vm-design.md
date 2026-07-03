@@ -215,7 +215,7 @@ class CFG:
 `build_cfg()` in `interpreter/cfg.py:13` uses a classic three-phase algorithm:
 
 **Phase 1 — Identify block boundaries** (lines 17-29):
-Block starts occur at instruction 0, after every `LABEL` opcode, and after any terminator (`BRANCH`, `BRANCH_IF`, `RETURN`, `THROW`).
+Block starts occur at instruction 0, after every `LABEL` opcode, and after any terminator (`BRANCH`, `BRANCH_IF`, `RETURN`, `THROW`, `HALT`).
 
 **Phase 2 — Create blocks** (lines 33-47):
 Slice the instruction stream between consecutive starts. The leading `LABEL` pseudo-instruction is stripped from each block and used as the block's label. Blocks without a `LABEL` get a synthetic name (`__block_N`).
@@ -226,6 +226,7 @@ Slice the instruction stream between consecutive starts. The leading `LABEL` pse
 BRANCH target       →  edge to target
 BRANCH_IF t,f       →  edges to both t and f
 RETURN / THROW      →  no successors (terminal)
+HALT                →  no successors (terminal)
 (anything else)     →  fall through to next block
 ```
 
@@ -433,6 +434,7 @@ flowchart TD
 
     handle control flow:
         RETURN/THROW → _handle_return_flow()
+        HALT         → break              ─── unconditional, skips _handle_return_flow()
         next_label set → jump to target block
         default → ip++
 ```
@@ -662,6 +664,26 @@ After RETURN:
   2. Write return_value (120) to caller's result_reg (%4)
   3. Jump to return_label:return_ip (entry:4)
 ```
+
+### HALT vs RETURN
+
+`HALT` (`interpreter/instructions.py` — `Halt_`) is COBOL-only, emitted exclusively by
+`lower_stop_run` (`interpreter/cobol/lower_arithmetic.py`) for `STOP RUN`. COBOL's `STOP RUN`
+must terminate the *entire program* immediately, no matter how deep the current call stack is —
+unlike `GOBACK`/`EXIT PROGRAM`, which correctly compile to `RETURN` and pop exactly one frame,
+resuming the caller (or halting only if that frame is the top-level/`MAIN_FRAME_NAME` frame or
+the stack is empty).
+
+Both step loops (`_run_loop` in `interpreter/run.py` and `execute_cfg_traced`) special-case
+`HALT` as an unconditional `break` that runs *before* `_handle_return_flow()` is ever consulted —
+it ignores `call_stack` depth entirely, so a `STOP RUN` ten frames deep in nested `CALL`s still
+ends execution immediately rather than returning control up the chain one frame at a time.
+
+`Halt_` is a genuinely distinct instruction type rather than a boolean flag on `Return_`. The
+reason is type inference (`interpreter/types/type_inference.py`) dispatches on exact instruction
+type when inferring function return types; a flagged `Return_` would still be unioned into the
+inferred return type even though `STOP RUN` never produces a value. `Halt_` has `writes() ->
+None` and `reads() -> []` — it carries no operands. See [IR reference](ir-reference.md#halt).
 
 ### Parameter binding via SYMBOLIC
 
