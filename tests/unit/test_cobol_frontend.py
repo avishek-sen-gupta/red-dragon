@@ -521,8 +521,8 @@ class TestProcedureDivisionLowering:
         stmts = [StopRunStatement()]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        returns = _find_opcodes(instructions, Opcode.RETURN)
-        assert len(returns) >= 1
+        halts = _find_opcodes(instructions, Opcode.HALT)
+        assert len(halts) >= 1
 
     @covers(CobolFeature.GO_TO, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_goto_produces_branch(self):

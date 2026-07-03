@@ -127,7 +127,7 @@ class TestEmitContextLowerStatement:
         ctx.lower_statement(StopRunStatement(), materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]
-        assert Opcode.RETURN in opcodes
+        assert Opcode.HALT in opcodes
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_statement_with_materialised_dispatches_display(self):
@@ -185,7 +185,7 @@ class TestDispatchStatementWithMaterialised:
         dispatch_statement(ctx, StopRunStatement(), materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]
-        assert Opcode.RETURN in opcodes
+        assert Opcode.HALT in opcodes
 
 
 # ── lower_move with MaterialisedSectionedLayout ────────────────────────────
@@ -288,7 +288,7 @@ class TestLowerPerformWithMaterialised:
         lower_perform(ctx, stmt, materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]
-        assert Opcode.RETURN in opcodes
+        assert Opcode.HALT in opcodes
 
 
 # ── lower_call with MaterialisedSectionedLayout ────────────────────────────
