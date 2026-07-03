@@ -532,3 +532,23 @@ class TestExtractFunctionInstructions:
         assert "t1 = const 10" in mermaid
         assert "entry" not in mermaid
         assert "func_bar" not in mermaid
+
+
+class TestHaltTerminatesBlock:
+    def test_block_ending_in_halt_has_no_successors(self):
+        from interpreter.cfg import build_cfg
+        from interpreter.ir import IRInstruction, Opcode, CodeLabel
+        from interpreter.register import Register
+
+        instructions = [
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
+            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%0"), operands=[1]),
+            IRInstruction(opcode=Opcode.HALT, operands=[]),
+            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%1"), operands=[2]),
+            IRInstruction(opcode=Opcode.RETURN, operands=["%1"]),
+        ]
+
+        cfg = build_cfg(instructions)
+
+        entry_block = cfg.blocks[CodeLabel("entry")]
+        assert entry_block.successors == []

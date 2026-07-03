@@ -12,6 +12,7 @@ from interpreter.instructions import (
     BranchIf,
     Return_,
     Throw_,
+    Halt_,
     ResumeContinuation,
 )
 from interpreter import constants
@@ -35,7 +36,9 @@ def build_cfg(instructions: list[InstructionBase]) -> CFG:
         if isinstance(inst, Label_):
             block_starts.add(i)
             label_to_idx[inst.label] = i
-        elif isinstance(inst, (Branch, BranchIf, Return_, Throw_, ResumeContinuation)):
+        elif isinstance(
+            inst, (Branch, BranchIf, Return_, Throw_, Halt_, ResumeContinuation)
+        ):
             if i + 1 < len(typed_instructions):
                 block_starts.add(i + 1)
 
@@ -86,7 +89,7 @@ def build_cfg(instructions: list[InstructionBase]) -> CFG:
             if i + 1 < len(block_labels):
                 _add_edge(cfg, label, block_labels[i + 1])
 
-        elif isinstance(last, (Return_, Throw_)):
+        elif isinstance(last, (Return_, Throw_, Halt_)):
             pass  # no successors
 
         else:
