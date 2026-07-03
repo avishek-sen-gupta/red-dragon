@@ -58,6 +58,7 @@ from interpreter.instructions import (
     BranchIf,
     CallFunction,
     Const,
+    Halt_,
     Label_,
     Return_,
 )
@@ -1852,10 +1853,9 @@ def lower_stop_run(
     stmt: StopRunStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """STOP RUN."""
-    zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.int_(zero_reg, 0))
-    ctx.emit_inst(Return_(value_reg=zero_reg))
+    """STOP RUN — unconditionally terminates the entire run unit, unlike
+    GOBACK/EXIT PROGRAM (which return control to the caller)."""
+    ctx.emit_inst(Halt_())
 
 
 def lower_goback(
