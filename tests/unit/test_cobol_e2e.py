@@ -451,7 +451,7 @@ class TestMultipleStatementTypes:
         assert Opcode.ALLOC_REGION in opcodes
         assert Opcode.WRITE_REGION in opcodes
         assert Opcode.CALL_FUNCTION in opcodes  # print
-        assert Opcode.RETURN in opcodes  # STOP RUN
+        assert Opcode.HALT in opcodes  # STOP RUN
 
 
 class TestIfElseExecution:
