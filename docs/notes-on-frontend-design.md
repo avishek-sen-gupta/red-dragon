@@ -26,7 +26,7 @@ For per-language frontend documentation (one document per language), see [fronte
 
 ## 1. Overview
 
-The frontend subsystem converts source code in any language into a universal flattened three-address code IR ([34 opcodes](ir-reference.md)). There are three frontend strategies:
+The frontend subsystem converts source code in any language into a universal flattened three-address code IR ([37 opcodes](ir-reference.md)). There are three frontend strategies:
 
 | Strategy | Input | How | Speed | Languages |
 |---|---|---|---|---|
@@ -83,7 +83,7 @@ Returns a flat list of IR instructions, always starting with `LABEL "entry"`. An
 
 ## 3. IR — The Target Format
 
-The IR is defined in `interpreter/ir.py` — 34 opcodes covering value producers, control flow, stores, and special operations. Every frontend, regardless of source language, targets this same instruction set.
+The IR is defined in `interpreter/ir.py` — 37 opcodes covering value producers, control flow, stores, and special operations. Every frontend, regardless of source language, targets this same instruction set.
 
 See the [IR Reference](ir-reference.md) for the complete opcode specification, instruction format, and common IR patterns.
 
@@ -539,6 +539,11 @@ Pattern matching is implemented as a shared compiler layer (`interpreter/fronten
 |----------|--------|------|
 | Python | `parse_pattern` | `interpreter/frontends/python/patterns.py` |
 | C# | `parse_csharp_pattern` | `interpreter/frontends/csharp/patterns.py` |
+| Java | `parse_java_pattern` | `interpreter/frontends/java/patterns.py` |
+| Kotlin | `parse_kotlin_pattern` | `interpreter/frontends/kotlin/patterns.py` |
+| Scala | `parse_scala_pattern` | `interpreter/frontends/scala/patterns.py` |
+| Ruby | `parse_ruby_pattern` | `interpreter/frontends/ruby/patterns.py` |
+| Rust | `parse_rust_pattern` | `interpreter/frontends/rust/patterns.py` |
 
 Other languages can add their own `parse_pattern` function that maps their tree-sitter AST into the Pattern ADT. The `compile_match` compiler and all IR emission are shared.
 
@@ -548,7 +553,7 @@ Other languages can add their own `parse_pattern` function that maps their tree-
 
 | Principle | Manifestation |
 |---|---|
-| **Single IR for all languages** | 34 opcodes are enough to represent 15 languages + COBOL + LLM output |
+| **Single IR for all languages** | 37 opcodes are enough to represent 15 languages + COBOL + LLM output |
 | **Pure-function dispatch tables** | Extensible via dict lookup, not if/elif chains |
 | **GrammarConstants dataclass** | Same lowering logic handles different tree-sitter grammars |
 | **Graceful degradation** | Unknown constructs → `SYMBOLIC`, not crashes |

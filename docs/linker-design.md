@@ -24,7 +24,7 @@ Project directory
     ▼
 Phase 1: Source discovery + import extraction
     │  scan by language extensions
-    │  extract_imports() per file — tree-sitter AST or regex (COBOL)
+    │  extract_imports() per file — tree-sitter AST or Lark grammar (COBOL)
     │  ImportResolver maps ImportRef → file path
     ▼
 Dependency graph + topological sort
@@ -105,7 +105,7 @@ class ImportRef:
 | PHP | `namespace_use_declaration`, `require_*` | `use`, `require` | |
 | Lua | `function_call[require]` | `require` | |
 | Pascal | `declUses` → `moduleName` | `using` | |
-| COBOL | regex: `COPY name`, `CALL 'name'` | `include`, `require` | No tree-sitter |
+| COBOL | Lark LALR grammar: `COPY name`, `CALL 'name'` | `include`, `require` | No tree-sitter; light grammar (not plain regex) so keywords inside string literals don't produce false imports |
 
 ### 3.3 Import resolution
 
@@ -340,6 +340,7 @@ class ModuleUnit:
     ir: tuple[InstructionBase, ...]    # raw, un-namespaced (immutable)
     exports: ExportTable
     imports: tuple[ImportRef, ...]
+    symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
 
 @dataclass
 class LinkedProgram:
@@ -347,12 +348,28 @@ class LinkedProgram:
     merged_ir: list[InstructionBase]
     merged_cfg: CFG
     merged_registry: FunctionRegistry
-    entry_module: Path
+    language: Language
     import_graph: dict[Path, list[Path]]
-    func_symbol_table: dict          # for ExecutionStrategies
-    class_symbol_table: dict         # for ExecutionStrategies
-    unresolved_imports: list[ImportRef]
+    type_env_builder: TypeEnvironmentBuilder
+    symbol_table: SymbolTable
+    data_layout: dict[str, dict] = field(default_factory=dict)
+    unresolved_imports: list[ImportRef] = field(default_factory=list)
+    func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
+    class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
+    entry_func_label: CodeLabel | None = None
+    # Explicit entry function label. When several modules are linked (e.g. a
+    # COBOL main program plus the subprograms it CALLs), multiple func_*
+    # labels exist and a bare func_* entry predicate would be ambiguous;
+    # callers that know the entry module set this to dispatch execution
+    # into it rather than into a linked-in callee.
+
+    def entry_points(self, predicate=lambda _: True) -> list[FuncRef]:
+        """Query func_symbol_table values matching predicate (default: all)."""
+        ...
 ```
+
+Note: `ExportTable` keys/values are typed domain objects (`FuncName`, `ClassName`,
+`VarName`, `CodeLabel`, `Register`), not bare strings — see §4 above.
 
 ---
 
@@ -402,11 +419,18 @@ These replace the original `startswith(FUNC_LABEL_PREFIX)` checks. Single-file c
 
 ```
 interpreter/project/
-    types.py       ImportRef, ExportTable, ModuleUnit, LinkedProgram, CyclicImportError
-    imports.py     extract_imports() — tree-sitter walkers for 15 languages + regex for COBOL
-    resolver.py    ImportResolver protocol + 13 language resolvers + topological_sort()
-    compiler.py    compile_module(), compile_directory(), build_export_table()
-    linker.py      link_modules() — strip, namespace, rebase, drop stubs, concatenate
+    types.py               ImportRef, ExportTable, ModuleUnit, LinkedProgram, CyclicImportError
+    imports.py             extract_imports() — tree-sitter walkers for 15 languages + Lark grammar for COBOL
+    resolver.py            ImportResolver protocol + 13 language resolvers + topological_sort()
+    compiler.py            compile_module(), compile_directory(), build_export_table()
+    linker.py              link_modules() — strip, namespace, rebase, drop stubs, concatenate
+    source_roots.py        SourceRootDiscovery — Maven-style src/main/java root discovery (Java multi-module)
+    entry_point.py         EntryPoint — top_level()/function(predicate) execution-entry spec
+    cobol_compile.py        compile_cobol()/compile_cobol_module() — COBOL-specific two-phase
+                            AST-cache pipeline (parallel parse-to-disk, sequential lower) with
+                            multi-program CALL linking (main + subprograms)
+    cobol_connections.py   extract_cobol_connections() — ProgramRef/Connection graph of a
+                            COBOL project's COPY/CALL edges, built on top of compile_cobol()
 
 interpreter/registry.py
     _is_func_label(), _is_class_label(), _is_end_class_label()

@@ -1,10 +1,10 @@
 # Frontend Feature Coverage Gaps
 
-**Generated**: 2026-06-06
+**Generated**: 2026-07-03
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 958 features across 16 languages — 789 covered, 169 uncovered
+**Totals**: 976 features across 16 languages — 811 covered, 165 uncovered
 
 ---
 
@@ -12,9 +12,9 @@
 
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
-| c | 48 | 34 | 14 ⚠ | 70% |
-| cobol | 114 | 108 | 6 ⚠ | 94% |
-| cpp | 84 | 44 | 40 ⚠ | 52% |
+| c | 51 | 36 | 15 ⚠ | 70% |
+| cobol | 127 | 125 | 2 ⚠ | 98% |
+| cpp | 84 | 45 | 39 ⚠ | 53% |
 | csharp | 94 | 73 | 21 ⚠ | 77% |
 | go | 44 | 41 | 3 ⚠ | 93% |
 | java | 72 | 72 | 0 | 100% |
@@ -25,8 +25,8 @@
 | php | 55 | 46 | 9 ⚠ | 83% |
 | python | 55 | 46 | 9 ⚠ | 83% |
 | ruby | 72 | 67 | 5 ⚠ | 93% |
-| rust | 60 | 46 | 14 ⚠ | 76% |
-| scala | 53 | 45 | 8 ⚠ | 84% |
+| rust | 61 | 47 | 14 ⚠ | 77% |
+| scala | 54 | 46 | 8 ⚠ | 85% |
 | typescript | 36 | 21 | 15 ⚠ | 58% |
 
 ---
@@ -45,6 +45,7 @@
 - `LABELED_STATEMENTS` — label: statement labels for goto targets
 - `LOGICAL_OPERATORS` — && and || logical short-circuit operators
 - `MACRO_FUNCTION` — function-like macro definitions and expansions
+- `NUMBER_LITERAL` — integer and floating-point numeric literals
 - `POINTER_LOAD` — loading a value through a pointer
 - `STRING_CONCATENATION` — adjacent string literal concatenation
 - `STRING_LITERAL` — "..." string literals
@@ -52,11 +53,7 @@
 
 ### cobol
 
-- `INSPECT_CONVERTING` — INSPECT x CONVERTING from TO to character conversion
-- `READ_AT_END` — AT END clause on READ statements
-- `ROUNDED_CLAUSE` — ROUNDED modifier on arithmetic result fields
 - `SEARCH_BINARY` — SEARCH ALL table WHEN cond binary table search statements
-- `SECTION_FILE` — FILE SECTION file record layout declarations
 - `USAGE_INDEX` — USAGE INDEX table index storage type
 
 ### cpp
@@ -85,7 +82,6 @@
 - `INITIALIZER_LIST` — {a, b, c} brace-enclosed initializer lists
 - `LABELED_STATEMENTS` — label: statement labels for goto targets
 - `LOGICAL_OPERATORS` — && and || logical short-circuit operators
-- `NUMBER_LITERAL` — integer and floating-point numeric literals
 - `POINTER_DEREFERENCE` — *ptr dereference operator
 - `POINTER_LOAD` — loading a value through a pointer
 - `POINTER_STORE` — storing a value through a pointer
