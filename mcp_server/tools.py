@@ -474,6 +474,7 @@ _OPCODE_CATEGORIES: dict[str, str] = {
     "THROW": "control_flow",
     "TRY_PUSH": "control_flow",
     "TRY_POP": "control_flow",
+    "HALT": "control_flow",
     "NEW_OBJECT": "heap",
     "NEW_ARRAY": "heap",
     "ALLOC_REGION": "memory",
@@ -635,6 +636,11 @@ _OPCODE_NOTES: dict[str, str] = {
         "Raises value_reg as an exception and begins stack unwinding. The VM searches "
         "up the call stack for a matching TRY_PUSH handler. If none is found, the "
         "program terminates with an unhandled exception."
+    ),
+    "HALT": (
+        "Unconditionally terminates the entire run unit (COBOL STOP RUN). Unlike "
+        "RETURN, a HALT never returns a value to a caller and stops the step loop "
+        "outright, regardless of call-stack depth. Carries no operands."
     ),
     "TRY_PUSH": (
         "Pushes an exception handler onto the VM's exception stack. catch_labels is "
