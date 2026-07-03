@@ -13,6 +13,7 @@ from decimal import Decimal
 import pytest
 
 from interpreter.address import Address
+from interpreter.cobol.data_layout import CobolAmbiguousReferenceError
 from interpreter.cobol.features import CobolFeature
 from interpreter.constants import Language
 from interpreter.field_name import FieldName
@@ -7966,3 +7967,59 @@ class TestPicInsertionSymbols:
         # WS-MARKER is the second field (after 10-byte date). Just verify no crash
         # and the region is non-empty.
         assert len(region) > 0
+
+
+class TestAmbiguousFieldNameQualification:
+    """Bare names ambiguous across nesting levels must raise; IN/OF disambiguates (red-dragon-wpme)."""
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_unqualified_ambiguous_reference_raises(self):
+        """WS-ID declared under two different 01-level groups; an unqualified
+        MOVE TO WS-ID cannot resolve — must raise, not silently pick one."""
+        with pytest.raises(CobolAmbiguousReferenceError, match="WS-ID"):
+            _run_cobol(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. TEST-AMBIG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "01 WS-GROUP-A.",
+                    "   05 WS-ID PIC 9(3).",
+                    "01 WS-GROUP-B.",
+                    "   05 WS-ID PIC 9(3).",
+                    "PROCEDURE DIVISION.",
+                    "MAIN-PARA.",
+                    "    MOVE 5 TO WS-ID.",
+                    "    STOP RUN.",
+                ]
+            )
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_of_qualification_disambiguates_both_occurrences(self):
+        """The same ambiguous WS-ID resolves correctly when qualified with OF,
+        each qualifier picking its own distinct field (not the same one twice)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISAMBIG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-GROUP-A.",
+                "   05 WS-ID PIC 9(3) VALUE 0.",
+                "01 WS-GROUP-B.",
+                "   05 WS-ID PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 111 TO WS-ID OF WS-GROUP-A.",
+                "    MOVE 222 TO WS-ID OF WS-GROUP-B.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-GROUP-A.WS-ID at offset 0, WS-GROUP-B.WS-ID at offset 3 (both PIC 9(3)).
+        assert (
+            _decode_zoned_unsigned(region, 0, 3) == 111
+        ), "WS-ID OF WS-GROUP-A should be 111, unaffected by the other MOVE"
+        assert (
+            _decode_zoned_unsigned(region, 3, 3) == 222
+        ), "WS-ID OF WS-GROUP-B should be 222, unaffected by the other MOVE"

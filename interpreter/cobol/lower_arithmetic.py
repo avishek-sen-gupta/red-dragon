@@ -1615,9 +1615,9 @@ def lower_initialize(
         ws_layout, _ = materialised.working_storage
         ls_layout, _ = materialised.local_storage
         lk_layout, _ = materialised.linkage
-        if ws_layout.lookup_as_storage(operand) is not None:
+        if ws_layout.exists(operand):
             section_layout = ws_layout
-        elif ls_layout.lookup_as_storage(operand) is not None:
+        elif ls_layout.exists(operand):
             section_layout = ls_layout
         else:
             section_layout = lk_layout

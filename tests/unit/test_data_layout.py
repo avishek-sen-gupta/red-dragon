@@ -1,8 +1,13 @@
 """Tests for COBOL data layout builder."""
 
+import pytest
+
 from interpreter.cobol.asg_types import CobolField
 from interpreter.cobol.cobol_types import CobolDataCategory
-from interpreter.cobol.data_layout import build_data_layout
+from interpreter.cobol.data_layout import (
+    build_data_layout,
+    CobolAmbiguousReferenceError,
+)
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers, NotLanguageFeature
 
@@ -457,6 +462,62 @@ class TestBuildDataLayoutNestedGroups:
         assert layout.lookup("WS-ID").offset == 0  # type: ignore[union-attr]
         assert layout.lookup("WS-TYPE").offset == 3  # type: ignore[union-attr]
         assert layout.lookup("WS-BODY").offset == 5  # type: ignore[union-attr]
+
+
+class TestAmbiguousBareNameLookup:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_ambiguous_name_at_two_levels_raises(self):
+        """A bare name declared at two different nesting levels is ambiguous."""
+        fields = [
+            CobolField(name="WS-ID", level=1, pic="9(3)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="WS-SUB",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=3,
+                children=[
+                    CobolField(
+                        name="WS-ID", level=5, pic="9(3)", usage="DISPLAY", offset=3
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        with pytest.raises(CobolAmbiguousReferenceError, match="WS-ID"):
+            layout.lookup("WS-ID")
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_unambiguous_name_still_resolves(self):
+        """A unique bare name resolves normally, even alongside an unrelated
+        ambiguous name elsewhere in the same layout."""
+        fields = [
+            CobolField(name="WS-ID", level=1, pic="9(3)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="WS-SUB",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=3,
+                children=[
+                    CobolField(
+                        name="WS-ID", level=5, pic="9(3)", usage="DISPLAY", offset=3
+                    ),
+                    CobolField(
+                        name="WS-UNIQUE",
+                        level=5,
+                        pic="X(4)",
+                        usage="DISPLAY",
+                        offset=6,
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.lookup("WS-UNIQUE")
+        assert fl is not None
+        assert fl.byte_length == 4
+        assert fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
 
 
 class TestBuildDataLayoutCompTypes:
