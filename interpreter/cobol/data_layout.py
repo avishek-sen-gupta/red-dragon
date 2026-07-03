@@ -24,6 +24,23 @@ logger = logging.getLogger(__name__)
 # RENAMES (level-66) is always treated as ALPHANUMERIC; its descriptor is fixed.
 _RENAMES_TYPE_DESCRIPTOR = parse_pic("X")
 
+
+class CobolAmbiguousReferenceError(Exception):
+    """A bare (unqualified) field reference resolves to more than one field.
+
+    Real COBOL compilers reject this at compile time; the programmer must
+    qualify with IN/OF (e.g. ``WS-ID OF WS-SUB``) to disambiguate.
+    """
+
+    def __init__(self, name: str):
+        super().__init__(
+            f"*** Guru Meditation Error #00A18105.C0BF1E1D ***\n"
+            f"Ambiguous reference to {name!r} — declared in more than one "
+            f"place in this record. Qualify with IN/OF (e.g. '{name} OF "
+            f"<group-name>') to disambiguate."
+        )
+
+
 # Generic value type for the case-insensitive dict lookup helper.
 _V = TypeVar("_V")
 
@@ -102,24 +119,54 @@ class DataLayout:
     conditions: list[ConditionName] = field(default_factory=list)
 
     def lookup(self, name: str) -> FieldLayout | None:
-        """Depth-first search for a leaf field by bare name.
+        """Search for a leaf field by bare name within this subtree.
 
-        Returns the first match found. Field names should be unique across
-        the record; duplicate names at different levels are a program error.
+        Field names should be unique within the subtree rooted at ``self``;
+        if the bare name resolves to more than one field at different
+        nesting levels, that is a genuine program error and raises
+        :class:`CobolAmbiguousReferenceError` (real COBOL compilers reject
+        this at compile time, requiring IN/OF qualification). Callers that
+        already resolved a qualifier should call ``lookup()`` on the
+        narrowed subgroup (see :meth:`lookup_qualified`), so ambiguity is
+        evaluated only within that subgroup's own subtree.
 
         COBOL identifiers are case-insensitive: a field declared ``Vstring-length``
         (e.g. CardDemo CSUTLDTC) is referenced as ``VSTRING-LENGTH`` from the
         PROCEDURE DIVISION, so the match is done case-insensitively while the
         verbatim declared name is preserved on the FieldLayout.
         """
+        matches = self._find_all(name)
+        if len(matches) > 1:
+            raise CobolAmbiguousReferenceError(name)
+        return matches[0] if matches else None
+
+    def _find_all(self, name: str) -> list[FieldLayout]:
+        """Collect every leaf field matching ``name`` (case-insensitive) in this subtree."""
+        results = []
         direct = _ci_get(self.fields, name)
         if direct is not None:
-            return direct
+            results.append(direct)
         for sub in self.groups.values():
-            found = sub.lookup(name)
-            if found is not None:
-                return found
-        return None
+            results.extend(sub._find_all(name))
+        return results
+
+    def exists(self, name: str) -> bool:
+        """True if ``name`` resolves to at least one leaf field or group here.
+
+        A pure existence check that never raises on ambiguity — for callers
+        that only need to know whether a bare name is a real field/group at
+        all (e.g. distinguishing a MOVE target from an unmodelled special
+        register, or picking which DATA DIVISION section owns a name), not
+        callers that need to resolve it to one specific location. Use
+        :meth:`lookup`/:meth:`lookup_qualified` for the latter.
+        """
+        if self._find_all(name):
+            return True
+        try:
+            self.lookup_group(name)
+            return True
+        except KeyError:
+            return False
 
     def lookup_or_raise(self, name: str) -> FieldLayout:
         result = self.lookup(name)

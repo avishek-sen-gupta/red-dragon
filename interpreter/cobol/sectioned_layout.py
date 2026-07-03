@@ -91,7 +91,7 @@ class MaterialisedSectionedLayout:
             self.linkage,
             self.file,
         ):
-            if layout.lookup_as_storage(name) is not None:
+            if layout.exists(name):
                 return layout.enclosing_occurs_element_size(name)
         return 0
 
@@ -106,7 +106,7 @@ class MaterialisedSectionedLayout:
             self.linkage,
             self.file,
         ):
-            if layout.lookup_as_storage(name) is not None:
+            if layout.exists(name):
                 return layout.all_enclosing_occurs_strides(name)
         return []
 
@@ -117,11 +117,11 @@ class MaterialisedSectionedLayout:
         file_layout, _ = self.file
         sr_layout, _ = self.special_registers
         return (
-            ls_layout.lookup_as_storage(name) is not None
-            or ws_layout.lookup_as_storage(name) is not None
-            or lk_layout.lookup_as_storage(name) is not None
-            or file_layout.lookup_as_storage(name) is not None
-            or sr_layout.lookup_as_storage(name) is not None
+            ls_layout.exists(name)
+            or ws_layout.exists(name)
+            or lk_layout.exists(name)
+            or file_layout.exists(name)
+            or sr_layout.exists(name)
         )
 
     def group_leaf_names(self, group_name: str) -> list[str]:
