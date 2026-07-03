@@ -514,7 +514,7 @@ class TestProcedureDivisionLowering:
         assert len(print_calls) >= 1
 
     @covers(CobolFeature.STOP_RUN, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
-    def test_stop_run_produces_return(self):
+    def test_stop_run_produces_halt(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
