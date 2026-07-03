@@ -19,7 +19,14 @@ from interpreter.types.coercion.default_conversion_rules import (
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import Opcode, CodeLabel, NO_LABEL
-from interpreter.instructions import InstructionBase, Label_, Return_, Throw_, Suspend
+from interpreter.instructions import (
+    InstructionBase,
+    Label_,
+    Return_,
+    Throw_,
+    Halt_,
+    Suspend,
+)
 from interpreter.register import Register
 from interpreter.types.typed_value import typed, unwrap
 from interpreter.types.type_expr import UNKNOWN
@@ -468,6 +475,11 @@ def _run_loop(
                 vm, update, type_env=type_env, conversion_rules=conversion_rules
             )
 
+        if isinstance(instruction, Halt_):
+            if config.verbose:
+                logger.info("[step %d] STOP RUN — halting entire run unit.", step)
+            break
+
         if is_return or (is_throw and not is_caught_throw):
             flow = _handle_return_flow(
                 vm, cfg, return_frame, update, config.verbose, step
@@ -822,6 +834,11 @@ def execute_cfg_traced(
                 used_llm=used_llm,
             )
         )
+
+        if isinstance(instruction, Halt_):
+            if config.verbose:
+                logger.info("[step %d] STOP RUN — halting entire run unit.", step)
+            break
 
         if is_return or is_throw:
             flow = _handle_return_flow(
