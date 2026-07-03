@@ -5351,7 +5351,7 @@ class TestSubprogramWsPersistence:
                     "77 WS-COUNTER PIC 9(4) VALUE 0.",
                     "PROCEDURE DIVISION.",
                     "    ADD 1 TO WS-COUNTER.",
-                    "    STOP RUN.",
+                    "    GOBACK.",
                 ]
             )
         )
@@ -5513,7 +5513,7 @@ class TestCallUsingByReference:
                     "PROCEDURE DIVISION.",
                     "    MOVE LS-VALUE TO WS-RECEIVED.",
                     "    ADD 3 TO LS-VALUE.",
-                    "    STOP RUN.",
+                    "    GOBACK.",
                 ]
             )
         )
@@ -6190,6 +6190,237 @@ class TestGobackExitProgram:
         assert (
             ws_flag == 1
         ), f"WS-FLAG: expected 1 (MAIN continued after GOBACK), got {ws_flag}"
+
+
+class TestStopRunTerminatesRunUnit:
+    """STOP RUN halts the ENTIRE run unit, unlike GOBACK/EXIT PROGRAM (red-dragon-mjin)."""
+
+    @covers(CobolFeature.STOP_RUN)
+    def test_stop_run_in_subprogram_halts_caller(self, tmp_path):
+        """STOP RUN in a called subprogram halts immediately; MAIN's post-CALL code never runs."""
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-RESULT PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'HELPER'.",
+                    "    MOVE 42 TO WS-RESULT.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "HELPER.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. HELPER.",
+                    "PROCEDURE DIVISION.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if VarName("__prog_MAINPROG") in frame.local_vars:
+                singleton_ptr = frame.local_vars[VarName("__prog_MAINPROG")].value
+                break
+        assert singleton_ptr is not None
+        assert isinstance(singleton_ptr, Pointer)
+        ws_addr = Address(
+            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+        )
+        region = vm.region_get(ws_addr)
+        assert region is not None
+        ws_result = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            ws_result == 0
+        ), f"WS-RESULT: expected 0 (STOP RUN in HELPER halted before MAIN's MOVE), got {ws_result}"
+
+    @covers(CobolFeature.STOP_RUN)
+    def test_stop_run_in_deeply_nested_call_halts_everything(self, tmp_path):
+        """3-level CALL chain A->B->C; STOP RUN in C halts everything, not just B or C's frame."""
+        (tmp_path / "PROGA.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. PROGA.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-A-RESULT PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'PROGB'.",
+                    "    MOVE 1 TO WS-A-RESULT.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "PROGB.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. PROGB.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-B-RESULT PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'PROGC'.",
+                    "    MOVE 1 TO WS-B-RESULT.",
+                    "    GOBACK.",
+                ]
+            )
+        )
+        (tmp_path / "PROGC.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. PROGC.",
+                    "PROCEDURE DIVISION.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_proga_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if VarName("__prog_PROGA") in frame.local_vars:
+                singleton_ptr = frame.local_vars[VarName("__prog_PROGA")].value
+                break
+        assert singleton_ptr is not None
+        assert isinstance(singleton_ptr, Pointer)
+        ws_addr = Address(
+            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+        )
+        region = vm.region_get(ws_addr)
+        assert region is not None
+        ws_a_result = _decode_zoned_unsigned(region, offset=0, length=4)
+        assert (
+            ws_a_result == 0
+        ), f"WS-A-RESULT: expected 0 (STOP RUN in PROGC halted the entire chain), got {ws_a_result}"
+
+    @covers(CobolFeature.GOBACK)
+    def test_goback_at_top_level_halts_vm(self):
+        """GOBACK in the top-level/main program (no CALL) halts, same as STOP RUN.
+
+        This is a regression guard for the pre-existing MAIN_FRAME_NAME/empty-stack
+        mechanism in _handle_return_flow — not new behavior introduced by this fix.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-GOBACK-TOP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-FLAG PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    GOBACK.",
+                "    MOVE 1 TO WS-FLAG.",
+            ],
+            max_steps=500,
+        )
+        region = _first_region(vm)
+        assert (
+            region[0] == 0xF0
+        ), f"WS-FLAG: expected 0 (GOBACK halted before MOVE 1), got {hex(region[0])}"
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="red-dragon-zerg: BY REFERENCE copy-back is caller-emitted IR that "
+        "never runs when the callee halts via STOP RUN instead of returning",
+    )
+    @covers(CobolFeature.STOP_RUN, CobolFeature.CALL_USING)
+    def test_stop_run_loses_by_reference_write_known_gap(self, tmp_path):
+        """KNOWN GAP (red-dragon-zerg): BY REFERENCE write is lost when the
+        callee terminates via STOP RUN instead of GOBACK/EXIT PROGRAM, because
+        copy-back is caller-emitted IR that only runs if control resumes at
+        the caller (via _handle_return_flow), which STOP RUN's Halt_
+        deliberately never does. This test documents the gap; it should start
+        FAILING (i.e. this xfail should flip) once red-dragon-zerg is fixed —
+        at that point, delete this test and restore a normal passing
+        assertion for BY REFERENCE + STOP RUN interaction."""
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-TICKET PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'HELPER' USING BY REFERENCE WS-TICKET.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "HELPER.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. HELPER.",
+                    "DATA DIVISION.",
+                    "LINKAGE SECTION.",
+                    "01 LK-TICKET PIC 9(4).",
+                    "PROCEDURE DIVISION.",
+                    "    MOVE 77 TO LK-TICKET.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=500,
+        )
+
+        singleton_ptr = None
+        for frame in reversed(vm.call_stack):
+            if VarName("__prog_MAINPROG") in frame.local_vars:
+                singleton_ptr = frame.local_vars[VarName("__prog_MAINPROG")].value
+                break
+        assert singleton_ptr is not None
+        assert isinstance(singleton_ptr, Pointer)
+        ws_addr = Address(
+            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+        )
+        region = vm.region_get(ws_addr)
+        assert region is not None
+        ws_ticket = _decode_zoned_unsigned(region, offset=0, length=4)
+        # This SHOULD be 77 per real COBOL BY REFERENCE semantics — it currently
+        # is not, due to the known gap. When fixed, this assertion flips to pass
+        # and the xfail marker above must be removed.
+        assert (
+            ws_ticket == 77
+        ), f"WS-TICKET: expected 77 (currently fails — known gap red-dragon-zerg), got {ws_ticket}"
 
 
 class TestEvaluateFigurativeCondition:

@@ -518,13 +518,23 @@ class TestCobolMultiFile:
             os.environ["PROLEAP_BRIDGE_JAR"] = old
 
     def test_call_subprogram(self, tmp_path):
-        """MAIN passes WS-TICKET BY REFERENCE; HELPER writes 77 into LK-TICKET.
+        """MAIN passes WS-TICKET BY REFERENCE; HELPER writes 77 then STOP RUNs.
 
-        Verifies end-to-end multi-module CALL USING BY REFERENCE:
+        Verifies end-to-end multi-module CALL USING BY REFERENCE, AND that
+        STOP RUN correctly halts the whole run unit (red-dragon-mjin):
         - The params region (MAIN's WS-TICKET bytes) reaches HELPER's LINKAGE SECTION.
-        - HELPER writes 77 into LK-TICKET, mutating the shared params region.
-        - Copy-back after the CALL propagates 77 into MAIN's WS-TICKET.
-        - MAIN's WS-RESULT equals 42 (execution continued after the CALL).
+        - HELPER's STOP RUN halts the ENTIRE run unit — MAIN's COMPUTE
+          WS-RESULT = 42, which comes after the CALL, must never execute.
+
+        Note: this test intentionally does NOT assert on WS-TICKET's value
+        after the CALL. BY REFERENCE copy-back is caller-emitted IR that only
+        runs when control resumes at the caller (via _handle_return_flow),
+        which STOP RUN's Halt_ deliberately never does — so whether HELPER's
+        write to LK-TICKET is visible in MAIN's WS-TICKET after a STOP RUN is
+        a known, separately tracked gap (red-dragon-zerg), not something this
+        test covers. See TestStopRunTerminatesRunUnit::
+        test_stop_run_loses_by_reference_write_known_gap for a dedicated,
+        xfail-marked regression test of that gap.
 
         Note: reading FROM a LINKAGE field into WS is tracked separately under
         red-dragon-4q25.33 (SECTION_LINKAGE read path).
@@ -575,9 +585,12 @@ class TestCobolMultiFile:
             Address(vm.heap_get(main_ptr.base).fields[FieldName("ws_handle")].value)
         )
         assert main_ws is not None
-        # WS-TICKET at offset 0, 4 bytes — HELPER wrote 77 to LK-TICKET (copy-back)
-        ticket = _decode_zoned_unsigned(main_ws, 0, 4)
-        assert ticket == 77, f"WS-TICKET: expected 77 after HELPER write, got {ticket}"
-        # WS-RESULT at offset 4, 4 bytes — 42 after COMPUTE
+        # WS-TICKET at offset 0 is intentionally NOT asserted here — see the
+        # docstring above (known gap, red-dragon-zerg).
+        # WS-RESULT at offset 4, 4 bytes — STOP RUN in HELPER halts the entire
+        # run unit, so MAIN's COMPUTE WS-RESULT = 42 (which runs AFTER the
+        # CALL returns) must never execute; WS-RESULT stays at its VALUE 0.
         result = _decode_zoned_unsigned(main_ws, 4, 4)
-        assert result == 42, f"WS-RESULT: expected 42, got {result}"
+        assert (
+            result == 0
+        ), f"WS-RESULT: expected 0 (STOP RUN halted before COMPUTE), got {result}"
