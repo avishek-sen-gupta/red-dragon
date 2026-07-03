@@ -103,7 +103,7 @@ The type system operates in three phases:
 
 ## TypeExpr — Algebraic Data Type for Types
 
-All types in the system are represented as `TypeExpr` values (`interpreter/types/type_expr.py`), an algebraic data type (ADT) with six variants. Every `TypeExpr` is a frozen (immutable) dataclass.
+All types in the system are represented as `TypeExpr` values (`interpreter/types/type_expr.py`), an algebraic data type (ADT) with nine variants. Every `TypeExpr` is a frozen (immutable) dataclass.
 
 ### Variants
 
@@ -114,6 +114,9 @@ All types in the system are represented as `TypeExpr` values (`interpreter/types
 | `UnionType` | `members: frozenset[TypeExpr]` | `"Union[Int, String]"` | Members sorted alphabetically in string form |
 | `FunctionType` | `params: tuple[TypeExpr, ...]`, `return_type: TypeExpr` | `"Fn(Int, String) -> Bool"` | `FunctionType((ScalarType("Int"),), ScalarType("Bool"))` |
 | `TypeVar` | `name: str`, `bound: TypeExpr = UNKNOWN` | `"T"` or `"T: Number"` | `TypeVar("T", bound=ScalarType("Number"))` |
+| `EnumType` | `name: str` | `"enum:Color"` | An enum instance type |
+| `AnnotationType` | `name: str` | `"annotation:Override"` | A Java/Kotlin annotation type |
+| `StructPatternType` | `name: str` | `"struct_pattern:Point"` | A Rust struct pattern type |
 | `UnknownType` | *(none)* | `""` (empty string) | Singleton `UNKNOWN`; falsy |
 
 ### String Compatibility
@@ -648,7 +651,13 @@ class _InferenceContext:
     # Function metadata
     func_return_types:    dict[str, TypeExpr]                    # func_label → return type
     func_param_types:     dict[str, list[tuple[str, TypeExpr]]]  # func_label → [(name, type)]
-    current_func_label:   str                                    # active function scope
+    scope_stack:          list[tuple[str, object]]                # (_FUNC_FRAME, label) | (_CLASS_FRAME, class_type)
+    _seeded_func_return_labels: frozenset[str]                   # declared return types — never widened
+
+    # current_func_label is a @property computed over scope_stack (not a field):
+    # the label of the innermost enclosing _FUNC_FRAME, or "" at top level / inside
+    # a class body. This replaced a directly-assigned field that used to get reset
+    # on every control-flow label, orphaning branched-return functions (red-dragon-b4j6).
 
     # Class metadata
     current_class_name:   TypeExpr                               # active class (ScalarType or UNKNOWN)
@@ -763,18 +772,19 @@ flowchart TD
 
 ### Per-Opcode Inference Rules
 
-The inference walk dispatches each instruction to a handler via the `_DISPATCH` table (22 opcodes handled). Each handler has the signature `(inst: InstructionBase, ctx: _InferenceContext, type_resolver: TypeResolver) → None`.
+The inference walk dispatches each instruction to a handler via the `_DISPATCH` table (23 opcodes handled), keyed by **exact instruction type** (`type(inst)`, not `isinstance`/subclass matching) — an instruction whose type has no entry is silently skipped. Each handler has the signature `(inst: InstructionBase, ctx: _InferenceContext, type_resolver: TypeResolver) → None`.
 
 #### LABEL — Scope Tracking
 
-Detects function and class scope boundaries via label prefixes:
+`ctx.current_func_label` is a computed property over a `scope_stack` (a stack of `(frame_kind, payload)` tuples), not a directly-assigned field — this replaced the earlier "reset on every label" scheme, which orphaned branched-return functions and let locals bleed into global scope (red-dragon-b4j6). The stack is cleared at the start of each fixpoint pass and pushed/popped as function and class labels are walked:
 
 | Label Pattern | Action |
 |---|---|
-| `func_*` | Set `ctx.current_func_label`; ensure `func_param_types` dict exists |
-| `class_*` (not `end_class_*`) | Extract class name → set `ctx.current_class_name` as `ScalarType`; reset `current_func_label`; init `class_method_types` dict |
-| `end_class_*` | Reset both `current_class_name` and `current_func_label` |
-| *(other)* | Reset `current_func_label` (exited function scope) |
+| `func_*` | Push `(_FUNC_FRAME, label)` onto `scope_stack`; ensure `func_param_types` dict exists |
+| `class_*` (not `end_class_*`) | Push `(_CLASS_FRAME, class_type)` — acts as a barrier so `current_func_label` reads `""` inside the class body; for real (non-prelude) class labels also sets the bled `current_class_name` field and inits `class_method_types` |
+| `end_class_*` | Pop the class frame (asserted via `_pop_frame`); `current_class_name` is a deliberately-preserved bleed, never reset |
+| `end_*` (function end) | Pop the function frame (asserted via `_pop_frame`) |
+| *(other, e.g. control-flow labels)* | No scope change — `current_func_label` is a pure view over `scope_stack`, so it is unaffected by non-scope labels |
 
 #### SYMBOLIC — Parameter Collection and Self/This Typing
 
@@ -875,9 +885,14 @@ Three-tier lookup:
 
 #### RETURN — Function Return Type
 
-1. Skip if not inside a function or return type already recorded
-2. Extract return value register's type
-3. Store in `func_return_types[current_func_label]`
+1. Skip if not inside a function (`current_func_label` empty)
+2. Skip synthetic fall-through returns (`inst.implicit`) — these are lowering artifacts marking an implicit end-of-function return, not a real `return` in the source, and must not influence the inferred return type
+3. Skip if there is no return value register
+4. Skip if the function's return type was pre-seeded (declared/annotated) — a seeded type in `_seeded_func_return_labels` is authoritative and is never widened by inferred `RETURN` types
+5. Extract the return value register's type; skip if unknown
+6. Store into `func_return_types[current_func_label]`, **unioning** with any previously-inferred return type rather than overwriting — a function with multiple `return` statements of different types infers `Union[...]`
+
+**`Halt_` (COBOL `STOP RUN`) is deliberately absent from `_DISPATCH`.** Because dispatch is keyed by exact instruction type, `Halt_` needed to be its own `InstructionBase` subclass rather than a flag on `Return_` — `STOP RUN` has no return-value semantics, so routing it through `_infer_return` (which reads `inst.value_reg`) would be incorrect. `Halt_` instructions are simply skipped during inference.
 
 #### ALLOC_REGION / LOAD_REGION — Region Operations
 
@@ -975,7 +990,7 @@ class TypeEnvironment:
 
 **Accessor:** `env.get_func_signature(name, index=0, class_name=UNBOUND)` returns the signature at overload `index`. For standalone functions, `class_name` defaults to `UNBOUND`. For class methods, pass `class_name=scalar("ClassName")`. Returns `_NULL_SIGNATURE` (with `UNKNOWN` return type) if not found.
 
-`FunctionSignature` (`interpreter/function_signature.py`) is a frozen dataclass:
+`FunctionSignature` (`interpreter/types/function_signature.py`) is a frozen dataclass:
 ```python
 @dataclass(frozen=True)
 class FunctionSignature:
@@ -1023,7 +1038,7 @@ _base_declared_vars: set[str]                  # variables declared at base leve
    - Map `name → name` in the current scope dict (or add to `_base_declared_vars` if no scope is active)
    - Return original name
 
-**`VarScopeInfo`** (`interpreter/var_scope_info.py`) — frozen metadata:
+**`VarScopeInfo`** (`interpreter/types/var_scope_info.py`) — frozen metadata:
 ```python
 @dataclass(frozen=True)
 class VarScopeInfo:
@@ -1117,7 +1132,7 @@ The `NULL_FIELD` sentinel follows the null-object pattern used throughout the co
 
 ## TypedValue — Runtime Value+Type Wrapper
 
-All runtime values in the VM are wrapped in `TypedValue` (`interpreter/typed_value.py`), a frozen dataclass pairing a raw Python value with its `TypeExpr` type:
+All runtime values in the VM are wrapped in `TypedValue` (`interpreter/types/typed_value.py`), a frozen dataclass pairing a raw Python value with its `TypeExpr` type:
 
 ```python
 @dataclass(frozen=True)
@@ -1196,7 +1211,7 @@ Pre-operation coercion transforms operands *before* the operator is evaluated an
 
 #### BinopCoercionStrategy
 
-`BinopCoercionStrategy` (`interpreter/binop_coercion.py`) is a `Protocol` for binary operator coercion:
+`BinopCoercionStrategy` (`interpreter/types/coercion/binop_coercion.py`) is a `Protocol` for binary operator coercion:
 
 ```python
 class BinopCoercionStrategy(Protocol):
@@ -1236,7 +1251,7 @@ class JavaBinopCoercion:
 
 #### UnopCoercionStrategy
 
-`UnopCoercionStrategy` (`interpreter/unop_coercion.py`) is a `Protocol` for unary operator coercion:
+`UnopCoercionStrategy` (`interpreter/types/coercion/unop_coercion.py`) is a `Protocol` for unary operator coercion:
 
 ```python
 class UnopCoercionStrategy(Protocol):
@@ -1325,7 +1340,7 @@ flowchart TD
 
 ### TypeConversionRules (ABC)
 
-`TypeConversionRules` (`interpreter/conversion_rules.py`) is the abstract base class defining the pluggable coercion interface:
+`TypeConversionRules` (`interpreter/types/coercion/conversion_rules.py`) is the abstract base class defining the pluggable coercion interface:
 
 ```python
 class TypeConversionRules(ABC):
@@ -1346,7 +1361,7 @@ class TypeConversionRules(ABC):
 
 ### ConversionResult
 
-`ConversionResult` (`interpreter/conversion_result.py`) is a frozen dataclass describing how to handle a binary operation:
+`ConversionResult` (`interpreter/types/coercion/conversion_result.py`) is a frozen dataclass describing how to handle a binary operation:
 
 ```python
 @dataclass(frozen=True)
@@ -1361,7 +1376,7 @@ IDENTITY_CONVERSION = ConversionResult()      # Singleton: no coercion, no overr
 
 ### DefaultTypeConversionRules
 
-`DefaultTypeConversionRules` (`interpreter/default_conversion_rules.py`) implements the standard coercion table. It uses three internal coercer functions:
+`DefaultTypeConversionRules` (`interpreter/types/coercion/default_conversion_rules.py`) implements the standard coercion table. It uses three internal coercer functions:
 - `_to_float(x)` → `float(x)` — widening promotion
 - `_to_int(x)` → `int(x)` — Bool → Int promotion
 - `_truncate_to_int(x)` → `math.trunc(x)` — truncate toward zero (C/Java semantics)
