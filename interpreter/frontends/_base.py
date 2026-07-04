@@ -20,7 +20,11 @@ from typing import Any, Callable
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
-from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.frontends.context import (
+    GrammarConstants,
+    TreeSitterEmitContext,
+    NO_NODE,
+)
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.operator_kind import resolve_binop, resolve_unop
@@ -76,10 +80,6 @@ from interpreter.frontends.type_alias_prepass import (
     TypeAliasExtractor,
     collect_type_aliases,
 )
-
-NO_NODE = (
-    object()
-)  # sentinel: no source-tree node available (diagnostics/source-location only)
 
 logger = logging.getLogger(__name__)
 
