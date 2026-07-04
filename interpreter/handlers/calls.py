@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -143,19 +144,12 @@ def _try_class_constructor_call(
     registry: FunctionRegistry,
     current_label: CodeLabel,
     overload_resolver: OverloadResolver = NullOverloadResolver(),
-    type_env: TypeEnvironment | None = None,
+    type_env: TypeEnvironment = TypeEnvironment(
+        register_types=MappingProxyType({}), var_types=MappingProxyType({})
+    ),
     type_hint: TypeExpr = UNKNOWN,
 ) -> ExecutionResult:
     """Attempt to handle a call as a class constructor."""
-    from types import MappingProxyType
-    from interpreter.types.type_environment import TypeEnvironment as _TE
-
-    if type_env is None:
-        type_env = _TE(
-            register_types=MappingProxyType({}),
-            var_types=MappingProxyType({}),
-        )
-
     if not isinstance(func_val, ClassRef):
         return ExecutionResult.not_handled()
     class_name, class_label = func_val.name, func_val.label
