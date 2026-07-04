@@ -42,12 +42,13 @@ repos:
         always_run: true
 
       - id: tests
-        name: Full test suite (incl. mandatory CardDemo CICS e2e)
-        # `make test` wires the CardDemo toolchain env (CARDDEMO_HOME +
-        # BMS_TOOLS_HOME + PROLEAP_BRIDGE_JAR) and builds the JAR if missing, so
-        # the now-mandatory-locally CardDemo e2e RUN here instead of hard-failing.
-        # (A bare `pytest tests/` would error those ~3 modules — see
-        # tests/integration/cics/conftest.py.)
+        name: Full test suite (slow — several minutes; CICS/CardDemo e2e moved to cicada)
+        # `make test` builds the ProLeap bridge JAR if missing, then runs the
+        # full interpreter/ + tests/ suite. No CardDemo/CICS toolchain wiring
+        # here anymore — that runtime and its e2e tests moved to the cicada
+        # repo (see 975277bf). This hook alone can take several minutes; give
+        # it a long timeout (or run in the background) rather than assuming a
+        # hang.
         entry: make test PYTEST_ARGS="-x -q"
         language: system
         pass_filenames: false
