@@ -222,6 +222,37 @@ updated pin before considering the change complete.
 
 ---
 
+## 6a. Coordination with the concurrent no-None-default cleanup (`red-dragon-nz4y`)
+
+RedDragon is mid-way through a separate, repo-wide initiative removing `None` defaults in favor of
+explicit sentinels/required args (`docs/superpowers/plans/2026-07-04-no-none-default-cleanup.md`,
+written but not yet implemented as of this design's approval). That plan's own text has already been
+updated (in its Task 3 and Task 9 sections) to explicitly skip `cics_text_parser`, citing this design
+(commit `968e7772`) by name and deferring to it — **no real conflict**, confirmed by direct
+inspection, not assumed.
+
+One loose end that plan intentionally left in place for this design to clean up:
+`tests/unit/test_get_frontend_defaults.py::test_get_frontend_defaults_away_from_none_except_deferred`
+currently asserts `sig.parameters["cics_text_parser"].default is None` (with a comment noting it's
+deferred). Once this design removes the `cics_text_parser` parameter from `get_frontend()` entirely,
+that assertion has nothing left to check — the implementation plan must **delete** that assertion
+line (not "fix" it to check something else), since the parameter it names no longer exists. This is
+a two-line test edit, not a design change, but worth calling out explicitly so it isn't missed as
+collateral from a parameter that simply stops existing.
+
+Separately: `red-dragon-79iv` (the other issue referenced by the same cleanup effort) is about
+`cobol_parser`/`llm_client` in `get_frontend()`, not `cics_text_parser` — genuinely unrelated to this
+design, confirmed by reading the issue directly.
+
+**Sequencing implication:** if the no-None-default cleanup plan's other tasks (bucket A/B/C fixes to
+`resolved_imports`, `copybook_dirs`, `extra_subprogram_sources`, `program_source_dir` in
+`cobol_frontend.py`/`cobol_compile.py` — the same two files this design also edits) land before this
+design's own implementation, re-read those files fresh immediately before implementing rather than
+relying on the state captured during this design's research — their line numbers and surrounding
+context will have shifted, even though the substance of this design's own edits is unaffected.
+
+---
+
 ## 7. Testing
 
 - RedDragon: unit tests for `DialectParser`/`NullDialectParser` (a fake dialect parser claiming a
