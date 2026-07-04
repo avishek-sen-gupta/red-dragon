@@ -9,10 +9,9 @@ discriminator.
 
 from __future__ import annotations
 
-import re
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Callable, Union
+from typing import Sequence, Union
 
 from interpreter.cobol.ref_mod import (
     RefModOperand,
@@ -21,34 +20,15 @@ from interpreter.cobol.ref_mod import (
 )
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
 from interpreter.cobol.file_enums import OpenMode, FileOrganization, AccessMode
+from interpreter.cobol.dialect_parser import DialectParser
 
-# ── CICS text parser injection ────────────────────────────────────
-# Set by CobolFrontend.lower() for the duration of each parse call.
-# Cicada injects parse_exec_cics_text from cics.cics_visitor via CobolFrontend.
-CicsTextParserFn = Callable[[str], "tuple[str, dict[str, CicsOperand | None]]"]
-_cics_text_parser: ContextVar[CicsTextParserFn | None] = ContextVar(
-    "_cics_text_parser", default=None
+# ── Dialect parser injection ──────────────────────────────────────
+# Set by CobolFrontend.lower() for the duration of each parse call. Cicada
+# and Squall each inject their own DialectParser (interpreter.cobol.
+# dialect_parser) via CobolFrontend — see parse_statement()'s fallback below.
+_dialect_parsers: ContextVar[Sequence[DialectParser]] = ContextVar(
+    "_dialect_parsers", default=()
 )
-
-
-@dataclass(frozen=True)
-class CicsOperand:
-    """A parsed EXEC CICS option value.
-
-    is_literal=True  -> a quoted string literal (text is the inner content, no quotes).
-    is_literal=False -> a bare operand: data-name, subscripted/reference-modified ref,
-                        or numeric literal (text preserved verbatim).
-
-    ``subscripts`` carries each index as a structured :class:`ExprNode`:
-    a bare data-name becomes a ``FieldRefNode``, an unsigned integer becomes a
-    ``LiteralNode``. Arithmetic CICS subscripts raise ValueError at parse time.
-    """
-
-    text: str
-    is_literal: bool
-    subscripts: tuple[ExprNode, ...] = ()
-    ref_mod_start: ExprNode | None = None
-    ref_mod_length: ExprNode | None = None
 
 
 # ── PERFORM specs ────────────────────────────────────────────────
@@ -121,8 +101,6 @@ CobolStatementType = Union[
     "RewriteStatement",
     "StartStatement",
     "DeleteStatement",
-    "ExecCicsStatement",
-    "ExecSqlStatement",
 ]
 
 
@@ -1303,58 +1281,6 @@ class DeleteStatement:
         return result
 
 
-@dataclass(frozen=True)
-class ExecCicsStatement:
-    """EXEC CICS verb-with-options block."""
-
-    verb: str
-    options: dict[str, "CicsOperand | None"]
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "ExecCicsStatement":
-        parser = _cics_text_parser.get()
-        if parser is None:
-            raise RuntimeError(
-                "No CICS text parser injected — pass cics_text_parser= to CobolFrontend"
-            )
-        text = data.get("exec_cics_text", "")
-        text = re.sub(r"\*>.*", "", text, flags=re.MULTILINE).strip()
-        verb, options = parser(text)
-        return cls(verb=verb, options=options)
-
-    def to_dict(self) -> dict:
-        # Serialise each operand structurally so the ASG export stays JSON-safe;
-        # a bare flag (None) is preserved. (Roundtrip is via exec_cics_text, not
-        # this options view, so this is informational only.)
-        serialised = {
-            key: (
-                None
-                if operand is None
-                else {"text": operand.text, "is_literal": operand.is_literal}
-            )
-            for key, operand in self.options.items()
-        }
-        return {"type": "EXEC_CICS", "verb": self.verb, "options": serialised}
-
-
-@dataclass(frozen=True)
-class ExecSqlStatement:
-    """EXEC SQL block. Carries the raw EXEC SQL text verbatim — including the
-    ``EXEC SQL``/``END-EXEC`` envelope — exactly as the ProLeap bridge emits it.
-    The COBOL frontend treats the SQL body as opaque text: envelope removal and
-    SQL parsing are done later by the injected SQL strategy's grammar-based parser
-    (squall), never by string surgery here."""
-
-    text: str  # raw EXEC SQL text verbatim, envelope included
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "ExecSqlStatement":
-        return cls(text=data.get("exec_sql_text", "") or "")
-
-    def to_dict(self) -> dict:
-        return {"type": "EXEC_SQL", "text": self.text}
-
-
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -1501,15 +1427,22 @@ _DISPATCH_TABLE: dict[str, type] = {
     "REWRITE": RewriteStatement,
     "START": StartStatement,
     "DELETE": DeleteStatement,
-    "EXEC_CICS": ExecCicsStatement,
-    "EXEC_SQL": ExecSqlStatement,
 }
 
 
 def parse_statement(data: dict) -> CobolStatementType:
-    """Dispatch on data['type'] to construct the appropriate typed statement."""
+    """Dispatch on data['type'] to construct the appropriate typed statement.
+
+    A type recognized by _DISPATCH_TABLE is never second-guessed against a
+    dialect parser. A type NOT in _DISPATCH_TABLE falls back to the injected
+    dialect parsers (interpreter.cobol.dialect_parser), in order — the first
+    whose applies(data) is True gets parse(data) called.
+    """
     stmt_type = data.get("type", "")
     cls = _DISPATCH_TABLE.get(stmt_type)
-    if cls is None:
-        raise ValueError(f"Unknown COBOL statement type: {stmt_type!r}")
-    return cls.from_dict(data)
+    if cls is not None:
+        return cls.from_dict(data)
+    for dialect_parser in _dialect_parsers.get():
+        if dialect_parser.applies(data):
+            return dialect_parser.parse(data)
+    raise ValueError(f"Unknown COBOL statement type: {stmt_type!r}")

@@ -60,7 +60,7 @@ def extract_cobol_connections(
     extra_subprogram_sources: dict[str, bytes] = {},
     parser: Any,
     extension_strategies: Sequence[Any] = (),
-    cics_text_parser: Any = None,
+    dialect_parsers: Sequence[Any] = (),
     observer: FrontendObserver = NullFrontendObserver(),
     source_transform: Callable[[str], str] = lambda s: s,
 ) -> list[Connection]:
@@ -80,7 +80,7 @@ def extract_cobol_connections(
         parser=parser,
         copybook_dirs=copybook_dirs,
         extension_strategies=extension_strategies,
-        cics_text_parser=cics_text_parser,
+        dialect_parsers=dialect_parsers,
         observer=observer,
         program_source_dir=program_source_dir,
         extra_subprogram_sources=extra_subprogram_sources,
