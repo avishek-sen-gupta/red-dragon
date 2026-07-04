@@ -1245,7 +1245,7 @@ def run(
     llm_client: Any = None,  # Any: Optional LLM client injection — see red-dragon-c7y2
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
-    copybook_dirs: list[Path] | None = None,
+    copybook_dirs: list[Path] = [],
 ) -> VMState:
     """End-to-end: parse → lower → build LinkedProgram → run_linked.
 
@@ -1286,16 +1286,13 @@ def run(
         def on_lower(self, duration: float) -> None:
             self._target.lower_time = duration
 
-    # Normalize copybook_dirs: None → [] (non-COBOL languages ignore it)
-    _copybook_dirs = copybook_dirs if copybook_dirs is not None else []
-
     observer: FrontendObserver = _StatsObserver(stats)
     if lang == Language.COBOL:
         # COBOL: compile via the shared compile_cobol API (behavior-preserving).
         frontend, linked = compile_cobol(
             source.encode("utf-8"),
-            parser=make_cobol_parser(copybook_dirs=_copybook_dirs),
-            copybook_dirs=_copybook_dirs,
+            parser=make_cobol_parser(copybook_dirs=copybook_dirs),
+            copybook_dirs=copybook_dirs,
             observer=observer,
         )
         stats.ir_instruction_count = len(linked.merged_ir)
@@ -1310,7 +1307,7 @@ def run(
             llm_provider=backend,
             llm_client=llm_client,
             observer=observer,
-            copybook_dirs=_copybook_dirs,
+            copybook_dirs=copybook_dirs,
         )
         instructions = frontend.lower(source.encode("utf-8"))
 
