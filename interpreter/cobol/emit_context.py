@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from interpreter.cobol.cobol_expression import ExprNode
-    from interpreter.cobol.asg_types import CobolASG
 
+from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.red_dragon_extension_strategy import (
     RedDragonExtensionLoweringStrategy,
 )
@@ -33,7 +33,7 @@ from interpreter.cobol.figurative_constants import (
     COBOL_RAW_FIGURATIVE_BYTES,
 )
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.frontend_observer import FrontendObserver
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
@@ -101,18 +101,16 @@ class EmitContext:
     def __init__(
         self,
         dispatch_fn: DispatchFn,
-        observer: FrontendObserver | None = None,
+        observer: FrontendObserver = NullFrontendObserver(),
         condition_index: ConditionNameIndex = ConditionNameIndex({}),
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
-        asg: "CobolASG | None" = None,
+        asg: CobolASG = CobolASG(),
     ) -> None:
-        from interpreter.cobol.asg_types import CobolASG as _CobolASG
-
         self._dispatch_fn = dispatch_fn
         self._observer = observer
         self._condition_index = condition_index
         self._extension_strategies = tuple(extension_strategies)
-        self._asg: _CobolASG = asg if asg is not None else _CobolASG()
+        self._asg: CobolASG = asg
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
