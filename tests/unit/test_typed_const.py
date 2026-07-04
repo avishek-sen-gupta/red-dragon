@@ -9,7 +9,7 @@ from interpreter.types.type_expr import scalar, NULL
 from interpreter.constants import FoundationTypeName
 from interpreter.cfg import build_cfg
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg
+from interpreter.run import execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
@@ -25,7 +25,11 @@ def _run(const_inst: Const) -> object:
     ]
     cfg = build_cfg(instrs)
     vm, _ = execute_cfg(
-        cfg, "entry", build_registry(instrs, cfg), VMConfig(max_steps=10)
+        cfg,
+        "entry",
+        build_registry(instrs, cfg),
+        VMConfig(max_steps=10),
+        vm=initial_vm_state(),
     )
     return unwrap(vm.current_frame.registers.get(const_inst.result_reg))
 

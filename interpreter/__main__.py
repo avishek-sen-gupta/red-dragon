@@ -19,7 +19,7 @@ from pathlib import Path
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
-from interpreter.run import run, run_linked
+from interpreter.run import run, run_linked, initial_vm_state
 
 
 def _configure_logging(level: str) -> None:
@@ -86,7 +86,13 @@ def main() -> int:
         )
     elif target.is_dir():
         linked = compile_directory(target, Language.COBOL)
-        run_linked(linked, ep, max_steps=args.max_steps, verbose=args.verbose)
+        run_linked(
+            linked,
+            ep,
+            max_steps=args.max_steps,
+            verbose=args.verbose,
+            initial_vm=initial_vm_state(),
+        )
     else:
         print(f"error: {target} does not exist", file=sys.stderr)
         return 1

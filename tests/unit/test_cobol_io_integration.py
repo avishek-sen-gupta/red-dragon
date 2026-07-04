@@ -6,7 +6,7 @@ from interpreter.vm.vm_types import SymbolicValue
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.instructions import InstructionBase
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg
+from interpreter.run import execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import unwrap
 from interpreter.register import Register
@@ -48,7 +48,9 @@ def _execute_with_provider(instructions, provider):
     cfg = build_cfg(instructions)
     registry = build_registry(instructions, cfg)
     config = VMConfig(max_steps=50, io_provider=provider)
-    vm, stats = execute_cfg(cfg, "entry", registry, config)
+    vm, stats = execute_cfg(
+        cfg, "entry", registry, config, vm=initial_vm_state(io_provider=provider)
+    )
     return vm
 
 

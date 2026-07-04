@@ -17,7 +17,7 @@ from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.instructions import InstructionBase
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg, ExecutionStrategies
+from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_inference import infer_types
@@ -95,6 +95,7 @@ class TestTypeCoecionEndToEnd:
                 type_env=type_env,
                 conversion_rules=conversion_rules,
             ),
+            vm=initial_vm_state(),
         )
 
         # The stored value should be retrievable via the integer key
@@ -112,6 +113,7 @@ class TestTypeCoecionEndToEnd:
             "entry",
             registry,
             VMConfig(max_steps=50),
+            vm=initial_vm_state(),
         )
 
         # Without coercion, 4/2 = 2.0 (float), stored at key "2.0"

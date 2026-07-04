@@ -15,7 +15,7 @@ from interpreter.cfg import build_cfg
 from interpreter.llm.llm_client import get_llm_client
 from interpreter.llm.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg
+from interpreter.run import execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
@@ -63,7 +63,13 @@ class TestHLASMLowering:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
         config = VMConfig(max_steps=500, source_language="hlasm")
-        vm, stats = execute_cfg(cfg, cfg.entry, registry, config)
+        vm, stats = execute_cfg(
+            cfg,
+            cfg.entry,
+            registry,
+            config,
+            vm=initial_vm_state(),
+        )
 
         locals_ = _get_locals(vm)
         # The expected value 55 should appear in at least one variable
