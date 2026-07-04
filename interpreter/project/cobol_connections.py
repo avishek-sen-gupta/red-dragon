@@ -55,9 +55,9 @@ class Connection:
 def extract_cobol_connections(
     source: bytes,
     *,
-    copybook_dirs: list[Path] | None = None,
-    program_source_dir: Path | None = None,
-    extra_subprogram_sources: dict[str, bytes] | None = None,
+    copybook_dirs: list[Path] = [],
+    program_source_dir: Path = Path("."),
+    extra_subprogram_sources: dict[str, bytes] = {},
     parser: Any,
     extension_strategies: Sequence[Any] = (),
     cics_text_parser: Any = None,
