@@ -6,7 +6,7 @@ from interpreter.type_name import TypeName
 import re
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
 
 from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
@@ -495,7 +495,9 @@ def lower_as_expr(
     return reg
 
 
-def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> Register:
+def emit_byref_load(
+    ctx: TreeSitterEmitContext, name: str, *, node: Any = NO_NODE
+) -> Register:
     """Load a variable, dereferencing if it's a byref (out/ref/in) param."""
     reg = ctx.fresh_reg()
     resolved = ctx.resolve_var(name)
@@ -508,7 +510,7 @@ def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> Regi
 
 
 def emit_byref_store(
-    ctx: TreeSitterEmitContext, name: str, val_reg: str, *, node=None
+    ctx: TreeSitterEmitContext, name: str, val_reg: str, *, node: Any = NO_NODE
 ) -> None:
     """Store to a variable, writing through pointer if it's a byref param."""
     if name in ctx.byref_params:
