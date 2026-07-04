@@ -253,7 +253,7 @@ def IRInstruction(
     label: CodeLabel = NO_LABEL,
     branch_targets: list[CodeLabel] = [],
     source_location: SourceLocation = NO_SOURCE_LOCATION,
-    literal_type: str | None = None,
+    literal_type: str = "",
 ) -> Any:
     """Factory: construct a typed instruction from flat (opcode, operands) form.
 
