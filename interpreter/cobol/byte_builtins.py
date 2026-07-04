@@ -7,6 +7,7 @@ Language-agnostic — no COBOL-specific logic here.
 
 from __future__ import annotations
 
+import math
 import struct
 from interpreter.func_name import FuncName
 from interpreter.cobol.cobol_constants import (
@@ -1034,6 +1035,638 @@ def _builtin_string_convert(args: list[TypedValue], vm: VMState) -> BuiltinResul
     return BuiltinResult(value="".join(table.get(ch, ch) for ch in source))
 
 
+def _builtin_reverse(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION REVERSE(s): s with characters in reverse order."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value[::-1])
+
+
+def _coerce_intrinsic_decimal(raw: object):
+    """Coerce a builtin argument value to a Decimal, or None if not numeric.
+
+    Accepts ints, floats, Decimals, and numeric strings. Shared by MAX/MIN/SUM
+    so mixed int/float/string arguments compare and combine without the
+    ``TypeError`` Python raises for direct Decimal-vs-float comparison.
+    """
+    from decimal import Decimal, InvalidOperation
+
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, Decimal)):
+        return Decimal(raw)
+    if isinstance(raw, float):
+        return Decimal(str(raw))
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return None
+        try:
+            return Decimal(s)
+        except InvalidOperation:
+            return None
+    return None
+
+
+def _decimal_to_intrinsic(value):
+    """Decimal -> int when integral, else Decimal (mirrors NUMVAL's convention)."""
+    return int(value) if value == value.to_integral_value() else value
+
+
+def _builtin_max(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION MAX(a, b, ...): the largest numeric argument."""
+    if not args:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    values = []
+    for a in args:
+        if _is_symbolic(a.value):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        d = _coerce_intrinsic_decimal(a.value)
+        if d is None:
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        values.append(d)
+    return BuiltinResult(value=_decimal_to_intrinsic(max(values)))
+
+
+def _builtin_min(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION MIN(a, b, ...): the smallest numeric argument."""
+    if not args:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    values = []
+    for a in args:
+        if _is_symbolic(a.value):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        d = _coerce_intrinsic_decimal(a.value)
+        if d is None:
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        values.append(d)
+    return BuiltinResult(value=_decimal_to_intrinsic(min(values)))
+
+
+def _builtin_sum(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION SUM(a, b, ...): the sum of all numeric arguments.
+
+    No arguments sums to 0 (matches the ISO definition of an empty SUM).
+    """
+    from decimal import Decimal
+
+    values = []
+    for a in args:
+        if _is_symbolic(a.value):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        d = _coerce_intrinsic_decimal(a.value)
+        if d is None:
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        values.append(d)
+    return BuiltinResult(value=_decimal_to_intrinsic(sum(values, Decimal(0))))
+
+
+def _builtin_random(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION RANDOM [(seed)]: next value 0 <= n < 1 in a VM-scoped
+    pseudo-random sequence backed by Python's ``random`` module — an accepted
+    deviation from ISO COBOL's implementation-defined generator (red-dragon-clpn).
+
+    No argument: returns the next value in the current sequence (a fresh
+    unseeded generator on first use). seed == 0: reseed non-reproducibly from
+    system entropy. seed > 0: reseed deterministically and remember the seed.
+    seed < 0: restart the sequence from the last positive seed supplied (falls
+    back to a fresh unseeded generator if none was ever supplied).
+    """
+    import random as _random_mod
+
+    if vm.cobol_random is None:
+        vm.cobol_random = _random_mod.Random()
+
+    if args:
+        if _is_symbolic(args[0].value):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        seed = _coerce_intrinsic_int(args[0].value)
+        if seed is None:
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        if seed > 0:
+            vm.cobol_random = _random_mod.Random(seed)
+            vm.cobol_random_seed = seed
+        elif seed == 0:
+            vm.cobol_random = _random_mod.Random()
+        elif vm.cobol_random_seed is not None:
+            vm.cobol_random = _random_mod.Random(vm.cobol_random_seed)
+        else:
+            vm.cobol_random = _random_mod.Random()
+
+    return BuiltinResult(value=vm.cobol_random.random())
+
+
+def _coerce_intrinsic_float(raw: object) -> float | None:
+    """Coerce a builtin argument value to a float, or None if not numeric."""
+    d = _coerce_intrinsic_decimal(raw)
+    return float(d) if d is not None else None
+
+
+def _builtin_abs(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION ABS(x): the absolute value of x."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    d = _coerce_intrinsic_decimal(args[0].value)
+    if d is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=_decimal_to_intrinsic(abs(d)))
+
+
+def _builtin_sqrt(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION SQRT(x): the non-negative square root of x.
+
+    Uses Decimal.sqrt() (28 significant digits by default) so perfect squares
+    come back exact rather than float-approximated. A negative argument is an
+    ISO-defined argument error and yields UNCOMPUTABLE.
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    d = _coerce_intrinsic_decimal(args[0].value)
+    if d is None or d < 0:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=_decimal_to_intrinsic(d.sqrt()))
+
+
+def _builtin_sin(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION SIN(x): the sine of x (radians)."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.sin(x))
+
+
+def _builtin_cos(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION COS(x): the cosine of x (radians)."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.cos(x))
+
+
+def _builtin_tan(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION TAN(x): the tangent of x (radians)."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.tan(x))
+
+
+def _builtin_asin(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION ASIN(x): the arcsine of x (radians); x must be in [-1,1]."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None or x < -1 or x > 1:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.asin(x))
+
+
+def _builtin_acos(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION ACOS(x): the arccosine of x (radians); x must be in [-1,1]."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None or x < -1 or x > 1:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.acos(x))
+
+
+def _builtin_atan(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION ATAN(x): the arctangent of x (radians); no domain restriction."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.atan(x))
+
+
+def _coerce_intrinsic_decimal_list(args: list[TypedValue]):
+    """Coerce every arg's value to Decimal, or return None if any fails/symbolic."""
+    values = []
+    for a in args:
+        if _is_symbolic(a.value):
+            return None
+        d = _coerce_intrinsic_decimal(a.value)
+        if d is None:
+            return None
+        values.append(d)
+    return values
+
+
+def _builtin_range(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION RANGE(a, b, ...): max(args) - min(args)."""
+    values = _coerce_intrinsic_decimal_list(args)
+    if not values:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=_decimal_to_intrinsic(max(values) - min(values)))
+
+
+def _builtin_mean(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION MEAN(a, b, ...): the arithmetic mean of the arguments."""
+    from decimal import Decimal
+
+    values = _coerce_intrinsic_decimal_list(args)
+    if not values:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(
+        value=_decimal_to_intrinsic(sum(values, Decimal(0)) / len(values))
+    )
+
+
+def _builtin_median(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION MEDIAN(a, b, ...): the middle value; for an even number
+    of arguments, the average of the two middle sorted values."""
+    values = _coerce_intrinsic_decimal_list(args)
+    if not values:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    ordered = sorted(values)
+    n = len(ordered)
+    mid = n // 2
+    if n % 2 == 1:
+        result = ordered[mid]
+    else:
+        result = (ordered[mid - 1] + ordered[mid]) / 2
+    return BuiltinResult(value=_decimal_to_intrinsic(result))
+
+
+def _builtin_midrange(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION MIDRANGE(a, b, ...): (max(args) + min(args)) / 2."""
+    values = _coerce_intrinsic_decimal_list(args)
+    if not values:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=_decimal_to_intrinsic((max(values) + min(values)) / 2))
+
+
+def _builtin_variance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION VARIANCE(a, b, ...): sample variance (n-1 divisor),
+    matching the ISO/IBM definition; a single argument yields 0 by convention
+    (avoids a division by zero)."""
+    from decimal import Decimal
+
+    values = _coerce_intrinsic_decimal_list(args)
+    if not values:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    n = len(values)
+    if n == 1:
+        return BuiltinResult(value=0)
+    mean = sum(values, Decimal(0)) / n
+    sq_dev = sum(((v - mean) ** 2 for v in values), Decimal(0))
+    return BuiltinResult(value=_decimal_to_intrinsic(sq_dev / (n - 1)))
+
+
+def _builtin_ord_max(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION ORD-MAX(a, b, ...): the 1-based position of the first
+    occurrence of the largest argument."""
+    values = _coerce_intrinsic_decimal_list(args)
+    if not values:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=values.index(max(values)) + 1)
+
+
+def _builtin_ord_min(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION ORD-MIN(a, b, ...): the 1-based position of the first
+    occurrence of the smallest argument."""
+    values = _coerce_intrinsic_decimal_list(args)
+    if not values:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=values.index(min(values)) + 1)
+
+
+def _builtin_concatenate(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION CONCATENATE(a, b, ...): all string arguments joined in order."""
+    parts = []
+    for a in args:
+        if _is_symbolic(a.value):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        if not isinstance(a.value, str):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        parts.append(a.value)
+    return BuiltinResult(value="".join(parts))
+
+
+def _builtin_exp(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION EXP(x): e^x."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    try:
+        return BuiltinResult(value=math.exp(x))
+    except OverflowError:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+
+
+def _builtin_log(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION LOG(x): the natural logarithm of x; x must be > 0
+    (ISO argument-error condition otherwise)."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None or x <= 0:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.log(x))
+
+
+def _builtin_factorial(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION FACTORIAL(n): n! for a non-negative integer n."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    d = _coerce_intrinsic_decimal(args[0].value)
+    if d is None or d < 0 or d != d.to_integral_value():
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.factorial(int(d)))
+
+
+def _builtin_integer(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION INTEGER(x): the greatest integer not greater than x (floor)."""
+    from decimal import ROUND_FLOOR
+
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    d = _coerce_intrinsic_decimal(args[0].value)
+    if d is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=int(d.to_integral_value(rounding=ROUND_FLOOR)))
+
+
+def _builtin_integer_part(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION INTEGER-PART(x): x truncated toward zero."""
+    from decimal import ROUND_DOWN
+
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    d = _coerce_intrinsic_decimal(args[0].value)
+    if d is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=int(d.to_integral_value(rounding=ROUND_DOWN)))
+
+
+def _builtin_fraction_part(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION FRACTION-PART(x): x - FUNCTION INTEGER-PART(x)."""
+    from decimal import ROUND_DOWN
+
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    d = _coerce_intrinsic_decimal(args[0].value)
+    if d is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    trunc = d.to_integral_value(rounding=ROUND_DOWN)
+    return BuiltinResult(value=_decimal_to_intrinsic(d - trunc))
+
+
+def _builtin_rem(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION REM(x, y): x - y * FUNCTION INTEGER-PART(x / y).
+
+    Unlike MOD (floored, sign follows the divisor), REM truncates toward zero
+    so its result's sign follows the dividend x.
+    """
+    from decimal import ROUND_DOWN
+
+    if len(args) < 2 or _is_symbolic(args[0].value) or _is_symbolic(args[1].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_decimal(args[0].value)
+    y = _coerce_intrinsic_decimal(args[1].value)
+    if x is None or y is None or y == 0:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    trunc = (x / y).to_integral_value(rounding=ROUND_DOWN)
+    return BuiltinResult(value=_decimal_to_intrinsic(x - y * trunc))
+
+
+def _builtin_substitute(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION SUBSTITUTE(source, search-1, replace-1 [, search-2,
+    replace-2]...): every occurrence of each search string replaced by its
+    paired replacement, applied in order over the running result (the basic
+    ALL-implied form — the FIRST/LAST qualifier extension is not handled).
+    """
+    if len(args) < 3 or (len(args) - 1) % 2 != 0:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if not isinstance(args[0].value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    result = args[0].value
+    for i in range(1, len(args), 2):
+        search, replacement = args[i].value, args[i + 1].value
+        if not isinstance(search, str) or not isinstance(replacement, str):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        result = result.replace(search, replacement)
+    return BuiltinResult(value=result)
+
+
+def _builtin_exp10(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION EXP10(x): 10^x."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    try:
+        return BuiltinResult(value=math.pow(10, x))
+    except OverflowError:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+
+
+def _builtin_log10(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION LOG10(x): the base-10 logarithm of x; x must be > 0
+    (ISO argument-error condition otherwise)."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    x = _coerce_intrinsic_float(args[0].value)
+    if x is None or x <= 0:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=math.log10(x))
+
+
+def _builtin_char(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION CHAR(n): the nth character (1-based) in the program
+    collating sequence — this codebase's EBCDIC table. n must be in [1,256].
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    n = _coerce_intrinsic_int(args[0].value)
+    if n is None or n < 1 or n > 256:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    ascii_code = EbcdicTable.EBCDIC_TO_ASCII[n - 1]
+    return BuiltinResult(value=chr(ascii_code))
+
+
+def _builtin_ord(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION ORD(c): the 1-based ordinal position of the single
+    character c in the program collating sequence (inverse of CHAR, subject
+    to duplicate-mapping collapse in the EBCDIC control-character range)."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str) or len(value) != 1:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    ebcdic_byte = EbcdicTable.ASCII_TO_EBCDIC[ord(value)]
+    return BuiltinResult(value=ebcdic_byte + 1)
+
+
+def _builtin_day_of_integer(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION DAY-OF-INTEGER(n): the Julian date YYYYDDD, n days after
+    the COBOL standard epoch (1600-12-31). Sibling of DATE-OF-INTEGER, which
+    returns the Gregorian YYYYMMDD form of the same day."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from datetime import date, timedelta
+
+    n = _coerce_intrinsic_int(args[0].value)
+    if n is None or n < 1:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    epoch = date(1600, 12, 31)
+    try:
+        d = epoch + timedelta(days=n)
+    except (OverflowError, ValueError):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    day_of_year = (d - date(d.year, 1, 1)).days + 1
+    return BuiltinResult(value=d.year * 1000 + day_of_year)
+
+
+def _builtin_integer_of_day(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION INTEGER-OF-DAY(yyyyddd): integer day count since the
+    COBOL standard epoch (1600-12-31); inverse of DAY-OF-INTEGER."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from datetime import date, timedelta
+
+    raw = _coerce_intrinsic_int(args[0].value)
+    if raw is None or raw < 1001:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    year, ddd = raw // 1000, raw % 1000
+    if ddd < 1 or ddd > 366:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    try:
+        d = date(year, 1, 1) + timedelta(days=ddd - 1)
+    except (OverflowError, ValueError):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if d.year != year:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    epoch = date(1600, 12, 31)
+    return BuiltinResult(value=(d - epoch).days)
+
+
+def _builtin_annuity(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION ANNUITY(rate, periods): the amortizing payment factor
+    for a loan of 1 unit repaid over `periods` periods at interest `rate` —
+    rate / (1 - (1+rate)^-periods), or 1/periods when rate is 0."""
+    if len(args) < 2 or _is_symbolic(args[0].value) or _is_symbolic(args[1].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    rate = _coerce_intrinsic_decimal(args[0].value)
+    periods = _coerce_intrinsic_int(args[1].value)
+    if rate is None or periods is None or periods < 1 or rate == -1:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from decimal import Decimal
+
+    if rate == 0:
+        return BuiltinResult(value=_decimal_to_intrinsic(Decimal(1) / periods))
+    denominator = 1 - (1 + rate) ** (-periods)
+    return BuiltinResult(value=_decimal_to_intrinsic(rate / denominator))
+
+
+def _builtin_present_value(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION PRESENT-VALUE(rate, cashflow-1, ...): the sum of each
+    cashflow-i discounted at `rate` for i periods."""
+    if len(args) < 2 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    rate = _coerce_intrinsic_decimal(args[0].value)
+    if rate is None or rate == -1:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    cashflows = _coerce_intrinsic_decimal_list(args[1:])
+    if not cashflows:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from decimal import Decimal
+
+    total = sum(
+        (cf / (1 + rate) ** (i + 1) for i, cf in enumerate(cashflows)), Decimal(0)
+    )
+    return BuiltinResult(value=_decimal_to_intrinsic(total))
+
+
+_DEFAULT_YY_CUTOFF = 50
+
+
+def _expand_two_digit_year(yy: int, cutoff: int) -> int:
+    """Expand a 2-digit year using the standard COBOL sliding-window rule:
+    yy >= cutoff -> 1900+yy (previous century); yy < cutoff -> 2000+yy.
+
+    Default cutoff (when omitted by the caller) is 50 — the common
+    production COBOL default (IBM Enterprise COBOL, GnuCOBOL), not a
+    system-clock-derived window.
+    """
+    return (1900 if yy >= cutoff else 2000) + yy
+
+
+def _builtin_date_to_yyyymmdd(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION DATE-TO-YYYYMMDD(yymmdd [, cutoff]): expand a 6-digit
+    YYMMDD date to 8-digit YYYYMMDD using the sliding-window year rule."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    raw = _coerce_intrinsic_int(args[0].value)
+    if raw is None or raw < 0 or raw > 999999:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    cutoff = _DEFAULT_YY_CUTOFF
+    if len(args) >= 2:
+        if _is_symbolic(args[1].value):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        c = _coerce_intrinsic_int(args[1].value)
+        if c is None or c < 0 or c > 99:
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        cutoff = c
+    yy, mmdd = raw // 10000, raw % 10000
+    return BuiltinResult(value=_expand_two_digit_year(yy, cutoff) * 10000 + mmdd)
+
+
+def _builtin_day_to_yyyyddd(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION DAY-TO-YYYYDDD(yyddd [, cutoff]): expand a 5-digit
+    YYDDD Julian date to 7-digit YYYYDDD using the sliding-window year rule."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    raw = _coerce_intrinsic_int(args[0].value)
+    if raw is None or raw < 0 or raw > 99999:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    cutoff = _DEFAULT_YY_CUTOFF
+    if len(args) >= 2:
+        if _is_symbolic(args[1].value):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        c = _coerce_intrinsic_int(args[1].value)
+        if c is None or c < 0 or c > 99:
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        cutoff = c
+    yy, ddd = raw // 1000, raw % 1000
+    return BuiltinResult(value=_expand_two_digit_year(yy, cutoff) * 1000 + ddd)
+
+
+def _builtin_year_to_yyyy(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL FUNCTION YEAR-TO-YYYY(yy [, cutoff]): expand a 2-digit year to a
+    4-digit year using the sliding-window year rule."""
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    yy = _coerce_intrinsic_int(args[0].value)
+    if yy is None or yy < 0 or yy > 99:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    cutoff = _DEFAULT_YY_CUTOFF
+    if len(args) >= 2:
+        if _is_symbolic(args[1].value):
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        c = _coerce_intrinsic_int(args[1].value)
+        if c is None or c < 0 or c > 99:
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        cutoff = c
+    return BuiltinResult(value=_expand_two_digit_year(yy, cutoff))
+
+
 from typing import Any
 
 BYTE_BUILTINS: dict[FuncName, Any] = (
@@ -1087,5 +1720,45 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.DATE_OF_INTEGER): _builtin_date_of_integer,
         FuncName(BuiltinName.MOD): _builtin_mod,
         FuncName(BuiltinName.STRING_CONVERT): _builtin_string_convert,
+        FuncName(BuiltinName.REVERSE): _builtin_reverse,
+        FuncName(BuiltinName.MAX): _builtin_max,
+        FuncName(BuiltinName.MIN): _builtin_min,
+        FuncName(BuiltinName.SUM): _builtin_sum,
+        FuncName(BuiltinName.RANDOM): _builtin_random,
+        FuncName(BuiltinName.ABS): _builtin_abs,
+        FuncName(BuiltinName.SQRT): _builtin_sqrt,
+        FuncName(BuiltinName.SIN): _builtin_sin,
+        FuncName(BuiltinName.COS): _builtin_cos,
+        FuncName(BuiltinName.TAN): _builtin_tan,
+        FuncName(BuiltinName.ASIN): _builtin_asin,
+        FuncName(BuiltinName.ACOS): _builtin_acos,
+        FuncName(BuiltinName.ATAN): _builtin_atan,
+        FuncName(BuiltinName.RANGE): _builtin_range,
+        FuncName(BuiltinName.MEAN): _builtin_mean,
+        FuncName(BuiltinName.MEDIAN): _builtin_median,
+        FuncName(BuiltinName.MIDRANGE): _builtin_midrange,
+        FuncName(BuiltinName.VARIANCE): _builtin_variance,
+        FuncName(BuiltinName.ORD_MAX): _builtin_ord_max,
+        FuncName(BuiltinName.ORD_MIN): _builtin_ord_min,
+        FuncName(BuiltinName.CONCATENATE): _builtin_concatenate,
+        FuncName(BuiltinName.EXP): _builtin_exp,
+        FuncName(BuiltinName.LOG): _builtin_log,
+        FuncName(BuiltinName.FACTORIAL): _builtin_factorial,
+        FuncName(BuiltinName.INTEGER): _builtin_integer,
+        FuncName(BuiltinName.INTEGER_PART): _builtin_integer_part,
+        FuncName(BuiltinName.FRACTION_PART): _builtin_fraction_part,
+        FuncName(BuiltinName.REM): _builtin_rem,
+        FuncName(BuiltinName.SUBSTITUTE): _builtin_substitute,
+        FuncName(BuiltinName.EXP10): _builtin_exp10,
+        FuncName(BuiltinName.LOG10): _builtin_log10,
+        FuncName(BuiltinName.CHAR): _builtin_char,
+        FuncName(BuiltinName.ORD): _builtin_ord,
+        FuncName(BuiltinName.DAY_OF_INTEGER): _builtin_day_of_integer,
+        FuncName(BuiltinName.INTEGER_OF_DAY): _builtin_integer_of_day,
+        FuncName(BuiltinName.ANNUITY): _builtin_annuity,
+        FuncName(BuiltinName.PRESENT_VALUE): _builtin_present_value,
+        FuncName(BuiltinName.DATE_TO_YYYYMMDD): _builtin_date_to_yyyymmdd,
+        FuncName(BuiltinName.DAY_TO_YYYYDDD): _builtin_day_to_yyyyddd,
+        FuncName(BuiltinName.YEAR_TO_YYYY): _builtin_year_to_yyyy,
     }
 )

@@ -156,6 +156,10 @@ class VMState:
     io_provider: Any = (
         None  # Any: Optional CobolIOProvider — avoids COBOL import in core VM — see red-dragon-r32l
     )
+    cobol_random: Any = (
+        None  # Any: optional random.Random — FUNCTION RANDOM sequence state
+    )
+    cobol_random_seed: int | None = None  # last positive seed passed to FUNCTION RANDOM
 
     def heap_get(self, addr: Address) -> HeapObject:
         """Get heap object by address. Returns NO_HEAP_OBJECT if not found."""
