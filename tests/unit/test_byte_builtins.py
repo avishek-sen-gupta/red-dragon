@@ -1,5 +1,8 @@
 """Tests for primitive byte-manipulation builtins."""
 
+import math
+from decimal import Decimal
+
 from interpreter.func_name import FuncName
 from interpreter.cobol.byte_builtins import (
     _builtin_nibble_get,
@@ -47,13 +50,53 @@ from interpreter.cobol.byte_builtins import (
     _builtin_integer_of_date,
     _builtin_mod,
     _builtin_date_of_integer,
+    _builtin_reverse,
+    _builtin_max,
+    _builtin_min,
+    _builtin_sum,
+    _builtin_random,
+    _builtin_abs,
+    _builtin_sqrt,
+    _builtin_sin,
+    _builtin_cos,
+    _builtin_tan,
+    _builtin_asin,
+    _builtin_acos,
+    _builtin_atan,
+    _builtin_range,
+    _builtin_mean,
+    _builtin_median,
+    _builtin_midrange,
+    _builtin_variance,
+    _builtin_ord_max,
+    _builtin_ord_min,
+    _builtin_concatenate,
+    _builtin_exp,
+    _builtin_log,
+    _builtin_factorial,
+    _builtin_integer,
+    _builtin_integer_part,
+    _builtin_fraction_part,
+    _builtin_rem,
+    _builtin_substitute,
+    _builtin_exp10,
+    _builtin_log10,
+    _builtin_char,
+    _builtin_ord,
+    _builtin_day_of_integer,
+    _builtin_integer_of_day,
+    _builtin_annuity,
+    _builtin_present_value,
+    _builtin_date_to_yyyymmdd,
+    _builtin_day_to_yyyyddd,
+    _builtin_year_to_yyyy,
     BYTE_BUILTINS,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.features import CobolFeature
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators
-from interpreter.vm.vm_types import SymbolicValue
+from interpreter.vm.vm_types import SymbolicValue, VMState
 from tests.covers import covers
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
@@ -413,6 +456,46 @@ class TestByteBuiltinsRegistration:
             "__date_of_integer",
             "__mod",
             "__string_convert",
+            "__reverse",
+            "__max",
+            "__min",
+            "__sum",
+            "__random",
+            "__abs",
+            "__sqrt",
+            "__sin",
+            "__cos",
+            "__tan",
+            "__asin",
+            "__acos",
+            "__atan",
+            "__range",
+            "__mean",
+            "__median",
+            "__midrange",
+            "__variance",
+            "__ord_max",
+            "__ord_min",
+            "__concatenate",
+            "__exp",
+            "__log",
+            "__factorial",
+            "__integer",
+            "__integer_part",
+            "__fraction_part",
+            "__rem",
+            "__substitute",
+            "__exp10",
+            "__log10",
+            "__char",
+            "__ord_char",
+            "__day_of_integer",
+            "__integer_of_day",
+            "__annuity",
+            "__present_value",
+            "__date_to_yyyymmdd",
+            "__day_to_yyyyddd",
+            "__year_to_yyyy",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:
@@ -2140,3 +2223,1240 @@ class TestCobolRound:
         sym = typed_from_runtime(Operators.UNCOMPUTABLE)
         result = _builtin_cobol_round([sym, typed_from_runtime(2)], None)
         assert result.value == _UNCOMPUTABLE
+
+
+class TestReverse:
+    """FUNCTION REVERSE(s) -> s with characters in reverse order."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_reverse([typed_from_runtime("ABCDE")], None).value == "EDCBA"
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_empty_string(self):
+        assert _builtin_reverse([typed_from_runtime("")], None).value == ""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_non_string_uncomputable(self):
+        assert _builtin_reverse([typed_from_runtime(5)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_reverse([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.REVERSE) in BYTE_BUILTINS
+
+
+class TestMax:
+    """FUNCTION MAX(a, b, ...) -> the largest argument."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_max(
+                [
+                    typed_from_runtime(3),
+                    typed_from_runtime(7),
+                    typed_from_runtime(5),
+                ],
+                None,
+            ).value
+            == 7
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_string_args(self):
+        assert (
+            _builtin_max([typed_from_runtime("3"), typed_from_runtime("7")], None).value
+            == 7
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_decimal_args(self):
+        assert _builtin_max(
+            [typed_from_runtime("2.5"), typed_from_runtime("2.75")], None
+        ).value == Decimal("2.75")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_max([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_max([typed_from_runtime(sym), typed_from_runtime(5)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.MAX) in BYTE_BUILTINS
+
+
+class TestMin:
+    """FUNCTION MIN(a, b, ...) -> the smallest argument."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_min(
+                [
+                    typed_from_runtime(8),
+                    typed_from_runtime(3),
+                    typed_from_runtime(5),
+                ],
+                None,
+            ).value
+            == 3
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_string_args(self):
+        assert (
+            _builtin_min([typed_from_runtime("3"), typed_from_runtime("7")], None).value
+            == 3
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_decimal_args(self):
+        assert _builtin_min(
+            [typed_from_runtime("2.5"), typed_from_runtime("2.75")], None
+        ).value == Decimal("2.5")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_min([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_min([typed_from_runtime(sym), typed_from_runtime(5)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.MIN) in BYTE_BUILTINS
+
+
+class TestSum:
+    """FUNCTION SUM(a, b, ...) -> the sum of all arguments."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_sum(
+                [
+                    typed_from_runtime(3),
+                    typed_from_runtime(7),
+                    typed_from_runtime(5),
+                ],
+                None,
+            ).value
+            == 15
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_is_zero(self):
+        assert _builtin_sum([], None).value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_decimal_args(self):
+        assert _builtin_sum(
+            [typed_from_runtime("2.5"), typed_from_runtime("2.75")], None
+        ).value == Decimal("5.25")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_sum([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.SUM) in BYTE_BUILTINS
+
+
+class TestRandom:
+    """FUNCTION RANDOM([seed]) -> next value in [0,1) from a VM-scoped sequence.
+
+    Python's random module is an accepted deviation from ISO COBOL's
+    implementation-defined generator (red-dragon-clpn): only reproducibility
+    for a fixed seed and the [0,1) range are contractually required.
+    """
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_seed_in_unit_range(self):
+        vm = VMState()
+        result = _builtin_random([], vm).value
+        assert 0 <= result < 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_positive_seed_is_reproducible(self):
+        first = _builtin_random([typed_from_runtime(42)], VMState()).value
+        second = _builtin_random([typed_from_runtime(42)], VMState()).value
+        assert first == second
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_successive_unseeded_calls_differ(self):
+        vm = VMState()
+        first = _builtin_random([], vm).value
+        second = _builtin_random([], vm).value
+        assert first != second
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_seed_replays_last_positive_seed(self):
+        vm = VMState()
+        first = _builtin_random([typed_from_runtime(7)], vm).value
+        _builtin_random([], vm)  # advance the sequence
+        replayed = _builtin_random([typed_from_runtime(-1)], vm).value
+        assert replayed == first
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_seed_uncomputable(self):
+        vm = VMState()
+        sym = SymbolicValue("s0")
+        assert _builtin_random([typed_from_runtime(sym)], vm).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.RANDOM) in BYTE_BUILTINS
+
+
+class TestAbs:
+    """FUNCTION ABS(x) -> the absolute value of x."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_abs([typed_from_runtime(-5)], None).value == 5
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_decimal_arg(self):
+        assert _builtin_abs([typed_from_runtime("-2.5")], None).value == Decimal("2.5")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_abs([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.ABS) in BYTE_BUILTINS
+
+
+class TestSqrt:
+    """FUNCTION SQRT(x) -> the (non-negative) square root of x."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_perfect_square(self):
+        assert _builtin_sqrt([typed_from_runtime(4)], None).value == 2
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_non_perfect_square(self):
+        result = _builtin_sqrt([typed_from_runtime(2)], None).value
+        assert math.isclose(float(result), 1.4142135623730951, rel_tol=1e-9)
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_uncomputable(self):
+        assert _builtin_sqrt([typed_from_runtime(-4)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_sqrt([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.SQRT) in BYTE_BUILTINS
+
+
+class TestSin:
+    """FUNCTION SIN(x) -> the sine of x (radians)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_sin([typed_from_runtime(0)], None).value == 0.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_sin([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.SIN) in BYTE_BUILTINS
+
+
+class TestCos:
+    """FUNCTION COS(x) -> the cosine of x (radians)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_cos([typed_from_runtime(0)], None).value == 1.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_cos([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.COS) in BYTE_BUILTINS
+
+
+class TestTan:
+    """FUNCTION TAN(x) -> the tangent of x (radians)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_tan([typed_from_runtime(0)], None).value == 0.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_tan([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.TAN) in BYTE_BUILTINS
+
+
+class TestAsin:
+    """FUNCTION ASIN(x) -> the arcsine of x, x in [-1,1] (radians)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        result = _builtin_asin([typed_from_runtime(1)], None).value
+        assert math.isclose(result, math.pi / 2, rel_tol=1e-9)
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_out_of_domain_uncomputable(self):
+        assert _builtin_asin([typed_from_runtime(2)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_asin([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.ASIN) in BYTE_BUILTINS
+
+
+class TestAcos:
+    """FUNCTION ACOS(x) -> the arccosine of x, x in [-1,1] (radians)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_acos([typed_from_runtime(1)], None).value == 0.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_out_of_domain_uncomputable(self):
+        assert _builtin_acos([typed_from_runtime(-2)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_acos([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.ACOS) in BYTE_BUILTINS
+
+
+class TestAtan:
+    """FUNCTION ATAN(x) -> the arctangent of x (radians)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        result = _builtin_atan([typed_from_runtime(1)], None).value
+        assert math.isclose(result, math.pi / 4, rel_tol=1e-9)
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_atan([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.ATAN) in BYTE_BUILTINS
+
+
+class TestRange:
+    """FUNCTION RANGE(a, b, ...) -> max(args) - min(args)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_range(
+                [
+                    typed_from_runtime(3),
+                    typed_from_runtime(7),
+                    typed_from_runtime(5),
+                ],
+                None,
+            ).value
+            == 4
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_range([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_range([typed_from_runtime(sym), typed_from_runtime(5)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.RANGE) in BYTE_BUILTINS
+
+
+class TestMean:
+    """FUNCTION MEAN(a, b, ...) -> the arithmetic mean of the arguments."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_mean(
+                [
+                    typed_from_runtime(2),
+                    typed_from_runtime(4),
+                    typed_from_runtime(6),
+                ],
+                None,
+            ).value
+            == 4
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_mean([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.MEAN) in BYTE_BUILTINS
+
+
+class TestMedian:
+    """FUNCTION MEDIAN(a, b, ...) -> the middle value; the average of the two
+    middle values for an even number of arguments."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_odd_count(self):
+        assert (
+            _builtin_median(
+                [
+                    typed_from_runtime(3),
+                    typed_from_runtime(7),
+                    typed_from_runtime(5),
+                ],
+                None,
+            ).value
+            == 5
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_even_count_averages_middle_two(self):
+        assert _builtin_median(
+            [
+                typed_from_runtime(1),
+                typed_from_runtime(2),
+                typed_from_runtime(3),
+                typed_from_runtime(4),
+            ],
+            None,
+        ).value == Decimal("2.5")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_median([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.MEDIAN) in BYTE_BUILTINS
+
+
+class TestMidrange:
+    """FUNCTION MIDRANGE(a, b, ...) -> (max(args) + min(args)) / 2."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_midrange(
+                [typed_from_runtime(2), typed_from_runtime(8)], None
+            ).value
+            == 5
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_midrange([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.MIDRANGE) in BYTE_BUILTINS
+
+
+class TestVariance:
+    """FUNCTION VARIANCE(a, b, ...) -> sample variance (n-1 divisor); 0 for a
+    single argument."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_single_arg_is_zero(self):
+        assert _builtin_variance([typed_from_runtime(5)], None).value == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_variance(
+                [
+                    typed_from_runtime(2),
+                    typed_from_runtime(4),
+                    typed_from_runtime(6),
+                ],
+                None,
+            ).value
+            == 4
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_variance([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.VARIANCE) in BYTE_BUILTINS
+
+
+class TestOrdMax:
+    """FUNCTION ORD-MAX(a, b, ...) -> 1-based position of the first
+    occurrence of the largest argument."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_ord_max(
+                [
+                    typed_from_runtime(3),
+                    typed_from_runtime(7),
+                    typed_from_runtime(5),
+                ],
+                None,
+            ).value
+            == 2
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_tie_returns_first_occurrence(self):
+        assert (
+            _builtin_ord_max(
+                [
+                    typed_from_runtime(7),
+                    typed_from_runtime(3),
+                    typed_from_runtime(7),
+                ],
+                None,
+            ).value
+            == 1
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_ord_max([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.ORD_MAX) in BYTE_BUILTINS
+
+
+class TestOrdMin:
+    """FUNCTION ORD-MIN(a, b, ...) -> 1-based position of the first
+    occurrence of the smallest argument."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_ord_min(
+                [
+                    typed_from_runtime(3),
+                    typed_from_runtime(7),
+                    typed_from_runtime(5),
+                ],
+                None,
+            ).value
+            == 1
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_args_uncomputable(self):
+        assert _builtin_ord_min([], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.ORD_MIN) in BYTE_BUILTINS
+
+
+class TestConcatenate:
+    """FUNCTION CONCATENATE(a, b, ...) -> all string arguments joined in order."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_concatenate(
+                [
+                    typed_from_runtime("AB"),
+                    typed_from_runtime("CD"),
+                    typed_from_runtime("EF"),
+                ],
+                None,
+            ).value
+            == "ABCDEF"
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_non_string_uncomputable(self):
+        assert (
+            _builtin_concatenate(
+                [typed_from_runtime("AB"), typed_from_runtime(5)], None
+            ).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_concatenate([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.CONCATENATE) in BYTE_BUILTINS
+
+
+class TestExp:
+    """FUNCTION EXP(x) -> e^x."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_exp([typed_from_runtime(0)], None).value == 1.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_one(self):
+        result = _builtin_exp([typed_from_runtime(1)], None).value
+        assert math.isclose(result, math.e, rel_tol=1e-9)
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_exp([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.EXP) in BYTE_BUILTINS
+
+
+class TestLog:
+    """FUNCTION LOG(x) -> the natural logarithm of x; x must be > 0."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_log([typed_from_runtime(1)], None).value == 0.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_e(self):
+        result = _builtin_log([typed_from_runtime(math.e)], None).value
+        assert math.isclose(result, 1.0, rel_tol=1e-9)
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_zero_uncomputable(self):
+        assert _builtin_log([typed_from_runtime(0)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_uncomputable(self):
+        assert _builtin_log([typed_from_runtime(-1)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_log([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.LOG) in BYTE_BUILTINS
+
+
+class TestFactorial:
+    """FUNCTION FACTORIAL(n) -> n! for a non-negative integer n."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_factorial([typed_from_runtime(5)], None).value == 120
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_zero(self):
+        assert _builtin_factorial([typed_from_runtime(0)], None).value == 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_uncomputable(self):
+        assert _builtin_factorial([typed_from_runtime(-1)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_non_integer_uncomputable(self):
+        assert (
+            _builtin_factorial([typed_from_runtime("2.5")], None).value is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_factorial([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.FACTORIAL) in BYTE_BUILTINS
+
+
+class TestInteger:
+    """FUNCTION INTEGER(x) -> the greatest integer not greater than x (floor)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_positive(self):
+        assert _builtin_integer([typed_from_runtime("3.7")], None).value == 3
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_floors_down(self):
+        assert _builtin_integer([typed_from_runtime("-3.2")], None).value == -4
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_integer([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.INTEGER) in BYTE_BUILTINS
+
+
+class TestIntegerPart:
+    """FUNCTION INTEGER-PART(x) -> x truncated toward zero."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_positive(self):
+        assert _builtin_integer_part([typed_from_runtime("3.7")], None).value == 3
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_truncates_toward_zero(self):
+        assert _builtin_integer_part([typed_from_runtime("-3.2")], None).value == -3
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_integer_part([typed_from_runtime(sym)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.INTEGER_PART) in BYTE_BUILTINS
+
+
+class TestFractionPart:
+    """FUNCTION FRACTION-PART(x) -> x - INTEGER-PART(x)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_positive(self):
+        assert _builtin_fraction_part(
+            [typed_from_runtime("3.7")], None
+        ).value == Decimal("0.7")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative(self):
+        assert _builtin_fraction_part(
+            [typed_from_runtime("-3.7")], None
+        ).value == Decimal("-0.7")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_fraction_part([typed_from_runtime(sym)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.FRACTION_PART) in BYTE_BUILTINS
+
+
+class TestRem:
+    """FUNCTION REM(x, y) -> x - y * FUNCTION INTEGER-PART(x / y); result sign
+    follows the dividend x (unlike MOD, which follows the divisor y)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert (
+            _builtin_rem([typed_from_runtime(7), typed_from_runtime(3)], None).value
+            == 1
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_dividend_differs_from_mod(self):
+        # trunc(-7/3) = -2; REM = -7 - 3*(-2) = -1 (MOD(-7,3) is 2 — floored).
+        assert (
+            _builtin_rem([typed_from_runtime(-7), typed_from_runtime(3)], None).value
+            == -1
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_divisor_differs_from_mod(self):
+        # trunc(7/-3) = -2; REM = 7 - (-3)*(-2) = 1 (MOD(7,-3) is -2 — floored).
+        assert (
+            _builtin_rem([typed_from_runtime(7), typed_from_runtime(-3)], None).value
+            == 1
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_divisor_zero_uncomputable(self):
+        assert (
+            _builtin_rem([typed_from_runtime(5), typed_from_runtime(0)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_rem([typed_from_runtime(sym), typed_from_runtime(3)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.REM) in BYTE_BUILTINS
+
+
+class TestSubstitute:
+    """FUNCTION SUBSTITUTE(source, search-1, replace-1 [, search-2, replace-2]...):
+    every occurrence of each search string replaced by its paired replacement,
+    applied in order over the running result."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic_all_occurrences(self):
+        assert (
+            _builtin_substitute(
+                [
+                    typed_from_runtime("ABCABC"),
+                    typed_from_runtime("A"),
+                    typed_from_runtime("X"),
+                ],
+                None,
+            ).value
+            == "XBCXBC"
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_multiple_pairs_applied_in_order(self):
+        assert (
+            _builtin_substitute(
+                [
+                    typed_from_runtime("ABCD"),
+                    typed_from_runtime("A"),
+                    typed_from_runtime("X"),
+                    typed_from_runtime("C"),
+                    typed_from_runtime("Y"),
+                ],
+                None,
+            ).value
+            == "XBYD"
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_unpaired_args_uncomputable(self):
+        assert (
+            _builtin_substitute(
+                [typed_from_runtime("AB"), typed_from_runtime("A")], None
+            ).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_substitute(
+                [
+                    typed_from_runtime(sym),
+                    typed_from_runtime("A"),
+                    typed_from_runtime("X"),
+                ],
+                None,
+            ).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.SUBSTITUTE) in BYTE_BUILTINS
+
+
+class TestExp10:
+    """FUNCTION EXP10(x) -> 10^x."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_exp10([typed_from_runtime(2)], None).value == 100.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_zero(self):
+        assert _builtin_exp10([typed_from_runtime(0)], None).value == 1.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_exp10([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.EXP10) in BYTE_BUILTINS
+
+
+class TestLog10:
+    """FUNCTION LOG10(x) -> the base-10 logarithm of x; x must be > 0."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_basic(self):
+        assert _builtin_log10([typed_from_runtime(100)], None).value == 2.0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_zero_uncomputable(self):
+        assert _builtin_log10([typed_from_runtime(0)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_negative_uncomputable(self):
+        assert _builtin_log10([typed_from_runtime(-1)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_log10([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.LOG10) in BYTE_BUILTINS
+
+
+class TestChar:
+    """FUNCTION CHAR(n) -> the nth character (1-based) in the program
+    collating sequence (this codebase's EBCDIC table)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_letter_a(self):
+        # EBCDIC byte 0xC1 (193 decimal) is 'A' -> n = 193 + 1 = 194.
+        assert _builtin_char([typed_from_runtime(194)], None).value == "A"
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_digit_zero(self):
+        # EBCDIC byte 0xF0 (240 decimal) is '0' -> n = 240 + 1 = 241.
+        assert _builtin_char([typed_from_runtime(241)], None).value == "0"
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_out_of_range_uncomputable(self):
+        assert _builtin_char([typed_from_runtime(0)], None).value is _UNCOMPUTABLE
+        assert _builtin_char([typed_from_runtime(257)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_char([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.CHAR) in BYTE_BUILTINS
+
+
+class TestOrd:
+    """FUNCTION ORD(c) -> the 1-based ordinal position of c in the program
+    collating sequence; ORD(CHAR(n)) == n for printable characters."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_letter_a(self):
+        assert _builtin_ord([typed_from_runtime("A")], None).value == 194
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_digit_zero(self):
+        assert _builtin_ord([typed_from_runtime("0")], None).value == 241
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_round_trips_with_char(self):
+        n = 194
+        char_result = _builtin_char([typed_from_runtime(n)], None).value
+        assert _builtin_ord([typed_from_runtime(char_result)], None).value == n
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_multi_char_uncomputable(self):
+        assert _builtin_ord([typed_from_runtime("AB")], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert _builtin_ord([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.ORD) in BYTE_BUILTINS
+
+
+class TestDayOfInteger:
+    """FUNCTION DAY-OF-INTEGER(n) -> the Julian date YYYYDDD, n days after the
+    COBOL standard epoch (1600-12-31)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_known_reference(self):
+        # day 154498 after the epoch is 2024-01-01 (day 1 of 2024).
+        assert _builtin_day_of_integer([typed_from_runtime(154498)], None).value == (
+            2024001
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_day_of_integer([typed_from_runtime(sym)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.DAY_OF_INTEGER) in BYTE_BUILTINS
+
+
+class TestIntegerOfDay:
+    """FUNCTION INTEGER-OF-DAY(yyyyddd) -> integer day count since the COBOL
+    standard epoch (1600-12-31); inverse of DAY-OF-INTEGER."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_known_reference(self):
+        assert (
+            _builtin_integer_of_day([typed_from_runtime(2024001)], None).value == 154498
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_invalid_day_of_year_uncomputable(self):
+        # 2023 is not a leap year, so day 366 doesn't exist.
+        assert (
+            _builtin_integer_of_day([typed_from_runtime(2023366)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_integer_of_day([typed_from_runtime(sym)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.INTEGER_OF_DAY) in BYTE_BUILTINS
+
+
+class TestAnnuity:
+    """FUNCTION ANNUITY(rate, periods) -> the amortizing payment factor for a
+    loan of 1 unit repaid over `periods` periods at interest `rate`."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_zero_rate(self):
+        assert _builtin_annuity(
+            [typed_from_runtime(0), typed_from_runtime(4)], None
+        ).value == Decimal("0.25")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_nonzero_rate(self):
+        result = _builtin_annuity(
+            [typed_from_runtime("0.05"), typed_from_runtime(10)], None
+        ).value
+        assert math.isclose(float(result), 0.129504575, rel_tol=1e-6)
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_non_positive_periods_uncomputable(self):
+        assert (
+            _builtin_annuity(
+                [typed_from_runtime("0.05"), typed_from_runtime(0)], None
+            ).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_annuity(
+                [typed_from_runtime(sym), typed_from_runtime(4)], None
+            ).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.ANNUITY) in BYTE_BUILTINS
+
+
+class TestPresentValue:
+    """FUNCTION PRESENT-VALUE(rate, cashflow-1, ...) -> sum of cashflow-i
+    discounted at `rate` for i periods."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_zero_rate_sums_cashflows(self):
+        assert _builtin_present_value(
+            [
+                typed_from_runtime(0),
+                typed_from_runtime(100),
+                typed_from_runtime(100),
+            ],
+            None,
+        ).value == Decimal("200")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_nonzero_rate(self):
+        result = _builtin_present_value(
+            [typed_from_runtime("0.10"), typed_from_runtime(110)], None
+        ).value
+        assert math.isclose(float(result), 100.0, rel_tol=1e-9)
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_no_cashflows_uncomputable(self):
+        assert (
+            _builtin_present_value([typed_from_runtime(0)], None).value is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_present_value(
+                [typed_from_runtime(sym), typed_from_runtime(100)], None
+            ).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.PRESENT_VALUE) in BYTE_BUILTINS
+
+
+class TestDateToYyyymmdd:
+    """FUNCTION DATE-TO-YYYYMMDD(yymmdd [, cutoff]) -> yymmdd expanded to an
+    8-digit YYYYMMDD; default cutoff is 50 (yy >= 50 -> 19yy, else 20yy),
+    matching the common production COBOL default (IBM/GnuCOBOL)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_below_default_cutoff(self):
+        assert (
+            _builtin_date_to_yyyymmdd([typed_from_runtime(240101)], None).value
+            == 20240101
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_at_or_above_default_cutoff(self):
+        assert (
+            _builtin_date_to_yyyymmdd([typed_from_runtime(990101)], None).value
+            == 19990101
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_explicit_cutoff_override(self):
+        assert (
+            _builtin_date_to_yyyymmdd(
+                [typed_from_runtime(750101), typed_from_runtime(80)], None
+            ).value
+            == 20750101
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_date_to_yyyymmdd([typed_from_runtime(sym)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.DATE_TO_YYYYMMDD) in BYTE_BUILTINS
+
+
+class TestDayToYyyyddd:
+    """FUNCTION DAY-TO-YYYYDDD(yyddd [, cutoff]) -> yyddd expanded to a
+    7-digit YYYYDDD; same default-50 windowing as DATE-TO-YYYYMMDD."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_below_default_cutoff(self):
+        assert (
+            _builtin_day_to_yyyyddd([typed_from_runtime(24001)], None).value == 2024001
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_at_or_above_default_cutoff(self):
+        assert (
+            _builtin_day_to_yyyyddd([typed_from_runtime(99001)], None).value == 1999001
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_day_to_yyyyddd([typed_from_runtime(sym)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.DAY_TO_YYYYDDD) in BYTE_BUILTINS
+
+
+class TestYearToYyyy:
+    """FUNCTION YEAR-TO-YYYY(yy [, cutoff]) -> yy expanded to a 4-digit year;
+    same default-50 windowing as DATE-TO-YYYYMMDD."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_below_default_cutoff(self):
+        assert _builtin_year_to_yyyy([typed_from_runtime(24)], None).value == 2024
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_at_or_above_default_cutoff(self):
+        assert _builtin_year_to_yyyy([typed_from_runtime(99)], None).value == 1999
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_explicit_cutoff_override(self):
+        assert (
+            _builtin_year_to_yyyy(
+                [typed_from_runtime(75), typed_from_runtime(80)], None
+            ).value
+            == 2075
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_symbolic_uncomputable(self):
+        sym = SymbolicValue("s0")
+        assert (
+            _builtin_year_to_yyyy([typed_from_runtime(sym)], None).value
+            is _UNCOMPUTABLE
+        )
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_registered_in_builtins(self):
+        assert FuncName(BuiltinName.YEAR_TO_YYYY) in BYTE_BUILTINS

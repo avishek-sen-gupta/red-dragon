@@ -69,10 +69,7 @@ class TestNumericMoveFractionalDigits:
 
 
 class TestIntrinsicFunctions:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="red-dragon-clpn: FUNCTION REVERSE not implemented (returns arg 1)",
-    )
+    # red-dragon-clpn: REVERSE implemented. Was xfail; now green.
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_reverse(self):
         """FUNCTION REVERSE('ABCDE') must yield 'EDCBA'."""
@@ -92,10 +89,7 @@ class TestIntrinsicFunctions:
         region = _first_region(vm)
         assert bytes(region[0:5]).decode("cp037") == "EDCBA"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="red-dragon-clpn: FUNCTION MAX not implemented (returns arg 1)",
-    )
+    # red-dragon-clpn: MAX implemented. Was xfail; now green.
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_max(self):
         """FUNCTION MAX(3 7 5) must yield 7."""
@@ -114,10 +108,7 @@ class TestIntrinsicFunctions:
         )
         assert _decode(_first_region(vm), 0, 2) == 7
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="red-dragon-clpn: FUNCTION MIN not implemented (returns arg 1)",
-    )
+    # red-dragon-clpn: MIN implemented. Was xfail; now green.
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_min(self):
         """FUNCTION MIN(3 7 5) must yield 3."""
@@ -174,6 +165,683 @@ class TestIntrinsicFunctions:
             ]
         )
         assert _decode(_first_region(vm), 0, 8) == 20240101
+
+    # red-dragon-clpn: SUM implemented. Was xfail; now green.
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_sum(self):
+        """FUNCTION SUM(3 7 5) must yield 15."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNSUM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION SUM(3 7 5).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 15
+
+    # red-dragon-clpn: RANDOM implemented (Python's random module). Was xfail; now green.
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_random_seeded_yields_value_below_one(self):
+        """FUNCTION RANDOM(1) is a fraction in [0,1); scaled by 1e6 it must be
+        < 1000000 — not an echo of the seed argument."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNRND.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(7) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION RANDOM(1) * 1000000.",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 7) < 1000000
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_abs(self):
+        """FUNCTION ABS(3 - 10) must yield 7."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNABS.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION ABS(3 - 10).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 7
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_sqrt(self):
+        """FUNCTION SQRT(16) must yield 4."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNSQT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION SQRT(16).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 4
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_cos_of_zero(self):
+        """FUNCTION COS(0) must yield 1 (distinguishes from the arg-1 fallback)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNCOS.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION COS(0).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_sin_of_zero(self):
+        """FUNCTION SIN(0) must yield 0."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNSIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION SIN(0).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_tan_of_zero(self):
+        """FUNCTION TAN(0) must yield 0."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNTAN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION TAN(0).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_acos_of_one(self):
+        """FUNCTION ACOS(1) must yield 0 (distinguishes from the arg-1 fallback of 1)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNACS.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION ACOS(1).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_asin_of_zero(self):
+        """FUNCTION ASIN(0) must yield 0."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNASN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION ASIN(0).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_atan_of_zero(self):
+        """FUNCTION ATAN(0) must yield 0."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNATN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION ATAN(0).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_range(self):
+        """FUNCTION RANGE(3 7 5) must yield 4."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNRNG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION RANGE(3 7 5).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 4
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_mean(self):
+        """FUNCTION MEAN(2 4 6) must yield 4."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNMEA.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION MEAN(2 4 6).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 4
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_median_odd_count(self):
+        """FUNCTION MEDIAN(3 7 5) must yield 5."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNMED.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION MEDIAN(3 7 5).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 5
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_midrange(self):
+        """FUNCTION MIDRANGE(2 8) must yield 5."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNMID.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION MIDRANGE(2 8).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 5
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_variance(self):
+        """FUNCTION VARIANCE(2 4 6) must yield 4 (sample variance, n-1 divisor)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNVAR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION VARIANCE(2 4 6).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 4
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_ord_max(self):
+        """FUNCTION ORD-MAX(3 7 5) must yield 2 (1-based position of 7)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNOMX.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION ORD-MAX(3 7 5).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 2
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_ord_min(self):
+        """FUNCTION ORD-MIN(3 7 5) must yield 1 (1-based position of 3)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNOMN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION ORD-MIN(3 7 5).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_concatenate(self):
+        """FUNCTION CONCATENATE('AB' 'CD' 'EF') must yield 'ABCDEF'."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNCAT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-OUT PIC X(6) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION CONCATENATE('AB' 'CD' 'EF') TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert bytes(region[0:6]).decode("cp037") == "ABCDEF"
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_exp_of_zero(self):
+        """FUNCTION EXP(0) must yield 1 (distinguishes from the arg-1 fallback of 0)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNEXP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION EXP(0).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_log_of_one(self):
+        """FUNCTION LOG(1) must yield 0 (distinguishes from the arg-1 fallback of 1)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNLOG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION LOG(1).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 0
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_factorial(self):
+        """FUNCTION FACTORIAL(5) must yield 120."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNFAC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION FACTORIAL(5).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 3) == 120
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_integer_floors(self):
+        """FUNCTION INTEGER(7.2) must yield 7."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNINT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION INTEGER(7.2).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 7
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_integer_part(self):
+        """FUNCTION INTEGER-PART(7.2) must yield 7."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNIPT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION INTEGER-PART(7.2).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 7
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_fraction_part(self):
+        """FUNCTION FRACTION-PART(7.2) must yield .2 (distinguishes from the
+        arg-1 fallback echoing the full 7.2)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNFPT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9V9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION FRACTION-PART(7.2).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode_dec(_first_region(vm), 0, 1, 1) == Decimal("0.2")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_rem(self):
+        """FUNCTION REM(7 3) must yield 1."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNREM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(2) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION REM(7 3).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 2) == 1
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_substitute(self):
+        """FUNCTION SUBSTITUTE('ABCABC' 'A' 'X') must yield 'XBCXBC'."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNSUB.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-OUT PIC X(6) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION SUBSTITUTE('ABCABC' 'A' 'X') TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert bytes(region[0:6]).decode("cp037") == "XBCXBC"
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_exp10(self):
+        """FUNCTION EXP10(2) must yield 100."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNE10.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION EXP10(2).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 3) == 100
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_log10(self):
+        """FUNCTION LOG10(100) must yield 2 (distinguishes from the arg-1
+        fallback of 100)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNL10.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(1) VALUE 5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION LOG10(100).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 1) == 2
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_char(self):
+        """FUNCTION CHAR(194) must yield 'A' (EBCDIC byte 0xC1)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNCHR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-OUT PIC X(1) VALUE SPACE.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION CHAR(194) TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert bytes(region[0:1]).decode("cp037") == "A"
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_ord(self):
+        """FUNCTION ORD('A') must yield 194."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNORD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION ORD('A').",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 3) == 194
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_day_of_integer(self):
+        """FUNCTION DAY-OF-INTEGER(154498) must yield 2024001 (Julian date)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNDOI2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(7) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION DAY-OF-INTEGER(154498).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 7) == 2024001
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_integer_of_day(self):
+        """FUNCTION INTEGER-OF-DAY(2024001) must yield 154498 (inverse of
+        DAY-OF-INTEGER)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNIOD2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(6) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION INTEGER-OF-DAY(2024001).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 6) == 154498
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_annuity(self):
+        """FUNCTION ANNUITY(0 4) must yield .25 (zero-rate special case)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNANN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9V99 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION ANNUITY(0 4).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode_dec(_first_region(vm), 0, 1, 2) == Decimal("0.25")
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_present_value(self):
+        """FUNCTION PRESENT-VALUE(0 100 100) must yield 200 (zero-rate: an
+        undiscounted sum)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNPV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION PRESENT-VALUE(0 100 100).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 3) == 200
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_date_to_yyyymmdd(self):
+        """FUNCTION DATE-TO-YYYYMMDD(240101) must yield 20240101 (default
+        cutoff 50: yy=24 < 50 -> 20yy)."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FND2Y.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(8) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION DATE-TO-YYYYMMDD(240101).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 8) == 20240101
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_day_to_yyyyddd(self):
+        """FUNCTION DAY-TO-YYYYDDD(24001) must yield 2024001."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FND2D.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(7) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION DAY-TO-YYYYDDD(24001).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 7) == 2024001
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_year_to_yyyy(self):
+        """FUNCTION YEAR-TO-YYYY(24) must yield 2024."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNY2Y.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION YEAR-TO-YYYY(24).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode(_first_region(vm), 0, 4) == 2024
 
 
 # ── red-dragon-frdu: arithmetic target ref-mod for SUBTRACT/MULTIPLY/DIVIDE ────
