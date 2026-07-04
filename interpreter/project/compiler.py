@@ -165,7 +165,7 @@ def compile_module(
     language: Language,
     source: bytes | None = None,
     namespace_resolver: NamespaceResolver = NamespaceResolver(),
-    copybook_dirs: list[Path] | None = None,
+    copybook_dirs: list[Path] = [],
 ) -> ModuleUnit:
     """Compile a single file into a ModuleUnit.
 
