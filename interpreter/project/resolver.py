@@ -185,8 +185,8 @@ class JavaImportResolver(ImportResolver):
         Path("src") / "main" / "kotlin",
     ]
 
-    def __init__(self, source_roots: list[Path] | None = None):
-        self._source_roots = list(source_roots) if source_roots is not None else []
+    def __init__(self, source_roots: list[Path] = []):
+        self._source_roots = source_roots
 
     def resolve(self, ref: ImportRef, project_root: Path) -> list[ResolvedImport]:
         if ref.is_system:
