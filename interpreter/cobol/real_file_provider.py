@@ -55,14 +55,12 @@ class RealFileIOProvider(CobolIOProvider):
     def __init__(
         self,
         base_dir: Path,
-        file_control: list[FileControlEntry] | None = None,
-        path_overrides: dict[str, Path] | None = None,
+        file_control: list[FileControlEntry] = [],
+        path_overrides: dict[str, Path] = {},
     ) -> None:
         self._base_dir = base_dir
-        self._fce: dict[str, FileControlEntry] = {
-            e.file_name: e for e in (file_control or [])
-        }
-        self._overrides: dict[str, Path] = path_overrides or {}
+        self._fce: dict[str, FileControlEntry] = {e.file_name: e for e in file_control}
+        self._overrides: dict[str, Path] = path_overrides
         self._drivers: dict[str, FileOrganizationDriver] = {}
         self._open_modes: dict[str, str] = {}
 
