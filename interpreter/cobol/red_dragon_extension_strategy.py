@@ -21,7 +21,7 @@ class RedDragonExtensionLoweringStrategy(Protocol):
     """One injectable extension-lowering strategy (CICS, SQL, …)."""
 
     def handles(self, stmt: Any) -> bool:
-        """True if this strategy owns ``stmt`` (e.g. isinstance(stmt, ExecSqlStatement))."""
+        """True if this strategy owns ``stmt`` (e.g. isinstance(stmt, YourDialectStatement))."""
         ...
 
     def preprocess_program_dict(self, data: dict) -> dict:
