@@ -19,7 +19,7 @@ from interpreter.constants import Language
 from interpreter.field_name import FieldName
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
-from interpreter.run import run, run_linked
+from interpreter.run import run, run_linked, initial_vm_state
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers, NotLanguageFeature
@@ -5366,6 +5366,7 @@ class TestSubprogramWsPersistence:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         # Find SUBPROG's singleton and read WS-COUNTER.
@@ -5453,6 +5454,7 @@ class TestSubprogramWsPersistence:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=5000,
+            initial_vm=initial_vm_state(),
         )
 
         key = VarName("__prog_MAINCLR")
@@ -5527,6 +5529,7 @@ class TestCallUsingByReference:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         def _ws(prog_name: str) -> bytearray:
@@ -5613,6 +5616,7 @@ class TestCallUsingByReference:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         key = VarName("__prog_MAINPROG")
@@ -5682,6 +5686,7 @@ class TestCallUsingByValue:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         def _ws(prog_name: str) -> bytearray:
@@ -5765,6 +5770,7 @@ class TestCallUsingByValue:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         def _ws(prog_name: str) -> bytearray:
@@ -5851,6 +5857,7 @@ class TestCallUsingLinkageRead:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None
@@ -5917,6 +5924,7 @@ class TestCallUsingLinkageRead:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=1000,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None
@@ -5982,6 +5990,7 @@ class TestCallUsingLinkageRead:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=1000,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None
@@ -6044,6 +6053,7 @@ class TestGobackExitProgram:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None
@@ -6100,6 +6110,7 @@ class TestGobackExitProgram:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None
@@ -6167,6 +6178,7 @@ class TestGobackExitProgram:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None
@@ -6233,6 +6245,7 @@ class TestStopRunTerminatesRunUnit:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None
@@ -6304,6 +6317,7 @@ class TestStopRunTerminatesRunUnit:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None
@@ -6401,6 +6415,7 @@ class TestStopRunTerminatesRunUnit:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         singleton_ptr = None

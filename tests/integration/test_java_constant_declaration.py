@@ -18,7 +18,7 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
-from interpreter.run import execute_cfg, ExecutionStrategies
+from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
@@ -64,6 +64,7 @@ class TestJavaConstantDeclaration:
             linked.merged_registry,
             config,
             strategies,
+            vm=initial_vm_state(),
         )
 
         frame = vm.call_stack[0]
@@ -124,6 +125,7 @@ class TestJavaInterfaceConstantDeclaration:
             linked.merged_registry,
             config,
             strategies,
+            vm=initial_vm_state(),
         )
 
         frame = vm.call_stack[0]

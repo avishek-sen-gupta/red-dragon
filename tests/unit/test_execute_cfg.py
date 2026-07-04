@@ -9,7 +9,7 @@ from interpreter.register import Register
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.cfg import build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
-from interpreter.run import execute_cfg, VMConfig, ExecutionStats
+from interpreter.run import execute_cfg, VMConfig, ExecutionStats, initial_vm_state
 from interpreter.types.typed_value import unwrap
 from tests.unit.cfg_helpers import (
     make_instructions as _make_instructions,
@@ -27,7 +27,12 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(cfg, "entry", registry)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert unwrap(vm.current_frame.local_vars[VarName("x")]) == 42
 
@@ -39,7 +44,12 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(cfg, "entry", registry)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert isinstance(stats, ExecutionStats)
         assert stats.steps > 0
@@ -59,7 +69,13 @@ class TestExecuteCfgBasic:
         cfg, registry = _build_simple_cfg(instructions)
         config = VMConfig(max_steps=3)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, config)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            registry,
+            config,
+            vm=initial_vm_state(),
+        )
 
         assert stats.steps == 3
 
@@ -83,7 +99,12 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(cfg, "entry", registry)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert unwrap(vm.current_frame.local_vars[VarName("result")]) == 99
         assert stats.steps > 0, "execution must have taken at least one step"
@@ -97,7 +118,12 @@ class TestExecuteCfgBasic:
         cfg, registry = _build_simple_cfg(instructions)
 
         with pytest.raises(ValueError, match="not found in CFG"):
-            execute_cfg(cfg, "nonexistent_label", registry)
+            execute_cfg(
+                cfg,
+                "nonexistent_label",
+                registry,
+                vm=initial_vm_state(),
+            )
 
     def test_empty_registry_works_for_simple_programs(self):
         instructions = _make_instructions(
@@ -109,7 +135,12 @@ class TestExecuteCfgBasic:
         cfg = build_cfg(instructions)
         empty_registry = FunctionRegistry()
 
-        vm, stats = execute_cfg(cfg, "entry", empty_registry)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            empty_registry,
+            vm=initial_vm_state(),
+        )
 
         assert unwrap(vm.current_frame.local_vars[VarName("v")]) == 7
 
@@ -124,7 +155,12 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(cfg, "entry", registry)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert unwrap(vm.current_frame.local_vars[VarName("result")]) == 42
 
@@ -153,7 +189,12 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(cfg, "entry", registry)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert unwrap(vm.current_frame.local_vars[VarName("result")]) == 10
 
@@ -171,7 +212,12 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(cfg, "entry", registry)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert stats.llm_calls == 0
         assert unwrap(vm.current_frame.local_vars[VarName("sum")]) == 8
@@ -216,13 +262,25 @@ class TestExecuteCfgBasic:
 
         # Run without verbose — capture baseline logs
         with caplog.at_level(logging.INFO, logger="interpreter.run"):
-            execute_cfg(cfg, "entry", registry, VMConfig(verbose=False))
+            execute_cfg(
+                cfg,
+                "entry",
+                registry,
+                VMConfig(verbose=False),
+                vm=initial_vm_state(),
+            )
         quiet_log = caplog.text
         caplog.clear()
 
         # Run with verbose — should produce additional output
         with caplog.at_level(logging.INFO, logger="interpreter.run"):
-            execute_cfg(cfg, "entry", registry, VMConfig(verbose=True))
+            execute_cfg(
+                cfg,
+                "entry",
+                registry,
+                VMConfig(verbose=True),
+                vm=initial_vm_state(),
+            )
         verbose_log = caplog.text
 
         assert "step" in verbose_log.lower()
@@ -242,7 +300,12 @@ class TestExecuteCfgHalt:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(cfg, "entry", registry)
+        vm, stats = execute_cfg(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert unwrap(vm.current_frame.local_vars[VarName("before_halt")]) == 1
         assert VarName("after_halt") not in vm.current_frame.local_vars
