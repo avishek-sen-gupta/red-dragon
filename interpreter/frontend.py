@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from interpreter.frontends.symbol_table import SymbolTable
 
 _NO_REPAIR_CLIENT = object()  # sentinel — distinct from None
+_NO_CICS_TEXT_PARSER = object()  # sentinel — distinct from None
 
 
 class Frontend(ABC):
@@ -79,10 +80,10 @@ def get_frontend(
     llm_client: Any = None,
     observer: FrontendObserver = NullFrontendObserver(),
     repair_client: Any = _NO_REPAIR_CLIENT,
-    copybook_dirs: list[Path] | None = None,
+    copybook_dirs: list[Path] = [],
     cobol_parser: Any = None,
     extension_strategies: Sequence[Any] = (),
-    cics_text_parser: Any = None,
+    cics_text_parser: Any = _NO_CICS_TEXT_PARSER,
 ) -> Frontend:
     """Build a frontend for the given language.
 
