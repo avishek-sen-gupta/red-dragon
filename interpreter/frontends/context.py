@@ -44,6 +44,10 @@ from interpreter.path_name import PathName
 
 logger = logging.getLogger(__name__)
 
+NO_NODE = (
+    object()
+)  # sentinel: no source-tree node available (diagnostics/source-location only)
+
 
 @dataclass
 class GrammarConstants:
@@ -204,7 +208,7 @@ class TreeSitterEmitContext:
         self.label_counter += 1
         return lbl
 
-    def emit_inst(self, inst: Instruction, *, node: Any = None) -> Instruction:
+    def emit_inst(self, inst: Instruction, *, node: Any = NO_NODE) -> Instruction:
         """Emit a typed instruction directly.
 
         Resolves source_location from *node* if the instruction carries
@@ -214,7 +218,7 @@ class TreeSitterEmitContext:
         import dataclasses
 
         loc = inst.source_location
-        if loc.is_unknown() and node is not None:
+        if loc.is_unknown() and node is not None and node is not NO_NODE:
             loc = self.source_loc(node)
             inst = dataclasses.replace(inst, source_location=loc)
 
@@ -226,7 +230,7 @@ class TreeSitterEmitContext:
         return inst
 
     def emit_decl_var(
-        self, name: str, val_reg: str, *, node: Any = None
+        self, name: str, val_reg: str, *, node: Any = NO_NODE
     ) -> Instruction:
         """Emit DECL_VAR: declare a new variable in the current scope."""
         return self.emit_inst(DeclVar(name=VarName(name), value_reg=val_reg), node=node)
@@ -236,7 +240,7 @@ class TreeSitterEmitContext:
         func_name: str,
         func_label: CodeLabel,
         result_reg: str,
-        node: Any = None,
+        node: Any = NO_NODE,
     ) -> Instruction:
         """Register a function reference in the symbol table and emit CONST.
 
@@ -257,7 +261,7 @@ class TreeSitterEmitContext:
         class_label: CodeLabel,
         parents: list[str],
         result_reg: str,
-        node: Any = None,
+        node: Any = NO_NODE,
     ) -> Instruction:
         """Register a class reference in the symbol table and emit CONST.
 
