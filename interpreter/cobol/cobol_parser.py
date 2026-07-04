@@ -52,7 +52,7 @@ class ProLeapCobolParser(CobolParser):
         self,
         runner: SubprocessRunner,
         bridge_jar: str,
-        copybook_dirs: list[Path] | None = None,
+        copybook_dirs: list[Path] = [],
     ):
         self._runner = runner
         self._bridge_jar = bridge_jar
@@ -119,7 +119,7 @@ class ProLeapCobolParser(CobolParser):
 
 
 def make_cobol_parser(
-    copybook_dirs: list[Path] | None = None,
+    copybook_dirs: list[Path] = [],
 ) -> ProLeapCobolParser:
     """Construct a ProLeapCobolParser from PROLEAP_BRIDGE_JAR env var.
 
