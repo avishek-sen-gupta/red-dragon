@@ -21,9 +21,12 @@ def _provider(
     overrides: dict[str, Path] | None = None,
 ) -> RealFileIOProvider:
     fce = [FileControlEntry.from_dict(e) for e in (entries or [])]
-    return RealFileIOProvider(
-        base_dir=tmp_path, file_control=fce, path_overrides=overrides
-    )
+    if overrides is not None:
+        return RealFileIOProvider(
+            base_dir=tmp_path, file_control=fce, path_overrides=overrides
+        )
+    else:
+        return RealFileIOProvider(base_dir=tmp_path, file_control=fce)
 
 
 class TestRealFileIOProvider:
