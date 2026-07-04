@@ -6,7 +6,7 @@ from interpreter.type_name import TypeName
 from typing import Any
 
 import logging
-from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.var_name import VarName
@@ -342,23 +342,21 @@ def lower_rust_string_const(
 
 
 def lower_rust_int_const(
-    ctx: TreeSitterEmitContext, value: int, node: Any | None = None
+    ctx: TreeSitterEmitContext, value: int, node: Any = NO_NODE
 ) -> Register:
     """Emit a typed int Const from a Python int value."""
     reg = ctx.fresh_reg()
-    if node is not None:
+    if node is not NO_NODE:
         ctx.emit_inst(Const.int_(reg, value), node=node)
     else:
         ctx.emit_inst(Const.int_(reg, value))
     return reg
 
 
-def lower_rust_none_const(
-    ctx: TreeSitterEmitContext, node: Any | None = None
-) -> Register:
+def lower_rust_none_const(ctx: TreeSitterEmitContext, node: Any = NO_NODE) -> Register:
     """Emit a typed null Const."""
     reg = ctx.fresh_reg()
-    if node is not None:
+    if node is not NO_NODE:
         ctx.emit_inst(Const.null_(reg), node=node)
     else:
         ctx.emit_inst(Const.null_(reg))
@@ -366,11 +364,11 @@ def lower_rust_none_const(
 
 
 def lower_rust_default_return_const(
-    ctx: TreeSitterEmitContext, node: Any | None = None
+    ctx: TreeSitterEmitContext, node: Any = NO_NODE
 ) -> Register:
     """Emit the Rust default return value '()' as a typed Const."""
     reg = ctx.fresh_reg()
-    if node is not None:
+    if node is not NO_NODE:
         ctx.emit_inst(Const.string(reg, "()"), node=node)
     else:
         ctx.emit_inst(Const.string(reg, "()"))
