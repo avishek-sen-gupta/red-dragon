@@ -63,7 +63,7 @@ from interpreter.instructions import (
     Return_,
 )
 from interpreter.ir import CodeLabel
-from interpreter.register import Register
+from interpreter.register import Register, NO_REGISTER
 
 logger = logging.getLogger(__name__)
 
@@ -493,7 +493,7 @@ def lower_move(
     # where COBOL moves the sending field's characters left-justified rather than
     # the numeric value (red-dragon-0fqr). Ref-modified sources keep the existing
     # sliced-string path.
-    zoned_display_reg: Register | None = None
+    zoned_display_reg: Register = NO_REGISTER
     if (
         source_fl is not None
         and stmt.source.ref_mod_start is None
@@ -531,7 +531,7 @@ def _store_move_value(
     target: RefModOperand,
     source_value_reg: Register,
     materialised: MaterialisedSectionedLayout,
-    zoned_display_reg: Register | None = None,
+    zoned_display_reg: Register = NO_REGISTER,
 ) -> None:
     """Store an already-evaluated MOVE source value into one receiving field.
 
@@ -549,7 +549,7 @@ def _store_move_value(
     )
 
     if (
-        zoned_display_reg is not None
+        zoned_display_reg.is_present()
         and target.ref_mod_start is None
         and target_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
     ):
