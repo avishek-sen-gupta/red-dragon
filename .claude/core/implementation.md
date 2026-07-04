@@ -2,6 +2,7 @@
 
 - When implementing features for multiple languages, verify each language's actual capabilities against VM/frontend source code. Don't assume.
 - When adding a language feature, consult existing frontend/VM documentation and implementation as reference before deciding on approach.
+- When a design question hinges on what a real external system does (COBOL semantics per z/OS/IBM Enterprise COBOL/GnuCOBOL, a library's actual behavior, a protocol spec), research it first — don't guess and don't default straight to asking the user. Reserve user questions for genuine business/policy choices that research can't resolve (e.g., "which century-cutoff convention do we want"), not for facts that are discoverable.
 - When the user asks to scope to a specific subdirectory or module, scope precisely. Don't run on the broader repo.
 - When working with LLM APIs, start with small test inputs before processing large datasets.
 - Review subagent output for workaround guards (`is not None` checks that mask bugs).
