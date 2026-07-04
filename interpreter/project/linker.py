@@ -458,9 +458,9 @@ def link_modules(
     project_root: Path,
     topo_order: list[Path],
     language: Language,
-    type_env_builder: TypeEnvironmentBuilder | None = None,
+    type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
     symbol_table: SymbolTable | None = None,
-    data_layout: dict[str, dict] | None = None,
+    data_layout: dict[str, dict] = {},
 ) -> LinkedProgram:
     """Link compiled modules into a single program.
 
@@ -473,12 +473,8 @@ def link_modules(
         [dep2 function bodies]
         [entry function bodies]
     """
-    if type_env_builder is None:
-        type_env_builder = TypeEnvironmentBuilder()
     if symbol_table is None:
         symbol_table = SymbolTable.empty()
-    if data_layout is None:
-        data_layout = {}
 
     prefixes = {path: module_prefix(path, project_root) for path in modules}
     resolved = _collect_resolved_imports(modules, import_graph)
