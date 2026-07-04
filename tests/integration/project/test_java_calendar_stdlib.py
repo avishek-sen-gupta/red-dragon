@@ -13,7 +13,7 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
-from interpreter.run import execute_cfg, ExecutionStrategies
+from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
@@ -66,6 +66,7 @@ class TestJavaCalendarStdlib:
             linked.merged_registry,
             config,
             strategies,
+            vm=initial_vm_state(),
         )
 
         # Collect all symbolic values from local vars across all frames
@@ -93,6 +94,7 @@ class TestJavaCalendarStdlib:
             linked.merged_registry,
             config,
             strategies,
+            vm=initial_vm_state(),
         )
 
         frame = vm.call_stack[0]

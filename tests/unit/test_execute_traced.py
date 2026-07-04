@@ -5,7 +5,7 @@ from interpreter.register import Register
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.cfg import build_cfg
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg_traced
+from interpreter.run import execute_cfg_traced, initial_vm_state
 from interpreter.trace_types import TraceStep, ExecutionTrace
 from interpreter.types.typed_value import unwrap
 from interpreter.func_name import FuncName
@@ -25,7 +25,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         # LABEL is skipped, so 3 executed instructions: CONST, STORE_VAR, RETURN
         assert len(trace.steps) == 3
@@ -38,7 +43,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert isinstance(trace, ExecutionTrace)
         assert all(isinstance(s, TraceStep) for s in trace.steps)
@@ -54,7 +64,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         # Mutating one snapshot must not affect others
         trace.steps[0].vm_state.call_stack[0].local_vars[VarName("INJECTED")] = "bad"
@@ -70,7 +85,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         # All instructions are in the "entry" block
         assert all(s.block_label == "entry" for s in trace.steps)
@@ -87,7 +107,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert trace.initial_state is not None
         assert trace.initial_state.heap_count() == 0
@@ -108,7 +133,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         expected_indices = list(range(len(trace.steps)))
         actual_indices = [s.step_index for s in trace.steps]
@@ -123,7 +153,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert trace.stats.steps > 0
         assert trace.stats.llm_calls == 0
@@ -138,7 +173,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         last_step_vars = trace.steps[-1].vm_state.call_stack[0].local_vars
         assert unwrap(last_step_vars[VarName("x")]) == 42
@@ -151,7 +191,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         assert all(not s.used_llm for s in trace.steps)
 
@@ -179,7 +224,12 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         # First two steps in entry, remaining in then_block, none in else_block
         assert trace.steps[0].block_label == "entry"
@@ -230,7 +280,12 @@ class TestExecuteCfgTracedHalt:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(cfg, "entry", registry)
+        vm, trace = execute_cfg_traced(
+            cfg,
+            "entry",
+            registry,
+            vm=initial_vm_state(),
+        )
 
         # CONST, STORE_VAR, HALT executed; the two instructions after HALT never run.
         assert len(trace.steps) == 3

@@ -16,7 +16,12 @@ from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
-from interpreter.run import execute_cfg, ExecutionStrategies, run_linked
+from interpreter.run import (
+    execute_cfg,
+    ExecutionStrategies,
+    run_linked,
+    initial_vm_state,
+)
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
@@ -74,6 +79,7 @@ def _run_project_vm(tmp_path, files, entry, language):
                     lambda ref, _target=entry_ref: ref.label == _target.label
                 ),
                 max_steps=200,
+                initial_vm=initial_vm_state(),
             )
 
     strategies = ExecutionStrategies(
@@ -86,6 +92,7 @@ def _run_project_vm(tmp_path, files, entry, language):
         linked.merged_registry,
         VMConfig(max_steps=200),
         strategies,
+        vm=initial_vm_state(),
     )
     return vm
 
@@ -569,6 +576,7 @@ class TestCobolMultiFile:
                 and "init_params" not in str(ref.label)
             ),
             max_steps=500,
+            initial_vm=initial_vm_state(),
         )
 
         # Locate MAIN's WS via its program singleton (region ordering is unstable

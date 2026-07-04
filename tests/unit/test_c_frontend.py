@@ -12,7 +12,7 @@ from interpreter.instructions import BranchIf, InstructionBase, CallFunction, Bi
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg, build_execution_strategies
+from interpreter.run import execute_cfg, build_execution_strategies, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
@@ -1119,7 +1119,12 @@ class TestCFrontendTernaryOperator:
 
         # Phase 1: preamble
         vm, _ = execute_cfg(
-            cfg, cfg.entry, registry, VMConfig(max_steps=200), strategies
+            cfg,
+            cfg.entry,
+            registry,
+            VMConfig(max_steps=200),
+            strategies,
+            vm=initial_vm_state(),
         )
 
         main_label = next(

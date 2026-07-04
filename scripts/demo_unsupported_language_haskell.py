@@ -31,7 +31,7 @@ from interpreter.cfg import build_cfg
 from interpreter.llm.llm_client import get_llm_client
 from interpreter.llm.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg
+from interpreter.run import execute_cfg, initial_vm_state
 from interpreter.run_types import UnresolvedCallStrategy, VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
@@ -160,7 +160,7 @@ def main():
     )
 
     t0 = time.perf_counter()
-    vm, stats = execute_cfg(cfg, cfg.entry, registry, config)
+    vm, stats = execute_cfg(cfg, cfg.entry, registry, config, vm=initial_vm_state())
     t_exec = time.perf_counter() - t0
 
     resolver_note = (

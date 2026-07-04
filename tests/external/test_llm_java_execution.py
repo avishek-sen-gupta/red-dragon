@@ -12,7 +12,7 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
-from interpreter.run import execute_cfg, ExecutionStrategies
+from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
 from interpreter.run_types import VMConfig, UnresolvedCallStrategy
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
@@ -64,6 +64,7 @@ class TestLLMJavaExecution:
             linked.merged_registry,
             config,
             strategies,
+            vm=initial_vm_state(),
         )
 
         locals_ = _get_locals(vm)
@@ -103,6 +104,7 @@ class TestLLMJavaExecution:
             linked.merged_registry,
             config,
             strategies,
+            vm=initial_vm_state(),
         )
 
         # At least 2 LLM calls: Math.sqrt and String.valueOf

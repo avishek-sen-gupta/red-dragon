@@ -19,7 +19,11 @@ from interpreter.instructions import InstructionBase
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.types import InterproceduralResult
 from interpreter.registry import FunctionRegistry, build_registry
-from interpreter.run import build_execution_strategies, execute_cfg_traced
+from interpreter.run import (
+    build_execution_strategies,
+    execute_cfg_traced,
+    initial_vm_state,
+)
 from interpreter.run_types import VMConfig
 from interpreter.trace_types import ExecutionTrace
 from interpreter.vm.vm_types import VMState
@@ -56,7 +60,9 @@ def load_session(source: str, language: str, max_steps: int = 300) -> Session:
     )
     strategies = build_execution_strategies(frontend, ir, registry, lang)
     config = VMConfig(max_steps=max_steps, source_language=lang)
-    vm, trace = execute_cfg_traced(cfg, "", registry, config, strategies)
+    vm, trace = execute_cfg_traced(
+        cfg, "", registry, config, strategies, vm=initial_vm_state()
+    )
     interprocedural = analyze_interprocedural(cfg, registry)
 
     return Session(

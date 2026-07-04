@@ -497,18 +497,34 @@ def _run_loop(
     return _LoopResult(suspended=False, steps=step + 1, llm_calls=llm_calls)
 
 
+def initial_vm_state(io_provider: Any = None) -> VMState:
+    """Build a fresh VMState seeded with the ``<main>`` call frame.
+
+    ``execute_cfg``/``run_resumable``/``execute_cfg_traced``/``run_linked``/
+    ``run_linked_resumable`` all require a caller-supplied ``vm``/``initial_vm``
+    now (no ``None``-defaulted fallback). This is the equivalent of what those
+    functions used to build internally when the argument was omitted — callers
+    that don't need to continue an existing VM should call this to get one.
+    """
+    vm = VMState()
+    vm.call_stack.append(StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME)))
+    vm.io_provider = io_provider
+    return vm
+
+
 def execute_cfg(
     cfg: CFG,
     entry_point: str | CodeLabel,
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
     strategies: ExecutionStrategies = ExecutionStrategies(),
-    vm: VMState | None = None,
+    *,
+    vm: VMState,
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
-    Initializes a VM, runs the step loop (local execution + LLM fallback),
-    and returns the final VM state plus execution metrics.
+    Runs the step loop (local execution + LLM fallback) against ``vm``, and
+    returns the final VM state plus execution metrics.
 
     Args:
         cfg: Pre-built control flow graph.
@@ -516,20 +532,14 @@ def execute_cfg(
         registry: Pre-built function/class registry.
         config: Execution configuration (backend, max_steps, verbose).
         strategies: Language-specific execution strategies (type env, coercion, etc.).
-        vm: Pre-built VM state to continue from. If None, a fresh VM is created.
+        vm: VM state to execute against (continues from it in place). Use
+            ``initial_vm_state()`` to get a fresh one.
 
     Returns:
         Tuple of (final VMState, ExecutionStats).
     """
     entry = _find_entry_point(cfg, entry_point)
     logger.debug("execute_cfg: entry=%s max_steps=%d", entry, config.max_steps)
-
-    if vm is None:
-        vm = VMState()
-        vm.call_stack.append(
-            StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))
-        )
-        vm.io_provider = config.io_provider
 
     call_resolver = _create_resolver(config)
     base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies)
@@ -636,17 +646,12 @@ def run_resumable(
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
     strategies: ExecutionStrategies = ExecutionStrategies(),
-    vm: VMState | None = None,
+    *,
+    vm: VMState,
 ) -> RunOutcome:
     """Execute a CFG, returning ``Suspended`` if it hits a ``Suspend`` (instead of
     raising as ``execute_cfg`` does), or ``Completed`` when it terminates."""
     entry = _find_entry_point(cfg, entry_point)
-    if vm is None:
-        vm = VMState()
-        vm.call_stack.append(
-            StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))
-        )
-        vm.io_provider = config.io_provider
     call_resolver = _create_resolver(config)
     base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies)
     loop = _run_loop(
@@ -703,7 +708,8 @@ def execute_cfg_traced(
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
     strategies: ExecutionStrategies = ExecutionStrategies(),
-    vm: VMState | None = None,
+    *,
+    vm: VMState,
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -716,19 +722,13 @@ def execute_cfg_traced(
         registry: Pre-built function/class registry.
         config: Execution configuration (backend, max_steps, verbose).
         strategies: Language-specific execution strategies (type env, coercion, etc.).
-        vm: Optional pre-built VMState to reuse; a fresh one is created if None.
+        vm: VMState to execute against. Use ``initial_vm_state()`` for a fresh one.
 
     Returns:
         Tuple of (final VMState, ExecutionTrace with per-step snapshots).
     """
     entry = _find_entry_point(cfg, entry_point)
 
-    if vm is None:
-        vm = VMState()
-        vm.call_stack.append(
-            StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))
-        )
-        vm.io_provider = config.io_provider
     initial_state = copy.deepcopy(vm)
 
     llm = None  # lazy — only created if local executor can't handle an instruction
@@ -960,7 +960,8 @@ def run_linked(
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
-    initial_vm: VMState | None = None,
+    *,
+    initial_vm: VMState,
 ) -> VMState:
     """Execute a LinkedProgram with the given entry point.
 
@@ -972,6 +973,8 @@ def run_linked(
         backend: LLM backend for interpreter fallback.
         unresolved_call_strategy: Resolution strategy for unknown calls.
         io_provider: Optional COBOL I/O provider (e.g. StubIOProvider for testing).
+        initial_vm: VM state to execute against. Use ``initial_vm_state()`` for a
+            fresh one.
     """
     strategies = _build_strategies_from_linked(linked)
 
@@ -987,8 +990,7 @@ def run_linked(
     # Make the data layout visible to builtins that run *during* execution
     # (e.g. CICS EIB-init and SEND/RECEIVE MAP read named fields via
     # vm.data_layout). Without this it would only be populated after the run.
-    if initial_vm is not None:
-        initial_vm.data_layout = linked.data_layout
+    initial_vm.data_layout = linked.data_layout
 
     if entry_point.is_top_level:
         vm, exec_stats = execute_cfg(
@@ -1045,7 +1047,8 @@ def run_linked_resumable(
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,
-    initial_vm: VMState | None = None,
+    *,
+    initial_vm: VMState,
 ) -> RunOutcome:
     """Like ``run_linked`` but suspendable: returns ``Suspended`` if execution
     reaches a ``SUSPEND`` instruction, else ``Completed``.
@@ -1063,8 +1066,7 @@ def run_linked_resumable(
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
     )
-    if initial_vm is not None:
-        initial_vm.data_layout = linked.data_layout
+    initial_vm.data_layout = linked.data_layout
 
     if entry_point.is_top_level:
         outcome = run_resumable(
@@ -1178,6 +1180,7 @@ def run_linked_traced(
             linked.merged_registry,
             vm_config,
             strategies,
+            vm=initial_vm_state(),
         )
     else:
         # Phase 1: preamble
@@ -1188,6 +1191,7 @@ def run_linked_traced(
             linked.merged_registry,
             vm_config,
             strategies,
+            vm=initial_vm_state(),
         )
 
         # Resolve entry point function via predicate
@@ -1393,6 +1397,7 @@ def run(
         backend=backend,
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
+        initial_vm=initial_vm_state(io_provider=io_provider),
     )
     stats.execution_time = time.perf_counter() - exec_start
     stats.total_time = time.perf_counter() - pipeline_start

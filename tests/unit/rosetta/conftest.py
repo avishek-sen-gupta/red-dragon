@@ -21,6 +21,7 @@ from interpreter.run import (
     execute_cfg,
     ExecutionStrategies,
     _function_scoping_for_language,
+    initial_vm_state,
 )
 from interpreter.run_types import ExecutionStats, VMConfig
 from interpreter.vm.vm_types import VMState
@@ -194,6 +195,7 @@ def execute_for_language(
             class_symbol_table=class_symbol_table,
             function_scoping=_function_scoping_for_language(Language(language)),
         ),
+        vm=initial_vm_state(),
     )
     logger.info(
         "Execution complete for %s: %d steps, %d LLM calls",

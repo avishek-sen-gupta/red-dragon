@@ -10,7 +10,7 @@ from interpreter.constants import Language
 from interpreter.field_name import FieldName
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
-from interpreter.run import run_linked
+from interpreter.run import run_linked, initial_vm_state
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
@@ -56,6 +56,7 @@ def test_copy_inlined_field_executes(tmp_path):
             and "init_params" not in str(ref.label)
         ),
         max_steps=500,
+        initial_vm=initial_vm_state(),
     )
 
     ptr = None
@@ -98,6 +99,7 @@ def test_copy_of_library_inlined(tmp_path):
             and "init_params" not in str(ref.label)
         ),
         max_steps=500,
+        initial_vm=initial_vm_state(),
     )
 
     ptr = None
@@ -167,6 +169,7 @@ def test_multiple_copybooks_inlined(tmp_path):
             and "init_params" not in str(ref.label)
         ),
         max_steps=500,
+        initial_vm=initial_vm_state(),
     )
     ptr = None
     for frame in reversed(vm.call_stack):
@@ -246,6 +249,7 @@ def test_copy_shared_record_across_call(tmp_path):
             and "init_params" not in str(ref.label)
         ),
         max_steps=500,
+        initial_vm=initial_vm_state(),
     )
 
     ptr = None

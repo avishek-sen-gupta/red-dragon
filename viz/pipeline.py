@@ -16,6 +16,7 @@ from interpreter.registry import build_registry
 from interpreter.run import (
     build_execution_strategies,
     execute_cfg_traced,
+    initial_vm_state,
 )
 from interpreter.run_types import VMConfig
 from interpreter.trace_types import ExecutionTrace
@@ -98,7 +99,9 @@ def run_pipeline(
     )
     strategies = build_execution_strategies(frontend, ir, registry, lang)
     config = VMConfig(max_steps=max_steps, source_language=lang)
-    _vm, trace = execute_cfg_traced(cfg, "", registry, config, strategies)
+    _vm, trace = execute_cfg_traced(
+        cfg, "", registry, config, strategies, vm=initial_vm_state()
+    )
 
     try:
         interprocedural = analyze_interprocedural(cfg, registry)
