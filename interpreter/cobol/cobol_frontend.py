@@ -176,7 +176,7 @@ class CobolFrontend(Frontend):
         self,
         source: bytes,
         namespace_resolver: NamespaceResolver = Frontend._NULL_RESOLVER,
-        resolved_imports: dict[str, PathName] | None = None,
+        resolved_imports: dict[str, PathName] = {},
     ) -> list[InstructionBase]:
         """Lower COBOL source to IR via the ProLeap bridge."""
 
