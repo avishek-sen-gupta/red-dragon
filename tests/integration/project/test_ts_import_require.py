@@ -16,7 +16,7 @@ from interpreter.constants import Language
 from interpreter.ir import Opcode
 from interpreter.project.compiler import compile_directory
 from interpreter.project.types import LinkedProgram
-from interpreter.run import execute_cfg, ExecutionStrategies
+from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
@@ -88,6 +88,7 @@ def _execute_linked(linked: LinkedProgram, max_steps: int = 500):
         linked.merged_registry,
         config,
         strategies,
+        vm=initial_vm_state(),
     )
 
 

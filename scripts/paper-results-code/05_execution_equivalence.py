@@ -26,7 +26,7 @@ sys.path.insert(0, "tests/unit/rosetta")
 
 from interpreter.cfg import build_cfg
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg, VMConfig
+from interpreter.run import execute_cfg, VMConfig, initial_vm_state
 from interpreter.frontends import (
     get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
@@ -67,7 +67,7 @@ def run_algo(lang, source, max_steps=2000):
     cfg = build_cfg(ir)
     reg = build_registry(ir, cfg)
     config = VMConfig(max_steps=max_steps)
-    vm, stats = execute_cfg(cfg, "entry", reg, config)
+    vm, stats = execute_cfg(cfg, "entry", reg, config, vm=initial_vm_state())
     # Extract 'answer' variable from frame 0
     var = "$answer" if lang == "php" else "answer"
     frame = vm.call_stack[0]

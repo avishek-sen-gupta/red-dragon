@@ -13,7 +13,7 @@ from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.instructions import InstructionBase, AllocRegion, Const
 from interpreter.ir import Opcode
 from interpreter.registry import build_registry
-from interpreter.run import VMConfig, execute_cfg
+from interpreter.run import VMConfig, execute_cfg, initial_vm_state
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame
 from interpreter.func_name import FuncName
@@ -80,7 +80,13 @@ def _execute_cobol_program(
     Returns the (VMState, ExecutionStats) from the procedure phase.
     """
     # Phase 1: init block — allocates WS and stores singleton
-    init_vm, _ = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=100))
+    init_vm, _ = execute_cfg(
+        cfg,
+        "entry",
+        registry,
+        VMConfig(max_steps=100),
+        vm=initial_vm_state(),
+    )
     # Phase 2: procedure — loads WS from singleton and runs procedure body
     proc_label = f"func_{program_id.lower()}_0"
     return execute_cfg(

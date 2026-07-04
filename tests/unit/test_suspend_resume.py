@@ -17,7 +17,13 @@ import pickle
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.register import Register
-from interpreter.run import Completed, Suspended, resume, run_resumable
+from interpreter.run import (
+    Completed,
+    Suspended,
+    resume,
+    run_resumable,
+    initial_vm_state,
+)
 from interpreter.types.typed_value import unwrap
 from interpreter.var_name import VarName
 from tests.unit.cfg_helpers import build_simple_cfg, make_instructions
@@ -47,7 +53,12 @@ def _save_yield_add_program():
 def test_basic_suspend_then_resume():
     cfg, registry = build_simple_cfg(_save_yield_add_program())
 
-    out = run_resumable(cfg, "entry", registry)
+    out = run_resumable(
+        cfg,
+        "entry",
+        registry,
+        vm=initial_vm_state(),
+    )
     assert isinstance(out, Suspended)
     assert out.value == 42  # the yielded payload
 
@@ -59,7 +70,12 @@ def test_basic_suspend_then_resume():
 def test_resume_from_scratch_rebuilds_entire_pipeline():
     # Run to the suspend on one pipeline...
     cfg1, registry1 = build_simple_cfg(_save_yield_add_program())
-    out = run_resumable(cfg1, "entry", registry1)
+    out = run_resumable(
+        cfg1,
+        "entry",
+        registry1,
+        vm=initial_vm_state(),
+    )
     assert isinstance(out, Suspended)
 
     # ...serialize the continuation, then discard EVERYTHING (cfg1/registry1) and
@@ -89,7 +105,12 @@ def test_multiple_suspends_in_one_execution():
         )
     )
 
-    a = run_resumable(cfg, "entry", registry)
+    a = run_resumable(
+        cfg,
+        "entry",
+        registry,
+        vm=initial_vm_state(),
+    )
     assert isinstance(a, Suspended) and a.value == 1
 
     b = resume(cfg, registry, a.state, 10)  # inject 10 -> %1; second SUSPEND yields it
@@ -102,7 +123,12 @@ def test_multiple_suspends_in_one_execution():
 
 def test_multi_shot_fork_resume_twice_independently():
     cfg, registry = build_simple_cfg(_save_yield_add_program())
-    out = run_resumable(cfg, "entry", registry)
+    out = run_resumable(
+        cfg,
+        "entry",
+        registry,
+        vm=initial_vm_state(),
+    )
     assert isinstance(out, Suspended)
 
     # Fork the continuation: two independent deep copies resumed with different

@@ -9,7 +9,7 @@ from interpreter.project.cobol_compile import (
     parallel_parse_to_cache,
 )
 from interpreter.project.types import LinkedProgram, ModuleUnit
-from interpreter.run import EntryPoint, run_linked
+from interpreter.run import EntryPoint, run_linked, initial_vm_state
 from tests.covers import covers, NotLanguageFeature
 
 _SRC = b"""       IDENTIFICATION DIVISION.
@@ -61,7 +61,12 @@ def test_compile_cobol_single_module_runs():
     _, linked = compile_cobol(_SRC, parser=make_cobol_parser())
     assert isinstance(linked, LinkedProgram)
     assert linked.merged_cfg is not None
-    vm = run_linked(linked, entry_point=EntryPoint.top_level(), max_steps=10_000)
+    vm = run_linked(
+        linked,
+        entry_point=EntryPoint.top_level(),
+        max_steps=10_000,
+        initial_vm=initial_vm_state(),
+    )
     assert vm is not None
 
 
@@ -94,7 +99,12 @@ def test_compile_cobol_links_extra_subprogram():
         "callee IR must be present in merged_ir (linked in); "
         f"labels seen: {[str(getattr(i, 'label', '')) for i in linked.merged_ir if hasattr(i, 'label')]}"
     )
-    vm = run_linked(linked, entry_point=EntryPoint.top_level(), max_steps=10_000)
+    vm = run_linked(
+        linked,
+        entry_point=EntryPoint.top_level(),
+        max_steps=10_000,
+        initial_vm=initial_vm_state(),
+    )
     assert vm is not None
 
 
@@ -212,7 +222,12 @@ def test_compile_cobol_ast_cache_dir_produces_runnable_program(tmp_path):
     _, linked = compile_cobol(
         _HELLO, parser=make_cobol_parser(), ast_cache_dir=tmp_path / "cache"
     )
-    vm = run_linked(linked, entry_point=EntryPoint.top_level(), max_steps=10_000)
+    vm = run_linked(
+        linked,
+        entry_point=EntryPoint.top_level(),
+        max_steps=10_000,
+        initial_vm=initial_vm_state(),
+    )
     assert vm is not None
 
 

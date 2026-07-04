@@ -23,7 +23,7 @@ from interpreter.project.compiler import compile_module
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.linker import link_modules
 from interpreter.project.types import ExportTable, ModuleUnit
-from interpreter.run import run_linked
+from interpreter.run import run_linked, initial_vm_state
 from interpreter.types.typed_value import unwrap, unwrap_locals
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import VMState
@@ -67,6 +67,7 @@ def _run_with_stdlib(
         linked,
         entry_point=EntryPoint.top_level(),
         max_steps=max_steps,
+        initial_vm=initial_vm_state(),
     )
 
 
@@ -90,6 +91,7 @@ def _run_class_with_stdlib(
         linked,
         entry_point=EntryPoint.function(lambda ref: ref.name == FuncName("main")),
         max_steps=max_steps,
+        initial_vm=initial_vm_state(),
     )
 
 

@@ -28,7 +28,11 @@ from interpreter.frontend import get_frontend
 from interpreter.ir_stats import count_opcodes
 from interpreter.parser import Parser, TreeSitterParserFactory
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg_traced, build_execution_strategies
+from interpreter.run import (
+    execute_cfg_traced,
+    build_execution_strategies,
+    initial_vm_state,
+)
 from interpreter.run_types import VMConfig
 from interpreter.trace_types import ExecutionTrace
 from interpreter.types.type_environment import TypeEnvironment
@@ -284,6 +288,7 @@ def execute_traced(
         registry,
         config,
         strategies,
+        vm=initial_vm_state(),
     )
     return trace
 
@@ -392,8 +397,11 @@ def run_project(
         The final VMState after execution.
     """
     from interpreter.project.compiler import compile_directory
-    from interpreter.run import execute_cfg, build_execution_strategies
-    from interpreter.vm.vm import VMState
+    from interpreter.run import (
+        execute_cfg,
+        build_execution_strategies,
+        initial_vm_state,
+    )
 
     lang = Language(language)
     entry_path = Path(entry_file)
@@ -416,5 +424,6 @@ def run_project(
         linked.merged_registry,
         config,
         strategies,
+        vm=initial_vm_state(),
     )
     return vm
