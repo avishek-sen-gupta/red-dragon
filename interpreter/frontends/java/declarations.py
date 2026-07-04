@@ -6,7 +6,7 @@ from interpreter.type_name import TypeName
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.context import TreeSitterEmitContext, NO_NODE
 
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
@@ -351,7 +351,7 @@ def lower_record_decl(
             for child in deferred
             if child.type == JavaNodeType.COMPACT_CONSTRUCTOR_DECLARATION
         ),
-        None,
+        NO_NODE,
     )
 
     for child in deferred:
@@ -393,7 +393,7 @@ def _emit_record_init(
     ctx: TreeSitterEmitContext,
     param_names: list[str],
     field_inits: list[FieldInit] = [],
-    compact_body=None,
+    compact_body: Any = NO_NODE,
 ) -> None:
     """Emit __init__ for a Java record: params → fields, with optional compact constructor body."""
     func_name = "__init__"
@@ -413,7 +413,7 @@ def _emit_record_init(
         ctx.emit_inst(DeclVar(name=VarName(name), value_reg=param_reg))
 
     # Compact constructor body runs before field assignments (validation etc.)
-    if compact_body:
+    if compact_body is not NO_NODE and compact_body is not None:
         ctx.lower_block(compact_body)
 
     # Prepend field initializers
