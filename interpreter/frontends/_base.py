@@ -77,6 +77,10 @@ from interpreter.frontends.type_alias_prepass import (
     collect_type_aliases,
 )
 
+NO_NODE = (
+    object()
+)  # sentinel: no source-tree node available (diagnostics/source-location only)
+
 logger = logging.getLogger(__name__)
 
 
