@@ -1286,13 +1286,16 @@ def run(
         def on_lower(self, duration: float) -> None:
             self._target.lower_time = duration
 
+    # Normalize copybook_dirs: None → [] (non-COBOL languages ignore it)
+    _copybook_dirs = copybook_dirs if copybook_dirs is not None else []
+
     observer: FrontendObserver = _StatsObserver(stats)
     if lang == Language.COBOL:
         # COBOL: compile via the shared compile_cobol API (behavior-preserving).
         frontend, linked = compile_cobol(
             source.encode("utf-8"),
-            parser=make_cobol_parser(copybook_dirs=copybook_dirs),
-            copybook_dirs=copybook_dirs,
+            parser=make_cobol_parser(copybook_dirs=_copybook_dirs),
+            copybook_dirs=_copybook_dirs,
             observer=observer,
         )
         stats.ir_instruction_count = len(linked.merged_ir)
@@ -1307,7 +1310,7 @@ def run(
             llm_provider=backend,
             llm_client=llm_client,
             observer=observer,
-            copybook_dirs=copybook_dirs,
+            copybook_dirs=_copybook_dirs,
         )
         instructions = frontend.lower(source.encode("utf-8"))
 
