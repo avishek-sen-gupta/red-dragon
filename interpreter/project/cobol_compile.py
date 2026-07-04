@@ -73,7 +73,7 @@ def compile_cobol_module(
     source: bytes,
     *,
     parser: Any,
-    copybook_dirs: list[Path] | None = None,
+    copybook_dirs: list[Path] = [],
     extension_strategies: Sequence[Any] = (),
     cics_text_parser: Any = None,
     observer: FrontendObserver = NullFrontendObserver(),
@@ -110,12 +110,12 @@ def compile_cobol(
     source: bytes,
     *,
     parser: Any,
-    copybook_dirs: list[Path] | None = None,
+    copybook_dirs: list[Path] = [],
     extension_strategies: Sequence[Any] = (),
     cics_text_parser: Any = None,
     observer: FrontendObserver = NullFrontendObserver(),
-    program_source_dir: Path | None = None,
-    extra_subprogram_sources: dict[str, bytes] | None = None,
+    program_source_dir: Path = Path("."),
+    extra_subprogram_sources: dict[str, bytes] = {},
     source_transform: Callable[[str], str] = lambda s: s,
     ast_cache_dir: Path | None = None,
 ) -> tuple[Any, LinkedProgram]:
@@ -141,13 +141,18 @@ def compile_cobol(
         # scope limitation: callers using program_source_dir + ast_cache_dir together
         # will get a LinkedProgram without disk-resolved callees.
         main_path = Path("__main__.cbl")
-        base = program_source_dir or Path(".")
+        base = program_source_dir
 
-        sub_sources: dict[str, bytes] = dict(extra_subprogram_sources or {})
+        sub_sources: dict[str, bytes] = dict(extra_subprogram_sources)
 
         # Resolve on-disk callees via program_source_dir and source_transform.
+        # program_source_dir's default (Path(".")) is the "no real directory given"
+        # sentinel: disk resolution only runs when a caller opts in with a
+        # different directory — comparing against the default (rather than the
+        # old `is not None` check) preserves that opt-in behavior now that the
+        # parameter itself is no longer Optional.
         disk_sources: dict[Path, bytes] = {}
-        if program_source_dir is not None:
+        if program_source_dir != Path("."):
             disk_sources = _resolve_call_sources(
                 source, main_path, program_source_dir.resolve(), source_transform
             )
