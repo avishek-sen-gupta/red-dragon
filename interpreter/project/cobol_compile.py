@@ -6,7 +6,7 @@ compile_cobol(): bytes → (CobolFrontend, LinkedProgram)
 
 This is the canonical entry point for compiling COBOL source.
 It knows about COBOL-specific injection points (parser, extension_strategies,
-cics_text_parser) abstractly — no CICS/SQL specifics live here.
+dialect_parsers) abstractly — no CICS/SQL specifics live here.
 All frontend construction is routed through get_frontend (the factory).
 """
 
@@ -75,7 +75,7 @@ def compile_cobol_module(
     parser: Any,
     copybook_dirs: list[Path] = [],
     extension_strategies: Sequence[Any] = (),
-    cics_text_parser: Any = None,
+    dialect_parsers: Sequence[Any] = (),
     observer: FrontendObserver = NullFrontendObserver(),
     path: Path = Path("__main__.cbl"),
     ast_path: Path,
@@ -88,7 +88,7 @@ def compile_cobol_module(
         copybook_dirs=copybook_dirs,
         cobol_parser=parser,
         extension_strategies=extension_strategies,
-        cics_text_parser=cics_text_parser,
+        dialect_parsers=dialect_parsers,
     )
     ir = frontend.lower_from_ast_dict(json.loads(ast_path.read_text("utf-8")))
     exports = build_export_table(
@@ -112,7 +112,7 @@ def compile_cobol(
     parser: Any,
     copybook_dirs: list[Path] = [],
     extension_strategies: Sequence[Any] = (),
-    cics_text_parser: Any = None,
+    dialect_parsers: Sequence[Any] = (),
     observer: FrontendObserver = NullFrontendObserver(),
     program_source_dir: Path = Path("."),
     extra_subprogram_sources: dict[str, bytes] = {},
@@ -173,7 +173,7 @@ def compile_cobol(
             parser=parser,
             copybook_dirs=copybook_dirs,
             extension_strategies=extension_strategies,
-            cics_text_parser=cics_text_parser,
+            dialect_parsers=dialect_parsers,
             observer=observer,
             path=main_path,
             ast_path=_ast_path(main_path),
@@ -188,7 +188,7 @@ def compile_cobol(
                     parser=parser,
                     copybook_dirs=copybook_dirs,
                     extension_strategies=extension_strategies,
-                    cics_text_parser=cics_text_parser,
+                    dialect_parsers=dialect_parsers,
                     observer=observer,
                     path=sub_path,
                     ast_path=_ast_path(sub_path),
@@ -211,7 +211,7 @@ def compile_cobol(
                     parser=parser,
                     copybook_dirs=copybook_dirs,
                     extension_strategies=extension_strategies,
-                    cics_text_parser=cics_text_parser,
+                    dialect_parsers=dialect_parsers,
                     observer=observer,
                     path=disk_path,
                     ast_path=_ast_path(disk_path),

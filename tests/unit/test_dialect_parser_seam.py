@@ -1,30 +1,68 @@
-"""RedDragon EXEC SQL extension seam — node, protocol, dispatch, frontend wiring."""
+# pyright: standard
+"""RedDragon extension seam — node, protocol, dispatch, frontend wiring.
 
-from interpreter.cobol.cobol_statements import ExecSqlStatement, parse_statement
+Proves the GENERIC extension_strategies + dialect_parsers machinery using
+RedDragon's own fake dialect (tests/unit/cobol/dialect_parser_fixtures.py) —
+never Cicada's or Squall's real types. Renamed from test_exec_sql_seam.py
+(which used to import Squall's ExecSqlStatement directly; that type has
+relocated to Squall and RedDragon must not depend on it)."""
+
+from interpreter.cobol.cobol_statements import parse_statement, _dialect_parsers
+from tests.unit.cobol.dialect_parser_fixtures import (
+    FakeDialectParser,
+    FakeExtensionStatement,
+)
 
 
-class TestExecSqlStatementNode:
-    def test_from_dict_carries_text_verbatim(self):
-        data = {
-            "type": "EXEC_SQL",
-            "exec_sql_text": "EXEC SQL SELECT ACCT_BAL INTO :WS-BAL FROM ACCOUNT END-EXEC",
-        }
-        stmt = ExecSqlStatement.from_dict(data)
-        # Opaque node: the bridge's text is carried verbatim (envelope included).
-        # Envelope removal + SQL parsing happen later in squall's grammar, not here.
-        assert stmt.text == data["exec_sql_text"]
+class TestDialectParserFallbackDispatch:
+    def test_parse_statement_dispatches_to_applying_parser(self):
+        token = _dialect_parsers.set([FakeDialectParser()])
+        try:
+            stmt = parse_statement({"type": "FAKE_EXTENSION", "fake_text": "hello"})
+        finally:
+            _dialect_parsers.reset(token)
+        assert isinstance(stmt, FakeExtensionStatement)
+        assert stmt.text == "hello"
 
-    def test_from_dict_empty_text(self):
-        stmt = ExecSqlStatement.from_dict({"type": "EXEC_SQL"})
-        assert stmt.text == ""
+    def test_no_dialect_parser_applies_raises_value_error(self):
+        token = _dialect_parsers.set([FakeDialectParser()])
+        try:
+            with pytest.raises(ValueError, match="Unknown COBOL statement type"):
+                parse_statement({"type": "SOMETHING_ELSE"})
+        finally:
+            _dialect_parsers.reset(token)
 
-    def test_parse_statement_dispatches_exec_sql(self):
-        stmt = parse_statement(
-            {"type": "EXEC_SQL", "exec_sql_text": "EXEC SQL DELETE FROM T END-EXEC"}
-        )
-        assert isinstance(stmt, ExecSqlStatement)
-        assert stmt.text == "EXEC SQL DELETE FROM T END-EXEC"
+    def test_empty_dialect_parsers_raises_value_error(self):
+        with pytest.raises(ValueError, match="Unknown COBOL statement type"):
+            parse_statement({"type": "FAKE_EXTENSION", "fake_text": "x"})
 
+    def test_recognized_core_type_never_offered_to_dialect_parsers(self):
+        """A core type (MOVE) is dispatched by _DISPATCH_TABLE directly, never
+        second-guessed against a dialect parser that would also claim it."""
+
+        class _AlwaysApplies:
+            def applies(self, data: dict) -> bool:
+                return True
+
+            def parse(self, data: dict):
+                raise AssertionError(
+                    "should never be called for a recognized core type"
+                )
+
+        token = _dialect_parsers.set([_AlwaysApplies()])
+        try:
+            stmt = parse_statement(
+                {"type": "MOVE", "source": {"kind": "lit", "value": "1"}, "targets": []}
+            )
+        finally:
+            _dialect_parsers.reset(token)
+        assert stmt.__class__.__name__ == "MoveStatement"
+
+
+import pytest  # noqa: E402 — see note below
+
+# ── Extension-strategy lowering protocol tests (unchanged from the old file,
+#    moved here verbatim since this file already covers "the seam" broadly) ──
 
 from interpreter.cobol.red_dragon_extension_strategy import (
     RedDragonExtensionLoweringStrategy,
@@ -58,15 +96,13 @@ class TestExtensionStrategyProtocol:
         assert not isinstance(_MissingHandles(), RedDragonExtensionLoweringStrategy)
 
 
-# ── Task 3-5 tests ────────────────────────────────────────────────────────────
-
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.statement_dispatch import dispatch_statement
 
 
 class _SpyStrategy:
     def __init__(self, kind):
-        self._kind = kind  # the statement class this spy claims
+        self._kind = kind
         self.lowered = []
         self.entered = 0
         self.preprocessed = 0
@@ -91,20 +127,18 @@ class TestEmitContextExtensionArray:
         assert tuple(ctx.extension_strategies) == ()
 
     def test_injected_array_is_exposed(self):
-        spy = _SpyStrategy(ExecSqlStatement)
+        spy = _SpyStrategy(FakeExtensionStatement)
         ctx = EmitContext(dispatch_fn=dispatch_statement, extension_strategies=[spy])
         assert list(ctx.extension_strategies) == [spy]
 
 
 class TestArrayDispatch:
     def test_routes_to_strategy_that_handles(self):
-        sql_spy = _SpyStrategy(ExecSqlStatement)
-        ctx = EmitContext(
-            dispatch_fn=dispatch_statement, extension_strategies=[sql_spy]
-        )
-        stmt = ExecSqlStatement(text="SELECT 1 INTO :X FROM T")
+        spy = _SpyStrategy(FakeExtensionStatement)
+        ctx = EmitContext(dispatch_fn=dispatch_statement, extension_strategies=[spy])
+        stmt = FakeExtensionStatement(text="SELECT 1 INTO :X FROM T")
         dispatch_statement(ctx, stmt, materialised=None)
-        assert sql_spy.lowered == [stmt]
+        assert spy.lowered == [stmt]
 
     def test_first_handler_wins_and_others_skipped(self):
         class _AlwaysHandles:
@@ -126,7 +160,7 @@ class TestArrayDispatch:
         ctx = EmitContext(
             dispatch_fn=dispatch_statement, extension_strategies=[first, second]
         )
-        stmt = ExecSqlStatement(text="DELETE FROM T")
+        stmt = FakeExtensionStatement(text="DELETE FROM T")
         dispatch_statement(ctx, stmt, materialised=None)
         assert first.lowered == [stmt]
         assert second.lowered == []
@@ -135,7 +169,7 @@ class TestArrayDispatch:
         import logging
 
         ctx = EmitContext(dispatch_fn=dispatch_statement, extension_strategies=[])
-        stmt = ExecSqlStatement(text="SELECT 1")
+        stmt = FakeExtensionStatement(text="SELECT 1")
         with caplog.at_level(logging.WARNING):
             dispatch_statement(ctx, stmt, materialised=None)
         assert "Unhandled" in caplog.text
@@ -147,9 +181,6 @@ from interpreter.cobol.cobol_parser import CobolParser
 
 
 class _PreprocessRecordingParser(CobolParser):
-    """Fake parser: calls the injected preprocessor on a minimal program dict,
-    then returns an empty ASG so frontend.lower() completes."""
-
     def parse(self, source: bytes, preprocessor=None) -> CobolASG:
         if preprocessor is not None:
             preprocessor({"type": "PROGRAM", "program_id": "T"})
@@ -172,7 +203,6 @@ class TestFrontendExtensionArray:
                 return data
 
             def on_procedure_entry(self, ctx, materialised): ...
-
             def lower(self, ctx, stmt, materialised): ...
 
         a, b = _OrderSpy("a"), _OrderSpy("b")
