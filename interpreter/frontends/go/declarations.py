@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import logging
-from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
 
 from interpreter import constants
 from interpreter.frontends.common.declarations import emit_implicit_return
@@ -373,7 +373,7 @@ def lower_go_const_decl(
     Value-less specs replay the previous expression with the new iota value.
     """
     iota_counter = 0
-    prev_value_node = None
+    prev_value_node: Any = NO_NODE
     old_iota = getattr(ctx, "_go_iota_value", 0)
     for child in node.children:
         if child.type == GoNodeType.CONST_SPEC:
@@ -398,7 +398,7 @@ def _unwrap_expression_list(
 
 
 def _lower_const_spec(
-    ctx: TreeSitterEmitContext, node: Any, prev_value_node=None
+    ctx: TreeSitterEmitContext, node: Any, prev_value_node: Any = NO_NODE
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a single const_spec: lower value, DECL_VAR.
 
@@ -415,7 +415,7 @@ def _lower_const_spec(
             DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
             node=node,
         )
-    elif name_node and prev_value_node is not None:
+    elif name_node and prev_value_node is not NO_NODE:
         val_reg = ctx.lower_expr(prev_value_node)
         ctx.emit_inst(
             DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
