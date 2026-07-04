@@ -191,12 +191,12 @@ class BaseFrontend(Frontend):
         label: CodeLabel = NO_LABEL,
         branch_targets: list[CodeLabel] = [],
         source_location: SourceLocation = NO_SOURCE_LOCATION,
-        node=None,
+        node: Any = NO_NODE,
     ) -> InstructionBase:
         loc = (
             source_location
             if not source_location.is_unknown()
-            else (self._source_loc(node) if node else NO_SOURCE_LOCATION)
+            else (self._source_loc(node) if node is not NO_NODE else NO_SOURCE_LOCATION)
         )
         inst = IRInstruction(
             opcode=opcode,
@@ -211,12 +211,12 @@ class BaseFrontend(Frontend):
         self._instructions.append(inst)
         return inst
 
-    def _emit_inst(self, inst: Instruction, *, node: Any = None) -> Instruction:
+    def _emit_inst(self, inst: Instruction, *, node: Any = NO_NODE) -> Instruction:
         """Emit a typed instruction directly (legacy-mode counterpart of ctx.emit_inst)."""
         import dataclasses
 
         loc = inst.source_location
-        if loc.is_unknown() and node is not None:
+        if loc.is_unknown() and node is not NO_NODE:
             loc = self._source_loc(node)
             inst = dataclasses.replace(inst, source_location=loc)
 
@@ -261,7 +261,7 @@ class BaseFrontend(Frontend):
         class_label: str,
         parents: list[str],
         result_reg: str,
-        node: Any = None,
+        node: Any = NO_NODE,
     ) -> InstructionBase:
         """Legacy-mode equivalent of ctx.emit_class_ref().
 
@@ -281,7 +281,11 @@ class BaseFrontend(Frontend):
         )
 
     def _emit_func_ref(
-        self, func_name: str, func_label: CodeLabel, result_reg: str, node: Any = None
+        self,
+        func_name: str,
+        func_label: CodeLabel,
+        result_reg: str,
+        node: Any = NO_NODE,
     ) -> InstructionBase:
         """Legacy-mode equivalent of ctx.emit_func_ref().
 
