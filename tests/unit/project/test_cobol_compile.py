@@ -146,7 +146,7 @@ def test_source_transform_applied_to_on_disk_callees_only(tmp_path: Path):
     compile_cobol(
         caller_src,
         parser=make_cobol_parser(),
-        program_source_dir=tmp_path,
+        program_source_dirs=[tmp_path],
         extra_subprogram_sources={"EXTRA": extra_src},
         source_transform=recording_transform,
     )
