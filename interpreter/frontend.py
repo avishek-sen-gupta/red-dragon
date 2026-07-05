@@ -11,6 +11,10 @@ from interpreter.cobol.cobol_parser import (
     make_cobol_parser as make_cobol_parser,
 )  # noqa: F401 — re-exported for callers outside interpreter.cobol
 from interpreter.constants import Language
+from interpreter.frontend_extension import (
+    DialectParser,
+    RedDragonExtensionLoweringStrategy,
+)
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -80,9 +84,8 @@ def get_frontend(
     observer: FrontendObserver = NullFrontendObserver(),
     repair_client: Any = _NO_REPAIR_CLIENT,
     copybook_dirs: list[Path] = [],
-    cobol_parser: Any = None,
-    extension_strategies: Sequence[Any] = (),
-    dialect_parsers: Sequence[Any] = (),
+    extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
+    dialect_parsers: Sequence[DialectParser] = (),
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -96,8 +99,6 @@ def get_frontend(
             a deterministic frontend, wraps it in RepairingFrontendDecorator.
         copybook_dirs: COBOL copybook search directories, passed to the
             ProLeap parser for COPY resolution. Ignored by other languages.
-        cobol_parser: Pre-built CobolParser for DI/testing. When provided,
-            skips ProLeapCobolParser construction. COBOL only.
         extension_strategies: Extension lowering strategies (e.g. CICS/SQL).
             Passed to CobolFrontend. COBOL only.
         dialect_parsers: Dialect parsers (e.g. CICS/SQL). Passed to
@@ -113,20 +114,17 @@ def get_frontend(
         from interpreter.cobol.cobol_parser import ProLeapCobolParser
         from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 
-        if cobol_parser is None:
-            # Canonical JAR location is the build.sh output — always freshly built
-            # from source and gitignored, so it can never go stale. The old tracked
-            # root "proleap-bridge.jar" was a cached binary that build.sh did not
-            # regenerate; it has been removed. Override with PROLEAP_BRIDGE_JAR.
-            bridge_jar = os.environ.get(
-                "PROLEAP_BRIDGE_JAR",
-                "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
-            )
-            resolved_parser = ProLeapCobolParser(
-                RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
-            )
-        else:
-            resolved_parser = cobol_parser
+        # Canonical JAR location is the build.sh output — always freshly built
+        # from source and gitignored, so it can never go stale. The old tracked
+        # root "proleap-bridge.jar" was a cached binary that build.sh did not
+        # regenerate; it has been removed. Override with PROLEAP_BRIDGE_JAR.
+        bridge_jar = os.environ.get(
+            "PROLEAP_BRIDGE_JAR",
+            "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
+        )
+        resolved_parser = ProLeapCobolParser(
+            RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
+        )
         return CobolFrontend(
             resolved_parser,
             observer=observer,
