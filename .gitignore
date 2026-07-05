@@ -58,3 +58,4 @@ dolt-server.*
 
 # Stale cached bridge JAR — the canonical artifact is proleap-bridge/target/*-shaded.jar (build.sh)
 /proleap-bridge.jar
+.superpowers/

@@ -82,7 +82,7 @@ def get_frontend(
     copybook_dirs: list[Path] = [],
     cobol_parser: Any = None,
     extension_strategies: Sequence[Any] = (),
-    cics_text_parser: Any = None,
+    dialect_parsers: Sequence[Any] = (),
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -100,7 +100,8 @@ def get_frontend(
             skips ProLeapCobolParser construction. COBOL only.
         extension_strategies: Extension lowering strategies (e.g. CICS/SQL).
             Passed to CobolFrontend. COBOL only.
-        cics_text_parser: Optional CICS text parser fn. COBOL only.
+        dialect_parsers: Dialect parsers (e.g. CICS/SQL). Passed to
+            CobolFrontend. COBOL only.
 
     Returns:
         A Frontend instance.
@@ -130,7 +131,7 @@ def get_frontend(
             resolved_parser,
             observer=observer,
             extension_strategies=list(extension_strategies),
-            cics_text_parser=cics_text_parser,
+            dialect_parsers=list(dialect_parsers),
         )
 
     if frontend_type == constants.FRONTEND_DETERMINISTIC:
