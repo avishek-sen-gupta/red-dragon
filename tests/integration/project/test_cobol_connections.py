@@ -148,7 +148,7 @@ class TestFixtureProject:
         conns = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
-            program_source_dir=cbl,
+            program_source_dirs=[cbl],
             parser=parser,
         )
 
@@ -167,7 +167,7 @@ class TestFixtureProject:
         conns = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
-            program_source_dir=cbl,
+            program_source_dirs=[cbl],
             parser=parser,
         )
         call_conns = {c.target.name: c for c in conns if c.kind == "CALL"}
@@ -184,7 +184,7 @@ class TestFixtureProject:
         conns = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
-            program_source_dir=cbl,
+            program_source_dirs=[cbl],
             parser=parser,
         )
         copy_conns = [c for c in conns if c.kind == "COPY"]
