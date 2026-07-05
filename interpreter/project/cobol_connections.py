@@ -60,7 +60,7 @@ def extract_cobol_connections(
     source: bytes,
     *,
     copybook_dirs: list[Path] = [],
-    program_source_dir: Path = Path("."),
+    program_source_dirs: Sequence[Path] = (),
     extra_subprogram_sources: dict[str, bytes] = {},
     parser: Any,
     extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
@@ -86,7 +86,7 @@ def extract_cobol_connections(
         extension_strategies=extension_strategies,
         dialect_parsers=dialect_parsers,
         observer=observer,
-        program_source_dir=program_source_dir,
+        program_source_dirs=program_source_dirs,
         extra_subprogram_sources=extra_subprogram_sources,
         source_transform=source_transform,
     )
