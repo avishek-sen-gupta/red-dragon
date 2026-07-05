@@ -14,6 +14,10 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from interpreter.constants import Language
+from interpreter.frontend_extension import (
+    DialectParser,
+    RedDragonExtensionLoweringStrategy,
+)
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.imports import extract_imports
@@ -59,8 +63,8 @@ def extract_cobol_connections(
     program_source_dir: Path = Path("."),
     extra_subprogram_sources: dict[str, bytes] = {},
     parser: Any,
-    extension_strategies: Sequence[Any] = (),
-    dialect_parsers: Sequence[Any] = (),
+    extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
+    dialect_parsers: Sequence[DialectParser] = (),
     observer: FrontendObserver = NullFrontendObserver(),
     source_transform: Callable[[str], str] = lambda s: s,
 ) -> list[Connection]:

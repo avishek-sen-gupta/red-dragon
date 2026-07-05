@@ -23,6 +23,10 @@ from typing import Any, Callable, Sequence
 from interpreter.cfg import build_cfg
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
+from interpreter.frontend_extension import (
+    DialectParser,
+    RedDragonExtensionLoweringStrategy,
+)
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.ir import CodeLabel
 from interpreter.project.compiler import build_export_table
@@ -74,8 +78,8 @@ def compile_cobol_module(
     *,
     parser: Any,
     copybook_dirs: list[Path] = [],
-    extension_strategies: Sequence[Any] = (),
-    dialect_parsers: Sequence[Any] = (),
+    extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
+    dialect_parsers: Sequence[DialectParser] = (),
     observer: FrontendObserver = NullFrontendObserver(),
     path: Path = Path("__main__.cbl"),
     ast_path: Path,
@@ -86,7 +90,6 @@ def compile_cobol_module(
         frontend_type=constants.FRONTEND_COBOL,
         observer=observer,
         copybook_dirs=copybook_dirs,
-        cobol_parser=parser,
         extension_strategies=extension_strategies,
         dialect_parsers=dialect_parsers,
     )
@@ -111,8 +114,8 @@ def compile_cobol(
     *,
     parser: Any,
     copybook_dirs: list[Path] = [],
-    extension_strategies: Sequence[Any] = (),
-    dialect_parsers: Sequence[Any] = (),
+    extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
+    dialect_parsers: Sequence[DialectParser] = (),
     observer: FrontendObserver = NullFrontendObserver(),
     program_source_dir: Path = Path("."),
     extra_subprogram_sources: dict[str, bytes] = {},

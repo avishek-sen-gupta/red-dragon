@@ -20,12 +20,12 @@ from interpreter.cobol.ref_mod import (
 )
 from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
 from interpreter.cobol.file_enums import OpenMode, FileOrganization, AccessMode
-from interpreter.cobol.dialect_parser import DialectParser
+from interpreter.frontend_extension import DialectParser
 
 # ── Dialect parser injection ──────────────────────────────────────
 # Set by CobolFrontend.lower() for the duration of each parse call. Cicada
-# and Squall each inject their own DialectParser (interpreter.cobol.
-# dialect_parser) via CobolFrontend — see parse_statement()'s fallback below.
+# and Squall each inject their own DialectParser (interpreter.frontend)
+# via CobolFrontend — see parse_statement()'s fallback below.
 _dialect_parsers: ContextVar[Sequence[DialectParser]] = ContextVar(
     "_dialect_parsers", default=()
 )
@@ -1435,7 +1435,7 @@ def parse_statement(data: dict) -> CobolStatementType:
 
     A type recognized by _DISPATCH_TABLE is never second-guessed against a
     dialect parser. A type NOT in _DISPATCH_TABLE falls back to the injected
-    dialect parsers (interpreter.cobol.dialect_parser), in order — the first
+    dialect parsers (interpreter.frontend.DialectParser), in order — the first
     whose applies(data) is True gets parse(data) called.
     """
     stmt_type = data.get("type", "")
