@@ -43,7 +43,8 @@ from interpreter.path_name import PathName
 from interpreter.cobol.red_dragon_extension_strategy import (
     RedDragonExtensionLoweringStrategy,
 )
-from interpreter.cobol.cobol_statements import CicsTextParserFn, _cics_text_parser
+from interpreter.cobol.cobol_statements import _dialect_parsers
+from interpreter.cobol.dialect_parser import DialectParser
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import CodeLabel
@@ -68,14 +69,12 @@ class CobolFrontend(Frontend):
         cobol_parser: CobolParser,
         observer: FrontendObserver = NullFrontendObserver(),
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
-        cics_text_parser: (
-            CicsTextParserFn | None
-        ) = None,  # must be set for CICS programs
+        dialect_parsers: Sequence[DialectParser] = (),
     ):
         self._parser = cobol_parser
         self._observer = observer
         self._extension_strategies = tuple(extension_strategies)
-        self._cics_text_parser = cics_text_parser
+        self._dialect_parsers = tuple(dialect_parsers)
         self._layout = DataLayout()
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
@@ -185,11 +184,11 @@ class CobolFrontend(Frontend):
                 data = strat.preprocess_program_dict(data)
             return data
 
-        token = _cics_text_parser.set(self._cics_text_parser)
+        token = _dialect_parsers.set(self._dialect_parsers)
         try:
             asg = self._parser.parse(source, preprocessor=_chained_preprocess)
         finally:
-            _cics_text_parser.reset(token)
+            _dialect_parsers.reset(token)
         return self._lower_asg(asg)
 
     def lower_from_ast_dict(self, data: dict) -> list[InstructionBase]:
@@ -199,13 +198,13 @@ class CobolFrontend(Frontend):
         the resulting ASG to IR. Use this in Phase 2 of the AST cache pipeline
         after parse_to_file has written ASTs to disk.
         """
-        token = _cics_text_parser.set(self._cics_text_parser)
+        token = _dialect_parsers.set(self._dialect_parsers)
         try:
             for strat in self._extension_strategies:
                 data = strat.preprocess_program_dict(data)
             asg = CobolASG.from_dict(data)
         finally:
-            _cics_text_parser.reset(token)
+            _dialect_parsers.reset(token)
         return self._lower_asg(asg)
 
     def _lower_asg(self, asg: CobolASG) -> list[InstructionBase]:
