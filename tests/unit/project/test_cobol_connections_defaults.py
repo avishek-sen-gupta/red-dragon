@@ -11,5 +11,4 @@ def test_extract_cobol_connections_defaults_away_from_none():
     assert sig.parameters["copybook_dirs"].default == []
     assert sig.parameters["program_source_dir"].default == Path(".")
     assert sig.parameters["extra_subprogram_sources"].default == {}
-    # cics_text_parser stays untouched — deferred alongside DialectParser migration
-    assert sig.parameters["cics_text_parser"].default is None
+    assert sig.parameters["dialect_parsers"].default == ()
