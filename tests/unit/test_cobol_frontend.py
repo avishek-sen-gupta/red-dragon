@@ -1719,16 +1719,19 @@ class TestTier2Lowering:
         stmts = [
             UnstringStatement(
                 source=RefModOperand(name="WS-FULL"),
-                delimited_by=" ",
+                delimiters=[" "],
                 into=["WS-FIRST", "WS-LAST"],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        # Should produce __string_split call
+        # Should produce a __multi_delimiter_split call (Task 2's new builtin
+        # replaces the old single-delimiter __string_split path entirely).
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         split_calls = [
-            c for c in calls if c.operands and c.operands[0] == "__string_split"
+            c
+            for c in calls
+            if c.operands and c.operands[0] == "__multi_delimiter_split"
         ]
         assert len(split_calls) >= 1
 

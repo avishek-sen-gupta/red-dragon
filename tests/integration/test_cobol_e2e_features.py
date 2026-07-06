@@ -289,6 +289,53 @@ class TestStringOperations:
         # INSPECT REPLACING: "AABAA" -> "ZZBZZ"
         assert _decode_alpha(region, 55, 5) == "ZZBZZ"
 
+    @covers(CobolFeature.UNSTRING_DELIMITED_BY)
+    def test_unstring_multiple_delimiters_first_match_wins(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-OR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A,B;C".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-F3  PIC X(5) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ',' OR ';'",
+                "        INTO WS-F1 WS-F2 WS-F3.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
+        assert _decode_alpha(region, 20, 5).strip() == "C"
+
+    @covers(CobolFeature.UNSTRING_DELIMITED_BY)
+    def test_unstring_single_delimiter_still_works(self):
+        """Regression: single-delimiter UNSTRING (no OR) is unaffected."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-SINGLE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A,B,C".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WS-F2.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
+
 
 class TestLevel88ConditionNames:
     """Single-value, THRU range, and multi-value level-88 conditions in one program."""

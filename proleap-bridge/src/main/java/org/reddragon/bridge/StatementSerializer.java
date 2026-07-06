@@ -1180,23 +1180,12 @@ public final class StatementSerializer {
             // Delimiters: first from DelimitedByPhrase, then each OR ALL? phrase.
             // Multiple delimiters (DELIMITED BY x OR y OR z) all land in one JSON
             // array; Python picks whichever matches earliest (red-dragon-4q25.12).
-            //
-            // TRANSITIONAL DUAL-EMIT: the old scalar "delimited_by" key (first
-            // delimiter only) is emitted ALONGSIDE the new "delimiters" array,
-            // not replaced — interpreter/cobol/cobol_statements.py's
-            // UnstringStatement.from_dict still reads "delimited_by" as
-            // load-bearing logic until Task 2 switches it over. Task 2 removes
-            // this old-key emission once that switch lands (confirmed via a
-            // real full-suite run during this task: dropping "delimited_by"
-            // outright breaks 8 passing tests today, before Task 2 exists).
             if (stmt.getSending() != null) {
                 JsonArray delimiters = new JsonArray();
                 io.proleap.cobol.asg.metamodel.procedure.unstring.DelimitedByPhrase dbp =
                         stmt.getSending().getDelimitedByPhrase();
                 if (dbp != null && dbp.getDelimitedByValueStmt() != null) {
-                    String firstDelim = extractValueStmtText(dbp.getDelimitedByValueStmt());
-                    delimiters.add(firstDelim);
-                    obj.addProperty("delimited_by", firstDelim);
+                    delimiters.add(extractValueStmtText(dbp.getDelimitedByValueStmt()));
                 }
                 for (io.proleap.cobol.asg.metamodel.procedure.unstring.OrAll orAll
                         : stmt.getSending().getOrAlls()) {
