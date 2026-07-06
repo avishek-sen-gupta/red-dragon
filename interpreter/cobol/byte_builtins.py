@@ -438,6 +438,58 @@ def _builtin_string_count(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
+def _builtin_string_boundary_slice(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Slice source down to a BEFORE/AFTER INITIAL boundary.
+
+    Args: [source: str, boundary_text: str, kind: str ("before"/"after")]
+    Returns: str — the bounded region; if boundary_text is not found at all,
+        the entire source string is returned unchanged (standard COBOL
+        behavior per red-dragon-4q25.13 acceptance criterion 5).
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source, boundary_text, kind = (a.value for a in args)
+    if not all(isinstance(v, str) for v in (source, boundary_text, kind)):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    pos = source.find(boundary_text)
+    if pos < 0:
+        return BuiltinResult(value=source)
+    if kind == "before":
+        return BuiltinResult(value=source[:pos])
+    return BuiltinResult(value=source[pos + len(boundary_text) :])
+
+
+def _builtin_string_boundary_split(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Split source at a BEFORE/AFTER INITIAL boundary into [bounded, remainder].
+
+    Args: [source: str, boundary_text: str, kind: str ("before"/"after")]
+    Returns: list[str] of exactly 2 elements: [bounded_part, remainder_part].
+        bounded_part is the region a bounded operation (e.g. REPLACING) should
+        act on; remainder_part is everything else in source, to be spliced
+        back around the (possibly modified) bounded_part to reconstruct the
+        full string. If boundary_text is not found at all, bounded_part is
+        the entire source and remainder_part is "" (nothing left over) —
+        consistent with STRING_BOUNDARY_SLICE's own not-found fallback.
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source, boundary_text, kind = (a.value for a in args)
+    if not all(isinstance(v, str) for v in (source, boundary_text, kind)):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    pos = source.find(boundary_text)
+    if pos < 0:
+        return BuiltinResult(value=[source, ""])
+    if kind == "before":
+        return BuiltinResult(value=[source[:pos], source[pos:]])
+    return BuiltinResult(
+        value=[source[pos + len(boundary_text) :], source[: pos + len(boundary_text)]]
+    )
+
+
 def _builtin_string_replace(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Replace occurrences of pattern in source string.
 
@@ -1788,6 +1840,8 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
             BuiltinName.COBOL_APPLY_EDIT_PICTURE
         ): _builtin_cobol_apply_edit_picture,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
+        FuncName(BuiltinName.STRING_BOUNDARY_SLICE): _builtin_string_boundary_slice,
+        FuncName(BuiltinName.STRING_BOUNDARY_SPLIT): _builtin_string_boundary_split,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
         FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,
         FuncName(BuiltinName.UPPER_CASE): _builtin_upper_case,

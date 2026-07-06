@@ -779,18 +779,53 @@ class UnstringStatement:
 
 
 @dataclass(frozen=True)
+class NoBoundary:
+    """No BEFORE/AFTER INITIAL clause present — the pattern scan is unbounded."""
+
+
+@dataclass(frozen=True)
+class BeforeAfterBoundary:
+    """A BEFORE INITIAL or AFTER INITIAL boundary limiting a scan region."""
+
+    kind: str  # "BEFORE" or "AFTER"
+    boundary_text: str
+
+
+BeforeAfter = NoBoundary | BeforeAfterBoundary
+
+
+def _before_after_from_dict(data: dict) -> BeforeAfter:
+    """A pattern/replacing entry carries at most one of "before"/"after" — the
+    grammar allows both (``inspectBeforeAfter*``) but real COBOL programs use
+    at most one per pattern; if both are present, BEFORE takes precedence."""
+    if "before" in data:
+        return BeforeAfterBoundary(kind="BEFORE", boundary_text=data["before"])
+    if "after" in data:
+        return BeforeAfterBoundary(kind="AFTER", boundary_text=data["after"])
+    return NoBoundary()
+
+
+@dataclass(frozen=True)
 class TallyingFor:
     """A single tallying pattern in INSPECT TALLYING."""
 
     mode: str  # "ALL", "LEADING", "CHARACTERS"
     pattern: str = ""
+    boundary: BeforeAfter = field(default_factory=NoBoundary)
 
     @classmethod
     def from_dict(cls, data: dict) -> TallyingFor:
-        return cls(mode=data.get("mode", ""), pattern=data.get("pattern", ""))
+        return cls(
+            mode=data.get("mode", ""),
+            pattern=data.get("pattern", ""),
+            boundary=_before_after_from_dict(data),
+        )
 
     def to_dict(self) -> dict:
-        return {"mode": self.mode, "pattern": self.pattern}
+        result = {"mode": self.mode, "pattern": self.pattern}
+        if isinstance(self.boundary, BeforeAfterBoundary):
+            result[self.boundary.kind.lower()] = self.boundary.boundary_text
+        return result
 
 
 @dataclass(frozen=True)
@@ -827,6 +862,7 @@ class Replacing:
     mode: str  # "ALL", "LEADING", "FIRST"
     from_pattern: str = ""
     to_pattern: str = ""
+    boundary: BeforeAfter = field(default_factory=NoBoundary)
 
     @classmethod
     def from_dict(cls, data: dict) -> Replacing:
@@ -834,10 +870,14 @@ class Replacing:
             mode=data.get("mode", ""),
             from_pattern=data.get("from", ""),
             to_pattern=data.get("to", ""),
+            boundary=_before_after_from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        return {"mode": self.mode, "from": self.from_pattern, "to": self.to_pattern}
+        result = {"mode": self.mode, "from": self.from_pattern, "to": self.to_pattern}
+        if isinstance(self.boundary, BeforeAfterBoundary):
+            result[self.boundary.kind.lower()] = self.boundary.boundary_text
+        return result
 
 
 @dataclass(frozen=True)
