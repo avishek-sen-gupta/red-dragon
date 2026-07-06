@@ -323,6 +323,43 @@ def _builtin_string_split(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=source.split(delimiter))
 
 
+def _builtin_multi_delimiter_split(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Split source on whichever candidate delimiter matches nearest, repeated
+    until the source is exhausted (COBOL UNSTRING ... DELIMITED BY d1 OR d2 OR ...).
+
+    Args: [source: str, delim1: str, delim2: str, ...] — one or more delimiters.
+    Returns: list[str]. A single delimiter behaves identically to
+        str.split(delimiter) (str.split's own behavior is the N=1 case of this
+        same repeated-nearest-match scan).
+    """
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source = args[0].value
+    delimiters = [a.value for a in args[1:]]
+    if not isinstance(source, str) or not all(isinstance(d, str) for d in delimiters):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    parts: list[str] = []
+    remaining = source
+    while True:
+        best_pos = -1
+        best_delim = ""
+        for d in delimiters:
+            if not d:
+                continue
+            pos = remaining.find(d)
+            if pos >= 0 and (best_pos < 0 or pos < best_pos):
+                best_pos = pos
+                best_delim = d
+        if best_pos < 0:
+            parts.append(remaining)
+            break
+        parts.append(remaining[:best_pos])
+        remaining = remaining[best_pos + len(best_delim) :]
+    return BuiltinResult(value=parts)
+
+
 def _builtin_string_count(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Count occurrences of pattern in source string.
 
@@ -1687,6 +1724,7 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.COBOL_PREPARE_SIGN): _builtin_cobol_prepare_sign,
         FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
         FuncName(BuiltinName.STRING_SPLIT): _builtin_string_split,
+        FuncName(BuiltinName.MULTI_DELIMITER_SPLIT): _builtin_multi_delimiter_split,
         FuncName(BuiltinName.STRING_COUNT): _builtin_string_count,
         FuncName(BuiltinName.STRING_REPLACE): _builtin_string_replace,
         FuncName(BuiltinName.STRING_CONCAT): _builtin_string_concat,

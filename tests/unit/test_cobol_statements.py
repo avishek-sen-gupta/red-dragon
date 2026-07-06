@@ -385,13 +385,13 @@ class TestParseStatementDispatch:
             {
                 "type": "UNSTRING",
                 "source": {"name": "WS-FULL"},
-                "delimited_by": "SPACES",
+                "delimiters": ["SPACES"],
                 "into": ["WS-FIRST", "WS-LAST"],
             }
         )
         assert isinstance(stmt, UnstringStatement)
         assert stmt.source.name == "WS-FULL"
-        assert stmt.delimited_by == "SPACES"
+        assert stmt.delimiters == ["SPACES"]
         assert stmt.into == ["WS-FIRST", "WS-LAST"]
 
     @covers(CobolFeature.INSPECT_TALLYING)
@@ -1087,7 +1087,7 @@ class TestRoundTrip:
         data = {
             "type": "UNSTRING",
             "source": {"name": "WS-FULL"},
-            "delimited_by": " ",
+            "delimiters": [" "],
             "into": ["WS-FIRST", "WS-LAST"],
         }
         assert self._round_trip(data) == data
