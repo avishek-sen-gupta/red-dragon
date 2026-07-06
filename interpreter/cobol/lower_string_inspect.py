@@ -456,38 +456,43 @@ def lower_inspect_tallying(
     src_str_reg: Register,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """INSPECT TALLYING — count pattern occurrences and write to tally target."""
-    total_count_reg = ctx.const_to_reg(0)
+    """INSPECT TALLYING — count pattern occurrences per independent target.
 
-    for tally_for in stmt.tallying_for:
-        pattern_reg = ctx.const_to_reg(strip_cobol_literal(str(tally_for.pattern)))
-        mode_reg = ctx.const_to_reg(tally_for.mode.lower())
-        ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
-        count_reg = ctx.inline_ir(
-            ir,
-            {
-                "%p_source": src_str_reg,
-                "%p_pattern": pattern_reg,
-                "%p_mode": mode_reg,
-            },
-        )
-        new_total = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=new_total,
-                operator=resolve_binop("+"),
-                left=total_count_reg,
-                right=count_reg,
-            ),
-        )
-        total_count_reg = new_total
+    Each TallyingGroup gets its own accumulator and its own write-back, so
+    ``INSPECT src TALLYING cnt1 FOR ALL 'A' cnt2 FOR ALL 'B'`` updates both
+    counters independently in one statement (red-dragon-4q25.17).
+    """
+    for group in stmt.tallying_groups:
+        total_count_reg = ctx.const_to_reg(0)
+        for tally_for in group.patterns:
+            pattern_reg = ctx.const_to_reg(strip_cobol_literal(str(tally_for.pattern)))
+            mode_reg = ctx.const_to_reg(tally_for.mode.lower())
+            ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
+            count_reg = ctx.inline_ir(
+                ir,
+                {
+                    "%p_source": src_str_reg,
+                    "%p_pattern": pattern_reg,
+                    "%p_mode": mode_reg,
+                },
+            )
+            new_total = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=new_total,
+                    operator=resolve_binop("+"),
+                    left=total_count_reg,
+                    right=count_reg,
+                ),
+            )
+            total_count_reg = new_total
 
-    if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
-        tally_ref, tally_rr = ctx.resolve_field_ref(stmt.tallying_target, materialised)
-        count_str_reg = ctx.emit_to_string(total_count_reg)
-        ctx.emit_encode_and_write(
-            tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
-        )
+        if group.target and ctx.has_field(group.target, materialised):
+            tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
+            count_str_reg = ctx.emit_to_string(total_count_reg)
+            ctx.emit_encode_and_write(
+                tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+            )
 
 
 def lower_inspect_replacing(

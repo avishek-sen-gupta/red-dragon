@@ -794,6 +794,33 @@ class TallyingFor:
 
 
 @dataclass(frozen=True)
+class TallyingGroup:
+    """One TALLYING target and the patterns counted into it.
+
+    INSPECT allows multiple independent targets in one statement:
+    ``INSPECT src TALLYING cnt1 FOR ALL 'A' cnt2 FOR ALL 'B'`` — this mirrors
+    the ProLeap ASG's own ``List<For>`` shape, where each ``For`` already
+    carries its own tally target.
+    """
+
+    target: str = ""
+    patterns: list[TallyingFor] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> TallyingGroup:
+        return cls(
+            target=data.get("target", ""),
+            patterns=[TallyingFor.from_dict(p) for p in data.get("patterns", [])],
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "target": self.target,
+            "patterns": [p.to_dict() for p in self.patterns],
+        }
+
+
+@dataclass(frozen=True)
 class Replacing:
     """A single replacing item in INSPECT REPLACING."""
 
@@ -819,8 +846,7 @@ class InspectStatement:
 
     inspect_type: str = ""  # "TALLYING", "REPLACING", or "CONVERTING"
     source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
-    tallying_target: str = ""
-    tallying_for: list[TallyingFor] = field(default_factory=list)
+    tallying_groups: list[TallyingGroup] = field(default_factory=list)
     replacings: list[Replacing] = field(default_factory=list)
     converting_from: str = ""  # INSPECT ... CONVERTING <from> TO <to>
     converting_to: str = ""
@@ -830,9 +856,8 @@ class InspectStatement:
         return cls(
             inspect_type=data.get("inspect_type", ""),
             source=RefModOperand.from_dict(data.get("source", {})),
-            tallying_target=data.get("tallying_target", ""),
-            tallying_for=[
-                TallyingFor.from_dict(t) for t in data.get("tallying_for", [])
+            tallying_groups=[
+                TallyingGroup.from_dict(g) for g in data.get("tallying_groups", [])
             ],
             replacings=[Replacing.from_dict(r) for r in data.get("replacings", [])],
             converting_from=data.get("converting_from", ""),
@@ -846,8 +871,7 @@ class InspectStatement:
             "source": self.source.to_dict(),
         }
         if self.inspect_type == "TALLYING":
-            result["tallying_target"] = self.tallying_target
-            result["tallying_for"] = [t.to_dict() for t in self.tallying_for]
+            result["tallying_groups"] = [g.to_dict() for g in self.tallying_groups]
         elif self.inspect_type == "REPLACING":
             result["replacings"] = [r.to_dict() for r in self.replacings]
         elif self.inspect_type == "CONVERTING":

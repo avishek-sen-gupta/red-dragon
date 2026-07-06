@@ -53,6 +53,7 @@ from interpreter.cobol.cobol_statements import (
     StringSending,
     StringStatement,
     TallyingFor,
+    TallyingGroup,
     UnstringStatement,
     WriteStatement,
 )
@@ -1768,8 +1769,12 @@ class TestTier2Lowering:
             InspectStatement(
                 inspect_type="TALLYING",
                 source=RefModOperand(name="WS-DATA"),
-                tallying_target="WS-COUNT",
-                tallying_for=[TallyingFor(mode="ALL", pattern="A")],
+                tallying_groups=[
+                    TallyingGroup(
+                        target="WS-COUNT",
+                        patterns=[TallyingFor(mode="ALL", pattern="A")],
+                    )
+                ],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
