@@ -139,9 +139,61 @@ def lower_string(
 
     if stmt.into and ctx.has_field(stmt.into, materialised):
         target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
-        ctx.emit_encode_and_write(
-            target_rr, target_ref.fl, concat_reg, target_ref.offset_reg
-        )
+        if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
+            # WITH POINTER: read the cursor (1-based), write starting there
+            # instead of at offset 0, then advance the cursor by the length of
+            # what was just written (red-dragon-4q25.15).
+            ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
+            ptr_decoded_reg = ctx.emit_decode_field(
+                ptr_rr, ptr_ref.fl, ptr_ref.offset_reg
+            )
+            one_reg = ctx.const_to_reg(1)
+            start_0indexed_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=start_0indexed_reg,
+                    operator=resolve_binop("-"),
+                    left=ptr_decoded_reg,
+                    right=one_reg,
+                )
+            )
+            write_offset_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=write_offset_reg,
+                    operator=resolve_binop("+"),
+                    left=ctx.const_to_reg(target_ref.fl.offset),
+                    right=start_0indexed_reg,
+                )
+            )
+            ctx.emit_encode_and_write(
+                target_rr, target_ref.fl, concat_reg, write_offset_reg
+            )
+            written_len_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=written_len_reg,
+                    func_name=FuncName(BuiltinName.LENGTH),
+                    args=(concat_reg,),
+                ),
+            )
+            new_ptr_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=new_ptr_reg,
+                    operator=resolve_binop("+"),
+                    left=ptr_decoded_reg,
+                    right=written_len_reg,
+                )
+            )
+            new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg)
+            ctx.emit_encode_and_write(
+                ptr_rr, ptr_ref.fl, new_ptr_str_reg, ptr_ref.offset_reg
+            )
+        else:
+            ctx.emit_encode_and_write(
+                target_rr, target_ref.fl, concat_reg, target_ref.offset_reg
+            )
     else:
         logger.warning("STRING INTO target %s not found in layout", stmt.into)
 
@@ -224,6 +276,38 @@ def lower_unstring(
         )
         ctx.emit_encode_and_write(
             target_rr, target_ref.fl, part_reg, target_ref.offset_reg
+        )
+
+    if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
+        # WITH POINTER: advance the cursor past however much of the source
+        # was actually consumed by the split (delimiter included), via the
+        # same repeated-nearest-match scan MULTI_DELIMITER_SPLIT already
+        # performs — not an assumed fixed delimiter width (red-dragon-4q25.15).
+        # delim_regs is already in scope from the MULTI_DELIMITER_SPLIT call
+        # earlier in this same function (Task 2).
+        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
+        ptr_decoded_reg = ctx.emit_decode_field(ptr_rr, ptr_ref.fl, ptr_ref.offset_reg)
+        target_count_reg = ctx.const_to_reg(len(stmt.into))
+        consumed_len_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=consumed_len_reg,
+                func_name=FuncName(BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH),
+                args=(src_str_reg, target_count_reg) + delim_regs,
+            ),
+        )
+        new_ptr_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_ptr_reg,
+                operator=resolve_binop("+"),
+                left=ptr_decoded_reg,
+                right=consumed_len_reg,
+            )
+        )
+        new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg)
+        ctx.emit_encode_and_write(
+            ptr_rr, ptr_ref.fl, new_ptr_str_reg, ptr_ref.offset_reg
         )
 
     if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
