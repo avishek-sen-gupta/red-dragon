@@ -723,20 +723,25 @@ class StringStatement:
 
     sendings: list[StringSending] = field(default_factory=list)
     into: str = ""
+    pointer: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> StringStatement:
         return cls(
             sendings=[StringSending.from_dict(s) for s in data.get("sendings", [])],
             into=data.get("into", ""),
+            pointer=data.get("pointer", ""),
         )
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "type": "STRING",
             "sendings": [s.to_dict() for s in self.sendings],
             "into": self.into,
         }
+        if self.pointer:
+            result["pointer"] = self.pointer
+        return result
 
 
 @dataclass(frozen=True)
@@ -747,6 +752,7 @@ class UnstringStatement:
     delimiters: list[str] = field(default_factory=list)
     into: list[str] = field(default_factory=list)
     tallying_target: str = ""
+    pointer: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> UnstringStatement:
@@ -755,6 +761,7 @@ class UnstringStatement:
             delimiters=list(data.get("delimiters", [])),
             into=data.get("into", []),
             tallying_target=data.get("tallying_target", ""),
+            pointer=data.get("pointer", ""),
         )
 
     def to_dict(self) -> dict:
@@ -766,6 +773,8 @@ class UnstringStatement:
         }
         if self.tallying_target:
             result["tallying_target"] = self.tallying_target
+        if self.pointer:
+            result["pointer"] = self.pointer
         return result
 
 

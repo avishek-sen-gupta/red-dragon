@@ -415,6 +415,84 @@ class TestStringOperations:
         assert _decode_alpha(region, 10, 5).strip() == "A"
         assert _decode_alpha(region, 15, 5).strip() == "B"
 
+    @covers(CobolFeature.STRING_VERB)
+    def test_string_with_pointer_appends_across_two_statements(self):
+        """Two STRING ... WITH POINTER calls append at the cursor, not overwrite."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-STRING-PTR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-DST PIC X(10) VALUE SPACES.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                '    STRING "AB" DELIMITED BY SIZE',
+                "        INTO WS-DST WITH POINTER WS-PTR.",
+                '    STRING "CD" DELIMITED BY SIZE',
+                "        INTO WS-DST WITH POINTER WS-PTR.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 10) == "ABCD      "
+        assert _decode(region, 10, 4) == 5  # ptr started at 1, advanced by 4 -> 5
+
+    @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_with_pointer_advances_past_consumed_delimiter(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-PTR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A,B".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WITH POINTER WS-PTR.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-PTR (9(4)) @15-18.
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode(region, 15, 4) == 3  # positioned just after the comma
+
+    @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_with_pointer_advances_past_multi_char_delimiter(self):
+        """Regression for the pre-dispatch fix: the cursor must advance past
+        the delimiter's ACTUAL length, not an assumed 1 character."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-PTR2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A::B::C".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY '::'",
+                "        INTO WS-F1 WS-F2 WITH POINTER WS-PTR.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19, WS-PTR (9(4)) @20-23.
+        # "A::B::C": "A" (1) + "::" (2) + "B" (1) + "::" (2) consumed for 2
+        # targets = 6 chars; ptr started at 1 -> expect 7, NOT 1+len("A")+
+        # len("B")+2*1=5 (which is what a wrong 1-char-per-delimiter
+        # assumption would produce).
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
+        assert _decode(region, 20, 4) == 7
+
 
 class TestLevel88ConditionNames:
     """Single-value, THRU range, and multi-value level-88 conditions in one program."""
