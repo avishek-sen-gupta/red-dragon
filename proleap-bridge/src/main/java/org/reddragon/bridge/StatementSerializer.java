@@ -1159,6 +1159,12 @@ public final class StatementSerializer {
             if (stmt.getIntoPhrase() != null && stmt.getIntoPhrase().getIntoCall() != null) {
                 obj.addProperty("into", extractCallName(stmt.getIntoPhrase().getIntoCall()));
             }
+            // WITH POINTER (red-dragon-4q25.15)
+            if (stmt.getWithPointerPhrase() != null
+                    && stmt.getWithPointerPhrase().getPointerCall() != null) {
+                obj.addProperty("pointer",
+                        extractCallName(stmt.getWithPointerPhrase().getPointerCall()));
+            }
         } catch (Exception e) {
             LOG.fine("Could not extract STRING operands: " + e.getMessage());
         }
@@ -1171,12 +1177,34 @@ public final class StatementSerializer {
             if (stmt.getSending() != null && stmt.getSending().getSendingCall() != null) {
                 obj.add("source", serializeMoveOperand(stmt.getSending().getSendingCall()));
             }
-            // Delimiter
-            if (stmt.getSending() != null && stmt.getSending().getDelimitedByPhrase() != null) {
-                ValueStmt delimVs = stmt.getSending().getDelimitedByPhrase().getDelimitedByValueStmt();
-                if (delimVs != null) {
-                    obj.addProperty("delimited_by", extractValueStmtText(delimVs));
+            // Delimiters: first from DelimitedByPhrase, then each OR ALL? phrase.
+            // Multiple delimiters (DELIMITED BY x OR y OR z) all land in one JSON
+            // array; Python picks whichever matches earliest (red-dragon-4q25.12).
+            //
+            // TRANSITIONAL DUAL-EMIT: the old scalar "delimited_by" key (first
+            // delimiter only) is emitted ALONGSIDE the new "delimiters" array,
+            // not replaced — interpreter/cobol/cobol_statements.py's
+            // UnstringStatement.from_dict still reads "delimited_by" as
+            // load-bearing logic until Task 2 switches it over. Task 2 removes
+            // this old-key emission once that switch lands (confirmed via a
+            // real full-suite run during this task: dropping "delimited_by"
+            // outright breaks 8 passing tests today, before Task 2 exists).
+            if (stmt.getSending() != null) {
+                JsonArray delimiters = new JsonArray();
+                io.proleap.cobol.asg.metamodel.procedure.unstring.DelimitedByPhrase dbp =
+                        stmt.getSending().getDelimitedByPhrase();
+                if (dbp != null && dbp.getDelimitedByValueStmt() != null) {
+                    String firstDelim = extractValueStmtText(dbp.getDelimitedByValueStmt());
+                    delimiters.add(firstDelim);
+                    obj.addProperty("delimited_by", firstDelim);
                 }
+                for (io.proleap.cobol.asg.metamodel.procedure.unstring.OrAll orAll
+                        : stmt.getSending().getOrAlls()) {
+                    if (orAll.getOrAllValueStmt() != null) {
+                        delimiters.add(extractValueStmtText(orAll.getOrAllValueStmt()));
+                    }
+                }
+                obj.add("delimiters", delimiters);
             }
             // INTO targets
             if (stmt.getIntoPhrase() != null) {
@@ -1188,10 +1216,40 @@ public final class StatementSerializer {
                 }
                 obj.add("into", intoArr);
             }
+            // WITH POINTER (red-dragon-4q25.15)
+            if (stmt.getWithPointerPhrase() != null
+                    && stmt.getWithPointerPhrase().getPointerCall() != null) {
+                obj.addProperty("pointer",
+                        extractCallName(stmt.getWithPointerPhrase().getPointerCall()));
+            }
+            // TALLYING IN (red-dragon-4q25.14)
+            if (stmt.getTallyingPhrase() != null
+                    && stmt.getTallyingPhrase().getTallyCountDataItemCall() != null) {
+                obj.addProperty("tallying_target",
+                        extractCallName(stmt.getTallyingPhrase().getTallyCountDataItemCall()));
+            }
         } catch (Exception e) {
             LOG.fine("Could not extract UNSTRING operands: " + e.getMessage());
         }
         return obj;
+    }
+
+    /**
+     * Emits "before"/"after" string properties on obj from a BeforeAfterPhrase
+     * list (red-dragon-4q25.13). A pattern/replacing entry may carry zero, one,
+     * or (per the grammar's inspectBeforeAfter*) both.
+     */
+    private static void addBeforeAfter(
+            JsonObject obj,
+            List<io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase> phrases) {
+        for (io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase bap : phrases) {
+            String key = (bap.getBeforeAfterType()
+                    == io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase.BeforeAfterType.BEFORE)
+                    ? "before" : "after";
+            if (bap.getDataItemValueStmt() != null) {
+                obj.addProperty(key, extractValueStmtText(bap.getDataItemValueStmt()));
+            }
+        }
     }
 
     private static JsonObject serializeInspect(InspectStatement stmt) {
@@ -1204,12 +1262,28 @@ public final class StatementSerializer {
             if (inspType == InspectStatement.InspectType.TALLYING) {
                 obj.addProperty("inspect_type", "TALLYING");
                 if (stmt.getTallying() != null) {
-                    JsonArray tallyingFor = new JsonArray();
+                    // TRANSITIONAL DUAL-EMIT: the old flat "tallying_target"/
+                    // "tallying_for" keys (first group only) are emitted
+                    // ALONGSIDE the new "tallying_groups" array, not replaced —
+                    // InspectStatement.from_dict still reads them as
+                    // load-bearing logic until Task 5 switches it over.
+                    // Task 5 removes this old-key emission once that switch
+                    // lands (confirmed via a real full-suite run during Task 1:
+                    // dropping these keys outright breaks passing tests today,
+                    // before Task 5 exists).
+                    JsonArray groups = new JsonArray();
+                    boolean firstGroup = true;
                     for (io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem : stmt.getTallying().getFors()) {
+                        JsonObject groupObj = new JsonObject();
                         if (forItem.getTallyCountDataItemCall() != null) {
-                            obj.addProperty("tallying_target",
-                                    extractCallName(forItem.getTallyCountDataItemCall()));
+                            String target = extractCallName(forItem.getTallyCountDataItemCall());
+                            groupObj.addProperty("target", target);
+                            if (firstGroup) {
+                                obj.addProperty("tallying_target", target);
+                            }
                         }
+                        JsonArray patterns = new JsonArray();
+                        JsonArray legacyPatterns = firstGroup ? new JsonArray() : null;
                         for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
                             String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
                             for (AllLeading al : alp.getAllLeadings()) {
@@ -1219,11 +1293,27 @@ public final class StatementSerializer {
                                     forObj.addProperty("pattern",
                                             extractValueStmtText(al.getPatternDataItemValueStmt()));
                                 }
-                                tallyingFor.add(forObj);
+                                addBeforeAfter(forObj, al.getBeforeAfterPhrases());
+                                patterns.add(forObj);
+                                if (legacyPatterns != null) {
+                                    JsonObject legacyObj = new JsonObject();
+                                    legacyObj.addProperty("mode", mode);
+                                    if (al.getPatternDataItemValueStmt() != null) {
+                                        legacyObj.addProperty("pattern",
+                                                extractValueStmtText(al.getPatternDataItemValueStmt()));
+                                    }
+                                    legacyPatterns.add(legacyObj);
+                                }
                             }
                         }
+                        if (legacyPatterns != null) {
+                            obj.add("tallying_for", legacyPatterns);
+                        }
+                        groupObj.add("patterns", patterns);
+                        groups.add(groupObj);
+                        firstGroup = false;
                     }
-                    obj.add("tallying_for", tallyingFor);
+                    obj.add("tallying_groups", groups);
                 }
             } else if (inspType == InspectStatement.InspectType.REPLACING) {
                 obj.addProperty("inspect_type", "REPLACING");
@@ -1248,6 +1338,7 @@ public final class StatementSerializer {
                                 repObj.addProperty("to",
                                         extractValueStmtText(ral.getBy().getByValueStmt()));
                             }
+                            addBeforeAfter(repObj, ral.getBeforeAfterPhrases());
                             replacings.add(repObj);
                         }
                     }
