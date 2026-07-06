@@ -892,7 +892,7 @@ Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
                 "PROGRAM-ID. E2E-UNSTRING-TALLY.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
-                '77 WS-SRC PIC X(10) VALUE "a,b,c".',
+                '77 WS-SRC PIC X(10) VALUE "A,B,C".',
                 "77 WS-F1  PIC X(5) VALUE SPACES.",
                 "77 WS-F2  PIC X(5) VALUE SPACES.",
                 "77 WS-F3  PIC X(5) VALUE SPACES.",
@@ -906,7 +906,8 @@ Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
             ]
         )
         region = _first_region(vm)
-        assert _decode(region, 30, 4) == 3
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19, WS-F3 @20-24, WS-CNT (9(4)) @25-28.
+        assert _decode(region, 25, 4) == 3
 
     @covers(CobolFeature.UNSTRING_VERB)
     def test_unstring_without_tallying_in_still_works(self):
@@ -917,7 +918,7 @@ Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
                 "PROGRAM-ID. E2E-UNSTRING-NOTALLY.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
-                '77 WS-SRC PIC X(10) VALUE "a,b".',
+                '77 WS-SRC PIC X(10) VALUE "A,B".',
                 "77 WS-F1  PIC X(5) VALUE SPACES.",
                 "77 WS-F2  PIC X(5) VALUE SPACES.",
                 "PROCEDURE DIVISION.",
@@ -927,8 +928,9 @@ Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
             ]
         )
         region = _first_region(vm)
-        assert _decode_alpha(region, 15, 5).strip() == "a"
-        assert _decode_alpha(region, 20, 5).strip() == "b"
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19.
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1078,7 +1080,7 @@ Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
                 "PROGRAM-ID. E2E-UNSTRING-PTR.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
-                '77 WS-SRC PIC X(10) VALUE "a,b".',
+                '77 WS-SRC PIC X(10) VALUE "A,B".',
                 "77 WS-F1  PIC X(5) VALUE SPACES.",
                 "77 WS-PTR PIC 9(4) VALUE 1.",
                 "PROCEDURE DIVISION.",
@@ -1089,8 +1091,9 @@ Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
             ]
         )
         region = _first_region(vm)
-        assert _decode_alpha(region, 15, 5).strip() == "a"
-        assert _decode(region, 20, 4) == 3  # positioned just after the comma
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-PTR (9(4)) @15-18.
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode(region, 15, 4) == 3  # positioned just after the comma
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
