@@ -401,15 +401,20 @@ class TestParseStatementDispatch:
                 "type": "INSPECT",
                 "inspect_type": "TALLYING",
                 "source": "WS-DATA",
-                "tallying_target": "WS-COUNT",
-                "tallying_for": [{"mode": "ALL", "pattern": "A"}],
+                "tallying_groups": [
+                    {
+                        "target": "WS-COUNT",
+                        "patterns": [{"mode": "ALL", "pattern": "A"}],
+                    }
+                ],
             }
         )
         assert isinstance(stmt, InspectStatement)
         assert stmt.inspect_type == "TALLYING"
-        assert stmt.tallying_target == "WS-COUNT"
-        assert len(stmt.tallying_for) == 1
-        assert stmt.tallying_for[0].mode == "ALL"
+        assert len(stmt.tallying_groups) == 1
+        assert stmt.tallying_groups[0].target == "WS-COUNT"
+        assert len(stmt.tallying_groups[0].patterns) == 1
+        assert stmt.tallying_groups[0].patterns[0].mode == "ALL"
 
     @covers(CobolFeature.INSPECT_REPLACING)
     def test_inspect_replacing(self):
@@ -1098,8 +1103,12 @@ class TestRoundTrip:
             "type": "INSPECT",
             "inspect_type": "TALLYING",
             "source": {"name": "WS-DATA"},
-            "tallying_target": "WS-COUNT",
-            "tallying_for": [{"mode": "ALL", "pattern": "A"}],
+            "tallying_groups": [
+                {
+                    "target": "WS-COUNT",
+                    "patterns": [{"mode": "ALL", "pattern": "A"}],
+                }
+            ],
         }
         assert self._round_trip(data) == data
 
