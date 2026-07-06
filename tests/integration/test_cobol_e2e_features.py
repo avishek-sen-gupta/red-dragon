@@ -362,6 +362,37 @@ class TestStringOperations:
         assert _decode(region, 25, 4) == 3
 
     @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_tallying_in_accumulates_and_caps_at_into_count(self):
+        """TALLYING IN adds to the counter's existing value (doesn't reset to
+        zero), and counts fields actually populated — capped at len(INTO) —
+        not the raw number of delimited substrings, when there are more
+        substrings than INTO targets."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-TALLY2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A,B,C,D".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-CNT PIC 9(4) VALUE 10.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WS-F2",
+                "        TALLYING IN WS-CNT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19, WS-CNT (9(4)) @20-23.
+        # "A,B,C,D" splits into 4 substrings but only 2 INTO targets exist, so
+        # only 2 are "populated" -> tally adds 2, not 4. Starting value 10 ->
+        # expect 12 (accumulate), NOT 2 (overwrite) and NOT 14 (uncapped raw count).
+        assert _decode(region, 20, 4) == 12
+
+    @covers(CobolFeature.UNSTRING_VERB)
     def test_unstring_without_tallying_in_still_works(self):
         """Regression: UNSTRING with no TALLYING IN clause is unaffected."""
         vm = _run_cobol(
