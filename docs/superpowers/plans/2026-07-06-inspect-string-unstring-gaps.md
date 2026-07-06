@@ -978,11 +978,29 @@ class UnstringStatement:
 
 - [ ] **Step 4: Write the tally count in `lower_unstring`**
 
+> **Correction, post-review:** a first implementation of this step wrote the raw
+> split-parts count directly, unconditionally overwriting the target field. A
+> reviewer flagged that this contradicts real COBOL `UNSTRING ... TALLYING IN`
+> semantics — verified against IBM's Enterprise COBOL Language Reference: "the
+> area count field contains, at the end of execution of the UNSTRING statement,
+> a value equal to **the initial value plus** the number of data receiving
+> areas acted upon." Two things follow from this: (1) the counter
+> **accumulates** — it must read the field's current value and add to it, not
+> overwrite; (2) the count is the number of receiving areas **actually
+> populated**, capped at `len(stmt.into)`, not the raw number of delimited
+> substrings — when there are more substrings than `INTO` targets, only
+> `len(stmt.into)` targets get written, and the tally must reflect that, not
+> the larger raw split count.
+
 In `interpreter/cobol/lower_string_inspect.py`, at the end of `lower_unstring` (after the `for i, target_name in enumerate(stmt.into): ...` loop that writes each split part to its target), add:
 
 ```python
     if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
         tally_ref, tally_rr = ctx.resolve_field_ref(stmt.tallying_target, materialised)
+        # Real UNSTRING TALLYING IN semantics (IBM Enterprise COBOL Language
+        # Reference): the counter ACCUMULATES — final value = initial value +
+        # number of receiving areas actually populated, capped at len(into)
+        # when there are more delimited substrings than INTO targets.
         len_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
@@ -991,23 +1009,81 @@ In `interpreter/cobol/lower_string_inspect.py`, at the end of `lower_unstring` (
                 args=(parts_reg,),
             ),
         )
-        count_str_reg = ctx.emit_to_string(len_reg)
+        into_count_reg = ctx.const_to_reg(len(stmt.into))
+        populated_count_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=populated_count_reg,
+                func_name=FuncName(BuiltinName.MIN),
+                args=(len_reg, into_count_reg),
+            ),
+        )
+        existing_decoded_reg = ctx.emit_decode_field(
+            tally_rr, tally_ref.fl, tally_ref.offset_reg
+        )
+        new_total_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_total_reg,
+                operator=resolve_binop("+"),
+                left=existing_decoded_reg,
+                right=populated_count_reg,
+            ),
+        )
+        count_str_reg = ctx.emit_to_string(new_total_reg)
         ctx.emit_encode_and_write(
             tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
         )
 ```
 
-(`parts_reg` is already in scope from the split call earlier in the same function — `LIST_LEN` counts the number of split parts, which is exactly the number of substrings the source produced. `stmt.into`'s own target count may be fewer than `parts_reg`'s length when there are more substrings than targets, but `TALLYING IN` per its acceptance criteria counts *fields actually populated* — since `lower_unstring`'s loop already only writes `min(len(stmt.into), len(parts))` targets, and `TALLYING IN`'s intent is "how many delimited substrings existed", using the raw split length matches real COBOL semantics for the common case where `INTO` lists enough targets; a mismatch between `into` count and this raw count is an existing, separate `ON OVERFLOW` concern outside this task's scope.)
+(`parts_reg` is already in scope from the split call earlier in the same function. `BuiltinName.MIN` is the existing COBOL intrinsic `FUNCTION MIN` builtin — already implemented, takes 2+ numeric args, returns the smallest — reused here rather than inventing a new comparison mechanism. `ctx.emit_decode_field` + `Binop("+")` on the decoded value is the exact same read-then-add idiom Task 4's `WITH POINTER` code uses for its own pointer-advance arithmetic later in this same file — reused, not reinvented.)
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 4a: Add a test covering accumulation and the more-substrings-than-targets case**
 
-```bash
-poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "unstring_tallying_in_counts or unstring_without_tallying_in" -v
+Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`, right after `test_unstring_tallying_in_counts_populated_fields`:
+
+```python
+    @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_tallying_in_accumulates_and_caps_at_into_count(self):
+        """TALLYING IN adds to the counter's existing value (doesn't reset to
+        zero), and counts fields actually populated — capped at len(INTO) —
+        not the raw number of delimited substrings, when there are more
+        substrings than INTO targets."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-TALLY2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A,B,C,D".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-CNT PIC 9(4) VALUE 10.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WS-F2",
+                "        TALLYING IN WS-CNT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19, WS-CNT (9(4)) @20-23.
+        # "A,B,C,D" splits into 4 substrings but only 2 INTO targets exist, so
+        # only 2 are "populated" -> tally adds 2, not 4. Starting value 10 ->
+        # expect 12 (accumulate), NOT 2 (overwrite) and NOT 14 (uncapped raw count).
+        assert _decode(region, 20, 4) == 12
 ```
 
-Expected: both PASS.
+- [ ] **Step 4b: Re-run all three UNSTRING TALLYING tests**
 
-- [ ] **Step 6: Run the full test suite**
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "unstring_tallying_in" -v
+```
+
+Expected: all 3 PASS — the original exact-fit test, the no-`TALLYING IN` regression test, and this new accumulate/cap test.
+
+- [ ] **Step 5: Run the full test suite**
 
 ```bash
 poetry run python -m pytest tests/ -q
@@ -1015,17 +1091,22 @@ poetry run python -m pytest tests/ -q
 
 Expected: no regressions.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-bd close red-dragon-4q25.14 --reason "UNSTRING TALLYING IN implemented — counts populated substrings via the existing split-parts list length"
+bd close red-dragon-4q25.14 --reason "UNSTRING TALLYING IN implemented — accumulates into the counter's existing value (verified against IBM Enterprise COBOL Language Reference), counting fields actually populated (capped at len(INTO)), not the raw split-parts count"
 bd export -o beads/issues.jsonl
 git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
         tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
 git commit -m "feat(cobol): UNSTRING TALLYING IN — count populated substrings
 
-UnstringStatement gains tallying_target; lower_unstring writes the
-split-parts list length to it via the existing copy-back write pattern.
+UnstringStatement gains tallying_target; lower_unstring accumulates the
+count of receiving areas actually populated (capped at len(INTO), not
+the raw split-parts count when there are more substrings than targets)
+into the counter's existing value, via emit_decode_field + Binop(+) +
+emit_encode_and_write - verified against IBM's Enterprise COBOL
+Language Reference ("the initial value plus the number of data
+receiving areas acted upon"), not an unconditional overwrite.
 
 red-dragon-4q25.14"
 ```
