@@ -243,6 +243,41 @@ def lower_unstring(
         )
         src_str_reg = sliced_reg
 
+    if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
+        # WITH POINTER: the scan begins at the pointer's current 1-based
+        # position, not offset 0 — narrows src_str_reg the same way ref-mod
+        # slicing does above, so the split (and later the consumed-length
+        # calc, which operates on this same sliced string) both scan from
+        # the cursor onward, not from the start of the field
+        # (red-dragon-4q25.15). The pointer-advance block further down
+        # re-resolves/re-decodes this same field independently rather than
+        # threading state out of this block — cheap since nothing writes to
+        # it in between, and keeps each block independently readable (the
+        # same tradeoff already made for WITH POINTER's own part-length
+        # recomputation above).
+        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
+        ptr_decoded_reg = ctx.emit_decode_field(ptr_rr, ptr_ref.fl, ptr_ref.offset_reg)
+        one_reg = ctx.const_to_reg(1)
+        ptr_start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=ptr_start_0indexed_reg,
+                operator=resolve_binop("-"),
+                left=ptr_decoded_reg,
+                right=one_reg,
+            )
+        )
+        rest_len_reg = ctx.const_to_reg(9999)
+        ptr_sliced_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=ptr_sliced_reg,
+                func_name=FuncName(BuiltinName.STRING_SLICE),
+                args=(src_str_reg, ptr_start_0indexed_reg, rest_len_reg),
+            )
+        )
+        src_str_reg = ptr_sliced_reg
+
     # One or more candidate delimiters (DELIMITED BY x OR y OR z): each is
     # known statically at lowering time (literal COBOL text), so each becomes
     # its own constant register; MULTI_DELIMITER_SPLIT does the correct
