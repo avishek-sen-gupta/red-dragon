@@ -6,6 +6,7 @@ import logging
 
 from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
 from interpreter.cobol.cobol_statements import (
+    BeforeAfterBoundary,
     InspectStatement,
     StringStatement,
     UnstringStatement,
@@ -22,7 +23,7 @@ from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction
-from interpreter.register import Register
+from interpreter.register import Register, NO_REGISTER
 
 logger = logging.getLogger(__name__)
 
@@ -465,13 +466,27 @@ def lower_inspect_tallying(
     for group in stmt.tallying_groups:
         total_count_reg = ctx.const_to_reg(0)
         for tally_for in group.patterns:
+            bounded_str_reg = src_str_reg
+            if isinstance(tally_for.boundary, BeforeAfterBoundary):
+                boundary_text_reg = ctx.const_to_reg(
+                    strip_cobol_literal(str(tally_for.boundary.boundary_text))
+                )
+                kind_reg = ctx.const_to_reg(tally_for.boundary.kind.lower())
+                bounded_str_reg = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=bounded_str_reg,
+                        func_name=FuncName(BuiltinName.STRING_BOUNDARY_SLICE),
+                        args=(src_str_reg, boundary_text_reg, kind_reg),
+                    ),
+                )
             pattern_reg = ctx.const_to_reg(strip_cobol_literal(str(tally_for.pattern)))
             mode_reg = ctx.const_to_reg(tally_for.mode.lower())
             ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
             count_reg = ctx.inline_ir(
                 ir,
                 {
-                    "%p_source": src_str_reg,
+                    "%p_source": bounded_str_reg,
                     "%p_pattern": pattern_reg,
                     "%p_mode": mode_reg,
                 },
@@ -506,20 +521,74 @@ def lower_inspect_replacing(
     current_str_reg: Register = src_str_reg
 
     for replacing in stmt.replacings:
+        remainder_reg: Register = NO_REGISTER
+        if isinstance(replacing.boundary, BeforeAfterBoundary):
+            boundary_text_reg = ctx.const_to_reg(
+                strip_cobol_literal(str(replacing.boundary.boundary_text))
+            )
+            kind_reg = ctx.const_to_reg(replacing.boundary.kind.lower())
+            split_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=split_reg,
+                    func_name=FuncName(BuiltinName.STRING_BOUNDARY_SPLIT),
+                    args=(current_str_reg, boundary_text_reg, kind_reg),
+                ),
+            )
+            zero_reg = ctx.const_to_reg(0)
+            one_reg = ctx.const_to_reg(1)
+            bounded_str_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=bounded_str_reg,
+                    func_name=FuncName(BuiltinName.LIST_GET),
+                    args=(split_reg, zero_reg),
+                ),
+            )
+            remainder_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=remainder_reg,
+                    func_name=FuncName(BuiltinName.LIST_GET),
+                    args=(split_reg, one_reg),
+                ),
+            )
+        else:
+            bounded_str_reg = current_str_reg
+
         from_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.from_pattern)))
         to_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.to_pattern)))
         mode_reg = ctx.const_to_reg(replacing.mode.lower())
         ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")
-        new_str_reg = ctx.inline_ir(
+        replaced_bounded_reg = ctx.inline_ir(
             ir,
             {
-                "%p_source": current_str_reg,
+                "%p_source": bounded_str_reg,
                 "%p_from": from_reg,
                 "%p_to": to_reg,
                 "%p_mode": mode_reg,
             },
         )
-        current_str_reg = new_str_reg
+
+        if remainder_reg.is_present():
+            spliced_reg = ctx.fresh_reg()
+            # BEFORE: replaced prefix + untouched remainder (boundary onward).
+            # AFTER: untouched remainder (up to and including boundary) + replaced suffix.
+            args = (
+                (replaced_bounded_reg, remainder_reg)
+                if replacing.boundary.kind == "BEFORE"
+                else (remainder_reg, replaced_bounded_reg)
+            )
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=spliced_reg,
+                    func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
+                    args=args,
+                ),
+            )
+            current_str_reg = spliced_reg
+        else:
+            current_str_reg = replaced_bounded_reg
 
     # Resolve the source region register for the write-back
     if ctx.has_field(stmt.source.name, materialised):

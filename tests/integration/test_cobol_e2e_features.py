@@ -39,6 +39,7 @@ def _decode_alpha(region, offset: int, length: int) -> str:
     """Decode EBCDIC alphanumeric bytes to ASCII string."""
     ebcdic_to_ascii = {
         0x40: " ",
+        0x4B: ".",
         0xC1: "A",
         0xC2: "B",
         0xC3: "C",
@@ -550,6 +551,82 @@ class TestStringOperations:
             [
                 "IDENTIFICATION DIVISION.",
                 "PROGRAM-ID. E2E-INSPECT-SINGLE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 2
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_before_initial_bounds_the_scan(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-BEFORE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC.ABC".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A' BEFORE INITIAL '.'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 2
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_after_initial_bounds_the_scan(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-AFTER.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC.ABC".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A' AFTER INITIAL '.'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 1
+
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_before_initial_bounds_the_scan(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-BEFORE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AA.AA     ".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING ALL 'A' BY 'Z' BEFORE INITIAL '.'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 10) == "ZZ.AA     "
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_without_before_after_still_works(self):
+        """Regression: INSPECT TALLYING with no BEFORE/AFTER is unaffected."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-NOBOUND.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
                 '77 WS-SRC PIC X(10) VALUE "ABCABC".',

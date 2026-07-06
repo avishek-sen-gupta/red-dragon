@@ -88,6 +88,8 @@ class BuiltinName:
     COBOL_ROUND = "__cobol_round"
     COBOL_APPLY_EDIT_PICTURE = "__cobol_apply_edit_picture"
     STRING_SLICE = "__string_slice"
+    STRING_BOUNDARY_SLICE = "__string_boundary_slice"
+    STRING_BOUNDARY_SPLIT = "__string_boundary_split"
     STRING_SPLICE = "__string_splice"
     STRING_ZFILL = "__string_zfill"
     UPPER_CASE = "__upper_case"
