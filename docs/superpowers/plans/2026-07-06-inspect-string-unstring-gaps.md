@@ -1175,6 +1175,37 @@ Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
         # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-PTR (9(4)) @15-18.
         assert _decode_alpha(region, 10, 5).strip() == "A"
         assert _decode(region, 15, 4) == 3  # positioned just after the comma
+
+    @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_with_pointer_advances_past_multi_char_delimiter(self):
+        """Regression for the pre-dispatch fix: the cursor must advance past
+        the delimiter's ACTUAL length, not an assumed 1 character."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-PTR2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A::B::C".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY '::'",
+                "        INTO WS-F1 WS-F2 WITH POINTER WS-PTR.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19, WS-PTR (9(4)) @20-23.
+        # "A::B::C": "A" (1) + "::" (2) + "B" (1) + "::" (2) consumed for 2
+        # targets = 6 chars; ptr started at 1 -> expect 7, NOT 1+len("A")+
+        # len("B")+2*1=5 (which is what a wrong 1-char-per-delimiter
+        # assumption would produce).
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
+        assert _decode(region, 20, 4) == 7
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1334,7 +1365,87 @@ Replace it with:
 
 - [ ] **Step 5: Read/write the pointer in `lower_unstring`**
 
-In `lower_unstring`, the per-target write loop currently is:
+> **Correction, pre-dispatch review:** the original version of this step
+> assumed every delimiter is exactly 1 character (`delim_len_reg =
+> ctx.const_to_reg(1)`), advancing the cursor by "joined part lengths + 1 char
+> per boundary." That's wrong in general — `DELIMITED BY` accepts a literal of
+> any length (`DELIMITED BY '::'`, or multiple `OR`-candidates of different
+> lengths, per Task 2), and the pointer must advance past whatever was
+> *actually* consumed, delimiter included. Rather than reconstruct this from
+> already-computed part lengths plus a wrong assumption, add one new builtin
+> that performs the exact same repeated-nearest-match scan
+> `MULTI_DELIMITER_SPLIT` (Task 2) already does internally, but returns the
+> consumed prefix length for the first N splits instead of the split parts.
+> This also drops a stray unbounded-loop magic number (`9999`) the original
+> version had no reason to include — `range(len(stmt.into))` is exactly the
+> bound needed, nothing else.
+
+In `interpreter/cobol/cobol_constants.py`, add one new `BuiltinName` entry directly below `MULTI_DELIMITER_SPLIT`:
+
+```python
+    MULTI_DELIMITER_SPLIT = "__multi_delimiter_split"
+    MULTI_DELIMITER_CONSUMED_LENGTH = "__multi_delimiter_consumed_length"
+```
+
+In `interpreter/cobol/byte_builtins.py`, add the implementation directly below `_builtin_multi_delimiter_split`:
+
+```python
+def _builtin_multi_delimiter_consumed_length(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Length of source consumed by the first target_count delimiter-splits
+    (COBOL UNSTRING ... WITH POINTER: the cursor advances past whatever was
+    actually consumed, delimiter included — not an assumed fixed delimiter
+    width). Performs the same repeated-nearest-match scan as
+    MULTI_DELIMITER_SPLIT, but returns the consumed prefix length instead of
+    the split parts.
+
+    Args: [source: str, target_count: int, delim1: str, delim2: str, ...]
+    Returns: int. If fewer than target_count delimiters are found, returns
+        len(source) (the whole remaining source was consumed).
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source = args[0].value
+    target_count = args[1].value
+    delimiters = [a.value for a in args[2:]]
+    if (
+        not isinstance(source, str)
+        or not isinstance(target_count, int)
+        or not all(isinstance(d, str) for d in delimiters)
+    ):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    consumed = 0
+    remaining = source
+    for _ in range(target_count):
+        best_pos = -1
+        best_delim = ""
+        for d in delimiters:
+            if not d:
+                continue
+            pos = remaining.find(d)
+            if pos >= 0 and (best_pos < 0 or pos < best_pos):
+                best_pos = pos
+                best_delim = d
+        if best_pos < 0:
+            consumed += len(remaining)
+            remaining = ""
+            break
+        consumed += best_pos + len(best_delim)
+        remaining = remaining[best_pos + len(best_delim) :]
+    return BuiltinResult(value=consumed)
+```
+
+Register it in the dispatch dict, directly below the `MULTI_DELIMITER_SPLIT` entry:
+
+```python
+        FuncName(BuiltinName.MULTI_DELIMITER_SPLIT): _builtin_multi_delimiter_split,
+        FuncName(
+            BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH
+        ): _builtin_multi_delimiter_consumed_length,
+```
+
+Now wire it into `lower_unstring`. The per-target write loop currently is:
 
 ```python
     for i, target_name in enumerate(stmt.into):
@@ -1361,54 +1472,24 @@ After this loop (and before the `TALLYING IN` block added in Task 3), add:
 ```python
     if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
         # WITH POINTER: advance the cursor past however much of the source
-        # was consumed by the split — i.e. the joined length of every
-        # populated target plus one delimiter character per target after the
-        # first (red-dragon-4q25.15).
+        # was actually consumed by the split (delimiter included), via the
+        # same repeated-nearest-match scan MULTI_DELIMITER_SPLIT already
+        # performs — not an assumed fixed delimiter width (red-dragon-4q25.15).
+        # delim_regs is already in scope from the MULTI_DELIMITER_SPLIT call
+        # earlier in this same function (Task 2).
         ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
         ptr_decoded_reg = ctx.emit_decode_field(
             ptr_rr, ptr_ref.fl, ptr_ref.offset_reg
         )
-        consumed_len_reg = ctx.const_to_reg(0)
-        for i in range(min(len(stmt.into), 9999)):
-            idx_reg = ctx.const_to_reg(i)
-            part_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=part_reg,
-                    func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(parts_reg, idx_reg),
-                ),
-            )
-            part_len_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=part_len_reg,
-                    func_name=FuncName(BuiltinName.LENGTH),
-                    args=(part_reg,),
-                ),
-            )
-            new_consumed_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Binop(
-                    result_reg=new_consumed_reg,
-                    operator=resolve_binop("+"),
-                    left=consumed_len_reg,
-                    right=part_len_reg,
-                )
-            )
-            consumed_len_reg = new_consumed_reg
-            if i < len(stmt.into) - 1:
-                delim_len_reg = ctx.const_to_reg(1)
-                with_delim_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Binop(
-                        result_reg=with_delim_reg,
-                        operator=resolve_binop("+"),
-                        left=consumed_len_reg,
-                        right=delim_len_reg,
-                    )
-                )
-                consumed_len_reg = with_delim_reg
+        target_count_reg = ctx.const_to_reg(len(stmt.into))
+        consumed_len_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=consumed_len_reg,
+                func_name=FuncName(BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH),
+                args=(src_str_reg, target_count_reg) + delim_regs,
+            ),
+        )
         new_ptr_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -1423,8 +1504,6 @@ After this loop (and before the `TALLYING IN` block added in Task 3), add:
             ptr_rr, ptr_ref.fl, new_ptr_str_reg, ptr_ref.offset_reg
         )
 ```
-
-(this recomputes each part via `LIST_GET` a second time rather than caching registers from the earlier loop — the earlier loop's `part_reg` values are per-iteration locals that fall out of scope; recomputing is cheap since the parts list itself was already split once, and keeps this block independently readable without threading extra state out of the first loop.)
 
 - [ ] **Step 6: Run tests to verify they pass**
 
