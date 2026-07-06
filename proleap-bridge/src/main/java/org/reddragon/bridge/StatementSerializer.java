@@ -1252,28 +1252,14 @@ public final class StatementSerializer {
             if (inspType == InspectStatement.InspectType.TALLYING) {
                 obj.addProperty("inspect_type", "TALLYING");
                 if (stmt.getTallying() != null) {
-                    // TRANSITIONAL DUAL-EMIT: the old flat "tallying_target"/
-                    // "tallying_for" keys (first group only) are emitted
-                    // ALONGSIDE the new "tallying_groups" array, not replaced —
-                    // InspectStatement.from_dict still reads them as
-                    // load-bearing logic until Task 5 switches it over.
-                    // Task 5 removes this old-key emission once that switch
-                    // lands (confirmed via a real full-suite run during Task 1:
-                    // dropping these keys outright breaks passing tests today,
-                    // before Task 5 exists).
                     JsonArray groups = new JsonArray();
-                    boolean firstGroup = true;
                     for (io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem : stmt.getTallying().getFors()) {
                         JsonObject groupObj = new JsonObject();
                         if (forItem.getTallyCountDataItemCall() != null) {
-                            String target = extractCallName(forItem.getTallyCountDataItemCall());
-                            groupObj.addProperty("target", target);
-                            if (firstGroup) {
-                                obj.addProperty("tallying_target", target);
-                            }
+                            groupObj.addProperty("target",
+                                    extractCallName(forItem.getTallyCountDataItemCall()));
                         }
                         JsonArray patterns = new JsonArray();
-                        JsonArray legacyPatterns = firstGroup ? new JsonArray() : null;
                         for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
                             String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
                             for (AllLeading al : alp.getAllLeadings()) {
@@ -1285,23 +1271,10 @@ public final class StatementSerializer {
                                 }
                                 addBeforeAfter(forObj, al.getBeforeAfterPhrases());
                                 patterns.add(forObj);
-                                if (legacyPatterns != null) {
-                                    JsonObject legacyObj = new JsonObject();
-                                    legacyObj.addProperty("mode", mode);
-                                    if (al.getPatternDataItemValueStmt() != null) {
-                                        legacyObj.addProperty("pattern",
-                                                extractValueStmtText(al.getPatternDataItemValueStmt()));
-                                    }
-                                    legacyPatterns.add(legacyObj);
-                                }
                             }
-                        }
-                        if (legacyPatterns != null) {
-                            obj.add("tallying_for", legacyPatterns);
                         }
                         groupObj.add("patterns", patterns);
                         groups.add(groupObj);
-                        firstGroup = false;
                     }
                     obj.add("tallying_groups", groups);
                 }
