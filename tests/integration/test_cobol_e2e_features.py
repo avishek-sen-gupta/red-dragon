@@ -516,6 +516,34 @@ class TestStringOperations:
         assert _decode(region, 14, 4) == 2
 
     @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_three_targets_mixed_modes(self):
+        """3 simultaneous counters, mixed ALL/LEADING modes (original bead's
+        acceptance criterion #4 for red-dragon-4q25.17)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-MULTI3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "BBBAACCCC".',
+                "77 WS-CNT-A PIC 9(4) VALUE 0.",
+                "77 WS-CNT-B PIC 9(4) VALUE 0.",
+                "77 WS-CNT-C PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT-A FOR ALL 'A'",
+                "        WS-CNT-B FOR LEADING 'B'",
+                "        WS-CNT-C FOR ALL 'C'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-CNT-A @10-13, WS-CNT-B @14-17, WS-CNT-C @18-21.
+        assert _decode(region, 10, 4) == 2  # ALL 'A' -> 2
+        assert _decode(region, 14, 4) == 3  # LEADING 'B' -> "BBB" at start -> 3
+        assert _decode(region, 18, 4) == 4  # ALL 'C' -> 4
+
+    @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying_single_target_still_works(self):
         """Regression: single-target INSPECT TALLYING is unaffected."""
         vm = _run_cobol(
