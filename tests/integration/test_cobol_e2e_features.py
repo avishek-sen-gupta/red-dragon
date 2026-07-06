@@ -493,6 +493,48 @@ class TestStringOperations:
         assert _decode_alpha(region, 15, 5).strip() == "B"
         assert _decode(region, 20, 4) == 7
 
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_multiple_independent_targets(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-MULTI.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AAABB".',
+                "77 WS-CNT-A PIC 9(4) VALUE 0.",
+                "77 WS-CNT-B PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT-A FOR ALL 'A'",
+                "        WS-CNT-B FOR ALL 'B'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 3
+        assert _decode(region, 14, 4) == 2
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_single_target_still_works(self):
+        """Regression: single-target INSPECT TALLYING is unaffected."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-SINGLE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 2
+
 
 class TestLevel88ConditionNames:
     """Single-value, THRU range, and multi-value level-88 conditions in one program."""
