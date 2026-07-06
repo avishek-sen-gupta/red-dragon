@@ -439,6 +439,8 @@ class TestByteBuiltinsRegistration:
             "__cobol_round",
             "__cobol_apply_edit_picture",
             "__string_slice",
+            "__string_boundary_slice",
+            "__string_boundary_split",
             "__string_splice",
             "__string_zfill",
             "__upper_case",
