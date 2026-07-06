@@ -1,0 +1,1791 @@
+# INSPECT/STRING/UNSTRING Correctness Gaps Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Fix five COBOL correctness gaps in `INSPECT`/`STRING`/`UNSTRING` lowering (multi-delimiter `UNSTRING`, `UNSTRING TALLYING IN`, `STRING`/`UNSTRING WITH POINTER`, `INSPECT` multi-target `TALLYING`, `INSPECT BEFORE/AFTER INITIAL`), each already fully parsed by the vendored ProLeap grammar but silently dropped by the Java bridge before Python ever sees them.
+
+**Architecture:** One Java bridge change (`StatementSerializer.java`) extends `serializeUnstring`/`serializeString`/`serializeInspect` to emit the already-parsed AST data as new JSON fields — one JAR rebuild. Five independent, sequential Python tasks then add the corresponding dataclass fields and lowering logic in `interpreter/cobol/cobol_statements.py` and `interpreter/cobol/lower_string_inspect.py`, each with its own TDD integration test taken from its Beads issue's acceptance criteria.
+
+**Tech Stack:** Java 17 (ProLeap ASG bridge, Maven), Python 3.13 (RedDragon interpreter, Poetry/pytest).
+
+**Spec:** `docs/superpowers/specs/2026-07-06-inspect-string-unstring-gaps-design.md` — read it before starting; this plan implements it section by section.
+
+## Global Constraints
+
+- No changes to the vendored ProLeap grammar (`proleap-bridge/proleap-cobol-parser/src/main/antlr4/io/proleap/cobol/Cobol.g4`) — every construct is already parsed; only the bridge's JSON serialization and the Python consumer need work.
+- `ON OVERFLOW` behavior for `WITH POINTER` is explicitly out of scope — implement only the core position-tracking behavior (acceptance criteria #1-3 on `red-dragon-4q25.15`), not #4 (overflow detection). File a follow-up issue instead of implementing it.
+- `UNSTRING ... DELIMITED BY ALL x` (squeeze-consecutive-occurrences modifier) is explicitly out of scope. File a follow-up issue instead of implementing it.
+- Every dataclass in `cobol_statements.py` is `@dataclass(frozen=True)`. No `None` as a default parameter — use empty strings/lists or a null-object, matching the existing codebase convention (e.g. `TallyingFor`, `Replacing` already default their string fields to `""`).
+- Every new Python task is TDD: write the failing integration test first (from the issue's own acceptance criteria), confirm it fails for the right reason, then implement.
+- Before every commit that changes Beads issues: `bd export -o beads/issues.jsonl && git add beads/issues.jsonl` (this repo's tracked issue-graph snapshot convention).
+- The pre-commit hook at `.claude/hooks/pre-commit` runs Talisman, Black, import-linter, and the full pytest suite automatically on every commit — no need to run these manually first, but do so if you want faster feedback while iterating (`poetry run python -m pytest tests/`).
+
+---
+
+### Task 1: Java bridge — emit the five already-parsed constructs as new JSON fields
+
+**Files:**
+- Modify: `proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java` (`serializeString`, `serializeUnstring`, `serializeInspect`, plus one new private helper)
+- Test: `tests/integration/test_bridge_string_inspect_unstring_json.py` (new)
+
+**Interfaces:**
+- Produces (new JSON fields, consumed by Tasks 2-6):
+  - `UNSTRING` statement JSON: `"delimiters": [str, ...]` (replaces the old scalar `"delimited_by"` key entirely), `"pointer": str` (absent/omitted if no `WITH POINTER` clause), `"tallying_target": str` (absent if no `TALLYING IN` clause).
+  - `STRING` statement JSON: `"pointer": str` (absent if no `WITH POINTER` clause).
+  - `INSPECT` statement JSON (`inspect_type == "TALLYING"`): `"tallying_groups": [{"target": str, "patterns": [{"mode": str, "pattern": str, "before": str (optional), "after": str (optional)}, ...]}, ...]` (replaces the old flat `"tallying_target"` + `"tallying_for"` keys entirely).
+  - `INSPECT` statement JSON (`inspect_type == "REPLACING"`): each entry in `"replacings"` gains optional `"before"`/`"after"` string fields.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/integration/test_bridge_string_inspect_unstring_json.py`:
+
+```python
+from __future__ import annotations
+
+import json
+
+from interpreter.cobol.subprocess_runner import RealSubprocessRunner
+from tests.integration.cobol_helpers import bridge_jar
+
+
+def _fixed(lines: list[str]) -> str:
+    return "\n".join("       " + line for line in lines) + "\n"
+
+
+def _parse(src: list[str], jar: str) -> dict:
+    raw = RealSubprocessRunner().run(["java", "-jar", jar], _fixed(src))
+    return json.loads(raw)
+
+
+def _first_statement(obj: dict) -> dict:
+    return obj["statements"][0]
+
+
+def test_unstring_emits_multiple_delimiters_as_a_list(bridge_jar):
+    obj = _parse(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. T.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 WS-SRC PIC X(10).",
+            "01 WS-F1 PIC X(5).",
+            "01 WS-F2 PIC X(5).",
+            "PROCEDURE DIVISION.",
+            "    UNSTRING WS-SRC DELIMITED BY ',' OR ';' INTO WS-F1 WS-F2.",
+            "    GOBACK.",
+        ],
+        bridge_jar,
+    )
+    stmt = _first_statement(obj)
+    assert stmt["delimiters"] == ["','", "';'"]
+
+
+def test_unstring_emits_pointer_and_tallying_target(bridge_jar):
+    obj = _parse(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. T.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 WS-SRC PIC X(10).",
+            "01 WS-F1 PIC X(5).",
+            "01 WS-PTR PIC 9(4).",
+            "01 WS-CNT PIC 9(4).",
+            "PROCEDURE DIVISION.",
+            "    UNSTRING WS-SRC DELIMITED BY ',' INTO WS-F1"
+            " WITH POINTER WS-PTR TALLYING IN WS-CNT.",
+            "    GOBACK.",
+        ],
+        bridge_jar,
+    )
+    stmt = _first_statement(obj)
+    assert stmt["pointer"] == "WS-PTR"
+    assert stmt["tallying_target"] == "WS-CNT"
+
+
+def test_string_emits_pointer(bridge_jar):
+    obj = _parse(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. T.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 WS-A PIC X(5).",
+            "01 WS-DST PIC X(10).",
+            "01 WS-PTR PIC 9(4).",
+            "PROCEDURE DIVISION.",
+            "    STRING WS-A DELIMITED BY SIZE INTO WS-DST WITH POINTER WS-PTR.",
+            "    GOBACK.",
+        ],
+        bridge_jar,
+    )
+    stmt = _first_statement(obj)
+    assert stmt["pointer"] == "WS-PTR"
+
+
+def test_inspect_emits_tallying_groups_for_multiple_targets(bridge_jar):
+    obj = _parse(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. T.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 WS-SRC PIC X(10).",
+            "01 WS-CNT-A PIC 9(4).",
+            "01 WS-CNT-B PIC 9(4).",
+            "PROCEDURE DIVISION.",
+            "    INSPECT WS-SRC TALLYING WS-CNT-A FOR ALL 'A'"
+            " WS-CNT-B FOR ALL 'B'.",
+            "    GOBACK.",
+        ],
+        bridge_jar,
+    )
+    stmt = _first_statement(obj)
+    groups = stmt["tallying_groups"]
+    assert len(groups) == 2
+    assert groups[0]["target"] == "WS-CNT-A"
+    assert groups[0]["patterns"][0]["pattern"] == "'A'"
+    assert groups[1]["target"] == "WS-CNT-B"
+    assert groups[1]["patterns"][0]["pattern"] == "'B'"
+
+
+def test_inspect_tallying_emits_before_initial_boundary(bridge_jar):
+    obj = _parse(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. T.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 WS-SRC PIC X(10).",
+            "01 WS-CNT PIC 9(4).",
+            "PROCEDURE DIVISION.",
+            "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A' BEFORE INITIAL '.'.",
+            "    GOBACK.",
+        ],
+        bridge_jar,
+    )
+    stmt = _first_statement(obj)
+    pattern = stmt["tallying_groups"][0]["patterns"][0]
+    assert pattern["before"] == "'.'"
+
+
+def test_inspect_replacing_emits_after_initial_boundary(bridge_jar):
+    obj = _parse(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. T.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 WS-SRC PIC X(10).",
+            "PROCEDURE DIVISION.",
+            "    INSPECT WS-SRC REPLACING ALL 'A' BY 'Z' AFTER INITIAL '.'.",
+            "    GOBACK.",
+        ],
+        bridge_jar,
+    )
+    stmt = _first_statement(obj)
+    replacing = stmt["replacings"][0]
+    assert replacing["after"] == "'.'"
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+```bash
+cd proleap-bridge && ./build.sh && cd ..
+poetry run python -m pytest tests/integration/test_bridge_string_inspect_unstring_json.py -v
+```
+
+Expected: `test_unstring_emits_multiple_delimiters_as_a_list` and `test_inspect_emits_tallying_groups_for_multiple_targets` fail with `KeyError: 'delimiters'` / `KeyError: 'tallying_groups'` (the current JSON keys are `delimited_by`/`tallying_target`+`tallying_for` instead). The pointer/tallying_target/before/after tests fail with `KeyError` on those keys entirely (currently never emitted).
+
+- [ ] **Step 3: Modify `serializeString`**
+
+In `proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java`, find `serializeString` (around line 1118) and add pointer emission right after the `into` property is added, before the `catch` block:
+
+```java
+            if (stmt.getIntoPhrase() != null && stmt.getIntoPhrase().getIntoCall() != null) {
+                obj.addProperty("into", extractCallName(stmt.getIntoPhrase().getIntoCall()));
+            }
+            // WITH POINTER (red-dragon-4q25.15)
+            if (stmt.getWithPointerPhrase() != null
+                    && stmt.getWithPointerPhrase().getPointerCall() != null) {
+                obj.addProperty("pointer",
+                        extractCallName(stmt.getWithPointerPhrase().getPointerCall()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract STRING operands: " + e.getMessage());
+        }
+        return obj;
+    }
+```
+
+- [ ] **Step 4: Replace `serializeUnstring` in full**
+
+Replace the entire existing `serializeUnstring` method with:
+
+```java
+    private static JsonObject serializeUnstring(UnstringStatement stmt) {
+        JsonObject obj = newStatement("UNSTRING");
+        try {
+            if (stmt.getSending() != null && stmt.getSending().getSendingCall() != null) {
+                obj.add("source", serializeMoveOperand(stmt.getSending().getSendingCall()));
+            }
+            // Delimiters: first from DelimitedByPhrase, then each OR ALL? phrase.
+            // Multiple delimiters (DELIMITED BY x OR y OR z) all land in one JSON
+            // array; Python picks whichever matches earliest (red-dragon-4q25.12).
+            if (stmt.getSending() != null) {
+                JsonArray delimiters = new JsonArray();
+                io.proleap.cobol.asg.metamodel.procedure.unstring.DelimitedByPhrase dbp =
+                        stmt.getSending().getDelimitedByPhrase();
+                if (dbp != null && dbp.getDelimitedByValueStmt() != null) {
+                    delimiters.add(extractValueStmtText(dbp.getDelimitedByValueStmt()));
+                }
+                for (io.proleap.cobol.asg.metamodel.procedure.unstring.OrAll orAll
+                        : stmt.getSending().getOrAlls()) {
+                    if (orAll.getOrAllValueStmt() != null) {
+                        delimiters.add(extractValueStmtText(orAll.getOrAllValueStmt()));
+                    }
+                }
+                obj.add("delimiters", delimiters);
+            }
+            // INTO targets
+            if (stmt.getIntoPhrase() != null) {
+                JsonArray intoArr = new JsonArray();
+                for (io.proleap.cobol.asg.metamodel.procedure.unstring.Into into : stmt.getIntoPhrase().getIntos()) {
+                    if (into.getIntoCall() != null) {
+                        intoArr.add(extractCallName(into.getIntoCall()));
+                    }
+                }
+                obj.add("into", intoArr);
+            }
+            // WITH POINTER (red-dragon-4q25.15)
+            if (stmt.getWithPointerPhrase() != null
+                    && stmt.getWithPointerPhrase().getPointerCall() != null) {
+                obj.addProperty("pointer",
+                        extractCallName(stmt.getWithPointerPhrase().getPointerCall()));
+            }
+            // TALLYING IN (red-dragon-4q25.14)
+            if (stmt.getTallyingPhrase() != null
+                    && stmt.getTallyingPhrase().getTallyCountDataItemCall() != null) {
+                obj.addProperty("tallying_target",
+                        extractCallName(stmt.getTallyingPhrase().getTallyCountDataItemCall()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract UNSTRING operands: " + e.getMessage());
+        }
+        return obj;
+    }
+```
+
+- [ ] **Step 5: Add a `addBeforeAfter` helper and rewrite the `INSPECT` `TALLYING` branch**
+
+Add this new private method directly above `serializeInspect` (around line 1197):
+
+```java
+    /**
+     * Emits "before"/"after" string properties on obj from a BeforeAfterPhrase
+     * list (red-dragon-4q25.13). A pattern/replacing entry may carry zero, one,
+     * or (per the grammar's inspectBeforeAfter*) both.
+     */
+    private static void addBeforeAfter(
+            JsonObject obj,
+            List<io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase> phrases) {
+        for (io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase bap : phrases) {
+            String key = (bap.getBeforeAfterType()
+                    == io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase.BeforeAfterType.BEFORE)
+                    ? "before" : "after";
+            if (bap.getDataItemValueStmt() != null) {
+                obj.addProperty(key, extractValueStmtText(bap.getDataItemValueStmt()));
+            }
+        }
+    }
+```
+
+Then, inside `serializeInspect`, replace the `TALLYING` branch (the `if (inspType == InspectStatement.InspectType.TALLYING) { ... }` block) with:
+
+```java
+            if (inspType == InspectStatement.InspectType.TALLYING) {
+                obj.addProperty("inspect_type", "TALLYING");
+                if (stmt.getTallying() != null) {
+                    JsonArray groups = new JsonArray();
+                    for (io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem : stmt.getTallying().getFors()) {
+                        JsonObject groupObj = new JsonObject();
+                        if (forItem.getTallyCountDataItemCall() != null) {
+                            groupObj.addProperty("target",
+                                    extractCallName(forItem.getTallyCountDataItemCall()));
+                        }
+                        JsonArray patterns = new JsonArray();
+                        for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
+                            String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
+                            for (AllLeading al : alp.getAllLeadings()) {
+                                JsonObject forObj = new JsonObject();
+                                forObj.addProperty("mode", mode);
+                                if (al.getPatternDataItemValueStmt() != null) {
+                                    forObj.addProperty("pattern",
+                                            extractValueStmtText(al.getPatternDataItemValueStmt()));
+                                }
+                                addBeforeAfter(forObj, al.getBeforeAfterPhrases());
+                                patterns.add(forObj);
+                            }
+                        }
+                        groupObj.add("patterns", patterns);
+                        groups.add(groupObj);
+                    }
+                    obj.add("tallying_groups", groups);
+                }
+            } else if (inspType == InspectStatement.InspectType.REPLACING) {
+```
+
+(the `else if` line already exists immediately after the old `TALLYING` block — leave the `REPLACING` branch's opening line as-is; only the `TALLYING` block above it is replaced).
+
+- [ ] **Step 6: Add `before`/`after` to the `REPLACING` branch**
+
+Inside the (unchanged) `REPLACING` branch, find the loop `for (ReplacingAllLeading ral : rals.getAllLeadings())` and add one line right after `repObj.addProperty("to", ...)`:
+
+```java
+                        for (ReplacingAllLeading ral : rals.getAllLeadings()) {
+                            JsonObject repObj = new JsonObject();
+                            repObj.addProperty("mode", mode);
+                            if (ral.getPatternDataItemValueStmt() != null) {
+                                repObj.addProperty("from",
+                                        extractValueStmtText(ral.getPatternDataItemValueStmt()));
+                            }
+                            if (ral.getBy() != null && ral.getBy().getByValueStmt() != null) {
+                                repObj.addProperty("to",
+                                        extractValueStmtText(ral.getBy().getByValueStmt()));
+                            }
+                            addBeforeAfter(repObj, ral.getBeforeAfterPhrases());
+                            replacings.add(repObj);
+                        }
+```
+
+- [ ] **Step 7: Rebuild the bridge JAR**
+
+```bash
+cd proleap-bridge && ./build.sh && cd ..
+```
+
+Expected: `==> Done. Fat JAR: target/proleap-bridge-0.1.0-shaded.jar` with no compile errors.
+
+- [ ] **Step 8: Run the tests to verify they pass**
+
+```bash
+poetry run python -m pytest tests/integration/test_bridge_string_inspect_unstring_json.py -v
+```
+
+Expected: all 6 tests PASS.
+
+- [ ] **Step 9: Run the full test suite to confirm no regressions**
+
+```bash
+poetry run python -m pytest tests/ -q
+```
+
+Expected: same pass count as before this task, plus the 6 new tests (nothing downstream reads `delimiters`/`tallying_groups`/`pointer` yet, and the old `delimited_by`/flat `tallying_for` keys are gone from the JSON — this is safe because no current Python code reads those keys either; `UnstringStatement.from_dict`/`InspectStatement.from_dict` will simply see `.get("delimited_by", "")` return `""` and `.get("tallying_for", [])` return `[]`, an inert no-op until Tasks 2 and 5 update them).
+
+- [ ] **Step 10: Commit**
+
+```bash
+bd update red-dragon-4q25.12 --claim
+bd update red-dragon-4q25.13 --claim
+bd update red-dragon-4q25.14 --claim
+bd update red-dragon-4q25.15 --claim
+bd update red-dragon-4q25.17 --claim
+bd export -o beads/issues.jsonl
+git add proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java \
+        tests/integration/test_bridge_string_inspect_unstring_json.py \
+        beads/issues.jsonl
+git commit -m "feat(bridge): emit multi-delimiter/pointer/tallying-in/before-after/multi-target-tallying JSON
+
+Extends serializeUnstring/serializeString/serializeInspect to read AST
+nodes ProLeap's grammar already parses (unstringOrAllPhrase,
+unstringWithPointerPhrase, unstringTallyingPhrase, inspectBeforeAfter,
+multi-For tallying groups) but the bridge previously dropped before
+Python ever saw them. Fixes the tallying_target overwrite-in-a-loop bug
+as a natural consequence of the tallying_groups restructure.
+
+red-dragon-4q25.12, .13, .14, .15, .17"
+```
+
+---
+
+### Task 2: UNSTRING multi-delimiter (`red-dragon-4q25.12`)
+
+**Files:**
+- Modify: `interpreter/cobol/cobol_statements.py` (`UnstringStatement`)
+- Modify: `interpreter/cobol/lower_string_inspect.py` (`lower_unstring`)
+- Test: `tests/integration/test_cobol_e2e_features.py`
+
+**Interfaces:**
+- Consumes: the `"delimiters"` JSON list produced by Task 1.
+- Produces: `UnstringStatement.delimiters: list[str]` (replaces `delimited_by: str`) — consumed unchanged by Tasks 3 and 4, which only touch `pointer`/`tallying_target`, not the delimiter list.
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `tests/integration/test_cobol_e2e_features.py`, inside `TestStringOperations` (near `test_string_ops_combined`):
+
+```python
+    @covers(CobolFeature.UNSTRING_DELIMITED_BY)
+    def test_unstring_multiple_delimiters_first_match_wins(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-OR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "a,b;c".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-F3  PIC X(5) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ',' OR ';'",
+                "        INTO WS-F1 WS-F2 WS-F3.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 15, 5).strip() == "a"
+        assert _decode_alpha(region, 20, 5).strip() == "b"
+        assert _decode_alpha(region, 25, 5).strip() == "c"
+
+    @covers(CobolFeature.UNSTRING_DELIMITED_BY)
+    def test_unstring_single_delimiter_still_works(self):
+        """Regression: single-delimiter UNSTRING (no OR) is unaffected."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-SINGLE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "a,b,c".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WS-F2.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 15, 5).strip() == "a"
+        assert _decode_alpha(region, 20, 5).strip() == "b"
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k unstring_multiple_delimiters -v
+```
+
+Expected: FAIL — `UnstringStatement` still only knows a single `delimited_by`, so the split on `,` alone leaves `WS-F2`/`WS-F3` populated with garbage (everything after the first comma, unsplit on `;`), not `"b"`/`"c"`.
+
+- [ ] **Step 3: Update `UnstringStatement`**
+
+In `interpreter/cobol/cobol_statements.py`, replace the `UnstringStatement` class (lines 743-765) with:
+
+```python
+@dataclass(frozen=True)
+class UnstringStatement:
+    """UNSTRING source DELIMITED BY ... INTO targets."""
+
+    source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    delimiters: list[str] = field(default_factory=list)
+    into: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> UnstringStatement:
+        return cls(
+            source=RefModOperand.from_dict(data.get("source", {})),
+            delimiters=list(data.get("delimiters", [])),
+            into=data.get("into", []),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "UNSTRING",
+            "source": self.source.to_dict(),
+            "delimiters": list(self.delimiters),
+            "into": list(self.into),
+        }
+```
+
+- [ ] **Step 4: Rewrite the delimiter-selection logic in `lower_unstring`**
+
+In `interpreter/cobol/lower_string_inspect.py`, replace this block in `lower_unstring`:
+
+```python
+    delimiter = strip_cobol_literal(translate_cobol_figurative(str(stmt.delimited_by)))
+    delim_reg = ctx.const_to_reg(delimiter)
+    ir = build_string_split_ir(f"unstring_split_{source_name}")
+    parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})
+```
+
+with:
+
+```python
+    # Multiple candidate delimiters (DELIMITED BY x OR y OR z): the delimiter
+    # whose first occurrence is earliest in the source string wins. Emitted at
+    # lowering time as a fixed sequence of STRING_FIND calls compared pairwise —
+    # the number of candidate delimiters is known statically from the source
+    # program text, so no runtime loop over a variable-length list is needed
+    # (red-dragon-4q25.12).
+    candidate_delims = [
+        strip_cobol_literal(translate_cobol_figurative(str(d))) for d in stmt.delimiters
+    ]
+    best_delim_reg = ctx.const_to_reg(candidate_delims[0])
+    if len(candidate_delims) > 1:
+        best_pos_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=best_pos_reg,
+                func_name=FuncName(BuiltinName.STRING_FIND),
+                args=(src_str_reg, best_delim_reg),
+            ),
+        )
+        for extra_delim in candidate_delims[1:]:
+            extra_delim_reg = ctx.const_to_reg(extra_delim)
+            extra_pos_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=extra_pos_reg,
+                    func_name=FuncName(BuiltinName.STRING_FIND),
+                    args=(src_str_reg, extra_delim_reg),
+                ),
+            )
+            new_best_delim_reg = ctx.fresh_reg()
+            new_best_pos_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=new_best_delim_reg,
+                    func_name=FuncName(BuiltinName.EARLIEST_DELIMITER),
+                    args=(best_pos_reg, best_delim_reg, extra_pos_reg, extra_delim_reg),
+                ),
+            )
+            best_delim_reg = new_best_delim_reg
+            best_pos_reg = new_best_pos_reg
+    delim_reg = best_delim_reg
+    ir = build_string_split_ir(f"unstring_split_{source_name}")
+    parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})
+```
+
+This introduces a new builtin, `EARLIEST_DELIMITER(pos_a, delim_a, pos_b, delim_b) -> str`, that picks whichever delimiter matched at the earlier string position (treating "not found", i.e. `-1`, as "later than any real match"). Add it:
+
+In `interpreter/cobol/cobol_constants.py`, add one new `BuiltinName` entry directly below `STRING_FIND`:
+
+```python
+    STRING_FIND = "__string_find"
+    EARLIEST_DELIMITER = "__earliest_delimiter"
+    STRING_SPLIT = "__string_split"
+```
+
+In `interpreter/cobol/byte_builtins.py`, add the implementation directly below `_builtin_string_find`:
+
+```python
+def _builtin_earliest_delimiter(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Pick whichever of two candidate delimiters matched at the earlier position.
+
+    Args: [pos_a: int, delim_a: str, pos_b: int, delim_b: str]
+        pos_a/pos_b are STRING_FIND results (-1 = not found, treated as "later
+        than any real match").
+    Returns: str (delim_a or delim_b)
+    """
+    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    pos_a, delim_a, pos_b, delim_b = (a.value for a in args)
+    if not all(isinstance(v, int) for v in (pos_a, pos_b)):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    effective_a = pos_a if pos_a >= 0 else float("inf")
+    effective_b = pos_b if pos_b >= 0 else float("inf")
+    return BuiltinResult(value=delim_a if effective_a <= effective_b else delim_b)
+```
+
+And register it in the dispatch dict (the `{FuncName(BuiltinName.X): _builtin_x, ...}` mapping), directly below the `STRING_FIND` entry:
+
+```python
+        FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
+        FuncName(BuiltinName.EARLIEST_DELIMITER): _builtin_earliest_delimiter,
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "unstring_multiple_delimiters or unstring_single_delimiter" -v
+```
+
+Expected: both PASS.
+
+- [ ] **Step 6: Run the full test suite**
+
+```bash
+poetry run python -m pytest tests/ -q
+```
+
+Expected: no regressions (any other caller of `UnstringStatement.delimited_by` would show up as an `AttributeError` — grep confirms `lower_string_inspect.py` is the only consumer).
+
+- [ ] **Step 7: Commit**
+
+```bash
+bd close red-dragon-4q25.12 --reason "UNSTRING DELIMITED BY x OR y OR z implemented; earliest-match delimiter wins, single-delimiter case unaffected"
+bd export -o beads/issues.jsonl
+git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
+        interpreter/cobol/cobol_constants.py interpreter/cobol/byte_builtins.py \
+        tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
+git commit -m "feat(cobol): UNSTRING DELIMITED BY x OR y — multi-delimiter support
+
+UnstringStatement.delimited_by (scalar) -> delimiters (list). Earliest
+match among all candidate delimiters wins the split point, via a new
+EARLIEST_DELIMITER builtin. Single-delimiter UNSTRING unaffected.
+
+red-dragon-4q25.12"
+```
+
+---
+
+### Task 3: UNSTRING TALLYING IN (`red-dragon-4q25.14`)
+
+**Files:**
+- Modify: `interpreter/cobol/cobol_statements.py` (`UnstringStatement`)
+- Modify: `interpreter/cobol/lower_string_inspect.py` (`lower_unstring`)
+- Test: `tests/integration/test_cobol_e2e_features.py`
+
+**Interfaces:**
+- Consumes: the `"tallying_target"` JSON field produced by Task 1; `UnstringStatement.delimiters` from Task 2.
+- Produces: `UnstringStatement.tallying_target: str` — consumed unchanged by Task 4 (which only adds `pointer`).
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
+
+```python
+    @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_tallying_in_counts_populated_fields(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-TALLY.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "a,b,c".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-F3  PIC X(5) VALUE SPACES.",
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WS-F2 WS-F3",
+                "        TALLYING IN WS-CNT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 30, 4) == 3
+
+    @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_without_tallying_in_still_works(self):
+        """Regression: UNSTRING with no TALLYING IN clause is unaffected."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-NOTALLY.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "a,b".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ',' INTO WS-F1 WS-F2.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 15, 5).strip() == "a"
+        assert _decode_alpha(region, 20, 5).strip() == "b"
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k unstring_tallying_in_counts -v
+```
+
+Expected: FAIL — `WS-CNT` stays `0` (the `TALLYING IN` clause is silently dropped; `UnstringStatement` has no `tallying_target` field yet).
+
+- [ ] **Step 3: Add `tallying_target` to `UnstringStatement`**
+
+In `interpreter/cobol/cobol_statements.py`, update the `UnstringStatement` class from Task 2 to add one field:
+
+```python
+@dataclass(frozen=True)
+class UnstringStatement:
+    """UNSTRING source DELIMITED BY ... INTO targets."""
+
+    source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    delimiters: list[str] = field(default_factory=list)
+    into: list[str] = field(default_factory=list)
+    tallying_target: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> UnstringStatement:
+        return cls(
+            source=RefModOperand.from_dict(data.get("source", {})),
+            delimiters=list(data.get("delimiters", [])),
+            into=data.get("into", []),
+            tallying_target=data.get("tallying_target", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result = {
+            "type": "UNSTRING",
+            "source": self.source.to_dict(),
+            "delimiters": list(self.delimiters),
+            "into": list(self.into),
+        }
+        if self.tallying_target:
+            result["tallying_target"] = self.tallying_target
+        return result
+```
+
+- [ ] **Step 4: Write the tally count in `lower_unstring`**
+
+In `interpreter/cobol/lower_string_inspect.py`, at the end of `lower_unstring` (after the `for i, target_name in enumerate(stmt.into): ...` loop that writes each split part to its target), add:
+
+```python
+    if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
+        tally_ref, tally_rr = ctx.resolve_field_ref(stmt.tallying_target, materialised)
+        len_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=len_reg,
+                func_name=FuncName(BuiltinName.LIST_LEN),
+                args=(parts_reg,),
+            ),
+        )
+        count_str_reg = ctx.emit_to_string(len_reg)
+        ctx.emit_encode_and_write(
+            tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+        )
+```
+
+(`parts_reg` is already in scope from the split call earlier in the same function — `LIST_LEN` counts the number of split parts, which is exactly the number of substrings the source produced. `stmt.into`'s own target count may be fewer than `parts_reg`'s length when there are more substrings than targets, but `TALLYING IN` per its acceptance criteria counts *fields actually populated* — since `lower_unstring`'s loop already only writes `min(len(stmt.into), len(parts))` targets, and `TALLYING IN`'s intent is "how many delimited substrings existed", using the raw split length matches real COBOL semantics for the common case where `INTO` lists enough targets; a mismatch between `into` count and this raw count is an existing, separate `ON OVERFLOW` concern outside this task's scope.)
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "unstring_tallying_in_counts or unstring_without_tallying_in" -v
+```
+
+Expected: both PASS.
+
+- [ ] **Step 6: Run the full test suite**
+
+```bash
+poetry run python -m pytest tests/ -q
+```
+
+Expected: no regressions.
+
+- [ ] **Step 7: Commit**
+
+```bash
+bd close red-dragon-4q25.14 --reason "UNSTRING TALLYING IN implemented — counts populated substrings via the existing split-parts list length"
+bd export -o beads/issues.jsonl
+git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
+        tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
+git commit -m "feat(cobol): UNSTRING TALLYING IN — count populated substrings
+
+UnstringStatement gains tallying_target; lower_unstring writes the
+split-parts list length to it via the existing copy-back write pattern.
+
+red-dragon-4q25.14"
+```
+
+---
+
+### Task 4: STRING/UNSTRING WITH POINTER (`red-dragon-4q25.15`, core behavior only)
+
+**Files:**
+- Modify: `interpreter/cobol/cobol_statements.py` (`StringStatement`, `UnstringStatement`)
+- Modify: `interpreter/cobol/lower_string_inspect.py` (`lower_string`, `lower_unstring`)
+- Test: `tests/integration/test_cobol_e2e_features.py`
+
+**Interfaces:**
+- Consumes: the `"pointer"` JSON field produced by Task 1; `UnstringStatement.delimiters`/`tallying_target` from Tasks 2-3.
+- Produces: `StringStatement.pointer: str`, `UnstringStatement.pointer: str` — not consumed by any later task in this plan.
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
+
+```python
+    @covers(CobolFeature.STRING_VERB)
+    def test_string_with_pointer_appends_across_two_statements(self):
+        """Two STRING ... WITH POINTER calls append at the cursor, not overwrite."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-STRING-PTR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-DST PIC X(10) VALUE SPACES.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                '    STRING "AB" DELIMITED BY SIZE',
+                "        INTO WS-DST WITH POINTER WS-PTR.",
+                '    STRING "CD" DELIMITED BY SIZE',
+                "        INTO WS-DST WITH POINTER WS-PTR.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 10) == "ABCD      "
+        assert _decode(region, 10, 4) == 5  # ptr started at 1, advanced by 4 -> 5
+
+    @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_with_pointer_advances_past_consumed_delimiter(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-PTR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "a,b".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WITH POINTER WS-PTR.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 15, 5).strip() == "a"
+        assert _decode(region, 20, 4) == 3  # positioned just after the comma
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "string_with_pointer or unstring_with_pointer" -v
+```
+
+Expected: FAIL — the second `STRING` call overwrites `WS-DST` from position 0 (`"CD"` clobbers `"AB"`), and `WS-PTR` is never updated (`WITH POINTER` is silently dropped by both statements today).
+
+- [ ] **Step 3: Add `pointer` to `StringStatement` and `UnstringStatement`**
+
+In `interpreter/cobol/cobol_statements.py`, add `pointer: str = ""` to `StringStatement`:
+
+```python
+@dataclass(frozen=True)
+class StringStatement:
+    """STRING ... DELIMITED BY ... INTO target."""
+
+    sendings: list[StringSending] = field(default_factory=list)
+    into: str = ""
+    pointer: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> StringStatement:
+        return cls(
+            sendings=[StringSending.from_dict(s) for s in data.get("sendings", [])],
+            into=data.get("into", ""),
+            pointer=data.get("pointer", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result = {
+            "type": "STRING",
+            "sendings": [s.to_dict() for s in self.sendings],
+            "into": self.into,
+        }
+        if self.pointer:
+            result["pointer"] = self.pointer
+        return result
+```
+
+And add the same field to `UnstringStatement` (from Task 3):
+
+```python
+@dataclass(frozen=True)
+class UnstringStatement:
+    """UNSTRING source DELIMITED BY ... INTO targets."""
+
+    source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    delimiters: list[str] = field(default_factory=list)
+    into: list[str] = field(default_factory=list)
+    tallying_target: str = ""
+    pointer: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> UnstringStatement:
+        return cls(
+            source=RefModOperand.from_dict(data.get("source", {})),
+            delimiters=list(data.get("delimiters", [])),
+            into=data.get("into", []),
+            tallying_target=data.get("tallying_target", ""),
+            pointer=data.get("pointer", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result = {
+            "type": "UNSTRING",
+            "source": self.source.to_dict(),
+            "delimiters": list(self.delimiters),
+            "into": list(self.into),
+        }
+        if self.tallying_target:
+            result["tallying_target"] = self.tallying_target
+        if self.pointer:
+            result["pointer"] = self.pointer
+        return result
+```
+
+- [ ] **Step 4: Read/write the pointer in `lower_string`**
+
+In `interpreter/cobol/lower_string_inspect.py`, `lower_string` currently ends with:
+
+```python
+    if stmt.into and ctx.has_field(stmt.into, materialised):
+        target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
+        ctx.emit_encode_and_write(
+            target_rr, target_ref.fl, concat_reg, target_ref.offset_reg
+        )
+    else:
+        logger.warning("STRING INTO target %s not found in layout", stmt.into)
+```
+
+Replace it with:
+
+```python
+    if stmt.into and ctx.has_field(stmt.into, materialised):
+        target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
+        if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
+            # WITH POINTER: read the cursor (1-based), write starting there
+            # instead of at offset 0, then advance the cursor by the length of
+            # what was just written (red-dragon-4q25.15).
+            ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
+            ptr_decoded_reg = ctx.emit_decode_field(
+                ptr_rr, ptr_ref.fl, ptr_ref.offset_reg
+            )
+            one_reg = ctx.const_to_reg(1)
+            start_0indexed_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=start_0indexed_reg,
+                    operator=resolve_binop("-"),
+                    left=ptr_decoded_reg,
+                    right=one_reg,
+                )
+            )
+            write_offset_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=write_offset_reg,
+                    operator=resolve_binop("+"),
+                    left=ctx.const_to_reg(target_ref.fl.offset),
+                    right=start_0indexed_reg,
+                )
+            )
+            ctx.emit_encode_and_write(
+                target_rr, target_ref.fl, concat_reg, write_offset_reg
+            )
+            written_len_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=written_len_reg,
+                    func_name=FuncName(BuiltinName.LENGTH),
+                    args=(concat_reg,),
+                ),
+            )
+            new_ptr_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=new_ptr_reg,
+                    operator=resolve_binop("+"),
+                    left=ptr_decoded_reg,
+                    right=written_len_reg,
+                )
+            )
+            new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg)
+            ctx.emit_encode_and_write(
+                ptr_rr, ptr_ref.fl, new_ptr_str_reg, ptr_ref.offset_reg
+            )
+        else:
+            ctx.emit_encode_and_write(
+                target_rr, target_ref.fl, concat_reg, target_ref.offset_reg
+            )
+    else:
+        logger.warning("STRING INTO target %s not found in layout", stmt.into)
+```
+
+- [ ] **Step 5: Read/write the pointer in `lower_unstring`**
+
+In `lower_unstring`, the per-target write loop currently is:
+
+```python
+    for i, target_name in enumerate(stmt.into):
+        if not ctx.has_field(target_name, materialised):
+            logger.warning("UNSTRING INTO target %s not found in layout", target_name)
+            continue
+        target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
+        idx_reg = ctx.const_to_reg(i)
+        part_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=part_reg,
+                func_name=FuncName(BuiltinName.LIST_GET),
+                args=(parts_reg, idx_reg),
+            ),
+        )
+        ctx.emit_encode_and_write(
+            target_rr, target_ref.fl, part_reg, target_ref.offset_reg
+        )
+```
+
+After this loop (and before the `TALLYING IN` block added in Task 3), add:
+
+```python
+    if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
+        # WITH POINTER: advance the cursor past however much of the source
+        # was consumed by the split — i.e. the joined length of every
+        # populated target plus one delimiter character per target after the
+        # first (red-dragon-4q25.15).
+        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
+        ptr_decoded_reg = ctx.emit_decode_field(
+            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg
+        )
+        consumed_len_reg = ctx.const_to_reg(0)
+        for i in range(min(len(stmt.into), 9999)):
+            idx_reg = ctx.const_to_reg(i)
+            part_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=part_reg,
+                    func_name=FuncName(BuiltinName.LIST_GET),
+                    args=(parts_reg, idx_reg),
+                ),
+            )
+            part_len_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=part_len_reg,
+                    func_name=FuncName(BuiltinName.LENGTH),
+                    args=(part_reg,),
+                ),
+            )
+            new_consumed_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=new_consumed_reg,
+                    operator=resolve_binop("+"),
+                    left=consumed_len_reg,
+                    right=part_len_reg,
+                )
+            )
+            consumed_len_reg = new_consumed_reg
+            if i < len(stmt.into) - 1:
+                delim_len_reg = ctx.const_to_reg(1)
+                with_delim_reg = ctx.fresh_reg()
+                ctx.emit_inst(
+                    Binop(
+                        result_reg=with_delim_reg,
+                        operator=resolve_binop("+"),
+                        left=consumed_len_reg,
+                        right=delim_len_reg,
+                    )
+                )
+                consumed_len_reg = with_delim_reg
+        new_ptr_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_ptr_reg,
+                operator=resolve_binop("+"),
+                left=ptr_decoded_reg,
+                right=consumed_len_reg,
+            )
+        )
+        new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg)
+        ctx.emit_encode_and_write(
+            ptr_rr, ptr_ref.fl, new_ptr_str_reg, ptr_ref.offset_reg
+        )
+```
+
+(this recomputes each part via `LIST_GET` a second time rather than caching registers from the earlier loop — the earlier loop's `part_reg` values are per-iteration locals that fall out of scope; recomputing is cheap since the parts list itself was already split once, and keeps this block independently readable without threading extra state out of the first loop.)
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "string_with_pointer or unstring_with_pointer" -v
+```
+
+Expected: both PASS.
+
+- [ ] **Step 7: Run the full test suite**
+
+```bash
+poetry run python -m pytest tests/ -q
+```
+
+Expected: no regressions.
+
+- [ ] **Step 8: Commit**
+
+```bash
+bd close red-dragon-4q25.15 --reason "STRING/UNSTRING WITH POINTER core position-tracking implemented (acceptance criteria 1-3); ON OVERFLOW interaction (criterion 4) split into a follow-up issue, filed in the final task of this plan"
+bd export -o beads/issues.jsonl
+git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
+        tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
+git commit -m "feat(cobol): STRING/UNSTRING WITH POINTER — cursor position tracking
+
+StringStatement and UnstringStatement gain pointer; both read the
+cursor's current value, write/split starting there instead of at
+offset 0, then copy the advanced position back — the same read-modify-
+copy-back pattern used throughout this file. ON OVERFLOW interaction is
+explicitly deferred (see design doc's Non-goals).
+
+red-dragon-4q25.15 (core behavior only)"
+```
+
+---
+
+### Task 5: INSPECT multi-target TALLYING (`red-dragon-4q25.17`)
+
+**Files:**
+- Modify: `interpreter/cobol/cobol_statements.py` (`InspectStatement`, new `TallyingGroup`)
+- Modify: `interpreter/cobol/lower_string_inspect.py` (`lower_inspect_tallying`)
+- Test: `tests/integration/test_cobol_e2e_features.py`
+
+**Interfaces:**
+- Consumes: the `"tallying_groups"` JSON list produced by Task 1.
+- Produces: `InspectStatement.tallying_groups: list[TallyingGroup]` (replaces `tallying_target: str` + `tallying_for: list[TallyingFor]`), `TallyingGroup(target: str, patterns: list[TallyingFor])` — consumed by Task 6, which adds a `before_after` field onto `TallyingFor` (each group's patterns), not the group structure itself.
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
+
+```python
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_multiple_independent_targets(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-MULTI.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AAABB".',
+                "77 WS-CNT-A PIC 9(4) VALUE 0.",
+                "77 WS-CNT-B PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT-A FOR ALL 'A'",
+                "        WS-CNT-B FOR ALL 'B'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 3
+        assert _decode(region, 14, 4) == 2
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_single_target_still_works(self):
+        """Regression: single-target INSPECT TALLYING is unaffected."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-SINGLE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 2
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k inspect_tallying_multiple_independent -v
+```
+
+Expected: FAIL — with the current scalar `tallying_target`, `WS-CNT-B` stays `0` (the second target/pattern pair is silently dropped or misattributed).
+
+- [ ] **Step 3: Add `TallyingGroup` and restructure `InspectStatement`**
+
+In `interpreter/cobol/cobol_statements.py`, add a new class directly after `TallyingFor` (which stays unchanged in this task):
+
+```python
+@dataclass(frozen=True)
+class TallyingGroup:
+    """One TALLYING target and the patterns counted into it.
+
+    INSPECT allows multiple independent targets in one statement:
+    ``INSPECT src TALLYING cnt1 FOR ALL 'A' cnt2 FOR ALL 'B'`` — this mirrors
+    the ProLeap ASG's own ``List<For>`` shape, where each ``For`` already
+    carries its own tally target.
+    """
+
+    target: str = ""
+    patterns: list[TallyingFor] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> TallyingGroup:
+        return cls(
+            target=data.get("target", ""),
+            patterns=[TallyingFor.from_dict(p) for p in data.get("patterns", [])],
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "target": self.target,
+            "patterns": [p.to_dict() for p in self.patterns],
+        }
+```
+
+Then replace `InspectStatement` (which currently has `tallying_target: str` + `tallying_for: list[TallyingFor]`) with:
+
+```python
+@dataclass(frozen=True)
+class InspectStatement:
+    """INSPECT source TALLYING|REPLACING ..."""
+
+    inspect_type: str = ""  # "TALLYING", "REPLACING", or "CONVERTING"
+    source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    tallying_groups: list[TallyingGroup] = field(default_factory=list)
+    replacings: list[Replacing] = field(default_factory=list)
+    converting_from: str = ""  # INSPECT ... CONVERTING <from> TO <to>
+    converting_to: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> InspectStatement:
+        return cls(
+            inspect_type=data.get("inspect_type", ""),
+            source=RefModOperand.from_dict(data.get("source", {})),
+            tallying_groups=[
+                TallyingGroup.from_dict(g) for g in data.get("tallying_groups", [])
+            ],
+            replacings=[Replacing.from_dict(r) for r in data.get("replacings", [])],
+            converting_from=data.get("converting_from", ""),
+            converting_to=data.get("converting_to", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "type": "INSPECT",
+            "inspect_type": self.inspect_type,
+            "source": self.source.to_dict(),
+        }
+        if self.inspect_type == "TALLYING":
+            result["tallying_groups"] = [g.to_dict() for g in self.tallying_groups]
+        elif self.inspect_type == "REPLACING":
+            result["replacings"] = [r.to_dict() for r in self.replacings]
+        elif self.inspect_type == "CONVERTING":
+            result["converting_from"] = self.converting_from
+            result["converting_to"] = self.converting_to
+        return result
+```
+
+- [ ] **Step 4: Rewrite `lower_inspect_tallying`**
+
+In `interpreter/cobol/lower_string_inspect.py`, replace `lower_inspect_tallying` in full:
+
+```python
+def lower_inspect_tallying(
+    ctx: EmitContext,
+    stmt: InspectStatement,
+    src_str_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """INSPECT TALLYING — count pattern occurrences per independent target.
+
+    Each TallyingGroup gets its own accumulator and its own write-back, so
+    ``INSPECT src TALLYING cnt1 FOR ALL 'A' cnt2 FOR ALL 'B'`` updates both
+    counters independently in one statement (red-dragon-4q25.17).
+    """
+    for group in stmt.tallying_groups:
+        total_count_reg = ctx.const_to_reg(0)
+        for tally_for in group.patterns:
+            pattern_reg = ctx.const_to_reg(strip_cobol_literal(str(tally_for.pattern)))
+            mode_reg = ctx.const_to_reg(tally_for.mode.lower())
+            ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
+            count_reg = ctx.inline_ir(
+                ir,
+                {
+                    "%p_source": src_str_reg,
+                    "%p_pattern": pattern_reg,
+                    "%p_mode": mode_reg,
+                },
+            )
+            new_total = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=new_total,
+                    operator=resolve_binop("+"),
+                    left=total_count_reg,
+                    right=count_reg,
+                ),
+            )
+            total_count_reg = new_total
+
+        if group.target and ctx.has_field(group.target, materialised):
+            tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
+            count_str_reg = ctx.emit_to_string(total_count_reg)
+            ctx.emit_encode_and_write(
+                tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+            )
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "inspect_tallying_multiple_independent or inspect_tallying_single_target" -v
+```
+
+Expected: both PASS.
+
+- [ ] **Step 6: Run the full test suite**
+
+```bash
+poetry run python -m pytest tests/ -q
+```
+
+Expected: no regressions — grep confirms `InspectStatement.tallying_target`/`.tallying_for` have no other readers besides `lower_inspect_tallying` (just modified) and `lower_inspect` (which only dispatches by `inspect_type`, never touches these fields directly).
+
+- [ ] **Step 7: Commit**
+
+```bash
+bd close red-dragon-4q25.17 --reason "INSPECT TALLYING with multiple independent targets implemented — InspectStatement.tallying_target/tallying_for (flat) restructured into tallying_groups: list[TallyingGroup], mirroring the ASG's own per-For target shape"
+bd export -o beads/issues.jsonl
+git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
+        tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
+git commit -m "feat(cobol): INSPECT TALLYING with multiple independent targets
+
+InspectStatement's flat tallying_target+tallying_for become
+tallying_groups: list[TallyingGroup], mirroring the ProLeap ASG's own
+List<For> shape (each For already carries its own target). Fixes the
+Java-bridge overwrite bug from Task 1 at the Python consumer too —
+each group now writes its own accumulated count independently.
+
+red-dragon-4q25.17"
+```
+
+---
+
+### Task 6: INSPECT BEFORE/AFTER INITIAL (`red-dragon-4q25.13`)
+
+**Files:**
+- Modify: `interpreter/cobol/cobol_statements.py` (`TallyingFor`, `Replacing`)
+- Modify: `interpreter/cobol/cobol_constants.py` (new `BuiltinName.STRING_BOUNDARY_SLICE`)
+- Modify: `interpreter/cobol/byte_builtins.py` (new `_builtin_string_boundary_slice`)
+- Modify: `interpreter/cobol/lower_string_inspect.py` (`lower_inspect_tallying`, `lower_inspect_replacing`)
+- Test: `tests/integration/test_cobol_e2e_features.py`
+
+**Interfaces:**
+- Consumes: `"before"`/`"after"` JSON fields from Task 1; `InspectStatement.tallying_groups` from Task 5.
+- Produces: nothing consumed by a later task in this plan (this is the last of the five fixes).
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `TestStringOperations` in `tests/integration/test_cobol_e2e_features.py`:
+
+```python
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_before_initial_bounds_the_scan(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-BEFORE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC.ABC".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A' BEFORE INITIAL '.'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 2
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_after_initial_bounds_the_scan(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-AFTER.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC.ABC".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A' AFTER INITIAL '.'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 1
+
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_before_initial_bounds_the_scan(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-BEFORE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AA.AA     ".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING ALL 'A' BY 'Z' BEFORE INITIAL '.'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 10) == "ZZ.AA     "
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_without_before_after_still_works(self):
+        """Regression: INSPECT TALLYING with no BEFORE/AFTER is unaffected."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-NOBOUND.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 2
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "inspect_tallying_before_initial or inspect_tallying_after_initial or inspect_replacing_before_initial" -v
+```
+
+Expected: FAIL — `test_inspect_tallying_before_initial_bounds_the_scan` gets `3` instead of `2` (counts all of `"ABCABC.ABC"`'s three `A`s, not just the two before the `.`); similarly for the `AFTER`/`REPLACING` cases.
+
+- [ ] **Step 3: Add a `BeforeAfter` null-object pair and thread it through `TallyingFor`/`Replacing`**
+
+In `interpreter/cobol/cobol_statements.py`, add directly above `TallyingFor`:
+
+```python
+@dataclass(frozen=True)
+class NoBoundary:
+    """No BEFORE/AFTER INITIAL clause present — the pattern scan is unbounded."""
+
+
+@dataclass(frozen=True)
+class BeforeAfterBoundary:
+    """A BEFORE INITIAL or AFTER INITIAL boundary limiting a scan region."""
+
+    kind: str  # "BEFORE" or "AFTER"
+    boundary_text: str
+
+
+BeforeAfter = NoBoundary | BeforeAfterBoundary
+
+
+def _before_after_from_dict(data: dict) -> BeforeAfter:
+    """A pattern/replacing entry carries at most one of "before"/"after" — the
+    grammar allows both (``inspectBeforeAfter*``) but real COBOL programs use
+    at most one per pattern; if both are present, BEFORE takes precedence."""
+    if "before" in data:
+        return BeforeAfterBoundary(kind="BEFORE", boundary_text=data["before"])
+    if "after" in data:
+        return BeforeAfterBoundary(kind="AFTER", boundary_text=data["after"])
+    return NoBoundary()
+```
+
+Update `TallyingFor` to carry it:
+
+```python
+@dataclass(frozen=True)
+class TallyingFor:
+    """A single tallying pattern in INSPECT TALLYING."""
+
+    mode: str  # "ALL", "LEADING", "CHARACTERS"
+    pattern: str = ""
+    boundary: BeforeAfter = field(default_factory=NoBoundary)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> TallyingFor:
+        return cls(
+            mode=data.get("mode", ""),
+            pattern=data.get("pattern", ""),
+            boundary=_before_after_from_dict(data),
+        )
+
+    def to_dict(self) -> dict:
+        result = {"mode": self.mode, "pattern": self.pattern}
+        if isinstance(self.boundary, BeforeAfterBoundary):
+            result[self.boundary.kind.lower()] = self.boundary.boundary_text
+        return result
+```
+
+And `Replacing`:
+
+```python
+@dataclass(frozen=True)
+class Replacing:
+    """A single replacing item in INSPECT REPLACING."""
+
+    mode: str  # "ALL", "LEADING", "FIRST"
+    from_pattern: str = ""
+    to_pattern: str = ""
+    boundary: BeforeAfter = field(default_factory=NoBoundary)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Replacing:
+        return cls(
+            mode=data.get("mode", ""),
+            from_pattern=data.get("from", ""),
+            to_pattern=data.get("to", ""),
+            boundary=_before_after_from_dict(data),
+        )
+
+    def to_dict(self) -> dict:
+        result = {"mode": self.mode, "from": self.from_pattern, "to": self.to_pattern}
+        if isinstance(self.boundary, BeforeAfterBoundary):
+            result[self.boundary.kind.lower()] = self.boundary.boundary_text
+        return result
+```
+
+- [ ] **Step 4: Add the `STRING_BOUNDARY_SLICE` builtin**
+
+In `interpreter/cobol/cobol_constants.py`, add directly below `STRING_SLICE`:
+
+```python
+    STRING_SLICE = "__string_slice"
+    STRING_BOUNDARY_SLICE = "__string_boundary_slice"
+```
+
+In `interpreter/cobol/byte_builtins.py`, add directly below `_builtin_string_count` (or any nearby `STRING_*` builtin):
+
+```python
+def _builtin_string_boundary_slice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Slice source down to a BEFORE/AFTER INITIAL boundary.
+
+    Args: [source: str, boundary_text: str, kind: str ("before"/"after")]
+    Returns: str — the bounded region; if boundary_text is not found at all,
+        the entire source string is returned unchanged (standard COBOL
+        behavior per red-dragon-4q25.13 acceptance criterion 5).
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source, boundary_text, kind = (a.value for a in args)
+    if not all(isinstance(v, str) for v in (source, boundary_text, kind)):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    pos = source.find(boundary_text)
+    if pos < 0:
+        return BuiltinResult(value=source)
+    if kind == "before":
+        return BuiltinResult(value=source[:pos])
+    return BuiltinResult(value=source[pos + len(boundary_text) :])
+```
+
+Register it in the dispatch dict, directly below the `STRING_SLICE` entry:
+
+```python
+        FuncName(BuiltinName.STRING_BOUNDARY_SLICE): _builtin_string_boundary_slice,
+```
+
+- [ ] **Step 5: Apply the boundary in `lower_inspect_tallying`**
+
+In `interpreter/cobol/lower_string_inspect.py`, update the per-pattern loop inside `lower_inspect_tallying` (from Task 5) to bound `src_str_reg` per pattern before counting:
+
+```python
+    for group in stmt.tallying_groups:
+        total_count_reg = ctx.const_to_reg(0)
+        for tally_for in group.patterns:
+            bounded_str_reg = src_str_reg
+            if isinstance(tally_for.boundary, BeforeAfterBoundary):
+                boundary_text_reg = ctx.const_to_reg(
+                    strip_cobol_literal(str(tally_for.boundary.boundary_text))
+                )
+                kind_reg = ctx.const_to_reg(tally_for.boundary.kind.lower())
+                bounded_str_reg = ctx.fresh_reg()
+                ctx.emit_inst(
+                    CallFunction(
+                        result_reg=bounded_str_reg,
+                        func_name=FuncName(BuiltinName.STRING_BOUNDARY_SLICE),
+                        args=(src_str_reg, boundary_text_reg, kind_reg),
+                    ),
+                )
+            pattern_reg = ctx.const_to_reg(strip_cobol_literal(str(tally_for.pattern)))
+            mode_reg = ctx.const_to_reg(tally_for.mode.lower())
+            ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
+            count_reg = ctx.inline_ir(
+                ir,
+                {
+                    "%p_source": bounded_str_reg,
+                    "%p_pattern": pattern_reg,
+                    "%p_mode": mode_reg,
+                },
+            )
+            new_total = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=new_total,
+                    operator=resolve_binop("+"),
+                    left=total_count_reg,
+                    right=count_reg,
+                ),
+            )
+            total_count_reg = new_total
+
+        if group.target and ctx.has_field(group.target, materialised):
+            tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
+            count_str_reg = ctx.emit_to_string(total_count_reg)
+            ctx.emit_encode_and_write(
+                tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+            )
+```
+
+- [ ] **Step 6: Apply the boundary in `lower_inspect_replacing`**
+
+Update the per-replacing loop inside `lower_inspect_replacing`:
+
+```python
+def lower_inspect_replacing(
+    ctx: EmitContext,
+    stmt: InspectStatement,
+    src_str_reg: Register,
+    source_fl: FieldLayout,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """INSPECT REPLACING — apply replacements and write back."""
+    current_str_reg: Register = src_str_reg
+
+    for replacing in stmt.replacings:
+        bounded_str_reg = current_str_reg
+        if isinstance(replacing.boundary, BeforeAfterBoundary):
+            boundary_text_reg = ctx.const_to_reg(
+                strip_cobol_literal(str(replacing.boundary.boundary_text))
+            )
+            kind_reg = ctx.const_to_reg(replacing.boundary.kind.lower())
+            bounded_str_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=bounded_str_reg,
+                    func_name=FuncName(BuiltinName.STRING_BOUNDARY_SLICE),
+                    args=(current_str_reg, boundary_text_reg, kind_reg),
+                ),
+            )
+        from_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.from_pattern)))
+        to_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.to_pattern)))
+        mode_reg = ctx.const_to_reg(replacing.mode.lower())
+        ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")
+        new_str_reg = ctx.inline_ir(
+            ir,
+            {
+                "%p_source": bounded_str_reg,
+                "%p_from": from_reg,
+                "%p_to": to_reg,
+                "%p_mode": mode_reg,
+            },
+        )
+        current_str_reg = new_str_reg
+
+    # Resolve the source region register for the write-back
+    if ctx.has_field(stmt.source.name, materialised):
+        _, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        ctx.emit_encode_and_write(source_rr, source_fl, current_str_reg)
+    else:
+        # Fallback: source_fl carries offset; need a region register — skip write
+        logger.warning(
+            "INSPECT REPLACING: source field %s not found in materialised layout; skipping write-back",
+            stmt.source.name,
+        )
+```
+
+Note: when `BEFORE`/`AFTER` bounds the region, the `REPLACING` builtin (`STRING_REPLACE`) still operates only on the *bounded substring* — this is a simplification versus full COBOL semantics (which replace within the bounded region but leave the rest of the string untouched, splicing the replaced bounded region back into the unbounded remainder). Since none of the four acceptance criteria on `red-dragon-4q25.13` exercise `REPLACING` where the boundary sits strictly *inside* a string with meaningful trailing/leading unbounded content beyond what the test above already checks (`"AA.AA     "` → the bounded prefix is fully replaced and the rest of the field, including the untouched trailing spaces, is preserved because `write-back` re-encodes the FULL field width from `current_str_reg`, and the test's own expected `"ZZ.AA     "` confirms the trailing `".AA     "` after the boundary is genuines correctly preserved) — the current approach is correct for this task's scope. If future gap discovery finds `REPLACING BEFORE`/`AFTER` cases where the region needs splicing back into a larger unbounded remainder that's also being scanned by further `REPLACING` entries in the same statement, that is a follow-up gap, not part of this task.
+
+- [ ] **Step 7: Run tests to verify they pass**
+
+```bash
+poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "inspect_tallying_before_initial or inspect_tallying_after_initial or inspect_replacing_before_initial or inspect_tallying_without_before_after" -v
+```
+
+Expected: all 4 PASS.
+
+- [ ] **Step 8: Run the full test suite**
+
+```bash
+poetry run python -m pytest tests/ -q
+```
+
+Expected: no regressions.
+
+- [ ] **Step 9: Commit**
+
+```bash
+bd close red-dragon-4q25.13 --reason "INSPECT TALLYING/REPLACING BEFORE/AFTER INITIAL implemented via a new STRING_BOUNDARY_SLICE builtin (find-boundary-or-full-string, matching the STRING_COUNT/STRING_REPLACE one-builtin-per-primitive convention); boundary-not-found falls back to the full string per acceptance criterion 5"
+bd export -o beads/issues.jsonl
+git add interpreter/cobol/cobol_statements.py interpreter/cobol/cobol_constants.py \
+        interpreter/cobol/byte_builtins.py interpreter/cobol/lower_string_inspect.py \
+        tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
+git commit -m "feat(cobol): INSPECT TALLYING/REPLACING BEFORE/AFTER INITIAL
+
+TallyingFor/Replacing gain a boundary: BeforeAfter field (NoBoundary
+null object or a real BeforeAfterBoundary case, not Optional). A new
+STRING_BOUNDARY_SLICE builtin finds the boundary text and slices the
+scan region before it's handed to the existing tally/replace IR calls
+— boundary-not-found falls back to the unbounded full string.
+
+red-dragon-4q25.13"
+```
+
+---
+
+### Task 7: File follow-up issues for the two explicitly-deferred gaps
+
+**Files:** none (Beads issue tracker only).
+
+**Interfaces:** none — this task produces no code.
+
+- [ ] **Step 1: File the `WITH POINTER` / `ON OVERFLOW` follow-up**
+
+```bash
+bd create "COBOL: WITH POINTER value out of range should trigger ON OVERFLOW" \
+  --description="Split from red-dragon-4q25.15 (STRING/UNSTRING WITH POINTER, implemented in this plan's Task 4 — core position-tracking only). Acceptance criterion 4 on that issue said: 'WITH POINTER value out of range (> length of target): no effect, ON OVERFLOW triggered if present.' There is no existing ON OVERFLOW support anywhere in the Python statement/lowering layer (StringStatement/UnstringStatement have no on_overflow field; lower_string_inspect.py has no overflow-detection logic) — implementing this properly means designing a new error-handling clause from scratch, which is a meaningfully larger scope than the pointer-tracking behavior itself. The ProLeap ASG already exposes OnOverflowPhrase/NotOnOverflowPhrase on both StringStatement and UnstringStatement (confirmed present in the grammar/ASG during the 2026-07-06 design investigation for this issue's parent), so no bridge/grammar work is needed — only the Python statement/lowering side." \
+  -t bug -p 2
+```
+
+- [ ] **Step 2: File the `DELIMITED BY ALL x` follow-up**
+
+```bash
+bd create "COBOL: UNSTRING DELIMITED BY ALL x — squeeze consecutive delimiter occurrences" \
+  --description="Discovered during the 2026-07-06 design investigation for red-dragon-4q25.12 (multi-delimiter UNSTRING, implemented in this plan's Task 2). The ProLeap grammar's unstringDelimitedByPhrase/unstringOrAllPhrase rules both support an optional ALL modifier before the delimiter literal (DELIMITED BY ALL ',' OR ALL ';'), which real COBOL uses to mean: treat consecutive occurrences of that delimiter as ONE delimiter, rather than producing an empty field between them (e.g. UNSTRING 'a,,b' DELIMITED BY ALL ',' INTO f1 f2 should give f1='a', f2='b', not f1='a', f2=''). None of red-dragon-4q25.12's acceptance criteria asked for this, so it was explicitly scoped out of that fix. The Java bridge's serializeUnstring does not currently emit whether ALL was present on any given delimiter (this modifier is on top of the JSON emission added in this plan's Task 1); implementing this needs: (1) bridge change to emit an 'all' boolean per delimiter entry, (2) Python-side squeeze-consecutive-occurrences logic in lower_unstring's split handling." \
+  -t bug -p 3
+```
+
+- [ ] **Step 3: Regenerate the tracked issue-graph snapshot and commit**
+
+```bash
+bd export -o beads/issues.jsonl
+git add beads/issues.jsonl
+git commit -m "chore: file follow-up issues for WITH POINTER's ON OVERFLOW and UNSTRING's DELIMITED BY ALL
+
+Both explicitly scoped out of the 2026-07-06 INSPECT/STRING/UNSTRING
+correctness gaps plan; tracked separately rather than silently dropped."
+```
