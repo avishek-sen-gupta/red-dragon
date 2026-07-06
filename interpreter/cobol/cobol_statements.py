@@ -744,14 +744,14 @@ class UnstringStatement:
     """UNSTRING source DELIMITED BY ... INTO targets."""
 
     source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
-    delimited_by: str = ""
+    delimiters: list[str] = field(default_factory=list)
     into: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> UnstringStatement:
         return cls(
             source=RefModOperand.from_dict(data.get("source", {})),
-            delimited_by=data.get("delimited_by", ""),
+            delimiters=list(data.get("delimiters", [])),
             into=data.get("into", []),
         )
 
@@ -759,7 +759,7 @@ class UnstringStatement:
         return {
             "type": "UNSTRING",
             "source": self.source.to_dict(),
-            "delimited_by": self.delimited_by,
+            "delimiters": list(self.delimiters),
             "into": list(self.into),
         }
 
