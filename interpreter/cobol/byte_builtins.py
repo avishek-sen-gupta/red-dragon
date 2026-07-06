@@ -360,6 +360,52 @@ def _builtin_multi_delimiter_split(
     return BuiltinResult(value=parts)
 
 
+def _builtin_multi_delimiter_consumed_length(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Length of source consumed by the first target_count delimiter-splits
+    (COBOL UNSTRING ... WITH POINTER: the cursor advances past whatever was
+    actually consumed, delimiter included — not an assumed fixed delimiter
+    width). Performs the same repeated-nearest-match scan as
+    MULTI_DELIMITER_SPLIT, but returns the consumed prefix length instead of
+    the split parts.
+
+    Args: [source: str, target_count: int, delim1: str, delim2: str, ...]
+    Returns: int. If fewer than target_count delimiters are found, returns
+        len(source) (the whole remaining source was consumed).
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source = args[0].value
+    target_count = args[1].value
+    delimiters = [a.value for a in args[2:]]
+    if (
+        not isinstance(source, str)
+        or not isinstance(target_count, int)
+        or not all(isinstance(d, str) for d in delimiters)
+    ):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    consumed = 0
+    remaining = source
+    for _ in range(target_count):
+        best_pos = -1
+        best_delim = ""
+        for d in delimiters:
+            if not d:
+                continue
+            pos = remaining.find(d)
+            if pos >= 0 and (best_pos < 0 or pos < best_pos):
+                best_pos = pos
+                best_delim = d
+        if best_pos < 0:
+            consumed += len(remaining)
+            remaining = ""
+            break
+        consumed += best_pos + len(best_delim)
+        remaining = remaining[best_pos + len(best_delim) :]
+    return BuiltinResult(value=consumed)
+
+
 def _builtin_string_count(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Count occurrences of pattern in source string.
 
@@ -1725,6 +1771,9 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
         FuncName(BuiltinName.STRING_SPLIT): _builtin_string_split,
         FuncName(BuiltinName.MULTI_DELIMITER_SPLIT): _builtin_multi_delimiter_split,
+        FuncName(
+            BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH
+        ): _builtin_multi_delimiter_consumed_length,
         FuncName(BuiltinName.STRING_COUNT): _builtin_string_count,
         FuncName(BuiltinName.STRING_REPLACE): _builtin_string_replace,
         FuncName(BuiltinName.STRING_CONCAT): _builtin_string_concat,
