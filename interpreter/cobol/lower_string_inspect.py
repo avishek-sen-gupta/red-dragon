@@ -191,10 +191,23 @@ def lower_unstring(
         )
         src_str_reg = sliced_reg
 
-    delimiter = strip_cobol_literal(translate_cobol_figurative(str(stmt.delimited_by)))
-    delim_reg = ctx.const_to_reg(delimiter)
-    ir = build_string_split_ir(f"unstring_split_{source_name}")
-    parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})
+    # One or more candidate delimiters (DELIMITED BY x OR y OR z): each is
+    # known statically at lowering time (literal COBOL text), so each becomes
+    # its own constant register; MULTI_DELIMITER_SPLIT does the correct
+    # repeated-nearest-match scan across all of them at runtime — a single
+    # delimiter is just the N=1 case of the same builtin (red-dragon-4q25.12).
+    delim_regs = tuple(
+        ctx.const_to_reg(strip_cobol_literal(translate_cobol_figurative(str(d))))
+        for d in stmt.delimiters
+    )
+    parts_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=parts_reg,
+            func_name=FuncName(BuiltinName.MULTI_DELIMITER_SPLIT),
+            args=(src_str_reg,) + delim_regs,
+        ),
+    )
 
     for i, target_name in enumerate(stmt.into):
         if not ctx.has_field(target_name, materialised):

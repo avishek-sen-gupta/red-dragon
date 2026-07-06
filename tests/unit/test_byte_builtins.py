@@ -425,6 +425,7 @@ class TestByteBuiltinsRegistration:
             "__cobol_prepare_sign",
             "__string_find",
             "__string_split",
+            "__multi_delimiter_split",
             "__string_count",
             "__string_replace",
             "__string_concat",
