@@ -620,6 +620,26 @@ class TestStringOperations:
         region = _first_region(vm)
         assert _decode_alpha(region, 0, 10) == "ZZ.AA     "
 
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_after_initial_bounds_the_scan(self):
+        """The AFTER-boundary splice order (remainder + replaced_bounded) had
+        no dedicated e2e coverage; only hand-traced during review."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-AFTER.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AA.AA     ".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING ALL 'A' BY 'Z' AFTER INITIAL '.'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 10) == "AA.ZZ     "
+
     @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying_without_before_after_still_works(self):
         """Regression: INSPECT TALLYING with no BEFORE/AFTER is unaffected."""
