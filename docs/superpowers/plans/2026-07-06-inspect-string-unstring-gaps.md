@@ -1684,6 +1684,124 @@ class InspectStatement:
         return result
 ```
 
+- [ ] **Step 3a: Update the three existing unit tests that reference the old `tallying_target`/`tallying_for` fields/keys**
+
+> Same class of gap Task 2 and Task 3's briefs each had before dispatch —
+> checked and fixed here proactively rather than left for a blocked attempt.
+
+In `tests/unit/test_cobol_statements.py`, `TestParseStatementDispatch::test_inspect_tallying` currently reads:
+
+```python
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying(self):
+        stmt = parse_statement(
+            {
+                "type": "INSPECT",
+                "inspect_type": "TALLYING",
+                "source": "WS-DATA",
+                "tallying_target": "WS-COUNT",
+                "tallying_for": [{"mode": "ALL", "pattern": "A"}],
+            }
+        )
+        assert isinstance(stmt, InspectStatement)
+        assert stmt.inspect_type == "TALLYING"
+        assert stmt.tallying_target == "WS-COUNT"
+        assert len(stmt.tallying_for) == 1
+        assert stmt.tallying_for[0].mode == "ALL"
+```
+
+Change to:
+
+```python
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying(self):
+        stmt = parse_statement(
+            {
+                "type": "INSPECT",
+                "inspect_type": "TALLYING",
+                "source": "WS-DATA",
+                "tallying_groups": [
+                    {
+                        "target": "WS-COUNT",
+                        "patterns": [{"mode": "ALL", "pattern": "A"}],
+                    }
+                ],
+            }
+        )
+        assert isinstance(stmt, InspectStatement)
+        assert stmt.inspect_type == "TALLYING"
+        assert len(stmt.tallying_groups) == 1
+        assert stmt.tallying_groups[0].target == "WS-COUNT"
+        assert len(stmt.tallying_groups[0].patterns) == 1
+        assert stmt.tallying_groups[0].patterns[0].mode == "ALL"
+```
+
+`TestRoundTrip::test_inspect_tallying_round_trip` currently reads:
+
+```python
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_round_trip(self):
+        data = {
+            "type": "INSPECT",
+            "inspect_type": "TALLYING",
+            "source": {"name": "WS-DATA"},
+            "tallying_target": "WS-COUNT",
+            "tallying_for": [{"mode": "ALL", "pattern": "A"}],
+        }
+        assert self._round_trip(data) == data
+```
+
+Change to:
+
+```python
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_round_trip(self):
+        data = {
+            "type": "INSPECT",
+            "inspect_type": "TALLYING",
+            "source": {"name": "WS-DATA"},
+            "tallying_groups": [
+                {
+                    "target": "WS-COUNT",
+                    "patterns": [{"mode": "ALL", "pattern": "A"}],
+                }
+            ],
+        }
+        assert self._round_trip(data) == data
+```
+
+In `tests/unit/test_cobol_frontend.py`, the `InspectStatement` construction around line 1767 currently reads:
+
+```python
+        stmts = [
+            InspectStatement(
+                inspect_type="TALLYING",
+                source=RefModOperand(name="WS-DATA"),
+                tallying_target="WS-COUNT",
+                tallying_for=[TallyingFor(mode="ALL", pattern="A")],
+            )
+        ]
+```
+
+Change to:
+
+```python
+        stmts = [
+            InspectStatement(
+                inspect_type="TALLYING",
+                source=RefModOperand(name="WS-DATA"),
+                tallying_groups=[
+                    TallyingGroup(
+                        target="WS-COUNT",
+                        patterns=[TallyingFor(mode="ALL", pattern="A")],
+                    )
+                ],
+            )
+        ]
+```
+
+(this test's own file will need `TallyingGroup` added to its existing import of `InspectStatement`/`TallyingFor` from `interpreter.cobol.cobol_statements` — check the current import line and add it there, not as a separate import statement.)
+
 - [ ] **Step 4: Rewrite `lower_inspect_tallying`**
 
 In `interpreter/cobol/lower_string_inspect.py`, replace `lower_inspect_tallying` in full:
@@ -1804,7 +1922,9 @@ bd close red-dragon-4q25.17 --reason "INSPECT TALLYING with multiple independent
 bd export -o beads/issues.jsonl
 git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
         proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java \
-        tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
+        tests/integration/test_cobol_e2e_features.py \
+        tests/unit/test_cobol_statements.py tests/unit/test_cobol_frontend.py \
+        beads/issues.jsonl
 git commit -m "feat(cobol): INSPECT TALLYING with multiple independent targets
 
 InspectStatement's flat tallying_target+tallying_for become
@@ -1813,7 +1933,8 @@ List<For> shape (each For already carries its own target). Fixes the
 Java-bridge overwrite bug from Task 1 at the Python consumer too —
 each group now writes its own accumulated count independently. Also
 retires Task 1's transitional dual-emitted tallying_target/tallying_for
-bridge keys, now that this task's from_dict switch makes them dead.
+bridge keys, now that this task's from_dict switch makes them dead, and
+updates three existing unit tests that referenced the old flat fields.
 
 red-dragon-4q25.17"
 ```
