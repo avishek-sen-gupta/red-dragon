@@ -1179,7 +1179,8 @@ public final class StatementSerializer {
             }
             // Delimiters: first from DelimitedByPhrase, then each OR ALL? phrase.
             // Multiple delimiters (DELIMITED BY x OR y OR z) all land in one JSON
-            // array; Python picks whichever matches earliest (red-dragon-4q25.12).
+            // array; Python repeatedly finds whichever candidate is nearest at
+            // each split point, not a single delimiter chosen once (red-dragon-4q25.12).
             if (stmt.getSending() != null) {
                 JsonArray delimiters = new JsonArray();
                 io.proleap.cobol.asg.metamodel.procedure.unstring.DelimitedByPhrase dbp =
