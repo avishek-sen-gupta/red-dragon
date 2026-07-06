@@ -16,7 +16,6 @@ from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ir_encoders import (
     build_inspect_replace_ir,
     build_inspect_tally_ir,
-    build_string_split_ir,
 )
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
