@@ -746,6 +746,7 @@ class UnstringStatement:
     source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     delimiters: list[str] = field(default_factory=list)
     into: list[str] = field(default_factory=list)
+    tallying_target: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> UnstringStatement:
@@ -753,15 +754,19 @@ class UnstringStatement:
             source=RefModOperand.from_dict(data.get("source", {})),
             delimiters=list(data.get("delimiters", [])),
             into=data.get("into", []),
+            tallying_target=data.get("tallying_target", ""),
         )
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "type": "UNSTRING",
             "source": self.source.to_dict(),
             "delimiters": list(self.delimiters),
             "into": list(self.into),
         }
+        if self.tallying_target:
+            result["tallying_target"] = self.tallying_target
+        return result
 
 
 @dataclass(frozen=True)
