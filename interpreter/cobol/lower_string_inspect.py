@@ -228,6 +228,10 @@ def lower_unstring(
 
     if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
         tally_ref, tally_rr = ctx.resolve_field_ref(stmt.tallying_target, materialised)
+        # Real UNSTRING TALLYING IN semantics (IBM Enterprise COBOL Language
+        # Reference): the counter ACCUMULATES — final value = initial value +
+        # number of receiving areas actually populated, capped at len(into)
+        # when there are more delimited substrings than INTO targets.
         len_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
@@ -236,7 +240,28 @@ def lower_unstring(
                 args=(parts_reg,),
             ),
         )
-        count_str_reg = ctx.emit_to_string(len_reg)
+        into_count_reg = ctx.const_to_reg(len(stmt.into))
+        populated_count_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=populated_count_reg,
+                func_name=FuncName(BuiltinName.MIN),
+                args=(len_reg, into_count_reg),
+            ),
+        )
+        existing_decoded_reg = ctx.emit_decode_field(
+            tally_rr, tally_ref.fl, tally_ref.offset_reg
+        )
+        new_total_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_total_reg,
+                operator=resolve_binop("+"),
+                left=existing_decoded_reg,
+                right=populated_count_reg,
+            ),
+        )
+        count_str_reg = ctx.emit_to_string(new_total_reg)
         ctx.emit_encode_and_write(
             tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
         )
