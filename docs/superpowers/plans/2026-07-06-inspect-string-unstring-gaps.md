@@ -451,10 +451,30 @@ red-dragon-4q25.12, .13, .14, .15, .17"
 
 ### Task 2: UNSTRING multi-delimiter (`red-dragon-4q25.12`)
 
+> **Design correction (post-implementer-discovery):** an earlier version of this
+> task picked one "earliest" delimiter across the whole string and did a single
+> global split on it — that is WRONG for `DELIMITED BY x OR y` where different
+> delimiter characters occur at different points in the string (e.g.
+> `"a,b;c"` split on `,` alone leaves `"b;c"` unsplit). Real UNSTRING `OR`
+> semantics require finding whichever candidate delimiter is nearest at
+> **each** split point, repeated until the source is exhausted — not a single
+> delimiter chosen once. This version replaces the whole
+> `EARLIEST_DELIMITER`/pairwise-reduction approach with one new builtin,
+> `MULTI_DELIMITER_SPLIT`, that performs the correct repeated-nearest-match
+> algorithm internally. It also fixes two test-authoring bugs an implementer
+> found in the original tests (lowercase COBOL literals the test file's own
+> `_decode_alpha` helper can't decode; field offsets off by a constant +5) and
+> adds missing updates to three existing unit tests that reference the old
+> `delimited_by` field/key.
+
 **Files:**
 - Modify: `interpreter/cobol/cobol_statements.py` (`UnstringStatement`)
 - Modify: `interpreter/cobol/lower_string_inspect.py` (`lower_unstring`)
+- Modify: `interpreter/cobol/cobol_constants.py` (new `BuiltinName.MULTI_DELIMITER_SPLIT`)
+- Modify: `interpreter/cobol/byte_builtins.py` (new `_builtin_multi_delimiter_split`)
 - Modify: `proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java` (retire the transitional dual-emitted `delimited_by` key from Task 1 — this task's own dataclass switch is what makes it safe to remove)
+- Modify: `tests/unit/test_cobol_statements.py` (two existing tests reference the old `delimited_by` field/key on `UnstringStatement`)
+- Modify: `tests/unit/test_cobol_frontend.py` (one existing test constructs `UnstringStatement(delimited_by=...)` directly, and asserts on the old `__string_split` opcode name)
 - Test: `tests/integration/test_cobol_e2e_features.py`
 
 **Interfaces:**
@@ -463,7 +483,7 @@ red-dragon-4q25.12, .13, .14, .15, .17"
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `tests/integration/test_cobol_e2e_features.py`, inside `TestStringOperations` (near `test_string_ops_combined`):
+Add to `tests/integration/test_cobol_e2e_features.py`, inside `TestStringOperations` (near `test_string_ops_combined`). **Field layout note:** fields lay out sequentially from offset 0 with no gap, matching `test_string_ops_combined`'s own precedent in this file — `WS-SRC` (X10) occupies bytes 0-9, `WS-F1` (X5) occupies 10-14, `WS-F2` occupies 15-19, `WS-F3` occupies 20-24. **Literal case note:** use UPPERCASE COBOL literals — this file's own `_decode_alpha` helper (defined earlier in the file) only maps EBCDIC codes for uppercase `A`-`Z`/digits/space, not lowercase.
 
 ```python
     @covers(CobolFeature.UNSTRING_DELIMITED_BY)
@@ -474,7 +494,7 @@ Add to `tests/integration/test_cobol_e2e_features.py`, inside `TestStringOperati
                 "PROGRAM-ID. E2E-UNSTRING-OR.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
-                '77 WS-SRC PIC X(10) VALUE "a,b;c".',
+                '77 WS-SRC PIC X(10) VALUE "A,B;C".',
                 "77 WS-F1  PIC X(5) VALUE SPACES.",
                 "77 WS-F2  PIC X(5) VALUE SPACES.",
                 "77 WS-F3  PIC X(5) VALUE SPACES.",
@@ -486,9 +506,9 @@ Add to `tests/integration/test_cobol_e2e_features.py`, inside `TestStringOperati
             ]
         )
         region = _first_region(vm)
-        assert _decode_alpha(region, 15, 5).strip() == "a"
-        assert _decode_alpha(region, 20, 5).strip() == "b"
-        assert _decode_alpha(region, 25, 5).strip() == "c"
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
+        assert _decode_alpha(region, 20, 5).strip() == "C"
 
     @covers(CobolFeature.UNSTRING_DELIMITED_BY)
     def test_unstring_single_delimiter_still_works(self):
@@ -499,7 +519,7 @@ Add to `tests/integration/test_cobol_e2e_features.py`, inside `TestStringOperati
                 "PROGRAM-ID. E2E-UNSTRING-SINGLE.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
-                '77 WS-SRC PIC X(10) VALUE "a,b,c".',
+                '77 WS-SRC PIC X(10) VALUE "A,B,C".',
                 "77 WS-F1  PIC X(5) VALUE SPACES.",
                 "77 WS-F2  PIC X(5) VALUE SPACES.",
                 "PROCEDURE DIVISION.",
@@ -510,8 +530,8 @@ Add to `tests/integration/test_cobol_e2e_features.py`, inside `TestStringOperati
             ]
         )
         region = _first_region(vm)
-        assert _decode_alpha(region, 15, 5).strip() == "a"
-        assert _decode_alpha(region, 20, 5).strip() == "b"
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -520,7 +540,7 @@ Add to `tests/integration/test_cobol_e2e_features.py`, inside `TestStringOperati
 poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k unstring_multiple_delimiters -v
 ```
 
-Expected: FAIL — `UnstringStatement` still only knows a single `delimited_by`, so the split on `,` alone leaves `WS-F2`/`WS-F3` populated with garbage (everything after the first comma, unsplit on `;`), not `"b"`/`"c"`.
+Expected: FAIL — `UnstringStatement` still only knows a single `delimited_by`, so the split on `,` alone leaves `WS-F2` holding `"B;C"` (unsplit on `;`) and `WS-F3` blank, not `"B"`/`"C"`.
 
 - [ ] **Step 3: Update `UnstringStatement`**
 
@@ -552,7 +572,176 @@ class UnstringStatement:
         }
 ```
 
-- [ ] **Step 4: Rewrite the delimiter-selection logic in `lower_unstring`**
+- [ ] **Step 3a: Update the three existing unit tests that reference the old `delimited_by` field/key**
+
+In `tests/unit/test_cobol_statements.py`, `TestParseStatementDispatch::test_unstring` currently reads:
+
+```python
+    @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_DELIMITED_BY)
+    def test_unstring(self):
+        stmt = parse_statement(
+            {
+                "type": "UNSTRING",
+                "source": {"name": "WS-FULL"},
+                "delimited_by": "SPACES",
+                "into": ["WS-FIRST", "WS-LAST"],
+            }
+        )
+        assert isinstance(stmt, UnstringStatement)
+        assert stmt.source.name == "WS-FULL"
+        assert stmt.delimited_by == "SPACES"
+        assert stmt.into == ["WS-FIRST", "WS-LAST"]
+```
+
+Change to:
+
+```python
+    @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_DELIMITED_BY)
+    def test_unstring(self):
+        stmt = parse_statement(
+            {
+                "type": "UNSTRING",
+                "source": {"name": "WS-FULL"},
+                "delimiters": ["SPACES"],
+                "into": ["WS-FIRST", "WS-LAST"],
+            }
+        )
+        assert isinstance(stmt, UnstringStatement)
+        assert stmt.source.name == "WS-FULL"
+        assert stmt.delimiters == ["SPACES"]
+        assert stmt.into == ["WS-FIRST", "WS-LAST"]
+```
+
+`TestRoundTrip::test_unstring_round_trip` currently reads:
+
+```python
+    @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_DELIMITED_BY)
+    def test_unstring_round_trip(self):
+        data = {
+            "type": "UNSTRING",
+            "source": {"name": "WS-FULL"},
+            "delimited_by": " ",
+            "into": ["WS-FIRST", "WS-LAST"],
+        }
+        assert self._round_trip(data) == data
+```
+
+Change to:
+
+```python
+    @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_DELIMITED_BY)
+    def test_unstring_round_trip(self):
+        data = {
+            "type": "UNSTRING",
+            "source": {"name": "WS-FULL"},
+            "delimiters": [" "],
+            "into": ["WS-FIRST", "WS-LAST"],
+        }
+        assert self._round_trip(data) == data
+```
+
+In `tests/unit/test_cobol_frontend.py`, `TestTier2Lowering::test_unstring_produces_split_and_writes` currently constructs the statement and asserts on the opcode name:
+
+```python
+        stmts = [
+            UnstringStatement(
+                source=RefModOperand(name="WS-FULL"),
+                delimited_by=" ",
+                into=["WS-FIRST", "WS-LAST"],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should produce __string_split call
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        split_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__string_split"
+        ]
+        assert len(split_calls) >= 1
+```
+
+Change to:
+
+```python
+        stmts = [
+            UnstringStatement(
+                source=RefModOperand(name="WS-FULL"),
+                delimiters=[" "],
+                into=["WS-FIRST", "WS-LAST"],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should produce a __multi_delimiter_split call (Task 2's new builtin
+        # replaces the old single-delimiter __string_split path entirely).
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        split_calls = [
+            c
+            for c in calls
+            if c.operands and c.operands[0] == "__multi_delimiter_split"
+        ]
+        assert len(split_calls) >= 1
+```
+
+(Note: `tests/unit/test_cobol_statements.py::TestStringRefModAst::test_unstring_statement_from_dict` also passes a stale `"delimited_by"` key in its input dict, but its assertions only check `stmt.source`, never a delimiter field — it will keep passing unchanged (the key is silently ignored by the new `from_dict`) and does not need editing.)
+
+- [ ] **Step 4: Add the `MULTI_DELIMITER_SPLIT` builtin**
+
+Real UNSTRING `OR` semantics: at each split point, find whichever candidate delimiter occurs nearest, split there, and repeat from just past it — not "pick one delimiter for the whole string." Since the number and text of candidate delimiters is known statically at lowering time (from `stmt.delimiters`, literal COBOL text), each is passed as its own constant register, and the new builtin does the repeated-nearest-match scan itself at runtime.
+
+In `interpreter/cobol/cobol_constants.py`, add one new `BuiltinName` entry directly below `STRING_SPLIT`:
+
+```python
+    STRING_SPLIT = "__string_split"
+    MULTI_DELIMITER_SPLIT = "__multi_delimiter_split"
+```
+
+In `interpreter/cobol/byte_builtins.py`, add the implementation directly below `_builtin_string_split`:
+
+```python
+def _builtin_multi_delimiter_split(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Split source on whichever candidate delimiter matches nearest, repeated
+    until the source is exhausted (COBOL UNSTRING ... DELIMITED BY d1 OR d2 OR ...).
+
+    Args: [source: str, delim1: str, delim2: str, ...] — one or more delimiters.
+    Returns: list[str]. A single delimiter behaves identically to
+        str.split(delimiter) (str.split's own behavior is the N=1 case of this
+        same repeated-nearest-match scan).
+    """
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source = args[0].value
+    delimiters = [a.value for a in args[1:]]
+    if not isinstance(source, str) or not all(isinstance(d, str) for d in delimiters):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    parts: list[str] = []
+    remaining = source
+    while True:
+        best_pos = -1
+        best_delim = ""
+        for d in delimiters:
+            if not d:
+                continue
+            pos = remaining.find(d)
+            if pos >= 0 and (best_pos < 0 or pos < best_pos):
+                best_pos = pos
+                best_delim = d
+        if best_pos < 0:
+            parts.append(remaining)
+            break
+        parts.append(remaining[:best_pos])
+        remaining = remaining[best_pos + len(best_delim) :]
+    return BuiltinResult(value=parts)
+```
+
+Register it in the dispatch dict, directly below the `STRING_SPLIT` entry:
+
+```python
+        FuncName(BuiltinName.STRING_SPLIT): _builtin_string_split,
+        FuncName(BuiltinName.MULTI_DELIMITER_SPLIT): _builtin_multi_delimiter_split,
+```
+
+- [ ] **Step 5: Rewrite the delimiter-selection logic in `lower_unstring`**
 
 In `interpreter/cobol/lower_string_inspect.py`, replace this block in `lower_unstring`:
 
@@ -566,90 +755,28 @@ In `interpreter/cobol/lower_string_inspect.py`, replace this block in `lower_uns
 with:
 
 ```python
-    # Multiple candidate delimiters (DELIMITED BY x OR y OR z): the delimiter
-    # whose first occurrence is earliest in the source string wins. Emitted at
-    # lowering time as a fixed sequence of STRING_FIND calls compared pairwise —
-    # the number of candidate delimiters is known statically from the source
-    # program text, so no runtime loop over a variable-length list is needed
-    # (red-dragon-4q25.12).
-    candidate_delims = [
-        strip_cobol_literal(translate_cobol_figurative(str(d))) for d in stmt.delimiters
-    ]
-    best_delim_reg = ctx.const_to_reg(candidate_delims[0])
-    if len(candidate_delims) > 1:
-        best_pos_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=best_pos_reg,
-                func_name=FuncName(BuiltinName.STRING_FIND),
-                args=(src_str_reg, best_delim_reg),
-            ),
-        )
-        for extra_delim in candidate_delims[1:]:
-            extra_delim_reg = ctx.const_to_reg(extra_delim)
-            extra_pos_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=extra_pos_reg,
-                    func_name=FuncName(BuiltinName.STRING_FIND),
-                    args=(src_str_reg, extra_delim_reg),
-                ),
-            )
-            new_best_delim_reg = ctx.fresh_reg()
-            new_best_pos_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=new_best_delim_reg,
-                    func_name=FuncName(BuiltinName.EARLIEST_DELIMITER),
-                    args=(best_pos_reg, best_delim_reg, extra_pos_reg, extra_delim_reg),
-                ),
-            )
-            best_delim_reg = new_best_delim_reg
-            best_pos_reg = new_best_pos_reg
-    delim_reg = best_delim_reg
-    ir = build_string_split_ir(f"unstring_split_{source_name}")
-    parts_reg = ctx.inline_ir(ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg})
+    # One or more candidate delimiters (DELIMITED BY x OR y OR z): each is
+    # known statically at lowering time (literal COBOL text), so each becomes
+    # its own constant register; MULTI_DELIMITER_SPLIT does the correct
+    # repeated-nearest-match scan across all of them at runtime — a single
+    # delimiter is just the N=1 case of the same builtin (red-dragon-4q25.12).
+    delim_regs = tuple(
+        ctx.const_to_reg(strip_cobol_literal(translate_cobol_figurative(str(d))))
+        for d in stmt.delimiters
+    )
+    parts_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=parts_reg,
+            func_name=FuncName(BuiltinName.MULTI_DELIMITER_SPLIT),
+            args=(src_str_reg,) + delim_regs,
+        ),
+    )
 ```
 
-This introduces a new builtin, `EARLIEST_DELIMITER(pos_a, delim_a, pos_b, delim_b) -> str`, that picks whichever delimiter matched at the earlier string position (treating "not found", i.e. `-1`, as "later than any real match"). Add it:
+This entirely replaces the old `build_string_split_ir`/`STRING_SPLIT`-via-single-delimiter path for UNSTRING (note: `build_string_split_ir`/`STRING_SPLIT` are untouched and still used elsewhere — e.g. `lower_string`'s own unrelated delimiter handling for the `STRING` verb — this change is scoped to `lower_unstring` only).
 
-In `interpreter/cobol/cobol_constants.py`, add one new `BuiltinName` entry directly below `STRING_FIND`:
-
-```python
-    STRING_FIND = "__string_find"
-    EARLIEST_DELIMITER = "__earliest_delimiter"
-    STRING_SPLIT = "__string_split"
-```
-
-In `interpreter/cobol/byte_builtins.py`, add the implementation directly below `_builtin_string_find`:
-
-```python
-def _builtin_earliest_delimiter(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Pick whichever of two candidate delimiters matched at the earlier position.
-
-    Args: [pos_a: int, delim_a: str, pos_b: int, delim_b: str]
-        pos_a/pos_b are STRING_FIND results (-1 = not found, treated as "later
-        than any real match").
-    Returns: str (delim_a or delim_b)
-    """
-    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    pos_a, delim_a, pos_b, delim_b = (a.value for a in args)
-    if not all(isinstance(v, int) for v in (pos_a, pos_b)):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    effective_a = pos_a if pos_a >= 0 else float("inf")
-    effective_b = pos_b if pos_b >= 0 else float("inf")
-    return BuiltinResult(value=delim_a if effective_a <= effective_b else delim_b)
-```
-
-And register it in the dispatch dict (the `{FuncName(BuiltinName.X): _builtin_x, ...}` mapping), directly below the `STRING_FIND` entry:
-
-```python
-        FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
-        FuncName(BuiltinName.EARLIEST_DELIMITER): _builtin_earliest_delimiter,
-```
-
-- [ ] **Step 5: Retire the transitional `delimited_by` bridge key**
+- [ ] **Step 6: Retire the transitional `delimited_by` bridge key**
 
 Task 1 dual-emitted the old scalar `"delimited_by"` JSON key alongside the new `"delimiters"` array, specifically because `UnstringStatement.from_dict` still read the old key at that point. Step 3 above just switched `from_dict` over to `"delimiters"` — the old key is now dead. Remove it from the bridge:
 
@@ -687,7 +814,7 @@ cd proleap-bridge && ./build.sh && cd ..
 
 Expected: clean build, no compile errors.
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [ ] **Step 7: Run tests to verify they pass**
 
 ```bash
 poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "unstring_multiple_delimiters or unstring_single_delimiter" -v
@@ -695,7 +822,16 @@ poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "uns
 
 Expected: both PASS.
 
-- [ ] **Step 7: Run the full test suite**
+Also run the three updated unit tests:
+
+```bash
+poetry run python -m pytest tests/unit/test_cobol_statements.py -k unstring -v
+poetry run python -m pytest tests/unit/test_cobol_frontend.py -k test_unstring_produces_split_and_writes -v
+```
+
+Expected: all PASS.
+
+- [ ] **Step 8: Run the full test suite**
 
 ```bash
 poetry run python -m pytest tests/ -q
@@ -703,22 +839,29 @@ poetry run python -m pytest tests/ -q
 
 Expected: no regressions. This is the real regression gate for the `delimited_by` retirement — confirms every UNSTRING caller now resolves its delimiter via `delimiters` (Step 3's `from_dict` switch) with nothing left depending on the now-removed `delimited_by` key.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-bd close red-dragon-4q25.12 --reason "UNSTRING DELIMITED BY x OR y OR z implemented; earliest-match delimiter wins, single-delimiter case unaffected"
+bd close red-dragon-4q25.12 --reason "UNSTRING DELIMITED BY x OR y OR z implemented via a new MULTI_DELIMITER_SPLIT builtin (repeated nearest-match-of-N-candidates scan, not a single delimiter chosen once); single-delimiter case unaffected"
 bd export -o beads/issues.jsonl
 git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
         interpreter/cobol/cobol_constants.py interpreter/cobol/byte_builtins.py \
         proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java \
-        tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
+        tests/integration/test_cobol_e2e_features.py \
+        tests/unit/test_cobol_statements.py tests/unit/test_cobol_frontend.py \
+        beads/issues.jsonl
 git commit -m "feat(cobol): UNSTRING DELIMITED BY x OR y — multi-delimiter support
 
-UnstringStatement.delimited_by (scalar) -> delimiters (list). Earliest
-match among all candidate delimiters wins the split point, via a new
-EARLIEST_DELIMITER builtin. Single-delimiter UNSTRING unaffected.
-Also retires Task 1's transitional dual-emitted delimited_by bridge
-key, now that this task's from_dict switch makes it dead.
+UnstringStatement.delimited_by (scalar) -> delimiters (list). A new
+MULTI_DELIMITER_SPLIT builtin repeatedly finds whichever candidate
+delimiter is nearest at each split point and splits there - not a
+single delimiter chosen once for the whole string, which cannot
+correctly handle interleaved distinct delimiters (e.g. 'a,b;c' DELIMITED
+BY ',' OR ';'). Single-delimiter UNSTRING is the N=1 case of the same
+builtin, matching str.split's own behavior exactly. Also retires Task
+1's transitional dual-emitted delimited_by bridge key, now that this
+task's from_dict switch makes it dead, and updates three existing unit
+tests that referenced the old delimited_by field/key/opcode name.
 
 red-dragon-4q25.12"
 ```
