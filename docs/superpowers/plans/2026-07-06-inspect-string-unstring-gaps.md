@@ -30,10 +30,12 @@
 
 **Interfaces:**
 - Produces (new JSON fields, consumed by Tasks 2-6):
-  - `UNSTRING` statement JSON: `"delimiters": [str, ...]` (replaces the old scalar `"delimited_by"` key entirely), `"pointer": str` (absent/omitted if no `WITH POINTER` clause), `"tallying_target": str` (absent if no `TALLYING IN` clause).
+  - `UNSTRING` statement JSON: `"delimiters": [str, ...]` (new; `"delimited_by"` (old scalar key) stays present too, transitionally — see dual-emit note below), `"pointer": str` (absent/omitted if no `WITH POINTER` clause), `"tallying_target": str` (absent if no `TALLYING IN` clause — this is a brand-new key on the UNSTRING statement, unrelated to INSPECT's differently-shaped legacy key of the same name below).
   - `STRING` statement JSON: `"pointer": str` (absent if no `WITH POINTER` clause).
-  - `INSPECT` statement JSON (`inspect_type == "TALLYING"`): `"tallying_groups": [{"target": str, "patterns": [{"mode": str, "pattern": str, "before": str (optional), "after": str (optional)}, ...]}, ...]` (replaces the old flat `"tallying_target"` + `"tallying_for"` keys entirely).
+  - `INSPECT` statement JSON (`inspect_type == "TALLYING"`): `"tallying_groups": [{"target": str, "patterns": [{"mode": str, "pattern": str, "before": str (optional), "after": str (optional)}, ...]}, ...]` (new; the old flat `"tallying_target"` + `"tallying_for"` keys — first group only — stay present too, transitionally).
   - `INSPECT` statement JSON (`inspect_type == "REPLACING"`): each entry in `"replacings"` gains optional `"before"`/`"after"` string fields.
+
+  **Dual-emit, not replace:** the old `"delimited_by"` (UNSTRING) and `"tallying_target"`/`"tallying_for"` (INSPECT TALLYING) keys are emitted *alongside* the new ones in this task, not removed — `UnstringStatement.from_dict`/`InspectStatement.from_dict` still read the old keys until Tasks 2 and 5 switch them over, and those old keys are load-bearing in the current, already-shipped behavior (confirmed empirically: dropping them outright breaks 8 passing tests, since the defaults `from_dict` falls back to are silently wrong, not absent). Task 2 retires the `delimited_by` dual-emit once its own `from_dict` switch lands; Task 5 retires the `tallying_target`/`tallying_for` dual-emit the same way. This keeps every task in this plan independently shippable with zero regressions at each commit.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -233,12 +235,23 @@ Replace the entire existing `serializeUnstring` method with:
             // Delimiters: first from DelimitedByPhrase, then each OR ALL? phrase.
             // Multiple delimiters (DELIMITED BY x OR y OR z) all land in one JSON
             // array; Python picks whichever matches earliest (red-dragon-4q25.12).
+            //
+            // TRANSITIONAL DUAL-EMIT: the old scalar "delimited_by" key (first
+            // delimiter only) is emitted ALONGSIDE the new "delimiters" array,
+            // not replaced — interpreter/cobol/cobol_statements.py's
+            // UnstringStatement.from_dict still reads "delimited_by" as
+            // load-bearing logic until Task 2 switches it over. Task 2 removes
+            // this old-key emission once that switch lands (confirmed via a
+            // real full-suite run during this task: dropping "delimited_by"
+            // outright breaks 8 passing tests today, before Task 2 exists).
             if (stmt.getSending() != null) {
                 JsonArray delimiters = new JsonArray();
                 io.proleap.cobol.asg.metamodel.procedure.unstring.DelimitedByPhrase dbp =
                         stmt.getSending().getDelimitedByPhrase();
                 if (dbp != null && dbp.getDelimitedByValueStmt() != null) {
-                    delimiters.add(extractValueStmtText(dbp.getDelimitedByValueStmt()));
+                    String firstDelim = extractValueStmtText(dbp.getDelimitedByValueStmt());
+                    delimiters.add(firstDelim);
+                    obj.addProperty("delimited_by", firstDelim);
                 }
                 for (io.proleap.cobol.asg.metamodel.procedure.unstring.OrAll orAll
                         : stmt.getSending().getOrAlls()) {
@@ -307,14 +320,28 @@ Then, inside `serializeInspect`, replace the `TALLYING` branch (the `if (inspTyp
             if (inspType == InspectStatement.InspectType.TALLYING) {
                 obj.addProperty("inspect_type", "TALLYING");
                 if (stmt.getTallying() != null) {
+                    // TRANSITIONAL DUAL-EMIT: the old flat "tallying_target"/
+                    // "tallying_for" keys (first group only) are emitted
+                    // ALONGSIDE the new "tallying_groups" array, not replaced —
+                    // InspectStatement.from_dict still reads them as
+                    // load-bearing logic until Task 5 switches it over.
+                    // Task 5 removes this old-key emission once that switch
+                    // lands (confirmed via a real full-suite run during Task 1:
+                    // dropping these keys outright breaks passing tests today,
+                    // before Task 5 exists).
                     JsonArray groups = new JsonArray();
+                    boolean firstGroup = true;
                     for (io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem : stmt.getTallying().getFors()) {
                         JsonObject groupObj = new JsonObject();
                         if (forItem.getTallyCountDataItemCall() != null) {
-                            groupObj.addProperty("target",
-                                    extractCallName(forItem.getTallyCountDataItemCall()));
+                            String target = extractCallName(forItem.getTallyCountDataItemCall());
+                            groupObj.addProperty("target", target);
+                            if (firstGroup) {
+                                obj.addProperty("tallying_target", target);
+                            }
                         }
                         JsonArray patterns = new JsonArray();
+                        JsonArray legacyPatterns = firstGroup ? new JsonArray() : null;
                         for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
                             String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
                             for (AllLeading al : alp.getAllLeadings()) {
@@ -326,10 +353,23 @@ Then, inside `serializeInspect`, replace the `TALLYING` branch (the `if (inspTyp
                                 }
                                 addBeforeAfter(forObj, al.getBeforeAfterPhrases());
                                 patterns.add(forObj);
+                                if (legacyPatterns != null) {
+                                    JsonObject legacyObj = new JsonObject();
+                                    legacyObj.addProperty("mode", mode);
+                                    if (al.getPatternDataItemValueStmt() != null) {
+                                        legacyObj.addProperty("pattern",
+                                                extractValueStmtText(al.getPatternDataItemValueStmt()));
+                                    }
+                                    legacyPatterns.add(legacyObj);
+                                }
                             }
+                        }
+                        if (legacyPatterns != null) {
+                            obj.add("tallying_for", legacyPatterns);
                         }
                         groupObj.add("patterns", patterns);
                         groups.add(groupObj);
+                        firstGroup = false;
                     }
                     obj.add("tallying_groups", groups);
                 }
@@ -381,7 +421,7 @@ Expected: all 6 tests PASS.
 poetry run python -m pytest tests/ -q
 ```
 
-Expected: same pass count as before this task, plus the 6 new tests (nothing downstream reads `delimiters`/`tallying_groups`/`pointer` yet, and the old `delimited_by`/flat `tallying_for` keys are gone from the JSON — this is safe because no current Python code reads those keys either; `UnstringStatement.from_dict`/`InspectStatement.from_dict` will simply see `.get("delimited_by", "")` return `""` and `.get("tallying_for", [])` return `[]`, an inert no-op until Tasks 2 and 5 update them).
+Expected: **exactly zero regressions** — same pass count as before this task, plus the 6 new tests. Unlike an earlier draft of this plan, the old `delimited_by`/`tallying_target`/`tallying_for` keys are NOT removed by this task — they're dual-emitted alongside the new keys specifically so `UnstringStatement.from_dict`/`InspectStatement.from_dict` (unchanged until Tasks 2/5) keep reading exactly what they read before. If you see any failures here, do not proceed — this task's whole point is to be a safe, standalone-shippable JSON-schema addition with no behavior change yet.
 
 - [ ] **Step 10: Commit**
 
@@ -414,6 +454,7 @@ red-dragon-4q25.12, .13, .14, .15, .17"
 **Files:**
 - Modify: `interpreter/cobol/cobol_statements.py` (`UnstringStatement`)
 - Modify: `interpreter/cobol/lower_string_inspect.py` (`lower_unstring`)
+- Modify: `proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java` (retire the transitional dual-emitted `delimited_by` key from Task 1 — this task's own dataclass switch is what makes it safe to remove)
 - Test: `tests/integration/test_cobol_e2e_features.py`
 
 **Interfaces:**
@@ -608,7 +649,45 @@ And register it in the dispatch dict (the `{FuncName(BuiltinName.X): _builtin_x,
         FuncName(BuiltinName.EARLIEST_DELIMITER): _builtin_earliest_delimiter,
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 5: Retire the transitional `delimited_by` bridge key**
+
+Task 1 dual-emitted the old scalar `"delimited_by"` JSON key alongside the new `"delimiters"` array, specifically because `UnstringStatement.from_dict` still read the old key at that point. Step 3 above just switched `from_dict` over to `"delimiters"` — the old key is now dead. Remove it from the bridge:
+
+In `proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java`, in `serializeUnstring`, remove the two lines that emit the transitional key (leave `delimiters.add(firstDelim);` in place — only the old-key line goes):
+
+```java
+                if (dbp != null && dbp.getDelimitedByValueStmt() != null) {
+                    String firstDelim = extractValueStmtText(dbp.getDelimitedByValueStmt());
+                    delimiters.add(firstDelim);
+                    obj.addProperty("delimited_by", firstDelim);
+                }
+```
+
+becomes:
+
+```java
+                if (dbp != null && dbp.getDelimitedByValueStmt() != null) {
+                    delimiters.add(extractValueStmtText(dbp.getDelimitedByValueStmt()));
+                }
+```
+
+Also delete the now-stale `TRANSITIONAL DUAL-EMIT` comment block directly above this `if` (the one added in Task 1) — replace it with the original, simpler comment:
+
+```java
+            // Delimiters: first from DelimitedByPhrase, then each OR ALL? phrase.
+            // Multiple delimiters (DELIMITED BY x OR y OR z) all land in one JSON
+            // array; Python picks whichever matches earliest (red-dragon-4q25.12).
+```
+
+Rebuild the JAR:
+
+```bash
+cd proleap-bridge && ./build.sh && cd ..
+```
+
+Expected: clean build, no compile errors.
+
+- [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
 poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "unstring_multiple_delimiters or unstring_single_delimiter" -v
@@ -616,27 +695,30 @@ poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "uns
 
 Expected: both PASS.
 
-- [ ] **Step 6: Run the full test suite**
+- [ ] **Step 7: Run the full test suite**
 
 ```bash
 poetry run python -m pytest tests/ -q
 ```
 
-Expected: no regressions (any other caller of `UnstringStatement.delimited_by` would show up as an `AttributeError` — grep confirms `lower_string_inspect.py` is the only consumer).
+Expected: no regressions. This is the real regression gate for the `delimited_by` retirement — confirms every UNSTRING caller now resolves its delimiter via `delimiters` (Step 3's `from_dict` switch) with nothing left depending on the now-removed `delimited_by` key.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 bd close red-dragon-4q25.12 --reason "UNSTRING DELIMITED BY x OR y OR z implemented; earliest-match delimiter wins, single-delimiter case unaffected"
 bd export -o beads/issues.jsonl
 git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
         interpreter/cobol/cobol_constants.py interpreter/cobol/byte_builtins.py \
+        proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java \
         tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
 git commit -m "feat(cobol): UNSTRING DELIMITED BY x OR y — multi-delimiter support
 
 UnstringStatement.delimited_by (scalar) -> delimiters (list). Earliest
 match among all candidate delimiters wins the split point, via a new
 EARLIEST_DELIMITER builtin. Single-delimiter UNSTRING unaffected.
+Also retires Task 1's transitional dual-emitted delimited_by bridge
+key, now that this task's from_dict switch makes it dead.
 
 red-dragon-4q25.12"
 ```
@@ -1158,6 +1240,7 @@ red-dragon-4q25.15 (core behavior only)"
 **Files:**
 - Modify: `interpreter/cobol/cobol_statements.py` (`InspectStatement`, new `TallyingGroup`)
 - Modify: `interpreter/cobol/lower_string_inspect.py` (`lower_inspect_tallying`)
+- Modify: `proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java` (retire the transitional dual-emitted `tallying_target`/`tallying_for` keys from Task 1 — this task's own dataclass switch is what makes it safe to remove)
 - Test: `tests/integration/test_cobol_e2e_features.py`
 
 **Interfaces:**
@@ -1345,7 +1428,54 @@ def lower_inspect_tallying(
             )
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 5: Retire the transitional `tallying_target`/`tallying_for` bridge keys**
+
+Task 1 dual-emitted the old flat `"tallying_target"`/`"tallying_for"` JSON keys (first group only) alongside the new `"tallying_groups"` array, specifically because `InspectStatement.from_dict` still read the old keys at that point. Step 3 above just switched `from_dict` over to `"tallying_groups"` — the old keys are now dead. Remove them from the bridge:
+
+In `proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java`, in `serializeInspect`'s `TALLYING` branch, remove all of the transitional dual-emit bookkeeping. Replace the whole block back to its simpler form:
+
+```java
+            if (inspType == InspectStatement.InspectType.TALLYING) {
+                obj.addProperty("inspect_type", "TALLYING");
+                if (stmt.getTallying() != null) {
+                    JsonArray groups = new JsonArray();
+                    for (io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem : stmt.getTallying().getFors()) {
+                        JsonObject groupObj = new JsonObject();
+                        if (forItem.getTallyCountDataItemCall() != null) {
+                            groupObj.addProperty("target",
+                                    extractCallName(forItem.getTallyCountDataItemCall()));
+                        }
+                        JsonArray patterns = new JsonArray();
+                        for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
+                            String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
+                            for (AllLeading al : alp.getAllLeadings()) {
+                                JsonObject forObj = new JsonObject();
+                                forObj.addProperty("mode", mode);
+                                if (al.getPatternDataItemValueStmt() != null) {
+                                    forObj.addProperty("pattern",
+                                            extractValueStmtText(al.getPatternDataItemValueStmt()));
+                                }
+                                addBeforeAfter(forObj, al.getBeforeAfterPhrases());
+                                patterns.add(forObj);
+                            }
+                        }
+                        groupObj.add("patterns", patterns);
+                        groups.add(groupObj);
+                    }
+                    obj.add("tallying_groups", groups);
+                }
+            } else if (inspType == InspectStatement.InspectType.REPLACING) {
+```
+
+Rebuild the JAR:
+
+```bash
+cd proleap-bridge && ./build.sh && cd ..
+```
+
+Expected: clean build, no compile errors.
+
+- [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
 poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "inspect_tallying_multiple_independent or inspect_tallying_single_target" -v
@@ -1353,20 +1483,21 @@ poetry run python -m pytest tests/integration/test_cobol_e2e_features.py -k "ins
 
 Expected: both PASS.
 
-- [ ] **Step 6: Run the full test suite**
+- [ ] **Step 7: Run the full test suite**
 
 ```bash
 poetry run python -m pytest tests/ -q
 ```
 
-Expected: no regressions — grep confirms `InspectStatement.tallying_target`/`.tallying_for` have no other readers besides `lower_inspect_tallying` (just modified) and `lower_inspect` (which only dispatches by `inspect_type`, never touches these fields directly).
+Expected: no regressions. This is the real regression gate for the `tallying_target`/`tallying_for` retirement — confirms every INSPECT TALLYING caller now resolves via `tallying_groups` (Step 3's `from_dict` switch) with nothing left depending on the now-removed keys.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 bd close red-dragon-4q25.17 --reason "INSPECT TALLYING with multiple independent targets implemented — InspectStatement.tallying_target/tallying_for (flat) restructured into tallying_groups: list[TallyingGroup], mirroring the ASG's own per-For target shape"
 bd export -o beads/issues.jsonl
 git add interpreter/cobol/cobol_statements.py interpreter/cobol/lower_string_inspect.py \
+        proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java \
         tests/integration/test_cobol_e2e_features.py beads/issues.jsonl
 git commit -m "feat(cobol): INSPECT TALLYING with multiple independent targets
 
@@ -1374,7 +1505,9 @@ InspectStatement's flat tallying_target+tallying_for become
 tallying_groups: list[TallyingGroup], mirroring the ProLeap ASG's own
 List<For> shape (each For already carries its own target). Fixes the
 Java-bridge overwrite bug from Task 1 at the Python consumer too —
-each group now writes its own accumulated count independently.
+each group now writes its own accumulated count independently. Also
+retires Task 1's transitional dual-emitted tallying_target/tallying_for
+bridge keys, now that this task's from_dict switch makes them dead.
 
 red-dragon-4q25.17"
 ```
