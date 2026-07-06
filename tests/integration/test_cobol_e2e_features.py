@@ -500,6 +500,77 @@ class TestStringOperations:
         assert _decode(region, 20, 4) == 5
 
     @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_with_pointer_resumes_scan_with_multiple_or_delimiters(self):
+        """Cross-fix interaction: multi-candidate DELIMITED BY x OR y (Task 2)
+        combined with WITH POINTER (Task 4) across two consecutive calls -
+        each call must pick whichever candidate delimiter is nearest starting
+        from the cursor, not from offset 0."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-PTR4.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A,B;C".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ',' OR ';'",
+                "        INTO WS-F1 WITH POINTER WS-PTR.",
+                "    UNSTRING WS-SRC DELIMITED BY ',' OR ';'",
+                "        INTO WS-F2 WITH POINTER WS-PTR.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19, WS-PTR (9(4)) @20-23.
+        # 1st call: ptr=1 -> scans "A,B;C" from offset 0, nearest delimiter is
+        # ',' at pos 1 -> WS-F1="A", ptr advances by 1+1=2 -> 3.
+        # 2nd call: ptr=3 -> MUST scan from offset 2 ("B;C"), where only ';'
+        # is present -> WS-F2="B" (not "A"), ptr advances by 1+1=2 -> 5.
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
+        assert _decode(region, 20, 4) == 5
+
+    @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_tallying_in_and_with_pointer_together(self):
+        """Cross-fix interaction: TALLYING IN (Task 3) and WITH POINTER
+        (Task 4) on the same UNSTRING statement both write back correctly -
+        they touch different fields, but nothing before this checked they
+        coexist in one lowering pass."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-TALLY-PTR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A,B,C".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WS-F2",
+                "        WITH POINTER WS-PTR",
+                "        TALLYING IN WS-CNT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19, WS-CNT @20-23, WS-PTR @24-27.
+        # "A,B,C" -> 3 substrings, only 2 INTO targets -> WS-F1="A", WS-F2="B",
+        # WS-CNT = min(3,2) = 2. Consumed length for 2 targets = len("A")+
+        # len(",")+len("B")+len(",") = 4; ptr started at 1 -> 5.
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
+        assert _decode(region, 20, 4) == 2
+        assert _decode(region, 24, 4) == 5
+
+    @covers(CobolFeature.UNSTRING_VERB)
     def test_unstring_with_pointer_advances_past_multi_char_delimiter(self):
         """Regression for the pre-dispatch fix: the cursor must advance past
         the delimiter's ACTUAL length, not an assumed 1 character."""
