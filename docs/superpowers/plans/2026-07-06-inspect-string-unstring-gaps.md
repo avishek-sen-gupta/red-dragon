@@ -2169,6 +2169,66 @@ Register it in the dispatch dict, directly below the `STRING_SLICE` entry:
         FuncName(BuiltinName.STRING_BOUNDARY_SLICE): _builtin_string_boundary_slice,
 ```
 
+> **Correction, pre-dispatch review:** `STRING_BOUNDARY_SLICE` alone is enough
+> for `lower_inspect_tallying` (Step 5 below), which only ever needs the
+> bounded region to count patterns in — the rest of the string is never
+> touched or written back. But `lower_inspect_replacing` (Step 6) is
+> different: it must replace patterns *only within* the bounded region, then
+> write the FULL field back, with whatever came before/after the boundary
+> preserved untouched. The original version of this step discarded that
+> untouched remainder entirely — it replaced the bounded slice and then
+> treated the REPLACED SLICE ALONE as the new full string, silently dropping
+> everything outside the boundary. That fails the task's own test
+> (`"AA.AA     "` → expected `"ZZ.AA     "` — the trailing `".AA     "` would
+> actually be lost, not preserved, contradicting the original step's own
+> incorrect justification comment). Add a second builtin that returns BOTH
+> halves so the replaced piece can be spliced back with the untouched
+> remainder:
+
+In `interpreter/cobol/cobol_constants.py`, add one more entry directly below `STRING_BOUNDARY_SLICE`:
+
+```python
+    STRING_BOUNDARY_SLICE = "__string_boundary_slice"
+    STRING_BOUNDARY_SPLIT = "__string_boundary_split"
+```
+
+In `interpreter/cobol/byte_builtins.py`, add directly below `_builtin_string_boundary_slice`:
+
+```python
+def _builtin_string_boundary_split(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Split source at a BEFORE/AFTER INITIAL boundary into [bounded, remainder].
+
+    Args: [source: str, boundary_text: str, kind: str ("before"/"after")]
+    Returns: list[str] of exactly 2 elements: [bounded_part, remainder_part].
+        bounded_part is the region a bounded operation (e.g. REPLACING) should
+        act on; remainder_part is everything else in source, to be spliced
+        back around the (possibly modified) bounded_part to reconstruct the
+        full string. If boundary_text is not found at all, bounded_part is
+        the entire source and remainder_part is "" (nothing left over) —
+        consistent with STRING_BOUNDARY_SLICE's own not-found fallback.
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source, boundary_text, kind = (a.value for a in args)
+    if not all(isinstance(v, str) for v in (source, boundary_text, kind)):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    pos = source.find(boundary_text)
+    if pos < 0:
+        return BuiltinResult(value=[source, ""])
+    if kind == "before":
+        return BuiltinResult(value=[source[:pos], source[pos:]])
+    return BuiltinResult(
+        value=[source[pos + len(boundary_text) :], source[: pos + len(boundary_text)]]
+    )
+```
+
+Register it in the dispatch dict, directly below the `STRING_BOUNDARY_SLICE` entry:
+
+```python
+        FuncName(BuiltinName.STRING_BOUNDARY_SLICE): _builtin_string_boundary_slice,
+        FuncName(BuiltinName.STRING_BOUNDARY_SPLIT): _builtin_string_boundary_split,
+```
+
 - [ ] **Step 5: Apply the boundary in `lower_inspect_tallying`**
 
 In `interpreter/cobol/lower_string_inspect.py`, update the per-pattern loop inside `lower_inspect_tallying` (from Task 5) to bound `src_str_reg` per pattern before counting:
@@ -2223,6 +2283,27 @@ In `interpreter/cobol/lower_string_inspect.py`, update the per-pattern loop insi
 
 - [ ] **Step 6: Apply the boundary in `lower_inspect_replacing`**
 
+> **Correction, pre-dispatch review:** see the note on Step 4 above —
+> `REPLACING` must splice the replaced bounded region back with the untouched
+> remainder, not discard it. Uses the new `STRING_BOUNDARY_SPLIT` builtin to
+> get both halves, then `STRING_CONCAT_PAIR` (already used elsewhere in this
+> file, e.g. `lower_string`) to reassemble them in the right order once the
+> bounded half has been replaced.
+
+This uses `NO_REGISTER` (this file's existing null-object sentinel for "no
+register", per the repo's no-`None`-defaults convention) as the "no boundary"
+case — not yet imported in this file. Change the existing import line:
+
+```python
+from interpreter.register import Register
+```
+
+to:
+
+```python
+from interpreter.register import Register, NO_REGISTER
+```
+
 Update the per-replacing loop inside `lower_inspect_replacing`:
 
 ```python
@@ -2237,25 +2318,46 @@ def lower_inspect_replacing(
     current_str_reg: Register = src_str_reg
 
     for replacing in stmt.replacings:
-        bounded_str_reg = current_str_reg
+        remainder_reg: Register = NO_REGISTER
         if isinstance(replacing.boundary, BeforeAfterBoundary):
             boundary_text_reg = ctx.const_to_reg(
                 strip_cobol_literal(str(replacing.boundary.boundary_text))
             )
             kind_reg = ctx.const_to_reg(replacing.boundary.kind.lower())
+            split_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=split_reg,
+                    func_name=FuncName(BuiltinName.STRING_BOUNDARY_SPLIT),
+                    args=(current_str_reg, boundary_text_reg, kind_reg),
+                ),
+            )
+            zero_reg = ctx.const_to_reg(0)
+            one_reg = ctx.const_to_reg(1)
             bounded_str_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
                     result_reg=bounded_str_reg,
-                    func_name=FuncName(BuiltinName.STRING_BOUNDARY_SLICE),
-                    args=(current_str_reg, boundary_text_reg, kind_reg),
+                    func_name=FuncName(BuiltinName.LIST_GET),
+                    args=(split_reg, zero_reg),
                 ),
             )
+            remainder_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=remainder_reg,
+                    func_name=FuncName(BuiltinName.LIST_GET),
+                    args=(split_reg, one_reg),
+                ),
+            )
+        else:
+            bounded_str_reg = current_str_reg
+
         from_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.from_pattern)))
         to_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.to_pattern)))
         mode_reg = ctx.const_to_reg(replacing.mode.lower())
         ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")
-        new_str_reg = ctx.inline_ir(
+        replaced_bounded_reg = ctx.inline_ir(
             ir,
             {
                 "%p_source": bounded_str_reg,
@@ -2264,7 +2366,26 @@ def lower_inspect_replacing(
                 "%p_mode": mode_reg,
             },
         )
-        current_str_reg = new_str_reg
+
+        if remainder_reg.is_present():
+            spliced_reg = ctx.fresh_reg()
+            # BEFORE: replaced prefix + untouched remainder (boundary onward).
+            # AFTER: untouched remainder (up to and including boundary) + replaced suffix.
+            args = (
+                (replaced_bounded_reg, remainder_reg)
+                if replacing.boundary.kind == "BEFORE"
+                else (remainder_reg, replaced_bounded_reg)
+            )
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=spliced_reg,
+                    func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
+                    args=args,
+                ),
+            )
+            current_str_reg = spliced_reg
+        else:
+            current_str_reg = replaced_bounded_reg
 
     # Resolve the source region register for the write-back
     if ctx.has_field(stmt.source.name, materialised):
@@ -2278,7 +2399,7 @@ def lower_inspect_replacing(
         )
 ```
 
-Note: when `BEFORE`/`AFTER` bounds the region, the `REPLACING` builtin (`STRING_REPLACE`) still operates only on the *bounded substring* — this is a simplification versus full COBOL semantics (which replace within the bounded region but leave the rest of the string untouched, splicing the replaced bounded region back into the unbounded remainder). Since none of the four acceptance criteria on `red-dragon-4q25.13` exercise `REPLACING` where the boundary sits strictly *inside* a string with meaningful trailing/leading unbounded content beyond what the test above already checks (`"AA.AA     "` → the bounded prefix is fully replaced and the rest of the field, including the untouched trailing spaces, is preserved because `write-back` re-encodes the FULL field width from `current_str_reg`, and the test's own expected `"ZZ.AA     "` confirms the trailing `".AA     "` after the boundary is genuines correctly preserved) — the current approach is correct for this task's scope. If future gap discovery finds `REPLACING BEFORE`/`AFTER` cases where the region needs splicing back into a larger unbounded remainder that's also being scanned by further `REPLACING` entries in the same statement, that is a follow-up gap, not part of this task.
+Hand-traced against the task's own test: source `"AA.AA     "`, `REPLACING ALL 'A' BY 'Z' BEFORE INITIAL '.'`. `STRING_BOUNDARY_SPLIT` finds `.` at position 2, kind `"before"` → `["AA", ".AA     "]`. Bounded `"AA"` → replaced to `"ZZ"`. Splice for `BEFORE`: `replaced_bounded + remainder` = `"ZZ" + ".AA     "` = `"ZZ.AA     "` — matches the test's expected value exactly, with the remainder genuinely preserved this time (not discarded).
 
 - [ ] **Step 7: Run tests to verify they pass**
 
