@@ -226,6 +226,21 @@ def lower_unstring(
             target_rr, target_ref.fl, part_reg, target_ref.offset_reg
         )
 
+    if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
+        tally_ref, tally_rr = ctx.resolve_field_ref(stmt.tallying_target, materialised)
+        len_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=len_reg,
+                func_name=FuncName(BuiltinName.LIST_LEN),
+                args=(parts_reg,),
+            ),
+        )
+        count_str_reg = ctx.emit_to_string(len_reg)
+        ctx.emit_encode_and_write(
+            tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+        )
+
 
 def lower_inspect(
     ctx: EmitContext,
