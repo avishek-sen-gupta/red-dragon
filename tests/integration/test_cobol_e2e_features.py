@@ -464,6 +464,42 @@ class TestStringOperations:
         assert _decode(region, 15, 4) == 3  # positioned just after the comma
 
     @covers(CobolFeature.UNSTRING_VERB)
+    def test_unstring_with_pointer_resumes_scan_from_cursor_on_second_call(self):
+        """Real WITH POINTER semantics: the SECOND UNSTRING call must scan
+        starting at the cursor position left by the first, not re-scan from
+        offset 0 (a bug a whole-branch review caught: the pointer was being
+        advanced/written correctly but never actually used to offset where
+        the scan itself began)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-PTR3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "A,B,C".',
+                "77 WS-F1  PIC X(5) VALUE SPACES.",
+                "77 WS-F2  PIC X(5) VALUE SPACES.",
+                "77 WS-PTR PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F1 WITH POINTER WS-PTR.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-F2 WITH POINTER WS-PTR.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-F1 @10-14, WS-F2 @15-19, WS-PTR (9(4)) @20-23.
+        # 1st call: ptr=1 -> scans "A,B,C" from offset 0 -> WS-F1="A", ptr
+        # advances by len("A")+len(",")=2 -> 3.
+        # 2nd call: ptr=3 -> MUST scan from offset 2 ("B,C"), not offset 0
+        # again -> WS-F2="B" (not "A"), ptr advances by len("B")+len(",")=2 -> 5.
+        assert _decode_alpha(region, 10, 5).strip() == "A"
+        assert _decode_alpha(region, 15, 5).strip() == "B"
+        assert _decode(region, 20, 4) == 5
+
+    @covers(CobolFeature.UNSTRING_VERB)
     def test_unstring_with_pointer_advances_past_multi_char_delimiter(self):
         """Regression for the pre-dispatch fix: the cursor must advance past
         the delimiter's ACTUAL length, not an assumed 1 character."""
