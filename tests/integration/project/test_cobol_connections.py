@@ -7,14 +7,14 @@ TestFixtureProject exercises the full on-disk pipeline against
 tests/fixtures/projects/cobol_connections_demo/ — the durable e2e case.
 """
 
-import json
 from pathlib import Path
 
 import pytest
 
 from tests.covers import covers, NotLanguageFeature
 from interpreter.cobol.cobol_parser import make_cobol_parser
-from interpreter.project.cobol_connections import Connection, extract_cobol_connections
+from interpreter.project.cobol_connections import extract_cobol_connections
+from interpreter.project.graph_types import EdgeKind, NodeKind
 
 _MAIN_CALL = b"""       IDENTIFICATION DIVISION.
        PROGRAM-ID. MAIN.
@@ -39,26 +39,28 @@ def cobol_parser():
 class TestCallConnections:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_call_connection_detected(self, cobol_parser):
-        conns = extract_cobol_connections(
+        _nodes, edges = extract_cobol_connections(
             _MAIN_CALL,
             extra_subprogram_sources={"HELPER": _HELPER},
             parser=cobol_parser,
         )
-        call_conns = [c for c in conns if c.kind == "CALL"]
-        assert len(call_conns) == 1
-        assert call_conns[0].source.name == "MAIN"
-        assert call_conns[0].target.name == "HELPER"
+        call_edges = [e for e in edges if e.kind == EdgeKind.CALL]
+        assert len(call_edges) == 1
+        assert call_edges[0].source == "MAIN"
+        assert call_edges[0].target == "HELPER"
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_call_target_file_path_resolved(self, cobol_parser):
-        conns = extract_cobol_connections(
+        nodes, _edges = extract_cobol_connections(
             _MAIN_CALL,
             extra_subprogram_sources={"HELPER": _HELPER},
             parser=cobol_parser,
         )
-        call_conns = [c for c in conns if c.kind == "CALL"]
-        assert call_conns[0].target.file_path is not None
-        assert call_conns[0].target.file_path.stem.upper() == "HELPER"
+        helper = next(
+            n for n in nodes if n.kind == NodeKind.PROGRAM and n.id == "HELPER"
+        )
+        assert helper.file_path is not None
+        assert Path(helper.file_path).stem.upper() == "HELPER"
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_no_connections_for_standalone_program(self, cobol_parser):
@@ -67,18 +69,21 @@ class TestCallConnections:
        PROCEDURE DIVISION.
            GOBACK.
 """
-        conns = extract_cobol_connections(src, parser=cobol_parser)
-        assert conns == []
+        nodes, edges = extract_cobol_connections(src, parser=cobol_parser)
+        assert edges == []
+        assert [n.id for n in nodes] == ["STANDALONE"]
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_returns_list_of_connection_objects(self, cobol_parser):
-        conns = extract_cobol_connections(
+    def test_returns_node_and_edge_lists(self, cobol_parser):
+        nodes, edges = extract_cobol_connections(
             _MAIN_CALL,
             extra_subprogram_sources={"HELPER": _HELPER},
             parser=cobol_parser,
         )
-        assert isinstance(conns, list)
-        assert all(isinstance(c, Connection) for c in conns)
+        assert isinstance(nodes, list)
+        assert isinstance(edges, list)
+        assert all(n.kind is NodeKind.PROGRAM for n in nodes)
+        assert all(e.kind is EdgeKind.CALL for e in edges)
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_transitive_calls_included(self, cobol_parser):
@@ -100,33 +105,33 @@ class TestCallConnections:
        PROCEDURE DIVISION.
            GOBACK.
 """
-        conns = extract_cobol_connections(
+        nodes, edges = extract_cobol_connections(
             prog_a,
             extra_subprogram_sources={"PROGB": prog_b, "PROGC": prog_c},
             parser=cobol_parser,
         )
-        call_conns = [c for c in conns if c.kind == "CALL"]
-        names = {(c.source.name.upper(), c.target.name.upper()) for c in call_conns}
-        assert ("PROGA", "PROGB") in names
-        assert ("PROGB", "PROGC") in names
+        call_edges = [e for e in edges if e.kind == EdgeKind.CALL]
+        pairs = {(e.source, e.target) for e in call_edges}
+        assert ("PROGA", "PROGB") in pairs
+        assert ("PROGB", "PROGC") in pairs
         # import_graph is flat: only main→direct-callees are resolved; B→C has no path
-        b_to_c = next(c for c in call_conns if c.source.name.upper() == "PROGB")
-        assert (
-            b_to_c.target.file_path is None
-        )  # flat import_graph — indirect callee path not resolved
+        progc = next(
+            n for n in nodes if n.kind == NodeKind.PROGRAM and n.id == "PROGC"
+        )
+        assert progc.file_path is None
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_main_source_file_path_is_sentinel(self, cobol_parser):
         # compile_cobol() uses Path("__main__.cbl") as the main module path;
-        # callers should not rely on source.file_path being a real filesystem path
+        # callers should not rely on file_path being a real filesystem path
         # when source is passed as bytes (no source_file argument).
-        conns = extract_cobol_connections(
+        nodes, _edges = extract_cobol_connections(
             _MAIN_CALL,
             extra_subprogram_sources={"HELPER": _HELPER},
             parser=cobol_parser,
         )
-        call_conns = [c for c in conns if c.kind == "CALL"]
-        assert call_conns[0].source.file_path == Path("__main__.cbl")
+        main = next(n for n in nodes if n.kind == NodeKind.PROGRAM and n.id == "MAIN")
+        assert main.file_path == "__main__.cbl"
 
 
 _FIXTURE = (
@@ -145,50 +150,49 @@ class TestFixtureProject:
         cbl = _FIXTURE / "cbl"
         cpy = _FIXTURE / "cpy"
         parser = make_cobol_parser(copybook_dirs=[cpy])
-        conns = extract_cobol_connections(
+        _nodes, edges = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
             program_source_dirs=[cbl],
             parser=parser,
         )
 
-        kinds = [(c.kind, c.source.name, c.target.name) for c in conns]
-        assert ("COPY", "MAIN", "CUSTREC") in kinds
-        assert ("CALL", "MAIN", "VALIDATE") in kinds
-        assert ("CALL", "MAIN", "RPTPROG") in kinds
-        assert ("COPY", "VALIDATE", "CUSTREC") in kinds
-        assert ("CALL", "VALIDATE", "LOGERR") in kinds
+        triples = [(e.kind.value, e.source, e.target) for e in edges]
+        assert ("COPY", "MAIN", "CUSTREC") in triples
+        assert ("CALL", "MAIN", "VALIDATE") in triples
+        assert ("CALL", "MAIN", "RPTPROG") in triples
+        assert ("COPY", "VALIDATE", "CUSTREC") in triples
+        assert ("CALL", "VALIDATE", "LOGERR") in triples
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_fixture_call_file_paths_resolved(self):
         cbl = _FIXTURE / "cbl"
         cpy = _FIXTURE / "cpy"
         parser = make_cobol_parser(copybook_dirs=[cpy])
-        conns = extract_cobol_connections(
+        nodes, _edges = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
             program_source_dirs=[cbl],
             parser=parser,
         )
-        call_conns = {c.target.name: c for c in conns if c.kind == "CALL"}
-        assert (
-            call_conns["VALIDATE"].target.file_path == (cbl / "VALIDATE.cbl").resolve()
-        )
-        assert call_conns["RPTPROG"].target.file_path == (cbl / "RPTPROG.cbl").resolve()
+        by_id = {n.id: n for n in nodes if n.kind == NodeKind.PROGRAM}
+        assert by_id["VALIDATE"].file_path == str((cbl / "VALIDATE.cbl").resolve())
+        assert by_id["RPTPROG"].file_path == str((cbl / "RPTPROG.cbl").resolve())
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_fixture_copy_target_file_path_is_none(self):
         cbl = _FIXTURE / "cbl"
         cpy = _FIXTURE / "cpy"
         parser = make_cobol_parser(copybook_dirs=[cpy])
-        conns = extract_cobol_connections(
+        nodes, _edges = extract_cobol_connections(
             (cbl / "MAIN.cbl").read_bytes(),
             copybook_dirs=[cpy],
             program_source_dirs=[cbl],
             parser=parser,
         )
-        copy_conns = [c for c in conns if c.kind == "COPY"]
-        assert all(c.target.file_path is None for c in copy_conns)
+        copybook_nodes = [n for n in nodes if n.kind == NodeKind.COPYBOOK]
+        assert copybook_nodes
+        assert all(n.file_path is None for n in copybook_nodes)
 
 
 class TestCopyConnections:
@@ -206,11 +210,13 @@ class TestCopyConnections:
            GOBACK.
 """
         parser = make_cobol_parser(copybook_dirs=[tmp_path])
-        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path], parser=parser)
-        copy_conns = [c for c in conns if c.kind == "COPY"]
-        assert len(copy_conns) == 1
-        assert copy_conns[0].source.name == "MAINPROG"
-        assert copy_conns[0].target.name == "MYREC"
+        _nodes, edges = extract_cobol_connections(
+            src, copybook_dirs=[tmp_path], parser=parser
+        )
+        copy_edges = [e for e in edges if e.kind == EdgeKind.COPY]
+        assert len(copy_edges) == 1
+        assert copy_edges[0].source == "MAINPROG"
+        assert copy_edges[0].target == "MYREC"
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_copy_target_file_path_is_none(self, tmp_path: Path):
@@ -226,27 +232,10 @@ class TestCopyConnections:
            GOBACK.
 """
         parser = make_cobol_parser(copybook_dirs=[tmp_path])
-        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path], parser=parser)
-        copy_conns = [c for c in conns if c.kind == "COPY"]
-        assert copy_conns[0].target.file_path is None
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_to_json_roundtrips_for_copy(self, tmp_path: Path):
-        cpy_file = tmp_path / "MYREC.cpy"
-        cpy_file.write_text("       01 MY-FIELD PIC X(10).\n")
-
-        src = b"""       IDENTIFICATION DIVISION.
-       PROGRAM-ID. MAINPROG.
-       DATA DIVISION.
-       WORKING-STORAGE SECTION.
-           COPY MYREC.
-       PROCEDURE DIVISION.
-           GOBACK.
-"""
-        parser = make_cobol_parser(copybook_dirs=[tmp_path])
-        conns = extract_cobol_connections(src, copybook_dirs=[tmp_path], parser=parser)
-        copy_conns = [c for c in conns if c.kind == "COPY"]
-        data = json.loads(copy_conns[0].to_json())
-        assert data["kind"] == "COPY"
-        assert data["target_file"] is None
-        assert data["target_name"] == "MYREC"
+        nodes, _edges = extract_cobol_connections(
+            src, copybook_dirs=[tmp_path], parser=parser
+        )
+        myrec = next(
+            n for n in nodes if n.kind == NodeKind.COPYBOOK and n.id == "MYREC"
+        )
+        assert myrec.file_path is None

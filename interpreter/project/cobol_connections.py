@@ -1,15 +1,13 @@
 # pyright: standard
 """COBOL inter-program connection extraction.
 
-ProgramRef      — identifies a program or copybook by name and optional file path.
-Connection      — a directed COPY or CALL relationship between two ProgramRefs.
-extract_cobol_connections() — compile a COBOL project and return all connections.
+extract_cobol_connections() — compile a COBOL project and return its
+CALL/COPY relationships as the shared knowledge-graph schema (GraphNode,
+GraphEdge — see interpreter.project.graph_types).
 """
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -20,40 +18,9 @@ from interpreter.frontend_extension import (
 )
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.project.cobol_compile import compile_cobol
+from interpreter.project.graph_types import EdgeKind, GraphEdge, GraphNode, NodeKind
 from interpreter.project.imports import extract_imports
 from interpreter.project.types import ImportKind, ImportRef
-
-
-@dataclass(frozen=True)
-class ProgramRef:
-    """Identifies a COBOL program or copybook."""
-
-    name: str
-    file_path: Path | None
-
-
-@dataclass(frozen=True)
-class Connection:
-    """A directed COPY or CALL relationship between two COBOL programs."""
-
-    kind: str  # "COPY" or "CALL"
-    source: ProgramRef
-    target: ProgramRef
-
-    def to_json(self) -> str:
-        return json.dumps(
-            {
-                "kind": self.kind,
-                "source_name": self.source.name,
-                "source_file": (
-                    str(self.source.file_path) if self.source.file_path else None
-                ),
-                "target_name": self.target.name,
-                "target_file": (
-                    str(self.target.file_path) if self.target.file_path else None
-                ),
-            }
-        )
 
 
 def extract_cobol_connections(
@@ -67,15 +34,17 @@ def extract_cobol_connections(
     dialect_parsers: Sequence[DialectParser] = (),
     observer: FrontendObserver = NullFrontendObserver(),
     source_transform: Callable[[str], str] = lambda s: s,
-) -> list[Connection]:
-    """Compile a COBOL project and return all COPY and CALL connections.
+) -> tuple[list[GraphNode], list[GraphEdge]]:
+    """Compile a COBOL project and return its CALL/COPY graph.
 
-    Calls compile_cobol() with the same arguments, then post-processes
-    the finished LinkedProgram — no VM execution takes place.
+    Calls compile_cobol() with the same arguments, then post-processes the
+    finished LinkedProgram — no VM execution takes place.
 
     CALL target file paths are resolved from LinkedProgram.import_graph.
     COPY target file paths are always None (copybooks are inlined by ProLeap
     before red-dragon sees the ASG; the name is extracted from raw source).
+    Every node id is uppercased (the standard COBOL convention), so the same
+    program/copybook referenced with different case always merges to one node.
     """
     main_path = Path("__main__.cbl")
 
@@ -117,27 +86,61 @@ def extract_cobol_connections(
         main_imports = tuple(extract_imports(source, main_path, Language.COBOL))
         modules_with_imports = {main_path: main_imports}
 
-    connections: list[Connection] = []
+    nodes: dict[tuple[NodeKind, str], GraphNode] = {}
+    edges: list[GraphEdge] = []
+
+    def _add_node(kind: NodeKind, name: str, file_path: Path | None) -> str:
+        node_id = name.upper()
+        key = (kind, node_id)
+        existing = nodes.get(key)
+        if existing is None:
+            nodes[key] = GraphNode(
+                id=node_id,
+                kind=kind,
+                file_path=str(file_path) if file_path is not None else None,
+            )
+        elif existing.file_path is None and file_path is not None:
+            nodes[key] = GraphNode(
+                id=node_id, kind=kind, file_path=str(file_path)
+            )
+        return node_id
+
     for module_path, imports in modules_with_imports.items():
-        source_ref = ProgramRef(name=_module_name(module_path), file_path=module_path)
+        source_name = _module_name(module_path)
+        # Only the main module's own compiled path is trustworthy as a node
+        # file_path here. For every other module, import_graph is flat (main's
+        # entry lists every subprogram module, whether or not main actually
+        # calls it directly — see LinkedProgram.import_graph construction in
+        # compile_cobol), so a subprogram's own module_path is not evidence
+        # that anything in the graph actually resolves to it. Its file_path
+        # is instead populated below, only when some other module's CALL
+        # target resolves to it through call_resolution.
+        source_file_path = module_path if module_path == main_path else None
+        source_id = _add_node(NodeKind.PROGRAM, source_name, source_file_path)
         call_map = call_resolution.get(module_path, {})
         for ref in imports:
             if ref.kind == ImportKind.INCLUDE:
-                connections.append(
-                    Connection(
-                        kind="COPY",
-                        source=source_ref,
-                        target=ProgramRef(name=ref.module_path, file_path=None),
+                target_id = _add_node(NodeKind.COPYBOOK, ref.module_path, None)
+                edges.append(
+                    GraphEdge(
+                        source=source_id,
+                        source_kind=NodeKind.PROGRAM,
+                        target=target_id,
+                        target_kind=NodeKind.COPYBOOK,
+                        kind=EdgeKind.COPY,
                     )
                 )
             elif ref.kind == ImportKind.REQUIRE:
                 target_path = call_map.get(ref.module_path.upper())
-                connections.append(
-                    Connection(
-                        kind="CALL",
-                        source=source_ref,
-                        target=ProgramRef(name=ref.module_path, file_path=target_path),
+                target_id = _add_node(NodeKind.PROGRAM, ref.module_path, target_path)
+                edges.append(
+                    GraphEdge(
+                        source=source_id,
+                        source_kind=NodeKind.PROGRAM,
+                        target=target_id,
+                        target_kind=NodeKind.PROGRAM,
+                        kind=EdgeKind.CALL,
                     )
                 )
 
-    return connections
+    return list(nodes.values()), edges
