@@ -115,9 +115,7 @@ class TestCallConnections:
         assert ("PROGA", "PROGB") in pairs
         assert ("PROGB", "PROGC") in pairs
         # import_graph is flat: only main→direct-callees are resolved; B→C has no path
-        progc = next(
-            n for n in nodes if n.kind == NodeKind.PROGRAM and n.id == "PROGC"
-        )
+        progc = next(n for n in nodes if n.kind == NodeKind.PROGRAM and n.id == "PROGC")
         assert progc.file_path is None
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
