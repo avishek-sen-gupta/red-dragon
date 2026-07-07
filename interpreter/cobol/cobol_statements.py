@@ -719,17 +719,22 @@ class StringSending:
 
 @dataclass(frozen=True)
 class StringStatement:
-    """STRING ... DELIMITED BY ... INTO target."""
+    """STRING ... DELIMITED BY ... INTO target.
+
+    ``into`` may carry reference modification (``INTO dest(start:length)``,
+    red-dragon-2fxq) — a bare receiving field is ``RefModOperand(name=...)``
+    with no ref-mod set, same as any other RefModOperand-typed operand.
+    """
 
     sendings: list[StringSending] = field(default_factory=list)
-    into: str = ""
+    into: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     pointer: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> StringStatement:
         return cls(
             sendings=[StringSending.from_dict(s) for s in data.get("sendings", [])],
-            into=data.get("into", ""),
+            into=RefModOperand.from_dict(data.get("into", {})),
             pointer=data.get("pointer", ""),
         )
 
@@ -737,7 +742,7 @@ class StringStatement:
         result = {
             "type": "STRING",
             "sendings": [s.to_dict() for s in self.sendings],
-            "into": self.into,
+            "into": self.into.to_dict(),
         }
         if self.pointer:
             result["pointer"] = self.pointer
@@ -746,11 +751,16 @@ class StringStatement:
 
 @dataclass(frozen=True)
 class UnstringStatement:
-    """UNSTRING source DELIMITED BY ... INTO targets."""
+    """UNSTRING source DELIMITED BY ... INTO targets.
+
+    Each entry in ``into`` may carry reference modification (``INTO
+    dest(start:length)``, red-dragon-2fxq) — a bare receiving field is
+    ``RefModOperand(name=...)`` with no ref-mod set.
+    """
 
     source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     delimiters: list[str] = field(default_factory=list)
-    into: list[str] = field(default_factory=list)
+    into: list[RefModOperand] = field(default_factory=list)
     tallying_target: str = ""
     pointer: str = ""
 
@@ -759,7 +769,7 @@ class UnstringStatement:
         return cls(
             source=RefModOperand.from_dict(data.get("source", {})),
             delimiters=list(data.get("delimiters", [])),
-            into=data.get("into", []),
+            into=[RefModOperand.from_dict(i) for i in data.get("into", [])],
             tallying_target=data.get("tallying_target", ""),
             pointer=data.get("pointer", ""),
         )
@@ -769,7 +779,7 @@ class UnstringStatement:
             "type": "UNSTRING",
             "source": self.source.to_dict(),
             "delimiters": list(self.delimiters),
-            "into": list(self.into),
+            "into": [i.to_dict() for i in self.into],
         }
         if self.tallying_target:
             result["tallying_target"] = self.tallying_target

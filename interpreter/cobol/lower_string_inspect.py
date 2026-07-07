@@ -19,6 +19,7 @@ from interpreter.cobol.ir_encoders import (
     build_inspect_tally_ir,
 )
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
+from interpreter.cobol.ref_mod import RefModOperand
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.operator_kind import resolve_binop
 from interpreter.func_name import FuncName
@@ -26,6 +27,64 @@ from interpreter.instructions import Binop, CallFunction
 from interpreter.register import Register, NO_REGISTER
 
 logger = logging.getLogger(__name__)
+
+
+def _write_ref_mod_target(
+    ctx: EmitContext,
+    target: RefModOperand,
+    value_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """Write value_reg into target's field.
+
+    Splices into target's own reference modification (INTO dest(start:length))
+    instead of overwriting the whole field when present — shared by STRING
+    and UNSTRING destination writes (red-dragon-2fxq), mirroring the same
+    decode-then-STRING_SPLICE write path MOVE's own target ref-mod already
+    uses (lower_arithmetic.py's _store_move_value). Caller is responsible for
+    confirming ctx.has_field(target.name, materialised) first.
+    """
+    target_ref, target_rr = ctx.resolve_field_ref(
+        target.name, materialised, target.qualifiers, subscripts=target.subscripts
+    )
+    target_value_reg = value_reg
+    if target.ref_mod_start is not None:
+        target_decoded = ctx.emit_decode_field(
+            target_rr, target_ref.fl, target_ref.offset_reg
+        )
+        target_str_reg = ctx.emit_to_string(target_decoded)
+        tgt_start_reg = eval_ref_mod_expr(ctx, target.ref_mod_start, materialised)
+        one_reg = ctx.const_to_reg(1)
+        tgt_start_0indexed_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=tgt_start_0indexed_reg,
+                operator=resolve_binop("-"),
+                left=tgt_start_reg,
+                right=one_reg,
+            )
+        )
+        if target.ref_mod_length is not None:
+            tgt_length_reg = eval_ref_mod_expr(ctx, target.ref_mod_length, materialised)
+        else:
+            tgt_length_reg = ctx.const_to_reg(999999)
+        spliced_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=spliced_reg,
+                func_name=FuncName(BuiltinName.STRING_SPLICE),
+                args=(
+                    target_str_reg,
+                    tgt_start_0indexed_reg,
+                    tgt_length_reg,
+                    value_reg,
+                ),
+            )
+        )
+        target_value_reg = spliced_reg
+    ctx.emit_encode_and_write(
+        target_rr, target_ref.fl, target_value_reg, target_ref.offset_reg
+    )
 
 
 def lower_string(
@@ -138,8 +197,24 @@ def lower_string(
             )
             concat_reg = new_concat
 
-    if stmt.into and ctx.has_field(stmt.into, materialised):
-        target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
+    if stmt.into.name and ctx.has_field(stmt.into.name, materialised):
+        if stmt.into.ref_mod_start is not None:
+            # INTO dest(start:length): splice into the sliced region only,
+            # leaving the rest of the field untouched (red-dragon-2fxq).
+            # WITH POINTER's own cursor-offset write is a distinct mechanism
+            # for the same "where to write" question; combining both on one
+            # statement is rare in practice and not modelled — ref-mod wins,
+            # and the pointer clause (if also present) is not applied.
+            if stmt.pointer:
+                logger.warning(
+                    "STRING INTO target %s has both reference modification "
+                    "and WITH POINTER; using reference modification, "
+                    "ignoring the pointer",
+                    stmt.into.name,
+                )
+            _write_ref_mod_target(ctx, stmt.into, concat_reg, materialised)
+            return
+        target_ref, target_rr = ctx.resolve_field_ref(stmt.into.name, materialised)
         if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
             # WITH POINTER: read the cursor (1-based), write starting there
             # instead of at offset 0, then advance the cursor by the length of
@@ -196,7 +271,7 @@ def lower_string(
                 target_rr, target_ref.fl, concat_reg, target_ref.offset_reg
             )
     else:
-        logger.warning("STRING INTO target %s not found in layout", stmt.into)
+        logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
 
 
 def lower_unstring(
@@ -296,11 +371,12 @@ def lower_unstring(
         ),
     )
 
-    for i, target_name in enumerate(stmt.into):
-        if not ctx.has_field(target_name, materialised):
-            logger.warning("UNSTRING INTO target %s not found in layout", target_name)
+    for i, target_operand in enumerate(stmt.into):
+        if not ctx.has_field(target_operand.name, materialised):
+            logger.warning(
+                "UNSTRING INTO target %s not found in layout", target_operand.name
+            )
             continue
-        target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
         idx_reg = ctx.const_to_reg(i)
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -310,9 +386,10 @@ def lower_unstring(
                 args=(parts_reg, idx_reg),
             ),
         )
-        ctx.emit_encode_and_write(
-            target_rr, target_ref.fl, part_reg, target_ref.offset_reg
-        )
+        # INTO dest(start:length) splices into the sliced region only,
+        # leaving the rest of the field untouched (red-dragon-2fxq); a bare
+        # target writes the whole field, as before.
+        _write_ref_mod_target(ctx, target_operand, part_reg, materialised)
 
     if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
         # WITH POINTER: advance the cursor past however much of the source
