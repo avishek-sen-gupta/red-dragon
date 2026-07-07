@@ -337,6 +337,58 @@ class TestStringOperations:
         assert _decode_alpha(region, 10, 5).strip() == "A"
         assert _decode_alpha(region, 15, 5).strip() == "B"
 
+    @covers(CobolFeature.STRING_VERB, CobolFeature.STRING_TARGET_REF_MOD)
+    def test_string_into_ref_mod_writes_only_the_sliced_region(self):
+        """STRING ... INTO dest(start:length) writes only the sliced region of
+        the receiving field, leaving the rest of the field untouched
+        (red-dragon-2fxq)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-STRING-REFMOD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(5) VALUE "HELLO".',
+                '77 WS-DST PIC X(10) VALUE "XXXXXXXXXX".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STRING WS-SRC DELIMITED BY SIZE",
+                "        INTO WS-DST(3:5).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X5) @0-4, WS-DST (X10) @5-14.
+        # WS-DST(3:5) is 1-indexed chars 3-7 -> splice "HELLO" there, leaving
+        # the surrounding "XX"/"XXX" untouched: "XX" + "HELLO" + "XXX".
+        assert _decode_alpha(region, 5, 10) == "XXHELLOXXX"
+
+    @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_TARGET_REF_MOD)
+    def test_unstring_into_ref_mod_writes_only_the_sliced_region(self):
+        """UNSTRING ... INTO dest(start:length) writes only the sliced region
+        of the receiving field, leaving the rest untouched (red-dragon-2fxq).
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-UNSTRING-REFMOD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AB,CD".',
+                '77 WS-DST PIC X(10) VALUE "XXXXXXXXXX".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-SRC DELIMITED BY ','",
+                "        INTO WS-DST(3:2).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-SRC (X10) @0-9, WS-DST (X10) @10-19.
+        # Only one INTO target -> first split part "AB" is written.
+        # WS-DST(3:2) is 1-indexed chars 3-4 -> splice "AB" there.
+        assert _decode_alpha(region, 10, 10) == "XXABXXXXXX"
+
     @covers(CobolFeature.UNSTRING_VERB)
     def test_unstring_tallying_in_counts_populated_fields(self):
         vm = _run_cobol(

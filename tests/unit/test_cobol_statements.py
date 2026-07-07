@@ -377,7 +377,7 @@ class TestParseStatementDispatch:
         assert len(stmt.sendings) == 2
         assert stmt.sendings[0].value.name == "WS-FIRST"
         assert stmt.sendings[0].delimited_by == "SPACES"
-        assert stmt.into == "WS-RESULT"
+        assert stmt.into.name == "WS-RESULT"
 
     @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_DELIMITED_BY)
     def test_unstring(self):
@@ -392,7 +392,7 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, UnstringStatement)
         assert stmt.source.name == "WS-FULL"
         assert stmt.delimiters == ["SPACES"]
-        assert stmt.into == ["WS-FIRST", "WS-LAST"]
+        assert [i.name for i in stmt.into] == ["WS-FIRST", "WS-LAST"]
 
     @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying(self):
@@ -1083,7 +1083,20 @@ class TestRoundTrip:
                 {"value": {"name": "WS-FIRST"}, "delimited_by": "SPACES"},
                 {"value": {"name": "WS-LAST"}, "delimited_by": "SIZE"},
             ],
-            "into": "WS-RESULT",
+            "into": {"name": "WS-RESULT"},
+        }
+        assert self._round_trip(data) == data
+
+    @covers(CobolFeature.STRING_VERB, CobolFeature.STRING_TARGET_REF_MOD)
+    def test_string_into_ref_mod_round_trip(self):
+        data = {
+            "type": "STRING",
+            "sendings": [{"value": {"name": "WS-SRC"}, "delimited_by": "SIZE"}],
+            "into": {
+                "name": "WS-DST",
+                "ref_mod_start": {"kind": "lit", "value": "3"},
+                "ref_mod_length": {"kind": "lit", "value": "5"},
+            },
         }
         assert self._round_trip(data) == data
 
@@ -1093,7 +1106,7 @@ class TestRoundTrip:
             "type": "UNSTRING",
             "source": {"name": "WS-FULL"},
             "delimiters": [" "],
-            "into": ["WS-FIRST", "WS-LAST"],
+            "into": [{"name": "WS-FIRST"}, {"name": "WS-LAST"}],
         }
         assert self._round_trip(data) == data
 

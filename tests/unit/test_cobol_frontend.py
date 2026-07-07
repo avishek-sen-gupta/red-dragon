@@ -1631,7 +1631,7 @@ class TestTier2Lowering:
                         value=RefModOperand(name="WS-LAST"), delimited_by="SIZE"
                     ),
                 ],
-                into="WS-RESULT",
+                into=RefModOperand(name="WS-RESULT"),
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -1673,7 +1673,7 @@ class TestTier2Lowering:
                 sendings=[
                     StringSending(value=RefModOperand(name="WS-SRC"), delimited_by=" "),
                 ],
-                into="WS-OUT",
+                into=RefModOperand(name="WS-OUT"),
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -1721,7 +1721,7 @@ class TestTier2Lowering:
             UnstringStatement(
                 source=RefModOperand(name="WS-FULL"),
                 delimiters=[" "],
-                into=["WS-FIRST", "WS-LAST"],
+                into=[RefModOperand(name="WS-FIRST"), RefModOperand(name="WS-LAST")],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
