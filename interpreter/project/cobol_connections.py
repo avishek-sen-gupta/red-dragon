@@ -100,9 +100,7 @@ def extract_cobol_connections(
                 file_path=str(file_path) if file_path is not None else None,
             )
         elif existing.file_path is None and file_path is not None:
-            nodes[key] = GraphNode(
-                id=node_id, kind=kind, file_path=str(file_path)
-            )
+            nodes[key] = GraphNode(id=node_id, kind=kind, file_path=str(file_path))
         return node_id
 
     for module_path, imports in modules_with_imports.items():
