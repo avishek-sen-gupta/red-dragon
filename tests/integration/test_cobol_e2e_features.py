@@ -672,6 +672,35 @@ class TestStringOperations:
         assert _decode(region, 10, 4) == 2
 
     @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_accumulates_across_separate_statements(self):
+        """INSPECT TALLYING's counter accumulates into its existing value
+        across separate statement executions - it does not reset to zero
+        each time (red-dragon-pvxc, verified against IBM's Enterprise COBOL
+        Language Reference: 'initialize the tally field to zero before
+        TALLYING unless you intend to accumulate across multiple INSPECTs').
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-ACCUM.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AAABB".',
+                "77 WS-CNT PIC 9(4) VALUE 10.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A'.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # Each INSPECT counts 3 'A's. Starting value 10 -> after 1st call,
+        # accumulate gives 13 (NOT 3, which is what overwrite would produce);
+        # after 2nd call, accumulate gives 16 (NOT 3 again).
+        assert _decode(region, 10, 4) == 16
+
+    @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying_before_initial_bounds_the_scan(self):
         vm = _run_cobol(
             [
