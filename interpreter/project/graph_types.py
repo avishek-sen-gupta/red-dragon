@@ -29,6 +29,12 @@ class NodeKind(Enum):
     STEP = "STEP"
     DATASET = "DATASET"
     BMS_MAP = "BMS_MAP"
+    # The logical name a program's EXEC CICS ... FILE(...) references (a CSD
+    # DEFINE FILE entry) — distinct from DATASET, its physical DSNAME, which
+    # a CICS_FILE resolves to via a DEFINES_DATASET edge. Two nodes because a
+    # program only ever knows the logical name; the physical dataset is a
+    # separate identity JCL jobs can also independently reference.
+    CICS_FILE = "CICS_FILE"
 
 
 class EdgeKind(Enum):
@@ -44,6 +50,10 @@ class EdgeKind(Enum):
     READS = "READS"
     WRITES = "WRITES"
     UPDATES = "UPDATES"
+    DELETES = "DELETES"
+    ENDS_BROWSE = "ENDS_BROWSE"
+    # CICS_FILE -> DATASET, from a CSD's DEFINE FILE(name) ... DSNAME(...).
+    DEFINES_DATASET = "DEFINES_DATASET"
 
 
 @dataclass(frozen=True)
