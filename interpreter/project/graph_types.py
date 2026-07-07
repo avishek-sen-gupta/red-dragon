@@ -39,6 +39,12 @@ class NodeKind(Enum):
     # JOB.STEP.DDNAME (never a bare dataset name, since instream data has
     # none). See EdgeKind.READS, source STEP -> target INSTREAM_DATA.
     INSTREAM_DATA = "INSTREAM_DATA"
+    # A batch COBOL program's FILE-CONTROL SELECT ... ASSIGN TO ddname entry
+    # — id is the ASSIGN TO name (the DD name its OPEN/READ/WRITE statements
+    # reference), not the physical dataset. Mirrors CICS_FILE's split from
+    # DATASET: a program only ever knows its DD name; the physical dataset
+    # is a JCL-level identity a job's DD statement assigns independently.
+    COBOL_FILE = "COBOL_FILE"
 
 
 class EdgeKind(Enum):

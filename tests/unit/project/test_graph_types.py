@@ -16,6 +16,7 @@ def test_node_kind_has_expected_members():
         "BMS_MAP",
         "CICS_FILE",
         "INSTREAM_DATA",
+        "COBOL_FILE",
     }
 
 
