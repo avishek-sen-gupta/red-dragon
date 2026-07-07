@@ -35,6 +35,10 @@ class NodeKind(Enum):
     # program only ever knows the logical name; the physical dataset is a
     # separate identity JCL jobs can also independently reference.
     CICS_FILE = "CICS_FILE"
+    # A JCL DD's literal inline content (DD *) — id is scoped by
+    # JOB.STEP.DDNAME (never a bare dataset name, since instream data has
+    # none). See EdgeKind.READS, source STEP -> target INSTREAM_DATA.
+    INSTREAM_DATA = "INSTREAM_DATA"
 
 
 class EdgeKind(Enum):

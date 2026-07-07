@@ -15,6 +15,7 @@ def test_node_kind_has_expected_members():
         "DATASET",
         "BMS_MAP",
         "CICS_FILE",
+        "INSTREAM_DATA",
     }
 
 
