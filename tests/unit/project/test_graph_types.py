@@ -14,6 +14,7 @@ def test_node_kind_has_expected_members():
         "STEP",
         "DATASET",
         "BMS_MAP",
+        "CICS_FILE",
     }
 
 
@@ -32,6 +33,9 @@ def test_edge_kind_has_expected_members():
         "READS",
         "WRITES",
         "UPDATES",
+        "DELETES",
+        "ENDS_BROWSE",
+        "DEFINES_DATASET",
     }
 
 
