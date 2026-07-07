@@ -1156,8 +1156,13 @@ public final class StatementSerializer {
                 }
             }
             obj.add("sendings", sendings);
+            // Structured ref (name + ref_mod_start/length + subscripts +
+            // qualifiers), not a plain name, so INTO dest(start:length)
+            // reference modification on the receiving field is preserved
+            // (red-dragon-2fxq) — same serializeRef already used for MOVE's
+            // own receiving-field ref-mod.
             if (stmt.getIntoPhrase() != null && stmt.getIntoPhrase().getIntoCall() != null) {
-                obj.addProperty("into", extractCallName(stmt.getIntoPhrase().getIntoCall()));
+                obj.add("into", serializeRef(stmt.getIntoPhrase().getIntoCall()));
             }
             // WITH POINTER (red-dragon-4q25.15)
             if (stmt.getWithPointerPhrase() != null
@@ -1196,12 +1201,15 @@ public final class StatementSerializer {
                 }
                 obj.add("delimiters", delimiters);
             }
-            // INTO targets
+            // INTO targets — each a structured ref (name + ref_mod_start/
+            // length + subscripts + qualifiers), not a plain name, so
+            // INTO dest(start:length) on any receiving field is preserved
+            // (red-dragon-2fxq).
             if (stmt.getIntoPhrase() != null) {
                 JsonArray intoArr = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.unstring.Into into : stmt.getIntoPhrase().getIntos()) {
                     if (into.getIntoCall() != null) {
-                        intoArr.add(extractCallName(into.getIntoCall()));
+                        intoArr.add(serializeRef(into.getIntoCall()));
                     }
                 }
                 obj.add("into", intoArr);
