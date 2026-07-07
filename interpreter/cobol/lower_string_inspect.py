@@ -499,7 +499,18 @@ def lower_inspect_tallying(
     counters independently in one statement (red-dragon-4q25.17).
     """
     for group in stmt.tallying_groups:
-        total_count_reg = ctx.const_to_reg(0)
+        has_target = bool(group.target) and ctx.has_field(group.target, materialised)
+        if has_target:
+            # Real INSPECT TALLYING semantics (IBM Enterprise COBOL Language
+            # Reference): the counter ACCUMULATES into its existing value
+            # across separate statement executions — it is not reset to zero
+            # each time (red-dragon-pvxc).
+            tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
+            total_count_reg = ctx.emit_decode_field(
+                tally_rr, tally_ref.fl, tally_ref.offset_reg
+            )
+        else:
+            total_count_reg = ctx.const_to_reg(0)
         for tally_for in group.patterns:
             bounded_str_reg = src_str_reg
             if isinstance(tally_for.boundary, BeforeAfterBoundary):
@@ -537,7 +548,7 @@ def lower_inspect_tallying(
             )
             total_count_reg = new_total
 
-        if group.target and ctx.has_field(group.target, materialised):
+        if has_target:
             tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
             count_str_reg = ctx.emit_to_string(total_count_reg)
             ctx.emit_encode_and_write(
