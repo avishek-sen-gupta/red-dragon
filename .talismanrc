@@ -215,4 +215,6 @@ fileignoreconfig:
   # content detection like uv.lock.
   ignore_detectors:
     - filecontent
+- filename: interpreter/project/cobol_connections.py
+  checksum: 5eed28ea03f5708a0a32e9cd4da154a347e1c226165c1681d6145b9bc15a3464
 version: "1.0"
