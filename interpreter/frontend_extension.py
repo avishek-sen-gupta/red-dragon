@@ -1,5 +1,6 @@
 # pyright: standard
-"""Generic frontend-extension seams: RedDragonExtensionLoweringStrategy, DialectParser.
+"""Generic frontend-extension seams: DialectParser, and a re-export of
+RedDragonExtensionLoweringStrategy for backward compatibility.
 
 Only COBOL uses these today, but neither protocol carries COBOL-specific
 semantics beyond the ``ctx``/``materialised`` parameter types in
@@ -13,37 +14,11 @@ these types) never have to import through ``interpreter.frontend`` (whose own
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    from interpreter.cobol.emit_context import EmitContext
-    from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-
-
-@runtime_checkable
-class RedDragonExtensionLoweringStrategy(Protocol):
-    """One injectable extension-lowering strategy (CICS, SQL, …)."""
-
-    def handles(self, stmt: Any) -> bool:
-        """True if this strategy owns ``stmt`` (e.g. isinstance(stmt, YourDialectStatement))."""
-        ...
-
-    def preprocess_program_dict(self, data: dict) -> dict:
-        """Transform the raw bridge JSON dict before generic COBOL parsing.
-        Return ``data`` unchanged for a no-op."""
-        ...
-
-    def on_procedure_entry(
-        self, ctx: "EmitContext", materialised: "MaterialisedSectionedLayout"
-    ) -> None:
-        """Called once at the start of the procedure division."""
-        ...
-
-    def lower(
-        self, ctx: "EmitContext", stmt: Any, materialised: "MaterialisedSectionedLayout"
-    ) -> None:
-        """Lower one extension statement to IR."""
-        ...
+from interpreter.frontend_extension_lowering import (
+    RedDragonExtensionLoweringStrategy as RedDragonExtensionLoweringStrategy,
+)
 
 
 @runtime_checkable
