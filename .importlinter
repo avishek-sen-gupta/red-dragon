@@ -75,5 +75,5 @@ ignore_imports =
     interpreter.frontend -> interpreter.cobol.cobol_frontend
     interpreter.frontend -> interpreter.cobol.cobol_parser
     interpreter.frontend -> interpreter.cobol.subprocess_runner
-    interpreter.frontend_extension -> interpreter.cobol.emit_context
-    interpreter.frontend_extension -> interpreter.cobol.sectioned_layout
+    interpreter.frontend_extension_lowering -> interpreter.cobol.emit_context
+    interpreter.frontend_extension_lowering -> interpreter.cobol.sectioned_layout
