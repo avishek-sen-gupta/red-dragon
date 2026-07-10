@@ -77,3 +77,4 @@ ignore_imports =
     interpreter.frontend -> interpreter.cobol.subprocess_runner
     interpreter.frontend_extension_lowering -> interpreter.cobol.emit_context
     interpreter.frontend_extension_lowering -> interpreter.cobol.sectioned_layout
+    interpreter.project.cobol_compile -> interpreter.cobol.ast_store

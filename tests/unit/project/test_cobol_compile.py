@@ -175,7 +175,7 @@ def test_parallel_parse_to_cache_writes_one_file_per_source(tmp_path):
     result = parallel_parse_to_cache(sources, make_cobol_parser(), tmp_path)
     assert set(result.keys()) == set(sources.keys())
     for src_path, ast_path in result.items():
-        path_hash = hashlib.md5(str(src_path).encode()).hexdigest()[:8]
+        path_hash = hashlib.md5(str(src_path).encode()).hexdigest()
         assert ast_path == tmp_path / f"{src_path.stem}-{path_hash}.ast.json"
         assert ast_path.exists()
         assert json.loads(ast_path.read_text())["program_id"] is not None

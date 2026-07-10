@@ -12,15 +12,14 @@ All frontend construction is routed through get_frontend (the factory).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from interpreter.cfg import build_cfg
+from interpreter.cobol.ast_store import AstStore, AstStrategy, _key
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.frontend_extension import DialectParser
@@ -51,24 +50,9 @@ def parallel_parse_to_cache(
     the JSON string immediately — ASTs never accumulate in memory across workers.
     Returns {source_path: ast_json_path}. cache_dir is created if absent.
     """
-    cache_dir.mkdir(parents=True, exist_ok=True)
-
-    def _parse_one(item: tuple[Path, bytes]) -> tuple[Path, Path]:
-        src_path, source = item
-        path_hash = hashlib.md5(str(src_path).encode()).hexdigest()[:8]
-        out_path = cache_dir / f"{src_path.stem}-{path_hash}.ast.json"
-        parser.parse_to_file(source, out_path)
-        return src_path, out_path
-
-    result: dict[Path, Path] = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(_parse_one, item): item[0] for item in sources.items()
-        }
-        for future in as_completed(futures):
-            src_path, ast_path = future.result()
-            result[src_path] = ast_path
-    return result
+    store = AstStore(AstStrategy.DISK, cache_dir=cache_dir, max_workers=max_workers)
+    store.parse_all(sources, parser)
+    return {src: cache_dir / f"{src.stem}-{_key(src)}.ast.json" for src in sources}
 
 
 def compile_cobol_module(
@@ -167,8 +151,7 @@ def compile_cobol(
         parallel_parse_to_cache(all_sources, parser, cache_dir)
 
         def _ast_path(src_path: Path) -> Path:
-            path_hash = hashlib.md5(str(src_path).encode()).hexdigest()[:8]
-            return cache_dir / f"{src_path.stem}-{path_hash}.ast.json"
+            return cache_dir / f"{src_path.stem}-{_key(src_path)}.ast.json"
 
         main_frontend, main_module = compile_cobol_module(
             source,
