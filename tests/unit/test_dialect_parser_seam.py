@@ -64,7 +64,7 @@ import pytest  # noqa: E402 — see note below
 # ── Extension-strategy lowering protocol tests (unchanged from the old file,
 #    moved here verbatim since this file already covers "the seam" broadly) ──
 
-from interpreter.frontend_extension import RedDragonExtensionLoweringStrategy
+from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 
 
 class _ConformingStrategy:

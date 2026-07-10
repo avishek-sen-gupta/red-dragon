@@ -23,10 +23,8 @@ from typing import Any, Callable, Sequence
 from interpreter.cfg import build_cfg
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
-from interpreter.frontend_extension import (
-    DialectParser,
-    RedDragonExtensionLoweringStrategy,
-)
+from interpreter.frontend_extension import DialectParser
+from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.ir import CodeLabel
 from interpreter.project.compiler import build_export_table

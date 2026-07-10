@@ -12,10 +12,8 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from interpreter.constants import Language
-from interpreter.frontend_extension import (
-    DialectParser,
-    RedDragonExtensionLoweringStrategy,
-)
+from interpreter.frontend_extension import DialectParser
+from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.graph_types import EdgeKind, GraphEdge, GraphNode, NodeKind

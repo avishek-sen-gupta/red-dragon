@@ -1,24 +1,18 @@
 # pyright: standard
-"""Generic frontend-extension seams: DialectParser, and a re-export of
-RedDragonExtensionLoweringStrategy for backward compatibility.
+"""Generic frontend-extension seams: DialectParser.
 
-Only COBOL uses these today, but neither protocol carries COBOL-specific
-semantics beyond the ``ctx``/``materialised`` parameter types in
-RedDragonExtensionLoweringStrategy — they live in their own module, separate
-from ``interpreter.frontend``, so another language's frontend can adopt the
-same seam later, and so that ``interpreter.cobol``'s own modules (which need
-these types) never have to import through ``interpreter.frontend`` (whose own
-``make_cobol_parser`` re-export would otherwise close a circular import).
+Only COBOL uses these today, but the protocol carries no COBOL-specific
+semantics — it lives in its own module, separate from ``interpreter.frontend``,
+so another language's frontend can adopt the same seam later, and so that
+``interpreter.cobol``'s own modules (which need these types) never have to
+import through ``interpreter.frontend`` (whose own ``make_cobol_parser``
+re-export would otherwise close a circular import).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
-
-from interpreter.frontend_extension_lowering import (
-    RedDragonExtensionLoweringStrategy as RedDragonExtensionLoweringStrategy,
-)
 
 
 @runtime_checkable
