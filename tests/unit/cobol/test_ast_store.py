@@ -69,19 +69,18 @@ def test_memory_and_disk_apply_preprocessor_identically(tmp_path, strategy):
 
 
 def test_full_hex_key_no_truncation(tmp_path):
-    # two distinct paths must never collide (full-hex key)
+    # the store keys on the FULL 32-char md5 hex — truncation ([:8]) collides at scale
+    from interpreter.cobol.ast_store import _key
+
+    a, b = Path("A.cbl"), Path("B.cbl")
+    assert len(_key(a)) == 32  # full hex, not truncated
+    assert _key(a) != _key(b)  # distinct paths -> distinct keys
+
     parser = _FakeParser()
     store = AstStore(AstStrategy.DISK, cache_dir=tmp_path)
-    a, b = Path("A.cbl"), Path("B.cbl")
     store.parse_all(
-        {a: b"       PROGRAM-ID. A.\n", b: b"       PROGRAM-ID. B.\n"}, parser
+        {a: b"       PROGRAM-ID. A.\n", b: b"       PROGRAM-ID. BB.\n"}, parser
     )
-    assert (
-        store.get(a)["src_len"] != store.get(b)["src_len"] or True
-    )  # distinct entries
-    import hashlib
-
-    assert (
-        len(hashlib.md5(b"x").hexdigest()) == 32
-    )  # sanity: we key on full 32-char hex
+    # distinct entries retrieved without collision (sources differ in length)
+    assert store.get(a)["src_len"] != store.get(b)["src_len"]
     store.close()
