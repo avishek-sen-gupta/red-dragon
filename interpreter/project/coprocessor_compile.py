@@ -19,8 +19,8 @@ from typing import Any, Callable, Sequence
 from interpreter.frontend_extension import (
     DialectParser,
     NullDialectParser,
-    RedDragonExtensionLoweringStrategy,
 )
+from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.types import LinkedProgram
 

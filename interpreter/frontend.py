@@ -11,10 +11,8 @@ from interpreter.cobol.cobol_parser import (
     make_cobol_parser as make_cobol_parser,
 )  # noqa: F401 — re-exported for callers outside interpreter.cobol
 from interpreter.constants import Language
-from interpreter.frontend_extension import (
-    DialectParser,
-    RedDragonExtensionLoweringStrategy,
-)
+from interpreter.frontend_extension import DialectParser
+from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
