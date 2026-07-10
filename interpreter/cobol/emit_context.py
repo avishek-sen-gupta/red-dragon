@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from interpreter.cobol.cobol_expression import ExprNode
 
 from interpreter.cobol.asg_types import CobolASG
-from interpreter.frontend_extension import RedDragonExtensionLoweringStrategy
+from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor

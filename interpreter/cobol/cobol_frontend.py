@@ -38,10 +38,8 @@ from interpreter.refs.func_ref import FuncRef
 from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
-from interpreter.frontend_extension import (
-    DialectParser,
-    RedDragonExtensionLoweringStrategy,
-)
+from interpreter.frontend_extension import DialectParser
+from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
 from interpreter.cobol.cobol_statements import _dialect_parsers
