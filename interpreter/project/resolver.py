@@ -65,6 +65,15 @@ class NullImportResolver(ImportResolver):
 # ── Python resolver ──────────────────────────────────────────────
 
 
+def _candidates(base: Path, parts: list[str]) -> list[Path]:
+    """Generate candidate file paths for a dotted module path."""
+    rel_path = Path(*parts)
+    return [
+        base / rel_path.with_suffix(".py"),
+        base / rel_path / "__init__.py",
+    ]
+
+
 class PythonImportResolver(ImportResolver):
     """Resolve Python imports to local .py files or packages (__init__.py)."""
 
@@ -82,7 +91,7 @@ class PythonImportResolver(ImportResolver):
         parts = ref.module_path.split(".") if ref.module_path else []
 
         if parts:
-            candidates = self._candidates(project_root, parts)
+            candidates = _candidates(project_root, parts)
             for candidate in candidates:
                 if candidate.exists():
                     return [ResolvedImport(ref=ref, resolved_path=candidate)]
@@ -102,7 +111,7 @@ class PythonImportResolver(ImportResolver):
         if ref.module_path:
             # from .models import User → look for models.py relative to base
             parts = ref.module_path.split(".")
-            candidates = self._candidates(base, parts)
+            candidates = _candidates(base, parts)
             for candidate in candidates:
                 if candidate.exists():
                     return [ResolvedImport(ref=ref, resolved_path=candidate)]
@@ -112,20 +121,11 @@ class PythonImportResolver(ImportResolver):
             for name in ref.names:
                 if name == "*":
                     continue
-                candidates = self._candidates(base, [name])
+                candidates = _candidates(base, [name])
                 for candidate in candidates:
                     if candidate.exists():
                         return [ResolvedImport(ref=ref, resolved_path=candidate)]
         return [ResolvedImport(ref=ref)]
-
-    @staticmethod
-    def _candidates(base: Path, parts: list[str]) -> list[Path]:
-        """Generate candidate file paths for a dotted module path."""
-        rel_path = Path(*parts)
-        return [
-            base / rel_path.with_suffix(".py"),
-            base / rel_path / "__init__.py",
-        ]
 
 
 # ── JavaScript / TypeScript resolver ─────────────────────────────

@@ -89,8 +89,12 @@ def _main_compare() -> None:
     from viz.compare_app import CompareApp
     from viz.pipeline import run_pipeline
 
+    def _read_source(path: str) -> str:
+        with open(path) as f:
+            return f.read()
+
     results = [
-        run_pipeline(open(path).read(), language=lang, max_steps=args.max_steps)
+        run_pipeline(_read_source(path), language=lang, max_steps=args.max_steps)
         for spec in args.specs
         for lang, path in [spec.split(":", 1)]
     ]

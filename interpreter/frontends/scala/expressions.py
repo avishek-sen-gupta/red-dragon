@@ -484,10 +484,7 @@ def lower_new_expr(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     named_children = [c for c in node.children if c.is_named]
-    if named_children:
-        type_name = ctx.node_text(named_children[0])
-    else:
-        type_name = "Object"
+    type_name = ctx.node_text(named_children[0]) if named_children else "Object"
 
     args_node = next(
         (c for c in node.children if c.type == NT.ARGUMENTS),
