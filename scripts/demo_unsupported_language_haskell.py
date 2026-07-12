@@ -12,9 +12,9 @@ The pipeline:
   3. VM execution — runs the IR; external calls produce symbolic values
 
 Usage:
-    poetry run python scripts/demo_unsupported_language.py
-    poetry run python scripts/demo_unsupported_language.py --backend ollama
-    poetry run python scripts/demo_unsupported_language.py --verbose
+    uv run python scripts/demo_unsupported_language.py
+    uv run python scripts/demo_unsupported_language.py --backend ollama
+    uv run python scripts/demo_unsupported_language.py --verbose
 """
 
 from __future__ import annotations

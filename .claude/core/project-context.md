@@ -1,7 +1,7 @@
 ## Project Context
 
 - **Language:** Python 3.13+ (main codebase), Markdown (docs)
-- **Package manager:** Poetry (`poetry run` prefix for all commands)
+- **Package manager:** uv (`uv run` prefix for all commands)
 - **Test framework:** pytest with pytest-xdist (parallel by default)
 - **Formatter:** Black
 - **Architectural contracts:** import-linter (`.importlinter`)

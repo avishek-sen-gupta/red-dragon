@@ -6,12 +6,12 @@ language, grouped by structural class. Useful for understanding *why*
 a particular language has a distinct shape.
 
 Run from the red-dragon repo root:
-    poetry run python3 scripts/03_structural_class_drilldown.py <algorithm> [lang1 lang2 ...]
+    uv run python3 scripts/03_structural_class_drilldown.py <algorithm> [lang1 lang2 ...]
 
 Examples:
-    poetry run python3 scripts/03_structural_class_drilldown.py factorial_rec
-    poetry run python3 scripts/03_structural_class_drilldown.py classes lua c go python java
-    poetry run python3 scripts/03_structural_class_drilldown.py fibonacci python java
+    uv run python3 scripts/03_structural_class_drilldown.py factorial_rec
+    uv run python3 scripts/03_structural_class_drilldown.py classes lua c go python java
+    uv run python3 scripts/03_structural_class_drilldown.py fibonacci python java
 
 If no languages are specified, all languages are shown.
 """

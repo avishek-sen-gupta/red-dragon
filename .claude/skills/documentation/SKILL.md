@@ -14,7 +14,7 @@ Work through these in order. For each: read the current doc, read the relevant s
 ### 1. README.md (repo root)
 - Supported languages list and count
 - Feature capabilities (VM, type system, multi-file, MCP, TUI)
-- Test count (run `poetry run python -m pytest tests/ --co -q 2>/dev/null | tail -3` to get current count)
+- Test count (run `uv run python -m pytest tests/ --co -q 2>/dev/null | tail -3` to get current count)
 - Any new frontends or major features since last update
 
 ### 2. `docs/architectural-design-decisions.md`
@@ -79,4 +79,4 @@ Work through these in order. For each: read the current doc, read the relevant s
 | Linker | `interpreter/project/` |
 | Frontend design | `interpreter/frontends/<lang>_frontend.py` |
 | Lowering gaps | open Beads issues + `bd list --priority=0,1` |
-| Test count | `poetry run python -m pytest tests/ --co -q 2>/dev/null \| tail -3` |
+| Test count | `uv run python -m pytest tests/ --co -q 2>/dev/null \| tail -3` |

@@ -5,7 +5,7 @@ LLM-plausible resolution produces concrete values for the same source.
 
 Ported from scripts/demo_unresolved_call.py with proper value assertions.
 
-Run with: poetry run python -m pytest -m external tests/external/test_llm_symbolic_vs_plausible.py -v
+Run with: uv run python -m pytest -m external tests/external/test_llm_symbolic_vs_plausible.py -v
 """
 
 import pytest

@@ -6,7 +6,7 @@ and reports return values and step counts. Generates Table 4 and Table 5
 from the SCAM paper.
 
 Run from the red-dragon repo root:
-    poetry run python3 scripts/05_execution_equivalence.py [--steps]
+    uv run python3 scripts/05_execution_equivalence.py [--steps]
 
 Options:
     --steps   Also print the step count table (Table 5)

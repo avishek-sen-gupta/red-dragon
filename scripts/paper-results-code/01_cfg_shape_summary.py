@@ -5,7 +5,7 @@ Generates a summary of CFG shapes (block count, edge count, IR length,
 SYMBOLIC counts) across all Rosetta algorithms and all 15 languages.
 
 Run from the red-dragon repo root:
-    poetry run python3 scripts/01_cfg_shape_summary.py
+    uv run python3 scripts/01_cfg_shape_summary.py
 
 Output: one line per algorithm with min/max blocks, edges, IR length,
         number of distinct structural variants, and unresolved SYMBOLIC count.

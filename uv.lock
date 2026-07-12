@@ -2247,7 +2247,7 @@ wheels = [
 [[package]]
 name = "python-fp-lint"
 version = "0.1.0"
-source = { git = "https://github.com/avishek-sen-gupta/python-fp-lint.git#c98f3c48bde632f14b443017da90c911460e8383" }
+source = { git = "https://github.com/avishek-sen-gupta/python-fp-lint.git#6fa7a4598f5bbea5dd956473d08b4cdbd22df073" }
 dependencies = [
     { name = "beniget" },
     { name = "pyyaml" },

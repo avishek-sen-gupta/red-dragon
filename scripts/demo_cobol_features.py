@@ -12,10 +12,10 @@ Each demo program focuses on a different cluster of COBOL features.
 All programs run through the real ProLeap parser — no mocked ASGs.
 
 Usage:
-    poetry run python scripts/demo_cobol_features.py
-    poetry run python scripts/demo_cobol_features.py --verbose
-    poetry run python scripts/demo_cobol_features.py --program arithmetic
-    poetry run python scripts/demo_cobol_features.py --list
+    uv run python scripts/demo_cobol_features.py
+    uv run python scripts/demo_cobol_features.py --verbose
+    uv run python scripts/demo_cobol_features.py --program arithmetic
+    uv run python scripts/demo_cobol_features.py --list
 
 Requires:
     PROLEAP_BRIDGE_JAR env var (or default path at

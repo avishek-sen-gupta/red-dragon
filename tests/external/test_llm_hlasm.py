@@ -6,7 +6,7 @@ the deterministic VM executes the resulting IR.
 
 Ported from scripts/demo_hlasm.py with sum=55 verification.
 
-Run with: poetry run python -m pytest -m external tests/external/test_llm_hlasm.py -v
+Run with: uv run python -m pytest -m external tests/external/test_llm_hlasm.py -v
 """
 
 import pytest

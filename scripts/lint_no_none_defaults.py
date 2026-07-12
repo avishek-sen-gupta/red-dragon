@@ -8,7 +8,7 @@ A parameter default of literal `None` is flagged regardless of its type
 annotation. This is a mechanical check, not a style opinion: the project has
 already decided the convention, this just catches drift from it.
 
-Usage: poetry run python scripts/lint_no_none_defaults.py <path> [<path> ...]
+Usage: uv run python scripts/lint_no_none_defaults.py <path> [<path> ...]
 Exit code 1 if any violation is found (0 otherwise), for CI/pre-commit use.
 """
 
