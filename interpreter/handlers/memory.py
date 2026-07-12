@@ -355,7 +355,7 @@ def _handle_store_indirect(
     logger.debug("store_indirect on non-pointer %s", obj_desc)
     return ExecutionResult.success(
         StateUpdate(
-            reasoning=f"store_indirect on {obj_desc} = {val!r} (non-pointer, no-op)",
+            reasoning=f"store_indirect on {obj_desc} = {tv.value!r} (non-pointer, no-op)",
         )
     )
 
