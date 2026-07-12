@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from interpreter.constants import Language
+from interpreter.frontend_observer import NullFrontendObserver
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.java import JavaFrontend
+from interpreter.frontends.java import expressions as java_expressions
 from interpreter.frontends.java.features import JavaFeature
 from interpreter.instructions import InstructionBase
 from interpreter.ir import Opcode
@@ -10,6 +14,23 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.var_name import VarName
 from tests.covers import NotLanguageFeature, covers
+
+
+class _FakeDegenerateNode:
+    """A tree-sitter node with no 'value' field and no named children.
+
+    Real Java grammar can't produce this shape for CAST_EXPRESSION or
+    EXPRESSION_STATEMENT (both always have a mandatory expression child),
+    so these fallback branches are only reachable via a hand-built node —
+    they exist as a defensive guard against malformed/unexpected ASTs.
+    """
+
+    children: list = []
+    start_point = (0, 0)
+    end_point = (0, 0)
+
+    def child_by_field_name(self, name: str):
+        return None
 
 
 def _parse_java(source: str) -> list[InstructionBase]:
@@ -107,6 +128,49 @@ class TestJavaExpressions:
         )
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
+
+    @covers(JavaFeature.CAST)
+    def test_cast_expr_degenerate_node_falls_back_to_null(self):
+        """Regression test: the fallback in lower_cast_expr called the
+
+        deliberately-unimported lower_const_literal (see the module-level
+        comment in expressions.py — a trap for unmigrated Const-literal
+        call sites from the gjoy.4 typed-literals refactor), raising
+        NameError instead of emitting a null CONST like its sibling
+        fallbacks (lower_field_access, lower_array_access) do.
+        """
+        ctx = TreeSitterEmitContext(
+            source=b"",
+            language=Language.JAVA,
+            observer=NullFrontendObserver(),
+            constants=JavaFrontend(
+                TreeSitterParserFactory(), "java"
+            )._build_constants(),
+        )
+        reg = java_expressions.lower_cast_expr(ctx, _FakeDegenerateNode())
+        assert ctx.instructions[-1].opcode == Opcode.CONST
+        assert ctx.instructions[-1].result_reg == reg
+        assert ctx.instructions[-1].operands == [None]
+
+    @covers(JavaFeature.SWITCH_EXPRESSION)
+    def test_expr_stmt_as_expr_degenerate_node_falls_back_to_null(self):
+        """Regression test: same NameError trap as lower_cast_expr above,
+
+        in the arrow-arm expression_statement fallback for switch
+        expressions.
+        """
+        ctx = TreeSitterEmitContext(
+            source=b"",
+            language=Language.JAVA,
+            observer=NullFrontendObserver(),
+            constants=JavaFrontend(
+                TreeSitterParserFactory(), "java"
+            )._build_constants(),
+        )
+        reg = java_expressions.lower_expr_stmt_as_expr(ctx, _FakeDegenerateNode())
+        assert ctx.instructions[-1].opcode == Opcode.CONST
+        assert ctx.instructions[-1].result_reg == reg
+        assert ctx.instructions[-1].operands == [None]
 
 
 class TestJavaMethodCalls:

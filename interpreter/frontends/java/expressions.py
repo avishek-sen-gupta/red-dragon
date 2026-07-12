@@ -18,9 +18,6 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.java.node_types import JavaNodeType
-
-# lower_const_literal is intentionally NOT imported — it now raises TypeError.
-# All literal sites must use the typed helpers above (gjoy.4 migration).
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
@@ -535,7 +532,7 @@ def lower_cast_expr(
     children = [c for c in node.children if c.is_named]
     if len(children) >= 2:
         return ctx.lower_expr(children[-1])
-    return lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_instanceof(
@@ -632,7 +629,7 @@ def lower_expr_stmt_as_expr(
     named_children = [c for c in node.children if c.is_named]
     if named_children:
         return ctx.lower_expr(named_children[0])
-    return lower_const_literal(ctx, node)
+    return lower_null_literal(ctx, node)
 
 
 def lower_throw_as_expr(
