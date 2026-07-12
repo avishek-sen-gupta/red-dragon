@@ -3,7 +3,7 @@
 Verifies that the LLM execution strategy produces correct concrete values
 for unresolvable Java stdlib calls (Math.sqrt, String.valueOf, .length()).
 
-Run with: poetry run python -m pytest -m external tests/external/test_llm_java_execution.py -v
+Run with: uv run python -m pytest -m external tests/external/test_llm_java_execution.py -v
 """
 
 from pathlib import Path

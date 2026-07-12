@@ -59,7 +59,7 @@ repos:
       # commits. Re-enable once they no longer mutate the tree mid-commit.
       # - id: feature-coverage-gaps
       #   name: Regenerate frontend lowering gaps doc
-      #   entry: bash -c 'poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md && git add -u docs/frontend-lowering-gaps.md'
+      #   entry: bash -c 'uv run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md && git add -u docs/frontend-lowering-gaps.md'
       #   language: system
       #   pass_filenames: false
       #   always_run: true

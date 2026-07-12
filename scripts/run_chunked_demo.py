@@ -8,9 +8,9 @@ Exercises the full chunking pipeline:
   4. Results are reassembled into a single IR stream
 
 Usage:
-    poetry run python scripts/run_chunked_demo.py
-    poetry run python scripts/run_chunked_demo.py --backend ollama
-    poetry run python scripts/run_chunked_demo.py --verbose
+    uv run python scripts/run_chunked_demo.py
+    uv run python scripts/run_chunked_demo.py --backend ollama
+    uv run python scripts/run_chunked_demo.py --verbose
 """
 
 from __future__ import annotations

@@ -10,7 +10,7 @@ region — so we get, per failing assertion, *which* paragraph/feature failed an
 the human-readable RE-MARK. Aggregating RE-MARK+FEATURE across programs surfaces
 the shared root causes behind the "completes-but-fails" backlog (red-dragon-m0oa).
 
-Usage: poetry run python scripts/nist_ccvs_tracer.py [PROG ...]
+Usage: uv run python scripts/nist_ccvs_tracer.py [PROG ...]
        (no args = every SQ/IX/RL program in the NIST corpus)
 Requires PROLEAP_BRIDGE_JAR to be set.
 """

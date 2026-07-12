@@ -42,7 +42,7 @@ def run_target(target: str, use_coverage: bool = False) -> int:
     if use_coverage:
         cov_paths = ",".join(f"--cov={p}" for p in paths)
         cov_cmd = [
-            "poetry",
+            "uv",
             "run",
             "python",
             "-m",
@@ -57,7 +57,7 @@ def run_target(target: str, use_coverage: bool = False) -> int:
             return result.returncode
 
     cmd = [
-        "poetry",
+        "uv",
         "run",
         "mutmut",
         "run",
@@ -72,7 +72,7 @@ def run_target(target: str, use_coverage: bool = False) -> int:
 
 def show_results() -> int:
     """Print mutmut results summary from the last run. Returns exit code."""
-    result = subprocess.run(["poetry", "run", "mutmut", "results"])
+    result = subprocess.run(["uv", "run", "mutmut", "results"])
     return result.returncode
 
 

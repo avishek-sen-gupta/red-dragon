@@ -1,6 +1,6 @@
 """External tests for demo scripts — require LLM API access.
 
-Run with: poetry run python -m pytest -m external
+Run with: uv run python -m pytest -m external
 These are excluded from default test runs and CI.
 """
 

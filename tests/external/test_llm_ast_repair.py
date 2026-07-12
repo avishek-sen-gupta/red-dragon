@@ -5,7 +5,7 @@ then lowered deterministically. Verifies that repair reduces SYMBOLIC instructio
 
 Ported from scripts/demo_ast_repair.py with proper assertions.
 
-Run with: poetry run python -m pytest -m external tests/external/test_llm_ast_repair.py -v
+Run with: uv run python -m pytest -m external tests/external/test_llm_ast_repair.py -v
 """
 
 import pytest
