@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends._base import BaseFrontend
