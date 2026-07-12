@@ -6,7 +6,7 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.types.null_type_resolver import NullTypeResolver
-from interpreter.types.type_expr import ScalarType, UNKNOWN, scalar
+from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
 from interpreter.types.type_resolver import TypeResolver
 
 

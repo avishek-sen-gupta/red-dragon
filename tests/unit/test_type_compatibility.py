@@ -3,10 +3,10 @@
 from interpreter.constants import FoundationTypeName
 from interpreter.type_name import TypeName
 from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
-from interpreter.types.type_expr import scalar, UNKNOWN
-from interpreter.types.typed_value import typed
-from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 from interpreter.types.type_node import TypeNode
+from interpreter.types.typed_value import typed
 
 
 def _default_graph() -> TypeGraph:

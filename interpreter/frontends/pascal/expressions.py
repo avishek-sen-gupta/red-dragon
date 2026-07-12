@@ -1,44 +1,43 @@
 """Pascal-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
-
-from typing import Any
 
 import logging
-from interpreter.frontends.context import TreeSitterEmitContext
+from typing import Any
 
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.expressions import (
-    lower_int_literal,
     lower_float_literal,
-    lower_string_literal,
+    lower_int_literal,
     lower_null_literal,
+    lower_string_literal,
 )
 from interpreter.frontends.common.property_accessors import emit_field_load_or_getter
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.pascal.declarations import _resolve_object_class
+from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.frontends.pascal.pascal_constants import (
     K_OPERATOR_MAP,
     K_UNARY_MAP,
     KEYWORD_NOISE,
 )
-from interpreter.frontends.pascal.node_types import PascalNodeType
-from interpreter.frontends.pascal.declarations import _resolve_object_class
-from interpreter.register import Register
-from interpreter.types.type_expr import scalar
-from interpreter.operator_kind import resolve_binop, resolve_unop
-from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
     Binop,
-    Unop,
     CallFunction,
     CallUnknown,
+    Const,
     LoadField,
     LoadIndex,
-    StoreIndex,
     NewArray,
+    StoreIndex,
     Symbolic,
+    Unop,
 )
+from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import scalar
 
 logger = logging.getLogger(__name__)
 

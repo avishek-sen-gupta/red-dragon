@@ -1,17 +1,17 @@
 """Unit tests for the clone builtin (PHP object cloning)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
+from interpreter.address import Address
+from interpreter.constants import FoundationTypeName
+from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import TypeExpr, scalar
+from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.vm.builtins import Builtins
 from interpreter.vm.vm import VMState
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.func_name import FuncName
-from interpreter.address import Address
 from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
-from interpreter.types.typed_value import typed, typed_from_runtime
-from interpreter.types.type_expr import TypeExpr, scalar
-from interpreter.constants import FoundationTypeName
 
 
 class TestCloneBuiltin:

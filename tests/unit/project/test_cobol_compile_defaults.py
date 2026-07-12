@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.project.cobol_compile import compile_cobol, compile_cobol_module
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

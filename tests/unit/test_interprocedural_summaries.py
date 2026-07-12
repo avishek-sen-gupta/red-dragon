@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from interpreter.cfg_types import BasicBlock, CFG
+from interpreter.cfg_types import CFG, BasicBlock
 from interpreter.constants import PARAM_PREFIX
-from interpreter.ir import CodeLabel
-from interpreter.register import Register
-from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     DeclVar,
@@ -17,12 +14,14 @@ from interpreter.instructions import (
 )
 from interpreter.interprocedural.summaries import build_summary
 from interpreter.interprocedural.types import (
-    CallContext,
+    ROOT_CONTEXT,
     DereferenceEndpoint,
     FunctionEntry,
-    ROOT_CONTEXT,
     VariableEndpoint,
 )
+from interpreter.ir import CodeLabel
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _build_set_val_cfg() -> tuple[CFG, FunctionEntry]:

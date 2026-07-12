@@ -11,7 +11,7 @@ Run with: uv run python -m pytest -m external tests/external/test_llm_e2e_pipeli
 
 import pytest
 
-from interpreter.constants import Language, FRONTEND_LLM, FRONTEND_DETERMINISTIC
+from interpreter.constants import FRONTEND_DETERMINISTIC, FRONTEND_LLM, Language
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy

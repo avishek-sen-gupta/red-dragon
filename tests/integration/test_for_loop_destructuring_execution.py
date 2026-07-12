@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 
 from interpreter.ir import Opcode
-from tests.unit.rosetta.conftest import parse_for_language, find_all
+from tests.unit.rosetta.conftest import find_all, parse_for_language
 
 # ---------------------------------------------------------------------------
 # Programs: for-loop destructuring across 4 languages

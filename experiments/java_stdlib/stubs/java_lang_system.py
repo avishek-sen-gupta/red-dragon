@@ -1,5 +1,4 @@
 from pathlib import Path
-from interpreter.type_name import TypeName
 
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
@@ -8,16 +7,15 @@ from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
     CallCtorFunction,
-    Const,
     DeclVar,
     Label_,
     NewObject,
-    Return_,
     StoreField,
 )
 from interpreter.ir import CodeLabel
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import scalar
 from interpreter.var_name import VarName
 

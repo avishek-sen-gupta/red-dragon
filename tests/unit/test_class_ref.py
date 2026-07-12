@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.refs.class_ref import ClassRef, NO_CLASS_REF
-from interpreter.ir import CodeLabel
 from interpreter.class_name import ClassName
+from interpreter.ir import CodeLabel
+from interpreter.refs.class_ref import NO_CLASS_REF, ClassRef
 
 
 class TestClassRef:

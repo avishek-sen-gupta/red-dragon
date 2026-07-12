@@ -10,31 +10,31 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
+from interpreter import constants
+from interpreter.handlers._common import _symbolic_name
 from interpreter.instructions import (
-    InstructionBase,
     Branch,
     BranchIf,
-    Return_,
     Halt_,
-    Throw_,
-    TryPush,
-    TryPop,
-    SetContinuation,
+    InstructionBase,
     ResumeContinuation,
+    Return_,
+    SetContinuation,
+    Throw_,
+    TryPop,
+    TryPush,
 )
 from interpreter.ir import CodeLabel
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import typed
 from interpreter.vm.vm import (
-    VMState,
     ExceptionHandler,
     ExecutionResult,
     StateUpdate,
-    _resolve_reg,
+    VMState,
     _is_symbolic,
+    _resolve_reg,
 )
-from interpreter.types.type_expr import scalar
-from interpreter.types.typed_value import typed
-from interpreter import constants
-from interpreter.handlers._common import _symbolic_name
 
 
 def _handle_branch(

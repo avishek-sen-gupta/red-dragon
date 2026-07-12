@@ -2,31 +2,31 @@
 
 from __future__ import annotations
 
+from interpreter.constants import Language
+from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.common.patterns import (
-    LiteralPattern,
-    WildcardPattern,
-    CapturePattern,
-    SequencePattern,
-    MappingPattern,
-    ClassPattern,
-    OrPattern,
     AsPattern,
+    CapturePattern,
+    ClassPattern,
+    LiteralPattern,
+    MappingPattern,
+    MatchCase,
+    NoBody,
+    NoGuard,
+    OrPattern,
+    SequencePattern,
     StarPattern,
     ValuePattern,
-    MatchCase,
-    compile_pattern_test,
-    compile_pattern_bindings,
+    WildcardPattern,
     compile_match,
-    NoGuard,
-    NoBody,
+    compile_pattern_bindings,
+    compile_pattern_test,
 )
-from interpreter.frontends.python import PythonFrontend
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
-from interpreter.instructions import InstructionBase
-from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.constants import Language
+from interpreter.frontends.python import PythonFrontend
+from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 
 
 def _make_ctx():

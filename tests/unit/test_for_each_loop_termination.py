@@ -10,9 +10,6 @@ the loop condition so the counter advances each iteration.
 
 from __future__ import annotations
 
-import pytest
-
-from interpreter.ir import Opcode
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 

@@ -1,21 +1,20 @@
 """Integration tests: Python pattern matching through VM execution."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 import pytest
 
-from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
 from interpreter.constants import Language
-from interpreter.run import run
-from interpreter.types.typed_value import unwrap_locals
-from interpreter.types.type_expr import scalar
-from interpreter.vm.vm import _heap_addr
-from interpreter.project.entry_point import EntryPoint
-from tests.covers import covers
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.frontends.python.features import PythonFeature
+from interpreter.project.entry_point import EntryPoint
+from interpreter.run import run
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
+from interpreter.vm.vm import _heap_addr
+from tests.covers import covers
 
 
 def _run_python(source: str, max_steps: int = 500):

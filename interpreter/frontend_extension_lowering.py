@@ -31,13 +31,13 @@ class RedDragonExtensionLoweringStrategy(Protocol):
         ...
 
     def on_procedure_entry(
-        self, ctx: "EmitContext", materialised: "MaterialisedSectionedLayout"
+        self, ctx: EmitContext, materialised: MaterialisedSectionedLayout
     ) -> None:
         """Called once at the start of the procedure division."""
         ...
 
     def lower(
-        self, ctx: "EmitContext", stmt: Any, materialised: "MaterialisedSectionedLayout"
+        self, ctx: EmitContext, stmt: Any, materialised: MaterialisedSectionedLayout
     ) -> None:
         """Lower one extension statement to IR."""
         ...

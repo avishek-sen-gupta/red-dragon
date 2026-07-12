@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
@@ -11,10 +9,9 @@ from interpreter.instructions import (
     Binop,
     Const,
     DeclVar,
-    InstructionBase,
     Label_,
 )
-from interpreter.ir import CodeLabel, Opcode, SourceLocation
+from interpreter.ir import CodeLabel, SourceLocation
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 from interpreter.var_name import VarName

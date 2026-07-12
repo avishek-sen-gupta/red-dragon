@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
+from interpreter.frontends.rust.expressions import lower_if_expr
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -22,7 +20,8 @@ from interpreter.instructions import (
     LoadVar,
     StoreVar,
 )
-from interpreter.frontends.rust.expressions import lower_if_expr
+from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

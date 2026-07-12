@@ -8,7 +8,10 @@ from __future__ import annotations
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
-from tests.integration.cobol_helpers import bridge_jar, to_fixed
+from tests.integration.cobol_helpers import (
+    bridge_jar,  # noqa: F401
+    to_fixed,
+)
 from tests.unit.cobol.dialect_parser_fixtures import FakeExtensionStatement
 
 _PROGRAM = to_fixed(

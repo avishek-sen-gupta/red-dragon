@@ -10,10 +10,10 @@ from textual.containers import Horizontal, Vertical
 from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
-from viz.panels.source_panel import SourcePanel
 from viz.panels.ir_panel import IRPanel
+from viz.panels.source_panel import SourcePanel
 from viz.panels.step_panel import StepPanel
-from viz.pipeline import PipelineResult, run_pipeline
+from viz.pipeline import PipelineResult
 
 logger = logging.getLogger(__name__)
 

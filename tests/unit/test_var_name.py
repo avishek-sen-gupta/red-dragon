@@ -2,7 +2,7 @@
 
 import pytest
 
-from interpreter.var_name import VarName, NoVarName, NO_VAR_NAME
+from interpreter.var_name import NO_VAR_NAME, VarName
 
 
 class TestVarName:

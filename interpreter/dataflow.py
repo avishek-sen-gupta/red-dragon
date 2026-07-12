@@ -10,13 +10,13 @@ from functools import reduce
 from typing import Any
 
 from interpreter import constants
-from interpreter.cfg import BasicBlock, CFG
-from interpreter.ir import CodeLabel, Opcode, VAR_DEFINITION_OPCODES
+from interpreter.cfg import CFG, BasicBlock
 from interpreter.instructions import (
     DeclVar,
     InstructionBase,
     StoreVar,
 )
+from interpreter.ir import VAR_DEFINITION_OPCODES, CodeLabel
 from interpreter.register import Register
 from interpreter.storage_identifier import StorageIdentifier
 from interpreter.var_name import VarName

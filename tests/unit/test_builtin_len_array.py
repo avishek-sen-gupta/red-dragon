@@ -8,14 +8,14 @@ includes the 'length' key itself and produces an off-by-one.
 from __future__ import annotations
 
 from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.vm.builtins import _builtin_len, _builtin_array_of
 from interpreter.constants import FoundationTypeName
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.func_name import FuncName
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import typed, typed_from_runtime
+from interpreter.vm.builtins import _builtin_array_of, _builtin_len
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
-from interpreter.func_name import FuncName
 
 
 def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:

@@ -2,7 +2,7 @@ import inspect
 
 from interpreter.cobol.lower_arithmetic import _store_move_value
 from interpreter.register import NO_REGISTER
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestStoreMovValueDefault:

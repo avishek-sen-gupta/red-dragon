@@ -1,51 +1,46 @@
 """C-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
+import logging
 import re
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
+from interpreter.frontends.c.node_types import CNodeType
 from interpreter.frontends.common.expressions import (
+    lower_float_literal,
+    lower_int_literal,
     lower_null_literal,
     lower_string_literal,
-    lower_int_literal,
-    lower_float_literal,
 )
-from interpreter.frontends.c.node_types import CNodeType
-from interpreter.register import Register
-from interpreter.types.type_expr import scalar
-from interpreter.operator_kind import resolve_unop
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.func_name import FuncName
-from interpreter.class_name import ClassName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
-    Binop,
-    Unop,
-    CallFunction,
-    LoadField,
-    StoreField,
-    LoadIndex,
-    StoreIndex,
-    NewObject,
-    NewArray,
-    Label_,
+    AddressOf,
     Branch,
     BranchIf,
-    AddressOf,
+    CallFunction,
+    DeclVar,
+    Label_,
+    LoadField,
+    LoadIndex,
     LoadIndirect,
+    LoadVar,
+    NewArray,
+    NewObject,
+    StoreField,
+    StoreIndex,
     StoreIndirect,
-    Symbolic,
+    StoreVar,
+    Unop,
 )
+from interpreter.operator_kind import resolve_unop
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

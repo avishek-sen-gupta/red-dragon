@@ -8,28 +8,25 @@ flow to which outputs (return value, field writes) for a single function.
 from __future__ import annotations
 
 import logging
-from functools import reduce
 from typing import Any
 
-from interpreter.cfg_types import BasicBlock, CFG
-from interpreter.dataflow import DataflowResult, Definition, analyze
+from interpreter import constants
+from interpreter.cfg_types import CFG, BasicBlock
+from interpreter.dataflow import DataflowResult, analyze
 from interpreter.field_name import FieldName
-from interpreter.ir import CodeLabel
 from interpreter.instructions import (
     DeclVar,
-    StoreVar,
-    Symbolic,
+    LoadField,
+    LoadIndirect,
+    LoadVar,
     Return_,
     StoreField,
-    LoadField,
-    LoadVar,
     StoreIndirect,
-    LoadIndirect,
+    StoreVar,
+    Symbolic,
 )
-from interpreter import constants
-from interpreter.register import Register
-from interpreter.var_name import VarName
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
     CallContext,
     DereferenceEndpoint,
     FieldEndpoint,
@@ -37,10 +34,12 @@ from interpreter.interprocedural.types import (
     FunctionEntry,
     FunctionSummary,
     InstructionLocation,
-    NO_DEFINITION,
     ReturnEndpoint,
     VariableEndpoint,
 )
+from interpreter.ir import CodeLabel
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

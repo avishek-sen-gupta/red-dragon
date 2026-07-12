@@ -9,24 +9,24 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
+from interpreter import constants
+from interpreter.address import Address
 from interpreter.instructions import (
-    InstructionBase,
     AllocRegion,
-    WriteRegion,
+    InstructionBase,
     LoadRegion,
-)
-from interpreter.vm.vm import (
-    VMState,
-    ExecutionResult,
-    StateUpdate,
-    RegionWrite,
-    _resolve_reg,
-    _is_symbolic,
+    WriteRegion,
 )
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import typed
-from interpreter.address import Address
-from interpreter import constants
+from interpreter.vm.vm import (
+    ExecutionResult,
+    RegionWrite,
+    StateUpdate,
+    VMState,
+    _is_symbolic,
+    _resolve_reg,
+)
 
 
 def _handle_alloc_region(

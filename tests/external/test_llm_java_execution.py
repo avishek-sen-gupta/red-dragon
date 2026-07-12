@@ -12,8 +12,8 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
-from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
-from interpreter.run_types import VMConfig, UnresolvedCallStrategy
+from interpreter.run import ExecutionStrategies, execute_cfg, initial_vm_state
+from interpreter.run_types import UnresolvedCallStrategy, VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
 

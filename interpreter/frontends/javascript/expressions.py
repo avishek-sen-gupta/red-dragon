@@ -1,49 +1,50 @@
 """JavaScript-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from interpreter.type_name import TypeName
-from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from interpreter.ir import SpreadArguments, CodeLabel
-
-from interpreter.frontends.context import TreeSitterEmitContext
+    from interpreter.ir import SpreadArguments
 
 from interpreter import constants
-from interpreter.frontends.common.expressions import (
-    lower_int_literal,
-    lower_float_literal,
-    lower_string_literal,
-    lower_null_literal,
-)
-from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
-from interpreter.operator_kind import resolve_binop
-from interpreter.register import Register
-from interpreter.types.type_expr import scalar
 from interpreter.field_name import FieldName
-from interpreter.var_name import VarName
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    lower_float_literal,
+    lower_int_literal,
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
     Binop,
+    Branch,
+    BranchIf,
     CallFunction,
     CallMethod,
     CallUnknown,
+    Const,
+    DeclVar,
+    Label_,
     LoadField,
     LoadIndex,
+    LoadVar,
+    NewObject,
+    Return_,
     StoreField,
     StoreIndex,
-    NewObject,
+    StoreVar,
     Symbolic,
-    Branch,
-    BranchIf,
-    Label_,
-    Return_,
 )
+from interpreter.operator_kind import resolve_binop
+from interpreter.register import Register
+from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 
 
 def lower_js_number(

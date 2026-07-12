@@ -1,30 +1,30 @@
 """Unit tests for heap_writes TypedValue migration (red-dragon-gny + red-dragon-x2t)."""
 
 from types import MappingProxyType
-from interpreter.type_name import TypeName
 
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
+from interpreter.address import Address
 from interpreter.constants import FoundationTypeName
-from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.func_name import FuncName
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm.executor import (
-    _handle_store_field,
-    _handle_store_indirect,
-    _handle_store_index,
-    _handle_load_field,
-    _handle_load_index,
-    _handle_load_var,
-    _handle_address_of,
-    _default_handler_context,
-)
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.var_name import VarName
+from interpreter.vm.executor import (
+    _default_handler_context,
+    _handle_address_of,
+    _handle_load_field,
+    _handle_load_index,
+    _handle_load_var,
+    _handle_store_field,
+    _handle_store_index,
+    _handle_store_indirect,
+)
 from interpreter.vm.vm import apply_update, materialize_raw_update
-from interpreter.register import Register
-from interpreter.address import Address
-from interpreter.func_name import FuncName
 from interpreter.vm.vm_types import (
     HeapObject,
     HeapWrite,

@@ -9,8 +9,6 @@ graphs are non-empty) rather than exact register/label names.
 
 from __future__ import annotations
 
-import pytest
-
 from interpreter.cfg import build_cfg
 from interpreter.constants import Language
 from interpreter.field_name import FieldName

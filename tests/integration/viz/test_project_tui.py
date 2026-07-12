@@ -4,10 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from interpreter.constants import Language
 from interpreter.project.entry_point import EntryPoint
 from viz.project_pipeline import (
-    ProjectPipelineResult,
     execute_project,
     lookup_module_for_index,
     run_project_pipeline,

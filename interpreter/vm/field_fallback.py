@@ -15,12 +15,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from interpreter.address import Address
 from interpreter import constants
+from interpreter.address import Address
 from interpreter.field_name import FieldName
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
-from interpreter.vm.vm import VMState, _heap_addr as shared_heap_addr
+from interpreter.vm.vm import VMState
+from interpreter.vm.vm import _heap_addr as shared_heap_addr
 
 
 class FieldFallbackStrategy(ABC):

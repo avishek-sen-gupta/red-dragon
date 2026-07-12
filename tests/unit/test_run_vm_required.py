@@ -9,7 +9,7 @@ from interpreter.run import (
     run_linked_resumable,
     run_resumable,
 )
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

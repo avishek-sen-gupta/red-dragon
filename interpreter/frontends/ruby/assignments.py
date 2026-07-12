@@ -4,16 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.frontends.common.expressions import lower_default_return
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.operator_kind import resolve_binop
+from interpreter.frontends.ruby.expressions import lower_ruby_store_target
+from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.instructions import (
     Binop,
     Return_,
 )
-from interpreter.frontends.common.expressions import lower_default_return
-from interpreter.frontends.ruby.expressions import lower_ruby_store_target
-from interpreter.frontends.ruby.node_types import RubyNodeType
+from interpreter.operator_kind import resolve_binop
 
 
 def lower_ruby_return(

@@ -7,8 +7,8 @@ from interpreter.cobol.cobol_expression import (
     RefModNode,
     expr_from_dict,
 )
-from tests.covers import covers
 from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 
 class TestExprFromDict:

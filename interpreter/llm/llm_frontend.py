@@ -2,32 +2,31 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import re
 import time
 from typing import Any
 
+from interpreter import constants
+from interpreter.class_name import ClassName
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
-from interpreter.register import Register, NO_REGISTER
-from interpreter.refs.class_ref import ClassRef
-from interpreter.refs.func_ref import FuncRef
-import dataclasses
-
+from interpreter.instructions import Const, InstructionBase, Label_
 from interpreter.ir import (
+    NO_LABEL,
     NO_SOURCE_LOCATION,
+    CodeLabel,
     IRInstruction,
     Opcode,
-    CodeLabel,
-    NO_LABEL,
 )
-from interpreter.instructions import InstructionBase, Const, Label_
 from interpreter.llm.llm_client import LLMClient
-from interpreter import constants
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
+from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 

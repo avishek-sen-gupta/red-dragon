@@ -2,40 +2,37 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
-
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
 from interpreter import constants
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.common.expressions import (
     lower_null_literal,
 )
-from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.javascript.expressions import lower_js_params
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
-from interpreter.types.type_expr import ScalarType, metatype
-from interpreter.field_name import FieldName
-from interpreter.register import Register
-from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
-from interpreter.class_name import ClassName
 from interpreter.instructions import (
+    Branch,
+    CallFunction,
     Const,
     DeclVar,
+    Label_,
     LoadField,
     LoadIndex,
-    CallFunction,
     Symbolic,
-    Branch,
-    Label_,
-    Return_,
 )
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import ScalarType, metatype
+from interpreter.var_name import VarName
 
 
 def lower_js_var_declaration(
@@ -387,7 +384,7 @@ def lower_class_static_block(
 # ---------------------------------------------------------------------------
 
 
-def _extract_js_method(node) -> tuple[str, "FunctionInfo"] | None:
+def _extract_js_method(node) -> tuple[str, FunctionInfo] | None:
     """Extract a FunctionInfo from a JS method_definition node."""
     from interpreter.frontends.symbol_table import FunctionInfo
 
@@ -412,7 +409,7 @@ def _extract_param_names(params_node) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _extract_js_self_fields(body) -> "dict[str, FieldInfo]":
+def _extract_js_self_fields(body) -> dict[str, FieldInfo]:
     """Walk a constructor body and collect this.x = ... assignments."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -442,7 +439,7 @@ def _extract_js_self_fields(body) -> "dict[str, FieldInfo]":
     return fields
 
 
-def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":
+def _extract_js_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a JS class_declaration or class node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -508,9 +505,8 @@ def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_js_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_js_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class nodes."""
-    from interpreter.frontends.symbol_table import ClassInfo
 
     if node.type in (JSN.CLASS_DECLARATION, JSN.CLASS):
         result = _extract_js_class(node)
@@ -521,7 +517,7 @@ def _collect_js_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None
         _collect_js_classes(child, accumulator)
 
 
-def extract_javascript_symbols(root) -> "SymbolTable":
+def extract_javascript_symbols(root) -> SymbolTable:
     """Walk the JS AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

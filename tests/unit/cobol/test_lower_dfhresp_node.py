@@ -11,14 +11,16 @@ from __future__ import annotations
 from interpreter.cobol.asg_types import CobolASG, CobolField
 from interpreter.cobol.cobol_statements import EvaluateStatement, WhenStatement
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_arithmetic import lower_evaluate
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
-from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.cobol.sectioned_layout import build_sectioned_layout
+from interpreter.cobol.sectioned_layout import (
+    MaterialisedSectionedLayout,
+    build_sectioned_layout,
+)
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.instructions import Binop, Const
 from tests.covers import covers
-from interpreter.cobol.features import CobolFeature
 
 
 def _eibresp_ctx() -> tuple[EmitContext, MaterialisedSectionedLayout]:

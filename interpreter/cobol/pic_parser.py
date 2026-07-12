@@ -25,7 +25,6 @@ past detection (e.g. B / 0 / '/' insertion — see red-dragon-r9s9).
 
 from __future__ import annotations
 
-
 from dataclasses import dataclass
 
 from lark import Lark, Transformer

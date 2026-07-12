@@ -18,10 +18,10 @@ Diagnostic-confirmed node types (ruby_pattern_diag.py):
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-
+from interpreter.frontends.common.pattern_utils import resolve_positional_via_match_args
 from interpreter.frontends.common.patterns import (
     AsPattern,
     CapturePattern,
@@ -34,7 +34,6 @@ from interpreter.frontends.common.patterns import (
     StarPattern,
     WildcardPattern,
 )
-from interpreter.frontends.common.pattern_utils import resolve_positional_via_match_args
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.ruby.node_types import RubyNodeType as RNT
 

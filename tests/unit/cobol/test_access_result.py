@@ -1,5 +1,5 @@
-from tests.covers import covers, NotLanguageFeature
 from interpreter.cobol.access_result import AccessCondition, AccessResult
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

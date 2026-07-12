@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
+from interpreter import constants
 from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.rust.node_types import RustNodeType
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
@@ -25,19 +34,9 @@ from interpreter.instructions import (
     StoreField,
     Symbolic,
 )
-from interpreter.frontends.common.expressions import (
-    lower_null_literal,
-    lower_string_literal,
-)
-from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter import constants
-from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
-)
-from interpreter.frontends.rust.node_types import RustNodeType
 from interpreter.register import Register
-from interpreter.types.type_expr import EnumType, scalar
+from interpreter.types.type_expr import EnumType
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -715,7 +714,7 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_rust_struct_fields(field_declaration_list) -> "dict[FieldName, FieldInfo]":
+def _extract_rust_struct_fields(field_declaration_list) -> dict[FieldName, FieldInfo]:
     """Extract fields from a Rust field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -734,7 +733,7 @@ def _extract_rust_struct_fields(field_declaration_list) -> "dict[FieldName, Fiel
     return fields
 
 
-def _extract_rust_struct(node) -> "tuple[ClassName, ClassInfo] | None":
+def _extract_rust_struct(node) -> tuple[ClassName, ClassInfo] | None:
     """Extract a ClassInfo from a Rust struct_item node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo
 
@@ -757,11 +756,11 @@ def _extract_rust_struct(node) -> "tuple[ClassName, ClassInfo] | None":
 
 def _collect_rust_structs_and_impls(
     node,
-    classes: "dict[ClassName, ClassInfo]",
-    functions: "dict[FuncName, FunctionInfo]",
+    classes: dict[ClassName, ClassInfo],
+    functions: dict[FuncName, FunctionInfo],
 ) -> None:
     """Walk AST to collect struct definitions and impl blocks (methods)."""
-    from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo
+    from interpreter.frontends.symbol_table import FunctionInfo
 
     if node.type == RustNodeType.STRUCT_ITEM:
         result = _extract_rust_struct(node)
@@ -820,7 +819,7 @@ def _collect_rust_structs_and_impls(
         _collect_rust_structs_and_impls(child, classes, functions)
 
 
-def extract_rust_symbols(root) -> "SymbolTable":
+def extract_rust_symbols(root) -> SymbolTable:
     """Walk the Rust AST and return a SymbolTable of all struct definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 

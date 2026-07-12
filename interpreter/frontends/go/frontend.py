@@ -3,23 +3,24 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from interpreter.frontends._base import BaseFrontend
+from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.register import Register
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
-from interpreter.frontends.common import expressions as common_expr
-from interpreter.frontends.common import control_flow as common_cf
+from interpreter.frontends._base import BaseFrontend
 from interpreter.frontends.common import assignments as common_assign
-from interpreter.frontends.go import expressions as go_expr
+from interpreter.frontends.common import control_flow as common_cf
+from interpreter.frontends.common import expressions as common_expr
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.go import control_flow as go_cf
 from interpreter.frontends.go import declarations as go_decl
+from interpreter.frontends.go import expressions as go_expr
 from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.frontends.go.type_alias_extractor import GoTypeAliasExtractor
-from interpreter.constants import Language
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.parser import ParserFactory
+from interpreter.register import Register
 
 
 class GoFrontend(BaseFrontend):

@@ -1,13 +1,13 @@
 # pyright: standard
 """Unit tests for TypeScriptTypeAliasExtractor."""
 
-from tests.covers import covers
 from interpreter.frontends.typescript.features import TypeScriptFeature
 from interpreter.frontends.typescript.type_alias_extractor import (
     TypeScriptTypeAliasExtractor,
 )
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import ScalarType
+from tests.covers import covers
 
 
 class _FakeTSNode:

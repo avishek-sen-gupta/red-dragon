@@ -11,11 +11,9 @@ from interpreter.cobol.cobol_statements import (
     DisplayStatement,
     IfStatement,
     MoveStatement,
-    StopRunStatement,
     parse_statement,
 )
-from interpreter.cobol.condition_name import ConditionName, ConditionValue
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestCobolField:

@@ -15,6 +15,7 @@ from interpreter.cobol.cobol_statements import (
     CobolStatementType,
     ComputeStatement,
     ContinueStatement,
+    DeleteStatement,
     DisplayStatement,
     EntryStatement,
     EvaluateStatement,
@@ -30,18 +31,16 @@ from interpreter.cobol.cobol_statements import (
     OpenStatement,
     PerformStatement,
     ReadStatement,
+    RewriteStatement,
     SearchStatement,
     SetStatement,
+    StartStatement,
     StopRunStatement,
     StringStatement,
     UnstringStatement,
     WriteStatement,
-    RewriteStatement,
-    StartStatement,
-    DeleteStatement,
 )
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.lower_arithmetic import (
     lower_arithmetic,
     lower_arithmetic_corresponding,
@@ -83,6 +82,7 @@ from interpreter.cobol.lower_string_inspect import (
     lower_string,
     lower_unstring,
 )
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 
 logger = logging.getLogger(__name__)
 

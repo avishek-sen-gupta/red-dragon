@@ -1,7 +1,8 @@
 """Tests for FuncName domain type."""
 
 import pytest
-from interpreter.func_name import FuncName, NO_FUNC_NAME
+
+from interpreter.func_name import NO_FUNC_NAME, FuncName
 
 
 class TestFuncName:

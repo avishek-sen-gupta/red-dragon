@@ -1,16 +1,28 @@
 """Rust-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
-
-from typing import Any
 
 import logging
-from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
+from typing import Any
 
-from interpreter.operator_kind import resolve_binop, resolve_unop
-from interpreter.var_name import VarName
+from interpreter import constants
 from interpreter.field_name import FieldName
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+    lower_float_literal,
+    lower_int_literal,
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
+from interpreter.frontends.common.patterns import (
+    Pattern,
+    compile_pattern_bindings,
+    compile_pattern_test,
+)
+from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
+from interpreter.frontends.rust.node_types import RustNodeType
+from interpreter.frontends.rust.patterns import parse_rust_pattern
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AddressOf,
@@ -35,28 +47,11 @@ from interpreter.instructions import (
     Symbolic,
     Unop,
 )
-from interpreter import constants
-from interpreter.frontends.common.expressions import (
-    lower_default_return,
-    lower_int_literal,
-    lower_float_literal,
-    lower_string_literal,
-    lower_null_literal,
-    lower_bool_literal,
-    lower_canonical_none,
-    lower_canonical_true,
-    lower_canonical_false,
-)
-from interpreter.frontends.rust.node_types import RustNodeType
-from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
-from interpreter.frontends.common.patterns import (
-    Pattern,
-    compile_pattern_bindings,
-    compile_pattern_test,
-)
-from interpreter.frontends.rust.patterns import parse_rust_pattern
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import StructPatternType, scalar
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

@@ -16,14 +16,12 @@ All compute make_adder(10)(5) = 15 using closures that capture x.
 import pytest
 
 from interpreter.ir import Opcode
-
 from tests.unit.rosetta.conftest import (
-    parse_for_language,
-    opcodes,
     assert_clean_lowering,
-    assert_cross_language_consistency,
     execute_for_language,
     extract_answer,
+    opcodes,
+    parse_for_language,
 )
 
 # ---------------------------------------------------------------------------

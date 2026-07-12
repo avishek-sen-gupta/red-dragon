@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
-
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext, NO_NODE
-
+from interpreter import constants
 from interpreter.field_name import FieldName
-from interpreter.var_name import VarName
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_field_initializers,
+    emit_implicit_return,
+    emit_synthetic_init,
+)
+from interpreter.frontends.common.expressions import (
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
+from interpreter.frontends.java.expressions import lower_java_params
+from interpreter.frontends.java.node_types import JavaNodeType
+from interpreter.frontends.type_extraction import (
+    extract_normalized_type,
+)
 from interpreter.instructions import (
     Branch,
     Const,
@@ -22,23 +34,9 @@ from interpreter.instructions import (
     StoreIndex,
     Symbolic,
 )
-from interpreter import constants
-from interpreter.frontends.java.expressions import lower_java_params
-from interpreter.frontends.type_extraction import (
-    extract_normalized_type,
-)
-from interpreter.frontends.java.node_types import JavaNodeType
-from interpreter.frontends.common.declarations import (
-    FieldInit,
-    emit_field_initializers,
-    emit_implicit_return,
-    emit_synthetic_init,
-)
-from interpreter.frontends.common.expressions import (
-    lower_null_literal,
-    lower_string_literal,
-)
-from interpreter.types.type_expr import AnnotationType, EnumType, ScalarType, scalar
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import AnnotationType, EnumType, ScalarType
+from interpreter.var_name import VarName
 
 
 def lower_local_var_decl(
@@ -612,13 +610,13 @@ def lower_annotation_type_decl(
 # ---------------------------------------------------------------------------
 # Symbol extraction (Phase 2)
 # ---------------------------------------------------------------------------
+from interpreter.class_name import ClassName
 from interpreter.frontends.symbol_table import (
     ClassInfo,
     FieldInfo,
     FunctionInfo,
     SymbolTable,
 )
-from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
 
 

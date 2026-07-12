@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.frontends.kotlin.features import KotlinFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 from tests.covers import covers
 
 

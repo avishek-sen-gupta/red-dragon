@@ -8,18 +8,18 @@ Exercises 3 features:
 """
 
 from interpreter.api import lower_and_infer
+from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.refs.func_ref import FuncRef
+from interpreter.register import Register
 from interpreter.type_name import TypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.refs.func_ref import FuncRef
-from interpreter.func_name import FuncName
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import parse_type, scalar
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
-from interpreter.register import Register
 from interpreter.var_name import VarName
 
 

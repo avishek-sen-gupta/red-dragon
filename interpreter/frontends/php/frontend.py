@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.register import Register
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
-from interpreter.frontends.common import expressions as common_expr
-from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
-from interpreter.frontends.php import expressions as php_expr
+from interpreter.frontends.common import control_flow as common_cf
+from interpreter.frontends.common import expressions as common_expr
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.php import control_flow as php_cf
 from interpreter.frontends.php import declarations as php_decl
+from interpreter.frontends.php import expressions as php_expr
 from interpreter.frontends.php.node_types import PHPNodeType
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.register import Register
 
 
 class PhpFrontend(BaseFrontend):

@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
+from interpreter.frontends.common.exceptions import (
+    lower_raise_or_throw,
+    lower_try_catch,
+)
+from interpreter.frontends.common.expressions import (
+    lower_default_return,
+)
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
+from interpreter.frontends.php.node_types import PHPNodeType
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -23,15 +28,8 @@ from interpreter.instructions import (
     StoreVar,
 )
 from interpreter.ir import CodeLabel
-from interpreter.frontends.common.exceptions import (
-    lower_raise_or_throw,
-    lower_try_catch,
-)
-from interpreter.frontends.common.expressions import (
-    lower_default_return,
-    lower_int_literal,
-)
-from interpreter.frontends.php.node_types import PHPNodeType
+from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

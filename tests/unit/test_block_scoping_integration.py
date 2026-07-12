@@ -7,20 +7,20 @@ and that function-scoped frontends (Python, JavaScript var) do NOT.
 
 from __future__ import annotations
 
-from interpreter.frontends.java import JavaFrontend
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.cpp import CppFrontend
 from interpreter.frontends.csharp import CSharpFrontend
-from interpreter.frontends.rust import RustFrontend
 from interpreter.frontends.go import GoFrontend
+from interpreter.frontends.java import JavaFrontend
+from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.kotlin import KotlinFrontend
+from interpreter.frontends.python import PythonFrontend
+from interpreter.frontends.ruby import RubyFrontend
+from interpreter.frontends.rust import RustFrontend
 from interpreter.frontends.scala import ScalaFrontend
 from interpreter.frontends.typescript import TypeScriptFrontend
-from interpreter.frontends.python import PythonFrontend
-from interpreter.frontends.javascript import JavaScriptFrontend
-from interpreter.frontends.ruby import RubyFrontend
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 
 

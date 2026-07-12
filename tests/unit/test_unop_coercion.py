@@ -1,9 +1,9 @@
 """Unit tests for UnopCoercionStrategy implementations."""
 
-from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.type_name import TypeName
-from interpreter.types.typed_value import TypedValue, typed
 from interpreter.types.coercion.unop_coercion import DefaultUnopCoercion
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import TypedValue, typed
 
 
 class TestDefaultUnopCoercion:

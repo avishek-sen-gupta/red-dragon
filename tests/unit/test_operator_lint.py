@@ -1,14 +1,11 @@
 """Tests for per-language operator lint pass."""
 
-import pytest
-
-from interpreter.operator_kind import BinopKind, UnopKind
 from interpreter.frontends.operator_sets import (
     VALID_BINOPS,
     VALID_UNOPS,
     lint_operators,
-    OperatorViolation,
 )
+from interpreter.operator_kind import BinopKind, UnopKind
 
 
 class TestOperatorSetsCompleteness:

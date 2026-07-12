@@ -9,12 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import reduce
 
-from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.ir import CodeLabel
-from interpreter.register import Register
-from interpreter.operator_kind import resolve_binop, resolve_unop
-from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -30,8 +26,10 @@ from interpreter.instructions import (
     StoreVar,
     Unop,
 )
-from interpreter.types.type_expr import scalar, NULL
-from interpreter.constants import FoundationTypeName
+from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 @dataclass(frozen=True)

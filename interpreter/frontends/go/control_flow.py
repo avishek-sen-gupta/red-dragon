@@ -2,35 +2,34 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import CodeLabel
 from interpreter.frontends.common.expressions import lower_default_return
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.go.expressions import (
     extract_expression_list,
     lower_expression_list,
     lower_go_store_target,
 )
 from interpreter.frontends.go.node_types import GoNodeType
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
     Binop,
-    CallFunction,
-    LoadIndex,
-    Label_,
     Branch,
     BranchIf,
+    CallFunction,
+    Const,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    LoadVar,
     Return_,
+    StoreVar,
 )
+from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

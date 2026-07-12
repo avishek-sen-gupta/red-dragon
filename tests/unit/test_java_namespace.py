@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
+from interpreter.frontends.java.features import JavaFeature
 from interpreter.frontends.java.namespace import (
     JavaPreScanResult,
     java_pre_scan,
 )
-from interpreter.frontends.java.features import JavaFeature
 from tests.covers import covers
 
 
@@ -63,22 +63,21 @@ record Point(int x, int y) { }
 
 from pathlib import Path
 
-from interpreter.frontends.java.namespace import build_java_namespace_tree
-from interpreter.namespace import NamespaceType
-from interpreter.project.types import NO_MODULE_UNIT
-from interpreter.refs.class_ref import NO_CLASS_REF, ClassRef
 from interpreter.class_name import ClassName
-from interpreter.ir import CodeLabel
-from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.constants import Language
+from interpreter.frontends.java.namespace import build_java_namespace_tree
+from interpreter.ir import CodeLabel
+from interpreter.namespace import NamespaceType
+from interpreter.project.types import NO_MODULE_UNIT, ExportTable, ModuleUnit
+from interpreter.refs.class_ref import NO_CLASS_REF
 
 
 def _make_stub_module(class_name: str, label_str: str) -> ModuleUnit:
     """Minimal stub ModuleUnit for testing."""
-    from interpreter.instructions import Label_, Branch, Const, DeclVar
+    from interpreter.instructions import Branch, Const, DeclVar, Label_
     from interpreter.register import Register
-    from interpreter.var_name import VarName
     from interpreter.types.type_expr import UNKNOWN
+    from interpreter.var_name import VarName
 
     cls_label = f"class_{class_name}_0"
     end_label = f"end_class_{class_name}_1"
@@ -169,14 +168,14 @@ class TestBuildJavaNamespaceTree:
         assert resolved is None
 
 
+from interpreter.frontends._base import NullFrontendObserver
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.java.namespace import (
     JavaNamespaceResolver,
     _collect_field_access_chain,
 )
-from interpreter.namespace import NO_CHAIN, NO_RESOLUTION, NamespaceTree
-from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
-from interpreter.frontends._base import NullFrontendObserver
 from interpreter.ir import Opcode
+from interpreter.namespace import NO_CHAIN, NO_RESOLUTION, NamespaceTree
 from interpreter.parser import TreeSitterParserFactory
 
 _PARSER = TreeSitterParserFactory()

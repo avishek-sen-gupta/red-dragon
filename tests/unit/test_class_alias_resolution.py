@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
-
-from interpreter.address import Address
-from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.parser import TreeSitterParserFactory
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import ParameterizedType, ScalarType, metatype
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
-from interpreter.project.entry_point import EntryPoint
 
 
 def _run_js(source: str, max_steps: int = 200):

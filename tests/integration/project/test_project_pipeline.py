@@ -3,16 +3,14 @@
 Tests: discover imports → resolve → compile → link → execute/analyze.
 """
 
-from pathlib import Path
-
 import pytest
 
-from interpreter.constants import Language
-from interpreter.var_name import VarName
-from interpreter.project.compiler import compile_module, compile_directory
-from interpreter.project.types import LinkedProgram, ModuleUnit
-from interpreter.func_name import FuncName
 from interpreter.class_name import ClassName
+from interpreter.constants import Language
+from interpreter.func_name import FuncName
+from interpreter.project.compiler import compile_directory, compile_module
+from interpreter.project.types import LinkedProgram, ModuleUnit
+from interpreter.var_name import VarName
 
 
 class TestCompileModulePython:

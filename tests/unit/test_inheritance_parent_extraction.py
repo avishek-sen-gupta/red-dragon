@@ -10,12 +10,10 @@ PHP, C++.  Java is already covered in ``test_class_inheritance.py``.
 
 from __future__ import annotations
 
-import pytest
-
+from interpreter.cfg import build_cfg
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
 from interpreter.frontends import get_deterministic_frontend
-from interpreter.cfg import build_cfg
 from interpreter.registry import build_registry
 
 

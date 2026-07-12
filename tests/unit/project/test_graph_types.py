@@ -1,7 +1,7 @@
 """Unit tests for the shared knowledge-graph node/edge schema."""
 
-from tests.covers import covers, NotLanguageFeature
 from interpreter.project.graph_types import EdgeKind, GraphEdge, GraphNode, NodeKind
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -11,29 +11,32 @@ is non-empty.  Once all frontends are converted, legacy code will be removed.
 """
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 import logging
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
+from interpreter import constants
+from interpreter.class_name import ClassName
+from interpreter.constants import DEFAULT_EXCEPTION_TYPE, CanonicalLiteral, Language
+from interpreter.field_name import FieldName
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import (
+    NO_NODE,
     GrammarConstants,
     TreeSitterEmitContext,
-    NO_NODE,
 )
-from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.operator_kind import resolve_binop, resolve_unop
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
-from interpreter.class_name import ClassName
+from interpreter.frontends.type_alias_prepass import (
+    NullTypeAliasExtractor,
+    TypeAliasExtractor,
+    collect_type_aliases,
+)
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    InstructionBase,
     Binop,
     Branch,
     BranchIf,
@@ -43,6 +46,7 @@ from interpreter.instructions import (
     Const,
     DeclVar,
     Instruction,
+    InstructionBase,
     Label_,
     LoadField,
     LoadIndex,
@@ -60,26 +64,23 @@ from interpreter.instructions import (
     Unop,
 )
 from interpreter.ir import (
+    NO_LABEL,
     NO_SOURCE_LOCATION,
+    CodeLabel,
     IRInstruction,
     Opcode,
     SourceLocation,
-    CodeLabel,
-    NO_LABEL,
 )
-from interpreter.register import Register, NO_REGISTER
+from interpreter.namespace_resolver import NamespaceResolver
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.parser import ParserFactory
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
+from interpreter.register import NO_REGISTER, Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from interpreter import constants
-from interpreter.constants import CanonicalLiteral, DEFAULT_EXCEPTION_TYPE, Language
 from interpreter.types.type_expr import scalar
-from interpreter.frontends.type_alias_prepass import (
-    NullTypeAliasExtractor,
-    TypeAliasExtractor,
-    collect_type_aliases,
-)
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

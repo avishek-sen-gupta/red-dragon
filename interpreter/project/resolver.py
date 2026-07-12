@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from interpreter.constants import Language
-from interpreter.project.types import CyclicImportError, ImportKind, ImportRef
+from interpreter.project.types import ImportKind, ImportRef
 
 logger = logging.getLogger(__name__)
 

@@ -12,36 +12,33 @@ import re
 from typing import Any, get_type_hints
 
 from interpreter.cfg import build_cfg
-from interpreter.instructions import _TO_TYPED, InstructionBase
 from interpreter.cfg_types import CFG
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
+from interpreter.instructions import _TO_TYPED, InstructionBase
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.summaries import extract_sub_cfg
 from interpreter.interprocedural.types import (
+    FieldEndpoint,
     FunctionEntry,
     InterproceduralResult,
     ReturnEndpoint,
-    FieldEndpoint,
-    VariableEndpoint,
 )
 from interpreter.registry import FunctionRegistry, build_registry
 from mcp_server.formatting import (
     format_chain_node,
-    format_flow_endpoint,
     format_state_update,
     format_typed_value,
     format_vm_state_frame,
 )
-from mcp_server.session import Session, get_session, load_session, set_session
+from mcp_server.session import get_session, load_session, set_session
 from viz.panels.dataflow_graph_panel import (
-    ChainNode,
     build_call_chain,
     find_top_level_call_sites,
 )
 from viz.panels.dataflow_summary_panel import (
-    build_function_callers,
     build_function_callees,
+    build_function_callers,
     merge_flows_for_function,
     render_endpoint,
 )
@@ -402,8 +399,8 @@ def handle_load_project(
     """
     from pathlib import Path
 
-    from interpreter.project.compiler import compile_directory
     from interpreter.interprocedural.analyze import analyze_interprocedural
+    from interpreter.project.compiler import compile_directory
 
     try:
         lang = Language(language)

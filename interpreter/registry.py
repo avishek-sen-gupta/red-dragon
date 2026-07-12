@@ -6,14 +6,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from interpreter.ir import CodeLabel
-from interpreter.instructions import Const, InstructionBase, Label_, Symbolic
+from interpreter import constants
 from interpreter.cfg import CFG
 from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
+from interpreter.instructions import Const, InstructionBase, Label_, Symbolic
+from interpreter.ir import CodeLabel
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter import constants
 
 # ── Registry ─────────────────────────────────────────────────────
 

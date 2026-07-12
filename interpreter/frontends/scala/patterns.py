@@ -5,6 +5,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.frontends.common.pattern_utils import (
+    parse_number,
+    resolve_positional_via_match_args,
+)
 from interpreter.frontends.common.patterns import (
     AsPattern,
     CapturePattern,
@@ -15,10 +19,6 @@ from interpreter.frontends.common.patterns import (
     SequencePattern,
     ValuePattern,
     WildcardPattern,
-)
-from interpreter.frontends.common.pattern_utils import (
-    parse_number,
-    resolve_positional_via_match_args,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT

@@ -1,13 +1,15 @@
 from interpreter.cobol.asg_types import CobolASG, CobolField
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.sectioned_layout import SectionedLayout, build_sectioned_layout
-from interpreter.cobol.lower_data_division import lower_sectioned_data_division
-from interpreter.cobol.statement_dispatch import dispatch_statement
-from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.features import CobolFeature
-from interpreter.ir import Opcode
+from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.sectioned_layout import (
+    MaterialisedSectionedLayout,
+    build_sectioned_layout,
+)
+from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.instructions import LoadVar
-from tests.covers import covers, NotLanguageFeature
+from interpreter.ir import Opcode
+from tests.covers import NotLanguageFeature, covers
 
 
 def _make_field(name: str, pic: str = "X(5)", offset: int = 0) -> CobolField:

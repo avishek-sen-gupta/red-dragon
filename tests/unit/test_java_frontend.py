@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.frontends.java import JavaFrontend
 from interpreter.frontends.java.features import JavaFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from tests.covers import covers, NotLanguageFeature
+from interpreter.var_name import VarName
+from tests.covers import NotLanguageFeature, covers
 
 
 def _parse_java(source: str) -> list[InstructionBase]:
@@ -1548,9 +1548,9 @@ class TestJavaStringLengthExecution:
     @covers(JavaFeature.METHOD_CALL)
     def test_string_length_returns_concrete(self):
         """s.length() on a concrete string should return a concrete int."""
+        from interpreter.project.entry_point import EntryPoint
         from interpreter.run import run
         from interpreter.types.typed_value import unwrap_locals
-        from interpreter.project.entry_point import EntryPoint
 
         vm = run(
             'class M { static int result = "hello".length(); }',

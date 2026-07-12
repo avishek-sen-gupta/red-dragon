@@ -1,11 +1,9 @@
 """Tests for condition lowering with level-88 condition name expansion."""
 
-from interpreter.cobol.asg_types import CobolField, CobolASG
+from interpreter.cobol.asg_types import CobolASG, CobolField
 from interpreter.cobol.condition_lowering import lower_condition
 from interpreter.cobol.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.condition_name_index import (
-    ConditionEntry,
-    ConditionNameIndex,
     build_condition_index,
 )
 from interpreter.cobol.data_layout import build_data_layout
@@ -13,11 +11,8 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.sectioned_layout import (
-    MaterialisedSectionedLayout,
-    SectionedLayout,
     build_sectioned_layout,
 )
-from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.ir import Opcode
 from tests.covers import covers
 

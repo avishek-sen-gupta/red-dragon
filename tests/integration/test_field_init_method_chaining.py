@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.address import Address
 from interpreter.field_name import FieldName
 from interpreter.types.typed_value import TypedValue
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer

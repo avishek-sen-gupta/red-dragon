@@ -1,31 +1,30 @@
 """Integration tests: source → frontend → IR → type inference pass."""
 
 import pytest
-from interpreter.type_name import TypeName
-from tests.covers import covers, NotLanguageFeature
+
+from interpreter.constants import FoundationTypeName, Language
+from interpreter.frontend import get_frontend
 from interpreter.frontends.go.features import GoFeature
 from interpreter.frontends.rust.features import RustFeature
 from interpreter.frontends.typescript.features import TypeScriptFeature
-
-from interpreter.constants import Language, FoundationTypeName
+from interpreter.func_name import FuncName
+from interpreter.ir import Opcode
+from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.frontend import get_frontend
-from interpreter.ir import Opcode
-from interpreter.register import Register
 from interpreter.types.type_expr import (
+    UNBOUND,
     FunctionType,
     ParameterizedType,
-    UNBOUND,
     scalar,
-    fn_type,
     tuple_of,
 )
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
-from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
+from tests.covers import NotLanguageFeature, covers
 
 
 def _resolver():
@@ -2868,8 +2867,8 @@ class TestVarianceIntegration:
 
     def test_java_list_inferred_type_with_invariant_variance(self):
         """Java List<String> inferred type checked against invariant variance rules."""
-        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.constants import Variance
+        from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 
         _, env = _lower_and_infer(
             "class M { void m() { List<String> items = new ArrayList<>(); } }",
@@ -2891,8 +2890,8 @@ class TestVarianceIntegration:
 
     def test_java_map_inferred_type_with_mixed_variance(self):
         """Java Map<String, Integer> checked with invariant key, covariant value."""
-        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.constants import Variance
+        from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 
         _, env = _lower_and_infer(
             "class M { void m() { Map<String, Integer> m = new HashMap<>(); } }",
@@ -2922,7 +2921,7 @@ class TestVarianceIntegration:
 
     def test_kotlin_list_inferred_type_covariant_default(self):
         """Kotlin List<String> with default covariant variance allows widening."""
-        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 
         _, env = _lower_and_infer(
             'fun main() { val items: List<String> = listOf("a") }',
@@ -2943,9 +2942,9 @@ class TestBoundedTypeVarIntegration:
 
     def test_java_inferred_int_satisfies_number_bound(self):
         """Java int var inferred as Int satisfies TypeVar bounded by Number."""
-        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.types.type_expr import typevar, scalar
         from interpreter.constants import FoundationTypeName
+        from interpreter.types.type_expr import scalar, typevar
+        from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 
         _, env = _lower_and_infer(
             "class M { static int x_tv1 = 42; }",
@@ -2961,9 +2960,9 @@ class TestBoundedTypeVarIntegration:
 
     def test_java_inferred_string_fails_number_bound(self):
         """Java String var does NOT satisfy TypeVar bounded by Number."""
-        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.types.type_expr import typevar, scalar
         from interpreter.constants import FoundationTypeName
+        from interpreter.types.type_expr import scalar, typevar
+        from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 
         _, env = _lower_and_infer(
             'class M { void m() { String s_tv1 = "hello"; } }',
@@ -2979,9 +2978,9 @@ class TestBoundedTypeVarIntegration:
 
     def test_java_generic_list_satisfies_typevar_container_bound(self):
         """Java List[Int] checked against List[T: Number] with TypeVar argument."""
-        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.types.type_expr import typevar, scalar, array_of
         from interpreter.constants import FoundationTypeName
+        from interpreter.types.type_expr import scalar, typevar
+        from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 
         _, env = _lower_and_infer(
             "class M { void m() { List<Integer> nums_tv1 = new ArrayList<>(); } }",

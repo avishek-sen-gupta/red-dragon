@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.field_name import FieldName
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.func_name import FuncName
 from interpreter.instructions import CallMethod, LoadField, StoreField
 from interpreter.register import Register

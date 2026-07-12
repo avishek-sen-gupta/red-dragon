@@ -21,19 +21,17 @@ Program:
 
 import pytest
 
-from interpreter.ir import Opcode
-from interpreter.var_name import VarName
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
 from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import SymbolicValue, VMState
-
 from tests.unit.rosetta.conftest import (
-    parse_for_language,
-    find_all,
+    _var_name_for_language,
     assert_clean_lowering,
     execute_for_language,
     extract_answer,
-    _var_name_for_language,
+    parse_for_language,
 )
 
 # ---------------------------------------------------------------------------

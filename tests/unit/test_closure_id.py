@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.closure_id import ClosureId, NoClosureId, NO_CLOSURE_ID
+from interpreter.closure_id import NO_CLOSURE_ID, ClosureId, NoClosureId
 
 
 class TestClosureId:

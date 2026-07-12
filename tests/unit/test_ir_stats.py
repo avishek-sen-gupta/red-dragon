@@ -1,11 +1,9 @@
 """Tests for IR statistics: count_opcodes (pure) and ir_stats (API wrapper)."""
 
-import pytest
-
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.register import Register
-from interpreter.ir_stats import count_opcodes
 from interpreter.api import ir_stats
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.ir_stats import count_opcodes
+from interpreter.register import Register
 
 SIMPLE_SOURCE = "x = 42\n"
 

@@ -1,10 +1,11 @@
 """Project pipeline — compile a directory into a ProjectPipelineResult for TUI display."""
 
 from __future__ import annotations
+
 import bisect
 import dataclasses
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from interpreter.constants import Language

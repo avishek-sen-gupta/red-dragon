@@ -2,7 +2,7 @@ import inspect
 
 from interpreter.frontends.context import NO_NODE
 from interpreter.frontends.java.declarations import _emit_record_init
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

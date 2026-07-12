@@ -1,32 +1,29 @@
 """Tests for UnresolvedCallResolver — SymbolicResolver and LLMPlausibleResolver."""
 
 import json
-from interpreter.type_name import TypeName
-
-import pytest
 
 from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
 from interpreter.instructions import InstructionBase
+from interpreter.ir import IRInstruction, Opcode
 from interpreter.llm.llm_client import LLMClient
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm.unresolved_call import (
     LLMPlausibleResolver,
     SymbolicResolver,
     UnresolvedCallResolver,
     _symbolic_name,
 )
-from interpreter.types.type_expr import scalar
-from interpreter.types.typed_value import TypedValue
-from interpreter.register import Register
 from interpreter.vm.vm_types import (
-    ExecutionResult,
-    StackFrame,
     HeapObject,
+    StackFrame,
     SymbolicValue,
     VMState,
 )
-from interpreter.func_name import FuncName
 
 
 def _make_vm() -> VMState:

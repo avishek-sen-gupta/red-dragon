@@ -6,11 +6,11 @@ frame, STORE_VAR walks up the scope chain to find existing bindings.
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.constants import Language
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.project.entry_point import EntryPoint
+from interpreter.var_name import VarName
 
 
 def _run(source: str, lang: Language, max_steps: int = 500):

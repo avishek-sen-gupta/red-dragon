@@ -8,12 +8,12 @@ should use enter_block_scope/exit_block_scope to declare loop variables.
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
+from interpreter.frontends.python.features import PythonFeature
 from interpreter.ir import Opcode
 from interpreter.types.typed_value import unwrap
-from interpreter.frontends.python.features import PythonFeature
+from interpreter.var_name import VarName
 from tests.covers import covers
-from tests.unit.rosetta.conftest import parse_for_language, execute_for_language
+from tests.unit.rosetta.conftest import execute_for_language, parse_for_language
 
 
 class TestListComprehensionScoping:

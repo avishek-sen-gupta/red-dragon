@@ -1,9 +1,8 @@
 """Tests for OCCURS support in data layout computation."""
 
 from interpreter.cobol.asg_types import CobolField
-from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import build_data_layout
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestElementaryOccurs:

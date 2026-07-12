@@ -1,7 +1,5 @@
 """Tests for assignment coercion — coerce_assignment on TypeConversionRules."""
 
-import math
-
 from interpreter.constants import FoundationTypeName
 from interpreter.types.coercion.conversion_result import _identity
 from interpreter.types.coercion.default_conversion_rules import (

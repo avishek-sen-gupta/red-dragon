@@ -2,11 +2,11 @@
 
 import logging
 
-from interpreter.vm.executor import _unwrap_builtin_result
-from interpreter.type_name import TypeName
-from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.types.type_expr import pointer, scalar
 from interpreter.address import Address
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import pointer, scalar
+from interpreter.types.typed_value import TypedValue, typed
+from interpreter.vm.executor import _unwrap_builtin_result
 from interpreter.vm.vm_types import BuiltinResult, Pointer
 
 

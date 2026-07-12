@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.statement_dispatch import dispatch_statement
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

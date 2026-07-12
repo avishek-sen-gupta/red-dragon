@@ -3,46 +3,38 @@
 from __future__ import annotations
 
 import re
-from interpreter.type_name import TypeName
-
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode
 from interpreter import constants
-from interpreter.types.type_expr import scalar
-from interpreter.var_name import VarName
+from interpreter.frontends.c.expressions import lower_c_store_target
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    extract_call_args_unwrap,
+    lower_default_return,
+    lower_float_literal,
+    lower_int_literal,
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.cpp.node_types import CppNodeType
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
+    Branch,
     CallCtorFunction,
     CallFunction,
     CallMethod,
+    Label_,
     LoadIndex,
+    LoadVar,
+    Return_,
     StoreIndex,
     Throw_,
-    Symbolic,
-    Label_,
-    Branch,
-    Return_,
 )
-from interpreter.frontends.common.expressions import (
-    extract_call_args_unwrap,
-    lower_identifier,
-    lower_canonical_none,
-    lower_int_literal,
-    lower_float_literal,
-    lower_string_literal,
-    lower_null_literal,
-    lower_default_return,
-)
-from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter.frontends.c.expressions import lower_c_store_target
-from interpreter.frontends.cpp.node_types import CppNodeType
-from interpreter.types.type_expr import ScalarType
 from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import ScalarType, scalar
+from interpreter.var_name import VarName
 
 # ── C++ typed literal lowerers ────────────────────────────────────────────────
 
@@ -439,8 +431,8 @@ def lower_cpp_call(
     common ``lower_call`` implementation.
     """
     from interpreter.frontends.common.expressions import (
-        lower_call_impl,
         extract_call_args,
+        lower_call_impl,
     )
 
     func_node = node.child_by_field_name(ctx.constants.call_function_field)

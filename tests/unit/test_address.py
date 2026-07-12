@@ -1,7 +1,8 @@
 """Tests for Address domain type."""
 
 import pytest
-from interpreter.address import Address, NoAddress, NO_ADDRESS
+
+from interpreter.address import NO_ADDRESS, Address
 
 
 class TestAddress:

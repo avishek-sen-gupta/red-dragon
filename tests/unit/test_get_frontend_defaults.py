@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.frontend import get_frontend
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

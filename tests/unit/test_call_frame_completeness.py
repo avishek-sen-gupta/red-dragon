@@ -1,10 +1,9 @@
 """Tests: StackFramePush carries return_ip + result_reg so apply_update
 creates a fully-initialized StackFrame without any post-patch (red-dragon-1hcq)."""
 
-from tests.covers import covers, NotLanguageFeature
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
-from interpreter.register import Register, NO_REGISTER
+from interpreter.register import NO_REGISTER, Register
 from interpreter.vm.vm import apply_update
 from interpreter.vm.vm_types import (
     StackFrame,
@@ -12,6 +11,7 @@ from interpreter.vm.vm_types import (
     StateUpdate,
     VMState,
 )
+from tests.covers import NotLanguageFeature, covers
 
 
 def _vm_with_main() -> VMState:

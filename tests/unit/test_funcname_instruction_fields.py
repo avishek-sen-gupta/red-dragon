@@ -1,7 +1,7 @@
 """Test that CallFunction/CallMethod/CallCtorFunction use FuncName-typed fields."""
 
-from interpreter.func_name import FuncName, NO_FUNC_NAME
-from interpreter.instructions import CallFunction, CallMethod, CallCtorFunction
+from interpreter.func_name import NO_FUNC_NAME, FuncName
+from interpreter.instructions import CallCtorFunction, CallFunction, CallMethod
 
 
 class TestCallFunctionFuncNameField:

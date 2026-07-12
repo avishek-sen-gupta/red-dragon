@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 import struct
-from interpreter.func_name import FuncName
+
 from interpreter.cobol.cobol_constants import (
     BuiltinName,
     ByteConstants,
@@ -19,6 +19,7 @@ from interpreter.cobol.cobol_constants import (
     TallyMode,
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import Operators, VMState, _is_symbolic
 from interpreter.vm.vm_types import BuiltinResult
@@ -650,7 +651,7 @@ def _builtin_cobol_round(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         or any(a.value is _UNCOMPUTABLE for a in args)
     ):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from decimal import Decimal, ROUND_HALF_UP
+    from decimal import ROUND_HALF_UP, Decimal
 
     decimal_digits = int(args[1].value)
     quantizer = Decimal(10) ** -decimal_digits

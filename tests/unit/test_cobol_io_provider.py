@@ -1,16 +1,15 @@
 """Tests for COBOL I/O provider — NullIOProvider and StubIOProvider."""
 
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import (
-    CobolIOProvider,
     IOResult,
     NullIOProvider,
-    StubIOProvider,
     StubFile,
+    StubIOProvider,
 )
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators
-from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE

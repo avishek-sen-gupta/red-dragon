@@ -3,19 +3,20 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.register import Register
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
-from interpreter.frontends.common import expressions as common_expr
-from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
-from interpreter.frontends.scala import expressions as scala_expr
+from interpreter.frontends.common import control_flow as common_cf
+from interpreter.frontends.common import expressions as common_expr
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.scala import control_flow as scala_cf
 from interpreter.frontends.scala import declarations as scala_decl
+from interpreter.frontends.scala import expressions as scala_expr
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.register import Register
 
 
 class ScalaFrontend(BaseFrontend):

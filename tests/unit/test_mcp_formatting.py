@@ -2,29 +2,26 @@
 
 from __future__ import annotations
 
+from interpreter.constants import FoundationTypeName
 from interpreter.field_name import FieldName
-from interpreter.var_name import VarName
-from interpreter.dataflow import Definition
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
     FieldEndpoint,
     FunctionEntry,
     InstructionLocation,
-    NO_DEFINITION,
     ReturnEndpoint,
     VariableEndpoint,
 )
-from interpreter.ir import Opcode, CodeLabel
-from interpreter.types.typed_value import TypedValue
-from interpreter.constants import FoundationTypeName
-from interpreter.types.type_expr import ScalarType
+from interpreter.ir import CodeLabel
 from interpreter.register import Register
-
+from interpreter.types.type_expr import ScalarType
+from interpreter.types.typed_value import TypedValue
+from interpreter.var_name import VarName
 from mcp_server.formatting import (
-    format_typed_value,
+    format_chain_node,
     format_flow_endpoint,
     format_state_update,
-    format_chain_node,
-    format_vm_state_frame,
+    format_typed_value,
 )
 
 
@@ -112,9 +109,8 @@ class TestFormatStateUpdate:
         assert result["variables"] == {"x": 10}
 
     def test_next_label(self):
-        from interpreter.vm.vm_types import StateUpdate
-
         from interpreter.ir import CodeLabel
+        from interpreter.vm.vm_types import StateUpdate
 
         update = StateUpdate(next_label=CodeLabel("func_f_0"))
         result = format_state_update(update)

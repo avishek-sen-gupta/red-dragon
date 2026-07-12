@@ -2,14 +2,12 @@
 
 from pathlib import Path
 
-import pytest
-
+from interpreter.constants import Language
+from interpreter.project.compiler import compile_directory
 from interpreter.project.source_roots import (
     ExplicitSourceRootDiscovery,
     MavenSourceRootDiscovery,
 )
-from interpreter.project.compiler import compile_directory
-from interpreter.constants import Language
 
 
 class TestExplicitSourceRootDiscovery:

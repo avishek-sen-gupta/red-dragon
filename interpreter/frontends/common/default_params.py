@@ -10,8 +10,6 @@ from typing import Any
 
 from interpreter import constants
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -27,6 +25,8 @@ from interpreter.instructions import (
     StoreVar,
     Symbolic,
 )
+from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 
 
 def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:

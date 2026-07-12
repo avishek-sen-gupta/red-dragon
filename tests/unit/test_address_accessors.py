@@ -2,7 +2,7 @@
 
 from interpreter.address import Address
 from interpreter.field_name import FieldName
-from interpreter.vm.vm_types import VMState, HeapObject, NO_HEAP_OBJECT
+from interpreter.vm.vm_types import NO_HEAP_OBJECT, HeapObject, VMState
 
 
 class TestVMStateHeapAccessors:

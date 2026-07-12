@@ -2,41 +2,17 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
-
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode
 from interpreter import constants
-from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
-from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    Symbolic,
-    CallFunction,
-    StoreField,
-    Label_,
-    Branch,
-    Return_,
-)
 from interpreter.frontends.c.declarations import (
-    extract_declarator_name,
     _find_function_declarator,
+    extract_declarator_name,
     lower_c_params,
     lower_declaration,
     lower_struct_field,
 )
-from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
-)
-from interpreter.frontends.cpp.node_types import CppNodeType
-from interpreter.types.type_expr import ScalarType
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
@@ -44,9 +20,28 @@ from interpreter.frontends.common.declarations import (
     emit_synthetic_init,
 )
 from interpreter.frontends.common.expressions import (
-    lower_null_literal,
     lower_default_return,
+    lower_null_literal,
 )
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.cpp.node_types import CppNodeType
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
+from interpreter.func_name import FuncName
+from interpreter.instructions import (
+    Branch,
+    CallFunction,
+    DeclVar,
+    Label_,
+    LoadVar,
+    StoreField,
+    Symbolic,
+)
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import ScalarType
+from interpreter.var_name import VarName
 
 
 def lower_cpp_declaration(
@@ -554,13 +549,13 @@ def lower_cpp_struct_def(
 # ---------------------------------------------------------------------------
 # Symbol extraction (Phase 2)
 # ---------------------------------------------------------------------------
+from interpreter.class_name import ClassName
 from interpreter.frontends.symbol_table import (
     ClassInfo,
     FieldInfo,
     FunctionInfo,
     SymbolTable,
 )
-from interpreter.class_name import ClassName
 
 
 def _is_cpp_static(node) -> bool:

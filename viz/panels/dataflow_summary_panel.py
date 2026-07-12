@@ -9,7 +9,6 @@ from textual.widgets import Tree
 
 from interpreter.interprocedural.types import (
     CallGraph,
-    CallSite,
     FieldEndpoint,
     FlowEndpoint,
     FunctionEntry,

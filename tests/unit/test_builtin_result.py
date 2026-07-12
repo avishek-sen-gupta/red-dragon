@@ -1,10 +1,10 @@
 """Unit tests for BuiltinResult dataclass."""
 
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.address import Address
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import scalar
-from interpreter.address import Address
-from interpreter.vm.vm_types import BuiltinResult, NewObject, HeapWrite
+from interpreter.vm.vm_types import BuiltinResult, HeapWrite, NewObject
 
 
 class TestBuiltinResult:

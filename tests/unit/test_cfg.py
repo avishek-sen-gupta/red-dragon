@@ -3,14 +3,14 @@
 import pytest
 
 from interpreter.cfg import (
+    _collapse_inst_lines,
     build_cfg,
     cfg_to_mermaid,
     extract_function_instructions,
-    _collapse_inst_lines,
 )
-from interpreter.register import Register
-from interpreter.ir import Opcode, CodeLabel
 from interpreter.instructions import Label_
+from interpreter.ir import CodeLabel, Opcode
+from interpreter.register import Register
 from tests.unit.cfg_helpers import make_instructions as _make_instructions
 
 
@@ -537,7 +537,7 @@ class TestExtractFunctionInstructions:
 class TestHaltTerminatesBlock:
     def test_block_ending_in_halt_has_no_successors(self):
         from interpreter.cfg import build_cfg
-        from interpreter.ir import IRInstruction, Opcode, CodeLabel
+        from interpreter.ir import CodeLabel, IRInstruction, Opcode
         from interpreter.register import Register
 
         instructions = [

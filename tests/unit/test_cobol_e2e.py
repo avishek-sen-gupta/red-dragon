@@ -10,19 +10,19 @@ from typing import Any
 
 from interpreter.cfg import build_cfg
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from interpreter.instructions import InstructionBase, AllocRegion, Const
+from interpreter.cobol.cobol_parser import make_cobol_parser
+from interpreter.cobol.features import CobolFeature
+from interpreter.func_name import FuncName
+from interpreter.instructions import AllocRegion, Const, InstructionBase
 from interpreter.ir import Opcode
 from interpreter.registry import build_registry
 from interpreter.run import VMConfig, execute_cfg, initial_vm_state
-from interpreter.vm.vm import VMState, apply_update
-from interpreter.vm.vm_types import StackFrame
-from interpreter.func_name import FuncName
 from interpreter.vm.executor import (
     LocalExecutor,
     _default_handler_context,
 )
-from interpreter.cobol.cobol_parser import make_cobol_parser
-from interpreter.cobol.features import CobolFeature
+from interpreter.vm.vm import VMState, apply_update
+from interpreter.vm.vm_types import StackFrame
 from tests.covers import covers
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "cobol"

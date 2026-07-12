@@ -6,9 +6,8 @@ import json
 
 import pytest
 
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.llm.llm_client import LLMClient
-from interpreter.register import Register
 from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
@@ -18,6 +17,7 @@ from interpreter.llm.llm_frontend import (
     _strip_markdown_fences,
     _validate_ir,
 )
+from interpreter.register import Register
 
 
 class FakeLLMClient(LLMClient):

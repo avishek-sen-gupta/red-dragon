@@ -10,13 +10,15 @@ from interpreter.constants import Language
 from interpreter.field_name import FieldName
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
-from interpreter.run import run_linked, initial_vm_state
+from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
+from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
 from tests.integration.cobol_helpers import (
-    bridge_jar,
     decode_zoned_unsigned as _decode_zoned_unsigned,
+)
+from tests.integration.cobol_helpers import (
     to_fixed as _to_fixed,
 )
 

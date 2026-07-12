@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from interpreter.cobol.cobol_parser import ProLeapCobolParser, CobolParseError
-from interpreter.cobol.subprocess_runner import SubprocessRunner
+from interpreter.cobol.cobol_parser import CobolParseError, ProLeapCobolParser
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.subprocess_runner import SubprocessRunner
 from tests.covers import covers
 
 

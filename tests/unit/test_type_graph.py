@@ -1,25 +1,22 @@
 """Tests for TypeGraph — DAG with subtype queries and LUB."""
 
-from interpreter.types.type_node import TypeNode
-from interpreter.type_name import TypeName
-from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
 from interpreter.constants import FoundationTypeName, Variance
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
-    ScalarType,
+    FunctionType,
     ParameterizedType,
     UnionType,
-    FunctionType,
-    TypeVar,
-    scalar,
-    pointer,
     array_of,
-    map_of,
-    union_of,
-    optional,
     fn_type,
+    map_of,
+    pointer,
+    scalar,
     tuple_of,
     typevar,
+    union_of,
 )
+from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
+from interpreter.types.type_node import TypeNode
 
 
 def _default_graph() -> TypeGraph:

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.var_name import VarName
-from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter import constants
 from interpreter.class_name import ClassName
 from interpreter.field_name import FieldName
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.ruby.expressions import lower_ruby_params
+from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.func_name import FuncName
-
 from interpreter.instructions import (
     Branch,
     DeclVar,
@@ -17,11 +19,8 @@ from interpreter.instructions import (
     Return_,
     Symbolic,
 )
-from interpreter import constants
-from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter.frontends.ruby.expressions import lower_ruby_params
-from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> Register:
@@ -241,7 +240,7 @@ def lower_ruby_module(
 # ---------------------------------------------------------------------------
 
 
-def _extract_ruby_initialize_fields(body) -> "dict[str, FieldInfo]":
+def _extract_ruby_initialize_fields(body) -> dict[str, FieldInfo]:
     """Walk initialize body and collect @x = ... instance variable assignments."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -260,7 +259,7 @@ def _extract_ruby_initialize_fields(body) -> "dict[str, FieldInfo]":
     return fields
 
 
-def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
+def _extract_ruby_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a Ruby class node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -327,9 +326,8 @@ def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_ruby_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_ruby_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class nodes."""
-    from interpreter.frontends.symbol_table import ClassInfo
 
     if node.type == RubyNodeType.CLASS:
         result = _extract_ruby_class(node)
@@ -340,7 +338,7 @@ def _collect_ruby_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> No
         _collect_ruby_classes(child, accumulator)
 
 
-def extract_ruby_symbols(root) -> "SymbolTable":
+def extract_ruby_symbols(root) -> SymbolTable:
     """Walk the Ruby AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

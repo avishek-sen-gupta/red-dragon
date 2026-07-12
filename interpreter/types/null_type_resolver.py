@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from interpreter.types.coercion.conversion_result import (
-    ConversionResult,
     IDENTITY_CONVERSION,
+    ConversionResult,
     _identity,
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules

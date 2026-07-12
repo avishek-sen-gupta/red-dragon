@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from interpreter.parser import TreeSitterParserFactory
 from interpreter.frontends.go.features import GoFeature
+from interpreter.parser import TreeSitterParserFactory
 from tests.covers import covers
 
 

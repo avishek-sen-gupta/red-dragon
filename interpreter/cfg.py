@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-from interpreter.ir import Opcode, CodeLabel
-from interpreter.instructions import (
-    CallCtorFunction,
-    CallFunction,
-    InstructionBase,
-    Label_,
-    Branch,
-    BranchIf,
-    Return_,
-    Throw_,
-    Halt_,
-    ResumeContinuation,
-)
 from interpreter import constants
 from interpreter.cfg_types import (
-    BasicBlock,
     CFG,
+    BasicBlock,
 )  # noqa: F401 — re-exported for backwards compatibility
+from interpreter.instructions import (
+    Branch,
+    BranchIf,
+    CallCtorFunction,
+    CallFunction,
+    Halt_,
+    InstructionBase,
+    Label_,
+    ResumeContinuation,
+    Return_,
+    Throw_,
+)
+from interpreter.ir import CodeLabel, Opcode
 
 
 def build_cfg(instructions: list[InstructionBase]) -> CFG:

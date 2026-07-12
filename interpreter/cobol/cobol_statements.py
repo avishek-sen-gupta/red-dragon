@@ -9,17 +9,18 @@ discriminator.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Sequence, Union
+from typing import Union
 
+from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
+from interpreter.cobol.file_enums import AccessMode, FileOrganization, OpenMode
 from interpreter.cobol.ref_mod import (
-    RefModOperand,
     FunctionCallOperand,
+    RefModOperand,
     is_function_operand,
 )
-from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
-from interpreter.cobol.file_enums import OpenMode, FileOrganization, AccessMode
 from interpreter.frontend_extension import DialectParser
 
 # ── Dialect parser injection ──────────────────────────────────────
@@ -54,11 +55,11 @@ class PerformVaryingSpec:
     """PERFORM ... VARYING loop specification."""
 
     varying_var: str  # loop variable name
-    varying_from: "str | dict"  # FROM value (structured expr dict, or legacy text)
+    varying_from: str | dict  # FROM value (structured expr dict, or legacy text)
     varying_by: str  # BY step value
     condition: dict
     test_before: bool = True
-    after_specs: "tuple[PerformVaryingSpec, ...]" = field(default_factory=tuple)
+    after_specs: tuple[PerformVaryingSpec, ...] = field(default_factory=tuple)
 
 
 PerformSpec = Union[PerformTimesSpec, PerformUntilSpec, PerformVaryingSpec]
@@ -162,9 +163,9 @@ class MoveStatement:
     def _serialize_ref_mod_expr(expr) -> dict:
         """Serialize RefModExpr back to JSON dict format."""
         from interpreter.cobol.ref_mod import (
+            RefModBinOp,
             RefModLiteral,
             RefModReference,
-            RefModBinOp,
         )
 
         if isinstance(expr, RefModLiteral):
@@ -212,7 +213,7 @@ class ArithmeticCorrespondingStatement:
     target: str  # target group name
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ArithmeticCorrespondingStatement":
+    def from_dict(cls, data: dict) -> ArithmeticCorrespondingStatement:
         op = "ADD" if data.get("type") == "ADD_CORRESPONDING" else "SUBTRACT"
         return cls(
             op=op,
@@ -319,7 +320,7 @@ class ComputeTarget:
     rounded: bool = False
 
     @classmethod
-    def from_dict(cls, data: dict | str) -> "ComputeTarget":
+    def from_dict(cls, data: dict | str) -> ComputeTarget:
         if isinstance(data, str):
             return cls(name=data)
         return cls(name=data["name"], rounded=data.get("rounded", False))
@@ -505,7 +506,7 @@ class ProcedureRef:
     section: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProcedureRef":
+    def from_dict(cls, data: dict) -> ProcedureRef:
         return cls(paragraph=data.get("paragraph", ""), section=data.get("section", ""))
 
     def to_dict(self) -> dict:

@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from interpreter.class_name import ClassName
 from interpreter.field_name import FieldName
 from interpreter.instructions import LoadField, LoadVar
 from interpreter.namespace import (

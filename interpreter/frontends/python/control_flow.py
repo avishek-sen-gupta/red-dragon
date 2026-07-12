@@ -4,37 +4,36 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.var_name import VarName
-from interpreter.frontends.context import TreeSitterEmitContext
-
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.python.expressions import (
     _emit_for_increment,
     lower_store_target,
 )
 from interpreter.frontends.python.node_types import PythonNodeType
-from interpreter.operator_kind import resolve_binop
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
     Binop,
-    CallFunction,
-    CallMethod,
-    LoadIndex,
-    Label_,
     Branch,
     BranchIf,
+    CallFunction,
+    CallMethod,
+    Const,
+    DeclVar,
     ImportModule,
+    Label_,
     LoadField,
+    LoadIndex,
+    LoadVar,
+    StoreVar,
 )
+from interpreter.operator_kind import resolve_binop
 from interpreter.path_name import NO_PATH_NAME
-from interpreter.field_name import FieldName
+from interpreter.var_name import VarName
 
 _WILDCARD_PATTERN = "_"
 

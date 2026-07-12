@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+from interpreter.closure_id import NO_CLOSURE_ID, ClosureId
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
-from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
+from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 
 
 class TestFuncRef:

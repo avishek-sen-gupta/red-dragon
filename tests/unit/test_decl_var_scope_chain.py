@@ -6,19 +6,19 @@ STORE_VAR walks the scope chain to update existing variables (assignment).
 
 from interpreter.address import Address
 from interpreter.field_name import FieldName
-from interpreter.var_name import VarName
+from interpreter.func_name import FuncName
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.types.typed_value import typed_from_runtime, unwrap, typed
-from interpreter.vm.vm import VMState, apply_update
-from interpreter.vm.vm_types import HeapObject, StackFrame, StateUpdate
+from interpreter.register import Register
 from interpreter.types.type_expr import UNKNOWN
-from interpreter.vm.field_fallback import ImplicitThisFieldFallback
+from interpreter.types.typed_value import typed, typed_from_runtime, unwrap
+from interpreter.var_name import VarName
 from interpreter.vm.executor import (
     LocalExecutor,
     _default_handler_context,
 )
-from interpreter.register import Register
-from interpreter.func_name import FuncName
+from interpreter.vm.field_fallback import ImplicitThisFieldFallback
+from interpreter.vm.vm import VMState, apply_update
+from interpreter.vm.vm_types import HeapObject, StackFrame, StateUpdate
 from tests.unit.vm_helpers import make_vm as _make_vm
 
 

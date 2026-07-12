@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-from interpreter.func_name import FuncName, NO_FUNC_NAME
-from interpreter.register import Register, NO_REGISTER
+from interpreter.func_name import NO_FUNC_NAME, FuncName
 from interpreter.ir import Opcode
+from interpreter.register import NO_REGISTER, Register
 from interpreter.var_name import VarName
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestCallWithMemoryOpcode:
@@ -85,6 +84,7 @@ class TestCallWithMemoryInstruction:
     def test_in_instruction_union(self):
         """CallWithMemory must appear in the Instruction union type."""
         import typing
+
         from interpreter.instructions import CallWithMemory, Instruction
 
         args = typing.get_args(Instruction)
@@ -137,9 +137,10 @@ def _make_vm_with_func_ref(callee_label: str, func_name: str, params_val, result
 def _make_handler_ctx(callee_label: str):
     """Build a minimal HandlerContext with the callee block in the CFG."""
     import dataclasses
-    from interpreter.vm.executor import _default_handler_context
+
     from interpreter.cfg import CFG, BasicBlock
     from interpreter.ir import NO_LABEL, CodeLabel
+    from interpreter.vm.executor import _default_handler_context
 
     cfg = CFG()
     lbl = CodeLabel(callee_label)

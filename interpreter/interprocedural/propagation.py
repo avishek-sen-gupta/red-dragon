@@ -13,10 +13,10 @@ from typing import Any
 
 from interpreter import constants
 from interpreter.cfg_types import CFG
-from interpreter.ir import CodeLabel, NO_LABEL
-from interpreter.instructions import LoadVar, DeclVar, StoreVar, AddressOf
+from interpreter.instructions import AddressOf, DeclVar, LoadVar, StoreVar
 from interpreter.interprocedural.summaries import build_summary
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
     CallContext,
     CallGraph,
     CallSite,
@@ -25,12 +25,11 @@ from interpreter.interprocedural.types import (
     FlowEndpoint,
     FunctionEntry,
     FunctionSummary,
-    InstructionLocation,
-    NO_DEFINITION,
     ReturnEndpoint,
     SummaryKey,
     VariableEndpoint,
 )
+from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.registry import FunctionRegistry
 
 logger = logging.getLogger(__name__)

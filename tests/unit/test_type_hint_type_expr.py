@@ -1,14 +1,14 @@
 """Tests for TypeExpr-valued type_hint on NewObject and NewArray."""
 
-from interpreter.type_name import TypeName
 from interpreter.instructions import (
     CallCtorFunction,
-    NewObject,
-    NewArray,
     InstructionBase,
+    NewArray,
+    NewObject,
 )
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
     UNKNOWN,
     AnnotationType,

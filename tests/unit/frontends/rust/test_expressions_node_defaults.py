@@ -6,7 +6,7 @@ from interpreter.frontends.rust.expressions import (
     lower_rust_int_const,
     lower_rust_none_const,
 )
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass, field
 
 from interpreter.cobol.condition_name import ConditionValue
-from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.cobol.data_layout import DataLayout
 
 logger = logging.getLogger(__name__)
 

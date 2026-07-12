@@ -14,7 +14,6 @@ import logging
 
 from interpreter.cobol.cobol_constants import ByteConstants
 from interpreter.cobol.data_filters import align_decimal, left_adjust
-from interpreter.cobol.ebcdic_table import EbcdicTable
 
 logger = logging.getLogger(__name__)
 

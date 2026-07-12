@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from interpreter.frontends.ruby import RubyFrontend
 from interpreter.frontends.ruby.features import RubyFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_expr import FunctionType
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 

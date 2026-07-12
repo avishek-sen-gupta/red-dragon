@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from interpreter.register import Register, NoRegister, NO_REGISTER
+from interpreter.register import NO_REGISTER, Register
 
 
 @dataclass(frozen=True)

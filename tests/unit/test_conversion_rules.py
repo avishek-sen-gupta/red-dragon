@@ -6,7 +6,7 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
-from interpreter.types.type_expr import ScalarType, TypeExpr, UNKNOWN, scalar
+from interpreter.types.type_expr import UNKNOWN, ScalarType, TypeExpr, scalar
 
 
 def _rules() -> DefaultTypeConversionRules:

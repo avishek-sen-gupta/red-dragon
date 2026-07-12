@@ -6,7 +6,6 @@ and that &complex_expr still falls back to UNOP "&".
 
 from __future__ import annotations
 
-from interpreter.constants import Language
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.rust import RustFrontend
 from interpreter.ir import Opcode

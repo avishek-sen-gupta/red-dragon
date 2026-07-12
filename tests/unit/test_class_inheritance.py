@@ -8,15 +8,15 @@ Covers:
 
 from __future__ import annotations
 
-from interpreter.refs.class_ref import ClassRef
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.cfg import build_cfg
 from interpreter.class_name import ClassName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.llm.llm_frontend import _convert_llm_class_refs
+from interpreter.refs.class_ref import ClassRef
 from interpreter.registry import (
     _expand_parent_chains,
     build_registry,
 )
-from interpreter.cfg import build_cfg
 
 # ── _convert_llm_class_refs ──────────────────────────────────────
 

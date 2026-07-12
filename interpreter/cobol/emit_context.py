@@ -12,58 +12,57 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from interpreter.cobol.cobol_expression import ExprNode
 
-from interpreter.cobol.asg_types import CobolASG
-from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
+from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_filters import align_decimal, left_adjust
-from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.cobol.data_layout import FieldLayout
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.figurative_constants import (
     COBOL_FIGURATIVE_CONSTANTS,
     COBOL_RAW_FIGURATIVE_BYTES,
 )
-from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
+    build_decode_binary_ir,
     build_decode_comp3_ir,
+    build_decode_float_ir,
     build_decode_zoned_ir,
     build_decode_zoned_separate_ir,
     build_encode_alphanumeric_ir,
     build_encode_alphanumeric_justified_ir,
+    build_encode_binary_ir,
     build_encode_comp3_ir,
+    build_encode_float_ir,
     build_encode_zoned_ir,
     build_encode_zoned_separate_ir,
-    build_encode_binary_ir,
-    build_decode_binary_ir,
-    build_encode_float_ir,
-    build_decode_float_ir,
 )
-from interpreter.operator_kind import resolve_binop
-from interpreter.ir import Opcode, CodeLabel, NO_LABEL
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.constants import FoundationTypeName
+from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    InstructionBase,
     Binop,
     CallFunction,
     Const,
-    Instruction,
+    InstructionBase,
     Label_,
     LoadRegion,
     Return_,
     WriteRegion,
 )
-from interpreter.register import Register, NO_REGISTER
-from interpreter.constants import FoundationTypeName
+from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop
+from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import array_of, scalar
 
 logger = logging.getLogger(__name__)
@@ -232,7 +231,7 @@ class EmitContext:
         name: str,
         materialised: MaterialisedSectionedLayout,
         qualifiers: tuple[str, ...] = (),
-        subscripts: tuple["ExprNode", ...] = (),
+        subscripts: tuple[ExprNode, ...] = (),
     ) -> tuple[ResolvedFieldRef, Register]:
         """Resolve a field reference that may contain subscript notation.
 
@@ -1010,7 +1009,7 @@ class EmitContext:
             FileControlEntry,
         )  # avoid circular at module level
 
-        fce: "FileControlEntry | None" = next(
+        fce: FileControlEntry | None = next(
             (e for e in self._asg.file_control if e.file_name == file_name), None
         )
         if fce is None or not fce.file_status_var:

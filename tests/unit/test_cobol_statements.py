@@ -2,16 +2,15 @@
 
 import pytest
 
-from interpreter.cobol.features import CobolFeature
-from tests.covers import covers
-
 from interpreter.cobol.cobol_statements import (
     AcceptStatement,
+    AlteredGoto,
     AlterStatement,
     ArithmeticStatement,
     CallStatement,
     CancelStatement,
     CloseStatement,
+    ComputedGoto,
     ComputeStatement,
     ComputeTarget,
     ContinueStatement,
@@ -21,10 +20,6 @@ from interpreter.cobol.cobol_statements import (
     EvaluateStatement,
     ExitStatement,
     GotoStatement,
-    SimpleGoto,
-    ComputedGoto,
-    AlteredGoto,
-    ProcedureRef,
     IfStatement,
     InitializeStatement,
     InspectStatement,
@@ -34,24 +29,25 @@ from interpreter.cobol.cobol_statements import (
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    ProcedureRef,
     ReadStatement,
-    Replacing,
     RewriteStatement,
     SearchStatement,
-    SearchWhen,
     SetStatement,
+    SimpleGoto,
     StartStatement,
     StopRunStatement,
     StringSending,
     StringStatement,
-    TallyingFor,
     UnstringStatement,
     WhenOtherStatement,
     WhenStatement,
     WriteStatement,
     parse_statement,
 )
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.ref_mod import RefModOperand
+from tests.covers import covers
 
 
 def _ref(name: str) -> dict:
@@ -148,7 +144,7 @@ class TestParseStatementDispatch:
         )
         assert isinstance(stmt, ComputeStatement)
         # expression is now an ExprNode, so we check its structure
-        from interpreter.cobol.cobol_expression import BinOpNode, FieldRefNode
+        from interpreter.cobol.cobol_expression import BinOpNode
 
         assert isinstance(stmt.expression, BinOpNode)
         assert stmt.targets == [ComputeTarget(name="WS-RESULT")]

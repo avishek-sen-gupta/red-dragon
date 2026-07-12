@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from interpreter.class_name import ClassName, NO_CLASS_NAME
-from interpreter.ir import CodeLabel, NO_LABEL
+from interpreter.class_name import NO_CLASS_NAME, ClassName
+from interpreter.ir import NO_LABEL, CodeLabel
 
 
 @dataclass(frozen=True)

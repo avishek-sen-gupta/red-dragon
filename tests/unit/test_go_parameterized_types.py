@@ -1,10 +1,10 @@
 """Tests for Go frontend emitting parameterized types for slices and maps."""
 
-from interpreter.frontends.go.frontend import GoFrontend
-from interpreter.type_name import TypeName
 from interpreter.frontends.go.features import GoFeature
+from interpreter.frontends.go.frontend import GoFrontend
 from interpreter.instructions import NewArray, NewObject
-from interpreter.types.type_expr import ParameterizedType, ScalarType, scalar
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import ParameterizedType, scalar
 from tests.covers import covers
 
 

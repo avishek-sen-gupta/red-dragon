@@ -17,35 +17,35 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from interpreter.cobol.asg_types import CobolASG
+from interpreter.cobol.cobol_parser import CobolParser
+from interpreter.cobol.cobol_statements import _dialect_parsers
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.sectioned_layout import (
-    MaterialisedSectionedLayout,
-    build_sectioned_layout,
-)
-from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.cobol.field_resolution import ResolvedFieldRef
-from interpreter.cobol.cobol_parser import CobolParser
 from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
+from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
 )
-from interpreter.refs.func_ref import FuncRef
-from interpreter.cobol.lower_procedure import lower_procedure_division
+from interpreter.cobol.sectioned_layout import (
+    MaterialisedSectionedLayout,
+    build_sectioned_layout,
+)
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.frontend_extension import DialectParser
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
-from interpreter.namespace_resolver import NamespaceResolver
-from interpreter.path_name import PathName
-from interpreter.cobol.cobol_statements import _dialect_parsers
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import CodeLabel
+from interpreter.namespace_resolver import NamespaceResolver
+from interpreter.path_name import PathName
+from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
 
 if TYPE_CHECKING:
@@ -115,7 +115,7 @@ class CobolFrontend(Frontend):
         name: str,
         materialised: MaterialisedSectionedLayout,
         qualifiers: tuple[str, ...] = (),
-        subscripts: tuple["ExprNode", ...] = (),
+        subscripts: tuple[ExprNode, ...] = (),
     ) -> tuple[ResolvedFieldRef, Register]:
         return self._ctx.resolve_field_ref(
             name, materialised, qualifiers=qualifiers, subscripts=subscripts

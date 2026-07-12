@@ -5,11 +5,11 @@ Verifies that `()` (unit value) is lowered and executed without errors.
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.constants import Language
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.project.entry_point import EntryPoint
+from interpreter.var_name import VarName
 
 
 def _run_rust(source: str, max_steps: int = 200):

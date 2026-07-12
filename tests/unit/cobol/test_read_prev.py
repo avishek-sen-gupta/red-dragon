@@ -9,7 +9,7 @@ from interpreter.cobol.file_drivers import (
     SequentialDriver,
 )
 from interpreter.cobol.file_enums import OpenMode
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -1,19 +1,18 @@
 """Unit tests for partially-delegating builtins returning BuiltinResult."""
 
 from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.constants import FoundationTypeName
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm.builtins import (
     _builtin_keys,
     _builtin_slice,
-    _slice_heap_array,
     _method_slice,
+    _slice_heap_array,
 )
 from interpreter.vm.vm import Operators
-from interpreter.vm.vm_types import BuiltinResult, HeapObject, VMState
-from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.types.type_expr import scalar
-from interpreter.constants import FoundationTypeName
-from interpreter.vm.vm_types import Pointer
+from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer, VMState
 
 
 class TestBuiltinKeysResult:

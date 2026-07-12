@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
-from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
-from interpreter.refs.func_ref import FuncRef
+from interpreter.frontend_observer import NullFrontendObserver
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.func_name import FuncName
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.ir import CodeLabel, Opcode
+from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
 
 

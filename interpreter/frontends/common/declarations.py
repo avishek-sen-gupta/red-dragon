@@ -5,15 +5,18 @@ Extracted from BaseFrontend: function_def, params, class_def, var_declaration.
 
 from __future__ import annotations
 
-from typing import Any, Callable
-
-from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.frontends.common.node_types import CommonNodeType
+from collections.abc import Callable
+from typing import Any
 
 from interpreter import constants
-from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
-from interpreter.register import Register
+from interpreter.frontends.common.expressions import lower_default_return
+from interpreter.frontends.common.node_types import CommonNodeType
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 from interpreter.instructions import (
     Branch,
     Const,
@@ -24,11 +27,8 @@ from interpreter.instructions import (
     StoreField,
     Symbolic,
 )
-from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
-)
-from interpreter.frontends.common.expressions import lower_default_return
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def emit_implicit_return(

@@ -8,9 +8,9 @@ from here.
 
 from __future__ import annotations
 
+from interpreter.class_name import ClassName
 from interpreter.frontends.common.patterns import ClassPattern, Pattern
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.class_name import ClassName
 
 
 def parse_number(text: str, strip_suffixes: str = "") -> int | float:

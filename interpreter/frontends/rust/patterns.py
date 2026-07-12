@@ -5,6 +5,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.frontends.common.pattern_utils import (
+    parse_number,
+    resolve_positional_via_match_args,
+)
 from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
@@ -16,10 +20,6 @@ from interpreter.frontends.common.patterns import (
     StarPattern,
     ValuePattern,
     WildcardPattern,
-)
-from interpreter.frontends.common.pattern_utils import (
-    parse_number,
-    resolve_positional_via_match_args,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.rust.node_types import RustNodeType

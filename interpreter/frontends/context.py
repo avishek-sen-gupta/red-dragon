@@ -8,39 +8,38 @@ pure-function lowerers.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from interpreter import constants
+from interpreter.class_name import ClassName
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
-from interpreter.class_name import ClassName
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
-from interpreter.var_name import VarName
 from interpreter.instructions import (
-    InstructionBase,
     Const,
     DeclVar,
     Instruction,
+    InstructionBase,
     Symbolic,
 )
 from interpreter.ir import (
-    NO_SOURCE_LOCATION,
+    CodeLabel,
     Opcode,
     SourceLocation,
-    CodeLabel,
-    NO_LABEL,
 )
-from interpreter.register import Register, NO_REGISTER
-from interpreter.refs.class_ref import ClassRef
-from interpreter.refs.func_ref import FuncRef
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.type_name import TypeName
-from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from interpreter.types.var_scope_info import VarScopeInfo
-from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_expr import UNKNOWN, TypeExpr
+from interpreter.types.var_scope_info import VarScopeInfo
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

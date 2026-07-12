@@ -19,8 +19,8 @@ from interpreter.frontends.common.patterns import (
     WildcardPattern,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.csharp.expressions import _resolve_csharp_char_escape
+from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 
 
 def parse_csharp_pattern(
