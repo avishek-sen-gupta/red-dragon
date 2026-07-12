@@ -6,9 +6,9 @@ sends the raw source to an LLM constrained by the IR schema, then the
 deterministic VM executes the resulting IR.
 
 Usage:
-    poetry run python scripts/demo_hlasm.py
-    poetry run python scripts/demo_hlasm.py --backend ollama
-    poetry run python scripts/demo_hlasm.py --verbose
+    uv run python scripts/demo_hlasm.py
+    uv run python scripts/demo_hlasm.py --backend ollama
+    uv run python scripts/demo_hlasm.py --verbose
 """
 
 from __future__ import annotations

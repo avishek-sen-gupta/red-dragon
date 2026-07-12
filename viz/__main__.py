@@ -1,20 +1,20 @@
-"""Allow running viz as a module: poetry run python -m viz <source_file>
+"""Allow running viz as a module: uv run python -m viz <source_file>
 
 Single file:
-  poetry run python -m viz demo.c -l c
+  uv run python -m viz demo.c -l c
 
 Compare mode:
-  poetry run python -m viz compare c:demo.c rust:demo.rs
+  uv run python -m viz compare c:demo.c rust:demo.rs
 
 Lowering trace:
-  poetry run python -m viz lower demo.py -l python
+  uv run python -m viz lower demo.py -l python
 
 Coverage matrix:
-  poetry run python -m viz coverage
-  poetry run python -m viz coverage -l python,javascript,rust
+  uv run python -m viz coverage
+  uv run python -m viz coverage -l python,javascript,rust
 
 Multi-file project:
-  poetry run python -m viz project /path/to/dir -l java -s 500
+  uv run python -m viz project /path/to/dir -l java -s 500
 """
 
 from __future__ import annotations

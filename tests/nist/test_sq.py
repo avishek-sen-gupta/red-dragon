@@ -1,6 +1,6 @@
 """NIST-85 Sequential File I/O tests (SQ series).
 
-Run: poetry run python -m pytest tests/nist/test_sq.py -m nist -v
+Run: uv run python -m pytest tests/nist/test_sq.py -m nist -v
 
 assert_nist_pass now requires real completion (END OF TEST banner) AND a zero
 failure count in the CCVS summary — see tests/nist/conftest.py. Under that

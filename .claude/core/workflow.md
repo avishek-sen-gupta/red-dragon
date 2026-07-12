@@ -37,10 +37,10 @@ A deterministic pre-commit hook at `.claude/hooks/pre-commit` runs all gates aut
 You may run individual gates to check specific parts of your work in progress:
 
 ```bash
-poetry run python -m black .                              # formatting only
-poetry run lint-imports                                   # architectural contracts only
-poetry run pyright interpreter/ mcp_server/               # type checking only (not in hook)
-poetry run python -m pytest tests/                        # tests only
+uv run python -m black .                              # formatting only
+uv run lint-imports                                   # architectural contracts only
+uv run pyright interpreter/ mcp_server/               # type checking only (not in hook)
+uv run python -m pytest tests/                        # tests only
 ```
 
 **Pyright is not in the pre-commit hook** — run it manually when working on type annotations.

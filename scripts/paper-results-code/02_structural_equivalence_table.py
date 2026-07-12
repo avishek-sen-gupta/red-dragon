@@ -6,7 +6,7 @@ SCAM paper). For each algorithm, groups languages by (blocks, edges) shape
 and assigns class labels A, B, C, ... in descending size order.
 
 Run from the red-dragon repo root:
-    poetry run python3 scripts/02_structural_equivalence_table.py [--csv]
+    uv run python3 scripts/02_structural_equivalence_table.py [--csv]
 
 Options:
     --csv   Output as CSV instead of plain text

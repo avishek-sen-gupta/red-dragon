@@ -7,7 +7,7 @@ Thanks for your interest in contributing! RedDragon is an experimental project, 
 ```bash
 git clone https://github.com/avishek-sen-gupta/red-dragon.git
 cd red-dragon
-poetry install
+uv sync
 ```
 
 For COBOL frontend support, you also need JDK 17+ and the ProLeap bridge JAR (see README for setup).
@@ -17,8 +17,8 @@ For COBOL frontend support, you also need JDK 17+ and the ProLeap bridge JAR (se
 1. **Create a branch** for your feature or fix.
 2. **Write tests first.** Unit tests go in `tests/unit/`, integration tests in `tests/integration/`. See [Testing](#testing) below.
 3. **Implement** the feature or fix.
-4. **Format** with Black: `poetry run python -m black .`
-5. **Run the full test suite**: `poetry run python -m pytest tests/ -x -q`
+4. **Format** with Black: `uv run python -m black .`
+5. **Run the full test suite**: `uv run python -m pytest tests/ -x -q`
 6. **Open a pull request** against `main`.
 
 ## Testing
@@ -33,8 +33,8 @@ For COBOL frontend support, you also need JDK 17+ and the ProLeap bridge JAR (se
 
 ## Code Style
 
-- **Python 3.13+**, managed with Poetry.
-- **Black** formatting is enforced in CI — run `poetry run python -m black .` before committing.
+- **Python 3.13+**, managed with uv.
+- **Black** formatting is enforced in CI — run `uv run python -m black .` before committing.
 - Prefer functional style: list comprehensions, `map`, `filter`, `reduce` over mutation-heavy `for` loops.
 - Favour small, composable functions. Avoid large monolithic functions.
 - Use fully qualified module imports — no relative imports.

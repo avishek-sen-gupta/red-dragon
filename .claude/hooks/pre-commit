@@ -90,7 +90,7 @@ fi
 # ---------------------------------------------------------------------------
 
 echo_success "Running Black (auto-fix)..."
-poetry -C "$REPO_ROOT" run python -m black .
+uv run --project "$REPO_ROOT" python -m black .
 git -C "$REPO_ROOT" add -u
 
 # ---------------------------------------------------------------------------
@@ -103,17 +103,17 @@ echo_success "Running Python FP lint (interpreter/ only)..."
 # Pyright type check (non-blocking — warnings only)
 # ---------------------------------------------------------------------------
 echo_success "Running Pyright type check..."
-poetry -C "$REPO_ROOT" run pyright || true
+uv run --project "$REPO_ROOT" pyright || true
 
 echo_success "Running import-linter architectural contracts..."
-poetry -C "$REPO_ROOT" run lint-imports
+uv run --project "$REPO_ROOT" lint-imports
 if [ $? -ne 0 ]; then
   echo_error "import-linter check failed. Fix architectural contract violations before committing."
   exit 1
 fi
 
 echo_success "Running full test suite..."
-poetry -C "$REPO_ROOT" run python -m pytest tests/ -x -q
+uv run --project "$REPO_ROOT" python -m pytest tests/ -x -q
 if [ $? -ne 0 ]; then
   echo_error "Tests or coverage check failed. Fix before committing."
   exit 1
@@ -123,7 +123,7 @@ fi
 # Regenerate frontend lowering gaps doc
 # ---------------------------------------------------------------------------
 echo_success "Regenerating frontend lowering gaps doc..."
-poetry -C "$REPO_ROOT" run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md
+uv run --project "$REPO_ROOT" python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md
 git -C "$REPO_ROOT" add -u docs/frontend-lowering-gaps.md
 
 # ---------------------------------------------------------------------------

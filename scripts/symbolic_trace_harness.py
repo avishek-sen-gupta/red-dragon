@@ -7,13 +7,13 @@ the instruction/block where each symbolic was first created.
 
 Usage:
     # Search for candidate entry points:
-    poetry run python scripts/symbolic_trace_harness.py \\
+    uv run python scripts/symbolic_trace_harness.py \\
         --root /path/to/project \\
         --language java \\
         --search MyClass
 
     # Execute a specific function and trace symbolics:
-    poetry run python scripts/symbolic_trace_harness.py \\
+    uv run python scripts/symbolic_trace_harness.py \\
         --root /path/to/project \\
         --language java \\
         --label 'module.package.MyClass.func_main_4'

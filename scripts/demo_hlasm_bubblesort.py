@@ -2,8 +2,8 @@
 """Demo: LLM frontend lowers an HLASM bubble sort to IR, then the VM executes it.
 
 Usage:
-    poetry run python scripts/demo_hlasm_bubblesort.py
-    poetry run python scripts/demo_hlasm_bubblesort.py --verbose
+    uv run python scripts/demo_hlasm_bubblesort.py
+    uv run python scripts/demo_hlasm_bubblesort.py --verbose
 """
 
 from __future__ import annotations

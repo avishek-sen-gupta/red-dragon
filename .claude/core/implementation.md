@@ -15,7 +15,7 @@
 
 ## Python Introspection
 
-- Write temporary scripts to `/tmp/*.py` and execute with `poetry run python /tmp/script.py`.
+- Write temporary scripts to `/tmp/*.py` and execute with `uv run python /tmp/script.py`.
 - Clean up temp files after use.
 - Do not use `python -c` with multiline strings.
 

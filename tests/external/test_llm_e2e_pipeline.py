@@ -6,7 +6,7 @@ Exercises both LLM integration points:
 
 Ported from scripts/demo_llm_e2e.py with proper value assertions.
 
-Run with: poetry run python -m pytest -m external tests/external/test_llm_e2e_pipeline.py -v
+Run with: uv run python -m pytest -m external tests/external/test_llm_e2e_pipeline.py -v
 """
 
 import pytest

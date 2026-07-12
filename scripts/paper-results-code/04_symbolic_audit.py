@@ -9,7 +9,7 @@ Classifies each into:
   - other:       any other SYMBOLIC hint
 
 Run from the red-dragon repo root:
-    poetry run python3 scripts/04_symbolic_audit.py [--verbose]
+    uv run python3 scripts/04_symbolic_audit.py [--verbose]
 
 Options:
     --verbose   Print every individual SYMBOLIC instruction with context

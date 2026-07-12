@@ -7,9 +7,9 @@ Exercises both LLM integration points in a single pipeline run:
                     (math.sqrt, math.floor) via plausible value inference
 
 Usage:
-    poetry run python scripts/demo_llm_e2e.py
-    poetry run python scripts/demo_llm_e2e.py --backend ollama
-    poetry run python scripts/demo_llm_e2e.py --verbose
+    uv run python scripts/demo_llm_e2e.py
+    uv run python scripts/demo_llm_e2e.py --backend ollama
+    uv run python scripts/demo_llm_e2e.py --verbose
 """
 
 from __future__ import annotations

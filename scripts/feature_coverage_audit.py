@@ -6,10 +6,10 @@ scans all test files for @covers(...) annotations, and reports which enum
 members have no associated test.
 
 Usage:
-    poetry run python scripts/feature_coverage_audit.py
-    poetry run python scripts/feature_coverage_audit.py --output results.json
-    poetry run python scripts/feature_coverage_audit.py --language java
-    poetry run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md
+    uv run python scripts/feature_coverage_audit.py
+    uv run python scripts/feature_coverage_audit.py --output results.json
+    uv run python scripts/feature_coverage_audit.py --language java
+    uv run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md
 
 With no --output flag: JSON to stdout, summary to stderr.
 With --output FILE: JSON to file, summary to stdout.
@@ -217,7 +217,7 @@ def generate_gaps_doc(results: Sequence[LanguageCoverageResult]) -> str:
         "Uncovered members = features the frontend handles but no test annotates."
     )
     lines.append(
-        f"**Regenerate**: `poetry run python scripts/feature_coverage_audit.py "
+        f"**Regenerate**: `uv run python scripts/feature_coverage_audit.py "
         f"--gaps-doc docs/frontend-lowering-gaps.md`"
     )
     lines.append("")

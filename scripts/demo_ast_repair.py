@@ -7,10 +7,10 @@ Exercises the RepairingFrontendDecorator with a real LLM call:
   3. Compares IR output with vs. without repair
 
 Usage:
-    poetry run python scripts/demo_ast_repair.py
-    poetry run python scripts/demo_ast_repair.py --backend ollama
-    poetry run python scripts/demo_ast_repair.py --language javascript
-    poetry run python scripts/demo_ast_repair.py --verbose
+    uv run python scripts/demo_ast_repair.py
+    uv run python scripts/demo_ast_repair.py --backend ollama
+    uv run python scripts/demo_ast_repair.py --language javascript
+    uv run python scripts/demo_ast_repair.py --verbose
 """
 
 from __future__ import annotations

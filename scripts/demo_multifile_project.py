@@ -13,9 +13,9 @@ Creates a temporary multi-file Python project on disk, then runs the
 full pipeline programmatically.
 
 Usage:
-    poetry run python scripts/demo_multifile_project.py
-    poetry run python scripts/demo_multifile_project.py --verbose
-    poetry run python scripts/demo_multifile_project.py --language javascript
+    uv run python scripts/demo_multifile_project.py
+    uv run python scripts/demo_multifile_project.py --verbose
+    uv run python scripts/demo_multifile_project.py --language javascript
 """
 
 from __future__ import annotations
