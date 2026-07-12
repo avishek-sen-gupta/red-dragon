@@ -19,6 +19,12 @@ from interpreter.frontends.common.expressions import (
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.php.control_flow import lower_php_compound
 from interpreter.frontends.php.node_types import PHPNodeType
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -614,7 +620,6 @@ def lower_php_global_declaration(
 
 def _extract_php_method(node) -> tuple[str, FunctionInfo] | None:
     """Extract a FunctionInfo from a PHP method_declaration node."""
-    from interpreter.frontends.symbol_table import FunctionInfo
 
     name_node = node.child_by_field_name("name")
     if name_node is None:
@@ -636,7 +641,6 @@ def _extract_php_method(node) -> tuple[str, FunctionInfo] | None:
 
 def _extract_php_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a PHP class_declaration node."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
     name_node = node.child_by_field_name("name")
     if name_node is None:
@@ -741,7 +745,6 @@ def _collect_php_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
 
 def extract_php_symbols(root) -> SymbolTable:
     """Walk the PHP AST and return a SymbolTable of all class definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     _collect_php_classes(root, classes)

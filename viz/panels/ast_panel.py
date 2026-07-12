@@ -5,13 +5,14 @@ from __future__ import annotations
 from textual.reactive import reactive
 from textual.widgets import Tree
 
+from interpreter.instructions import InstructionBase
 from viz.pipeline import ASTNode
 
 
 class ASTPanel(Tree):
     """Displays the tree-sitter AST as a collapsible tree widget."""
 
-    current_instruction: reactive[IRInstruction | None] = reactive(None)
+    current_instruction: reactive[InstructionBase | None] = reactive(None)
 
     def __init__(self, ast: ASTNode | None = None, **kwargs) -> None:
         super().__init__("AST", **kwargs)

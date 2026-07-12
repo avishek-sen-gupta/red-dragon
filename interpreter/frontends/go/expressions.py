@@ -33,7 +33,7 @@ from interpreter.instructions import (
 )
 from interpreter.register import Register
 from interpreter.type_name import TypeName
-from interpreter.types.type_expr import array_of, map_of, scalar
+from interpreter.types.type_expr import TypeExpr, array_of, map_of, scalar
 from interpreter.var_name import VarName
 
 

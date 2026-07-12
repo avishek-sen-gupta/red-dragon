@@ -17,6 +17,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.lua.node_types import LuaNodeType
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.instructions import (
     Branch,
     DeclVar,
@@ -202,6 +203,5 @@ def lower_lua_return(
 
 def extract_lua_symbols(root) -> SymbolTable:
     """Return an empty SymbolTable — Lua table-based OOP has no extractable class syntax."""
-    from interpreter.frontends.symbol_table import SymbolTable
 
     return SymbolTable.empty()
