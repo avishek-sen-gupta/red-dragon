@@ -1,7 +1,7 @@
 """Fetch canonical-data.json files from Exercism's problem-specifications repo.
 
 Usage:
-    poetry run python scripts/exercism_harvest.py leap collatz-conjecture difference-of-squares
+    uv run python scripts/exercism_harvest.py leap collatz-conjecture difference-of-squares
 
 Downloads each exercise's canonical-data.json from GitHub and writes it
 to tests/unit/exercism/exercises/<exercise>/canonical_data.json.

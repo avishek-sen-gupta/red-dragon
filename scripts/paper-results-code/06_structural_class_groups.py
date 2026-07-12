@@ -6,7 +6,7 @@ For each Rosetta algorithm, prints the structural class groupings
 suitable for the paper's Section 5.3 analysis.
 
 Run from the red-dragon repo root:
-    poetry run python3 scripts/06_structural_class_groups.py [algo]
+    uv run python3 scripts/06_structural_class_groups.py [algo]
 
 If algo is given, shows only that algorithm.
 Otherwise shows all algorithms.

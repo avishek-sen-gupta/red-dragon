@@ -117,22 +117,22 @@ An interactive TUI for stepping through the full pipeline (source → AST → IR
 
 ```bash
 # Single-language mode
-poetry run python -m viz viz/examples/pointer_demo.c -l c
-poetry run python -m viz viz/examples/factorial.py -l python
+uv run python -m viz viz/examples/pointer_demo.c -l c
+uv run python -m viz viz/examples/factorial.py -l python
 
 # Compare mode — side-by-side across languages
-poetry run python -m viz compare c:viz/examples/pointer_demo.c rust:viz/examples/pointer_demo.rs
+uv run python -m viz compare c:viz/examples/pointer_demo.c rust:viz/examples/pointer_demo.rs
 
 # Lowering trace — interactive exploration of how frontend lowers AST to IR
-poetry run python -m viz lower viz/examples/factorial.py -l python
+uv run python -m viz lower viz/examples/factorial.py -l python
 
 # Coverage matrix — cross-language frontend handler availability
-poetry run python -m viz coverage
-poetry run python -m viz coverage -l python,javascript,rust
+uv run python -m viz coverage
+uv run python -m viz coverage -l python,javascript,rust
 
 # Multi-file project — compile directory, browse import graph, debug across modules
-poetry run python -m viz project tests/fixtures/projects/python_basic -l python
-poetry run python -m viz project /path/to/java/project -l java -s 500
+uv run python -m viz project tests/fixtures/projects/python_basic -l python
+uv run python -m viz project /path/to/java/project -l java -s 500
 ```
 
 Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `d` toggles **Dataflow mode** (replaces AST/VM/CFG with call-graph summaries and whole-program dependency graph, cross-highlights source and IR on function selection), `q` quits.
@@ -165,14 +165,14 @@ RedDragon exposes its compilation pipeline, VM execution, and interprocedural da
 
 **3 resources:** `reddragon://source`, `reddragon://ir`, `reddragon://cfg`
 
-**Run:** `poetry run python -m mcp_server`
+**Run:** `uv run python -m mcp_server`
 
 **Configure in Claude Code** (`.claude/settings.json`):
 ```json
 {
   "mcpServers": {
     "red-dragon": {
-      "command": "poetry",
+      "command": "uv",
       "args": ["run", "python", "-m", "mcp_server"],
       "cwd": "/path/to/red-dragon"
     }
@@ -185,7 +185,7 @@ RedDragon exposes its compilation pipeline, VM execution, and interprocedural da
 ### Prerequisites
 
 - **Python >= 3.10**
-- **Poetry**
+- **uv**
 - **JDK 17+** (COBOL frontend only)
 - **Maven** (COBOL frontend only)
 
@@ -196,15 +196,15 @@ git clone --recurse-submodules https://github.com/avishek-sen-gupta/red-dragon.g
 cd red-dragon
 
 # 1. Python dependencies
-poetry install
+uv sync
 
 # 2. ProLeap COBOL bridge (requires JDK 17+ and Maven)
 cd proleap-bridge && ./build.sh && cd ..
 # Produces: proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
 
 # 3. Verify
-poetry run python -m pytest tests/unit/ -x -q       # unit tests (no external deps)
-poetry run python -m pytest tests/integration/ -x -q # integration tests (needs ProLeap JAR)
+uv run python -m pytest tests/unit/ -x -q       # unit tests (no external deps)
+uv run python -m pytest tests/integration/ -x -q # integration tests (needs ProLeap JAR)
 ```
 
 ### Minimal build (without COBOL)
@@ -212,8 +212,8 @@ poetry run python -m pytest tests/integration/ -x -q # integration tests (needs 
 ```bash
 git clone https://github.com/avishek-sen-gupta/red-dragon.git
 cd red-dragon
-poetry install
-poetry run python -m pytest tests/unit/ -x -q
+uv sync
+uv run python -m pytest tests/unit/ -x -q
 ```
 
 All 15 tree-sitter frontends and the LLM frontends work without JDK/Maven. COBOL integration tests skip gracefully when the ProLeap JAR is not present.
@@ -240,16 +240,16 @@ export HUGGING_FACE_API_TOKEN=hf_...     # for HuggingFace Inference Endpoints
 ## Usage
 
 ```bash
-poetry run python interpreter.py myfile.py -v            # run on a file
-poetry run python interpreter.py myfile.py --ir-only      # inspect IR only
-poetry run python interpreter.py myfile.py --cfg-only     # inspect CFG only
-poetry run python interpreter.py example.js -l javascript  # non-Python source
-poetry run python interpreter.py myfile.py -f llm -v       # LLM frontend
-poetry run python interpreter.py myfile.py -f chunked_llm  # chunked LLM frontend
-poetry run python interpreter.py example.cob -l cobol         # COBOL via ProLeap bridge
+uv run python interpreter.py myfile.py -v            # run on a file
+uv run python interpreter.py myfile.py --ir-only      # inspect IR only
+uv run python interpreter.py myfile.py --cfg-only     # inspect CFG only
+uv run python interpreter.py example.js -l javascript  # non-Python source
+uv run python interpreter.py myfile.py -f llm -v       # LLM frontend
+uv run python interpreter.py myfile.py -f chunked_llm  # chunked LLM frontend
+uv run python interpreter.py example.cob -l cobol         # COBOL via ProLeap bridge
 export PROLEAP_BRIDGE_JAR=/path/to/bridge.jar                 # optional: custom bridge JAR path
-poetry run python interpreter.py myfile.py --mermaid        # output CFG as Mermaid flowchart
-poetry run python interpreter.py myfile.py --mermaid --function foo  # CFG for a single function
+uv run python interpreter.py myfile.py --mermaid        # output CFG as Mermaid flowchart
+uv run python interpreter.py myfile.py --mermaid --function foo  # CFG for a single function
 ```
 
 | Flag | Description |
@@ -629,10 +629,10 @@ All providers are accessed through [LiteLLM](https://github.com/BerriAI/litellm)
 Demo scripts exercising the LLM integration:
 
 ```bash
-poetry run python scripts/demo_llm_e2e.py             # LLM frontend + LLM resolver (Python)
-poetry run python scripts/demo_unsupported_language_haskell.py  # LLM frontend for Haskell (no tree-sitter)
-poetry run python scripts/run_chunked_demo.py           # chunked LLM frontend
-poetry run python scripts/demo_ast_repair.py            # LLM-assisted AST repair for malformed source
+uv run python scripts/demo_llm_e2e.py             # LLM frontend + LLM resolver (Python)
+uv run python scripts/demo_unsupported_language_haskell.py  # LLM frontend for Haskell (no tree-sitter)
+uv run python scripts/run_chunked_demo.py           # chunked LLM frontend
+uv run python scripts/demo_ast_repair.py            # LLM-assisted AST repair for malformed source
 ```
 
 ## LLM-assisted AST repair
@@ -657,15 +657,15 @@ The repair is:
 ## Testing
 
 ```bash
-poetry run pytest tests/ -v          # all tests (parallel by default via pytest-xdist)
-poetry run pytest tests/unit/ -v     # unit tests only
-poetry run pytest tests/integration/ -v  # integration tests only
-poetry run pytest tests/ -n 0 -v     # disable parallel execution
+uv run pytest tests/ -v          # all tests (parallel by default via pytest-xdist)
+uv run pytest tests/unit/ -v     # unit tests only
+uv run pytest tests/integration/ -v  # integration tests only
+uv run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
 Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls).
 
-Current suite size: **14,533 collected tests** (`poetry run python -m pytest tests/ --co -q`).
+Current suite size: **14,533 collected tests** (`uv run python -m pytest tests/ --co -q`).
 
 **Coverage areas:**
 
@@ -777,11 +777,11 @@ The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [
 Static analysis tools run in CI as a report-only job (non-blocking). To run locally:
 
 ```bash
-poetry run radon cc interpreter/ -s -n C       # cyclomatic complexity (grade C and above)
-poetry run radon mi interpreter/ -s -n B        # maintainability index (grade B and below)
-poetry run pylint interpreter/ --exit-zero      # linting (report only)
-poetry run lint-imports                         # architectural import contracts
-poetry run pydeps interpreter --no-show -T png  # dependency graph (requires graphviz)
+uv run radon cc interpreter/ -s -n C       # cyclomatic complexity (grade C and above)
+uv run radon mi interpreter/ -s -n B        # maintainability index (grade B and below)
+uv run pylint interpreter/ --exit-zero      # linting (report only)
+uv run lint-imports                         # architectural import contracts
+uv run pydeps interpreter --no-show -T png  # dependency graph (requires graphviz)
 ```
 
 | Tool | Purpose |

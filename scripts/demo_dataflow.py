@@ -6,9 +6,9 @@ transitive chains, and function calls, then performs reaching-definitions
 analysis and renders the variable dependency graph as a Mermaid flowchart.
 
 Usage:
-    poetry run python scripts/demo_dataflow.py
-    poetry run python scripts/demo_dataflow.py --verbose
-    poetry run python scripts/demo_dataflow.py --output graph.md
+    uv run python scripts/demo_dataflow.py
+    uv run python scripts/demo_dataflow.py --verbose
+    uv run python scripts/demo_dataflow.py --output graph.md
 """
 
 from __future__ import annotations
