@@ -15,6 +15,12 @@ from interpreter.frontends.common.expressions import (
     lower_null_literal,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -654,7 +660,6 @@ def _extract_c_declarator_name_no_ctx(decl_node) -> str | None:
 
 def _extract_c_struct_fields(field_decl_list) -> dict[str, FieldInfo]:
     """Extract fields from a C struct field_declaration_list node."""
-    from interpreter.frontends.symbol_table import FieldInfo
 
     fields: dict[FieldName, FieldInfo] = {}
     for child in field_decl_list.children:
@@ -677,7 +682,6 @@ def _collect_c_structs_and_functions(
     functions: dict[FuncName, FunctionInfo],
 ) -> None:
     """Walk AST to collect struct_specifier nodes as ClassInfo and top-level function_definition nodes."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
     if node.type == CNodeType.STRUCT_SPECIFIER:
         name_node = node.child_by_field_name("name")
@@ -720,7 +724,6 @@ def _collect_c_structs_and_functions(
 
 def extract_c_symbols(root) -> SymbolTable:
     """Walk the C AST and return a SymbolTable of all struct and function definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     functions: dict[FuncName, FunctionInfo] = {}

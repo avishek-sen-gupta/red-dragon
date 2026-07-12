@@ -16,6 +16,12 @@ from interpreter.frontends.common.declarations import (
 from interpreter.frontends.common.property_accessors import register_property_accessor
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.frontends.type_extraction import (
     extract_normalized_type_from_child,
 )
@@ -733,7 +739,6 @@ def lower_object_decl(
 
 def _extract_kotlin_primary_ctor_fields(primary_ctor) -> dict[str, FieldInfo]:
     """Extract val/var params from a Kotlin primary_constructor as fields."""
-    from interpreter.frontends.symbol_table import FieldInfo
 
     fields: dict[FieldName, FieldInfo] = {}
     for child in primary_ctor.children:
@@ -763,7 +768,6 @@ def _extract_kotlin_primary_ctor_fields(primary_ctor) -> dict[str, FieldInfo]:
 
 def _extract_kotlin_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a Kotlin class_declaration node."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
     # Kotlin class_declaration uses type_identifier for name, not a "name" field
     name_node = next((c for c in node.children if c.type == KNT.TYPE_IDENTIFIER), None)
@@ -925,7 +929,6 @@ def _collect_kotlin_classes(node, accumulator: dict[ClassName, ClassInfo]) -> No
 
 def extract_kotlin_symbols(root) -> SymbolTable:
     """Walk the Kotlin AST and return a SymbolTable of all class definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     _collect_kotlin_classes(root, classes)

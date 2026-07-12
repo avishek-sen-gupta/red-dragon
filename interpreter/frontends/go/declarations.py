@@ -17,6 +17,12 @@ from interpreter.frontends.go.expressions import (
     lower_go_store_target,
 )
 from interpreter.frontends.go.node_types import GoNodeType
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -436,7 +442,6 @@ def _lower_const_spec(
 
 def _extract_go_struct_fields(field_declaration_list) -> dict[str, FieldInfo]:
     """Extract fields from a Go struct field_declaration_list node."""
-    from interpreter.frontends.symbol_table import FieldInfo
 
     fields: dict[FieldName, FieldInfo] = {}
     for child in field_declaration_list.children:
@@ -469,7 +474,6 @@ def _collect_go_structs(
     node, classes: dict[ClassName, ClassInfo], methods: dict[FuncName, FunctionInfo]
 ) -> None:
     """Walk AST to collect structs (as ClassInfo) and top-level/method functions."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
     if node.type == GoNodeType.TYPE_DECLARATION:
         for child in node.children:
@@ -547,7 +551,6 @@ def _collect_go_structs(
 
 def extract_go_symbols(root) -> SymbolTable:
     """Walk the Go AST and return a SymbolTable of all struct and function definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     top_level_functions: dict[FuncName, FunctionInfo] = {}

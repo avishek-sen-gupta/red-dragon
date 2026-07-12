@@ -15,6 +15,12 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.rust.node_types import RustNodeType
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -528,7 +534,6 @@ def emit_prelude(ctx: TreeSitterEmitContext) -> None:
 
 def _register_prelude_in_symbol_table(ctx: TreeSitterEmitContext) -> None:
     """Register Option and Box in symbol table with match_args for pattern matching."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo
 
     ctx.symbol_table.classes[ClassName("Option")] = ClassInfo(
         name=ClassName("Option"),
@@ -716,7 +721,6 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
 
 def _extract_rust_struct_fields(field_declaration_list) -> dict[FieldName, FieldInfo]:
     """Extract fields from a Rust field_declaration_list node."""
-    from interpreter.frontends.symbol_table import FieldInfo
 
     fields: dict[FieldName, FieldInfo] = {}
     for child in field_declaration_list.children:
@@ -735,7 +739,6 @@ def _extract_rust_struct_fields(field_declaration_list) -> dict[FieldName, Field
 
 def _extract_rust_struct(node) -> tuple[ClassName, ClassInfo] | None:
     """Extract a ClassInfo from a Rust struct_item node."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo
 
     name_node = node.child_by_field_name("name")
     if name_node is None:
@@ -760,7 +763,6 @@ def _collect_rust_structs_and_impls(
     functions: dict[FuncName, FunctionInfo],
 ) -> None:
     """Walk AST to collect struct definitions and impl blocks (methods)."""
-    from interpreter.frontends.symbol_table import FunctionInfo
 
     if node.type == RustNodeType.STRUCT_ITEM:
         result = _extract_rust_struct(node)
@@ -821,7 +823,6 @@ def _collect_rust_structs_and_impls(
 
 def extract_rust_symbols(root) -> SymbolTable:
     """Walk the Rust AST and return a SymbolTable of all struct definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     functions: dict[FuncName, FunctionInfo] = {}

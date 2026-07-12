@@ -6,11 +6,13 @@ from rich.text import Text
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from interpreter.instructions import InstructionBase
+
 
 class SourcePanel(Static):
     """Displays source code with the current instruction's source span highlighted."""
 
-    current_instruction: reactive[IRInstruction | None] = reactive(None)
+    current_instruction: reactive[InstructionBase | None] = reactive(None)
 
     def __init__(self, source: str = "", **kwargs) -> None:
         super().__init__(**kwargs)

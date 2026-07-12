@@ -11,6 +11,12 @@ from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.ruby.expressions import lower_ruby_params
 from interpreter.frontends.ruby.node_types import RubyNodeType
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
@@ -242,7 +248,6 @@ def lower_ruby_module(
 
 def _extract_ruby_initialize_fields(body) -> dict[str, FieldInfo]:
     """Walk initialize body and collect @x = ... instance variable assignments."""
-    from interpreter.frontends.symbol_table import FieldInfo
 
     fields: dict[str, FieldInfo] = {}
     for stmt in body.children:
@@ -261,7 +266,6 @@ def _extract_ruby_initialize_fields(body) -> dict[str, FieldInfo]:
 
 def _extract_ruby_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a Ruby class node."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
     name_node = node.child_by_field_name("name")
     if name_node is None:
@@ -340,7 +344,6 @@ def _collect_ruby_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None
 
 def extract_ruby_symbols(root) -> SymbolTable:
     """Walk the Ruby AST and return a SymbolTable of all class definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     _collect_ruby_classes(root, classes)

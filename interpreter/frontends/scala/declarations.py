@@ -15,6 +15,12 @@ from interpreter.frontends.common.declarations import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
@@ -617,7 +623,6 @@ def lower_function_def_stmt(
 
 def _extract_scala_primary_ctor_fields(class_params_node) -> dict[str, FieldInfo]:
     """Extract val/var class parameters as fields from a class_parameters node."""
-    from interpreter.frontends.symbol_table import FieldInfo
 
     fields: dict[FieldName, FieldInfo] = {}
     for child in class_params_node.children:
@@ -642,7 +647,6 @@ def _extract_scala_primary_ctor_fields(class_params_node) -> dict[str, FieldInfo
 
 def _extract_scala_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a Scala class_definition or case_class_definition node."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
     name_node = node.child_by_field_name("name")
     if name_node is None:
@@ -735,7 +739,6 @@ def _collect_scala_classes(node, accumulator: dict[ClassName, ClassInfo]) -> Non
 
 def extract_scala_symbols(root) -> SymbolTable:
     """Walk the Scala AST and return a SymbolTable of all class definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     _collect_scala_classes(root, classes)

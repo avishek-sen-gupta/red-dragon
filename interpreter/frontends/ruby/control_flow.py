@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from interpreter import constants
+from interpreter.frontends.common.patterns import Pattern
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.func_name import FuncName
