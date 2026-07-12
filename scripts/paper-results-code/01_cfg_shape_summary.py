@@ -11,17 +11,17 @@ Output: one line per algorithm with min/max blocks, edges, IR length,
         number of distinct structural variants, and unresolved SYMBOLIC count.
 """
 
-import sys
-import os
-import importlib
 import glob
+import importlib
+import os
+import sys
 
 sys.path.insert(0, "tests/unit/rosetta")
 
 from interpreter.cfg import build_cfg
 from interpreter.frontends import (
-    get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
+    get_deterministic_frontend,
 )
 from interpreter.ir import Opcode
 

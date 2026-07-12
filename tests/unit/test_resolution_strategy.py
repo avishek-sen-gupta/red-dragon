@@ -1,12 +1,12 @@
 """Unit tests for ResolutionStrategy — candidate ranking by arity then type."""
 
 from interpreter.constants import FoundationTypeName
-from interpreter.types.function_kind import FunctionKind
-from interpreter.types.function_signature import FunctionSignature
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
 from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
-from interpreter.types.type_expr import scalar, UNKNOWN
-from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.types.function_kind import FunctionKind
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 from interpreter.types.typed_value import typed
 
 

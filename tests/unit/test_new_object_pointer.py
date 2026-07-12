@@ -1,22 +1,21 @@
 """Tests that NEW_OBJECT produces a Pointer with correct parameterized type."""
 
+from dataclasses import replace as _replace
+
 from interpreter.cfg import CFG
+from interpreter.func_name import FuncName
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.register import Register
+from interpreter.registry import FunctionRegistry
 from interpreter.type_name import TypeName
+from interpreter.types.type_expr import pointer, scalar
 from interpreter.vm.executor import (
-    LocalExecutor,
     HandlerContext,
+    LocalExecutor,
     _default_handler_context,
 )
-from interpreter.ir import IRInstruction, Opcode
-from interpreter.registry import FunctionRegistry
 from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import Pointer, StackFrame
-from interpreter.types.type_expr import pointer, scalar
-from interpreter.register import Register
-
-
-from dataclasses import replace as _replace
-from interpreter.func_name import FuncName
 
 
 def _ctx(**overrides) -> HandlerContext:

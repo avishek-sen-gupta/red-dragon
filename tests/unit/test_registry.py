@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from interpreter.cfg import build_cfg
+from interpreter.class_name import ClassName
+from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.func_name import FuncName
-from interpreter.class_name import ClassName
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.registry import build_registry, _scan_classes
+from interpreter.registry import _scan_classes, build_registry
 
 
 class TestScanClassesOverloads:

@@ -1,13 +1,14 @@
 import logging
+
 from interpreter.cobol.asg_types import CobolASG, CobolField
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,
 )
 from interpreter.register import Register
-from interpreter.cobol.features import CobolFeature
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _make_field(name: str, pic: str = "X(5)", offset: int = 0) -> CobolField:

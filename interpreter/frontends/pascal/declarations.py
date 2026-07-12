@@ -1,50 +1,49 @@
 """Pascal-specific declaration lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
-
-from typing import Any
 
 import logging
-from interpreter.frontends.context import TreeSitterEmitContext
+from typing import Any
 
 from interpreter import constants
-from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
-from interpreter.frontends.pascal.control_flow import lower_pascal_block
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.property_accessors import (
+    emit_field_store_or_setter,
+    register_property_accessor,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.pascal.control_flow import lower_pascal_block
+from interpreter.frontends.pascal.node_types import PascalNodeType
+from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
+from interpreter.frontends.pascal.type_helpers import extract_pascal_return_type
 from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
-from interpreter.frontends.pascal.type_helpers import extract_pascal_return_type
-from interpreter.frontends.pascal.node_types import PascalNodeType
-from interpreter.frontends.common.property_accessors import (
-    register_property_accessor,
-    emit_field_store_or_setter,
-)
-from interpreter.types.type_expr import EnumType, scalar
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
-from interpreter.class_name import ClassName
-from interpreter.register import Register
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
-    StoreField,
-    StoreIndex,
+    Branch,
     CallCtorFunction,
     CallFunction,
     CallMethod,
+    Const,
+    DeclVar,
+    Label_,
     LoadField,
+    LoadVar,
     NewArray,
     NewObject,
-    Symbolic,
-    Branch,
-    Label_,
     Return_,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
 )
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import EnumType, scalar
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -830,7 +829,7 @@ def _lower_pascal_enum(
 # ---------------------------------------------------------------------------
 
 
-def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None":
+def _extract_pascal_class_from_decl_type(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a Pascal declType node that contains a declClass."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -898,9 +897,8 @@ def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None"
     )
 
 
-def _collect_pascal_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_pascal_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all declType nodes containing declClass."""
-    from interpreter.frontends.symbol_table import ClassInfo
 
     if node.type == PascalNodeType.DECL_TYPE:
         result = _extract_pascal_class_from_decl_type(node)
@@ -911,7 +909,7 @@ def _collect_pascal_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> 
         _collect_pascal_classes(child, accumulator)
 
 
-def extract_pascal_symbols(root) -> "SymbolTable":
+def extract_pascal_symbols(root) -> SymbolTable:
     """Walk the Pascal AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

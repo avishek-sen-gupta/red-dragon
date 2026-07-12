@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.frontends.type_extraction import normalize_type_hint
 from interpreter.frontends.pascal.node_types import PascalNodeType
+from interpreter.frontends.type_extraction import normalize_type_hint
 from interpreter.types.type_expr import UNKNOWN, TypeExpr
 
 

@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.operator_kind import resolve_binop
-from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.c.node_types import CNodeType
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.instructions import (
     Binop,
-    Label_,
     Branch,
     BranchIf,
+    Label_,
 )
+from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop
 
 logger = logging.getLogger(__name__)
 

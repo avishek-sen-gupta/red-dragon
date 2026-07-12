@@ -1,8 +1,9 @@
 from __future__ import annotations
-from interpreter.cobol.ref_mod import RefModOperand, RefModLiteral, RefModReference
+
 from interpreter.cobol.cobol_expression import FieldRefNode, LiteralNode
-from tests.covers import covers
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.ref_mod import RefModLiteral, RefModOperand, RefModReference
+from tests.covers import covers
 
 
 @covers(CobolFeature.OCCURS_FIXED)

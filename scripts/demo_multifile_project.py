@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.api import analyze_project, run_project
 from interpreter.constants import Language
-from interpreter.project.compiler import compile_module, compile_directory
+from interpreter.project.compiler import compile_directory, compile_module
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import get_resolver
 from interpreter.types.typed_value import TypedValue

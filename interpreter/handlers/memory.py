@@ -2,48 +2,48 @@
 LOAD_INDIRECT, STORE_INDIRECT, ADDRESS_OF, LOAD_FIELD_INDIRECT."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 import logging
 from typing import TYPE_CHECKING
 
+from interpreter.type_name import TypeName
+
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
-from interpreter.instructions import (
-    InstructionBase,
-    AddressOf,
-    LoadIndirect,
-    LoadFieldIndirect,
-    StoreIndirect,
-    StoreField,
-    LoadField,
-    StoreIndex,
-    LoadIndex,
-)
+from interpreter import constants
 from interpreter.address import Address
-from interpreter.class_name import ClassName
-from interpreter.func_name import FuncName
-from interpreter.vm.vm import (
-    VMState,
-    HeapObject,
-    Pointer,
-    ExecutionResult,
-    StateUpdate,
-    _resolve_reg,
-    _heap_addr,
-    _is_symbolic,
-)
-from interpreter.vm.vm_types import HeapWrite
 from interpreter.cfg import CFG
-from interpreter.registry import FunctionRegistry
-from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.func_name import FuncName
+from interpreter.handlers._common import _symbolic_name, _symbolic_type_hint
+from interpreter.instructions import (
+    AddressOf,
+    InstructionBase,
+    LoadField,
+    LoadFieldIndirect,
+    LoadIndex,
+    LoadIndirect,
+    StoreField,
+    StoreIndex,
+    StoreIndirect,
+)
 from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+from interpreter.registry import FunctionRegistry
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.field_name import FieldName, FieldKind
-from interpreter import constants
-from interpreter.handlers._common import _symbolic_name, _symbolic_type_hint
+from interpreter.vm.vm import (
+    ExecutionResult,
+    HeapObject,
+    Pointer,
+    StateUpdate,
+    VMState,
+    _heap_addr,
+    _resolve_reg,
+)
+from interpreter.vm.vm_types import HeapWrite
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +90,12 @@ def _find_method_missing(
 
 
 def _resolve_method_delegation_target(
-    addr: "Address",
+    addr: Address,
     method_name: FuncName,
     vm: VMState,
     registry: FunctionRegistry,
     cfg: CFG,
-) -> tuple["Address", TypedValue] | None:
+) -> tuple[Address, TypedValue] | None:
     """Follow __boxed__ delegation chain to find an inner object that owns *method_name*.
 
     Returns (inner_addr, inner_typed_value) for the first object whose type
@@ -103,7 +103,7 @@ def _resolve_method_delegation_target(
     exhausted without finding one.
     """
     current_addr = addr
-    visited: set["Address"] = set()
+    visited: set[Address] = set()
     while (
         current_addr and vm.heap_contains(current_addr) and current_addr not in visited
     ):

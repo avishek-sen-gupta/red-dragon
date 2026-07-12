@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from interpreter.class_name import ClassName
-from interpreter.var_name import VarName
-from interpreter.refs.class_ref import ClassRef
 from interpreter.constants import Language
+from interpreter.refs.class_ref import ClassRef
+from interpreter.var_name import VarName
 from tests.integration.exec_helpers import run_locals
 
 

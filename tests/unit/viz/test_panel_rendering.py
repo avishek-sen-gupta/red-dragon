@@ -9,16 +9,14 @@ never rely on domain object comparison.
 from __future__ import annotations
 
 from interpreter.address import Address
+from interpreter.constants import FoundationTypeName
 from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
-from interpreter.types.typed_value import TypedValue
-from interpreter.constants import FoundationTypeName
 from interpreter.types.type_expr import ScalarType
+from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
-from interpreter.vm.vm_types import HeapObject, StackFrame
-
+from interpreter.vm.vm_types import HeapObject
 from viz.panels.vm_state_panel import _format_value
 
 

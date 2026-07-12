@@ -6,8 +6,8 @@ from interpreter.frontends.c import CFrontend
 from interpreter.frontends.cpp import CppFrontend
 from interpreter.frontends.java import JavaFrontend
 from interpreter.frontends.java.features import JavaFeature
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from tests.covers import covers
 

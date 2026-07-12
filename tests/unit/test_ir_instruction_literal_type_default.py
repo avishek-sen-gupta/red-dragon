@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.ir import IRInstruction
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestIRInstructionLiteralTypeDefault:

@@ -3,19 +3,20 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.register import Register
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
-from interpreter.frontends.common import expressions as common_expr
-from interpreter.frontends.common import control_flow as common_cf
-from interpreter.frontends.common import assignments as common_assign
-from interpreter.frontends.c import expressions as c_expr
 from interpreter.frontends.c import control_flow as c_cf
 from interpreter.frontends.c import declarations as c_decl
+from interpreter.frontends.c import expressions as c_expr
 from interpreter.frontends.c.node_types import CNodeType
+from interpreter.frontends.common import assignments as common_assign
+from interpreter.frontends.common import control_flow as common_cf
+from interpreter.frontends.common import expressions as common_expr
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.register import Register
 
 PREPROC_NOISE_TYPES = frozenset(
     {

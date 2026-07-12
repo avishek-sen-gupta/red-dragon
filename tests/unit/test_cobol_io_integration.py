@@ -1,16 +1,16 @@
 """Unit tests — verify executor dispatches __cobol_* calls to io_provider."""
 
 from interpreter.cfg import build_cfg
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
-from interpreter.vm.vm_types import SymbolicValue
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.instructions import InstructionBase
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.register import Register
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import unwrap
-from interpreter.register import Register
-from interpreter.cobol.features import CobolFeature
+from interpreter.vm.vm_types import SymbolicValue
 from tests.covers import covers
 
 

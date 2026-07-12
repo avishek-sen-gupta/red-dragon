@@ -1,13 +1,12 @@
 """Tests for the project pipeline — compile directory into ProjectPipelineResult."""
 
 from pathlib import Path
-import pytest
-from interpreter.constants import Language
+
 from viz.project_pipeline import (
     ProjectPipelineResult,
-    run_project_pipeline,
     execute_project,
     lookup_module_for_index,
+    run_project_pipeline,
 )
 
 

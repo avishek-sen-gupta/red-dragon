@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from interpreter.cobol.features import CobolFeature
+from interpreter.constants import Language
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import NO_PATH
 from interpreter.project.types import ImportKind, ImportRef
-from interpreter.constants import Language
-from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 

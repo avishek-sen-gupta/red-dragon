@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.project.linker import link_modules
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

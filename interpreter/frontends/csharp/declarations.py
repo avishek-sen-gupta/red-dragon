@@ -2,14 +2,33 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
-
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.var_name import VarName
+from interpreter import constants
+from interpreter.class_name import ClassName
 from interpreter.field_name import FieldName
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_field_initializers,
+    emit_implicit_return,
+    emit_synthetic_init,
+)
+from interpreter.frontends.common.expressions import (
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.csharp.expressions import lower_csharp_params
+from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
+from interpreter.frontends.type_extraction import (
+    extract_normalized_type,
+)
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
@@ -23,31 +42,9 @@ from interpreter.instructions import (
     StoreIndex,
     Symbolic,
 )
-from interpreter import constants
-from interpreter.frontends.csharp.expressions import lower_csharp_params
-from interpreter.frontends.common.expressions import (
-    lower_null_literal,
-    lower_string_literal,
-    lower_int_literal,
-)
-from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
-from interpreter.frontends.type_extraction import (
-    extract_normalized_type,
-)
-from interpreter.frontends.common.declarations import (
-    FieldInit,
-    emit_field_initializers,
-    emit_implicit_return,
-    emit_synthetic_init,
-)
-from interpreter.types.type_expr import EnumType, ScalarType, scalar
-from interpreter.frontends.symbol_table import (
-    ClassInfo,
-    FieldInfo,
-    FunctionInfo,
-    SymbolTable,
-)
-from interpreter.class_name import ClassName
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import EnumType, ScalarType
+from interpreter.var_name import VarName
 
 
 def lower_local_decl_stmt(

@@ -1,9 +1,10 @@
 """Tests for SymbolName domain type."""
 
 import pytest
-from interpreter.symbol_name import SymbolName
-from interpreter.func_name import FuncName
+
 from interpreter.class_name import ClassName
+from interpreter.func_name import FuncName
+from interpreter.symbol_name import SymbolName
 
 
 class TestSymbolName:

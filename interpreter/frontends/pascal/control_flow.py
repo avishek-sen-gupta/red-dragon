@@ -2,36 +2,34 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-
 from interpreter.constants import DEFAULT_EXCEPTION_TYPE
-from interpreter.ir import CodeLabel
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.common.expressions import lower_default_return
-from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.pascal.node_types import PascalNodeType
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
+from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.func_name import FuncName
-from interpreter.register import Register
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
     Binop,
-    CallFunction,
-    LoadIndex,
-    Symbolic,
-    Label_,
     Branch,
     BranchIf,
-    Return_,
+    CallFunction,
+    Const,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    LoadVar,
+    StoreVar,
+    Symbolic,
     Throw_,
 )
+from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

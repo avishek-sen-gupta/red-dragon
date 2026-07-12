@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.frontends.typescript.features import TypeScriptFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
-from tests.covers import covers, NotLanguageFeature
-
-
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from tests.covers import NotLanguageFeature, covers
 
 
 def _parse_ts(source: str) -> list[InstructionBase]:

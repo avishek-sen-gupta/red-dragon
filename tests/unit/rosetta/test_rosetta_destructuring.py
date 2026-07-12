@@ -19,13 +19,12 @@ manual array indexing.
 import pytest
 
 from interpreter.ir import Opcode
-
 from tests.unit.rosetta.conftest import (
-    parse_for_language,
-    find_all,
     assert_clean_lowering,
     execute_for_language,
     extract_answer,
+    find_all,
+    parse_for_language,
 )
 
 # ---------------------------------------------------------------------------

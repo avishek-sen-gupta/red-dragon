@@ -1,23 +1,23 @@
 """Unit tests for OverloadResolver -- compositor of strategy + ambiguity handler."""
 
 import pytest
-from interpreter.type_name import TypeName
 
+from interpreter.constants import FoundationTypeName
 from interpreter.overload.ambiguity_handler import (
     AmbiguousOverloadError,
     FallbackFirstWithWarning,
     StrictAmbiguityHandler,
 )
-from interpreter.constants import FoundationTypeName
-from interpreter.types.function_signature import FunctionSignature
 from interpreter.overload.overload_resolver import (
     NullOverloadResolver,
     OverloadResolver,
 )
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
+from interpreter.type_name import TypeName
 from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
-from interpreter.types.type_expr import scalar, UNKNOWN
-from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
 from interpreter.types.type_node import TypeNode
 from interpreter.types.typed_value import typed
 

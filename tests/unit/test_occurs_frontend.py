@@ -1,16 +1,11 @@
 """Tests for OCCURS support in the COBOL frontend — subscript parsing and resolution."""
 
-import pytest
-
+from interpreter.cobol.asg_types import CobolField
+from interpreter.cobol.cobol_expression import LiteralNode
 from interpreter.cobol.cobol_frontend import (
-    ResolvedFieldRef,
     CobolFrontend,
 )
-from interpreter.cobol.asg_types import CobolField
-from interpreter.cobol.cobol_types import CobolDataCategory
-from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
-from interpreter.cobol.pic_parser import parse_pic
-from interpreter.cobol.cobol_expression import LiteralNode
+from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.ir import Opcode
 from interpreter.register import Register

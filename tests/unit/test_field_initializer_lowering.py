@@ -11,15 +11,13 @@ lowered incorrectly: Java, C#, Kotlin, Scala.
 
 from __future__ import annotations
 
-import pytest
-
-from interpreter.ir import Opcode
-from interpreter.instructions import InstructionBase
+from interpreter.frontends.csharp import CSharpFrontend
 from interpreter.frontends.java import JavaFrontend
 from interpreter.frontends.java.features import JavaFeature
-from interpreter.frontends.csharp import CSharpFrontend
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.frontends.scala import ScalaFrontend
+from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from tests.covers import covers
 

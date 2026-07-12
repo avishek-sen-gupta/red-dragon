@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
-from tests.integration.cobol_helpers import bridge_jar
+from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
 
 
 def _fixed(lines: list[str]) -> str:

@@ -4,7 +4,7 @@ no runtime wiring) — red-dragon-4q25.32."""
 from __future__ import annotations
 
 from interpreter.cobol.asg_types import CobolASG, CobolField
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _file_record_fields() -> list[CobolField]:

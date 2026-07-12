@@ -8,17 +8,17 @@ from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.c.features import CFeature
-from interpreter.instructions import BranchIf, InstructionBase, CallFunction, Binop
+from interpreter.instructions import Binop, BranchIf, CallFunction, InstructionBase
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg, build_execution_strategies, initial_vm_state
+from interpreter.run import build_execution_strategies, execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.typed_value import unwrap
 from interpreter.var_name import VarName
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:

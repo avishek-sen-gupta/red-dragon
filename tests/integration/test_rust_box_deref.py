@@ -1,16 +1,15 @@
 """Integration tests for Rust Box auto-deref: Box::new → __method_missing__ → field delegation."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
-from interpreter.address import Address
-from interpreter.var_name import VarName
 from interpreter.constants import Language
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.vm.vm_types import Pointer, SymbolicValue
-from interpreter.project.entry_point import EntryPoint
+from interpreter.var_name import VarName
+from interpreter.vm.vm_types import SymbolicValue
 
 
 def _run_rust(source: str, max_steps: int = 200):

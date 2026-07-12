@@ -12,9 +12,10 @@ them here — this module has no knowledge of what any of them are for.
 from __future__ import annotations
 
 import functools
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 from interpreter.frontend_extension import (
     DialectParser,

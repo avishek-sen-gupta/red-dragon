@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.cobol.asg_types import CobolASG, CobolField
 from interpreter.cobol.cobol_statements import CallStatement, CallUsingParam
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_call import lower_call
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.sectioned_layout import (
@@ -13,8 +14,7 @@ from interpreter.cobol.sectioned_layout import (
 )
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.ir import Opcode
-from interpreter.cobol.features import CobolFeature
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _make_field(name: str, pic: str = "X(5)", offset: int = 0) -> CobolField:

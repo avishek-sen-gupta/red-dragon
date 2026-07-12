@@ -6,17 +6,15 @@ from __future__ import annotations
 import argparse
 import json
 
+from interpreter import constants
 from interpreter.api import (
-    lower_source,
-    dump_ir,
-    build_cfg_from_source,
     dump_cfg,
+    dump_ir,
     dump_mermaid,
 )
-from interpreter.run import run
-from interpreter import constants
-from interpreter.project.entry_point import EntryPoint
 from interpreter.func_name import FuncName
+from interpreter.project.entry_point import EntryPoint
+from interpreter.run import run
 
 
 def main():

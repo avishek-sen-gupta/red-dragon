@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-import sys
 import logging
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Vertical
 from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
-from viz.panels.source_panel import SourcePanel
 from viz.panels.ast_panel import ASTPanel
-from viz.panels.ir_panel import IRPanel
-from viz.panels.vm_state_panel import VMStatePanel
 from viz.panels.cfg_panel import CFGPanel
-from viz.panels.step_panel import StepPanel
-from viz.panels.dataflow_summary_panel import DataflowSummaryPanel, FunctionSelected
 from viz.panels.dataflow_graph_panel import DataflowGraphPanel
+from viz.panels.dataflow_summary_panel import DataflowSummaryPanel, FunctionSelected
+from viz.panels.ir_panel import IRPanel
+from viz.panels.source_panel import SourcePanel
+from viz.panels.step_panel import StepPanel
+from viz.panels.vm_state_panel import VMStatePanel
 from viz.pipeline import PipelineResult, run_pipeline
 
 logger = logging.getLogger(__name__)

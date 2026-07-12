@@ -1,12 +1,13 @@
 from __future__ import annotations
+
 from interpreter.cobol.cobol_expression import (
-    expr_from_dict,
+    BinOpNode,
     FieldRefNode,
     LiteralNode,
-    BinOpNode,
+    expr_from_dict,
 )
-from tests.covers import covers
 from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 
 @covers(CobolFeature.OCCURS_FIXED)

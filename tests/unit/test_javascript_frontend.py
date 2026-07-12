@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from interpreter.frontends.javascript import JavaScriptFrontend
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode, SpreadArguments
-from interpreter.instructions import InstructionBase
-from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from interpreter.frontends.javascript.features import JavaScriptFeature
-from tests.covers import covers, FeatureStatus, NotLanguageFeature
+from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode, SpreadArguments
+from interpreter.parser import TreeSitterParserFactory
+from tests.covers import FeatureStatus, NotLanguageFeature, covers
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_js(source: str) -> list[InstructionBase]:

@@ -1,7 +1,9 @@
 """Import graph panel — box-drawing DAG of the project's import structure."""
 
 from __future__ import annotations
+
 from pathlib import Path
+
 from textual.widgets import Static
 
 

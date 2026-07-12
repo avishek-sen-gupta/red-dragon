@@ -7,7 +7,7 @@ never Cicada's or Squall's real types. Renamed from test_exec_sql_seam.py
 (which used to import Squall's ExecSqlStatement directly; that type has
 relocated to Squall and RedDragon must not depend on it)."""
 
-from interpreter.cobol.cobol_statements import parse_statement, _dialect_parsers
+from interpreter.cobol.cobol_statements import _dialect_parsers, parse_statement
 from tests.unit.cobol.dialect_parser_fixtures import (
     FakeDialectParser,
     FakeExtensionStatement,
@@ -63,7 +63,6 @@ import pytest  # noqa: E402 — see note below
 
 # ── Extension-strategy lowering protocol tests (unchanged from the old file,
 #    moved here verbatim since this file already covers "the seam" broadly) ──
-
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 
 
@@ -173,8 +172,8 @@ class TestArrayDispatch:
         assert "Unhandled" in caplog.text
 
 
-from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.asg_types import CobolASG
+from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_parser import CobolParser
 
 

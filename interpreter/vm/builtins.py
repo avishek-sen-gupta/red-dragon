@@ -2,26 +2,26 @@
 """Built-in function implementations for the symbolic interpreter."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 import logging
 from typing import Any
 
 from interpreter.address import Address
+from interpreter.cobol.byte_builtins import BYTE_BUILTINS
 from interpreter.constants import ARR_ADDR_PREFIX, FoundationTypeName
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.func_name import FuncName
-from interpreter.vm.vm import VMState, Operators, _is_symbolic, _heap_addr
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import pointer, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.vm.vm import Operators, VMState, _heap_addr, _is_symbolic
 from interpreter.vm.vm_types import (
-    HeapObject,
     BuiltinResult,
-    NewObject,
+    HeapObject,
     HeapWrite,
+    NewObject,
     Pointer,
 )
-from interpreter.cobol.byte_builtins import BYTE_BUILTINS
-from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.types.type_expr import pointer, scalar
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 

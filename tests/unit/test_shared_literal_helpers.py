@@ -17,11 +17,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from interpreter.constants import FoundationTypeName
 from interpreter.instructions import Const
 from interpreter.ir import Opcode
 from interpreter.register import Register
-from interpreter.types.type_expr import scalar, NULL
-from interpreter.constants import FoundationTypeName
+from interpreter.types.type_expr import NULL, scalar
 from tests.covers import NotLanguageFeature, covers
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -262,8 +262,9 @@ class TestLowerConstLiteralRaises:
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_raises_with_helpful_message(self):
-        from interpreter.frontends.common.expressions import lower_const_literal
         import pytest
+
+        from interpreter.frontends.common.expressions import lower_const_literal
 
         ctx = _make_ctx("42")
         with pytest.raises(TypeError, match="typed helper"):
@@ -327,8 +328,8 @@ class TestLowerDefaultReturn:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_none_sentinel_emits_null(self):
         """'None' sentinel → typed null CONST (NULL type_expr, value=None)."""
-        from interpreter.frontends.common.expressions import lower_default_return
         from interpreter.constants import CanonicalLiteral
+        from interpreter.frontends.common.expressions import lower_default_return
 
         ctx = _make_ctx()
         reg = lower_default_return(ctx, MagicMock(), CanonicalLiteral.NONE)
@@ -370,11 +371,11 @@ class TestEmitImplicitReturn:
     def test_emits_return_marked_implicit(self):
         from interpreter.constants import Language
         from interpreter.frontend_observer import NullFrontendObserver
+        from interpreter.frontends.common.declarations import emit_implicit_return
         from interpreter.frontends.context import (
             GrammarConstants,
             TreeSitterEmitContext,
         )
-        from interpreter.frontends.common.declarations import emit_implicit_return
         from interpreter.instructions import Return_
         from interpreter.ir import Opcode
 

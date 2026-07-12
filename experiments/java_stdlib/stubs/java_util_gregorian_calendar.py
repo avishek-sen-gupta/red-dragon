@@ -23,15 +23,14 @@ from interpreter.instructions import (
     DeclVar,
     Label_,
     LoadVar,
-    NewObject,
     Return_,
     StoreField,
     Symbolic,
 )
 from interpreter.ir import CodeLabel
-from interpreter.types.type_expr import UNKNOWN
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.var_name import VarName
 
 _CLS = "class_GregorianCalendar_0"

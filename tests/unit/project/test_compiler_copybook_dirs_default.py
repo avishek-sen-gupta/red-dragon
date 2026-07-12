@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.project.compiler import compile_module
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestCompileCopybookDirsDefault:

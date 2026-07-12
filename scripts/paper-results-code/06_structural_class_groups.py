@@ -14,17 +14,17 @@ Otherwise shows all algorithms.
 Output: grouped view of languages by shape, ordered by group size.
 """
 
-import sys
-import os
-import importlib
 import glob
+import importlib
+import os
+import sys
 
 sys.path.insert(0, "tests/unit/rosetta")
 
 from interpreter.cfg import build_cfg
 from interpreter.frontends import (
-    get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
+    get_deterministic_frontend,
 )
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)

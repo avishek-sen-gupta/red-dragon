@@ -15,15 +15,13 @@ import pytest
 
 from interpreter.frontends import SUPPORTED_DETERMINISTIC_LANGUAGES
 from interpreter.ir import Opcode
-
 from tests.unit.rosetta.conftest import (
-    parse_for_language,
-    find_all,
     assert_clean_lowering,
     assert_cross_language_consistency,
     execute_for_language,
     extract_answer,
-    STANDARD_EXECUTABLE_LANGUAGES,
+    find_all,
+    parse_for_language,
 )
 
 # ---------------------------------------------------------------------------

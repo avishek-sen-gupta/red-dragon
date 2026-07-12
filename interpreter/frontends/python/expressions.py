@@ -1,53 +1,56 @@
 """Python-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from interpreter.type_name import TypeName
-from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from interpreter.ir import SpreadArguments, CodeLabel
-
-from interpreter.var_name import VarName
-from interpreter.frontends.context import TreeSitterEmitContext
+    from interpreter.ir import SpreadArguments
 
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_comparison as common_lower_comparison,
-    lower_int_literal,
-    lower_string_literal,
-    lower_null_literal,
+)
+from interpreter.frontends.common.expressions import (
     lower_interpolated_string_parts,
+    lower_string_literal,
+)
+from interpreter.frontends.common.expressions import (
     lower_store_target as common_lower_store_target,
 )
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.python.node_types import PythonNodeType
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
-from interpreter.frontends.python.node_types import PythonNodeType
-from interpreter.register import Register
-from interpreter.types.type_expr import scalar
-from interpreter.operator_kind import resolve_binop, UnopKind
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
     Binop,
+    Branch,
+    BranchIf,
     CallFunction,
     CallMethod,
     CallUnknown,
+    Const,
+    DeclVar,
+    Label_,
     LoadIndex,
-    StoreIndex,
+    LoadVar,
     NewArray,
     NewObject,
-    Symbolic,
-    Branch,
-    BranchIf,
-    Label_,
     Return_,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
     Unop,
 )
+from interpreter.operator_kind import UnopKind, resolve_binop
+from interpreter.register import Register
+from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 
 # ── store target (with tuple unpack) ──────────────────────────
 

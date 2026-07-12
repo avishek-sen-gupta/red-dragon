@@ -1,11 +1,11 @@
 # pyright: standard
 """Unit tests for RustTypeAliasExtractor."""
 
-from tests.covers import covers
 from interpreter.frontends.rust.features import RustFeature
 from interpreter.frontends.rust.type_alias_extractor import RustTypeAliasExtractor
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import ScalarType
+from tests.covers import covers
 
 
 class _FakeRustNode:

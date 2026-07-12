@@ -1,15 +1,15 @@
 """Tests for run_linked_traced() — traced execution of LinkedProgram."""
 
-from interpreter.constants import Language
-from interpreter.func_name import FuncName
-from interpreter.var_name import VarName
-from interpreter.frontend import get_frontend
 from interpreter.cfg import build_cfg
-from interpreter.registry import build_registry
+from interpreter.constants import Language
+from interpreter.frontend import get_frontend
+from interpreter.func_name import FuncName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.types import LinkedProgram
+from interpreter.registry import build_registry
 from interpreter.run import run_linked_traced
 from interpreter.trace_types import ExecutionTrace
+from interpreter.var_name import VarName
 
 
 def _build_linked_program(source: str, language: Language) -> LinkedProgram:

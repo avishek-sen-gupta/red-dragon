@@ -2,45 +2,40 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
-
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode
 from interpreter import constants
-from interpreter.field_name import FieldName
-from interpreter.var_name import VarName
-from interpreter.func_name import FuncName
 from interpreter.class_name import ClassName
-from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
-    StoreField,
-    LoadIndex,
-    NewObject,
-    Symbolic,
-    CallFunction,
-    CallMethod,
-    Label_,
-    Branch,
-    Return_,
-)
-from interpreter.frontends.type_extraction import (
-    extract_normalized_type,
-)
-from interpreter.frontends.scala.node_types import ScalaNodeType as NT
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
     emit_implicit_return,
     emit_synthetic_init,
 )
-from interpreter.types.type_expr import EnumType, ScalarType, scalar
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.scala.node_types import ScalaNodeType as NT
+from interpreter.frontends.type_extraction import (
+    extract_normalized_type,
+)
+from interpreter.func_name import FuncName
+from interpreter.instructions import (
+    Branch,
+    CallMethod,
+    Const,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    LoadVar,
+    NewObject,
+    Return_,
+    StoreField,
+    Symbolic,
+)
 from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import EnumType, ScalarType
+from interpreter.var_name import VarName
 
 
 def lower_enum_def(
@@ -620,7 +615,7 @@ def lower_function_def_stmt(
 # ---------------------------------------------------------------------------
 
 
-def _extract_scala_primary_ctor_fields(class_params_node) -> "dict[str, FieldInfo]":
+def _extract_scala_primary_ctor_fields(class_params_node) -> dict[str, FieldInfo]:
     """Extract val/var class parameters as fields from a class_parameters node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -645,7 +640,7 @@ def _extract_scala_primary_ctor_fields(class_params_node) -> "dict[str, FieldInf
     return fields
 
 
-def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
+def _extract_scala_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a Scala class_definition or case_class_definition node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -726,9 +721,8 @@ def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_scala_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_scala_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class/case class definition nodes."""
-    from interpreter.frontends.symbol_table import ClassInfo
 
     if node.type in (NT.CLASS_DEFINITION, NT.CASE_CLASS_DEFINITION):
         result = _extract_scala_class(node)
@@ -739,7 +733,7 @@ def _collect_scala_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> N
         _collect_scala_classes(child, accumulator)
 
 
-def extract_scala_symbols(root) -> "SymbolTable":
+def extract_scala_symbols(root) -> SymbolTable:
     """Walk the Scala AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

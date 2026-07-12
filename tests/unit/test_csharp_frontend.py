@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from interpreter.frontends.csharp import CSharpFrontend
 from interpreter.frontends.csharp.features import CSharpFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:

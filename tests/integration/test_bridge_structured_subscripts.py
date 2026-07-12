@@ -5,7 +5,7 @@ import json
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 from tests.covers import covers
-from tests.integration.cobol_helpers import bridge_jar
+from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
 
 
 def _fixed(lines: list[str]) -> str:

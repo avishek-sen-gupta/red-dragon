@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from interpreter.frontends.lua import LuaFrontend
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
-from interpreter.instructions import InstructionBase
-from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from interpreter.frontends.lua.features import LuaFeature
-from tests.covers import covers, NotLanguageFeature
+from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
+from tests.covers import NotLanguageFeature, covers
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_lua(source: str) -> list[InstructionBase]:
@@ -670,8 +670,8 @@ class TestLuaMethodIndexExpression:
     def test_method_index_in_dispatch_table(self):
         """method_index_expression must be in the expr dispatch table."""
         from interpreter.frontends.lua import LuaFrontend
-        from interpreter.parser import TreeSitterParserFactory
         from interpreter.frontends.lua.node_types import LuaNodeType
+        from interpreter.parser import TreeSitterParserFactory
 
         frontend = LuaFrontend(TreeSitterParserFactory(), "lua")
         dispatch = frontend._build_expr_dispatch()

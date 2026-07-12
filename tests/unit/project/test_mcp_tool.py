@@ -1,7 +1,5 @@
 """Tests for the MCP load_project tool."""
 
-from pathlib import Path
-
 import pytest
 
 from mcp_server.tools import handle_load_project

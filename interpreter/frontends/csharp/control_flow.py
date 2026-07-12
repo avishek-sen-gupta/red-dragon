@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.frontends.common.exceptions import (
+    lower_raise_or_throw,
+    lower_try_catch,
+)
+from interpreter.frontends.common.expressions import lower_null_literal
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import CodeLabel
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
+from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -22,13 +24,10 @@ from interpreter.instructions import (
     StoreVar,
     Throw_,
 )
-from interpreter.frontends.common.exceptions import (
-    lower_raise_or_throw,
-    lower_try_catch,
-)
-from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
-from interpreter.frontends.common.expressions import lower_null_literal
+from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def lower_if(
@@ -223,10 +222,10 @@ def lower_switch(
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower switch statement with pattern matching."""
     from interpreter.frontends.common.patterns import (
-        WildcardPattern,
         CapturePattern,
-        compile_pattern_test,
+        WildcardPattern,
         compile_pattern_bindings,
+        compile_pattern_test,
     )
     from interpreter.frontends.csharp.patterns import parse_csharp_pattern
 

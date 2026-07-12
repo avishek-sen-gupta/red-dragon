@@ -8,8 +8,9 @@ GraphEdge — see interpreter.project.graph_types).
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 from interpreter.constants import Language
 from interpreter.frontend_extension import DialectParser

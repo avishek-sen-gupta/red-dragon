@@ -23,8 +23,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from interpreter.constants import FRONTEND_COBOL, Language
 from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.constants import FRONTEND_COBOL, Language
 from interpreter.frontend import get_frontend
 from tests.nist.conftest import NIST_DIR, make_provider
 

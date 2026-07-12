@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.register import Register
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
-from interpreter.frontends.pascal import expressions as pascal_expr
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.pascal import control_flow as pascal_cf
 from interpreter.frontends.pascal import declarations as pascal_decl
-from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
+from interpreter.frontends.pascal import expressions as pascal_expr
 from interpreter.frontends.pascal.node_types import PascalNodeType
+from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.register import Register
 
 
 class PascalFrontend(BaseFrontend):

@@ -9,8 +9,8 @@ from interpreter.project.cobol_compile import (
     parallel_parse_to_cache,
 )
 from interpreter.project.types import LinkedProgram, ModuleUnit
-from interpreter.run import EntryPoint, run_linked, initial_vm_state
-from tests.covers import covers, NotLanguageFeature
+from interpreter.run import EntryPoint, initial_vm_state, run_linked
+from tests.covers import NotLanguageFeature, covers
 
 _SRC = b"""       IDENTIFICATION DIVISION.
        PROGRAM-ID. HELLO.

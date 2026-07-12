@@ -8,8 +8,8 @@ therefore dead and must not exist.
 """
 
 import interpreter.cobol.field_resolution as fr
-from tests.covers import covers
 from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
 
 
 class TestSubscriptRegexRetired:

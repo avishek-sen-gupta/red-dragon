@@ -1,5 +1,4 @@
 from pathlib import Path
-from interpreter.type_name import TypeName
 
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
@@ -23,6 +22,7 @@ from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.var_name import VarName
 

@@ -2,17 +2,17 @@
 
 from interpreter.cfg import build_cfg
 from interpreter.vm.executor import (
+    _default_handler_context,
     _handle_resume_continuation,
     _handle_set_continuation,
-    _default_handler_context,
 )
 
 _CTX = _default_handler_context()
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.continuation_name import ContinuationName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.register import Register
 from interpreter.vm.vm import apply_update
 from interpreter.vm.vm_types import StateUpdate
-from interpreter.continuation_name import ContinuationName
-from interpreter.register import Register
 from tests.unit.vm_helpers import make_vm as _make_vm
 
 

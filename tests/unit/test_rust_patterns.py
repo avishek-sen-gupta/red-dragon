@@ -6,8 +6,6 @@ import tree_sitter_language_pack as tslp
 
 from interpreter.constants import Language
 from interpreter.frontend_observer import NullFrontendObserver
-from interpreter.frontends.rust.features import RustFeature
-from tests.covers import covers
 from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
@@ -21,8 +19,10 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.rust import RustFrontend
+from interpreter.frontends.rust.features import RustFeature
 from interpreter.frontends.rust.patterns import parse_rust_pattern
 from interpreter.parser import TreeSitterParserFactory
+from tests.covers import covers
 
 
 def _make_rust_ctx(source: str) -> TreeSitterEmitContext:

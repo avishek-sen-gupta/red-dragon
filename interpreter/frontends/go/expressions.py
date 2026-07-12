@@ -2,33 +2,27 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-
 from interpreter import constants
-from interpreter.frontends.common.expressions import (
-    lower_string_literal,
-    lower_int_literal,
-    lower_float_literal,
-    lower_null_literal,
-    extract_call_args,
-)
-from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter.frontends.go.node_types import GoNodeType
-from interpreter.register import Register
-from interpreter.types.type_expr import ParameterizedType, scalar, array_of, map_of
-from interpreter.var_name import VarName
 from interpreter.field_name import FieldName
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    extract_call_args,
+    lower_string_literal,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
+    Branch,
     CallCtorFunction,
     CallFunction,
     CallMethod,
     CallUnknown,
+    Const,
+    Label_,
     LoadField,
     LoadIndex,
     NewArray,
@@ -36,9 +30,11 @@ from interpreter.instructions import (
     StoreField,
     StoreIndex,
     StoreVar,
-    Branch,
-    Label_,
 )
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import array_of, map_of, scalar
+from interpreter.var_name import VarName
 
 
 def lower_go_iota(
@@ -54,13 +50,12 @@ def lower_go_iota(
 logger = logging.getLogger(__name__)
 
 
-def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> "TypeExpr":
+def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> TypeExpr:
     """Convert a Go tree-sitter type node into a TypeExpr.
 
     Handles slice_type ([]T → Array[T]), map_type (map[K]V → Map[K, V]),
     and falls back to scalar(text) for simple type identifiers.
     """
-    from interpreter.types.type_expr import TypeExpr
 
     if type_node.type == "slice_type":
         named = [c for c in type_node.children if c.is_named]

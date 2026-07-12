@@ -1,9 +1,5 @@
 """Tests for compile_directory — compile all source files in a directory tree."""
 
-from pathlib import Path
-
-import pytest
-
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.project.types import LinkedProgram

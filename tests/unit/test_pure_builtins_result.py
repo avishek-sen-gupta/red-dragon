@@ -1,24 +1,24 @@
 """Unit tests verifying pure builtins return BuiltinResult with empty side-effect lists."""
 
 from interpreter.address import Address
+from interpreter.constants import FoundationTypeName
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.vm.builtins import (
-    _builtin_len,
-    _builtin_range,
-    _builtin_print,
-    _builtin_int,
-    _builtin_float,
-    _builtin_str,
-    _builtin_bool,
     _builtin_abs,
+    _builtin_bool,
+    _builtin_float,
+    _builtin_int,
+    _builtin_len,
     _builtin_max,
     _builtin_min,
+    _builtin_print,
+    _builtin_range,
+    _builtin_str,
 )
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.vm.vm import VMState, Operators
+from interpreter.vm.vm import Operators, VMState
 from interpreter.vm.vm_types import BuiltinResult, HeapObject
-from interpreter.types.typed_value import typed, typed_from_runtime
-from interpreter.types.type_expr import scalar
-from interpreter.constants import FoundationTypeName
 
 
 class TestPureBuiltinsReturnBuiltinResult:

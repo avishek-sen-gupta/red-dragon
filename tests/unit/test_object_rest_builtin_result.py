@@ -1,13 +1,13 @@
 """Unit tests for _builtin_object_rest returning BuiltinResult."""
 
 from interpreter.address import Address
-from interpreter.type_name import TypeName
 from interpreter.field_name import FieldName
-from interpreter.vm.builtins import _builtin_object_rest
-from interpreter.vm.vm import VMState, Operators
-from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue, typed_from_runtime
+from interpreter.vm.builtins import _builtin_object_rest
+from interpreter.vm.vm import Operators, VMState
+from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
 
 
 class TestObjectRestBuiltinResult:

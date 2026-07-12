@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from interpreter.frontends._base import BaseFrontend
-from interpreter.register import Register
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.common import expressions as common_expr
-from interpreter.frontends.kotlin import expressions as kotlin_expr
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.kotlin import control_flow as kotlin_cf
 from interpreter.frontends.kotlin import declarations as kotlin_decl
+from interpreter.frontends.kotlin import expressions as kotlin_expr
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.register import Register
 
 
 class KotlinFrontend(BaseFrontend):

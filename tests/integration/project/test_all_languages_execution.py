@@ -11,20 +11,20 @@ from pathlib import Path
 import pytest
 
 from interpreter.address import Address
-from interpreter.field_name import FieldName
-from interpreter.var_name import VarName
-from interpreter.vm.vm_types import Pointer
 from interpreter.constants import Language
+from interpreter.field_name import FieldName
 from interpreter.project.compiler import compile_directory
-from interpreter.run import (
-    execute_cfg,
-    ExecutionStrategies,
-    run_linked,
-    initial_vm_state,
-)
 from interpreter.project.entry_point import EntryPoint
+from interpreter.run import (
+    ExecutionStrategies,
+    execute_cfg,
+    initial_vm_state,
+    run_linked,
+)
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
+from interpreter.var_name import VarName
+from interpreter.vm.vm_types import Pointer
 
 
 def _decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:

@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
-
 from interpreter import constants
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
-)
+from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
 from interpreter.frontends.go.expressions import (
     extract_expression_list,
     get_expression_list_children,
@@ -20,18 +17,20 @@ from interpreter.frontends.go.expressions import (
     lower_go_store_target,
 )
 from interpreter.frontends.go.node_types import GoNodeType
-from interpreter.var_name import VarName
-from interpreter.class_name import ClassName
-from interpreter.field_name import FieldName
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 from interpreter.func_name import FuncName
-from interpreter.register import Register
 from interpreter.instructions import (
+    Branch,
     Const,
     DeclVar,
-    Symbolic,
-    Branch,
     Label_,
+    Symbolic,
 )
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -435,7 +434,7 @@ def _lower_const_spec(
 # ---------------------------------------------------------------------------
 
 
-def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
+def _extract_go_struct_fields(field_declaration_list) -> dict[str, FieldInfo]:
     """Extract fields from a Go struct field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -455,7 +454,7 @@ def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
     return fields
 
 
-def _extract_go_method_params(params_node) -> "tuple[str, ...]":
+def _extract_go_method_params(params_node) -> tuple[str, ...]:
     """Extract parameter names from a Go parameter_list node (skip receiver)."""
     return tuple(
         subchild.text.decode()
@@ -467,7 +466,7 @@ def _extract_go_method_params(params_node) -> "tuple[str, ...]":
 
 
 def _collect_go_structs(
-    node, classes: "dict[ClassName, ClassInfo]", methods: "dict[FuncName, FunctionInfo]"
+    node, classes: dict[ClassName, ClassInfo], methods: dict[FuncName, FunctionInfo]
 ) -> None:
     """Walk AST to collect structs (as ClassInfo) and top-level/method functions."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
@@ -546,7 +545,7 @@ def _collect_go_structs(
         _collect_go_structs(child, classes, methods)
 
 
-def extract_go_symbols(root) -> "SymbolTable":
+def extract_go_symbols(root) -> SymbolTable:
     """Walk the Go AST and return a SymbolTable of all struct and function definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 

@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import logging
-from interpreter.types.typed_value import TypedValue
 
 from interpreter.overload.ambiguity_handler import AmbiguityHandler
-from interpreter.types.function_signature import FunctionSignature
 from interpreter.overload.resolution_strategy import ResolutionStrategy
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.typed_value import TypedValue
 
 logger = logging.getLogger(__name__)
 

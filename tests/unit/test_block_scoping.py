@@ -5,9 +5,9 @@ at emission time, storing original name + scope metadata separately.
 """
 
 from interpreter.constants import Language
-from interpreter.type_name import TypeName
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.type_name import TypeName
 from interpreter.types.var_scope_info import VarScopeInfo
 from interpreter.var_name import VarName
 
@@ -195,8 +195,8 @@ class TestScopeTrackerNested:
 class TestFlatVarTypesUnionMerge:
     def test_same_name_different_scopes_produces_union(self):
         """x: Int in func_f and x: String in func_g → flat x: Union[Int, String]."""
-        from interpreter.types.type_inference import _InferenceContext
         from interpreter.types.type_expr import scalar, union_of
+        from interpreter.types.type_inference import _InferenceContext
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {
@@ -210,8 +210,8 @@ class TestFlatVarTypesUnionMerge:
 
     def test_same_type_same_name_no_union(self):
         """x: Int in both scopes → flat x: Int (no union)."""
-        from interpreter.types.type_inference import _InferenceContext
         from interpreter.types.type_expr import scalar
+        from interpreter.types.type_inference import _InferenceContext
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {
@@ -223,8 +223,8 @@ class TestFlatVarTypesUnionMerge:
 
     def test_disjoint_names_both_present(self):
         """x in func_f, y in func_g → flat has both."""
-        from interpreter.types.type_inference import _InferenceContext
         from interpreter.types.type_expr import scalar
+        from interpreter.types.type_inference import _InferenceContext
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {

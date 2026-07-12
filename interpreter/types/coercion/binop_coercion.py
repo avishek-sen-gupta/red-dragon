@@ -2,10 +2,10 @@
 """BinopCoercionStrategy — injectable language-specific pre-operation type coercion."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 from typing import Protocol
 
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import UNKNOWN, ScalarType, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
 

@@ -23,33 +23,32 @@ from typing import (
     get_type_hints,
 )
 
+from interpreter.constants import FoundationTypeName
+from interpreter.continuation_name import NO_CONTINUATION_NAME, ContinuationName
+from interpreter.field_name import NO_FIELD_NAME, FieldName
+from interpreter.func_name import NO_FUNC_NAME, FuncName
 from interpreter.ir import (
-    CodeLabel,
     NO_LABEL,
     NO_SOURCE_LOCATION,
+    CodeLabel,
     Opcode,
     SourceLocation,
     SpreadArguments,
 )
 from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolve_unop
+from interpreter.path_name import NO_PATH_NAME, NoPathName, PathName
 from interpreter.register import NO_REGISTER, Register
-from interpreter.constants import FoundationTypeName
+from interpreter.storage_identifier import StorageIdentifier
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
+    NULL,
     UNKNOWN,
     TypeExpr,
-    FunctionType,
-    NULL,
     fn_type,
     metatype,
     scalar,
 )
-from interpreter.field_name import FieldName, FieldKind, NO_FIELD_NAME
-from interpreter.func_name import FuncName, NO_FUNC_NAME
-from interpreter.storage_identifier import StorageIdentifier
 from interpreter.var_name import NO_VAR_NAME, VarName
-from interpreter.continuation_name import ContinuationName, NO_CONTINUATION_NAME
-from interpreter.path_name import PathName, NoPathName, NO_PATH_NAME
 
 
 def _is_union(origin: object) -> bool:
@@ -233,7 +232,7 @@ class Const(InstructionBase):
     # ── Typed factory classmethods ─────────────────────────────────
 
     @classmethod
-    def int_(cls, result_reg: Register, value: int, **kw: Any) -> "Const":
+    def int_(cls, result_reg: Register, value: int, **kw: Any) -> Const:
         """Create an integer constant with a real Python int payload."""
         return cls(
             result_reg=result_reg,
@@ -244,7 +243,7 @@ class Const(InstructionBase):
         )
 
     @classmethod
-    def float_(cls, result_reg: Register, value: float, **kw: Any) -> "Const":
+    def float_(cls, result_reg: Register, value: float, **kw: Any) -> Const:
         """Create a float constant with a real Python float payload."""
         return cls(
             result_reg=result_reg,
@@ -255,7 +254,7 @@ class Const(InstructionBase):
         )
 
     @classmethod
-    def string(cls, result_reg: Register, value: str, **kw: Any) -> "Const":
+    def string(cls, result_reg: Register, value: str, **kw: Any) -> Const:
         """Create a string constant with a real Python str payload (no surrounding quotes)."""
         return cls(
             result_reg=result_reg,
@@ -266,7 +265,7 @@ class Const(InstructionBase):
         )
 
     @classmethod
-    def bool_(cls, result_reg: Register, value: bool, **kw: Any) -> "Const":
+    def bool_(cls, result_reg: Register, value: bool, **kw: Any) -> Const:
         """Create a boolean constant with a real Python bool payload."""
         return cls(
             result_reg=result_reg,
@@ -277,7 +276,7 @@ class Const(InstructionBase):
         )
 
     @classmethod
-    def null_(cls, result_reg: Register, **kw: Any) -> "Const":
+    def null_(cls, result_reg: Register, **kw: Any) -> Const:
         """Create a null constant with Python None as payload."""
         return cls(
             result_reg=result_reg,
@@ -295,7 +294,7 @@ class Const(InstructionBase):
         params: list[TypeExpr] = [],
         return_type: TypeExpr = UNKNOWN,
         **kw: Any,
-    ) -> "Const":
+    ) -> Const:
         """Create a function-reference constant.
 
         ``value`` is the function label string; ``_handle_const`` will resolve
@@ -316,7 +315,7 @@ class Const(InstructionBase):
         value: Any,
         class_type: TypeExpr,
         **kw: Any,
-    ) -> "Const":
+    ) -> Const:
         """Create a class-reference constant.
 
         ``value`` is the class label string; ``_handle_const`` will resolve

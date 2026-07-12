@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from interpreter.frontends.cpp import CppFrontend
 from interpreter.frontends.cpp.features import CppFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
-from tests.covers import covers, NotLanguageFeature
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
+from tests.covers import NotLanguageFeature, covers
 
 
 def _parse_cpp(source: str) -> list[InstructionBase]:

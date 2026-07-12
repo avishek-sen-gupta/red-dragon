@@ -6,8 +6,6 @@ These tests verify end-to-end execution through the VM.
 
 from __future__ import annotations
 
-import pytest
-
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 

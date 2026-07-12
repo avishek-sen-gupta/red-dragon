@@ -1,8 +1,8 @@
 """Unit tests for string identity builtins: to_string, String::from."""
 
 from interpreter.func_name import FuncName
-from interpreter.vm.builtins import Builtins
 from interpreter.types.typed_value import typed
+from interpreter.vm.builtins import Builtins
 
 
 class TestToStringBuiltin:

@@ -1,8 +1,8 @@
 """Tests for FunctionSignature kind classification and callable_params."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
+from interpreter.type_name import TypeName
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_expr import scalar

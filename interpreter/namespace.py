@@ -11,17 +11,16 @@ so existing consumers can import from this single module.
 
 from dataclasses import dataclass, field
 
-from interpreter.project.types import ModuleUnit, NO_MODULE_UNIT
-from interpreter.refs.class_ref import ClassRef, NO_CLASS_REF
-
 # Re-export for convenience — consumers can import from interpreter.namespace
 from interpreter.namespace_resolver import (  # noqa: F401
-    NamespaceResolver,
-    NO_RESOLUTION,
     NO_CHAIN,
-    _NoResolution,
+    NO_RESOLUTION,
+    NamespaceResolver,
     _NoChain,
+    _NoResolution,
 )
+from interpreter.project.types import NO_MODULE_UNIT, ModuleUnit
+from interpreter.refs.class_ref import NO_CLASS_REF, ClassRef
 
 
 @dataclass

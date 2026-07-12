@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.project.cobol_connections import extract_cobol_connections
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -3,18 +3,17 @@
 
 import pytest
 
-from tests.covers import NotLanguageFeature, covers
-from interpreter.instructions import Const
-from interpreter.types.type_expr import scalar, NULL
-from interpreter.constants import FoundationTypeName
 from interpreter.cfg import build_cfg
+from interpreter.constants import FoundationTypeName
+from interpreter.instructions import Const, Label_, Return_
+from interpreter.ir import CodeLabel
+from interpreter.register import Register
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
-from interpreter.ir import CodeLabel
-from interpreter.register import Register
+from interpreter.types.type_expr import NULL, scalar
 from interpreter.types.typed_value import unwrap
-from interpreter.instructions import Label_, Return_
+from tests.covers import NotLanguageFeature, covers
 
 
 def _run(const_inst: Const) -> object:

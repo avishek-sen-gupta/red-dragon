@@ -1,52 +1,47 @@
 """Scala-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.field_name import FieldName
-from interpreter.var_name import VarName
-from interpreter.func_name import FuncName
-from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
-    StoreField,
-    StoreIndex,
-    LoadField,
-    CallCtorFunction,
-    CallFunction,
-    CallMethod,
-    NewArray,
-    Symbolic,
-    Throw_,
-    Label_,
-    Branch,
-    BranchIf,
-    Return_,
-)
 from interpreter.frontends.common.expressions import (
-    lower_int_literal,
-    lower_float_literal,
-    lower_string_literal,
-    lower_null_literal,
-    lower_bool_literal,
-    lower_default_return,
-    lower_interpolated_string_parts,
-    lower_call_impl,
     extract_call_args,
+    lower_call_impl,
+    lower_default_return,
+    lower_float_literal,
+    lower_int_literal,
+    lower_interpolated_string_parts,
+    lower_string_literal,
 )
 from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.scala.patterns import parse_scala_pattern
-from interpreter.types.type_expr import ScalarType, scalar
+from interpreter.func_name import FuncName
+from interpreter.instructions import (
+    Branch,
+    BranchIf,
+    CallCtorFunction,
+    CallMethod,
+    Const,
+    DeclVar,
+    Label_,
+    LoadField,
+    LoadVar,
+    NewArray,
+    Return_,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
+    Throw_,
+)
 from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import ScalarType, scalar
+from interpreter.var_name import VarName
 
 
 def lower_scala_integer_literal(

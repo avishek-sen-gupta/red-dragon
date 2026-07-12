@@ -3,10 +3,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
-from interpreter.types.type_expr import TypeExpr, UNKNOWN
+from interpreter.types.type_expr import UNKNOWN, TypeExpr
 
 
 def _identity(

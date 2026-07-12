@@ -8,7 +8,7 @@ from interpreter.instructions import CallWithMemory
 from interpreter.ir import CodeLabel
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 from interpreter.register import Register
-from interpreter.types.typed_value import TypedValue, typed
+from interpreter.types.typed_value import typed
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import HeapObject, VMState
 from tests.covers import covers
@@ -62,7 +62,7 @@ def test_call_with_memory_dispatches_to_init_params():
     from interpreter.cfg import CFG, BasicBlock
     from interpreter.handlers.calls import _handle_call_with_memory
     from interpreter.instructions import Return_
-    from interpreter.vm.executor import HandlerContext, _default_handler_context
+    from interpreter.vm.executor import _default_handler_context
 
     pid = "SUBPROG"
     pid_lower = pid.lower()

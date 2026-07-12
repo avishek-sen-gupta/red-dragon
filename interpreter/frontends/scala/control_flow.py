@@ -5,21 +5,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode, CodeLabel
-from interpreter.var_name import VarName
+from interpreter.frontends.scala.expressions import lower_if_expr, lower_match_expr
+from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
+    Branch,
+    BranchIf,
     CallFunction,
     DeclVar,
     Label_,
-    Branch,
-    BranchIf,
 )
-from interpreter.frontends.common.exceptions import lower_try_catch
-from interpreter.frontends.scala.expressions import lower_if_expr, lower_match_expr
-from interpreter.frontends.scala.node_types import ScalaNodeType as NT
+from interpreter.var_name import VarName
 
 
 def lower_if_stmt(

@@ -4,17 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from interpreter.project.types import ImportRef
+from interpreter.constants import Language
 from interpreter.project.resolver import (
-    ImportResolver,
-    ResolvedImport,
+    NO_PATH,
+    JavaImportResolver,
     NullImportResolver,
     PythonImportResolver,
-    JavaImportResolver,
+    ResolvedImport,
     get_resolver,
-    NO_PATH,
 )
-from interpreter.constants import Language
+from interpreter.project.types import ImportRef
 
 
 class TestNullImportResolver:

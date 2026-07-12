@@ -25,31 +25,31 @@ import re
 from pathlib import Path
 from typing import Any
 
+from interpreter import constants
 from interpreter.cfg import build_cfg
-from interpreter.ir import CodeLabel
-from interpreter.symbol_name import SymbolName
-from interpreter.instructions import (
-    InstructionBase,
-    CallFunction,
-    DeclVar,
-    Const,
-    Label_,
-    ImportModule,
-)
 from interpreter.constants import (
-    Language,
     CLASS_LABEL_PREFIX,
     PRELUDE_CLASS_LABEL_PREFIX,
+    Language,
 )
-from interpreter.types.type_expr import UNKNOWN
-from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
-from interpreter.path_name import PathName, NO_PATH_NAME
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.instructions import (
+    CallFunction,
+    Const,
+    DeclVar,
+    ImportModule,
+    InstructionBase,
+    Label_,
+)
+from interpreter.ir import CodeLabel
+from interpreter.path_name import NO_PATH_NAME
+from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.registry import build_registry
+from interpreter.symbol_name import SymbolName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter import constants
+from interpreter.types.type_expr import UNKNOWN
 
 # ── Public helpers (tested individually) ─────────────────────────
 
@@ -180,10 +180,7 @@ def _transform_module(
     future frontend breaks this adjacency, the skip_next_decl_for_reg flag
     could match a later unrelated DECL_VAR. See red-dragon-lzae.
     """
-    from interpreter.register import Register
     from interpreter.instructions import LoadField
-    from interpreter.field_name import FieldName
-    from interpreter.var_name import VarName
 
     result: list[InstructionBase] = []
     skip_next_decl_for_reg: str | None = None

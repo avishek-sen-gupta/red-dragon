@@ -3,9 +3,9 @@
 import pytest
 
 from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel
 from interpreter.project.entry_point import EntryPoint
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import CodeLabel
 
 
 def _make_func_ref(name: str) -> FuncRef:

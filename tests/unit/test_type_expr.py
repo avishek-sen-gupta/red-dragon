@@ -1,30 +1,30 @@
 """Unit tests for the TypeExpr algebraic data type."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 import pytest
 
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
-    TypeExpr,
-    ScalarType,
+    UNKNOWN,
+    FunctionType,
     ParameterizedType,
+    ScalarType,
+    TypeExpr,
+    TypeVar,
     UnionType,
     UnknownType,
-    FunctionType,
-    TypeVar,
-    UNKNOWN,
-    parse_type,
-    scalar,
-    pointer,
     array_of,
-    map_of,
-    union_of,
-    optional,
-    unknown,
     fn_type,
+    map_of,
+    optional,
+    parse_type,
+    pointer,
+    scalar,
     tuple_of,
     typevar,
+    union_of,
+    unknown,
 )
 
 

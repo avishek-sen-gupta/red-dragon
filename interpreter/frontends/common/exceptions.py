@@ -8,12 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import CodeLabel, NO_LABEL
 from interpreter import constants
 from interpreter.constants import DEFAULT_EXCEPTION_TYPE
-from interpreter.var_name import VarName
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.instructions import (
     Branch,
     Const,
@@ -24,6 +21,8 @@ from interpreter.instructions import (
     TryPop,
     TryPush,
 )
+from interpreter.ir import NO_LABEL
+from interpreter.var_name import VarName
 
 
 def lower_try_catch(

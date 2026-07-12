@@ -1,14 +1,13 @@
 """Tests for parameterized CALL_FUNCTION operand handling."""
 
+from interpreter.constants import Language
+from interpreter.field_name import FieldName
+from interpreter.project.entry_point import EntryPoint
+from interpreter.run import run
 from interpreter.type_name import TypeName
-from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
 from interpreter.types.type_expr import ScalarType
 from interpreter.types.typed_value import TypedValue
-from interpreter.run import run
-from interpreter.constants import Language
-from interpreter.project.entry_point import EntryPoint
+from interpreter.var_name import VarName
 
 
 class TestParameterizedCallFunction:

@@ -1,21 +1,20 @@
 """Unit tests for TypeEnvironmentBuilder."""
 
 from types import MappingProxyType
-from interpreter.type_name import TypeName
 
-from interpreter.types.function_signature import FunctionSignature
-from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.func_name import FuncName
 from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import (
-    TypeExpr,
-    ScalarType,
-    ParameterizedType,
     UNBOUND,
     UNKNOWN,
+    ParameterizedType,
+    ScalarType,
+    TypeExpr,
     parse_type,
     scalar,
 )
-from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 
 

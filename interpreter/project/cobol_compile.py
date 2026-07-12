@@ -15,9 +15,11 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
+from interpreter import constants
 from interpreter.cfg import build_cfg
 from interpreter.cobol.ast_store import AstStore, AstStrategy, _key
 from interpreter.constants import Language
@@ -32,7 +34,6 @@ from interpreter.project.linker import link_modules
 from interpreter.project.resolver import get_resolver, topological_sort
 from interpreter.project.types import ImportKind, LinkedProgram, ModuleUnit
 from interpreter.registry import build_registry
-from interpreter import constants
 
 logger = logging.getLogger(__name__)
 

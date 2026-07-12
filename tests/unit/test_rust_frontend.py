@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from interpreter.frontends.rust import RustFrontend
 from interpreter.frontends.rust.features import RustFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
-from tests.covers import covers, NotLanguageFeature
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
+from tests.covers import NotLanguageFeature, covers
 
 
 def _parse_rust(source: str) -> list[InstructionBase]:

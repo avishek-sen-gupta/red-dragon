@@ -2,6 +2,7 @@
 """ClosureId — typed closure environment identifier."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 

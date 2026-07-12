@@ -14,10 +14,11 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from interpreter.cobol.asg_types import CobolASG
 
@@ -96,7 +97,7 @@ class AstStore:
             self._owned_tmp.cleanup()
             self._owned_tmp = None
 
-    def __enter__(self) -> "AstStore":
+    def __enter__(self) -> AstStore:
         return self
 
     def __exit__(self, *exc: object) -> None:

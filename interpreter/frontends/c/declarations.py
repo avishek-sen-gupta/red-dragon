@@ -2,43 +2,40 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
-from interpreter.class_name import ClassName
-from interpreter.register import Register
-from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
-    StoreField,
-    Symbolic,
-    CallFunction,
-    NewObject,
-    Label_,
-    Branch,
-    Return_,
-)
 from interpreter import constants
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
+from interpreter.frontends.c.node_types import CNodeType
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    lower_int_literal,
+    lower_null_literal,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
-from interpreter.frontends.c.node_types import CNodeType
-from interpreter.types.type_expr import UNKNOWN, EnumType, TypeExpr, scalar, pointer
-from interpreter.frontends.common.expressions import (
-    lower_null_literal,
-    lower_int_literal,
+from interpreter.func_name import FuncName
+from interpreter.instructions import (
+    Branch,
+    CallFunction,
+    DeclVar,
+    Label_,
+    LoadVar,
+    NewObject,
+    Return_,
+    StoreField,
+    Symbolic,
 )
-from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.ir import Opcode
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import UNKNOWN, EnumType, TypeExpr, pointer, scalar
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -637,7 +634,7 @@ def lower_preproc_function_def(
 # ---------------------------------------------------------------------------
 
 
-def _extract_c_declarator_name_no_ctx(decl_node) -> "str | None":
+def _extract_c_declarator_name_no_ctx(decl_node) -> str | None:
     """Extract variable/function name from a C declarator without a ctx object."""
     if decl_node.type == CNodeType.IDENTIFIER:
         return decl_node.text.decode()
@@ -655,7 +652,7 @@ def _extract_c_declarator_name_no_ctx(decl_node) -> "str | None":
     return id_node.text.decode() if id_node is not None else None
 
 
-def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":
+def _extract_c_struct_fields(field_decl_list) -> dict[str, FieldInfo]:
     """Extract fields from a C struct field_declaration_list node."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -676,8 +673,8 @@ def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":
 
 def _collect_c_structs_and_functions(
     node,
-    classes: "dict[ClassName, ClassInfo]",
-    functions: "dict[FuncName, FunctionInfo]",
+    classes: dict[ClassName, ClassInfo],
+    functions: dict[FuncName, FunctionInfo],
 ) -> None:
     """Walk AST to collect struct_specifier nodes as ClassInfo and top-level function_definition nodes."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
@@ -721,7 +718,7 @@ def _collect_c_structs_and_functions(
         _collect_c_structs_and_functions(child, classes, functions)
 
 
-def extract_c_symbols(root) -> "SymbolTable":
+def extract_c_symbols(root) -> SymbolTable:
     """Walk the C AST and return a SymbolTable of all struct and function definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
 

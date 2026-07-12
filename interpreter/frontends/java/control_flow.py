@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.frontends.common.exceptions import (
+    lower_raise_or_throw,
+    lower_try_catch,
+)
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
+from interpreter.frontends.java.expressions import (
+    extract_call_args_unwrap,
+)
+from interpreter.frontends.java.node_types import JavaNodeType
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -22,17 +27,9 @@ from interpreter.instructions import (
     LoadVar,
     StoreVar,
 )
-from interpreter import constants
-from interpreter.frontends.common.exceptions import (
-    lower_raise_or_throw,
-    lower_try_catch,
-)
-from interpreter.frontends.java.expressions import (
-    extract_call_args_unwrap,
-    lower_java_store_target,
-)
-from interpreter.frontends.java.node_types import JavaNodeType
+from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def lower_if(
@@ -264,11 +261,11 @@ def lower_java_switch_expr(
 
             if case_value and case_value.type == "pattern":
                 # Java 16+ pattern matching: use Pattern ADT
-                from interpreter.frontends.java.patterns import parse_java_pattern
                 from interpreter.frontends.common.patterns import (
-                    compile_pattern_test,
                     compile_pattern_bindings,
+                    compile_pattern_test,
                 )
+                from interpreter.frontends.java.patterns import parse_java_pattern
 
                 pattern = parse_java_pattern(ctx, case_value)
                 test_reg = compile_pattern_test(ctx, subject_reg, pattern)

@@ -1,6 +1,6 @@
 """Tests for COBOL frontend — Data Division and Procedure Division lowering."""
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from interpreter.cobol.asg_types import (
     CobolASG,
@@ -8,14 +8,13 @@ from interpreter.cobol.asg_types import (
     CobolParagraph,
     CobolSection,
 )
+from interpreter.cobol.cobol_expression import expr_from_dict
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_parser import make_cobol_parser
-from interpreter.continuation_name import ContinuationName
-from interpreter.instructions import InstructionBase, AllocRegion, Const
 from interpreter.cobol.cobol_statements import (
     AcceptStatement,
-    AlterStatement,
     AlterProceedTo,
+    AlterStatement,
     ArithmeticStatement,
     CallStatement,
     CallUsingParam,
@@ -30,8 +29,6 @@ from interpreter.cobol.cobol_statements import (
     EntryStatement,
     ExitStatement,
     GotoStatement,
-    SimpleGoto,
-    ProcedureRef,
     IfStatement,
     InitializeStatement,
     InspectStatement,
@@ -42,12 +39,14 @@ from interpreter.cobol.cobol_statements import (
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    ProcedureRef,
     ReadStatement,
     Replacing,
     RewriteStatement,
     SearchStatement,
     SearchWhen,
     SetStatement,
+    SimpleGoto,
     StartStatement,
     StopRunStatement,
     StringSending,
@@ -57,10 +56,11 @@ from interpreter.cobol.cobol_statements import (
     UnstringStatement,
     WriteStatement,
 )
-from interpreter.cobol.ref_mod import RefModOperand
-from interpreter.cobol.cobol_expression import expr_from_dict
-from interpreter.ir import Opcode
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.ref_mod import RefModOperand
+from interpreter.continuation_name import ContinuationName
+from interpreter.instructions import AllocRegion, Const, InstructionBase
+from interpreter.ir import Opcode
 from tests.covers import covers
 
 

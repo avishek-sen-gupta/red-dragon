@@ -3,7 +3,7 @@
 Test vectors ported from smojol DataTypesTest.java.
 """
 
-from interpreter.cobol.comp3 import encode_comp3, decode_comp3
+from interpreter.cobol.comp3 import decode_comp3, encode_comp3
 
 
 class TestEncodeComp3:

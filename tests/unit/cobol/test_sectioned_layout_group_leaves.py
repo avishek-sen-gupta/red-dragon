@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.register import Register
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _alpha(n: int) -> CobolTypeDescriptor:

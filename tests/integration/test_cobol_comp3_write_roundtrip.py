@@ -25,7 +25,7 @@ from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
-    bridge_jar,
+    bridge_jar,  # noqa: F401
     to_fixed,
 )
 

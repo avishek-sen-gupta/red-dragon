@@ -2,13 +2,11 @@
 
 from pathlib import Path
 
-import pytest
-
 from interpreter.constants import Language
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.project.linker import link_modules
-from interpreter.project.types import ExportTable, ImportRef, ModuleUnit
 from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.project.linker import link_modules
+from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
 
 

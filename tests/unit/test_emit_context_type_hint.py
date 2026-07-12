@@ -5,11 +5,10 @@ and seed_param_type populate the TypeEnvironmentBuilder correctly, and that
 LABEL emit tracks the current function for param association.
 """
 
-from interpreter.type_name import TypeName
 from interpreter.constants import Language
-from interpreter.func_name import FuncName
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     CallFunction,
     Const,
@@ -19,7 +18,8 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
-from interpreter.types.type_expr import ScalarType, ParameterizedType, UNKNOWN
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import UNKNOWN, ParameterizedType, ScalarType
 
 
 def _make_ctx() -> TreeSitterEmitContext:

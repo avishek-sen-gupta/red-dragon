@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.frontends.go.features import GoFeature
+from interpreter.var_name import VarName
 from tests.covers import covers
 from tests.integration.exec_helpers import run_locals
 

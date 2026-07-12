@@ -20,11 +20,17 @@ import pytest
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
-    bridge_jar,
-    decode_zoned_unsigned as _decode,
-    decode_zoned_with_decimal as _decode_dec,
-    first_region as _first_region,
+    bridge_jar,  # noqa: F401
     run_cobol,
+)
+from tests.integration.cobol_helpers import (
+    decode_zoned_unsigned as _decode,
+)
+from tests.integration.cobol_helpers import (
+    decode_zoned_with_decimal as _decode_dec,
+)
+from tests.integration.cobol_helpers import (
+    first_region as _first_region,
 )
 
 

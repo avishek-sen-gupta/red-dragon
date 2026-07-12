@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
+from interpreter.closure_id import NO_CLOSURE_ID, ClosureId
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 

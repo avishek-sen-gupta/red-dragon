@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-from interpreter.var_name import VarName
+from interpreter import constants
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import NO_LABEL
-from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -27,9 +25,10 @@ from interpreter.instructions import (
     TryPush,
     Unop,
 )
-from interpreter import constants
-from interpreter.frontends.ruby.node_types import RubyNodeType
+from interpreter.ir import NO_LABEL
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +279,6 @@ def lower_ruby_if(
     ctx: TreeSitterEmitContext, node: Any
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower Ruby if statement with elsif support."""
-    from interpreter.frontends.common.control_flow import lower_if
 
     # Ruby uses the same fields as the common lower_if
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
@@ -657,7 +655,6 @@ def _lower_try_catch_ruby(
 
 def _extract_case_match_arms(node) -> list:
     """Collect in_clause children, appending else as a synthetic wildcard arm."""
-    from interpreter.frontends.common.patterns import WildcardPattern
 
     arms = [c for c in node.children if c.type == RubyNodeType.IN_CLAUSE]
     else_node = next(
@@ -669,7 +666,7 @@ def _extract_case_match_arms(node) -> list:
     return arms
 
 
-def _case_match_pattern_of(ctx: TreeSitterEmitContext, arm) -> "Pattern":
+def _case_match_pattern_of(ctx: TreeSitterEmitContext, arm) -> Pattern:
     """Extract and parse the pattern from an in_clause or synthetic else arm."""
     from interpreter.frontends.common.patterns import WildcardPattern
     from interpreter.frontends.ruby.patterns import parse_ruby_pattern

@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from mcp_server.resources import (
+    handle_cfg_resource,
+    handle_ir_resource,
+    handle_source_resource,
+)
 from mcp_server.session import clear_session
 from mcp_server.tools import (
     handle_analyze_program,
@@ -12,11 +17,6 @@ from mcp_server.tools import (
     handle_load_program,
     handle_run_to_end,
     handle_step,
-)
-from mcp_server.resources import (
-    handle_source_resource,
-    handle_ir_resource,
-    handle_cfg_resource,
 )
 
 MULTI_FUNC_SOURCE = """\

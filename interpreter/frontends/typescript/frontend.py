@@ -6,65 +6,57 @@ skipping type annotations.
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
+from collections.abc import Callable
+from typing import Any
 
-from typing import Any, Callable
-
-from interpreter.frontends.javascript import JavaScriptFrontend
-from interpreter.frontends.context import GrammarConstants
+from interpreter import constants
+from interpreter.constants import Language
+from interpreter.field_name import FieldName
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.common import expressions as common_expr
+from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.common.expressions import (
     lower_null_literal,
     lower_string_literal,
-    lower_int_literal,
 )
-from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter.frontends.typescript.type_alias_extractor import (
-    TypeScriptTypeAliasExtractor,
-)
-from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.constants import Language
-from interpreter.parser import ParserFactory
-from interpreter.ir import Opcode
-from interpreter import constants
-from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
-from interpreter.var_name import VarName
-from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
-    Symbolic,
-    CallFunction,
-    CallMethod,
-    LoadField,
-    StoreField,
-    StoreIndex,
-    NewObject,
-    Label_,
-    Branch,
-    BranchIf,
-    Return_,
-    ImportModule,
-)
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.frontends.javascript import JavaScriptFrontend
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
-from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.typescript.type_alias_extractor import (
+    TypeScriptTypeAliasExtractor,
+)
 from interpreter.frontends.typescript_node_types import TypeScriptNodeType
+from interpreter.func_name import FuncName
+from interpreter.instructions import (
+    Branch,
+    CallFunction,
+    Const,
+    DeclVar,
+    ImportModule,
+    Label_,
+    LoadField,
+    NewObject,
+    Return_,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
+)
+from interpreter.parser import ParserFactory
 from interpreter.path_name import NO_PATH_NAME
+from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
     UNKNOWN,
     EnumType,
     ScalarType,
     TypeExpr,
     metatype,
-    scalar,
 )
-from interpreter.register import Register
-from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.var_name import VarName
 
 
 class TypeScriptFrontend(JavaScriptFrontend):

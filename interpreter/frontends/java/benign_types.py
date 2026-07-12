@@ -12,7 +12,7 @@ This module is the single source of truth consumed by:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

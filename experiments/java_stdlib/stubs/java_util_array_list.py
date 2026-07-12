@@ -5,6 +5,7 @@ from interpreter.constants import Language
 from interpreter.field_name import FieldKind, FieldName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
+    NO_REGISTER,
     Binop,
     Branch,
     CallFunction,
@@ -19,12 +20,11 @@ from interpreter.instructions import (
     StoreField,
     Symbolic,
 )
-from interpreter.instructions import NO_REGISTER
 from interpreter.ir import CodeLabel
-from interpreter.types.type_expr import UNKNOWN
 from interpreter.operator_kind import BinopKind
 from interpreter.project.types import ExportTable, ModuleUnit
 from interpreter.register import Register
+from interpreter.types.type_expr import UNKNOWN
 from interpreter.var_name import VarName
 
 _ELEMENTS = FieldName("elements")

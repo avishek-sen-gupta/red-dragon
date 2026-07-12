@@ -27,17 +27,15 @@ from interpreter.cobol.cobol_constants import (
     CobolEncoding,
     NibblePosition,
 )
-from interpreter.operator_kind import resolve_binop
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    InstructionBase,
     Binop,
     CallFunction,
     Const,
+    InstructionBase,
     Return_,
 )
-from interpreter.constants import FoundationTypeName
-from interpreter.types.type_expr import array_of, scalar, UNKNOWN
+from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
 
 

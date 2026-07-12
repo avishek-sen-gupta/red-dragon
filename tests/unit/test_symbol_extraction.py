@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from interpreter.class_name import ClassName
-from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
-from interpreter.frontend import get_frontend
 from interpreter.constants import Language
+from interpreter.field_name import FieldName
+from interpreter.frontend import get_frontend
 from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.func_name import FuncName
 from interpreter.parser import TreeSitterParserFactory
 
 

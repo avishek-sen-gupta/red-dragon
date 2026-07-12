@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
+from interpreter.frontends.common.control_flow import lower_break, lower_continue
+from interpreter.frontends.common.exceptions import (
+    lower_raise_or_throw,
+    lower_try_catch,
+)
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
+from interpreter.frontends.kotlin.expressions import (
+    lower_if_expr,
+    lower_kotlin_store_target,
+    lower_when_expr,
+)
+from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -23,18 +31,8 @@ from interpreter.instructions import (
     Return_,
     StoreVar,
 )
-from interpreter import constants
-from interpreter.frontends.common.control_flow import lower_break, lower_continue
-from interpreter.frontends.common.exceptions import (
-    lower_raise_or_throw,
-    lower_try_catch,
-)
-from interpreter.frontends.kotlin.expressions import (
-    lower_if_expr,
-    lower_kotlin_store_target,
-    lower_when_expr,
-)
-from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
+from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

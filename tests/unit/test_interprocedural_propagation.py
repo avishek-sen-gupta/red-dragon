@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from interpreter.cfg_types import BasicBlock, CFG
+from interpreter.cfg_types import CFG, BasicBlock
 from interpreter.func_name import FuncName
-from interpreter.ir import CodeLabel
-from interpreter.register import Register
-from interpreter.var_name import VarName
 from interpreter.instructions import (
     AddressOf,
     CallFunction,
@@ -15,20 +12,23 @@ from interpreter.instructions import (
     LoadVar,
 )
 from interpreter.interprocedural.propagation import (
-    _trace_reg_to_var,
     _substitute_endpoint,
+    _trace_reg_to_var,
     apply_summary_at_call_site,
 )
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
+    ROOT_CONTEXT,
     CallSite,
     DereferenceEndpoint,
     FunctionEntry,
     FunctionSummary,
     InstructionLocation,
-    NO_DEFINITION,
-    ROOT_CONTEXT,
     VariableEndpoint,
 )
+from interpreter.ir import CodeLabel
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _build_caller_cfg_with_address_of() -> CFG:

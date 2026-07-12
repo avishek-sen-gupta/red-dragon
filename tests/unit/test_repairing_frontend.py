@@ -8,8 +8,8 @@ from interpreter.ast_repair.repairing_frontend_decorator import (
 )
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.instructions import InstructionBase
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.llm.llm_client import LLMClient
 from interpreter.parser import TreeSitterParserFactory
 

@@ -1,5 +1,5 @@
-from tests.covers import covers, NotLanguageFeature
 from interpreter.frontends._base import NO_NODE
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestNONode:

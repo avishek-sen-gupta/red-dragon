@@ -4,8 +4,8 @@ Test vectors ported from smojol AlphanumericDataTypeSpec.java.
 """
 
 from interpreter.cobol.alphanumeric import (
-    encode_alphanumeric,
     decode_alphanumeric,
+    encode_alphanumeric,
     encode_hex_literal,
     parse_hex_literal,
 )

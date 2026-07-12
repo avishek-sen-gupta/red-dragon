@@ -7,11 +7,11 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Header, Footer, OptionList, Static
+from textual.widgets import Footer, Header, OptionList, Static
 
 from interpreter.project.entry_point import EntryPoint
-from viz.panels.import_graph_panel import ImportGraphPanel
 from viz.panels.entry_point_picker_panel import EntryPointPickerPanel
+from viz.panels.import_graph_panel import ImportGraphPanel
 from viz.project_pipeline import ProjectPipelineResult
 
 

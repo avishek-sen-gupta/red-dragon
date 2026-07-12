@@ -1,13 +1,13 @@
 """Tests for ConditionNameIndex and build_condition_index."""
 
+from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.condition_name_index import (
     ConditionEntry,
     ConditionNameIndex,
     build_condition_index,
 )
-from interpreter.cobol.cobol_types import CobolTypeDescriptor, CobolDataCategory
-from interpreter.cobol.data_layout import FieldLayout, DataLayout
+from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 

@@ -3,16 +3,13 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 
 from interpreter.cobol.cobol_statements import FileControlEntry
-from interpreter.cobol.file_enums import FileOrganization
-from interpreter.cobol.io_provider import IOResult
 from interpreter.cobol.real_file_provider import RealFileIOProvider
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _provider(

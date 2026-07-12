@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from interpreter.frontends.java import JavaFrontend
 from interpreter.frontends.go import GoFrontend
-from interpreter.ir import Opcode
+from interpreter.frontends.java import JavaFrontend
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 
 

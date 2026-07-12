@@ -9,15 +9,15 @@ Covers:
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.c.features import CFeature
 from interpreter.ir import Opcode
-from interpreter.project.entry_point import EntryPoint
 from interpreter.parser import TreeSitterParserFactory
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 from tests.covers import covers
 
 

@@ -1,43 +1,40 @@
 """Unit tests for the static type inference pass."""
 
 import pytest
-from interpreter.type_name import TypeName
 
 from interpreter.constants import FoundationTypeName
-from interpreter.types.coercion.conversion_result import IDENTITY_CONVERSION
+from interpreter.func_name import FuncName
+from interpreter.instructions import InstructionBase
+from interpreter.ir import NO_LABEL, CodeLabel, IRInstruction, Opcode
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
+from interpreter.register import NO_REGISTER, Register
+from interpreter.type_name import TypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
-from interpreter.instructions import InstructionBase
-from interpreter.types.null_type_resolver import NullTypeResolver
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.null_type_resolver import NullTypeResolver
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import (
-    TypeExpr,
-    ScalarType,
-    ParameterizedType,
-    UnionType,
-    UnknownType,
-    FunctionType,
+    NULL,
     UNBOUND,
     UNKNOWN,
-    NULL,
+    ParameterizedType,
+    ScalarType,
+    TypeExpr,
+    UnionType,
+    UnknownType,
+    fn_type,
     parse_type,
     scalar,
-    union_of,
-    fn_type,
     tuple_of,
 )
-from tests.covers import covers, NotLanguageFeature
-from interpreter.refs.class_ref import ClassRef
-from interpreter.refs.func_ref import FuncRef
-from interpreter.func_name import FuncName
-from interpreter.types.type_inference import infer_types, _infer_const_type
+from interpreter.types.type_inference import _infer_const_type, infer_types
 from interpreter.types.type_resolver import TypeResolver
-from interpreter.register import Register, NO_REGISTER
 from interpreter.var_name import VarName
+from tests.covers import NotLanguageFeature, covers
 
 
 def _derive_literal_type(operand) -> str:

@@ -13,33 +13,32 @@ from typing import TYPE_CHECKING, Optional
 
 from tree_sitter import Node
 
+from interpreter import constants
 from interpreter.cfg import (
     CFG,
     build_cfg,
     cfg_to_mermaid,
     extract_function_instructions,
 )
-from interpreter.constants import Language
-from interpreter.instructions import InstructionBase
-from interpreter.types.coercion.default_conversion_rules import (
-    DefaultTypeConversionRules,
-)
+from interpreter.constants import Language, LLMProvider
 from interpreter.frontend import get_frontend
+from interpreter.instructions import InstructionBase
 from interpreter.ir_stats import count_opcodes
 from interpreter.parser import Parser, TreeSitterParserFactory
 from interpreter.registry import build_registry
 from interpreter.run import (
-    execute_cfg_traced,
     build_execution_strategies,
+    execute_cfg_traced,
     initial_vm_state,
 )
 from interpreter.run_types import VMConfig
 from interpreter.trace_types import ExecutionTrace
+from interpreter.types.coercion.default_conversion_rules import (
+    DefaultTypeConversionRules,
+)
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
-from interpreter import constants
-from interpreter.constants import LLMProvider
 
 if TYPE_CHECKING:
     from interpreter.interprocedural.types import InterproceduralResult
@@ -351,7 +350,7 @@ def analyze_project(
     entry_file: str | Path,
     language: str | Language,
     project_root: str | Path | None = None,
-) -> "InterproceduralResult":
+) -> InterproceduralResult:
     """Multi-file analysis: discover → compile → link → analyze.
 
     Returns the same InterproceduralResult as single-file analysis,
@@ -365,8 +364,8 @@ def analyze_project(
     Returns:
         An InterproceduralResult with cross-module analysis.
     """
-    from interpreter.project.compiler import compile_directory
     from interpreter.interprocedural.analyze import analyze_interprocedural
+    from interpreter.project.compiler import compile_directory
 
     lang = Language(language)
     entry_path = Path(entry_file)
@@ -381,7 +380,7 @@ def run_project(
     project_root: str | Path | None = None,
     max_steps: int = 500,
     verbose: bool = False,
-) -> "VMState":
+) -> VMState:
     """Multi-file execution: discover → compile → link → execute.
 
     Returns the same VMState as single-file run().
@@ -399,7 +398,6 @@ def run_project(
     from interpreter.project.compiler import compile_directory
     from interpreter.run import (
         execute_cfg,
-        build_execution_strategies,
         initial_vm_state,
     )
 

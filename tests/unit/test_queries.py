@@ -3,7 +3,6 @@
 import pytest
 
 from interpreter.field_name import FieldName
-from interpreter.ir import CodeLabel
 from interpreter.interprocedural.queries import (
     backward_slice,
     forward_slice,
@@ -12,15 +11,16 @@ from interpreter.interprocedural.queries import (
     taint_reaches,
 )
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
+    NO_INSTRUCTION_LOC,
     CallGraph,
     FieldEndpoint,
     FunctionEntry,
     InterproceduralResult,
-    NO_DEFINITION,
-    NO_INSTRUCTION_LOC,
     ReturnEndpoint,
     VariableEndpoint,
 )
+from interpreter.ir import CodeLabel
 
 # ---------------------------------------------------------------------------
 # Fixtures

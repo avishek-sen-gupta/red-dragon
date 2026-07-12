@@ -3,13 +3,13 @@
 
 from typing import Any
 
-from tests.covers import covers
 from interpreter.frontends.type_alias_prepass import (
     NullTypeAliasExtractor,
     collect_type_aliases,
 )
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import ScalarType, TypeExpr
+from tests.covers import covers
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -74,6 +74,7 @@ class TestBaseFrontendIntegration:
     @covers("type_alias_prepass.base_frontend.default_extractor")
     def test_base_frontend_has_null_extractor_by_default(self) -> None:
         from unittest.mock import MagicMock
+
         from interpreter.frontends._base import BaseFrontend
         from interpreter.frontends.type_alias_prepass import NullTypeAliasExtractor
 

@@ -6,8 +6,8 @@ These tests verify end-to-end execution through the VM.
 from __future__ import annotations
 
 from interpreter.frontends.kotlin.features import KotlinFeature
-from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from tests.covers import covers
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 class TestKotlinThrowExpressionExecution:

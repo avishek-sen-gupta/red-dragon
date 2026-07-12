@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.var_name import VarName
 from interpreter.constants import Language
+from interpreter.frontends.java.features import JavaFeature
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.project.entry_point import EntryPoint
-from interpreter.frontends.java.features import JavaFeature
+from interpreter.var_name import VarName
 from tests.covers import covers
 
 

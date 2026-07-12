@@ -21,10 +21,10 @@ from interpreter.cobol.ir_encoders import (
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.ref_mod import RefModOperand
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.operator_kind import resolve_binop
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction
-from interpreter.register import Register, NO_REGISTER
+from interpreter.operator_kind import resolve_binop
+from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 

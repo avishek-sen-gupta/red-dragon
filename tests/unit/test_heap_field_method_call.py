@@ -7,27 +7,24 @@ rather than falling back to symbolic resolution.
 
 from __future__ import annotations
 
+from dataclasses import replace as _replace
+
+from interpreter.address import Address
+from interpreter.cfg import build_cfg
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.vm.vm import VMState, SymbolicValue, apply_update
-from interpreter.address import Address
-from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+from interpreter.register import Register
+from interpreter.registry import build_registry
+from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.executor import (
-    LocalExecutor,
     HandlerContext,
+    LocalExecutor,
     _default_handler_context,
 )
-from interpreter.cfg import CFG, build_cfg
-from interpreter.registry import FunctionRegistry, build_registry
-from interpreter.refs.func_ref import FuncRef, BoundFuncRef
-from interpreter.types.typed_value import typed, typed_from_runtime, unwrap
-from interpreter.types.type_expr import scalar, UNKNOWN
-from interpreter.constants import FoundationTypeName
-from interpreter.register import Register
-
-
-from dataclasses import replace as _replace
+from interpreter.vm.vm import SymbolicValue, VMState
+from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
 
 
 def _ctx(**overrides) -> HandlerContext:

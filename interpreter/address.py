@@ -2,6 +2,7 @@
 """Address — typed heap/region address."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 

@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
 
 from interpreter.cfg import build_cfg
 from interpreter.cfg_types import CFG
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
-from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
 from interpreter.frontend_observer import NullFrontendObserver
-from interpreter.ir import Opcode, SourceLocation, NO_SOURCE_LOCATION
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.instructions import InstructionBase, Label_
+from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 

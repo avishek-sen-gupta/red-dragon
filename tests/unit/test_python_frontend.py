@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from interpreter.frontends.python import PythonFrontend
 from interpreter.frontends.python.features import PythonFeature
-from interpreter.parser import TreeSitterParserFactory
+from interpreter.instructions import InstructionBase, Label_
 from interpreter.ir import (
     NO_SOURCE_LOCATION,
+    CodeLabel,
     Opcode,
     SourceLocation,
     SpreadArguments,
-    CodeLabel,
 )
-from interpreter.instructions import InstructionBase, Label_
+from interpreter.parser import TreeSitterParserFactory
 from tests.covers import covers
 
 
@@ -1203,10 +1203,11 @@ class TestPythonInterpolation:
     def test_interpolation_handler_directly(self):
         """interpolation node lowered directly should lower the inner expression."""
         from tree_sitter_language_pack import get_parser
+
+        from interpreter.frontend_observer import NullFrontendObserver
+        from interpreter.frontends.context import TreeSitterEmitContext
         from interpreter.frontends.python.expressions import lower_interpolation
         from interpreter.frontends.python.frontend import PythonFrontend
-        from interpreter.frontends.context import TreeSitterEmitContext
-        from interpreter.frontend_observer import NullFrontendObserver
 
         parser = get_parser("python")
         source = b'f"{x + 1}"'

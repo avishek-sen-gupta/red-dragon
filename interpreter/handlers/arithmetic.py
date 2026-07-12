@@ -7,22 +7,22 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
-from interpreter.instructions import InstructionBase, Binop, Unop
-from interpreter.vm.vm import (
-    VMState,
-    Pointer,
-    ExecutionResult,
-    StateUpdate,
-    Operators,
-    _resolve_reg,
-    _heap_addr,
-    _is_symbolic,
-)
+from interpreter import constants
+from interpreter.handlers._common import _symbolic_name
+from interpreter.instructions import Binop, InstructionBase, Unop
 from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import typed, typed_from_runtime
-from interpreter import constants
-from interpreter.handlers._common import _symbolic_name
+from interpreter.vm.vm import (
+    ExecutionResult,
+    Operators,
+    Pointer,
+    StateUpdate,
+    VMState,
+    _heap_addr,
+    _is_symbolic,
+    _resolve_reg,
+)
 
 
 def _handle_binop(
