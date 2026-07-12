@@ -313,6 +313,22 @@ class TestPointerDereference:
 
         assert vm.heap_get(ptr.base).fields[FieldName("0", FieldKind.INDEX)].value == 99
 
+    def test_store_indirect_on_non_pointer_is_a_no_op(self):
+        """STORE_INDIRECT on a non-Pointer value should no-op, not crash.
+
+        Regression test: the reasoning string referenced an undefined `val`
+        instead of `tv.value`, so this fallback path raised NameError.
+        """
+        vm = _make_vm()
+        vm.current_frame.registers[Register("%notptr")] = typed_from_runtime(42)
+        vm.current_frame.registers[Register("%99")] = typed_from_runtime(99)
+
+        inst = _make_inst(Opcode.STORE_INDIRECT, operands=["%notptr", "%99"])
+        result = _handle_store_indirect(inst, vm, _CTX)
+
+        assert result.success
+        assert result.update.heap_writes == []
+
 
 # ── Pointer arithmetic ───────────────────────────────────────────
 
