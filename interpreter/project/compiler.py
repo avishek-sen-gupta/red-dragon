@@ -29,6 +29,7 @@ from interpreter.path_name import NO_PATH_NAME, PathName
 from interpreter.project.imports import extract_imports
 from interpreter.project.linker import link_modules
 from interpreter.project.resolver import (
+    ImportResolver,
     JavaImportResolver,
     get_resolver,
     topological_sort,

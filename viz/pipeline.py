@@ -9,6 +9,7 @@ from interpreter.cfg import build_cfg
 from interpreter.cfg_types import CFG
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
+from interpreter.instructions import InstructionBase
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.types import InterproceduralResult
 from interpreter.parser import TreeSitterParserFactory

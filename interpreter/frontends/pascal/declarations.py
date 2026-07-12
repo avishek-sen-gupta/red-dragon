@@ -18,6 +18,12 @@ from interpreter.frontends.pascal.control_flow import lower_pascal_block
 from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.type_helpers import extract_pascal_return_type
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
@@ -831,7 +837,6 @@ def _lower_pascal_enum(
 
 def _extract_pascal_class_from_decl_type(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a Pascal declType node that contains a declClass."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -911,7 +916,6 @@ def _collect_pascal_classes(node, accumulator: dict[ClassName, ClassInfo]) -> No
 
 def extract_pascal_symbols(root) -> SymbolTable:
     """Walk the Pascal AST and return a SymbolTable of all class definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     _collect_pascal_classes(root, classes)

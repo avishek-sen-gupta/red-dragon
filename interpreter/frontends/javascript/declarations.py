@@ -14,6 +14,12 @@ from interpreter.frontends.common.expressions import (
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.javascript.expressions import lower_js_params
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -386,7 +392,6 @@ def lower_class_static_block(
 
 def _extract_js_method(node) -> tuple[str, FunctionInfo] | None:
     """Extract a FunctionInfo from a JS method_definition node."""
-    from interpreter.frontends.symbol_table import FunctionInfo
 
     name_node = node.child_by_field_name("name")
     if name_node is None:
@@ -411,7 +416,6 @@ def _extract_param_names(params_node) -> tuple[str, ...]:
 
 def _extract_js_self_fields(body) -> dict[str, FieldInfo]:
     """Walk a constructor body and collect this.x = ... assignments."""
-    from interpreter.frontends.symbol_table import FieldInfo
 
     fields: dict[str, FieldInfo] = {}
     for stmt in body.children:
@@ -441,7 +445,6 @@ def _extract_js_self_fields(body) -> dict[str, FieldInfo]:
 
 def _extract_js_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a JS class_declaration or class node."""
-    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
     name_node = node.child_by_field_name("name")
     if name_node is None:
@@ -519,7 +522,6 @@ def _collect_js_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
 
 def extract_javascript_symbols(root) -> SymbolTable:
     """Walk the JS AST and return a SymbolTable of all class definitions."""
-    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 
     classes: dict[ClassName, ClassInfo] = {}
     _collect_js_classes(root, classes)
