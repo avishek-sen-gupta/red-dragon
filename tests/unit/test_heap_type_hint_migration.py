@@ -2,11 +2,10 @@
 
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
-    ScalarType,
-    ParameterizedType,
     UNKNOWN,
+    ParameterizedType,
+    ScalarType,
     scalar,
-    parse_type,
 )
 from interpreter.vm.vm_types import HeapObject
 

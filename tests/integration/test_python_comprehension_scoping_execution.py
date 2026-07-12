@@ -6,11 +6,11 @@ to the enclosing scope through the full parse -> lower -> execute pipeline.
 
 from __future__ import annotations
 
-from tests.unit.rosetta.conftest import execute_for_language
-from interpreter.var_name import VarName
-from interpreter.types.typed_value import unwrap
-from tests.covers import covers
 from interpreter.frontends.python.features import PythonFeature
+from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
+from tests.covers import covers
+from tests.unit.rosetta.conftest import execute_for_language
 
 
 class TestListComprehensionScopingExecution:

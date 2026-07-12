@@ -5,25 +5,21 @@ produces a float in Python), the type-aware executor coerces it to int
 so that STORE_INDEX and LOAD_INDEX use matching heap keys.
 """
 
-from types import MappingProxyType
-
-from interpreter.var_name import VarName
 from interpreter.cfg import build_cfg
 from interpreter.constants import FoundationTypeName
+from interpreter.instructions import InstructionBase
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.register import Register
+from interpreter.registry import build_registry
+from interpreter.run import ExecutionStrategies, execute_cfg, initial_vm_state
+from interpreter.run_types import VMConfig
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.types.function_signature import FunctionSignature
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.instructions import InstructionBase
-from interpreter.registry import build_registry
-from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
-from interpreter.run_types import VMConfig
-from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.types.typed_value import unwrap
-from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _build_division_index_program() -> list[InstructionBase]:

@@ -6,12 +6,12 @@ import json
 
 import pytest
 
+from interpreter.func_name import FuncName
+from interpreter.ir import IRInstruction, Opcode
 from interpreter.llm.backend import LLMInterpreterBackend, get_backend
 from interpreter.llm.llm_client import LLMClient
 from interpreter.register import Register
-from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm.vm import VMState, StackFrame
-from interpreter.func_name import FuncName
+from interpreter.vm.vm import StackFrame, VMState
 
 
 class FakeLLMClient(LLMClient):

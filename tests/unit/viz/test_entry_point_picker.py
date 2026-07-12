@@ -1,6 +1,7 @@
 """Tests for EntryPointPickerPanel — entry point grouping."""
 
 from pathlib import Path
+
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 from interpreter.refs.func_ref import FuncRef

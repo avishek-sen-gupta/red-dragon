@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+from interpreter.constants import Language
+from interpreter.frontend_observer import NullFrontendObserver
+from interpreter.frontends import get_deterministic_frontend
 from interpreter.frontends.common.default_params import (
     emit_resolve_default_func,
 )
-from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
-from interpreter.frontends import get_deterministic_frontend
-from interpreter.frontend_observer import NullFrontendObserver
-from interpreter.constants import Language
-from interpreter.ir import Opcode
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.func_name import FuncName
+from interpreter.ir import Opcode
 
 
 def _make_ctx() -> TreeSitterEmitContext:

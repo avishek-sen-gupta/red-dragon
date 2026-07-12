@@ -26,7 +26,6 @@ from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
     LiteralPattern,
-    WildcardPattern,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.kotlin import KotlinFrontend

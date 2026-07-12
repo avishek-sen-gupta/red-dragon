@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lark import Lark, Transformer as LarkTransformer
+from lark import Lark
+from lark import Transformer as LarkTransformer
 
 from interpreter.project.import_types import ImportKind, ImportRef
 

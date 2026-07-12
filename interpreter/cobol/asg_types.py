@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 
 from interpreter.cobol.cobol_statements import (
     CobolStatementType,
-    parse_statement,
     FileControlEntry,
+    parse_statement,
 )
 from interpreter.cobol.cobol_types import CobolTypeDescriptor
 from interpreter.cobol.condition_name import ConditionName, ConditionValue

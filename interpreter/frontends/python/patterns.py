@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.class_name import ClassName
 from interpreter.frontends.common.patterns import (
     AsPattern,
     CapturePattern,
@@ -20,7 +21,6 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.python.node_types import PythonNodeType
-from interpreter.class_name import ClassName
 
 _WILDCARD = "_"
 

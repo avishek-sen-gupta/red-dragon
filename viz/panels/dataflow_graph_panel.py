@@ -5,26 +5,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from rich.text import Text
-from textual.widgets import Static, Tree
+from textual.widgets import Tree
 
 from interpreter.cfg_types import CFG
-from interpreter.interprocedural.call_graph import (
-    _build_block_to_function,
-)
-from interpreter.interprocedural.types import (
-    CallGraph,
-    FieldEndpoint,
-    FlowEndpoint,
-    FunctionEntry,
-    FunctionSummary,
-    InterproceduralResult,
-    NO_DEFINITION,
-    ReturnEndpoint,
-    SummaryKey,
-    VariableEndpoint,
-)
-from interpreter.ir import CodeLabel
 from interpreter.instructions import (
     CallFunction,
     CallMethod,
@@ -32,6 +15,19 @@ from interpreter.instructions import (
     LoadVar,
     StoreVar,
 )
+from interpreter.interprocedural.types import (
+    NO_DEFINITION,
+    CallGraph,
+    FieldEndpoint,
+    FlowEndpoint,
+    FunctionEntry,
+    FunctionSummary,
+    InterproceduralResult,
+    ReturnEndpoint,
+    SummaryKey,
+    VariableEndpoint,
+)
+from interpreter.ir import CodeLabel
 from viz.panels.dataflow_summary_panel import merge_flows_for_function, render_endpoint
 
 logger = logging.getLogger(__name__)

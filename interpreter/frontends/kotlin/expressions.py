@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from interpreter.type_name import TypeName
-from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from interpreter.ir import SpreadArguments, CodeLabel
+    from interpreter.ir import SpreadArguments
 
 import logging
 import re
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import CodeLabel
-from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter import constants
 from interpreter.field_name import FieldName
-from interpreter.var_name import VarName
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    lower_float_literal,
+    lower_identifier,
+    lower_int_literal,
+    lower_interpolated_string_parts,
+    lower_string_literal,
+    lower_update_expr,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -39,18 +46,8 @@ from interpreter.instructions import (
     Symbolic,
     Unop,
 )
-from interpreter import constants
-from interpreter.frontends.common.expressions import (
-    lower_bool_literal,
-    lower_float_literal,
-    lower_identifier,
-    lower_int_literal,
-    lower_interpolated_string_parts,
-    lower_null_literal,
-    lower_string_literal,
-    lower_update_expr,
-)
-from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.var_name import VarName
 
 _UNSIGNED_SUFFIX = re.compile(r"[uUlL]+$")
 

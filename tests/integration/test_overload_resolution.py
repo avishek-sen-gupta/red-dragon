@@ -4,10 +4,10 @@ Tests that when source code defines overloaded methods, the executor picks
 the correct overload based on call-site argument arity and types.
 """
 
-from interpreter.var_name import VarName
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap
-from interpreter.project.entry_point import EntryPoint
+from interpreter.var_name import VarName
 
 
 class TestJavaOverloadResolutionByArity:

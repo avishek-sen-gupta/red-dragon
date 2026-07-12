@@ -3,28 +3,29 @@
 # pyright: standard
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 from typing import TYPE_CHECKING
+
+from interpreter.type_name import TypeName
 
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
-from interpreter.instructions import InstructionBase, NewObject as NewObjectInst
-from interpreter.instructions import NewArray
-from interpreter.vm.vm import (
-    VMState,
-    Pointer,
-    ExecutionResult,
-    StateUpdate,
-    NewObject,
-)
+from interpreter import constants
+from interpreter.address import Address
+from interpreter.instructions import InstructionBase, NewArray
+from interpreter.instructions import NewObject as NewObjectInst
 from interpreter.refs.class_ref import ClassRef
 from interpreter.types.type_expr import TypeExpr, pointer, scalar
 from interpreter.types.typed_value import typed
-from interpreter.address import Address
-from interpreter import constants
 from interpreter.var_name import VarName
+from interpreter.vm.vm import (
+    ExecutionResult,
+    NewObject,
+    Pointer,
+    StateUpdate,
+    VMState,
+)
 
 
 def _handle_new_object(

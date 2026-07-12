@@ -1,7 +1,7 @@
 # pyright: standard
 from interpreter.constants import FoundationTypeName
-from interpreter.types.type_expr import scalar, NULL
-from tests.covers import covers, NotLanguageFeature
+from interpreter.types.type_expr import NULL, scalar
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

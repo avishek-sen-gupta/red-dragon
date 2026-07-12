@@ -1,25 +1,21 @@
 # tests/unit/test_function_scoping_strategy.py
 from __future__ import annotations
+
+from interpreter.func_name import FuncName
+from interpreter.handlers._common import _write_var_to_frame
+from interpreter.ir import CodeLabel
+from interpreter.refs.func_ref import FuncRef
 from interpreter.type_name import TypeName
-
-from dataclasses import dataclass, field
-
-import pytest
-
-from interpreter.types.typed_value import TypedValue, typed
 from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import TypedValue, typed
 from interpreter.var_name import VarName
+from interpreter.vm.executor import HandlerContext, _default_handler_context
 from interpreter.vm.function_scoping import (
     GlobalLeakFunctionScopingStrategy,
     LocalFunctionScopingStrategy,
 )
 from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import StackFrame
-from interpreter.func_name import FuncName
-from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import CodeLabel
-from interpreter.handlers._common import _write_var_to_frame
-from interpreter.vm.executor import HandlerContext, _default_handler_context
 
 
 def _make_func_ref_value() -> TypedValue:

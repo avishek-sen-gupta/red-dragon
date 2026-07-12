@@ -1,13 +1,11 @@
 # pyright: standard
 """Unit tests for GoTypeAliasExtractor."""
 
-from typing import Any
-
-from tests.covers import covers
 from interpreter.frontends.go.features import GoFeature
 from interpreter.frontends.go.type_alias_extractor import GoTypeAliasExtractor
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import ScalarType
+from tests.covers import covers
 
 
 class _FakeGoNode:
@@ -23,7 +21,7 @@ class _FakeGoNode:
         self.type = kind
         self._fields = fields or {}
         self.text = text
-        self.children: list["_FakeGoNode"] = list(fields.values()) if fields else []
+        self.children: list[_FakeGoNode] = list(fields.values()) if fields else []
 
     def child_by_field_name(self, name: str) -> "_FakeGoNode | None":
         return self._fields.get(name)

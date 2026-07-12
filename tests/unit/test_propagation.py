@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from interpreter.cfg import build_cfg
+from interpreter.cfg_types import CFG
 from interpreter.field_name import FieldName
-from interpreter.cfg_types import BasicBlock, CFG
-from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.interprocedural.propagation import (
+    apply_summary_at_call_site,
+    build_whole_program_graph,
+    compute_sccs,
+    whole_program_fixpoint,
+)
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
     CallContext,
     CallGraph,
     CallSite,
@@ -14,19 +20,13 @@ from interpreter.interprocedural.types import (
     FunctionEntry,
     FunctionSummary,
     InstructionLocation,
-    NO_DEFINITION,
     ReturnEndpoint,
     SummaryKey,
     VariableEndpoint,
 )
-from interpreter.interprocedural.propagation import (
-    apply_summary_at_call_site,
-    build_whole_program_graph,
-    compute_sccs,
-    whole_program_fixpoint,
-)
-from interpreter.registry import FunctionRegistry
+from interpreter.ir import NO_LABEL, CodeLabel, IRInstruction, Opcode
 from interpreter.register import NO_REGISTER, Register
+from interpreter.registry import FunctionRegistry
 
 
 def _inst(

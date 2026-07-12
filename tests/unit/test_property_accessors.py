@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from interpreter.ir import Opcode
-from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.property_accessors import (
-    register_property_accessor,
-    has_property_accessor,
     emit_field_load_or_getter,
     emit_field_store_or_setter,
+    has_property_accessor,
+    register_property_accessor,
 )
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.ir import Opcode
 
 
 class TestPropertyAccessorRegistration:
@@ -76,9 +76,9 @@ class TestEmitFieldStoreOrSetter:
 
 
 def _make_ctx() -> TreeSitterEmitContext:
-    from interpreter.frontends.context import GrammarConstants
-    from interpreter.frontend_observer import NullFrontendObserver
     from interpreter.constants import Language
+    from interpreter.frontend_observer import NullFrontendObserver
+    from interpreter.frontends.context import GrammarConstants
 
     return TreeSitterEmitContext(
         source=b"",

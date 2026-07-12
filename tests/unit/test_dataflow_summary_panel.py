@@ -3,26 +3,25 @@
 from __future__ import annotations
 
 from interpreter.field_name import FieldName
-from interpreter.ir import CodeLabel
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
+    ROOT_CONTEXT,
     CallGraph,
     CallSite,
     FieldEndpoint,
     FunctionEntry,
     FunctionSummary,
-    InterproceduralResult,
-    NO_DEFINITION,
+    InstructionLocation,
     ReturnEndpoint,
     SummaryKey,
     VariableEndpoint,
-    ROOT_CONTEXT,
-    InstructionLocation,
 )
+from interpreter.ir import CodeLabel
 from viz.panels.dataflow_summary_panel import (
-    render_endpoint,
-    build_function_callers,
     build_function_callees,
+    build_function_callers,
     merge_flows_for_function,
+    render_endpoint,
 )
 
 

@@ -4,32 +4,28 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode, CodeLabel
-from interpreter import constants
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
-from interpreter.func_name import FuncName
-from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
-    Binop,
-    CallFunction,
-    LoadIndex,
-    Symbolic,
-    Label_,
-    Branch,
-    BranchIf,
-)
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
 from interpreter.frontends.common.expressions import lower_int_literal
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.cpp.node_types import CppNodeType
+from interpreter.func_name import FuncName
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    LoadVar,
+    StoreVar,
+    Symbolic,
+)
+from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 
 
 def lower_cpp_if(

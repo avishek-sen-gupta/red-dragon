@@ -8,7 +8,7 @@ from interpreter.cobol.lower_program_init import (
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.instructions import LoadField, LoadVar, StoreVar
 from interpreter.ir import Opcode
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _ws_layout_5bytes():

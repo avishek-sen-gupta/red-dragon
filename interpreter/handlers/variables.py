@@ -8,32 +8,31 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
+from interpreter import constants
 from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
+from interpreter.closure_id import NO_CLOSURE_ID, ClosureId
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.handlers._common import _write_var_to_frame
 from interpreter.instructions import (
-    InstructionBase,
     Const,
-    LoadVar,
     DeclVar,
+    InstructionBase,
+    LoadVar,
     StoreVar,
     Symbolic,
 )
+from interpreter.refs.func_ref import BoundFuncRef
+from interpreter.types.type_expr import UNKNOWN, FunctionType, ParameterizedType
+from interpreter.types.typed_value import TypedValue, typed
+from interpreter.var_name import VarName
 from interpreter.vm.vm import (
-    VMState,
     ClosureEnvironment,
     ExecutionResult,
     StateUpdate,
+    VMState,
     _resolve_reg,
 )
 from interpreter.vm.vm_types import HeapWrite
-from interpreter.refs.func_ref import FuncRef, BoundFuncRef
-from interpreter.refs.class_ref import ClassRef
-from interpreter.types.type_expr import UNKNOWN, FunctionType, ParameterizedType, scalar
-from interpreter.types.typed_value import TypedValue, typed
-from interpreter import constants
-from interpreter.handlers._common import _write_var_to_frame
-from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
 
 logger = logging.getLogger(__name__)
 

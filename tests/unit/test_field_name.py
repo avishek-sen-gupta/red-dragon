@@ -1,7 +1,8 @@
 """Tests for FieldName domain type."""
 
 import pytest
-from interpreter.field_name import FieldName, FieldKind, NoFieldName, NO_FIELD_NAME
+
+from interpreter.field_name import NO_FIELD_NAME, FieldKind, FieldName
 
 
 class TestFieldName:

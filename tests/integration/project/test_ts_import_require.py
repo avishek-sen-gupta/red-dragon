@@ -13,15 +13,15 @@ from pathlib import Path
 import pytest
 
 from interpreter.constants import Language
+from interpreter.frontends.typescript.features import TypeScriptFeature
 from interpreter.ir import Opcode
 from interpreter.project.compiler import compile_directory
 from interpreter.project.types import LinkedProgram
-from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
+from interpreter.run import ExecutionStrategies, execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
 from tests.covers import covers
-from interpreter.frontends.typescript.features import TypeScriptFeature
 
 # ── Source fixtures ────────────────────────────────────────────────
 

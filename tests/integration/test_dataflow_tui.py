@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.interprocedural.types import (
     InterproceduralResult,
-    ReturnEndpoint,
-    VariableEndpoint,
 )
+from interpreter.project.entry_point import EntryPoint
+from interpreter.var_name import VarName
 from viz.panels.dataflow_graph_panel import (
     ChainNode,
     build_call_chain,
     find_top_level_call_sites,
 )
 from viz.pipeline import run_pipeline
-from interpreter.project.entry_point import EntryPoint
 
 
 def _collect_labels(nodes: list[ChainNode]) -> list[str]:
@@ -143,8 +141,8 @@ result = double(5)
     def test_pipeline_produces_nonempty_call_chain(self):
         """The call-chain tree builder produces nodes for a multi-function program."""
         from viz.panels.dataflow_graph_panel import (
-            find_top_level_call_sites,
             build_call_chain,
+            find_top_level_call_sites,
         )
 
         result = run_pipeline(self.SOURCE, language="python", max_steps=50)

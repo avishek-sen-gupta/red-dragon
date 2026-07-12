@@ -1,44 +1,41 @@
 """Lua-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
-
-from typing import Any
 
 import logging
 import re
-from interpreter.frontends.context import TreeSitterEmitContext
+from typing import Any
 
-from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.declarations import emit_implicit_return
 from interpreter.frontends.common.expressions import (
     extract_call_args,
-    lower_int_literal,
-    lower_float_literal,
-    lower_string_literal,
-    lower_null_literal,
     lower_default_return,
+    lower_float_literal,
+    lower_int_literal,
+    lower_null_literal,
+    lower_string_literal,
 )
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.lua.node_types import LuaNodeType
-from interpreter.register import Register
-from interpreter.field_name import FieldName
-from interpreter.types.type_expr import scalar
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
-    LoadField,
-    LoadIndex,
-    NewObject,
+    Branch,
     CallFunction,
     CallMethod,
     CallUnknown,
-    Symbolic,
+    Const,
     Label_,
-    Branch,
-    Return_,
+    LoadField,
+    LoadIndex,
+    NewObject,
     StoreIndex,
+    Symbolic,
 )
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import scalar
 
 logger = logging.getLogger(__name__)
 

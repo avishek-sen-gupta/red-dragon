@@ -9,7 +9,7 @@ from typing import Any
 from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel
 from interpreter.llm.llm_client import LLMClient, get_llm_client
-from interpreter.vm.vm import VMState, StateUpdate, _resolve_reg, _serialize_value
+from interpreter.vm.vm import StateUpdate, VMState, _resolve_reg, _serialize_value
 
 
 class LLMBackend(ABC):

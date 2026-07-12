@@ -1,7 +1,7 @@
 import inspect
 
-from tests.covers import covers, NotLanguageFeature
-from interpreter.frontends._base import BaseFrontend, NO_NODE
+from interpreter.frontends._base import NO_NODE, BaseFrontend
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestBaseNodeDefaults:

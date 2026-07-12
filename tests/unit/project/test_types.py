@@ -4,25 +4,25 @@ from pathlib import Path
 
 import pytest
 
+from interpreter.cfg_types import CFG
+from interpreter.class_name import ClassName
+from interpreter.constants import Language
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.project.types import (
+    CyclicImportError,
+    ExportTable,
     ImportKind,
     ImportRef,
-    ExportTable,
-    ModuleUnit,
     LinkedProgram,
-    CyclicImportError,
+    ModuleUnit,
 )
-from interpreter.cfg_types import CFG
-from interpreter.constants import Language
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.func_name import FuncName
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
 from interpreter.registry import FunctionRegistry
-from interpreter.var_name import VarName
-from interpreter.class_name import ClassName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.var_name import VarName
 
 # ── ImportRef ────────────────────────────────────────────────────
 
@@ -403,14 +403,14 @@ class TestLinkedProgramEntryPoints:
 
 class TestImportKind:
     def test_all_values_defined(self):
-        from interpreter.project.types import ImportKind, ImportKind
+        from interpreter.project.types import ImportKind
 
         expected = {"import", "include", "use", "require", "mod", "using"}
         actual = {k.value for k in ImportKind}
         assert actual == expected
 
     def test_import_ref_uses_enum(self):
-        from interpreter.project.types import ImportKind, ImportKind
+        from interpreter.project.types import ImportKind
 
         ref = ImportRef(
             source_file=Path("main.py"),

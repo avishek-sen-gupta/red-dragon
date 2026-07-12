@@ -13,7 +13,7 @@ import pickle
 from interpreter import constants
 from interpreter.cfg import build_cfg
 from interpreter.func_name import FuncName
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.ir import CodeLabel, Opcode
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 from interpreter.register import Register
 from interpreter.registry import build_registry

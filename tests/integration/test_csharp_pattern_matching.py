@@ -1,11 +1,10 @@
 """Integration tests: C# pattern matching through VM execution."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
-
-from interpreter.var_name import VarName
 from interpreter.constants import Language
+from interpreter.type_name import TypeName
+from interpreter.var_name import VarName
 from tests.integration.exec_helpers import run_locals
 
 
@@ -175,9 +174,9 @@ class M {
 
 class TestIsinstancePrimitive:
     def test_isinstance_int(self):
-        from interpreter.vm.builtins import _builtin_isinstance
-        from interpreter.types.typed_value import typed
         from interpreter.types.type_expr import scalar
+        from interpreter.types.typed_value import typed
+        from interpreter.vm.builtins import _builtin_isinstance
         from interpreter.vm.vm import VMState
 
         vm = VMState()
@@ -189,9 +188,9 @@ class TestIsinstancePrimitive:
         assert result.value.value is True
 
     def test_isinstance_string(self):
-        from interpreter.vm.builtins import _builtin_isinstance
-        from interpreter.types.typed_value import typed
         from interpreter.types.type_expr import scalar
+        from interpreter.types.typed_value import typed
+        from interpreter.vm.builtins import _builtin_isinstance
         from interpreter.vm.vm import VMState
 
         vm = VMState()
@@ -203,9 +202,9 @@ class TestIsinstancePrimitive:
         assert result.value.value is True
 
     def test_isinstance_mismatch(self):
-        from interpreter.vm.builtins import _builtin_isinstance
-        from interpreter.types.typed_value import typed
         from interpreter.types.type_expr import scalar
+        from interpreter.types.typed_value import typed
+        from interpreter.vm.builtins import _builtin_isinstance
         from interpreter.vm.vm import VMState
 
         vm = VMState()

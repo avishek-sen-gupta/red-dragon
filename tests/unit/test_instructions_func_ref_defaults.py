@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.instructions import Const
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 class TestConstFuncRefDefaults:

@@ -15,7 +15,6 @@ import pytest
 from interpreter.constants import Language
 from interpreter.ir import Opcode
 from interpreter.project.compiler import compile_directory
-from interpreter.project.types import LinkedProgram
 
 
 class TestJavaNamespaceResolutionE2E:

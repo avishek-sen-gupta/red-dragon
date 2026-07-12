@@ -3,27 +3,26 @@
 import logging
 import statistics
 
-from interpreter.address import Address
 from interpreter.cfg import build_cfg
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.types.typed_value import TypedValue
-from interpreter.var_name import VarName
-from interpreter.vm.vm import _heap_addr
-from interpreter.frontends import (
-    get_deterministic_frontend,
-    SUPPORTED_DETERMINISTIC_LANGUAGES,
-)
-from interpreter.ir import Opcode
-from interpreter.instructions import InstructionBase
-from interpreter.registry import build_registry
 from interpreter.constants import Language
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.frontends import (
+    SUPPORTED_DETERMINISTIC_LANGUAGES,
+    get_deterministic_frontend,
+)
+from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.registry import build_registry
 from interpreter.run import (
-    execute_cfg,
     ExecutionStrategies,
     _function_scoping_for_language,
+    execute_cfg,
     initial_vm_state,
 )
 from interpreter.run_types import ExecutionStats, VMConfig
+from interpreter.types.typed_value import TypedValue
+from interpreter.var_name import VarName
+from interpreter.vm.vm import _heap_addr
 from interpreter.vm.vm_types import VMState
 
 logger = logging.getLogger(__name__)

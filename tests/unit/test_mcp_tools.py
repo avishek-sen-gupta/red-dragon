@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import json
-
+from mcp_server.session import clear_session
 from mcp_server.tools import (
     handle_analyze_program,
-    handle_get_function_summary,
     handle_get_call_chain,
+    handle_get_function_summary,
+    handle_get_ir,
+    handle_get_state,
     handle_list_opcodes,
     handle_load_program,
-    handle_step,
     handle_run_to_end,
-    handle_get_state,
-    handle_get_ir,
+    handle_step,
 )
-from mcp_server.session import clear_session
 
 
 class TestAnalyzeProgram:

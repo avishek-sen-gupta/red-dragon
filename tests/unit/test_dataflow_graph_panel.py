@@ -2,30 +2,28 @@
 
 from __future__ import annotations
 
+from interpreter.cfg import build_cfg
+from interpreter.constants import Language
 from interpreter.dataflow import Definition
 from interpreter.field_name import FieldName
+from interpreter.frontend import get_frontend
+from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
     FieldEndpoint,
     FunctionEntry,
     InstructionLocation,
-    NO_DEFINITION,
     ReturnEndpoint,
     VariableEndpoint,
 )
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from viz.panels.dataflow_graph_panel import annotate_endpoint, render_graph_lines
-
-from interpreter.cfg import build_cfg
-from interpreter.constants import Language
-from interpreter.frontend import get_frontend
-from interpreter.interprocedural.analyze import analyze_interprocedural
-from interpreter.registry import build_registry
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.register import Register
+from interpreter.registry import build_registry
 from viz.panels.dataflow_graph_panel import (
-    TopLevelCall,
-    ChainNode,
+    annotate_endpoint,
     build_call_chain,
     find_top_level_call_sites,
+    render_graph_lines,
     trace_reg_to_var,
 )
 

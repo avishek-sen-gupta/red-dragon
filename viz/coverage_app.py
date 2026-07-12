@@ -9,7 +9,7 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import Footer, Header, Input, Static
 
-from viz.coverage import FrontendCoverage, build_coverage
+from viz.coverage import FrontendCoverage
 from viz.panels.coverage_panel import CoveragePanel
 
 logger = logging.getLogger(__name__)

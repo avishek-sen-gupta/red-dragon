@@ -5,20 +5,17 @@ from __future__ import annotations
 import json
 from collections import deque
 
-import pytest
-
 from interpreter import constants
+from interpreter.frontend import get_frontend
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.llm.chunked_llm_frontend import (
     ChunkedLLMFrontend,
     ChunkExtractor,
     IRRenumberer,
-    SourceChunk,
 )
-from interpreter.frontend import get_frontend
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.llm.llm_client import LLMClient
 from interpreter.llm.llm_frontend import LLMFrontend
-from interpreter.parser import Parser, ParserFactory, TreeSitterParserFactory
+from interpreter.parser import Parser, TreeSitterParserFactory
 from interpreter.register import Register
 
 

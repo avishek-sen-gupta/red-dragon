@@ -7,23 +7,11 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.figurative_constants import (
-    COBOL_FIGURATIVE_CONSTANTS,
-    raw_figurative_byte,
-    translate_cobol_figurative,
-)
-from interpreter.cobol.ref_mod import (
-    RefModLiteral,
-    RefModReference,
-    RefModLengthOf,
-    RefModBinOp,
-    RefModExpr,
-    RefModOperand,
-    FunctionCallOperand,
-)
+from interpreter.cobol.cobol_expression import expr_from_dict
 from interpreter.cobol.cobol_statements import (
     ArithmeticCorrespondingStatement,
     ArithmeticStatement,
+    ComputedGoto,
     ComputeStatement,
     ContinueStatement,
     DisplayStatement,
@@ -32,25 +20,36 @@ from interpreter.cobol.cobol_statements import (
     ExitStatement,
     GobackStatement,
     GotoStatement,
-    SimpleGoto,
-    ComputedGoto,
     IfStatement,
     InitializeStatement,
     MoveCorrespondingStatement,
     MoveStatement,
     SetStatement,
+    SimpleGoto,
     StopRunStatement,
     WhenOtherStatement,
     WhenStatement,
 )
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.cobol_expression import expr_from_dict
 from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
-from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.field_resolution import ResolvedFieldRef
+from interpreter.cobol.figurative_constants import (
+    COBOL_FIGURATIVE_CONSTANTS,
+    raw_figurative_byte,
+    translate_cobol_figurative,
+)
+from interpreter.cobol.ref_mod import (
+    FunctionCallOperand,
+    RefModBinOp,
+    RefModExpr,
+    RefModLengthOf,
+    RefModLiteral,
+    RefModOperand,
+    RefModReference,
+)
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.operator_kind import resolve_binop, BinopKind
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -63,7 +62,8 @@ from interpreter.instructions import (
     Return_,
 )
 from interpreter.ir import CodeLabel
-from interpreter.register import Register, NO_REGISTER
+from interpreter.operator_kind import BinopKind, resolve_binop
+from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 

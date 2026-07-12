@@ -2,17 +2,13 @@
 
 from pathlib import Path
 
-import pytest
-
-from interpreter.project.types import ExportTable, ImportRef, ModuleUnit
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.project.linker import (
+    max_register_number,
     module_prefix,
     namespace_label,
     rebase_register,
-    max_register_number,
 )
-from interpreter.constants import Language
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.register import Register
 
 # ── module_prefix ────────────────────────────────────────────────

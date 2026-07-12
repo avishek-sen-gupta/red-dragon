@@ -1,23 +1,23 @@
 """Tests for the composable API functions in interpreter.api."""
 
 import pytest
-from interpreter.type_name import TypeName
 
 from interpreter.api import (
-    lower_source,
-    lower_and_infer,
-    dump_ir,
     build_cfg_from_source,
     dump_cfg,
+    dump_ir,
     dump_mermaid,
     extract_function_source,
+    lower_and_infer,
+    lower_source,
 )
 from interpreter.cfg import CFG
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.func_name import FuncName
 from interpreter.instructions import InstructionBase
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_name import TypeName
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import scalar
-from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 
 SIMPLE_SOURCE = "x = 42\n"

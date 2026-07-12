@@ -1,16 +1,30 @@
 """Java-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
-from interpreter.func_name import FuncName
+from interpreter import constants
 from interpreter.class_name import ClassName
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    extract_call_args_unwrap,
+    lower_default_return,
+    lower_float_literal,
+    lower_int_literal,
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.java.node_types import JavaNodeType
+
+# lower_const_literal is intentionally NOT imported — it now raises TypeError.
+# All literal sites must use the typed helpers above (gjoy.4 migration).
+from interpreter.frontends.type_extraction import (
+    extract_normalized_type,
+)
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
     BranchIf,
@@ -31,26 +45,10 @@ from interpreter.instructions import (
     Symbolic,
     Throw_,
 )
-from interpreter import constants
-from interpreter.frontends.common.expressions import (
-    extract_call_args_unwrap,
-    lower_default_return,
-    lower_float_literal,
-    lower_int_literal,
-    lower_null_literal,
-    lower_string_literal,
-    lower_store_target,
-)
-from interpreter.frontends.common.declarations import emit_implicit_return
-
-# lower_const_literal is intentionally NOT imported — it now raises TypeError.
-# All literal sites must use the typed helpers above (gjoy.4 migration).
-from interpreter.frontends.type_extraction import (
-    extract_normalized_type,
-)
-from interpreter.frontends.java.node_types import JavaNodeType
-from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import ScalarType, scalar
+from interpreter.var_name import VarName
 
 
 def _parse_java_integer(text: str) -> int:
@@ -558,11 +556,11 @@ def lower_instanceof(
 
     # Record pattern: o instanceof Point(int a, int b)
     if pattern_or_type_node and pattern_or_type_node.type == "record_pattern":
-        from interpreter.frontends.java.patterns import parse_java_pattern
         from interpreter.frontends.common.patterns import (
-            compile_pattern_test,
             compile_pattern_bindings,
+            compile_pattern_test,
         )
+        from interpreter.frontends.java.patterns import parse_java_pattern
 
         pattern = parse_java_pattern(ctx, pattern_or_type_node)
         test_reg = compile_pattern_test(ctx, obj_reg, pattern)

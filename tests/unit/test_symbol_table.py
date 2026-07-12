@@ -6,13 +6,13 @@ import pytest
 
 from interpreter.class_name import ClassName
 from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
 from interpreter.frontends.symbol_table import (
     ClassInfo,
     FieldInfo,
     FunctionInfo,
     SymbolTable,
 )
+from interpreter.func_name import FuncName
 
 
 class TestSymbolTableEmpty:

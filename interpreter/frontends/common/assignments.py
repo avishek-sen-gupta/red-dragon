@@ -7,16 +7,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.frontends.common.node_types import CommonNodeType
-from interpreter.operator_kind import resolve_binop
-from interpreter.instructions import Binop, Return_
-
-
 from interpreter.frontends.common.expressions import (
     lower_default_return,
     lower_store_target,
 )
+from interpreter.frontends.common.node_types import CommonNodeType
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.instructions import Binop, Return_
+from interpreter.operator_kind import resolve_binop
 
 
 def lower_assignment(

@@ -1,5 +1,6 @@
 """Tests for InstructionBase.map_registers() and map_labels()."""
 
+from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -14,9 +15,8 @@ from interpreter.instructions import (
     TryPush,
     WriteRegion,
 )
-from interpreter.continuation_name import ContinuationName
+from interpreter.ir import NO_LABEL, CodeLabel, SpreadArguments
 from interpreter.operator_kind import BinopKind
-from interpreter.ir import CodeLabel, NO_LABEL, SpreadArguments
 from interpreter.register import Register
 from interpreter.var_name import VarName
 

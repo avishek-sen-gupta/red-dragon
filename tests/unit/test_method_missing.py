@@ -5,30 +5,29 @@ non-existent field should dispatch through that function instead of returning
 a symbolic value.
 """
 
+from dataclasses import replace as _replace
+
 from interpreter.address import Address
-from interpreter.type_name import TypeName
-from interpreter.class_name import ClassName
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.func_name import FuncName
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
+from interpreter.class_name import ClassName
 from interpreter.constants import BOXED_FIELD, METHOD_MISSING
+from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+from interpreter.register import Register
+from interpreter.registry import FunctionRegistry
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime, unwrap
 from interpreter.vm.executor import (
-    LocalExecutor,
     HandlerContext,
+    LocalExecutor,
     _default_handler_context,
 )
-from interpreter.refs.func_ref import BoundFuncRef, FuncRef
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.registry import FunctionRegistry
-from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime, unwrap
-from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.vm.vm import HeapObject, VMState
-from interpreter.vm.vm_types import StackFrame, StateUpdate, SymbolicValue
-from interpreter.register import Register
-
-
-from dataclasses import replace as _replace
+from interpreter.vm.vm_types import StackFrame, SymbolicValue
 
 
 def _ctx(**overrides) -> HandlerContext:

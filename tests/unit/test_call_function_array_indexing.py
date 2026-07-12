@@ -6,19 +6,19 @@ not crash by falling through to native string indexing.
 """
 
 from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
+from interpreter.cfg import CFG
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.register import Register
+from interpreter.registry import FunctionRegistry
 from interpreter.types.typed_value import typed_from_runtime, unwrap
-from interpreter.vm.vm import _is_symbolic, apply_update
-from interpreter.vm.vm_types import HeapObject, StateUpdate
+from interpreter.var_name import VarName
 from interpreter.vm.executor import (
     LocalExecutor,
     _default_handler_context,
 )
-from interpreter.cfg import CFG
-from interpreter.registry import FunctionRegistry
-from interpreter.register import Register
+from interpreter.vm.vm import _is_symbolic, apply_update
+from interpreter.vm.vm_types import HeapObject, StateUpdate
 from tests.unit.vm_helpers import make_vm as _make_vm
 
 

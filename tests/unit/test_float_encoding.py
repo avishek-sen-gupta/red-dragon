@@ -5,13 +5,12 @@ COMP-2: IEEE 754 double-precision, 8 bytes, big-endian.
 """
 
 import struct
-import math
 
 from interpreter.cobol.float_encoding import (
-    encode_comp1,
     decode_comp1,
-    encode_comp2,
     decode_comp2,
+    encode_comp1,
+    encode_comp2,
 )
 
 

@@ -1,16 +1,16 @@
 """Unit tests verifying BYTE_BUILTINS return BuiltinResult."""
 
 from interpreter.cobol.byte_builtins import (
-    _builtin_nibble_get,
     _builtin_byte_from_int,
     _builtin_bytes_to_string,
+    _builtin_cobol_blank_when_zero,
+    _builtin_cobol_prepare_digits,
+    _builtin_int_to_binary_bytes,
     _builtin_list_get,
     _builtin_list_set,
     _builtin_make_list,
+    _builtin_nibble_get,
     _builtin_string_find,
-    _builtin_cobol_prepare_digits,
-    _builtin_int_to_binary_bytes,
-    _builtin_cobol_blank_when_zero,
 )
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators

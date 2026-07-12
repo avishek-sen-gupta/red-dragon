@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 from interpreter.cfg_types import CFG
-from interpreter.registry import FunctionRegistry
-from interpreter.interprocedural.types import InterproceduralResult
 from interpreter.interprocedural.call_graph import build_call_graph
 from interpreter.interprocedural.propagation import (
-    whole_program_fixpoint,
     build_whole_program_graph,
+    whole_program_fixpoint,
 )
+from interpreter.interprocedural.types import InterproceduralResult
+from interpreter.registry import FunctionRegistry
 
 
 def analyze_interprocedural(

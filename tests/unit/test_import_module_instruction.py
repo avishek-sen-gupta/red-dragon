@@ -4,8 +4,8 @@ import pytest
 
 from interpreter.instructions import ImportModule
 from interpreter.ir import Opcode
+from interpreter.path_name import NO_PATH_NAME, PathName
 from interpreter.register import Register
-from interpreter.path_name import PathName, NO_PATH_NAME
 
 
 class TestImportModuleInstruction:

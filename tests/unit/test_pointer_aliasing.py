@@ -13,34 +13,30 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
-from interpreter.ir import IRInstruction, Opcode
-from interpreter.instructions import InstructionBase
 from interpreter.address import Address
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.func_name import FuncName
+from interpreter.instructions import InstructionBase
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.register import NO_REGISTER, Register
+from interpreter.types.typed_value import typed_from_runtime, unwrap
+from interpreter.var_name import VarName
+from interpreter.vm.executor import (
+    _default_handler_context,
+    _handle_address_of,
+    _handle_binop,
+    _handle_load_indirect,
+    _handle_load_var,
+    _handle_store_indirect,
+    _handle_store_var,
+)
+from interpreter.vm.vm import apply_update
 from interpreter.vm.vm_types import (
+    ExecutionResult,
     HeapObject,
     Pointer,
     StackFrame,
     VMState,
-    ExecutionResult,
-    StateUpdate,
-)
-from interpreter.vm.vm import apply_update
-from interpreter.func_name import FuncName
-from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
-from interpreter.register import Register, NO_REGISTER
-from interpreter.vm.executor import (
-    _handle_address_of,
-    _handle_load_var,
-    _handle_store_var,
-    _handle_load_field,
-    _handle_store_field,
-    _handle_load_indirect,
-    _handle_store_indirect,
-    _handle_binop,
-    _handle_unop,
-    _default_handler_context,
 )
 
 _CTX = _default_handler_context()

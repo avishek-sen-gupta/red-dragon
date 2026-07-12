@@ -1,17 +1,28 @@
 """C#-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 import re
 from typing import Any
 
-from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
-
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
+from interpreter import constants
 from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    lower_float_literal,
+    lower_int_literal,
+    lower_interpolated_string_parts,
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.common.node_types import CommonNodeType
+from interpreter.frontends.context import NO_NODE, TreeSitterEmitContext
+from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
+from interpreter.frontends.type_extraction import (
+    extract_normalized_type,
+)
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AddressOf,
     Branch,
@@ -36,22 +47,10 @@ from interpreter.instructions import (
     StoreVar,
     Symbolic,
 )
-from interpreter import constants
-from interpreter.frontends.common.expressions import (
-    lower_int_literal,
-    lower_float_literal,
-    lower_string_literal,
-    lower_null_literal,
-    lower_interpolated_string_parts,
-)
-from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter.frontends.common.node_types import CommonNodeType
-from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
-from interpreter.frontends.type_extraction import (
-    extract_normalized_type,
-)
-from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import ScalarType, scalar
+from interpreter.var_name import VarName
 
 _BYREF_KEYWORDS = frozenset({"out", "ref", "in"})
 

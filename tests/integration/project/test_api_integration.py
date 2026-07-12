@@ -1,11 +1,9 @@
 """Tests for multi-file API and MCP integration."""
 
-from pathlib import Path
-
 import pytest
 
-from interpreter.constants import Language
 from interpreter.api import analyze_project, run_project
+from interpreter.constants import Language
 
 
 class TestAnalyzeProject:

@@ -18,18 +18,17 @@ Output: summary counts per category, per algorithm, per language.
         In verbose mode: full instruction list with surrounding IR context.
 """
 
-import sys
-import os
-import importlib
-import glob
 import argparse
+import glob
+import importlib
+import os
+import sys
 
 sys.path.insert(0, "tests/unit/rosetta")
 
-from interpreter.cfg import build_cfg
 from interpreter.frontends import (
-    get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
+    get_deterministic_frontend,
 )
 from interpreter.ir import Opcode
 

@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
-
-from interpreter.address import Address
 from interpreter.class_name import ClassName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
-from interpreter.var_name import VarName
-from interpreter.ir import Opcode
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
-from interpreter.project.entry_point import EntryPoint
 
 
 def _run_program(source: str, language: str = "python", max_steps: int = 300) -> dict:
@@ -73,8 +69,8 @@ answer = c.get()
 class TestJavaClassInstantiation:
     def test_class_methods_registered(self):
         """Java class methods should be registered in the correct class scope."""
-        from interpreter.frontends import get_deterministic_frontend
         from interpreter.cfg import build_cfg
+        from interpreter.frontends import get_deterministic_frontend
         from interpreter.registry import build_registry
 
         fe = get_deterministic_frontend("java")
@@ -138,8 +134,8 @@ int answer = 42;
 class TestCSharpClassInstantiation:
     def test_class_methods_registered(self):
         """C# class methods should be registered in the correct class scope."""
-        from interpreter.frontends import get_deterministic_frontend
         from interpreter.cfg import build_cfg
+        from interpreter.frontends import get_deterministic_frontend
         from interpreter.registry import build_registry
 
         fe = get_deterministic_frontend("csharp")
@@ -160,8 +156,8 @@ class Dog {
 class TestScalaClassInstantiation:
     def test_class_methods_registered(self):
         """Scala class methods should be registered in the correct class scope."""
-        from interpreter.frontends import get_deterministic_frontend
         from interpreter.cfg import build_cfg
+        from interpreter.frontends import get_deterministic_frontend
         from interpreter.registry import build_registry
 
         fe = get_deterministic_frontend("scala")

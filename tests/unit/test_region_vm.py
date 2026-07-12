@@ -4,17 +4,17 @@ Hand-crafted IR that allocates a region, writes bytes, reads them back.
 """
 
 from interpreter.address import Address
+from interpreter.cfg import CFG
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm.vm import apply_update
+from interpreter.register import Register
+from interpreter.registry import FunctionRegistry
 from interpreter.types.typed_value import unwrap
-from interpreter.vm.vm_types import SymbolicValue
 from interpreter.vm.executor import (
     LocalExecutor,
     _default_handler_context,
 )
-from interpreter.cfg import CFG
-from interpreter.registry import FunctionRegistry
-from interpreter.register import Register
+from interpreter.vm.vm import apply_update
+from interpreter.vm.vm_types import SymbolicValue
 from tests.unit.vm_helpers import make_vm as _make_vm
 
 

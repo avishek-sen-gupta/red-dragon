@@ -9,10 +9,9 @@ from __future__ import annotations
 from typing import Any
 
 from interpreter.frontends.context import TreeSitterEmitContext
-
 from interpreter.frontends.python.expressions import lower_store_target
-from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import Binop
+from interpreter.operator_kind import resolve_binop
 
 
 def lower_assignment(

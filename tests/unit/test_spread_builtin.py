@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from interpreter.vm.executor import _resolve_call_args
-from interpreter.ir import SpreadArguments
-from interpreter.vm.vm import VMState
-from interpreter.field_name import FieldName, FieldKind
 from interpreter.address import Address
-from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
-from interpreter.types.typed_value import typed, typed_from_runtime
-from interpreter.types.type_expr import scalar
 from interpreter.constants import FoundationTypeName
-from interpreter.register import Register
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.func_name import FuncName
+from interpreter.ir import SpreadArguments
+from interpreter.register import Register
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import typed, typed_from_runtime
+from interpreter.vm.executor import _resolve_call_args
+from interpreter.vm.vm import VMState
+from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
 
 
 class TestResolveCallArgs:

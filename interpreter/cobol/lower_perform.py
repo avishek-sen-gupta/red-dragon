@@ -14,8 +14,7 @@ from interpreter.cobol.cobol_statements import (
 from interpreter.cobol.condition_lowering import _lower_expr_dict
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
+from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -25,9 +24,10 @@ from interpreter.instructions import (
     SetContinuation,
     StoreVar,
 )
-from interpreter.continuation_name import ContinuationName
 from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -420,7 +420,7 @@ def lower_perform_varying(
 
 def _eval_varying_from(
     ctx: EmitContext,
-    varying_from: "str | dict",
+    varying_from: str | dict,
     materialised: MaterialisedSectionedLayout,
 ) -> Register:
     """Evaluate a PERFORM VARYING FROM value to a numeric register.

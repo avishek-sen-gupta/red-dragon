@@ -17,13 +17,13 @@ from pathlib import Path
 import pytest
 
 from interpreter.constants import Language
+from interpreter.frontends.java.features import JavaFeature
 from interpreter.project.compiler import compile_directory
-from interpreter.run import execute_cfg, ExecutionStrategies, initial_vm_state
+from interpreter.run import ExecutionStrategies, execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import SymbolicValue
-from interpreter.frontends.java.features import JavaFeature
 from tests.covers import covers
 
 _CONSTANTS_JAVA = """\

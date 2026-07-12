@@ -12,14 +12,14 @@ import json
 import logging
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.subprocess_runner import (
-    SubprocessRunner,
     CobolParseError,
     RealSubprocessRunner,
+    SubprocessRunner,
 )
 
 logger = logging.getLogger(__name__)

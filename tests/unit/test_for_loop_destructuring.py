@@ -14,12 +14,12 @@ Languages tested:
 
 from __future__ import annotations
 
-from interpreter.frontends.javascript import JavaScriptFrontend
-from interpreter.frontends.typescript import TypeScriptFrontend
-from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.frontends.cpp import CppFrontend
-from interpreter.ir import Opcode
+from interpreter.frontends.javascript import JavaScriptFrontend
+from interpreter.frontends.kotlin import KotlinFrontend
+from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 
 

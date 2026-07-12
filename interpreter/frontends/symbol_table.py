@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from interpreter.class_name import ClassName
-from interpreter.field_name import FieldName, NO_FIELD_NAME
+from interpreter.field_name import NO_FIELD_NAME, FieldName
 from interpreter.func_name import FuncName
 
 

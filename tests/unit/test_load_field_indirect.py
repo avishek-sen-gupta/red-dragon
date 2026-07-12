@@ -5,29 +5,28 @@ the field name comes from a register (not a static operand).  This is
 needed by __method_missing__ to forward field access by dynamic name.
 """
 
+from dataclasses import replace as _replace
+
 from interpreter.address import Address
-from interpreter.field_name import FieldName
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.instructions import InstructionBase
-from interpreter.vm.vm import VMState, HeapObject, apply_update
-from interpreter.vm.vm_types import StateUpdate, SymbolicValue
-from interpreter.vm.executor import (
-    LocalExecutor,
-    HandlerContext,
-    _default_handler_context,
-)
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
-from interpreter.registry import FunctionRegistry
-from interpreter.refs.func_ref import FuncRef, BoundFuncRef
-from interpreter.func_name import FuncName
-from interpreter.types.typed_value import TypedValue, typed_from_runtime, typed, unwrap
-from interpreter.types.type_expr import UNKNOWN
 from interpreter.constants import METHOD_MISSING
+from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
+from interpreter.instructions import InstructionBase
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 from interpreter.register import Register
-
-
-from dataclasses import replace as _replace
+from interpreter.registry import FunctionRegistry
+from interpreter.types.type_expr import UNKNOWN
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime, unwrap
+from interpreter.vm.executor import (
+    HandlerContext,
+    LocalExecutor,
+    _default_handler_context,
+)
+from interpreter.vm.vm import HeapObject, VMState, apply_update
+from interpreter.vm.vm_types import StateUpdate, SymbolicValue
 from tests.unit.vm_helpers import make_vm as _make_vm
 
 

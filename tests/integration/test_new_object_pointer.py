@@ -1,12 +1,10 @@
 """Integration tests for NEW_OBJECT producing Pointer with correct type."""
 
-from interpreter.address import Address
-from interpreter.type_name import TypeName
 from interpreter.constants import Language
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
-from interpreter.project.entry_point import EntryPoint
 
 
 def _typed_locals(vm):

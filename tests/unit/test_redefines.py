@@ -7,23 +7,22 @@ and decodes — validating COBOL REDEFINES byte-overlay semantics.
 
 from typing import Any
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.cobol.data_filters import align_decimal, left_adjust
+from interpreter.cobol.ir_encoders import (
+    build_decode_alphanumeric_ir,
+    build_decode_zoned_ir,
+    build_encode_alphanumeric_ir,
+    build_encode_zoned_ir,
+)
 from interpreter.instructions import InstructionBase
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.register import Register
 from interpreter.types.typed_value import unwrap
-from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.executor import (
     LocalExecutor,
     _default_handler_context,
 )
-
-from interpreter.cobol.ir_encoders import (
-    build_encode_zoned_ir,
-    build_decode_zoned_ir,
-    build_encode_alphanumeric_ir,
-    build_decode_alphanumeric_ir,
-)
-from interpreter.cobol.data_filters import align_decimal, left_adjust
-from interpreter.register import Register
+from interpreter.vm.vm import VMState, apply_update
 from tests.unit.vm_helpers import make_vm as _make_vm
 
 

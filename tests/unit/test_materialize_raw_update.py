@@ -1,26 +1,26 @@
 """Unit tests for materialize_raw_update."""
 
 from types import MappingProxyType
-from interpreter.type_name import TypeName
 
 from interpreter.address import Address
 from interpreter.closure_id import ClosureId
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
-from interpreter.ir import CodeLabel
-from interpreter.vm.vm import materialize_raw_update, apply_update
-from interpreter.register import Register
-from interpreter.func_name import FuncName
+from interpreter.var_name import VarName
+from interpreter.vm.vm import apply_update, materialize_raw_update
 from interpreter.vm.vm_types import (
-    StateUpdate,
-    VMState,
-    StackFrame,
-    SymbolicValue,
     Pointer,
+    StackFrame,
+    StateUpdate,
+    SymbolicValue,
+    VMState,
 )
 
 _EMPTY_TYPE_ENV = TypeEnvironment(

@@ -7,13 +7,14 @@ a pure function that walks the tree-sitter AST to find import nodes.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from interpreter.constants import Language
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.project.types import ImportKind, ImportRef
 from interpreter.project.cobol_imports import extract_cobol_imports
+from interpreter.project.types import ImportKind, ImportRef
 
 _parser_factory = TreeSitterParserFactory()
 

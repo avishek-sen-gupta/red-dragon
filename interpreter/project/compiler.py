@@ -11,29 +11,34 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
+from interpreter import constants
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
-from interpreter.func_name import FuncName
-from interpreter.register import Register
-from interpreter.var_name import VarName
 from interpreter.frontend import get_frontend
+from interpreter.func_name import FuncName
+from interpreter.instructions import (
+    DeclVar,
+    ImportModule,
+    InstructionBase,
+    Label_,
+    StoreVar,
+)
 from interpreter.ir import CodeLabel
-from interpreter.instructions import InstructionBase, DeclVar, StoreVar, Label_
 from interpreter.namespace import NamespaceResolver
-from interpreter.project.types import ExportTable, ModuleUnit, LinkedProgram
+from interpreter.path_name import NO_PATH_NAME, PathName
 from interpreter.project.imports import extract_imports
+from interpreter.project.linker import link_modules
 from interpreter.project.resolver import (
+    JavaImportResolver,
     get_resolver,
     topological_sort,
-    JavaImportResolver,
 )
-from interpreter.path_name import PathName, NO_PATH_NAME
-from interpreter.instructions import ImportModule
 from interpreter.project.source_roots import MavenSourceRootDiscovery
-from interpreter.project.linker import link_modules
+from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter import constants
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 # ── Resolved imports mapping ─────────────────────────────────────
 
@@ -41,7 +46,7 @@ from interpreter import constants
 def _build_resolved_imports_map(
     modules: dict[Path, ModuleUnit],
     import_graph: dict[Path, list[Path]],
-    resolver: "ImportResolver",
+    resolver: ImportResolver,
     directory: Path,
 ) -> dict[Path, dict[str, PathName]]:
     """Build a mapping from each module to resolved import paths.
@@ -273,12 +278,12 @@ def compile_directory(
     # --- Java namespace resolution: pre-scan + build tree ---
     namespace_resolver: NamespaceResolver = NamespaceResolver()
     if language == Language.JAVA:
+        from experiments.java_stdlib.registry import STDLIB_REGISTRY
         from interpreter.frontends.java.namespace import (
             JavaNamespaceResolver,
             build_java_namespace_tree,
             java_pre_scan,
         )
-        from experiments.java_stdlib.registry import STDLIB_REGISTRY
 
         scan_results = {path: java_pre_scan(path.read_bytes()) for path in source_files}
         tree = build_java_namespace_tree(scan_results, STDLIB_REGISTRY)

@@ -22,10 +22,14 @@ from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
-    bridge_jar,
-    decode_zoned_unsigned as _decode,
-    first_region as _first_region,
+    bridge_jar,  # noqa: F401
     to_fixed,
+)
+from tests.integration.cobol_helpers import (
+    decode_zoned_unsigned as _decode,
+)
+from tests.integration.cobol_helpers import (
+    first_region as _first_region,
 )
 
 

@@ -7,8 +7,8 @@ string constant.
 
 from __future__ import annotations
 
-from interpreter.ir import Opcode
 from interpreter.frontends.ruby.features import RubyFeature
+from interpreter.ir import Opcode
 from tests.covers import covers
 from tests.unit.rosetta.conftest import parse_for_language
 

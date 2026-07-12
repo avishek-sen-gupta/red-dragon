@@ -5,102 +5,98 @@ from __future__ import annotations
 import copy
 import logging
 import time
-from dataclasses import dataclass, field as dataclass_field, replace
+from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Union
 
-from interpreter.constants import Language, FoundationTypeName
+from interpreter import constants
+from interpreter.cfg import CFG, build_cfg
+from interpreter.constants import FoundationTypeName, Language, LLMProvider
+from interpreter.frontend import Frontend, get_frontend, make_cobol_parser
+from interpreter.frontend_observer import FrontendObserver
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
-from interpreter.var_name import VarName
-from interpreter.types.coercion.conversion_rules import TypeConversionRules
-from interpreter.types.coercion.default_conversion_rules import (
-    DefaultTypeConversionRules,
-)
-from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
-from interpreter.ir import Opcode, CodeLabel, NO_LABEL
 from interpreter.instructions import (
+    Halt_,
     InstructionBase,
     Label_,
     Return_,
-    Throw_,
-    Halt_,
     Suspend,
+    Throw_,
 )
-from interpreter.register import Register
-from interpreter.types.typed_value import typed, unwrap
-from interpreter.types.type_expr import UNKNOWN
-from interpreter.frontend import Frontend, get_frontend
-from interpreter.frontend_observer import FrontendObserver
-from interpreter.cfg import CFG, build_cfg
-from interpreter.registry import build_registry, FunctionRegistry
-from interpreter.refs.func_ref import FuncRef, BoundFuncRef
-from interpreter.refs.class_ref import ClassRef
-from interpreter.vm.executor import HandlerContext, _try_execute_locally
-from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.ir import NO_LABEL, CodeLabel
+from interpreter.llm.backend import get_backend
+from interpreter.overload.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.overload.overload_resolver import (
     NullOverloadResolver,
     OverloadResolver,
 )
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
-from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
-from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.project.cobol_compile import compile_cobol
+from interpreter.project.entry_point import EntryPoint
+from interpreter.project.types import LinkedProgram
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+from interpreter.register import Register
+from interpreter.registry import FunctionRegistry, build_registry
+from interpreter.run_types import (
+    ExecutionStats,
+    PipelineStats,
+    UnresolvedCallStrategy,
+    VMConfig,
+)  # noqa: F401 — re-exported for backwards compatibility
+from interpreter.trace_types import ExecutionTrace, TraceStep
 from interpreter.type_name import TypeName
-from interpreter.types.type_node import TypeNode
-from interpreter.overload.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.types.coercion.binop_coercion import (
     BinopCoercionStrategy,
     DefaultBinopCoercion,
     JavaBinopCoercion,
 )
-from interpreter.types.coercion.unop_coercion import (
-    UnopCoercionStrategy,
-    DefaultUnopCoercion,
+from interpreter.types.coercion.conversion_rules import TypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import (
+    DefaultTypeConversionRules,
 )
+from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
+from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
+from interpreter.types.coercion.unop_coercion import (
+    DefaultUnopCoercion,
+    UnopCoercionStrategy,
+)
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.type_graph import DEFAULT_TYPE_NODES, TypeGraph
+from interpreter.types.type_inference import infer_types
+from interpreter.types.type_node import TypeNode
+from interpreter.types.type_resolver import TypeResolver
+from interpreter.types.typed_value import TypedValue, typed, unwrap
+from interpreter.var_name import VarName
+from interpreter.vm.executor import HandlerContext, _try_execute_locally
 from interpreter.vm.field_fallback import (
     FieldFallbackStrategy,
-    NoFieldFallback,
     ImplicitThisFieldFallback,
+    NoFieldFallback,
 )
 from interpreter.vm.function_scoping import (
     FunctionScopingStrategy,
-    LocalFunctionScopingStrategy,
     GlobalLeakFunctionScopingStrategy,
+    LocalFunctionScopingStrategy,
 )
-from interpreter.types.type_environment import TypeEnvironment
-from interpreter.types.type_expr import scalar
-from interpreter.types.typed_value import TypedValue
-from interpreter.types.type_inference import infer_types
-from interpreter.types.type_resolver import TypeResolver
 from interpreter.vm.unresolved_call import (
-    SymbolicResolver,
     LLMPlausibleResolver,
+    SymbolicResolver,
     UnresolvedCallResolver,
 )
 from interpreter.vm.vm import (
-    VMState,
-    SymbolicValue,
     StackFrame,
     StateUpdate,
-    ExecutionResult,
+    SymbolicValue,
+    VMState,
     apply_update,
     coerce_local_update,
     materialize_raw_update,
 )
-from interpreter.run_types import (
-    VMConfig,
-    ExecutionStats,
-    PipelineStats,
-    UnresolvedCallStrategy,
-)  # noqa: F401 — re-exported for backwards compatibility
-from interpreter.trace_types import TraceStep, ExecutionTrace
-from interpreter.llm.backend import get_backend
-from interpreter import constants
-from interpreter.constants import LLMProvider
-from interpreter.frontend import make_cobol_parser
-from interpreter.project.cobol_compile import compile_cobol
-from interpreter.project.entry_point import EntryPoint
-from interpreter.project.types import LinkedProgram
 
 logger = logging.getLogger(__name__)
 

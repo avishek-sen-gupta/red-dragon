@@ -1,13 +1,12 @@
 """Unit tests for _builtin_array_of returning BuiltinResult with heap side effects."""
 
-from interpreter.address import Address
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.type_name import TypeName
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import TypedValue, typed_from_runtime
 from interpreter.vm.builtins import _builtin_array_of
 from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import BuiltinResult, Pointer
-from interpreter.types.type_expr import scalar
-from interpreter.types.typed_value import TypedValue, typed_from_runtime
 
 
 class TestArrayOfBuiltinResult:

@@ -14,6 +14,13 @@ pytestmark = pytest.mark.skip(
     reason="Java stdlib stubs return symbolic values - known limitation"
 )
 
+from experiments.java_stdlib.registry import STDLIB_REGISTRY
+from experiments.java_stdlib.stubs.java_io_print_stream import PRINT_STREAM_MODULE
+from experiments.java_stdlib.stubs.java_lang_math import MATH_MODULE
+from experiments.java_stdlib.stubs.java_lang_string import STRING_MODULE
+from experiments.java_stdlib.stubs.java_lang_system import SYSTEM_MODULE
+from experiments.java_stdlib.stubs.java_util_array_list import ARRAY_LIST_MODULE
+from experiments.java_stdlib.stubs.java_util_hash_map import HASH_MAP_MODULE
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
 from interpreter.field_name import FieldName
@@ -23,18 +30,10 @@ from interpreter.project.compiler import compile_module
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.linker import link_modules
 from interpreter.project.types import ExportTable, ModuleUnit
-from interpreter.run import run_linked, initial_vm_state
+from interpreter.run import initial_vm_state, run_linked
 from interpreter.types.typed_value import unwrap, unwrap_locals
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import VMState
-
-from experiments.java_stdlib.registry import STDLIB_REGISTRY
-from experiments.java_stdlib.stubs.java_io_print_stream import PRINT_STREAM_MODULE
-from experiments.java_stdlib.stubs.java_lang_math import MATH_MODULE
-from experiments.java_stdlib.stubs.java_lang_string import STRING_MODULE
-from experiments.java_stdlib.stubs.java_lang_system import SYSTEM_MODULE
-from experiments.java_stdlib.stubs.java_util_array_list import ARRAY_LIST_MODULE
-from experiments.java_stdlib.stubs.java_util_hash_map import HASH_MAP_MODULE
 
 # ── Helpers ───────────────────────────────────────────────────────
 

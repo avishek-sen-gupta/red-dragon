@@ -15,14 +15,14 @@ from __future__ import annotations
 import copy
 import pickle
 
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.ir import CodeLabel, Opcode
 from interpreter.register import Register
 from interpreter.run import (
     Completed,
     Suspended,
+    initial_vm_state,
     resume,
     run_resumable,
-    initial_vm_state,
 )
 from interpreter.types.typed_value import unwrap
 from interpreter.var_name import VarName

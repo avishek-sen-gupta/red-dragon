@@ -5,13 +5,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.frontends.common.pattern_utils import parse_number
 from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
     LiteralPattern,
     Pattern,
 )
-from interpreter.frontends.common.pattern_utils import parse_number
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 

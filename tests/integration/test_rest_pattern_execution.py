@@ -7,12 +7,9 @@ the VM's slice and object_rest builtins.
 
 from __future__ import annotations
 
-import pytest
-
-from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
 from interpreter.vm.vm import _heap_addr
 from tests.unit.rosetta.conftest import (
     execute_for_language,

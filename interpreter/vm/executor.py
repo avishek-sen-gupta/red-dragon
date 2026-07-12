@@ -7,54 +7,31 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from interpreter.cfg import CFG
+from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.handlers._common import _resolve_call_args  # noqa: F401
 from interpreter.instructions import InstructionBase
 from interpreter.ir import (
-    Opcode,
-    SpreadArguments,
-    CodeLabel,
-    NoCodeLabel,
     NO_LABEL,
+    CodeLabel,
+    Opcode,
 )
-from interpreter.cfg import CFG
-from interpreter.vm.vm import (
-    VMState,
-    SymbolicValue,
-    HeapObject,
-    ClosureEnvironment,
-    ExceptionHandler,
-    Pointer,
-    StackFramePush,
-    StateUpdate,
-    HeapWrite,
-    NewObject,
-    RegionWrite,
-    ExecutionResult,
-    Operators,
-    _resolve_reg,
-    _is_symbolic,
-    _heap_addr,
-)
-from interpreter.vm.vm_types import BuiltinResult, HeapWrite, StackFrame
-from interpreter.registry import FunctionRegistry
-from interpreter.refs.func_ref import FuncRef, BoundFuncRef
-from interpreter.refs.class_ref import ClassRef
-from interpreter.vm.builtins import Builtins, _builtin_array_of
 from interpreter.overload.overload_resolver import (
     NullOverloadResolver,
     OverloadResolver,
 )
-from interpreter.types.type_environment import TypeEnvironment
-from interpreter.types.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, scalar
-from interpreter.vm.unresolved_call import UnresolvedCallResolver, SymbolicResolver
-from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
+from interpreter.registry import FunctionRegistry
 from interpreter.types.coercion.binop_coercion import (
     BinopCoercionStrategy,
     DefaultBinopCoercion,
 )
 from interpreter.types.coercion.unop_coercion import (
-    UnopCoercionStrategy,
     DefaultUnopCoercion,
+    UnopCoercionStrategy,
 )
+from interpreter.types.type_environment import TypeEnvironment
 from interpreter.vm.field_fallback import (
     FieldFallbackStrategy,
     NoFieldFallback,
@@ -63,8 +40,11 @@ from interpreter.vm.function_scoping import (
     FunctionScopingStrategy,
     LocalFunctionScopingStrategy,
 )
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter import constants
+from interpreter.vm.unresolved_call import SymbolicResolver, UnresolvedCallResolver
+from interpreter.vm.vm import (
+    ExecutionResult,
+    VMState,
+)
 
 _DEFAULT_RESOLVER = SymbolicResolver()
 _DEFAULT_OVERLOAD_RESOLVER = NullOverloadResolver()
@@ -121,65 +101,54 @@ def _default_handler_context() -> HandlerContext:
 
 # ── Handler imports ──────────────────────────────────────────────
 
-from interpreter.handlers._common import (  # noqa: E402
-    _resolve_call_args,
-    _symbolic_name,
-    _symbolic_type_hint,
-    _write_var_to_frame,
-)
-from interpreter.handlers.variables import (  # noqa: E402
-    _handle_const,
-    _handle_load_var,
-    _handle_decl_var,
-    _handle_store_var,
-    _handle_symbolic,
-)
-from interpreter.handlers.memory import (  # noqa: E402
-    _handle_load_field,
-    _handle_store_field,
-    _handle_load_index,
-    _handle_store_index,
-    _handle_load_indirect,
-    _handle_store_indirect,
-    _handle_address_of,
-    _handle_load_field_indirect,
-    _find_method_missing,
-    _resolve_method_delegation_target,
-)
-from interpreter.handlers.control_flow import (  # noqa: E402
-    _handle_branch,
-    _handle_branch_if,
-    _handle_return,
-    _handle_halt,
-    _handle_throw,
-    _handle_try_push,
-    _handle_try_pop,
-    _handle_set_continuation,
-    _handle_resume_continuation,
-)
-from interpreter.handlers.calls import (  # noqa: E402
-    _handle_call_function,
-    _handle_call_method,
-    _handle_call_unknown,
-    _handle_call_ctor,
-    _handle_call_with_memory,
-    _try_builtin_call,
-    _try_class_constructor_call,
-    _try_user_function_call,
-    _unwrap_builtin_result,
-)
 from interpreter.handlers.arithmetic import (  # noqa: E402
     _handle_binop,
     _handle_unop,
 )
+from interpreter.handlers.calls import (  # noqa: E402
+    _handle_call_ctor,
+    _handle_call_function,
+    _handle_call_method,
+    _handle_call_unknown,
+    _handle_call_with_memory,
+    _unwrap_builtin_result,  # noqa: F401
+)
+from interpreter.handlers.control_flow import (  # noqa: E402
+    _handle_branch,
+    _handle_branch_if,
+    _handle_halt,
+    _handle_resume_continuation,
+    _handle_return,
+    _handle_set_continuation,
+    _handle_throw,
+    _handle_try_pop,
+    _handle_try_push,
+)
+from interpreter.handlers.memory import (  # noqa: E402
+    _handle_address_of,
+    _handle_load_field,
+    _handle_load_field_indirect,
+    _handle_load_index,
+    _handle_load_indirect,
+    _handle_store_field,
+    _handle_store_index,
+    _handle_store_indirect,
+)
 from interpreter.handlers.objects import (  # noqa: E402
-    _handle_new_object,
     _handle_new_array,
+    _handle_new_object,
 )
 from interpreter.handlers.regions import (  # noqa: E402
     _handle_alloc_region,
-    _handle_write_region,
     _handle_load_region,
+    _handle_write_region,
+)
+from interpreter.handlers.variables import (  # noqa: E402
+    _handle_const,
+    _handle_decl_var,
+    _handle_load_var,
+    _handle_store_var,
+    _handle_symbolic,
 )
 
 # ── Dispatch table and entry point ──────────────────────────────

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.cobol_statements import (
     AcceptStatement,
     CloseStatement,
@@ -14,7 +15,6 @@ from interpreter.cobol.cobol_statements import (
     StartStatement,
     WriteStatement,
 )
-from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.continuation_name import ContinuationName
@@ -29,7 +29,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
-from interpreter.register import Register, NO_REGISTER
+from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 

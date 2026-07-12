@@ -6,22 +6,21 @@ from __future__ import annotations
 import logging
 
 from interpreter.cfg_types import CFG
-from interpreter.ir import CodeLabel
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     CallCtorFunction,
     CallFunction,
     CallMethod,
     CallUnknown,
 )
-from interpreter.func_name import FuncName
-from interpreter.registry import FunctionRegistry
-from interpreter import constants
 from interpreter.interprocedural.types import (
     CallGraph,
     CallSite,
     FunctionEntry,
     InstructionLocation,
 )
+from interpreter.ir import CodeLabel
+from interpreter.registry import FunctionRegistry
 
 logger = logging.getLogger(__name__)
 

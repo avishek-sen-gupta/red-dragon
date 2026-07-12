@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from interpreter.frontends.java import JavaFrontend
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 
 
 def _parse_java(source: str) -> list[InstructionBase]:

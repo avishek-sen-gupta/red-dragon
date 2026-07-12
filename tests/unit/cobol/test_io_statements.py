@@ -1,19 +1,18 @@
 # pyright: standard
 """Tests for COBOL I/O statement dataclasses and FileControlEntry."""
 
-import pytest
-from tests.covers import covers, NotLanguageFeature
 from interpreter.cobol.cobol_statements import (
+    DeleteStatement,
     FileControlEntry,
     OpenStatement,
     ReadStatement,
-    WriteStatement,
     RewriteStatement,
     StartStatement,
-    DeleteStatement,
+    WriteStatement,
 )
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.file_enums import OpenMode, FileOrganization, AccessMode
+from interpreter.cobol.file_enums import AccessMode, FileOrganization, OpenMode
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -14,14 +14,11 @@ from interpreter.frontends.common.patterns import (
     CapturePattern,
     Pattern,
     WildcardPattern,
+    _needs_pre_guard_bindings,
     compile_pattern_bindings,
     compile_pattern_test,
-    _needs_pre_guard_bindings,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.register import Register
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -30,6 +27,9 @@ from interpreter.instructions import (
     Label_,
     LoadVar,
 )
+from interpreter.operator_kind import resolve_binop
+from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 @dataclass(frozen=True)

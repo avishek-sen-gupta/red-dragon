@@ -16,21 +16,21 @@ Output:
   - Step count deltas relative to the minimum (base) language
 """
 
-import sys
-import os
-import importlib
-import glob
 import argparse
+import glob
+import importlib
+import os
+import sys
 
 sys.path.insert(0, "tests/unit/rosetta")
 
 from interpreter.cfg import build_cfg
-from interpreter.registry import build_registry
-from interpreter.run import execute_cfg, VMConfig, initial_vm_state
 from interpreter.frontends import (
-    get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
+    get_deterministic_frontend,
 )
+from interpreter.registry import build_registry
+from interpreter.run import VMConfig, execute_cfg, initial_vm_state
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 LANG_SHORT = {

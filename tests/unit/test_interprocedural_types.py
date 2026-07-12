@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from interpreter.cfg import BasicBlock, CFG
-from interpreter.field_name import FieldName
+from interpreter.cfg import CFG, BasicBlock
 from interpreter.dataflow import Definition
-from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
-from interpreter.register import NO_REGISTER, Register
-from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
 from interpreter.interprocedural.types import (
+    NO_DEFINITION,
+    NO_INSTRUCTION_LOC,
+    ROOT_CONTEXT,
     CallContext,
     CallGraph,
     CallSite,
@@ -19,13 +19,13 @@ from interpreter.interprocedural.types import (
     FunctionSummary,
     InstructionLocation,
     InterproceduralResult,
-    NO_DEFINITION,
-    NO_INSTRUCTION_LOC,
-    ROOT_CONTEXT,
     ReturnEndpoint,
     SummaryKey,
     VariableEndpoint,
 )
+from interpreter.ir import NO_LABEL, CodeLabel, IRInstruction, Opcode
+from interpreter.register import NO_REGISTER, Register
+from interpreter.var_name import VarName
 
 
 def _make_inst(

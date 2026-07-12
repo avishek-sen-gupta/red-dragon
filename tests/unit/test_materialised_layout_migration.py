@@ -9,25 +9,20 @@ from __future__ import annotations
 from interpreter.cobol.asg_types import CobolASG, CobolField
 from interpreter.cobol.cobol_statements import (
     DisplayStatement,
-    MoveStatement,
     StopRunStatement,
 )
-from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import (
-    lower_data_division,
     lower_sectioned_data_division,
 )
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
-    SectionedLayout,
     build_sectioned_layout,
 )
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.ir import Opcode
-from interpreter.register import NO_REGISTER, Register
-from tests.covers import covers, NotLanguageFeature
+from interpreter.register import Register
+from tests.covers import NotLanguageFeature, covers
 
 
 def _make_field(name: str, pic: str = "X(5)", offset: int = 0) -> CobolField:
@@ -194,8 +189,8 @@ class TestDispatchStatementWithMaterialised:
 class TestLowerMoveWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_move_literal_to_field_emits_write_region(self):
-        from interpreter.cobol.lower_arithmetic import lower_move
         from interpreter.cobol.cobol_statements import MoveStatement, RefModOperand
+        from interpreter.cobol.lower_arithmetic import lower_move
 
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
@@ -218,11 +213,11 @@ class TestLowerMoveWithMaterialised:
 class TestLowerArithmeticWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_arithmetic_add_emits_binop_and_write(self):
-        from interpreter.cobol.lower_arithmetic import lower_arithmetic
         from interpreter.cobol.cobol_statements import (
             ArithmeticStatement,
             RefModOperand,
         )
+        from interpreter.cobol.lower_arithmetic import lower_arithmetic
 
         asg = CobolASG(data_fields=[_make_field("WS-A", pic="9(5)")])
         sl = build_sectioned_layout(asg)
@@ -250,8 +245,8 @@ class TestLowerArithmeticWithMaterialised:
 class TestLowerIoWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_accept_emits_call_function(self):
-        from interpreter.cobol.lower_io import lower_accept
         from interpreter.cobol.cobol_statements import AcceptStatement
+        from interpreter.cobol.lower_io import lower_accept
 
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
@@ -271,8 +266,8 @@ class TestLowerIoWithMaterialised:
 class TestLowerPerformWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_perform_inline_body_dispatches_children(self):
-        from interpreter.cobol.lower_perform import lower_perform
         from interpreter.cobol.cobol_statements import PerformStatement
+        from interpreter.cobol.lower_perform import lower_perform
 
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)
@@ -297,8 +292,8 @@ class TestLowerPerformWithMaterialised:
 class TestLowerCallWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_call_emits_call_with_memory(self):
-        from interpreter.cobol.lower_call import lower_call
         from interpreter.cobol.cobol_statements import CallStatement
+        from interpreter.cobol.lower_call import lower_call
 
         asg = CobolASG(data_fields=[_make_field("WS-A")])
         sl = build_sectioned_layout(asg)

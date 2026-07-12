@@ -4,7 +4,7 @@ from interpreter.frontends._base import NO_NODE
 from interpreter.frontends.context import (
     TreeSitterEmitContext as EmitContext,
 )
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

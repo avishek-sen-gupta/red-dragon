@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.declarations import lower_class_def
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.python.node_types import PythonNodeType
 
 
@@ -41,14 +41,14 @@ def lower_python_class_def(
 # ---------------------------------------------------------------------------
 # Symbol extraction (Phase 2)
 # ---------------------------------------------------------------------------
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
 from interpreter.frontends.symbol_table import (
     ClassInfo,
     FieldInfo,
     FunctionInfo,
     SymbolTable,
 )
-from interpreter.class_name import ClassName
-from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 
 

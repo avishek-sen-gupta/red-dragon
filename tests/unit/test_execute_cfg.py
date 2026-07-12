@@ -4,16 +4,18 @@ import logging
 
 import pytest
 
-from interpreter.var_name import VarName
-from interpreter.register import Register
-from interpreter.ir import Opcode, CodeLabel
 from interpreter.cfg import build_cfg
+from interpreter.ir import CodeLabel, Opcode
+from interpreter.register import Register
 from interpreter.registry import FunctionRegistry, build_registry
-from interpreter.run import execute_cfg, VMConfig, ExecutionStats, initial_vm_state
+from interpreter.run import ExecutionStats, VMConfig, execute_cfg, initial_vm_state
 from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
+from tests.unit.cfg_helpers import (
+    build_simple_cfg as _build_simple_cfg,
+)
 from tests.unit.cfg_helpers import (
     make_instructions as _make_instructions,
-    build_simple_cfg as _build_simple_cfg,
 )
 
 
@@ -225,8 +227,8 @@ class TestExecuteCfgBasic:
     def test_execute_cfg_accepts_prebuilt_vm(self):
         """execute_cfg should reuse a pre-built VM instead of creating a fresh one."""
         source = "x = 42"
-        from interpreter.frontend import get_frontend
         from interpreter.constants import Language
+        from interpreter.frontend import get_frontend
 
         frontend = get_frontend(Language.PYTHON)
         instructions = frontend.lower(source.encode("utf-8"))
@@ -234,11 +236,11 @@ class TestExecuteCfgBasic:
         registry = build_registry(instructions, cfg)
 
         # Pre-build a VM with a variable already set
-        from interpreter.vm.vm import VMState, StackFrame
         from interpreter.func_name import FuncName
-        from interpreter.var_name import VarName
-        from interpreter.types.typed_value import typed
         from interpreter.types.type_expr import UNKNOWN
+        from interpreter.types.typed_value import typed
+        from interpreter.var_name import VarName
+        from interpreter.vm.vm import StackFrame, VMState
 
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("__main__")))

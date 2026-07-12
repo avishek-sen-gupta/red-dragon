@@ -5,10 +5,10 @@ Verifies that _const dispatches on literal_type to produce a correctly typed
 Const instruction, without requiring a live LLM.
 """
 
-from tests.covers import NotLanguageFeature, covers
-from interpreter.instructions import _const
-from interpreter.types.type_expr import scalar, NULL
 from interpreter.constants import FoundationTypeName
+from interpreter.instructions import _const
+from interpreter.types.type_expr import NULL, scalar
+from tests.covers import NotLanguageFeature, covers
 
 
 class _Raw:

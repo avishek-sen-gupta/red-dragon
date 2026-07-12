@@ -3,22 +3,22 @@
 
 from __future__ import annotations
 
+from collections.abc import ItemsView, KeysView, ValuesView
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import ItemsView, KeysView, ValuesView
 
 from pydantic import BaseModel, ConfigDict
 
 from interpreter.address import Address
+from interpreter.closure_id import NO_CLOSURE_ID, ClosureId
 from interpreter.constants import FoundationTypeName
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.continuation_name import NO_CONTINUATION_NAME, ContinuationName
+from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
-from interpreter.register import Register, NO_REGISTER
-from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
+from interpreter.register import NO_REGISTER, Register
+from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
-from interpreter.closure_id import ClosureId, NO_CLOSURE_ID
-from interpreter.continuation_name import ContinuationName, NO_CONTINUATION_NAME
 from interpreter.var_name import VarName
 
 # ── Data types ───────────────────────────────────────────────────

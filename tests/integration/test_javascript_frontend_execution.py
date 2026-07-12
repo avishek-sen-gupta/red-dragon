@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.frontends.javascript.features import JavaScriptFeature
-from tests.covers import covers, FeatureStatus
+from interpreter.var_name import VarName
+from tests.covers import FeatureStatus, covers
 from tests.integration.exec_helpers import run_locals
 
 

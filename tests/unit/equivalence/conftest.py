@@ -4,7 +4,6 @@ import logging
 
 from interpreter.cfg import extract_function_instructions
 from interpreter.ir import Opcode
-
 from tests.unit.rosetta.conftest import parse_for_language
 
 logger = logging.getLogger(__name__)

@@ -3,32 +3,33 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
+from interpreter.constants import Language
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends._base import BaseFrontend
-from interpreter.register import Register
-from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
-from interpreter.frontends.common import expressions as common_expr
-from interpreter.frontends.common import control_flow as common_cf
 from interpreter.frontends.common import assignments as common_assign
-from interpreter.frontends.rust import expressions as rust_expr
-from interpreter.frontends.rust.expressions import (
-    lower_rust_integer_literal,
-    lower_rust_float_literal,
-    lower_rust_string_literal,
-    lower_rust_char_literal,
-    lower_rust_raw_string_literal,
-    lower_rust_negative_literal,
-    lower_rust_unit_expression,
-)
+from interpreter.frontends.common import control_flow as common_cf
+from interpreter.frontends.common import expressions as common_expr
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.rust import control_flow as rust_cf
 from interpreter.frontends.rust import declarations as rust_decl
+from interpreter.frontends.rust import expressions as rust_expr
+from interpreter.frontends.rust.expressions import (
+    lower_rust_char_literal,
+    lower_rust_float_literal,
+    lower_rust_integer_literal,
+    lower_rust_negative_literal,
+    lower_rust_raw_string_literal,
+    lower_rust_string_literal,
+    lower_rust_unit_expression,
+)
 from interpreter.frontends.rust.node_types import RustNodeType
 from interpreter.frontends.rust.type_alias_extractor import RustTypeAliasExtractor
-from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.constants import Language
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.parser import ParserFactory
+from interpreter.register import Register
 
 
 class RustFrontend(BaseFrontend):

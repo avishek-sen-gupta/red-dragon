@@ -7,24 +7,19 @@ original ``str(inst)`` output.
 
 from __future__ import annotations
 
-from interpreter.register import Register
-
-import pytest
-
+from interpreter.field_name import FieldName
+from interpreter.func_name import FuncName
+from interpreter.instructions import InstructionBase
 from interpreter.ir import (
+    NO_LABEL,
     CodeLabel,
     IRInstruction,
-    NO_LABEL,
-    NO_SOURCE_LOCATION,
     Opcode,
     SourceLocation,
     SpreadArguments,
 )
-from interpreter.instructions import InstructionBase
-from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
-from interpreter.register import NO_REGISTER, Register
-from tests.covers import covers, NotLanguageFeature
+from interpreter.register import Register
+from tests.covers import NotLanguageFeature, covers
 
 
 def _loc() -> SourceLocation:
