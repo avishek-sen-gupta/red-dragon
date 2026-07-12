@@ -340,10 +340,7 @@ def lower_pascal_inherited_expr(
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
     ]
-    if named_children:
-        method_name = ctx.node_text(named_children[0])
-    else:
-        method_name = "inherited"
+    method_name = ctx.node_text(named_children[0]) if named_children else "inherited"
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(

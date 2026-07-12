@@ -80,10 +80,7 @@ def lower_lua_assignment(
     val_regs = [ctx.lower_expr(v) for v in values]
 
     for i, target in enumerate(targets):
-        if i < len(val_regs):
-            val_reg = val_regs[i]
-        else:
-            val_reg = lower_null_literal(ctx, node)
+        val_reg = val_regs[i] if i < len(val_regs) else lower_null_literal(ctx, node)
         lower_lua_store_target(ctx, target, val_reg, node)
 
 

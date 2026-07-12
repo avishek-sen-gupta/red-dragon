@@ -148,7 +148,7 @@ class TestSubscriptedOccurrenceConditionOperands:
 # ── 2-D OCCURS (red-dragon-1wy3) ──────────────────────────────────────────────
 #
 # Layout:  01 GRID.
-#            03 GRID-ROW OCCURS 4 TIMES.   element_size = 3 × 2 = 6 bytes
+#            03 GRID-ROW OCCURS 4 TIMES.   element_size = 3 x 2 = 6 bytes
 #               05 GRID-CELL PIC 99 OCCURS 3 TIMES.  element_size = 2 bytes
 #          RESULT PIC 99 follows at offset 4*6 = 24.
 #
