@@ -17,7 +17,7 @@ from interpreter.register import Register
 from interpreter.type_name import TypeName
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_environment import TypeEnvironment
-from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
+from interpreter.types.type_expr import UNBOUND, UNKNOWN, TypeExpr
 from interpreter.types.var_scope_info import VarScopeInfo
 from interpreter.var_name import VarName
 

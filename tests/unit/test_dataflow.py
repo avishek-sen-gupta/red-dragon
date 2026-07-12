@@ -2,30 +2,21 @@
 
 from __future__ import annotations
 
-from interpreter.cfg import BasicBlock, CFG, build_cfg
+from interpreter.cfg import CFG, build_cfg
 from interpreter.dataflow import (
-    BlockDataflowFacts,
     DataflowResult,
-    Definition,
-    DefUseLink,
-    Use,
+    _uses_of,
     analyze,
-    build_dependency_graph,
     collect_all_definitions,
-    compute_gen_kill,
     extract_def_use_chains,
     solve_reaching_definitions,
-    _defs_of,
-    _uses_of,
-    _build_defs_by_variable,
 )
 from interpreter.frontends.python import PythonFrontend
-from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.instructions import InstructionBase
+from interpreter.ir import NO_LABEL, CodeLabel, IRInstruction, Opcode
 from interpreter.parser import TreeSitterParserFactory
-from interpreter import constants
-from interpreter.var_name import VarName
 from interpreter.register import NO_REGISTER, Register
+from interpreter.var_name import VarName
 
 
 def _make_inst(
@@ -760,8 +751,8 @@ class TestAddressOfDataflow:
 
     def test_c_pointer_program_dependency(self):
         """End-to-end: C program 'int x = 10; int *p = &x;' — p depends on x."""
-        from interpreter.frontend import get_frontend
         from interpreter.cfg import build_cfg
+        from interpreter.frontend import get_frontend
 
         fe = get_frontend("c")
         ir = fe.lower(b"int x = 10;\nint *p = &x;\n")

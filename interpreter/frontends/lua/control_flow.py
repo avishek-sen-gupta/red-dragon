@@ -2,30 +2,28 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode, CodeLabel
-from interpreter.frontends.lua.node_types import LuaNodeType
-from interpreter.operator_kind import resolve_binop, resolve_unop
-from interpreter.var_name import VarName
-from interpreter.func_name import FuncName
 from interpreter.frontends.common.expressions import lower_int_literal
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.lua.node_types import LuaNodeType
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
     Binop,
-    Unop,
-    CallFunction,
-    LoadIndex,
-    Label_,
     Branch,
     BranchIf,
+    CallFunction,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    LoadVar,
+    StoreVar,
+    Unop,
 )
+from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

@@ -9,15 +9,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
-from interpreter.address import Address
-from interpreter.vm.vm import VMState, SymbolicValue, _heap_addr, _is_symbolic
-from interpreter.vm.vm_types import StackFrame
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.ir import SpreadArguments
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
-from interpreter.types.typed_value import TypedValue, typed
-from interpreter.ir import SpreadArguments
+from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
+from interpreter.vm.vm import SymbolicValue, VMState, _heap_addr
+from interpreter.vm.vm_types import StackFrame
 
 
 def _resolve_call_args(vm: VMState, arg_operands: list) -> list[TypedValue]:
@@ -74,7 +73,7 @@ def _write_var_to_frame(
     ctx: HandlerContext | None = None,
 ) -> None:
     """Write a variable to a specific frame, handling aliases and closure envs."""
-    from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+    from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 
     alias_ptr = frame.var_heap_aliases.get(name)
     if alias_ptr and vm.heap_contains(alias_ptr.base):

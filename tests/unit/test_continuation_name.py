@@ -1,10 +1,11 @@
 """Tests for ContinuationName domain type."""
 
 import pytest
+
 from interpreter.continuation_name import (
+    NO_CONTINUATION_NAME,
     ContinuationName,
     NoContinuationName,
-    NO_CONTINUATION_NAME,
 )
 
 

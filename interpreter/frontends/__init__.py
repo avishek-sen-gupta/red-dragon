@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
-from interpreter.frontends._base import BaseFrontend
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.frontends._base import BaseFrontend
 from interpreter.parser import TreeSitterParserFactory
 
 # Lazy imports to avoid loading all frontends at startup

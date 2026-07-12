@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from interpreter.constants import Language
 from interpreter.frontends.python import PythonFrontend
 from interpreter.frontends.python.features import PythonFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import ImportModule, InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 from tests.covers import covers
 
 

@@ -489,9 +489,9 @@ def _run_pass3_runtime() -> tuple[list[str], bool]:
     cobol_logger.setLevel(logging.WARNING)
 
     try:
+        from interpreter.cobol.cobol_frontend import CobolFrontend
         from interpreter.cobol.cobol_parser import ProLeapCobolParser
         from interpreter.cobol.subprocess_runner import RealSubprocessRunner
-        from interpreter.cobol.cobol_frontend import CobolFrontend
 
         parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
         frontend = CobolFrontend(parser)

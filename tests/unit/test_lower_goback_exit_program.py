@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from interpreter.cobol.asg_types import CobolASG
-from interpreter.cobol.cobol_statements import GobackStatement, ExitProgramStatement
+from interpreter.cobol.cobol_statements import ExitProgramStatement, GobackStatement
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.lower_arithmetic import lower_goback, lower_exit_program
+from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.lower_arithmetic import lower_exit_program, lower_goback
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.ir import Opcode
-from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 

@@ -17,9 +17,11 @@ import pytest
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
-    bridge_jar,
-    first_region as _first_region,
+    bridge_jar,  # noqa: F401
     run_cobol,
+)
+from tests.integration.cobol_helpers import (
+    first_region as _first_region,
 )
 
 

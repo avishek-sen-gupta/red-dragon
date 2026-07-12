@@ -4,11 +4,9 @@
 from __future__ import annotations
 
 from interpreter.namespace import (
-    NamespaceNode,
     NamespaceTree,
     NamespaceType,
 )
-from interpreter.refs.class_ref import NO_CLASS_REF
 
 
 class TestNamespaceTreeResolve:
@@ -83,7 +81,7 @@ class TestNamespaceTreeResolve:
 
 class TestNamespaceResolverBase:
     def test_base_resolver_returns_no_resolution(self):
-        from interpreter.namespace import NamespaceResolver, NO_RESOLUTION
+        from interpreter.namespace import NO_RESOLUTION, NamespaceResolver
 
         resolver = NamespaceResolver()
         result = resolver.try_resolve_field_access(None, None)
@@ -117,9 +115,9 @@ class TestNamespaceTreeRegister:
         assert "Arrays" in tree.root.children["java"].children["util"].types
 
     def test_register_preserves_class_ref(self):
-        from interpreter.refs.class_ref import ClassRef
         from interpreter.class_name import ClassName
         from interpreter.ir import CodeLabel
+        from interpreter.refs.class_ref import ClassRef
 
         ref = ClassRef(
             name=ClassName("Arrays"),
@@ -137,13 +135,13 @@ class TestNamespaceTreeRegister:
 
 class TestContextNamespaceResolver:
     def test_default_resolver_is_base(self):
-        from interpreter.frontends.context import (
-            TreeSitterEmitContext,
-            GrammarConstants,
-        )
         from interpreter.constants import Language
         from interpreter.frontends._base import NullFrontendObserver
-        from interpreter.namespace import NamespaceResolver, NO_RESOLUTION
+        from interpreter.frontends.context import (
+            GrammarConstants,
+            TreeSitterEmitContext,
+        )
+        from interpreter.namespace import NO_RESOLUTION, NamespaceResolver
 
         ctx = TreeSitterEmitContext(
             source=b"",
@@ -160,11 +158,12 @@ class TestContextNamespaceResolver:
 class TestCompileModuleNamespaceResolver:
     def test_compile_module_accepts_namespace_resolver(self):
         """compile_module() should accept an optional namespace_resolver param."""
-        from interpreter.project.compiler import compile_module
+        import tempfile
+        from pathlib import Path
+
         from interpreter.constants import Language
         from interpreter.namespace import NamespaceResolver
-        from pathlib import Path
-        import tempfile
+        from interpreter.project.compiler import compile_module
 
         java_src = "class Foo { }"
         with tempfile.NamedTemporaryFile(suffix=".java", mode="w", delete=False) as f:

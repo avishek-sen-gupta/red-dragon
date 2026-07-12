@@ -6,11 +6,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
 
-from interpreter.cfg_types import BasicBlock, CFG
+from interpreter.cfg_types import CFG, BasicBlock
 from interpreter.dataflow import Definition
 from interpreter.field_name import FieldName
-from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.instructions import InstructionBase
+from interpreter.ir import NO_LABEL, CodeLabel, IRInstruction, Opcode
 
 # ---------------------------------------------------------------------------
 # 1. InstructionLocation — hashable reference to an IR instruction

@@ -2,9 +2,9 @@
 
 from interpreter.constants import Language
 from interpreter.func_name import FuncName
-from interpreter.var_name import VarName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
+from interpreter.var_name import VarName
 
 
 class TestRunViaEntryPoint:

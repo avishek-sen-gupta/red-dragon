@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
-
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
+from interpreter import constants
 from interpreter.class_name import ClassName
-from interpreter.var_name import VarName
+from interpreter.field_name import FieldName
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_field_initializers,
+    emit_implicit_return,
+    emit_synthetic_init,
+)
+from interpreter.frontends.common.property_accessors import register_property_accessor
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
+from interpreter.frontends.type_extraction import (
+    extract_normalized_type_from_child,
+)
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -24,20 +32,10 @@ from interpreter.instructions import (
     StoreField,
     Symbolic,
 )
-from interpreter import constants
-from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
-from interpreter.frontends.type_extraction import (
-    extract_normalized_type_from_child,
-)
-from interpreter.frontends.common.declarations import (
-    FieldInit,
-    emit_field_initializers,
-    emit_implicit_return,
-    emit_synthetic_init,
-)
-from interpreter.types.type_expr import EnumType, ScalarType, scalar
-from interpreter.frontends.common.property_accessors import register_property_accessor
 from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import EnumType, ScalarType, scalar
+from interpreter.var_name import VarName
 
 # -- property declaration ----------------------------------------------
 
@@ -733,7 +731,7 @@ def lower_object_decl(
 # ---------------------------------------------------------------------------
 
 
-def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
+def _extract_kotlin_primary_ctor_fields(primary_ctor) -> dict[str, FieldInfo]:
     """Extract val/var params from a Kotlin primary_constructor as fields."""
     from interpreter.frontends.symbol_table import FieldInfo
 
@@ -763,7 +761,7 @@ def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
     return fields
 
 
-def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
+def _extract_kotlin_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a Kotlin class_declaration node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -774,7 +772,7 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
     class_name = name_node.text.decode()
 
     # Parents from delegation_specifier > constructor_invocation > user_type > type_identifier
-    def _kotlin_delegation_parent_name(ds_node) -> "str | None":
+    def _kotlin_delegation_parent_name(ds_node) -> str | None:
         for sub in ds_node.children:
             if sub.type == "constructor_invocation":
                 user_type = next(
@@ -913,9 +911,8 @@ def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_kotlin_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class_declaration nodes."""
-    from interpreter.frontends.symbol_table import ClassInfo
 
     if node.type == KNT.CLASS_DECLARATION:
         result = _extract_kotlin_class(node)
@@ -926,7 +923,7 @@ def _collect_kotlin_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> 
         _collect_kotlin_classes(child, accumulator)
 
 
-def extract_kotlin_symbols(root) -> "SymbolTable":
+def extract_kotlin_symbols(root) -> SymbolTable:
     """Walk the Kotlin AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

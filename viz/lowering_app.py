@@ -7,7 +7,7 @@ import logging
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Vertical
 from textual.widgets import Footer, Header, Static
 
 from viz.lowering_trace import LoweringEvent, LoweringResult

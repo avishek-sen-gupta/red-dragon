@@ -1,9 +1,9 @@
 """Unit tests for TypedValue dataclass and factory helpers."""
 
-from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
-from interpreter.type_name import TypeName
-from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.address import Address
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm.vm_types import Pointer, SymbolicValue
 
 

@@ -4,36 +4,31 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
-from interpreter.frontends.common.expressions import (
-    lower_string_literal,
-    lower_int_literal,
-)
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
-    DeclVar,
-    StoreVar,
     Binop,
-    CallFunction,
-    LoadIndex,
-    Label_,
     Branch,
     BranchIf,
+    CallFunction,
+    Const,
+    DeclVar,
     ImportModule,
+    Label_,
     LoadField,
+    LoadIndex,
+    LoadVar,
+    StoreVar,
 )
+from interpreter.operator_kind import resolve_binop
 from interpreter.path_name import NO_PATH_NAME
-from interpreter.field_name import FieldName
+from interpreter.var_name import VarName
 
 
 def lower_js_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -> None:

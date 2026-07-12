@@ -1,11 +1,11 @@
 """Test that typed instructions expose the same interface as IRInstruction."""
 
-from interpreter.instructions import *
 from interpreter.continuation_name import ContinuationName
 from interpreter.func_name import FuncName
-from interpreter.ir import CodeLabel, NO_LABEL, Opcode
+from interpreter.instructions import *
+from interpreter.ir import NO_LABEL, CodeLabel, Opcode
 from interpreter.operator_kind import BinopKind, UnopKind
-from interpreter.register import Register, NO_REGISTER
+from interpreter.register import NO_REGISTER
 from interpreter.var_name import VarName
 
 

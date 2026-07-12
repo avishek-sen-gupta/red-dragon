@@ -1,18 +1,27 @@
 """PHP-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from interpreter.type_name import TypeName
-from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from interpreter.ir import SpreadArguments, CodeLabel
+    from interpreter.ir import SpreadArguments
 
 import logging
-from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
+from interpreter import constants
 from interpreter.field_name import FieldName
+from interpreter.frontends.common.declarations import emit_implicit_return
+from interpreter.frontends.common.expressions import (
+    extract_call_args_unwrap,
+    lower_interpolated_string_parts,
+    lower_null_literal,
+    lower_string_literal,
+)
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.php.node_types import PHPNodeType
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -34,20 +43,10 @@ from interpreter.instructions import (
     StoreIndex,
     StoreVar,
 )
-from interpreter import constants
-from interpreter.frontends.common.expressions import (
-    lower_int_literal,
-    lower_float_literal,
-    lower_string_literal,
-    lower_null_literal,
-    lower_bool_literal,
-    extract_call_args_unwrap,
-    lower_interpolated_string_parts,
-)
-from interpreter.frontends.common.declarations import emit_implicit_return
-from interpreter.frontends.php.node_types import PHPNodeType
+from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -458,7 +457,6 @@ def lower_php_object_creation(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower ``new Foo(args)`` or ``new class { ... }``."""
-    from interpreter.frontends.php.declarations import lower_php_class
 
     # Anonymous class: new class { ... }
     anon_node = next(
@@ -523,13 +521,12 @@ def _lower_php_anonymous_class(
 ) -> None:
     """Lower an anonymous_class node as a class with a synthetic name."""
     from interpreter.frontends.php.declarations import (
-        lower_php_method_decl,
-        lower_php_property_declaration,
         _collect_php_field_inits,
         _emit_php_synthetic_constructor,
         _has_static_modifier,
         _is_php_constructor,
         _lower_php_constructor_with_field_inits,
+        lower_php_method_decl,
     )
 
     body_node = next(
@@ -801,8 +798,8 @@ def lower_php_anonymous_function(
     ctx: TreeSitterEmitContext, node: Any
 ) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower function($x) use ($y) { body } as anonymous function."""
-    from interpreter.frontends.php.declarations import lower_php_params
     from interpreter.frontends.php.control_flow import lower_php_compound
+    from interpreter.frontends.php.declarations import lower_php_params
 
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)

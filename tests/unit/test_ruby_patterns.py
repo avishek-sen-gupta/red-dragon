@@ -18,8 +18,6 @@ from __future__ import annotations
 import tree_sitter_language_pack as tslp
 
 from interpreter.constants import Language
-from interpreter.frontends.ruby.features import RubyFeature
-from tests.covers import covers
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.common.patterns import (
     AsPattern,
@@ -34,8 +32,10 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.ruby import RubyFrontend
+from interpreter.frontends.ruby.features import RubyFeature
 from interpreter.frontends.ruby.patterns import parse_ruby_pattern
 from interpreter.parser import TreeSitterParserFactory
+from tests.covers import covers
 
 
 def _make_ruby_ctx(source: str) -> TreeSitterEmitContext:

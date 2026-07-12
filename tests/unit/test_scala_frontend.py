@@ -6,11 +6,11 @@ import pytest
 
 from interpreter.frontends.scala import ScalaFrontend
 from interpreter.frontends.scala.features import ScalaFeature
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 def _parse_scala(source: str) -> list[InstructionBase]:

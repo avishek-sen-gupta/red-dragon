@@ -5,18 +5,17 @@ when the concrete class's class_method_types lacks the method.
 """
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 from interpreter.func_name import FuncName
 from interpreter.instructions import CallMethod
 from interpreter.register import Register
-from interpreter.types.type_expr import scalar, UNKNOWN
-from interpreter.types.type_inference import _InferenceContext, _infer_call_method
-from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-from interpreter.types.type_resolver import TypeResolver
+from interpreter.type_name import TypeName
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
+from interpreter.types.type_expr import scalar
+from interpreter.types.type_inference import _infer_call_method, _InferenceContext
+from interpreter.types.type_resolver import TypeResolver
 
 
 def _resolver():

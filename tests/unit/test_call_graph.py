@@ -1,19 +1,18 @@
 """Unit tests for call graph construction — TDD: written BEFORE implementation."""
 
-from interpreter.cfg_types import BasicBlock, CFG
+from interpreter.cfg_types import CFG, BasicBlock
 from interpreter.func_name import FuncName
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.registry import FunctionRegistry
 from interpreter.interprocedural.call_graph import (
-    build_function_entries,
     build_call_graph,
+    build_function_entries,
 )
-from interpreter.register import Register
 from interpreter.interprocedural.types import (
     FunctionEntry,
-    CallSite,
     InstructionLocation,
 )
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.register import Register
+from interpreter.registry import FunctionRegistry
 
 
 def _make_cfg(blocks: dict[str, BasicBlock], entry: str = "entry") -> CFG:

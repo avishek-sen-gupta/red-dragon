@@ -3,7 +3,7 @@
 Test vectors ported from smojol DataTypesTest.java.
 """
 
-from interpreter.cobol.zoned_decimal import encode_zoned, decode_zoned
+from interpreter.cobol.zoned_decimal import decode_zoned, encode_zoned
 
 
 class TestEncodeZoned:

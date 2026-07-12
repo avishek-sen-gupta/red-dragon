@@ -7,14 +7,13 @@ import pytest
 from interpreter.cfg import extract_function_instructions
 from interpreter.frontends import SUPPORTED_DETERMINISTIC_LANGUAGES
 from interpreter.ir import Opcode
-
+from tests.unit.equivalence.conftest import function_opcode_sequence
 from tests.unit.rosetta.conftest import (
-    parse_for_language,
-    find_all,
     count_symbolic_unsupported,
+    find_all,
+    parse_for_language,
 )
 from tests.unit.rosetta.test_rosetta_factorial_rec import PROGRAMS
-from tests.unit.equivalence.conftest import function_opcode_sequence
 
 logger = logging.getLogger(__name__)
 

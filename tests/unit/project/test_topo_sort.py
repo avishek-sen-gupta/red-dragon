@@ -2,9 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
-from interpreter.project.types import CyclicImportError
 from interpreter.project.resolver import topological_sort
 
 

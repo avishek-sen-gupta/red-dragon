@@ -1,9 +1,9 @@
 """Tests for Rust frontend prelude class emission (Box, Option)."""
 
-from interpreter.frontends.rust.frontend import RustFrontend
 from interpreter.frontends.rust.features import RustFeature
-from interpreter.parser import TreeSitterParserFactory
+from interpreter.frontends.rust.frontend import RustFrontend
 from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
 from tests.covers import covers
 
 

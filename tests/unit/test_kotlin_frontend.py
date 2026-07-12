@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from interpreter.frontends.kotlin import KotlinFrontend
-from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import Opcode
-from interpreter.instructions import InstructionBase
-from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from interpreter.frontends.kotlin.features import KotlinFeature
-from tests.covers import covers, NotLanguageFeature
+from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
+from interpreter.parser import TreeSitterParserFactory
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from tests.covers import NotLanguageFeature, covers
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_kotlin(source: str) -> list[InstructionBase]:

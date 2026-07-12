@@ -2,6 +2,7 @@
 """SymbolName — untyped lookup key for named symbols at module boundaries."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 

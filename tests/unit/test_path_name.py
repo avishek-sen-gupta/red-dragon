@@ -2,7 +2,7 @@
 
 import pytest
 
-from interpreter.path_name import PathName, NoPathName, NO_PATH_NAME
+from interpreter.path_name import NO_PATH_NAME, PathName
 
 
 class TestPathName:

@@ -42,22 +42,15 @@ the expression's value.
 """
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.frontends.common.node_types import CommonNodeType
-
-from interpreter.constants import CanonicalLiteral, FoundationTypeName
-from interpreter.operator_kind import resolve_binop, resolve_unop
-from interpreter.ir import SpreadArguments
-from interpreter.types.type_expr import scalar, NULL
-from interpreter.register import Register
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
 from interpreter.class_name import ClassName
+from interpreter.constants import CanonicalLiteral
+from interpreter.field_name import FieldName
+from interpreter.frontends.common.node_types import CommonNodeType
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     CallFunction,
@@ -75,6 +68,12 @@ from interpreter.instructions import (
     Symbolic,
     Unop,
 )
+from interpreter.ir import SpreadArguments
+from interpreter.operator_kind import resolve_binop, resolve_unop
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 
 
 def lower_const_literal(

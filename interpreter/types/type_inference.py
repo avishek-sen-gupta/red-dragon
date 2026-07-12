@@ -12,63 +12,62 @@ strings as the "type not yet known" marker.  It is falsy, so existing
 """
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Callable
 
 from interpreter import constants
-from interpreter.register import Register
 from interpreter.constants import CanonicalLiteral, FoundationTypeName
-from interpreter.refs.class_ref import ClassRef
-from interpreter.refs.func_ref import FuncRef
-from interpreter.types.function_kind import FunctionKind
-from interpreter.types.function_signature import FunctionSignature
-from interpreter.ir import CodeLabel, SpreadArguments
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
-    InstructionBase,
-    Const,
-    DeclVar,
-    LoadVar,
-    StoreVar,
-    Symbolic,
+    AllocRegion,
     Binop,
-    Unop,
     CallCtorFunction,
     CallFunction,
     CallMethod,
     CallUnknown,
-    LoadField,
-    StoreField,
-    LoadIndex,
-    StoreIndex,
-    LoadIndirect,
-    StoreIndirect,
-    NewObject,
-    NewArray,
+    Const,
+    DeclVar,
+    InstructionBase,
     Label_,
-    Return_,
-    AllocRegion,
+    LoadField,
+    LoadIndex,
+    LoadIndirect,
     LoadRegion,
+    LoadVar,
+    NewArray,
+    NewObject,
+    Return_,
+    StoreField,
+    StoreIndex,
+    StoreIndirect,
+    StoreVar,
+    Symbolic,
+    Unop,
 )
+from interpreter.ir import CodeLabel
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.types.function_kind import FunctionKind
+from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import (
-    TypeExpr,
-    ScalarType,
-    ParameterizedType,
-    FunctionType,
     UNBOUND,
     UNKNOWN,
+    FunctionType,
+    ParameterizedType,
+    ScalarType,
+    TypeExpr,
     array_of,
     scalar,
-    union_of,
-    fn_type,
     tuple_of,
+    union_of,
 )
-from interpreter.func_name import FuncName
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.var_name import VarName
 

@@ -9,55 +9,53 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
+from interpreter import constants
 from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.cfg import CFG
 from interpreter.class_name import ClassName
+from interpreter.closure_id import NO_CLOSURE_ID
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.func_name import FuncName
-from interpreter.var_name import VarName
+from interpreter.handlers._common import _resolve_call_args, _symbolic_name
+from interpreter.handlers.memory import (
+    _resolve_method_delegation_target,
+)
 from interpreter.instructions import (
-    InstructionBase,
-    CallFunction,
     CallCtorFunction,
+    CallFunction,
     CallMethod,
     CallUnknown,
     CallWithMemory,
+    InstructionBase,
 )
 from interpreter.ir import CodeLabel
-from interpreter.vm.vm import (
-    VMState,
-    HeapObject,
-    ClosureEnvironment,
-    Pointer,
-    StackFramePush,
-    StateUpdate,
-    NewObject,
-    ExecutionResult,
-    Operators,
-    _resolve_reg,
-    _heap_addr,
-    _is_symbolic,
-)
-from interpreter.vm.vm_types import BuiltinResult
-from interpreter.cfg import CFG
-from interpreter.registry import FunctionRegistry
-from interpreter.refs.func_ref import FuncRef, BoundFuncRef
-from interpreter.refs.class_ref import ClassRef
-from interpreter.vm.builtins import Builtins, _builtin_array_of
 from interpreter.overload.overload_resolver import (
     NullOverloadResolver,
     OverloadResolver,
 )
-from interpreter.types.type_environment import TypeEnvironment
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+from interpreter.registry import FunctionRegistry
 from interpreter.type_name import TypeName
+from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter import constants
-from interpreter.handlers._common import _resolve_call_args, _symbolic_name
-from interpreter.closure_id import NO_CLOSURE_ID
-from interpreter.handlers.memory import (
-    _find_method_missing,
-    _resolve_method_delegation_target,
+from interpreter.var_name import VarName
+from interpreter.vm.builtins import Builtins, _builtin_array_of
+from interpreter.vm.vm import (
+    ClosureEnvironment,
+    ExecutionResult,
+    HeapObject,
+    NewObject,
+    Operators,
+    Pointer,
+    StackFramePush,
+    StateUpdate,
+    VMState,
+    _heap_addr,
+    _resolve_reg,
 )
+from interpreter.vm.vm_types import BuiltinResult
 
 logger = logging.getLogger(__name__)
 

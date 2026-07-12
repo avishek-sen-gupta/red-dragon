@@ -8,8 +8,6 @@ from interpreter.cobol.cobol_statements import SearchStatement
 from interpreter.cobol.condition_lowering import _lower_condition_str
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.operator_kind import resolve_binop
-from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -18,7 +16,9 @@ from interpreter.instructions import (
     LoadVar,
     StoreVar,
 )
+from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

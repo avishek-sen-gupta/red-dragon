@@ -1,6 +1,6 @@
 """Tests for Register.rebase() — offset numeric suffix in register names."""
 
-from interpreter.register import Register, NO_REGISTER
+from interpreter.register import NO_REGISTER, Register
 
 
 class TestRegisterRebase:

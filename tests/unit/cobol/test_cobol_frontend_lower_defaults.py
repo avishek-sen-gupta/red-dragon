@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -2,7 +2,7 @@ import inspect
 
 from interpreter.frontends.context import NO_NODE
 from interpreter.frontends.csharp.expressions import emit_byref_load, emit_byref_store
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

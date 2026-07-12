@@ -2,11 +2,9 @@
 
 from pathlib import Path
 
-import pytest
-
-from interpreter.project.imports import extract_imports
-from interpreter.project.types import ImportKind, ImportRef
 from interpreter.constants import Language
+from interpreter.project.imports import extract_imports
+from interpreter.project.types import ImportKind
 
 
 class TestJavaScriptImportExtraction:

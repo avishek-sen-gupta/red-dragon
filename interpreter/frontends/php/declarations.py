@@ -2,32 +2,11 @@
 
 from __future__ import annotations
 
-from interpreter.type_name import TypeName
-
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
-from interpreter.func_name import FuncName
-from interpreter.class_name import ClassName
-from interpreter.register import Register
-from interpreter.instructions import (
-    Branch,
-    DeclVar,
-    Label_,
-    LoadVar,
-    StoreField,
-    Symbolic,
-)
 from interpreter import constants
-from interpreter.frontends.php.control_flow import lower_php_compound
-from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
-)
-from interpreter.frontends.php.node_types import PHPNodeType
+from interpreter.class_name import ClassName
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
@@ -37,7 +16,26 @@ from interpreter.frontends.common.expressions import (
     lower_null_literal,
     lower_string_literal,
 )
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.php.control_flow import lower_php_compound
+from interpreter.frontends.php.node_types import PHPNodeType
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
+from interpreter.func_name import FuncName
+from interpreter.instructions import (
+    Branch,
+    DeclVar,
+    Label_,
+    LoadVar,
+    StoreField,
+    Symbolic,
+)
+from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import ScalarType
+from interpreter.var_name import VarName
 
 
 def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
@@ -614,7 +612,7 @@ def lower_php_global_declaration(
 # ---------------------------------------------------------------------------
 
 
-def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":
+def _extract_php_method(node) -> tuple[str, FunctionInfo] | None:
     """Extract a FunctionInfo from a PHP method_declaration node."""
     from interpreter.frontends.symbol_table import FunctionInfo
 
@@ -636,7 +634,7 @@ def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":
     return name, FunctionInfo(name=FuncName(name), params=params, return_type="")
 
 
-def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":
+def _extract_php_class(node) -> tuple[str, ClassInfo] | None:
     """Extract a ClassInfo from a PHP class_declaration node."""
     from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
 
@@ -729,9 +727,8 @@ def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":
     )
 
 
-def _collect_php_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> None:
+def _collect_php_classes(node, accumulator: dict[ClassName, ClassInfo]) -> None:
     """Recursively walk the AST and collect all class_declaration nodes."""
-    from interpreter.frontends.symbol_table import ClassInfo
 
     if node.type == PHPNodeType.CLASS_DECLARATION:
         result = _extract_php_class(node)
@@ -742,7 +739,7 @@ def _collect_php_classes(node, accumulator: "dict[ClassName, ClassInfo]") -> Non
         _collect_php_classes(child, accumulator)
 
 
-def extract_php_symbols(root) -> "SymbolTable":
+def extract_php_symbols(root) -> SymbolTable:
     """Walk the PHP AST and return a SymbolTable of all class definitions."""
     from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
 

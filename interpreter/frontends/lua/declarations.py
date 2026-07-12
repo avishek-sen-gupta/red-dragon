@@ -2,35 +2,32 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
-from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.field_name import FieldName
 from interpreter.frontends.common.declarations import (
-    lower_params,
     emit_implicit_return,
+    lower_params,
 )
 from interpreter.frontends.common.expressions import (
     lower_default_return,
     lower_null_literal,
 )
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.lua.node_types import LuaNodeType
-from interpreter.var_name import VarName
-from interpreter.field_name import FieldName
 from interpreter.instructions import (
-    Const,
-    LoadVar,
+    Branch,
     DeclVar,
-    StoreVar,
+    Label_,
+    LoadVar,
+    Return_,
     StoreField,
     StoreIndex,
-    Label_,
-    Branch,
-    Return_,
+    StoreVar,
 )
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +200,7 @@ def lower_lua_return(
 # straightforward without heuristic analysis. Return an empty SymbolTable.
 
 
-def extract_lua_symbols(root) -> "SymbolTable":
+def extract_lua_symbols(root) -> SymbolTable:
     """Return an empty SymbolTable — Lua table-based OOP has no extractable class syntax."""
     from interpreter.frontends.symbol_table import SymbolTable
 

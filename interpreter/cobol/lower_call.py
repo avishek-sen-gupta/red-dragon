@@ -14,7 +14,6 @@ from interpreter.cobol.cobol_statements import (
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.var_name import VarName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AllocRegion,
@@ -25,6 +24,7 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from interpreter.ir import CodeLabel
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 

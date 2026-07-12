@@ -5,22 +5,20 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from functools import reduce
 
-from interpreter.type_name import TypeName
-from interpreter.types.type_node import TypeNode
 from interpreter.constants import FoundationTypeName, Variance
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
-    TypeExpr,
-    ScalarType,
-    ParameterizedType,
-    UnionType,
     FunctionType,
+    ParameterizedType,
+    ScalarType,
+    TypeExpr,
     TypeVar,
+    UnionType,
     scalar,
     union_of,
-    tuple_of,
 )
+from interpreter.types.type_node import TypeNode
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +265,7 @@ class TypeGraph:
             case _:
                 return scalar(FoundationTypeName.ANY)
 
-    def extend(self, additional: tuple[TypeNode, ...]) -> "TypeGraph":
+    def extend(self, additional: tuple[TypeNode, ...]) -> TypeGraph:
         """Return a new TypeGraph with the additional nodes merged in."""
         merged = self._nodes.copy()
         for node in additional:
@@ -276,7 +274,7 @@ class TypeGraph:
 
     def extend_with_interfaces(
         self, implementations: dict[str, tuple[str, ...]]
-    ) -> "TypeGraph":
+    ) -> TypeGraph:
         """Return a new TypeGraph with class→interface edges added.
 
         For each ``class_name → (iface1, iface2, ...)``, adds interface
@@ -304,7 +302,7 @@ class TypeGraph:
 
     def with_variance(
         self, variance_registry: dict[str, tuple[Variance, ...]]
-    ) -> "TypeGraph":
+    ) -> TypeGraph:
         """Return a new TypeGraph with the given variance annotations."""
         merged = dict(self._variance_registry)
         merged.update(variance_registry)

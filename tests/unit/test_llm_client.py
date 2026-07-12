@@ -9,8 +9,8 @@ import pytest
 from interpreter.llm.llm_client import (
     LiteLLMClient,
     LLMClient,
-    get_llm_client,
     _resolve_model,
+    get_llm_client,
 )
 
 

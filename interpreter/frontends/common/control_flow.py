@@ -7,9 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
-
+from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.instructions import Branch, BranchIf, Label_, Symbolic
 
 

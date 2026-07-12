@@ -1,11 +1,11 @@
 """Tests for FuncName accessor methods on registries and tables."""
 
 from interpreter.class_name import ClassName
-from interpreter.type_name import TypeName
 from interpreter.func_name import FuncName
-from interpreter.registry import FunctionRegistry
-from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import CodeLabel
+from interpreter.refs.func_ref import FuncRef
+from interpreter.registry import FunctionRegistry
+from interpreter.type_name import TypeName
 
 
 class TestRegistryLookupFunc:
@@ -104,8 +104,8 @@ class TestBuiltinsLookupMethodBuiltin:
 
 class TestInferenceContextAccessors:
     def test_store_and_lookup_func_return_type(self):
+        from interpreter.types.type_expr import UNKNOWN, scalar
         from interpreter.types.type_inference import _InferenceContext
-        from interpreter.types.type_expr import scalar, UNKNOWN
 
         ctx = _InferenceContext()
         ctx.store_func_return_type(FuncName("add"), scalar(TypeName("Int")))
@@ -113,8 +113,8 @@ class TestInferenceContextAccessors:
         assert ctx.lookup_func_return_type(FuncName("missing")) == UNKNOWN
 
     def test_lookup_method_type(self):
+        from interpreter.types.type_expr import UNKNOWN, scalar
         from interpreter.types.type_inference import _InferenceContext
-        from interpreter.types.type_expr import scalar, UNKNOWN
 
         ctx = _InferenceContext()
         class_type = scalar(TypeName("MyClass"))

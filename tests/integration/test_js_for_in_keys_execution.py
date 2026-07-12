@@ -6,9 +6,9 @@ through the full parse → lower → execute pipeline.
 
 from __future__ import annotations
 
-from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 from interpreter.frontends.javascript.features import JavaScriptFeature
 from tests.covers import covers
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 class TestJSForInExecution:

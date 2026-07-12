@@ -6,17 +6,22 @@ len() and index-based iteration work correctly.
 """
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.func_name import FuncName
-from interpreter.vm.builtins import Builtins, _builtin_len
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import scalar
-from interpreter.vm.vm import VMState, apply_update
-from interpreter.vm.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
 from interpreter.types.typed_value import TypedValue, typed_from_runtime
-from interpreter.vm.vm_types import Pointer
+from interpreter.vm.builtins import Builtins, _builtin_len
+from interpreter.vm.vm import VMState, apply_update
+from interpreter.vm.vm_types import (
+    BuiltinResult,
+    HeapObject,
+    Pointer,
+    StackFrame,
+    StateUpdate,
+)
 
 
 def _result_addr(result: BuiltinResult) -> Address:

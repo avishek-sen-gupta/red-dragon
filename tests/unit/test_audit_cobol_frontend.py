@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-import pytest
-
+from interpreter.cobol.cobol_statements import _DISPATCH_TABLE
 from interpreter.cobol.features import CobolFeature
-from tests.covers import covers
-
 from scripts.audit_cobol_frontend import (
+    _BRIDGE_TO_DISPATCH,
+    _LOWERED_TYPES,
     BRIDGE_SERIALIZED_TYPES,
     DD_BRIDGE_EXTRACTED,
     DD_FRONTEND_HANDLED,
     DD_PYTHON_MODELLED,
+    PROLEAP_STATEMENT_TYPES,
     CobolAuditResult,
     DataDivisionAuditResult,
     DataDivisionFeature,
     DataDivisionStatus,
-    PROLEAP_STATEMENT_TYPES,
     StatusCategory,
-    _BRIDGE_TO_DISPATCH,
-    _LOWERED_TYPES,
     _classify_dd_feature,
     _classify_type,
     _run_pass1_bridge,
@@ -27,7 +24,7 @@ from scripts.audit_cobol_frontend import (
     run_audit,
     run_data_division_audit,
 )
-from interpreter.cobol.cobol_statements import _DISPATCH_TABLE
+from tests.covers import covers
 
 
 class TestProLeapConstants:

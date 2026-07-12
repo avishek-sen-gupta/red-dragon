@@ -17,14 +17,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.cfg import build_cfg
-from interpreter.types.coercion.default_conversion_rules import (
-    DefaultTypeConversionRules,
-)
 from interpreter.llm.llm_client import get_llm_client
 from interpreter.llm.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, initial_vm_state
 from interpreter.run_types import VMConfig
+from interpreter.types.coercion.default_conversion_rules import (
+    DefaultTypeConversionRules,
+)
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.types.typed_value import TypedValue

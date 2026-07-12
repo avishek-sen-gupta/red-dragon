@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-
+from interpreter.constants import Language
 from interpreter.frontends.kotlin.features import KotlinFeature
+from interpreter.func_name import FuncName
+from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.var_name import VarName
 from tests.covers import covers
-from interpreter.constants import Language
-from interpreter.refs.func_ref import BoundFuncRef
-from interpreter.func_name import FuncName
 from tests.integration.exec_helpers import run_locals
 
 

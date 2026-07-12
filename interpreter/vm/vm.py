@@ -6,31 +6,31 @@ from collections.abc import Callable
 from types import MappingProxyType
 from typing import Any
 
-from interpreter.address import Address, NO_ADDRESS
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.address import NO_ADDRESS, Address
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.register import Register
-from interpreter.var_name import VarName
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
-    SymbolicValue,
-    HeapObject,
+    VOID_RETURN,
     ClosureEnvironment,
     ExceptionHandler,
-    Pointer,
-    StackFrame,
-    VMState,
+    ExecutionResult,
+    HeapObject,
     HeapWrite,
     NewObject,
+    Pointer,
     RegionWrite,
+    StackFrame,
     StackFramePush,
     StateUpdate,
-    ExecutionResult,
+    SymbolicValue,
+    VMState,
     _serialize_value,
-    VOID_RETURN,
 )
 
 _EMPTY_TYPE_ENV = TypeEnvironment(

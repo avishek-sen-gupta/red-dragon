@@ -4,7 +4,7 @@ COMP/BINARY uses big-endian two's complement representation.
 Byte sizes: <=4 digits -> 2 bytes, <=9 digits -> 4 bytes, <=18 digits -> 8 bytes.
 """
 
-from interpreter.cobol.binary import encode_binary, decode_binary
+from interpreter.cobol.binary import decode_binary, encode_binary
 
 
 class TestEncodeBinary:

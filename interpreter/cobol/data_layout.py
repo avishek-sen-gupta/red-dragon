@@ -111,7 +111,7 @@ class DataLayout:
     """
 
     fields: dict[str, FieldLayout] = field(default_factory=dict)
-    groups: dict[str, "DataLayout"] = field(default_factory=dict)
+    groups: dict[str, DataLayout] = field(default_factory=dict)
     offset: int = 0
     total_bytes: int = 0
     occurs_count: int = 0
@@ -206,7 +206,7 @@ class DataLayout:
 
     def lookup_group_qualified(
         self, name: str, qualifiers: tuple[str, ...]
-    ) -> "DataLayout | None":
+    ) -> DataLayout | None:
         """Like :meth:`lookup_qualified` but for a group ``name``.
 
         Returns the nested group ``name`` within the resolved qualifier group, or
@@ -226,7 +226,7 @@ class DataLayout:
         except KeyError:
             return None
 
-    def lookup_group(self, name: str) -> "DataLayout":
+    def lookup_group(self, name: str) -> DataLayout:
         """Return a nested DataLayout by group name; raises KeyError if not found.
 
         Matched case-insensitively (COBOL identifiers are case-insensitive)."""
@@ -387,7 +387,7 @@ class DataLayout:
 def _placed_child_extent(
     cobol_field: CobolField,
     sub_fields: dict[str, FieldLayout],
-    sub_groups: dict[str, "DataLayout"],
+    sub_groups: dict[str, DataLayout],
     group_offset: int,
 ) -> int | None:
     """Return the group's byte length from its children's PLACED extents.

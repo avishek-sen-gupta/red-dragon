@@ -18,10 +18,10 @@ from interpreter.cobol.cobol_expression import (
     LiteralNode,
 )
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.statement_dispatch import dispatch_statement
-from interpreter.cobol.features import CobolFeature
 from interpreter.instructions import Binop, Const
 from interpreter.operator_kind import resolve_binop
 from tests.covers import covers

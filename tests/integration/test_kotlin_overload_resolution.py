@@ -4,12 +4,12 @@ Tests that when Kotlin source code defines overloaded methods, the executor pick
 the correct overload based on call-site argument arity and types.
 """
 
-from interpreter.frontends.kotlin.features import KotlinFeature
-from interpreter.var_name import VarName
 from interpreter.constants import Language
+from interpreter.frontends.kotlin.features import KotlinFeature
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap
-from interpreter.project.entry_point import EntryPoint
+from interpreter.var_name import VarName
 from tests.covers import covers
 
 

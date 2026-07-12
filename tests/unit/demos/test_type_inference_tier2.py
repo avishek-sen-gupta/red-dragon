@@ -11,14 +11,14 @@ Exercises 6 features:
 """
 
 from interpreter.api import lower_and_infer
+from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.register import Register
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
-from interpreter.register import Register
-from interpreter.func_name import FuncName
 from interpreter.var_name import VarName
 
 

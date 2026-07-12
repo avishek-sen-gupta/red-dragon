@@ -1,18 +1,13 @@
 """Tests for export table construction from IR + symbol tables."""
 
-from pathlib import Path
-
-import pytest
-
-from interpreter.project.types import ExportTable
-from interpreter.project.compiler import build_export_table
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.refs.func_ref import FuncRef
-from interpreter.refs.class_ref import ClassRef
+from interpreter.class_name import ClassName
 from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.project.compiler import build_export_table
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
 from interpreter.var_name import VarName
-from interpreter.class_name import ClassName
 
 
 class TestBuildExportTable:

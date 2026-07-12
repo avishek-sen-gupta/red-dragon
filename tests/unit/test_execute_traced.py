@@ -1,17 +1,19 @@
 """Tests for execute_cfg_traced and execute_traced — traced execution with step snapshots."""
 
-from interpreter.var_name import VarName
-from interpreter.register import Register
-from interpreter.ir import Opcode, CodeLabel
 from interpreter.cfg import build_cfg
+from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel, Opcode
+from interpreter.register import Register
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg_traced, initial_vm_state
-from interpreter.trace_types import TraceStep, ExecutionTrace
+from interpreter.trace_types import ExecutionTrace, TraceStep
 from interpreter.types.typed_value import unwrap
-from interpreter.func_name import FuncName
+from interpreter.var_name import VarName
+from tests.unit.cfg_helpers import (
+    build_simple_cfg as _build_simple_cfg,
+)
 from tests.unit.cfg_helpers import (
     make_instructions as _make_instructions,
-    build_simple_cfg as _build_simple_cfg,
 )
 
 
@@ -244,17 +246,17 @@ class TestExecuteCfgTraced:
     def test_execute_cfg_traced_accepts_prebuilt_vm(self):
         """execute_cfg_traced should reuse a pre-built VM."""
         source = "x = 42"
-        from interpreter.frontend import get_frontend
         from interpreter.constants import Language
+        from interpreter.frontend import get_frontend
 
         frontend = get_frontend(Language.PYTHON)
         instructions = frontend.lower(source.encode("utf-8"))
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        from interpreter.vm.vm import VMState, StackFrame
-        from interpreter.types.typed_value import typed
         from interpreter.types.type_expr import UNKNOWN
+        from interpreter.types.typed_value import typed
+        from interpreter.vm.vm import StackFrame, VMState
 
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name=FuncName("__main__")))

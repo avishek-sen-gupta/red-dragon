@@ -6,10 +6,10 @@ time, so the iterable is used directly for index-based iteration.
 
 from __future__ import annotations
 
-from interpreter.ir import Opcode
-from tests.unit.rosetta.conftest import parse_for_language
 from interpreter.frontends.lua.features import LuaFeature
+from interpreter.ir import Opcode
 from tests.covers import covers
+from tests.unit.rosetta.conftest import parse_for_language
 
 
 class TestLuaGenericForStripsIpairs:

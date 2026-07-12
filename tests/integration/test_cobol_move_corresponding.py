@@ -12,10 +12,14 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
+from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
 from tests.integration.cobol_helpers import (
-    bridge_jar,
     decode_zoned_unsigned as _decode_zoned_unsigned,
+)
+from tests.integration.cobol_helpers import (
     first_region as _first_region,
+)
+from tests.integration.cobol_helpers import (
     run_cobol as _run_cobol,
 )
 

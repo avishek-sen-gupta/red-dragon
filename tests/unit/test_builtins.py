@@ -3,24 +3,24 @@
 import logging
 
 from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.func_name import FuncName
+from interpreter.types.typed_value import TypedValue, typed_from_runtime
 from interpreter.vm.builtins import (
+    Builtins,
+    _builtin_object_rest,
     _builtin_print,
     _builtin_slice,
-    _builtin_object_rest,
-    Builtins,
 )
 from interpreter.vm.vm import Operators, apply_update
 from interpreter.vm.vm_types import (
     BuiltinResult,
     HeapObject,
+    Pointer,
     StackFrame,
     StateUpdate,
     VMState,
 )
-from interpreter.types.typed_value import TypedValue, typed_from_runtime
-from interpreter.vm.vm_types import Pointer
 
 
 def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:

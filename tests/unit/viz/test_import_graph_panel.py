@@ -1,6 +1,7 @@
 """Tests for ImportGraphPanel — box-drawing import DAG."""
 
 from pathlib import Path
+
 from viz.panels.import_graph_panel import render_import_graph
 
 

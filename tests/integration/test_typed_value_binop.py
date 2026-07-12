@@ -6,12 +6,12 @@ through the full pipeline.
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.constants import Language
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import SymbolicValue
-from interpreter.project.entry_point import EntryPoint
 from tests.integration.exec_helpers import run_locals
 
 

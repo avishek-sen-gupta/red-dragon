@@ -1,13 +1,13 @@
 """Tests for _resolve_reg returning TypedValue."""
 
+from interpreter.address import Address
+from interpreter.func_name import FuncName
 from interpreter.register import Register
 from interpreter.type_name import TypeName
+from interpreter.types.type_expr import UNKNOWN, pointer, scalar
+from interpreter.types.typed_value import TypedValue, typed
 from interpreter.vm.vm import _resolve_reg
-from interpreter.address import Address
 from interpreter.vm.vm_types import Pointer, StackFrame, VMState
-from interpreter.func_name import FuncName
-from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.types.type_expr import pointer, scalar, UNKNOWN
 
 
 def _make_vm(**registers: object) -> VMState:

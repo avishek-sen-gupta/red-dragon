@@ -8,47 +8,43 @@ from typing import Any
 
 import pytest
 
-from interpreter.ir import Opcode
-from interpreter.instructions import InstructionBase
-from interpreter.types.typed_value import unwrap
-from interpreter.vm.vm import VMState, apply_update
-from interpreter.vm.vm_types import StackFrame
-from interpreter.func_name import FuncName
-from interpreter.vm.executor import (
-    LocalExecutor,
-    HandlerContext,
-    _default_handler_context,
+from interpreter.cobol.alphanumeric import decode_alphanumeric, encode_alphanumeric
+from interpreter.cobol.binary import decode_binary, encode_binary
+from interpreter.cobol.comp3 import decode_comp3, encode_comp3
+from interpreter.cobol.data_filters import align_decimal, left_adjust
+from interpreter.cobol.float_encoding import (
+    decode_comp1,
+    decode_comp2,
+    encode_comp1,
+    encode_comp2,
 )
-from interpreter.cfg import CFG
-from interpreter.registry import FunctionRegistry
-
 from interpreter.cobol.ir_encoders import (
-    build_encode_zoned_ir,
-    build_decode_zoned_ir,
-    build_encode_zoned_separate_ir,
-    build_decode_zoned_separate_ir,
-    build_encode_comp3_ir,
+    build_decode_alphanumeric_ir,
+    build_decode_binary_ir,
     build_decode_comp3_ir,
+    build_decode_float_ir,
+    build_decode_zoned_ir,
+    build_decode_zoned_separate_ir,
     build_encode_alphanumeric_ir,
     build_encode_alphanumeric_justified_ir,
-    build_decode_alphanumeric_ir,
     build_encode_binary_ir,
-    build_decode_binary_ir,
+    build_encode_comp3_ir,
     build_encode_float_ir,
-    build_decode_float_ir,
+    build_encode_zoned_ir,
+    build_encode_zoned_separate_ir,
 )
-from interpreter.cobol.zoned_decimal import encode_zoned, decode_zoned
-from interpreter.cobol.comp3 import encode_comp3, decode_comp3
-from interpreter.cobol.binary import encode_binary, decode_binary
-from interpreter.cobol.float_encoding import (
-    encode_comp1,
-    decode_comp1,
-    encode_comp2,
-    decode_comp2,
-)
-from interpreter.cobol.alphanumeric import encode_alphanumeric, decode_alphanumeric
-from interpreter.cobol.data_filters import align_decimal, left_adjust
+from interpreter.cobol.zoned_decimal import decode_zoned, encode_zoned
+from interpreter.func_name import FuncName
+from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
 from interpreter.register import Register
+from interpreter.types.typed_value import unwrap
+from interpreter.vm.executor import (
+    LocalExecutor,
+    _default_handler_context,
+)
+from interpreter.vm.vm import VMState, apply_update
+from interpreter.vm.vm_types import StackFrame
 
 
 def _execute_ir(instructions: list[InstructionBase], registers: dict[str, Any]) -> Any:

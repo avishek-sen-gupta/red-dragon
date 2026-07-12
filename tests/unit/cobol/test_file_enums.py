@@ -1,6 +1,7 @@
-from interpreter.cobol.file_enums import OpenMode, FileOrganization, AccessMode
-from tests.covers import covers, NotLanguageFeature
 import pytest
+
+from interpreter.cobol.file_enums import AccessMode, FileOrganization, OpenMode
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

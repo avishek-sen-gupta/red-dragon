@@ -26,7 +26,7 @@ class FieldRefNode:
     """Reference to a COBOL data field by name."""
 
     name: str
-    subscripts: tuple["ExprNode", ...] = ()
+    subscripts: tuple[ExprNode, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -34,9 +34,9 @@ class RefModNode:
     """Reference modification: field reference with start position and optional length."""
 
     name: str
-    ref_mod_start: "ExprNode"
-    ref_mod_length: "ExprNode | None" = None
-    subscripts: tuple["ExprNode", ...] = ()
+    ref_mod_start: ExprNode
+    ref_mod_length: ExprNode | None = None
+    subscripts: tuple[ExprNode, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,8 @@ class BinOpNode:
     """Binary arithmetic operation."""
 
     op: str  # "+", "-", "*", "/"
-    left: "ExprNode"
-    right: "ExprNode"
+    left: ExprNode
+    right: ExprNode
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,7 @@ class FunctionNode:
     """
 
     name: str
-    args: tuple["ExprNode", ...] = ()
+    args: tuple[ExprNode, ...] = ()
 
 
 ExprNode = LiteralNode | FieldRefNode | RefModNode | BinOpNode | FunctionNode

@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from tests.covers import covers, NotLanguageFeature
 from interpreter.cobol.file_drivers import (
-    open_driver,
-    SequentialDriver,
     IndexedDriver,
     RelativeDriver,
+    SequentialDriver,
+    open_driver,
 )
 from interpreter.cobol.file_enums import FileOrganization, OpenMode
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

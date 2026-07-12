@@ -1,7 +1,7 @@
 import inspect
 
 from interpreter.handlers.calls import _try_class_constructor_call
-from tests.covers import covers, NotLanguageFeature
+from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

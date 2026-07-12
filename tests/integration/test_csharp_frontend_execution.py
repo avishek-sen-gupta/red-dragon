@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.address import Address
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.var_name import VarName
 from interpreter.constants import Language
+from interpreter.field_name import FieldKind, FieldName
+from interpreter.frontends.csharp.features import CSharpFeature
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.project.entry_point import EntryPoint
+from interpreter.var_name import VarName
 from tests.covers import covers
-from interpreter.frontends.csharp.features import CSharpFeature
 
 
 def _run_csharp(source: str, max_steps: int = 500) -> dict:

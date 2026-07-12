@@ -3,7 +3,7 @@
 Test vectors ported from smojol DataTypesTest.java.
 """
 
-from interpreter.cobol.data_filters import right_adjust, left_adjust, align_decimal
+from interpreter.cobol.data_filters import align_decimal, left_adjust, right_adjust
 
 
 class TestRightAdjust:

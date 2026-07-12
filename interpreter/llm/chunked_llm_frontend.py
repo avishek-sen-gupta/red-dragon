@@ -7,13 +7,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from interpreter import constants
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
-from interpreter.refs.class_ref import ClassRef
-from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import CodeLabel, IRInstruction, NoCodeLabel, Opcode, NO_LABEL
 from interpreter.instructions import InstructionBase, Label_, Symbolic
-from interpreter.register import Register, NO_REGISTER
+from interpreter.ir import NO_LABEL, CodeLabel, IRInstruction, NoCodeLabel, Opcode
 from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
@@ -21,7 +19,9 @@ from interpreter.llm.llm_frontend import (
     _convert_llm_func_refs,
 )
 from interpreter.parser import ParserFactory
-from interpreter import constants
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
+from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 

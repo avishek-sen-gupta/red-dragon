@@ -1,17 +1,16 @@
 from pathlib import Path
 
-from interpreter.project.types import ModuleUnit
-
 from experiments.java_stdlib.stubs.java_io_print_stream import PRINT_STREAM_MODULE
-from experiments.java_stdlib.stubs.java_util_calendar import CALENDAR_MODULE
-from experiments.java_stdlib.stubs.java_util_gregorian_calendar import (
-    GREGORIAN_CALENDAR_MODULE,
-)
 from experiments.java_stdlib.stubs.java_lang_math import MATH_MODULE
 from experiments.java_stdlib.stubs.java_lang_string import STRING_MODULE
 from experiments.java_stdlib.stubs.java_lang_system import SYSTEM_MODULE
 from experiments.java_stdlib.stubs.java_util_array_list import ARRAY_LIST_MODULE
+from experiments.java_stdlib.stubs.java_util_calendar import CALENDAR_MODULE
+from experiments.java_stdlib.stubs.java_util_gregorian_calendar import (
+    GREGORIAN_CALENDAR_MODULE,
+)
 from experiments.java_stdlib.stubs.java_util_hash_map import HASH_MAP_MODULE
+from interpreter.project.types import ModuleUnit
 
 STDLIB_REGISTRY: dict[Path, ModuleUnit] = {
     # Concrete classes (PrintStream must precede System — System.__init__ allocates a PrintStream)

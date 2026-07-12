@@ -6,8 +6,8 @@ the resulting TypeEnvironmentBuilder for correct type seeding.
 
 from __future__ import annotations
 
-from interpreter.ir import Opcode
 from interpreter.instructions import InstructionBase
+from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 
 

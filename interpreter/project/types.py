@@ -7,27 +7,29 @@ data model for the multi-file pipeline.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Sequence
 
 from interpreter.cfg_types import CFG
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
+from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel
 from interpreter.project.import_types import (
     ImportKind as ImportKind,
+)
+from interpreter.project.import_types import (
     ImportRef as ImportRef,
 )
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
-from interpreter.var_name import VarName
-from interpreter.instructions import InstructionBase
 from interpreter.registry import FunctionRegistry
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
-from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.var_name import VarName
 
 # ── Errors ───────────────────────────────────────────────────────
 

@@ -11,14 +11,12 @@ Exercises all 6 new features:
 """
 
 import logging
-import sys
 
 from interpreter.api import lower_and_infer
-from interpreter.constants import Language
+from interpreter.ir import Opcode
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.ir import Opcode
 from interpreter.types.type_expr import UNBOUND
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver

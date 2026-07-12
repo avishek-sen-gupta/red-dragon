@@ -1,20 +1,20 @@
 """Tests for _heap_addr() Pointer support and ADDRESS_OF guard."""
 
-from interpreter.field_name import FieldName, FieldKind
-from interpreter.type_name import TypeName
-from interpreter.register import Register
-from interpreter.var_name import VarName
-from interpreter.address import Address, NO_ADDRESS
-from interpreter.vm.vm import _heap_addr, HeapObject, VMState
-from interpreter.vm.vm_types import Pointer, StackFrame, SymbolicValue
+from interpreter.address import NO_ADDRESS, Address
+from interpreter.field_name import FieldKind, FieldName
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm.executor import _handle_address_of, _default_handler_context
+from interpreter.register import Register
+from interpreter.type_name import TypeName
+from interpreter.var_name import VarName
+from interpreter.vm.executor import _default_handler_context, _handle_address_of
+from interpreter.vm.vm import HeapObject, VMState, _heap_addr
+from interpreter.vm.vm_types import Pointer, StackFrame, SymbolicValue
 
 _CTX = _default_handler_context()
-from interpreter.types.typed_value import typed
-from interpreter.types.type_expr import pointer, scalar
 from interpreter.constants import FoundationTypeName
 from interpreter.func_name import FuncName
+from interpreter.types.type_expr import pointer, scalar
+from interpreter.types.typed_value import typed
 
 
 class TestHeapAddrPointer:

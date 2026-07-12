@@ -1,15 +1,20 @@
 """Ruby-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
-from interpreter.type_name import TypeName
 
 from typing import Any
 
-from interpreter.var_name import VarName
+from interpreter import constants
 from interpreter.field_name import FieldName
+from interpreter.frontends.common.expressions import (
+    extract_call_args,
+    lower_canonical_none,
+    lower_default_return,
+    lower_interpolated_string_parts,
+    lower_string_literal,
+)
 from interpreter.frontends.context import TreeSitterEmitContext
-
-from interpreter.operator_kind import resolve_binop
+from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -33,19 +38,11 @@ from interpreter.instructions import (
     Symbolic,
     Throw_,
 )
-from interpreter import constants
-from interpreter.frontends.common.expressions import (
-    extract_call_args,
-    lower_canonical_none,
-    lower_default_return,
-    lower_int_literal,
-    lower_float_literal,
-    lower_string_literal,
-    lower_interpolated_string_parts,
-)
-from interpreter.frontends.ruby.node_types import RubyNodeType
+from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 
 
 def lower_ruby_symbol(

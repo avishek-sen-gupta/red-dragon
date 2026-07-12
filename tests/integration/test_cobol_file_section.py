@@ -11,8 +11,11 @@ from __future__ import annotations
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.subprocess_runner import RealSubprocessRunner
-from tests.covers import covers, NotLanguageFeature
-from tests.integration.cobol_helpers import bridge_jar, to_fixed
+from tests.covers import NotLanguageFeature, covers
+from tests.integration.cobol_helpers import (
+    bridge_jar,  # noqa: F401
+    to_fixed,
+)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

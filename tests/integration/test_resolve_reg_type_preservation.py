@@ -1,13 +1,13 @@
 """Integration tests: parameterized types survive through _resolve_reg pipeline."""
 
-from interpreter.constants import Language, FoundationTypeName
-from interpreter.type_name import TypeName
+from interpreter.constants import FoundationTypeName, Language
+from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
-from interpreter.types.typed_value import TypedValue
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import ParameterizedType, pointer, scalar
+from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
-from interpreter.project.entry_point import EntryPoint
 
 
 def _typed_locals(vm):

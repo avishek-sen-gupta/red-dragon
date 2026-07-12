@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.covers import covers, NotLanguageFeature
 from interpreter.cobol.cobol_parser import make_cobol_parser
 from interpreter.project.cobol_connections import extract_cobol_connections
 from interpreter.project.graph_types import EdgeKind, NodeKind
+from tests.covers import NotLanguageFeature, covers
 
 _MAIN_CALL = b"""       IDENTIFICATION DIVISION.
        PROGRAM-ID. MAIN.

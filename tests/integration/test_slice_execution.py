@@ -7,12 +7,11 @@ independent — add/remove without affecting others.
 
 from __future__ import annotations
 
-from interpreter.var_name import VarName
 from interpreter.types.typed_value import unwrap
+from interpreter.var_name import VarName
 from tests.unit.rosetta.conftest import (
     execute_for_language,
     extract_answer,
-    extract_array,
 )
 
 
