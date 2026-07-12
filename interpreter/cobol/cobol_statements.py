@@ -108,6 +108,29 @@ CobolStatementType = Union[
 # ── Statement types ──────────────────────────────────────────────
 
 
+def _serialize_ref_mod_expr(expr) -> dict:
+    """Serialize RefModExpr back to JSON dict format."""
+    from interpreter.cobol.ref_mod import (
+        RefModBinOp,
+        RefModLiteral,
+        RefModReference,
+    )
+
+    if isinstance(expr, RefModLiteral):
+        return {"kind": "lit", "value": expr.value}
+    elif isinstance(expr, RefModReference):
+        return {"kind": "ref", "name": expr.name}
+    elif isinstance(expr, RefModBinOp):
+        return {
+            "kind": "binop",
+            "op": expr.op,
+            "left": _serialize_ref_mod_expr(expr.left),
+            "right": _serialize_ref_mod_expr(expr.right),
+        }
+    else:
+        return {}
+
+
 @dataclass(frozen=True)
 class MoveStatement:
     """MOVE source TO target.
@@ -141,9 +164,9 @@ class MoveStatement:
     def _operand_dict(self, operand: RefModOperand) -> dict:
         d: dict = {"name": operand.name}
         if operand.ref_mod_start is not None:
-            d["ref_mod_start"] = self._serialize_ref_mod_expr(operand.ref_mod_start)
+            d["ref_mod_start"] = _serialize_ref_mod_expr(operand.ref_mod_start)
         if operand.ref_mod_length is not None:
-            d["ref_mod_length"] = self._serialize_ref_mod_expr(operand.ref_mod_length)
+            d["ref_mod_length"] = _serialize_ref_mod_expr(operand.ref_mod_length)
         return d
 
     def to_dict(self) -> dict:
@@ -158,29 +181,6 @@ class MoveStatement:
         operands = [source_dict]
         operands.extend(self._operand_dict(t) for t in self.targets)
         return {"type": "MOVE", "operands": operands}
-
-    @staticmethod
-    def _serialize_ref_mod_expr(expr) -> dict:
-        """Serialize RefModExpr back to JSON dict format."""
-        from interpreter.cobol.ref_mod import (
-            RefModBinOp,
-            RefModLiteral,
-            RefModReference,
-        )
-
-        if isinstance(expr, RefModLiteral):
-            return {"kind": "lit", "value": expr.value}
-        elif isinstance(expr, RefModReference):
-            return {"kind": "ref", "name": expr.name}
-        elif isinstance(expr, RefModBinOp):
-            return {
-                "kind": "binop",
-                "op": expr.op,
-                "left": MoveStatement._serialize_ref_mod_expr(expr.left),
-                "right": MoveStatement._serialize_ref_mod_expr(expr.right),
-            }
-        else:
-            return {}
 
 
 @dataclass(frozen=True)

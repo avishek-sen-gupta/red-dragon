@@ -1428,10 +1428,7 @@ def _builtin_median(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     ordered = sorted(values)
     n = len(ordered)
     mid = n // 2
-    if n % 2 == 1:
-        result = ordered[mid]
-    else:
-        result = (ordered[mid - 1] + ordered[mid]) / 2
+    result = ordered[mid] if n % 2 == 1 else (ordered[mid - 1] + ordered[mid]) / 2
     return BuiltinResult(value=_decimal_to_intrinsic(result))
 
 

@@ -137,10 +137,7 @@ def lower_rust_string_literal(
         raw = ctx.node_text(node)
         # Strip leading b/B prefix and surrounding quotes
         raw = raw.lstrip("bB")
-        if raw.startswith('"') and raw.endswith('"'):
-            value = raw[1:-1]
-        else:
-            value = raw
+        value = raw[1:-1] if raw.startswith('"') and raw.endswith('"') else raw
     return lower_string_literal(ctx, node, value)
 
 
@@ -188,10 +185,7 @@ def lower_rust_char_literal(
     """
     raw = ctx.node_text(node)
     # Strip surrounding single quotes: 'x' -> x
-    if raw.startswith("'") and raw.endswith("'"):
-        inner = raw[1:-1]
-    else:
-        inner = raw
+    inner = raw[1:-1] if raw.startswith("'") and raw.endswith("'") else raw
 
     # Handle escape sequences
     if inner.startswith("\\"):

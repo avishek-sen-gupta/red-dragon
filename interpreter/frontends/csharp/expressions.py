@@ -75,10 +75,7 @@ def lower_csharp_real_literal(ctx: TreeSitterEmitContext, node: Any) -> Register
 def lower_csharp_string_literal(ctx: TreeSitterEmitContext, node: Any) -> Register:
     """Lower C# regular string literal: strip quotes and resolve escape sequences."""
     text = ctx.node_text(node)
-    if text.startswith('"') and text.endswith('"'):
-        inner = text[1:-1]
-    else:
-        inner = text
+    inner = text[1:-1] if text.startswith('"') and text.endswith('"') else text
     value = _resolve_csharp_escapes(inner)
     return lower_string_literal(ctx, node, value)
 
@@ -101,10 +98,7 @@ def lower_csharp_verbatim_string_literal(
 def lower_csharp_char_literal(ctx: TreeSitterEmitContext, node: Any) -> Register:
     """Lower C# character literal: 'x' → int ord."""
     text = ctx.node_text(node)
-    if text.startswith("'") and text.endswith("'"):
-        inner = text[1:-1]
-    else:
-        inner = text
+    inner = text[1:-1] if text.startswith("'") and text.endswith("'") else text
     char_val = _resolve_csharp_char_escape(inner)
     return lower_int_literal(ctx, node, text=str(ord(char_val)))
 
