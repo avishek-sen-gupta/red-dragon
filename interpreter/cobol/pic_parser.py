@@ -31,7 +31,11 @@ from lark import Lark, Transformer
 from lark.exceptions import UnexpectedInput
 
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.edit_picture import is_numeric_edited, parse_edit_picture
+from interpreter.cobol.edit_picture import (
+    is_numeric_edited,
+    parse_edit_picture,
+    reject_unsupported,
+)
 
 _USAGE_TO_CATEGORY = {
     "COMP-3": CobolDataCategory.COMP3,
@@ -246,6 +250,12 @@ def parse_pic(
             decimal_digits=0,
             signed=False,
         )
+
+    # Refuse edit symbols format_edited would mis-format, BEFORE the
+    # is_numeric_edited gate below — an all-float picture like "$$$$.$$" has no
+    # 9/Z, so it fails that gate and would otherwise reach the Lark grammar and
+    # die as an opaque "Cannot parse PIC clause" (red-dragon-0599).
+    reject_unsupported(pic)
 
     # Numeric-edited pictures (sign / Z suppression / comma / decimal insertion)
     # carry editing characters the Lark grammar deliberately drops. Their storage

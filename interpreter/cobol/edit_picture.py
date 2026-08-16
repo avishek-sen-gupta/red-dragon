@@ -15,20 +15,108 @@ Supported edit constructs (the subset used by AWS CardDemo):
   - Digit positions: ``9`` (always shown) and ``Z`` (suppressible)
 
 NOT supported (absent from CardDemo): floating sign / currency (``$$$``,
-``++++``, ``----``), ``*`` check protection, ``CR`` / ``DB``, ``B`` / ``0`` /
-``/`` insertion, ``P`` scaling.
+``++++``, ``----``), ``*`` check protection, ``CR`` / ``DB``, ``P`` scaling.
+(``B`` / ``0`` / ``/`` insertion IS supported — added by red-dragon-r9s9.)
+
+Unsupported symbols are REJECTED at parse time by :func:`reject_unsupported`,
+not formatted on a best-effort basis. They previously reached the verbatim
+fallback in :func:`format_edited` and produced well-formed but wrong output —
+``CR`` printed on positive balances, and the integer part of a ``$$,$$$.99``
+amount replaced by ``$`` characters. Output that looks like valid data is a
+worse failure than a refusal (red-dragon-0599). Implementing them for real is
+red-dragon-5f4g; each symbol leaves the rejection list as it lands.
+
+Note ``$`` is only rejected as a FLOATING run of two or more. A single fixed
+``$`` (e.g. ``$ZZZ,ZZZ.99``) formats correctly via the verbatim branch and
+remains supported.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from itertools import groupby
 
 # Picture symbols that mark a position as numeric-edited (vs. plain numeric /
 # alphanumeric). The presence of any of these — or an actual '.' decimal point —
 # makes the PIC a numeric-edited item.
 _SIGN_SYMS = frozenset("+-")
 _EDIT_SYMS = frozenset("Z+-,.B0/")
+
+
+# Edit symbols that can FLOAT: a run of two or more is a floating insertion
+# (n-1 digit positions plus one reserved symbol position), which this module
+# does not implement. A run of exactly ONE is fixed insertion, which it does.
+_FLOAT_SYMS = frozenset("$+-")
+
+# Trailing two-character sign tokens. Valid only as the last two positions.
+_TRAILING_SIGN_TOKENS = ("CR", "DB")
+
+
+class UnsupportedEditPictureError(ValueError):
+    """An edit picture RedDragon cannot honour (red-dragon-0599).
+
+    Subclasses ValueError because ``parse_pic`` has always raised ValueError
+    for unparseable pictures; existing ``except ValueError`` handling keeps
+    working while callers that care can catch this precisely.
+    """
+
+
+def reject_unsupported(pic: str) -> None:
+    """Raise if ``pic`` uses an edit symbol this module would mis-format.
+
+    ``format_edited`` implements only the CardDemo subset (fixed sign, Z
+    suppression, comma/decimal/B/0/slash insertion). Every other edit symbol
+    reaches its verbatim fallback branch and produces well-formed but WRONG
+    output — e.g. ``CR`` stamped on a positive balance, or the integer part
+    of a ``$$,$$$.99`` amount replaced by ``$`` characters. Wrong output that
+    looks like valid data is worse than a refusal, so refuse.
+
+    Real support for these symbols is red-dragon-5f4g; this check goes away
+    symbol-by-symbol as that lands.
+
+    The scan runs on EXPANDED positions, never the raw string: ``$(4)`` is the
+    same floating run as ``$$$$``, and conversely the ``0`` inside a repeat
+    count like ``9(10)`` must not be read as a symbol (red-dragon-r9s9).
+    """
+    try:
+        positions = _expand(pic.upper())
+    except ValueError:
+        # Malformed repeat count — not our error to report. Let the caller's
+        # own parse produce its (more specific) failure.
+        return
+
+    # Alphanumeric pictures are not numeric-edited and never carry these as
+    # edit symbols; mirrors is_numeric_edited's X/A test.
+    if "X" in positions or "A" in positions:
+        return
+
+    if len(positions) >= 2:
+        trailing = "".join(positions[-2:])
+        if trailing in _TRAILING_SIGN_TOKENS:
+            raise UnsupportedEditPictureError(
+                f"PIC {pic!r} uses the trailing sign symbol {trailing!r}, which "
+                f"RedDragon does not support: it is currently emitted for "
+                f"positive values too, which would report a credit on a debit. "
+                f"See red-dragon-5f4g."
+            )
+
+    if "*" in positions:
+        raise UnsupportedEditPictureError(
+            f"PIC {pic!r} uses '*' check protection, which RedDragon does not "
+            f"support: '*' is not counted as a digit position, so the value "
+            f"would be mis-placed within the field. See red-dragon-5f4g."
+        )
+
+    for sym, run in groupby(positions):
+        run_length = len(tuple(run))
+        if sym in _FLOAT_SYMS and run_length >= 2:
+            raise UnsupportedEditPictureError(
+                f"PIC {pic!r} uses a floating {sym!r} run of {run_length}, which "
+                f"RedDragon does not support: only a single fixed {sym!r} is "
+                f"handled, so the floating positions would be emitted literally "
+                f"instead of the value. See red-dragon-5f4g."
+            )
 
 
 def _expand(pic: str) -> list[str]:
