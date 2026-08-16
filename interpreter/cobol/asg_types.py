@@ -17,6 +17,7 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.cobol_types import CobolTypeDescriptor
 from interpreter.cobol.condition_name import ConditionName, ConditionValue
+from interpreter.cobol.edit_picture import UnsupportedEditPictureError
 from interpreter.cobol.pic_parser import parse_pic
 
 
@@ -62,18 +63,21 @@ class CobolField:
     def __post_init__(self) -> None:
         # Parse the PIC clause exactly ONCE, at ingestion, into the canonical
         # type descriptor. Frozen dataclass -> set via object.__setattr__.
-        object.__setattr__(
-            self,
-            "type_descriptor",
-            parse_pic(
+        try:
+            descriptor = parse_pic(
                 self.pic,
                 self.usage,
                 sign_leading=self.sign_leading,
                 sign_separate=self.sign_separate,
                 justified_right=self.justified_right,
                 blank_when_zero=self.blank_when_zero,
-            ),
-        )
+            )
+        except UnsupportedEditPictureError as exc:
+            # parse_pic sees only the picture. This is a load-time abort, so
+            # name the field too — otherwise the user has to grep the program
+            # for the picture to find out what failed (red-dragon-0599).
+            raise UnsupportedEditPictureError(f"field {self.name}: {exc}") from exc
+        object.__setattr__(self, "type_descriptor", descriptor)
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:

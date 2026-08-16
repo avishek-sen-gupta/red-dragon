@@ -11,10 +11,14 @@ Expected values follow IBM Enterprise COBOL editing rules.
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.cobol.edit_picture import (
+    UnsupportedEditPictureError,
     format_edited,
     is_numeric_edited,
     parse_edit_picture,
+    reject_unsupported,
 )
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -165,3 +169,128 @@ class TestInsertionEditSymbols:
     def test_format_edited_blank_insertion(self):
         """format_edited emits a space for B insertion positions."""
         assert format_edited("123456", "9(5)BB9") == "12345  6"
+
+
+class TestRejectUnsupported:
+    """Unsupported edit symbols are rejected at parse time rather than
+    silently mis-formatted (red-dragon-0599).
+
+    Real support for these symbols is red-dragon-5f4g; until then a loud
+    failure at field ingestion is the correct resting state, because the
+    alternative is well-formed but wrong output (e.g. 'CR' stamped on a
+    positive balance) that looks like valid data downstream.
+    """
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_floating_currency_run_is_rejected(self):
+        with pytest.raises(UnsupportedEditPictureError, match=r"\$"):
+            reject_unsupported("$$,$$$.99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_all_floating_currency_picture_is_rejected(self):
+        """The all-float picture that has no 9/Z at all — it never reached
+        is_numeric_edited, so it used to die as 'Cannot parse PIC clause'."""
+        with pytest.raises(UnsupportedEditPictureError, match=r"\$"):
+            reject_unsupported("$$$$.$$")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_floating_currency_written_as_repeat_count_is_rejected(self):
+        """'$(4)' is the same floating run as '$$$$' — so the check must run
+        on EXPANDED positions, not the raw string."""
+        with pytest.raises(UnsupportedEditPictureError, match=r"\$"):
+            reject_unsupported("$(4).99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_floating_plus_run_is_rejected(self):
+        with pytest.raises(UnsupportedEditPictureError, match=r"\+"):
+            reject_unsupported("++++.99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_floating_minus_run_is_rejected(self):
+        with pytest.raises(UnsupportedEditPictureError, match="-"):
+            reject_unsupported("----.99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_check_protection_is_rejected(self):
+        with pytest.raises(UnsupportedEditPictureError, match=r"\*"):
+            reject_unsupported("**,***.99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_single_check_protection_symbol_is_rejected(self):
+        """Unlike '$', there is no supported single-'*' form."""
+        with pytest.raises(UnsupportedEditPictureError, match=r"\*"):
+            reject_unsupported("*ZZ9.99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_trailing_cr_is_rejected(self):
+        with pytest.raises(UnsupportedEditPictureError, match="CR"):
+            reject_unsupported("ZZZ.99CR")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_trailing_db_is_rejected(self):
+        with pytest.raises(UnsupportedEditPictureError, match="DB"):
+            reject_unsupported("ZZ9.99DB")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_error_names_the_offending_picture(self):
+        """The message must carry the picture itself — a load-time abort is
+        useless if it doesn't say which picture caused it."""
+        with pytest.raises(UnsupportedEditPictureError, match=r"\$\$,\$\$\$\.99"):
+            reject_unsupported("$$,$$$.99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_unsupported_error_is_a_value_error(self):
+        """parse_pic has always raised ValueError; subclassing keeps any
+        existing except-ValueError handling working."""
+        assert issubclass(UnsupportedEditPictureError, ValueError)
+
+
+class TestRejectUnsupportedAcceptsSupportedPictures:
+    """The rejection must not fire on pictures that work correctly today.
+    Each of these is a live regression guard, not a smoke test.
+    """
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_single_fixed_currency_is_accepted(self):
+        """A run of ONE '$' is fixed insertion and already formats correctly
+        via format_edited's verbatim branch — rejecting it would break
+        working code."""
+        reject_unsupported("$ZZZ,ZZZ.99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_fixed_leading_sign_is_accepted(self):
+        reject_unsupported("+99999999.99")
+        reject_unsupported("+ZZZ,ZZZ,ZZZ.99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_fixed_trailing_sign_is_accepted(self):
+        reject_unsupported("Z(9).99-")
+        reject_unsupported("-ZZZ,ZZZ,ZZZ.ZZ")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_trailing_blank_insertion_is_accepted(self):
+        """A trailing 'B' is legal blank insertion (supported since
+        red-dragon-r9s9) and must not be mistaken for the B of 'DB'."""
+        reject_unsupported("ZZ9.99B")
+        reject_unsupported("9(5)BB9")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_plain_numeric_pictures_are_accepted(self):
+        reject_unsupported("9(4)")
+        reject_unsupported("S9(5)V99")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_repeat_count_digits_are_not_scanned_as_symbols(self):
+        """red-dragon-r9s9 regression guard: scanning the RAW string once
+        made the '0' in '9(10)' look like an insertion symbol. The same
+        hazard applies here."""
+        reject_unsupported("9(10)")
+        reject_unsupported("S9(10)V99")
+        reject_unsupported("9(100)")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_alphanumeric_pictures_are_never_rejected(self):
+        """X/A pictures can carry these characters in a VALUE literal's
+        neighbourhood; they are not numeric-edited and must pass untouched."""
+        reject_unsupported("X(22)")
+        reject_unsupported("X(8)")
