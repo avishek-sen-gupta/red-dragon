@@ -313,10 +313,82 @@ public class AsgSerializerTest {
         assertEquals(15, DataFieldSerializer.countStoragePositions("+ZZZ,ZZZ,ZZZ.99"));
         assertEquals(13, DataFieldSerializer.countStoragePositions("Z(9).99-"));
         assertEquals(15, DataFieldSerializer.countStoragePositions("-ZZZ,ZZZ,ZZZ.ZZ"));
-        // Plain numerics/alphanumerics remain digit/char counts (not edited).
-        assertFalse(DataFieldSerializer.isNumericEdited("S9(5)V99"));
-        assertFalse(DataFieldSerializer.isNumericEdited("X(8)"));
-        assertTrue(DataFieldSerializer.isNumericEdited("+99999999.99"));
+        // Plain numerics/alphanumerics remain digit/char counts. There is no
+        // longer an isNumericEdited classification to assert against — one
+        // uniform rule sizes every picture (red-dragon-ilb6).
+        assertEquals(7, DataFieldSerializer.countStoragePositions("S9(5)V99"));
+        assertEquals(8, DataFieldSerializer.countStoragePositions("X(8)"));
+    }
+
+    /**
+     * B / 0 / slash insertion positions each occupy a byte. red-dragon-r9s9 taught
+     * the Python side this (commits 30dcb974 -> 39b1d248) but was never mirrored
+     * here, so the bridge under-allocated and every later field in the record slid
+     * backwards (red-dragon-ilb6).
+     */
+    @Test
+    public void testInsertionPositionsOccupyBytes() {
+        assertEquals(8, DataFieldSerializer.countStoragePositions("9(5)BB9"));
+        assertEquals(8, DataFieldSerializer.countStoragePositions("99/99/99"));
+        assertEquals(5, DataFieldSerializer.countStoragePositions("9(3)09"));
+    }
+
+    /**
+     * A picture with no 9/Z at all (all floating currency) previously failed the
+     * numeric-edited gate, fell through to the token regex, matched nothing, and
+     * was allocated ZERO bytes — its successor was laid on top of it.
+     */
+    @Test
+    public void testAllFloatingPictureIsSizedByCharacterWidth() {
+        assertEquals(7, DataFieldSerializer.countStoragePositions("$$$$.$$"));
+        assertEquals(7, DataFieldSerializer.countStoragePositions("$(4).99"));
+        assertEquals(7, DataFieldSerializer.countStoragePositions("++++.99"));
+    }
+
+    /** S, V and P are the only PIC symbols that occupy no storage. */
+    @Test
+    public void testScalingAndImpliedPointPositionsAreNotStored() {
+        assertEquals(1, DataFieldSerializer.countStoragePositions("PPP9"));
+        assertEquals(1, DataFieldSerializer.countStoragePositions("9PPP"));
+        assertEquals(7, DataFieldSerializer.countStoragePositions("S9(5)V99"));
+        assertEquals(12, DataFieldSerializer.countStoragePositions("S9(10)V99"));
+    }
+
+    /** Currency and check-protection positions are stored bytes like any other. */
+    @Test
+    public void testCurrencyAndCheckProtectionPositionsAreStored() {
+        assertEquals(9, DataFieldSerializer.countStoragePositions("$$,$$$.99"));
+        assertEquals(9, DataFieldSerializer.countStoragePositions("**,***.99"));
+        assertEquals(8, DataFieldSerializer.countStoragePositions("*(5).99"));
+        assertEquals(11, DataFieldSerializer.countStoragePositions("$ZZZ,ZZZ.99"));
+        assertEquals(8, DataFieldSerializer.countStoragePositions("ZZZ.99CR"));
+        assertEquals(8, DataFieldSerializer.countStoragePositions("ZZ9.99DB"));
+    }
+
+    /**
+     * The assertion that would actually have caught red-dragon-ilb6: consecutive
+     * fields must be laid out contiguously and must not overlap. Unit-testing the
+     * width alone never exercised the offset accumulator that consumes it.
+     */
+    @Test
+    public void testEditedFieldsGetContiguousNonOverlappingOffsets() throws Exception {
+        JsonObject asg = parseFixture("EditWidths.cbl");
+        JsonArray children = asg.getAsJsonArray("data_fields").get(0)
+                .getAsJsonObject().getAsJsonArray("children");
+
+        // Each edited field is followed by a PIC X(4) sentinel, so the gap between
+        // one field's offset and the next is exactly the edited field's width.
+        int[] expectedWidths = {8, 4, 8, 4, 5, 4, 7, 4};
+        int expectedOffset = 0;
+        for (int i = 0; i < expectedWidths.length; i++) {
+            JsonObject fld = children.get(i).getAsJsonObject();
+            assertEquals(
+                    "offset of " + fld.get("name").getAsString()
+                            + " (pic " + fld.get("pic").getAsString() + ")",
+                    expectedOffset,
+                    fld.get("offset").getAsInt());
+            expectedOffset += expectedWidths[i];
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
