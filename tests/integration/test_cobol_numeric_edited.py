@@ -14,6 +14,7 @@ loss); the field-source case below therefore uses a whole-number value.
 
 import pytest
 
+from interpreter.cobol.edit_picture import UnsupportedEditPictureError
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -119,3 +120,49 @@ def test_field_source_whole_number():
     region = _first_region(vm)
     # WS-SRC is 9 bytes; WS-EDIT starts at offset 9.
     assert _decode_chars(region, 9, 12) == "+00000042.00"
+
+
+class TestUnsupportedEditPicturesAreRejected:
+    """A program declaring an edit picture RedDragon cannot honour fails to
+    LOAD, rather than running and producing well-formed wrong output
+    (red-dragon-0599). Real support for these symbols is red-dragon-5f4g.
+
+    These go through the full source → bridge → field-ingestion path, so they
+    also prove the ProLeap bridge hands the raw picture through unchanged —
+    the Java side sizes these pictures happily and only the Python gate stops
+    them.
+    """
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_floating_currency_field_aborts_the_program(self):
+        with pytest.raises(UnsupportedEditPictureError, match="floating"):
+            _run_edit("$$,$$$.99", "1234.5")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_all_floating_currency_field_aborts_the_program(self):
+        with pytest.raises(UnsupportedEditPictureError, match="floating"):
+            _run_edit("$$$$.$$", "12.34")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_check_protection_field_aborts_the_program(self):
+        with pytest.raises(UnsupportedEditPictureError, match=r"check protection"):
+            _run_edit("**,***.99", "12.3")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_trailing_cr_field_aborts_the_program(self):
+        with pytest.raises(UnsupportedEditPictureError, match="CR"):
+            _run_edit("ZZZ.99CR", "4.5")
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_abort_message_names_the_declared_field(self):
+        """The whole point of failing at load is a message the user can act
+        on — it must identify the field, not just the picture."""
+        with pytest.raises(UnsupportedEditPictureError, match="WS-EDIT"):
+            _run_edit("$$,$$$.99", "1234.5")
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_single_fixed_currency_field_still_runs(self):
+        """PIC $ZZZ,ZZZ.99 formats correctly today and must keep running —
+        the rejection distinguishes a run of one from a floating run."""
+        vm = _run_edit("$ZZZ,ZZZ.99", "1234.5")
+        assert _decode_chars(_first_region(vm), 0, 11) == "$  1,234.50"
