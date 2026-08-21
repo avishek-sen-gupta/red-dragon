@@ -121,47 +121,29 @@ class TestScalingOnlyPic:
         assert result.total_digits == 1
 
 
-class TestParsePicRejectsUnsupportedEditSymbols:
-    """parse_pic refuses pictures format_edited would mis-format, at field
-    ingestion time rather than silently producing wrong output later
-    (red-dragon-0599). Support for them is red-dragon-5f4g.
+class TestParsePicAcceptsEditSymbols:
+    """parse_pic accepts every edit picture the formatter implements.
+
+    Replaces TestParsePicRejectsUnsupportedEditSymbols: red-dragon-5f4g
+    implemented floating currency/sign, '*' check protection and CR/DB, so
+    red-dragon-0599's parse-time refusal was removed. Sizing assertions are
+    kept here because byte_length is the RECORD width and must agree with the
+    bridge's uniform rule (red-dragon-ilb6).
     """
 
     @covers(CobolFeature.NUMERIC_EDITED)
-    def test_parse_pic_rejects_floating_currency(self):
-        with pytest.raises(UnsupportedEditPictureError):
-            parse_pic("$$,$$$.99")
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_parse_pic_rejects_all_floating_currency(self):
-        """This one previously died as an opaque 'Cannot parse PIC clause'
-        from the Lark grammar; it must now name the real cause."""
-        with pytest.raises(UnsupportedEditPictureError, match="floating"):
-            parse_pic("$$$$.$$")
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_parse_pic_rejects_check_protection(self):
-        with pytest.raises(UnsupportedEditPictureError):
-            parse_pic("**,***.99")
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_parse_pic_rejects_trailing_cr(self):
-        with pytest.raises(UnsupportedEditPictureError):
-            parse_pic("ZZZ.99CR")
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_parse_pic_still_accepts_single_fixed_currency(self):
-        """PIC $ZZZ,ZZZ.99 formats correctly today — rejecting it would be a
-        regression, not a fix."""
-        result = parse_pic("$ZZZ,ZZZ.99")
-        assert result.category == CobolDataCategory.NUMERIC_EDITED
-        assert result.total_digits == 11
+    def test_parse_pic_accepts_floating_and_check_protection(self):
+        assert parse_pic("$$,$$$.99").byte_length == 9
+        assert parse_pic("$$$$.$$").byte_length == 7
+        assert parse_pic("**,***.99").byte_length == 9
+        assert parse_pic("ZZZ.99CR").byte_length == 8
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_parse_pic_still_accepts_supported_edit_pictures(self):
         assert parse_pic("+ZZZ,ZZZ,ZZZ.99").total_digits == 15
         assert parse_pic("Z(9).99-").total_digits == 13
         assert parse_pic("9(5)BB9").total_digits == 8
+        assert parse_pic("$ZZZ,ZZZ.99").total_digits == 11
 
     @covers(CobolFeature.PIC_CLAUSE)
     def test_parse_pic_still_accepts_wide_plain_numeric(self):
@@ -170,14 +152,9 @@ class TestParsePicRejectsUnsupportedEditSymbols:
         assert parse_pic("S9(10)V99").total_digits == 12
 
     @covers(CobolFeature.NUMERIC_EDITED)
-    def test_field_ingestion_error_names_the_field(self):
-        """A load-time abort must say WHICH field, not just which picture —
-        parse_pic alone does not know the field name."""
-        with pytest.raises(UnsupportedEditPictureError, match="WS-BALANCE"):
-            CobolField(
-                name="WS-BALANCE",
-                level=5,
-                pic="$$,$$$.99",
-                usage="DISPLAY",
-                offset=0,
-            )
+    def test_field_ingestion_builds_descriptor_for_floating_picture(self):
+        fld = CobolField(
+            name="WS-BALANCE", level=5, pic="$$,$$$.99", usage="DISPLAY", offset=0
+        )
+        assert fld.type_descriptor.category == CobolDataCategory.NUMERIC_EDITED
+        assert fld.type_descriptor.byte_length == 9
