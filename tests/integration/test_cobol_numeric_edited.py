@@ -14,7 +14,6 @@ loss); the field-source case below therefore uses a whole-number value.
 
 import pytest
 
-from interpreter.cobol.edit_picture import UnsupportedEditPictureError
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -122,47 +121,158 @@ def test_field_source_whole_number():
     assert _decode_chars(region, 9, 12) == "+00000042.00"
 
 
-class TestUnsupportedEditPicturesAreRejected:
-    """A program declaring an edit picture RedDragon cannot honour fails to
-    LOAD, rather than running and producing well-formed wrong output
-    (red-dragon-0599). Real support for these symbols is red-dragon-5f4g.
+class TestFloatingAndCheckProtectionEndToEnd:
+    """Floating currency/sign, '*' check protection and CR/DB through the full
+    source -> bridge -> IR -> CFG -> VM pipeline (red-dragon-5f4g).
 
-    These go through the full source → bridge → field-ingestion path, so they
-    also prove the ProLeap bridge hands the raw picture through unchanged —
-    the Java side sizes these pictures happily and only the Python gate stops
-    them.
+    Replaces TestUnsupportedEditPicturesAreRejected, whose premise (that these
+    pictures abort at ingestion) was red-dragon-0599's holding position while
+    they were unimplemented.
+
+    These also prove the bridge and the Python formatter agree on the field
+    WIDTH: the assertion decodes exactly byte_length bytes, so a disagreement
+    between the bridge's allocation and Python's read would corrupt the
+    expected string (red-dragon-ilb6).
     """
 
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_floating_currency_field_aborts_the_program(self):
-        with pytest.raises(UnsupportedEditPictureError, match="floating"):
-            _run_edit("$$,$$$.99", "1234.5")
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_all_floating_currency_field_aborts_the_program(self):
-        with pytest.raises(UnsupportedEditPictureError, match="floating"):
-            _run_edit("$$$$.$$", "12.34")
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_check_protection_field_aborts_the_program(self):
-        with pytest.raises(UnsupportedEditPictureError, match=r"check protection"):
-            _run_edit("**,***.99", "12.3")
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_trailing_cr_field_aborts_the_program(self):
-        with pytest.raises(UnsupportedEditPictureError, match="CR"):
-            _run_edit("ZZZ.99CR", "4.5")
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_abort_message_names_the_declared_field(self):
-        """The whole point of failing at load is a message the user can act
-        on — it must identify the field, not just the picture."""
-        with pytest.raises(UnsupportedEditPictureError, match="WS-EDIT"):
-            _run_edit("$$,$$$.99", "1234.5")
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_floating_currency_slides_with_the_value(self):
+        vm = _run_edit("$$,$$$.99", "1234.5")
+        assert _decode_chars(_first_region(vm), 0, 9) == "$1,234.50"
 
     @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
-    def test_single_fixed_currency_field_still_runs(self):
-        """PIC $ZZZ,ZZZ.99 formats correctly today and must keep running —
-        the rejection distinguishes a run of one from a floating run."""
+    def test_floating_currency_hugs_a_small_value(self):
+        """The '$' moves right as the value shrinks — the whole point of a
+        floating insertion, and the case a fixed '$' cannot express."""
+        vm = _run_edit("$$,$$$.99", "7.25")
+        assert _decode_chars(_first_region(vm), 0, 9) == "    $7.25"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_all_floating_picture_runs(self):
+        """PIC $$$$.$$ used to abort the whole program at ingestion."""
+        vm = _run_edit("$$$$.$$", "12.34")
+        assert _decode_chars(_first_region(vm), 0, 7) == " $12.34"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_check_protection_fills_with_asterisks(self):
+        vm = _run_edit("**,***.99", "12.3")
+        assert _decode_chars(_first_region(vm), 0, 9) == "****12.30"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_trailing_cr_absent_on_a_positive_value(self):
+        """The bug that motivated the whole thread: CR was stamped on positive
+        balances, reporting a credit on a debit."""
+        vm = _run_edit("ZZZ.99CR", "4.5")
+        assert _decode_chars(_first_region(vm), 0, 8) == "  4.50  "
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_trailing_cr_present_on_a_negative_value(self):
+        vm = _run_edit("ZZZ.99CR", "-4.5")
+        assert _decode_chars(_first_region(vm), 0, 8) == "  4.50CR"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_single_fixed_currency_still_runs(self):
         vm = _run_edit("$ZZZ,ZZZ.99", "1234.5")
         assert _decode_chars(_first_region(vm), 0, 11) == "$  1,234.50"
+
+
+def _run_record(pic: str, move_src: str):
+    """Run a program where the edited field sits BETWEEN two sentinel fields.
+
+    The sentinels are what make this different from _run_edit: if the edited
+    field's width is wrong, it overruns or under-fills and the sentinel bytes
+    move. A single standalone 77-level field cannot detect that.
+    """
+    return run_cobol(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. EDITREC.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 WS-REC.",
+            "   05 WS-BEFORE PIC X(4) VALUE 'AAAA'.",
+            f"   05 WS-AMT PIC {pic}.",
+            "   05 WS-AFTER PIC X(4) VALUE 'ZZZZ'.",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            f"    MOVE {move_src} TO WS-AMT.",
+            "    STOP RUN.",
+        ],
+        max_steps=20000,
+    )
+
+
+class TestEditedFieldInARecordLayout:
+    """Edited pictures inside a real record, flanked by sentinel fields.
+
+    Everything else in this module exercises a single standalone 77-level
+    field, which cannot detect a WIDTH error: with nothing after it, an
+    over-wide or under-wide field has no neighbour to corrupt.
+
+    That is precisely the bug class this whole area kept producing —
+    red-dragon-ilb6 shipped a picture allocated ZERO bytes whose successor was
+    laid on top of it, and red-dragon-r9s9 shipped three pictures where Python
+    read two bytes further than the bridge allocated. Both were invisible to
+    width-in-isolation assertions.
+
+    Asserting the sentinels land exactly where they should is the assertion
+    that catches it: the bridge computes the offsets, Python computes the read
+    length, and these tests fail if the two disagree.
+    """
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_floating_currency_does_not_disturb_neighbours(self):
+        vm = _run_record("$$,$$$.99", "1234.5")
+        region = _first_region(vm)
+        assert _decode_chars(region, 0, 4) == "AAAA"
+        assert _decode_chars(region, 4, 9) == "$1,234.50"
+        assert _decode_chars(region, 13, 4) == "ZZZZ"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_floating_currency_short_value_does_not_disturb_neighbours(self):
+        """The '$' slides right for a small value, but the FIELD does not
+        shrink — the sentinel must stay at offset 13."""
+        vm = _run_record("$$,$$$.99", "7.25")
+        region = _first_region(vm)
+        assert _decode_chars(region, 0, 4) == "AAAA"
+        assert _decode_chars(region, 4, 9) == "    $7.25"
+        assert _decode_chars(region, 13, 4) == "ZZZZ"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_all_floating_picture_occupies_its_full_width(self):
+        """PIC $$$$.$$ is the picture the bridge used to allocate ZERO bytes
+        for, laying the next field directly on top of it (red-dragon-ilb6).
+        The sentinel at offset 11 is the assertion that would have caught it."""
+        vm = _run_record("$$$$.$$", "12.34")
+        region = _first_region(vm)
+        assert _decode_chars(region, 0, 4) == "AAAA"
+        assert _decode_chars(region, 4, 7) == " $12.34"
+        assert _decode_chars(region, 11, 4) == "ZZZZ"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_check_protection_does_not_disturb_neighbours(self):
+        vm = _run_record("**,***.99", "12.3")
+        region = _first_region(vm)
+        assert _decode_chars(region, 0, 4) == "AAAA"
+        assert _decode_chars(region, 4, 9) == "****12.30"
+        assert _decode_chars(region, 13, 4) == "ZZZZ"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_trailing_cr_occupies_two_bytes_on_a_positive_value(self):
+        """CR emits two SPACES when non-negative — it must still occupy its
+        two bytes, or the sentinel slides left."""
+        vm = _run_record("ZZZ.99CR", "4.5")
+        region = _first_region(vm)
+        assert _decode_chars(region, 0, 4) == "AAAA"
+        assert _decode_chars(region, 4, 8) == "  4.50  "
+        assert _decode_chars(region, 12, 4) == "ZZZZ"
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+    def test_blank_insertion_field_does_not_disturb_neighbours(self):
+        """PIC 9(5)BB9 is one of the three pictures where Python read 8 bytes
+        from a 6-byte bridge allocation until red-dragon-ilb6."""
+        vm = _run_record("9(5)BB9", "123456")
+        region = _first_region(vm)
+        assert _decode_chars(region, 0, 4) == "AAAA"
+        assert _decode_chars(region, 4, 8) == "12345  6"
+        assert _decode_chars(region, 12, 4) == "ZZZZ"
