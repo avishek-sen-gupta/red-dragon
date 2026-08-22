@@ -36,7 +36,12 @@ def encode_scaled_digits(value: str, td: CobolTypeDescriptor) -> str:
     if td.scale:
         scaled = descale(Decimal(clean), td.scale)
         # Truncate toward zero: COBOL does not round unless ROUNDED is given.
-        clean = str(int(scaled)) if td.decimal_digits == 0 else str(scaled)
+        # `format(scaled, "f")` is required (not `str(scaled)`): dividing by a
+        # power of ten can push Decimal into scientific notation (e.g.
+        # '1.2E+5'), which `align_decimal` cannot parse — it splits on '.',
+        # finds one inside the mantissa, and silently corrupts the exponent
+        # digits. Plain fixed-point avoids that entirely.
+        clean = str(int(scaled)) if td.decimal_digits == 0 else format(scaled, "f")
     integer_digits = td.total_digits - td.decimal_digits
     if td.decimal_digits > 0:
         return align_decimal(clean, integer_digits, td.decimal_digits)
