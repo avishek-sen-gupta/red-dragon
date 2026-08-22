@@ -32,6 +32,7 @@ from lark.exceptions import UnexpectedInput
 
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.edit_picture import (
+    DEFAULT_CURRENCY,
     is_numeric_edited,
     parse_edit_picture,
     reject_unsupported,
@@ -222,12 +223,15 @@ def parse_pic(
     sign_separate: bool = False,
     justified_right: bool = False,
     blank_when_zero: bool = False,
+    currency: str = DEFAULT_CURRENCY,
 ) -> CobolTypeDescriptor:
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
     Args:
         pic: The PIC string (e.g. "9(5)", "S9(5)V99", "X(8)").
         usage: USAGE clause value ("DISPLAY", "COMP-3", "COMP").
+        currency: the program's currency symbol, '$' unless SPECIAL-NAMES
+            declared CURRENCY SIGN IS otherwise (red-dragon-3o5f).
 
     Returns:
         A CobolTypeDescriptor describing the field's type and layout.
@@ -261,14 +265,15 @@ def parse_pic(
     # carry editing characters the Lark grammar deliberately drops. Their storage
     # is the formatted character string, so size by the picture's character width
     # and keep the original PIC for the MOVE-time edit mask (red-dragon edit_picture).
-    if usage == "DISPLAY" and is_numeric_edited(pic):
-        ep = parse_edit_picture(pic)
+    if usage == "DISPLAY" and is_numeric_edited(pic, currency):
+        ep = parse_edit_picture(pic, currency)
         return CobolTypeDescriptor(
             category=CobolDataCategory.NUMERIC_EDITED,
             total_digits=ep.width,
             decimal_digits=ep.frac_digits,
             signed=ep.signed,
             pic_string=pic,
+            currency=currency,
         )
 
     try:
