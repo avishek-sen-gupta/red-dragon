@@ -16,6 +16,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.pic_parser import parse_pic
+from interpreter.cobol.pic_scale import encode_scaled_digits
 from tests.covers import covers
 
 
@@ -53,3 +54,34 @@ class TestScaleIsRecorded:
         assert parse_pic("999PP").byte_length == 3
         assert parse_pic("PP999").byte_length == 3
         assert parse_pic("S9PP").byte_length == 1
+
+
+class TestEncodeAppliesScale:
+    """Encoding divides by 10**scale, so the STORED digits are the value's
+    significant digits, not the value itself.
+
+    NIST-85 NC124A declares `01 WORK-AREA-30 PICTURE 999PP VALUE 00900.` and
+    proves the stored content is '009' by moving it to ZZZPP and asserting
+    '  9'.
+    """
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    @pytest.mark.parametrize(
+        ("pic", "value", "stored"),
+        [
+            ("999PP", "900", "009"),
+            ("999PP", "12300", "123"),
+            ("999PP", "00900", "009"),
+            ("999PP", "950", "009"),
+            ("9PP", "200", "2"),
+        ],
+    )
+    def test_stored_digits_are_scaled(self, pic: str, value: str, stored: str):
+        assert encode_scaled_digits(value, parse_pic(pic)) == stored
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_unscaled_pictures_are_unchanged(self):
+        """Regression guard: scale == 0 must leave the digits exactly as the
+        pre-change code produced them."""
+        assert encode_scaled_digits("12345", parse_pic("9(5)")) == "12345"
+        assert encode_scaled_digits("123.45", parse_pic("9(3)V99")) == "12345"
