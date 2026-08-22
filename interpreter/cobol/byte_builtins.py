@@ -240,8 +240,14 @@ def _builtin_make_list(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Prepare digit list from a string value for COBOL numeric encoding.
 
-    Args: [value_str: str, total_digits: int, decimal_digits: int, signed: bool]
+    Args: [value_str: str, total_digits: int, decimal_digits: int, signed: bool,
+           scale: int (optional)]
     Returns: list[int] of digit values (0-9)
+
+    ``scale`` is the PIC P scaling exponent (Task 1's ``CobolTypeDescriptor.scale``).
+    It is optional so that IR emitted before red-dragon-qhtv (4-argument calls)
+    still runs, defaulting to 0 (unscaled) — mirrors how ``currency`` was added
+    to COBOL_APPLY_EDIT_PICTURE in red-dragon-3o5f.
     """
     if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
@@ -251,6 +257,7 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
         args[2].value,
         args[3].value,
     )
+    scale = args[4].value if len(args) > 4 else 0
     if not isinstance(total_digits, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if isinstance(value_str, (int, float)):
@@ -258,9 +265,22 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
     if not isinstance(value_str, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
 
+    from decimal import Decimal
+
     from interpreter.cobol.data_filters import align_decimal, left_adjust
+    from interpreter.cobol.pic_scale import descale
 
     clean = value_str.lstrip("+-")
+    if scale:
+        # Divide by the scaling factor BEFORE truncating to digit positions —
+        # order matters (12300 into PIC 999PP is 123, not 300). Reuses
+        # descale() rather than duplicating it a third time (emit_context.py's
+        # emit_decode_field does the IR-side multiply; encode_scaled_digits does
+        # the compile-time-literal divide). format(x, "f") avoids the
+        # scientific-notation trap Task 2 hit: str(Decimal) can render as
+        # '1.2E+5', which align_decimal cannot parse.
+        scaled = descale(Decimal(clean), scale)
+        clean = str(int(scaled)) if decimal_digits == 0 else format(scaled, "f")
     if decimal_digits > 0:
         integer_digits = total_digits - decimal_digits
         digit_str = align_decimal(clean, integer_digits, decimal_digits)
