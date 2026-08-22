@@ -85,3 +85,13 @@ class TestEncodeAppliesScale:
         pre-change code produced them."""
         assert encode_scaled_digits("12345", parse_pic("9(5)")) == "12345"
         assert encode_scaled_digits("123.45", parse_pic("9(3)V99")) == "12345"
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_scaled_division_landing_in_scientific_notation_is_not_corrupted(self):
+        """PIC PP9V9 combines leading P (negative scale) with V (decimal
+        digits). `Decimal.__truediv__` renders large-magnitude results in
+        scientific notation ('1.2E+5'), which `align_decimal` cannot parse —
+        it looks for a '.', finds one inside the mantissa, and silently
+        drops/zeroes the exponent digits. `format(d, 'f')` must be used
+        instead so the digit string stays plain decimal."""
+        assert encode_scaled_digits("12", parse_pic("PP9V9")) == "00"
