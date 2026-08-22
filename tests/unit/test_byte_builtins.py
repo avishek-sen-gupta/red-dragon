@@ -840,6 +840,51 @@ class TestCobolPrepareDigits:
             is _UNCOMPUTABLE
         )
 
+    def test_scale_divides_before_truncating(self):
+        """PIC 999PP (scale=2), value '12300' -> [1, 2, 3] (divide first: 123,
+        not truncate first: 300). Mirrors encode_scaled_digits (red-dragon-qhtv)."""
+        assert _builtin_cobol_prepare_digits(
+            [
+                typed_from_runtime("12300"),
+                typed_from_runtime(3),
+                typed_from_runtime(0),
+                typed_from_runtime(False),
+                typed_from_runtime(2),
+            ],
+            None,
+        ).value == [1, 2, 3]
+
+    def test_scale_defaults_to_zero_when_omitted(self):
+        """Backward compatibility: IR emitted before red-dragon-qhtv (4-argument
+        calls) still runs unscaled, same as the currency arg on
+        COBOL_APPLY_EDIT_PICTURE (red-dragon-3o5f)."""
+        assert _builtin_cobol_prepare_digits(
+            [
+                typed_from_runtime("10"),
+                typed_from_runtime(4),
+                typed_from_runtime(0),
+                typed_from_runtime(False),
+            ],
+            None,
+        ).value == [0, 0, 1, 0]
+
+    def test_non_numeric_input_into_scaled_field_does_not_raise(self):
+        """Before scale existed, non-digit input reaching this builtin was
+        tolerated (int(ch) if ch.isdigit() else 0 absorbs junk further down).
+        Decimal(clean) on the scale != 0 path raises decimal.InvalidOperation
+        for input like spaces — must fall back to the pre-existing tolerant
+        behaviour rather than crash (red-dragon-qhtv)."""
+        _builtin_cobol_prepare_digits(
+            [
+                typed_from_runtime("   "),
+                typed_from_runtime(3),
+                typed_from_runtime(0),
+                typed_from_runtime(False),
+                typed_from_runtime(2),
+            ],
+            None,
+        )
+
 
 class TestCobolPrepareSign:
     """Tests for __cobol_prepare_sign numeric encoding."""
