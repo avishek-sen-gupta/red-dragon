@@ -44,6 +44,10 @@ class CobolTypeDescriptor:
     # applied at RUNTIME from pic_string, so the symbol has to travel with it
     # or the formatter falls back to '$' (red-dragon-3o5f).
     currency: str = "$"
+    # PIC P decimal scaling: the value is stored_digits * 10**scale. Positive
+    # for trailing P (999PP -> +2), negative for leading P (PP9 -> -3). P
+    # occupies no storage, so this never affects byte_length (red-dragon-qhtv).
+    scale: int = 0
     # For NUMERIC_EDITED: the original PIC string carrying the edit mask
     # (sign/Z/comma/decimal positions) needed to format on MOVE. Empty otherwise.
     pic_string: str = ""
