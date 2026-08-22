@@ -23,7 +23,6 @@ from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
-from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.figurative_constants import (
@@ -45,6 +44,7 @@ from interpreter.cobol.ir_encoders import (
     build_encode_zoned_ir,
     build_encode_zoned_separate_ir,
 )
+from interpreter.cobol.pic_scale import encode_scaled_digits
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.constants import FoundationTypeName
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
@@ -576,13 +576,8 @@ class EmitContext:
     ) -> Register:
         """Emit inline numeric encoding IR. Returns result register."""
         negative = value.startswith("-")
-        clean = value.lstrip("+-")
 
-        integer_digits = td.total_digits - td.decimal_digits
-        if td.decimal_digits > 0:
-            digit_str = align_decimal(clean, integer_digits, td.decimal_digits)
-        else:
-            digit_str = left_adjust(clean.replace(".", ""), td.total_digits)
+        digit_str = encode_scaled_digits(value, td)
 
         digits = [int(ch) if ch.isdigit() else 0 for ch in digit_str]
 
@@ -688,7 +683,24 @@ class EmitContext:
                 f"dec_comp3_{fl.name}", td.total_digits, td.decimal_digits
             )
 
-        return self.inline_ir(ir, {"%p_data": data_reg})
+        decoded = self.inline_ir(ir, {"%p_data": data_reg})
+        if not td.scale:
+            return decoded
+        # PIC P: the stored digits are the value divided by the scaling factor,
+        # so reading multiplies back. Applied HERE rather than inside the four
+        # build_decode_*_ir builders — one site instead of four, and those
+        # builders keep their existing signatures (red-dragon-qhtv).
+        scaled = self.fresh_reg()
+        factor_reg = self.const_to_reg(float(10**td.scale))
+        self.emit_inst(
+            Binop(
+                result_reg=scaled,
+                operator=resolve_binop("*"),
+                left=decoded,
+                right=factor_reg,
+            )
+        )
+        return scaled
 
     def emit_decode_zoned_display(
         self, region_reg: Register, fl: FieldLayout, offset_reg: Register = NO_REGISTER
@@ -915,6 +927,7 @@ class EmitContext:
         total_digits_reg = self.const_to_reg(td.total_digits)
         decimal_digits_reg = self.const_to_reg(td.decimal_digits)
         signed_reg = self.const_to_reg(td.signed)
+        scale_reg = self.const_to_reg(td.scale)
         digits_reg = self.fresh_reg()
         self.emit_inst(
             CallFunction(
@@ -925,6 +938,7 @@ class EmitContext:
                     total_digits_reg,
                     decimal_digits_reg,
                     signed_reg,
+                    scale_reg,
                 ),
             ),
         )
