@@ -683,7 +683,24 @@ class EmitContext:
                 f"dec_comp3_{fl.name}", td.total_digits, td.decimal_digits
             )
 
-        return self.inline_ir(ir, {"%p_data": data_reg})
+        decoded = self.inline_ir(ir, {"%p_data": data_reg})
+        if not td.scale:
+            return decoded
+        # PIC P: the stored digits are the value divided by the scaling factor,
+        # so reading multiplies back. Applied HERE rather than inside the four
+        # build_decode_*_ir builders — one site instead of four, and those
+        # builders keep their existing signatures (red-dragon-qhtv).
+        scaled = self.fresh_reg()
+        factor_reg = self.const_to_reg(float(10**td.scale))
+        self.emit_inst(
+            Binop(
+                result_reg=scaled,
+                operator=resolve_binop("*"),
+                left=decoded,
+                right=factor_reg,
+            )
+        )
+        return scaled
 
     def emit_decode_zoned_display(
         self, region_reg: Register, fl: FieldLayout, offset_reg: Register = NO_REGISTER
@@ -910,6 +927,7 @@ class EmitContext:
         total_digits_reg = self.const_to_reg(td.total_digits)
         decimal_digits_reg = self.const_to_reg(td.decimal_digits)
         signed_reg = self.const_to_reg(td.signed)
+        scale_reg = self.const_to_reg(td.scale)
         digits_reg = self.fresh_reg()
         self.emit_inst(
             CallFunction(
@@ -920,6 +938,7 @@ class EmitContext:
                     total_digits_reg,
                     decimal_digits_reg,
                     signed_reg,
+                    scale_reg,
                 ),
             ),
         )
