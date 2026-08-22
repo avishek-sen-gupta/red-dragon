@@ -95,3 +95,20 @@ class TestEncodeAppliesScale:
         drops/zeroes the exponent digits. `format(d, 'f')` must be used
         instead so the digit string stays plain decimal."""
         assert encode_scaled_digits("12", parse_pic("PP9V9")) == "00"
+
+
+class TestEncodeToleratesNonNumericInput:
+    """Before red-dragon-qhtv, every input reaching encode_scaled_digits was
+    tolerated (non-digit chars later become 0). Adding the scale >= 0 division
+    introduced Decimal(clean), which raises decimal.InvalidOperation on
+    non-numeric input (spaces, alphanumeric junk) — a new crash surface,
+    confined to the scaled path. Falls back to the pre-existing tolerant
+    behaviour instead of crashing."""
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_spaces_into_scaled_field_does_not_raise(self):
+        encode_scaled_digits("   ", parse_pic("999PP"))
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_alphanumeric_junk_into_negative_scaled_field_does_not_raise(self):
+        encode_scaled_digits("ABC", parse_pic("PP9"))
