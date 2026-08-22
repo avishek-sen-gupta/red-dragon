@@ -13,6 +13,8 @@ import io.proleap.cobol.asg.metamodel.data.linkage.LinkageSection;
 import io.proleap.cobol.asg.metamodel.data.localstorage.LocalStorageSection;
 import io.proleap.cobol.asg.metamodel.data.workingstorage.WorkingStorageSection;
 import io.proleap.cobol.asg.metamodel.environment.EnvironmentDivision;
+import io.proleap.cobol.asg.metamodel.environment.specialnames.CurrencySignClause;
+import io.proleap.cobol.asg.metamodel.environment.specialnames.SpecialNamesParagraph;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.InputOutputSection;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlEntry;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlParagraph;
@@ -87,8 +89,57 @@ public final class AsgSerializer {
         serializeDataDivision(pu, asg);
         serializeProcedureDivision(pu, asg);
         asg.add("file_control", serializeFileControl(pu));
+        JsonObject specialNames = serializeSpecialNames(pu);
+        if (specialNames.size() > 0) {
+            asg.add("special_names", specialNames);
+        }
 
         return asg;
+    }
+
+    /**
+     * Serializes the SPECIAL-NAMES paragraph clauses RedDragon consumes.
+     *
+     * <p>Currently only CURRENCY SIGN IS. ProLeap's {@code CurrencySignClause}
+     * exposes both {@code getCurrencyLiteral()} and
+     * {@code getPictureSymbolLiteral()}; both are emitted so the Python side can
+     * REFUSE the multi-character PICTURE SYMBOL form loudly rather than silently
+     * mis-size fields — a multi-character currency literal changes every
+     * affected field's byte width (red-dragon-3o5f).
+     *
+     * <p>DECIMAL-POINT IS COMMA is deliberately NOT emitted: it changes numeric
+     * literals as well as pictures and is tracked separately.
+     *
+     * <p>Returns an EMPTY object when there is no SPECIAL-NAMES paragraph, so
+     * the caller can omit the key entirely and Python keeps its '$' default.
+     */
+    private static JsonObject serializeSpecialNames(ProgramUnit pu) {
+        JsonObject result = new JsonObject();
+        try {
+            EnvironmentDivision env = pu.getEnvironmentDivision();
+            if (env == null) return result;
+            SpecialNamesParagraph snp = env.getSpecialNamesParagraph();
+            if (snp == null) return result;
+            CurrencySignClause csc = snp.getCurrencySignClause();
+            if (csc == null) return result;
+            if (csc.getCurrencyLiteral() != null) {
+                result.addProperty("currency_sign",
+                        literalText(csc.getCurrencyLiteral()));
+            }
+            if (csc.getPictureSymbolLiteral() != null) {
+                result.addProperty("currency_picture_symbol",
+                        literalText(csc.getPictureSymbolLiteral()));
+            }
+        } catch (Exception e) {
+            LOG.fine("No SPECIAL-NAMES: " + e.getMessage());
+        }
+        return result;
+    }
+
+    /** Literal text with COBOL quote delimiters stripped. */
+    private static String literalText(io.proleap.cobol.asg.metamodel.Literal lit) {
+        String text = (lit.getCtx() != null) ? lit.getCtx().getText() : lit.toString();
+        return text.replaceAll("^['\"]|['\"]$", "");
     }
 
     /**

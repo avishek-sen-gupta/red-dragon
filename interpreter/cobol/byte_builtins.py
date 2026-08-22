@@ -664,15 +664,20 @@ def _builtin_cobol_apply_edit_picture(
 ) -> BuiltinResult:
     """Apply a COBOL numeric edit picture to a numeric value string.
 
-    Args: [value_str: str, pic_string: str]
+    Args: [value_str: str, pic_string: str, currency: str (optional)]
     Returns: str — the edited display string, exactly the picture's width.
+
+    ``currency`` is the program's CURRENCY SIGN symbol. It is optional so that
+    IR emitted before red-dragon-3o5f (two-argument calls) still runs, falling
+    back to '$'.
     """
     if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from interpreter.cobol.edit_picture import format_edited
+    from interpreter.cobol.edit_picture import DEFAULT_CURRENCY, format_edited
 
     value_str, pic_string = str(args[0].value), str(args[1].value)
-    return BuiltinResult(value=format_edited(value_str, pic_string))
+    currency = str(args[2].value) if len(args) > 2 else DEFAULT_CURRENCY
+    return BuiltinResult(value=format_edited(value_str, pic_string, currency))
 
 
 def _builtin_string_slice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
