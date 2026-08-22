@@ -113,12 +113,20 @@ class _Count:
     n: int
 
 
+@dataclass(frozen=True)
+class _Scale:
+    """One P scaling position, preserved so `fraction` can count them."""
+
+
 class _PicTransformer(Transformer):
     """Reduces the parse tree to (integer_digits, decimal_digits, ...) facts."""
 
     def count(self, items: list) -> _Count:
         # INT terminal -> a real integer; structural, no regex/slice.
         return _Count(int(items[0]))
+
+    def scaling(self, items: list) -> _Scale:
+        return _Scale()
 
     def digit(self, items: list) -> int:
         # items: [DIGIT_SYM] or [DIGIT_SYM, count]; Z counts as a digit position.
@@ -150,25 +158,42 @@ class _PicTransformer(Transformer):
 
     def fraction(self, items: list) -> dict:
         signed = any(getattr(t, "type", None) == "SIGN" for t in items)
-        body = next(i for i in items if isinstance(i, tuple))
-        integer_digits, decimal_digits = body
+        body_index = next(i for i, x in enumerate(items) if isinstance(x, tuple))
+        integer_digits, decimal_digits = items[body_index]
+        leading = sum(1 for x in items[:body_index] if isinstance(x, _Scale))
+        trailing = sum(1 for x in items[body_index + 1 :] if isinstance(x, _Scale))
+        if leading and trailing:
+            raise ValueError(
+                "PIC scaling positions must be contiguous on ONE side of the "
+                "digits; got P both before and after."
+            )
+        # Trailing P multiplies; leading P places the digits that many places
+        # to the RIGHT of the assumed point, so the rightmost digit lands at
+        # 10**-(P count + digit count).
+        if trailing:
+            scale = trailing
+        elif leading:
+            scale = -(leading + integer_digits + decimal_digits)
+        else:
+            scale = 0
         return {
             "alphanumeric": False,
             "integer_digits": integer_digits,
             "decimal_digits": decimal_digits,
             "signed": signed,
+            "scale": scale,
         }
 
     def scaling_only(self, items: list) -> dict:
         # A picture of only P scaling positions (e.g. "P", "PPP", "SPP"): no
-        # stored digit positions. The scaling shifts the implied decimal point
-        # but contributes zero digits to storage.
+        # stored digit positions, so no value can be held and no scale applies.
         signed = any(getattr(t, "type", None) == "SIGN" for t in items)
         return {
             "alphanumeric": False,
             "integer_digits": 0,
             "decimal_digits": 0,
             "signed": signed,
+            "scale": 0,
         }
 
     def alnum_pos(self, items: list) -> int:
@@ -207,6 +232,7 @@ class _PicTransformer(Transformer):
             "integer_digits": 0,
             "decimal_digits": 0,
             "signed": False,
+            "scale": 0,
         }
 
     def start(self, items: list) -> dict:
@@ -301,4 +327,5 @@ def parse_pic(
         sign_separate=sign_separate,
         sign_leading=sign_leading,
         blank_when_zero=blank_when_zero,
+        scale=facts.get("scale", 0),
     )
