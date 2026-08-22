@@ -39,6 +39,11 @@ class CobolTypeDescriptor:
     sign_leading: bool = False
     justified_right: bool = False
     blank_when_zero: bool = False
+    # For NUMERIC_EDITED: the program's currency symbol, '$' unless
+    # SPECIAL-NAMES declared CURRENCY SIGN IS otherwise. The edit mask is
+    # applied at RUNTIME from pic_string, so the symbol has to travel with it
+    # or the formatter falls back to '$' (red-dragon-3o5f).
+    currency: str = "$"
     # For NUMERIC_EDITED: the original PIC string carrying the edit mask
     # (sign/Z/comma/decimal positions) needed to format on MOVE. Empty otherwise.
     pic_string: str = ""

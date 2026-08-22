@@ -391,6 +391,34 @@ public class AsgSerializerTest {
         }
     }
 
+    /**
+     * SPECIAL-NAMES CURRENCY SIGN IS must reach the JSON contract. ProLeap's
+     * CurrencySignClause exposes getCurrencyLiteral() / getPictureSymbolLiteral(),
+     * but the bridge never read the SPECIAL-NAMES paragraph at all before this
+     * (red-dragon-3o5f).
+     */
+    @Test
+    public void testCurrencySignIsSerialized() throws Exception {
+        JsonObject asg = parseFixture("CurrencySign.cbl");
+        assertTrue("special_names missing from the ASG", asg.has("special_names"));
+        JsonObject sn = asg.getAsJsonObject("special_names");
+        assertEquals("W", sn.get("currency_sign").getAsString());
+    }
+
+    /**
+     * A program with no SPECIAL-NAMES paragraph must not grow a spurious
+     * currency_sign — Python defaults to '$' when the key is absent.
+     */
+    @Test
+    public void testNoSpecialNamesEmitsNoCurrencySign() throws Exception {
+        JsonObject asg = parseFixture("hello_world.cbl");
+        if (asg.has("special_names")) {
+            JsonObject sn = asg.getAsJsonObject("special_names");
+            assertFalse("currency_sign emitted for a program without SPECIAL-NAMES",
+                    sn.has("currency_sign"));
+        }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private JsonObject parseFixture(String filename) throws Exception {

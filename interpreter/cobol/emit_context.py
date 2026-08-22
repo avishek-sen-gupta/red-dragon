@@ -826,11 +826,12 @@ class EmitContext:
             # field's content). Mirrors GnuCOBOL's cob_move_edited.
             formatted_reg = self.fresh_reg()
             pic_reg = self.const_to_reg(td.pic_string)
+            currency_reg = self.const_to_reg(td.currency)
             self.emit_inst(
                 CallFunction(
                     result_reg=formatted_reg,
                     func_name=FuncName(BuiltinName.COBOL_APPLY_EDIT_PICTURE),
-                    args=(value_str_reg, pic_reg),
+                    args=(value_str_reg, pic_reg, currency_reg),
                 ),
             )
             ir = build_encode_alphanumeric_ir(f"enc_edited_{fl.name}", td.total_digits)
