@@ -128,7 +128,18 @@ class PictureAnalysis:
     # position, so digit_positions - scaling_positions is what its bytes hold,
     # while COMP-3 and binary storage covers all of digit_positions.
     scaling_positions: int
-    scale: int  # digit positions to the right of the (assumed) decimal point
+    # Digit positions to the right of a decimal point the picture WRITES (V or
+    # '.'), P excluded. Zero when no point is written, even if P implies one:
+    # what P implies is reported as point_shift instead, because the two are
+    # applied differently — decimal_digits is where the stored digits' point
+    # sits, point_shift is a further power of ten the stored digits are scaled
+    # by (red-dragon-qhtv).
+    fraction_digits: int
+    # The exponent P denotes: the value is (stored digits) * 10**point_shift.
+    # Positive for trailing P ("999PP" -> +2), negative for leading P, where the
+    # assumed point is left of the Ps so every stored digit is a fraction digit
+    # ("PP999" -> -5). Zero without P (p. 211).
+    point_shift: int
     signed: bool
     run: Run | None
     errors: tuple[str, ...]
@@ -219,7 +230,11 @@ def analyse(
 
     chars = 0
     digits = 0
-    digits_before_point = None
+    # Digit positions that are actually STORED, i.e. everything but P. Tracked
+    # alongside `digits` because the written decimal point divides the stored
+    # digits, while P is a scaling exponent applied to them as a whole.
+    stored = 0
+    stored_before_point = None
     seen_cs = False
     cs_chars = set()
     # An external floating-point picture's digit count and scale describe its
@@ -227,6 +242,7 @@ def analyse(
     # digits are not part of the value's precision.
     mantissa_digits = 0
     mantissa_before_point = None
+    mantissa_point_written = False
 
     for atom in atoms:
         if atom.sym == "cs":
@@ -255,23 +271,27 @@ def analyse(
             chars += char_size * atom.count
 
         digits += contributed
+        if atom.sym != "P":
+            stored += contributed
         if atom.mantissa:
             mantissa_digits += contributed
 
         if atom.sym in (".", "V"):
-            if digits_before_point is None:
-                digits_before_point = digits
-            if atom.mantissa and mantissa_before_point is None:
+            if stored_before_point is None:
+                stored_before_point = stored
+            if atom.mantissa and not mantissa_point_written:
                 mantissa_before_point = mantissa_digits
+                mantissa_point_written = True
 
     signed = any(a.sym in ("S", "+", "-", "CR", "DB") for a in atoms)
 
     if category == "external_float":
+        # A mantissa carries no P, so its stored digits are all of its digits.
         digits = mantissa_digits
-        digits_before_point = mantissa_before_point
-    if digits_before_point is None:
-        digits_before_point = _implied_point(atoms, digits)
-    scale = digits - digits_before_point
+        stored = mantissa_digits
+        stored_before_point = mantissa_before_point
+    fraction_digits = 0 if stored_before_point is None else stored - stored_before_point
+    scaling_positions = sum(a.count for a in atoms if a.sym == "P")
 
     if blank_when_zero and category == "numeric":
         # "Either the BLANK WHEN ZERO clause must be specified for the item, or
@@ -296,8 +316,9 @@ def analyse(
         category=category,
         char_positions=chars,
         digit_positions=digits,
-        scaling_positions=sum(a.count for a in atoms if a.sym == "P"),
-        scale=scale,
+        scaling_positions=scaling_positions,
+        fraction_digits=fraction_digits,
+        point_shift=_point_shift(atoms, scaling_positions, stored),
         signed=signed,
         run=runs[0] if runs else None,
         errors=tuple(errors),
@@ -323,18 +344,27 @@ def _run_digits(atom: Atom) -> int:
     return atom.count
 
 
-def _implied_point(atoms: list[Atom], digits: int) -> int:
-    """Digit positions left of the point when no . or V is written.
+_DIGIT_BEARING = ("9", "Z", "*", "P", "cs", "+", "-")
+
+
+def _point_shift(atoms: list[Atom], scaling_positions: int, stored: int) -> int:
+    """The power of ten a picture's P positions scale the stored digits by.
 
     "The symbol P specifies a scaling position and implies an assumed decimal
     point (to the left of the Ps if the Ps are leftmost PICTURE characters; to
     the right of the Ps if the Ps are rightmost PICTURE characters)" (p. 211).
+    Trailing Ps therefore multiply: "999PP" holding 009 is 900. Leading Ps put
+    the point left of themselves, so every stored digit is a fraction digit and
+    the rightmost one lands at 10**-(P count + stored digits): "PP999" holding
+    123 is .00123. The grammar admits P on one side only, so there is no case
+    where both apply.
     """
-    digit_bearing = ("9", "Z", "*", "P", "cs", "+", "-")
-    counted = [a for a in atoms if a.sym in digit_bearing]
-    if counted and counted[0].sym == "P":
+    if not scaling_positions:
         return 0
-    return digits
+    counted = [a for a in atoms if a.sym in _DIGIT_BEARING]
+    if counted and counted[0].sym == "P":
+        return -(scaling_positions + stored)
+    return scaling_positions
 
 
 def _walk(tree: Tree) -> tuple[list[Atom], list[Run]]:

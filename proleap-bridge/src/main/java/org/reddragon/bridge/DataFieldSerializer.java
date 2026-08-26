@@ -380,35 +380,28 @@ public final class DataFieldSerializer {
      * <p>For DISPLAY usage: count of storage characters (9, X, A) with repetition.
      * For COMP-3: ceil((digits + 1) / 2).
      * For COMP/BINARY: 2 for ≤4 digits, 4 for ≤9, 8 for ≤18.
-     *
-     * <p>The two counts differ over P: a scaling position is a digit position that
-     * occupies no CHARACTER position, so packed and binary storage covers it while
-     * DISPLAY storage does not (IBM Enterprise COBOL LR, Table 12: "Not counted in
-     * the size of the data item. Scaling position characters are counted in
-     * determining the maximum number of digit positions"). Python splits the same
-     * way — pic_parser._digit_counts — and the two must agree, because this length
-     * is what every following field's offset is computed from (red-dragon-ilb6).
      */
     public static int computePicByteLength(String pic, String usage) {
         if (pic.isEmpty()) {
             return 0;
         }
 
+        int digitCount = countStoragePositions(pic);
+
         return switch (usage) {
-            case "COMP-3", "PACKED-DECIMAL" -> (countDigitPositions(pic) / 2) + 1;
+            case "COMP-3", "PACKED-DECIMAL" -> (digitCount / 2) + 1;
             case "COMP", "COMP-4", "BINARY" -> {
-                int digitCount = countDigitPositions(pic);
                 if (digitCount <= 4) yield 2;
                 else if (digitCount <= 9) yield 4;
                 else yield 8;
             }
-            default -> countStoragePositions(pic);
+            default -> digitCount;
         };
     }
 
     /**
      * Counts storage positions (digits/chars) from a PIC string.
-     * Handles: 9(5) → 5, X(3) → 3, S9(5)V99 → 7, PPP999 → 3.
+     * Handles: 9(5) → 5, X(3) → 3, S9(5)V99 → 7, etc.
      *
      * <p>Numeric-edited pictures (sign, Z suppression, comma/decimal insertion)
      * store the formatted character string, so every position — including the
@@ -416,18 +409,6 @@ public final class DataFieldSerializer {
      * character width (mirroring Python edit_picture.parse_edit_picture().width).
      */
     public static int countStoragePositions(String pic) {
-        return countPositions(pic, false);
-    }
-
-    /**
-     * Counts digit positions from a PIC string, scaling positions included:
-     * PPP999 → 6, 9(5)PP → 7.
-     */
-    public static int countDigitPositions(String pic) {
-        return countPositions(pic, true);
-    }
-
-    private static int countPositions(String pic, boolean countScaling) {
         String upper = pic.toUpperCase();
         int count = 0;
         int i = 0;
@@ -438,13 +419,13 @@ public final class DataFieldSerializer {
                 int close = upper.indexOf(')', i);
                 int repeat = Integer.parseInt(upper.substring(i + 1, close));
                 // The preceding symbol already contributed 1 — add the remainder,
-                // but only if that symbol occupies a position at all.
-                if (isCountedPosition(previous, countScaling)) {
+                // but only if that symbol occupies storage at all (P(3) is still 0).
+                if (isStoredPosition(previous)) {
                     count += repeat - 1;
                 }
                 i = close + 1;
             } else {
-                if (isCountedPosition(c, countScaling)) {
+                if (isStoredPosition(c)) {
                     count += 1;
                 }
                 previous = c;
@@ -455,18 +436,14 @@ public final class DataFieldSerializer {
     }
 
     /**
-     * True if a PIC symbol occupies a position of the kind being counted.
+     * True if a PIC symbol occupies a storage position.
      *
-     * <p>S (operational sign) and V (implied decimal point) occupy neither a
-     * character nor a digit position. P occupies a digit position but no character
-     * position, hence countScaling. Everything else — digits, Z, currency, check
-     * protection, and every insertion character — is one byte of DISPLAY storage.
+     * <p>S (operational sign), V (implied decimal point) and P (decimal scaling)
+     * are the only PIC symbols that occupy none. Everything else — digits, Z,
+     * currency, check protection, and every insertion character — is one byte.
      */
-    private static boolean isCountedPosition(char c, boolean countScaling) {
-        if (c == 'P') {
-            return countScaling;
-        }
-        return c != 'S' && c != 'V';
+    private static boolean isStoredPosition(char c) {
+        return c != 'S' && c != 'V' && c != 'P';
     }
 
     private static String extractPic(DataDescriptionEntryGroup group) {

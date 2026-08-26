@@ -296,30 +296,21 @@ public class AsgSerializerTest {
     }
 
     /**
-     * P is a digit position that occupies no character position, so packed and
-     * binary storage covers it while DISPLAY storage does not (LR Table 12). The
-     * Python side splits the same way (pic_parser._digit_counts); these lengths
-     * must agree or every later field's offset in the record is wrong
-     * (red-dragon-ilb6).
+     * A scaling position holds no digit, in any USAGE: what a P-scaled item
+     * stores is the digits written as 9, and the Ps are a power of ten applied to
+     * them (Python: CobolTypeDescriptor.scale, pic_scale). So P is excluded from
+     * every width here, packed and binary included. Python agrees
+     * (pic_parser._digit_counts); these lengths must agree or every later field's
+     * offset in the record is wrong (red-dragon-ilb6).
      */
     @Test
-    public void testScalingPositionsCountForPackedAndBinaryOnly() {
+    public void testScalingPositionsAreExcludedFromEveryWidth() {
         assertEquals(3, DataFieldSerializer.computePicByteLength("PPP999", "DISPLAY"));
-        assertEquals(4, DataFieldSerializer.computePicByteLength("PPP999", "COMP-3"));
-        assertEquals(4, DataFieldSerializer.computePicByteLength("PPP999", "COMP"));
-        // 9(5)PP: 5 character positions, 7 digit positions.
+        assertEquals(2, DataFieldSerializer.computePicByteLength("PPP999", "COMP-3"));
+        assertEquals(2, DataFieldSerializer.computePicByteLength("PPP999", "COMP"));
         assertEquals(5, DataFieldSerializer.computePicByteLength("9(5)PP", "DISPLAY"));
-        assertEquals(4, DataFieldSerializer.computePicByteLength("9(5)PP", "COMP-3"));
+        assertEquals(3, DataFieldSerializer.computePicByteLength("9(5)PP", "COMP-3"));
         assertEquals(4, DataFieldSerializer.computePicByteLength("9(5)PP", "COMP"));
-    }
-
-    @Test
-    public void testCountDigitPositionsIncludesScaling() {
-        assertEquals(6, DataFieldSerializer.countDigitPositions("PPP999"));
-        assertEquals(7, DataFieldSerializer.countDigitPositions("9(5)PP"));
-        assertEquals(3, DataFieldSerializer.countDigitPositions("P(3)"));
-        // S and V still occupy neither kind of position.
-        assertEquals(7, DataFieldSerializer.countDigitPositions("S9(5)V99"));
     }
 
     @Test
@@ -417,6 +408,34 @@ public class AsgSerializerTest {
                     expectedOffset,
                     fld.get("offset").getAsInt());
             expectedOffset += expectedWidths[i];
+        }
+    }
+
+    /**
+     * SPECIAL-NAMES CURRENCY SIGN IS must reach the JSON contract. ProLeap's
+     * CurrencySignClause exposes getCurrencyLiteral() / getPictureSymbolLiteral(),
+     * but the bridge never read the SPECIAL-NAMES paragraph at all before this
+     * (red-dragon-3o5f).
+     */
+    @Test
+    public void testCurrencySignIsSerialized() throws Exception {
+        JsonObject asg = parseFixture("CurrencySign.cbl");
+        assertTrue("special_names missing from the ASG", asg.has("special_names"));
+        JsonObject sn = asg.getAsJsonObject("special_names");
+        assertEquals("W", sn.get("currency_sign").getAsString());
+    }
+
+    /**
+     * A program with no SPECIAL-NAMES paragraph must not grow a spurious
+     * currency_sign — Python defaults to '$' when the key is absent.
+     */
+    @Test
+    public void testNoSpecialNamesEmitsNoCurrencySign() throws Exception {
+        JsonObject asg = parseFixture("hello_world.cbl");
+        if (asg.has("special_names")) {
+            JsonObject sn = asg.getAsJsonObject("special_names");
+            assertFalse("currency_sign emitted for a program without SPECIAL-NAMES",
+                    sn.has("currency_sign"));
         }
     }
 

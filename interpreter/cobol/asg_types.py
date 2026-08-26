@@ -17,8 +17,41 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.cobol_types import CobolTypeDescriptor
 from interpreter.cobol.condition_name import ConditionName, ConditionValue
-from interpreter.cobol.edit_picture import UnsupportedEditPictureError
+from interpreter.cobol.edit_picture import (
+    DEFAULT_CURRENCY,
+    UnsupportedEditPictureError,
+)
 from interpreter.cobol.pic_parser import parse_pic
+
+
+def _currency_from_special_names(data: dict) -> str:
+    """Read the program's currency symbol from the bridge's SPECIAL-NAMES.
+
+    Refuses the multi-character form. IBM's
+    ``CURRENCY SIGN IS 'EUR' WITH PICTURE SYMBOL '$'`` makes each picture
+    symbol position occupy len(literal) BYTES, so it changes the field's
+    width — and the bridge computes record offsets independently of Python's
+    read lengths, with nothing reconciling them (see red-dragon-ilb6). Silently
+    accepting it would mis-place every later field in the record, so refuse
+    loudly instead (red-dragon-3o5f scoped it out).
+    """
+    special = data.get("special_names") or {}
+    sign = special.get("currency_sign") or DEFAULT_CURRENCY
+    if len(sign) != 1:
+        raise UnsupportedEditPictureError(
+            f"CURRENCY SIGN IS {sign!r} is a multi-character currency literal, "
+            f"which RedDragon does not support: each picture symbol position "
+            f"would occupy {len(sign)} bytes, changing every field's width. "
+            f"Only a single-character currency sign is implemented."
+        )
+    if special.get("currency_picture_symbol"):
+        raise UnsupportedEditPictureError(
+            f"CURRENCY SIGN IS {sign!r} WITH PICTURE SYMBOL "
+            f"{special['currency_picture_symbol']!r} is not supported: the "
+            f"PICTURE SYMBOL form exists to allow a multi-character currency "
+            f"literal, which changes field widths."
+        )
+    return sign
 
 
 @dataclass(frozen=True)
@@ -58,6 +91,12 @@ class CobolField:
     renames_from: str = ""
     renames_thru: str = ""
     blank_when_zero: bool = False
+    # The program's currency symbol at the time this field was ingested — '$'
+    # unless SPECIAL-NAMES declared CURRENCY SIGN IS otherwise. It is
+    # program-scoped, not per-field, but __post_init__ computes the type
+    # descriptor at construction, so it has to arrive as constructor state
+    # (red-dragon-3o5f).
+    currency_symbol: str = DEFAULT_CURRENCY
     type_descriptor: CobolTypeDescriptor = field(init=False)
 
     def __post_init__(self) -> None:
@@ -71,6 +110,7 @@ class CobolField:
                 sign_separate=self.sign_separate,
                 justified_right=self.justified_right,
                 blank_when_zero=self.blank_when_zero,
+                currency=self.currency_symbol,
             )
         except UnsupportedEditPictureError as exc:
             # parse_pic sees only the picture. This is a load-time abort, so
@@ -80,7 +120,7 @@ class CobolField:
         object.__setattr__(self, "type_descriptor", descriptor)
 
     @classmethod
-    def from_dict(cls, data: dict) -> CobolField:
+    def from_dict(cls, data: dict, currency: str = DEFAULT_CURRENCY) -> CobolField:
         sign_data = data.get("sign", {})
         return cls(
             name=data["name"],
@@ -91,7 +131,9 @@ class CobolField:
             value=data.get("value", ""),
             value_is_figurative=data.get("value_is_figurative", False),
             redefines=data.get("redefines", ""),
-            children=[CobolField.from_dict(c) for c in data.get("children", [])],
+            children=[
+                CobolField.from_dict(c, currency) for c in data.get("children", [])
+            ],
             occurs=data.get("occurs", 0),
             element_size=data.get("element_size", 0),
             conditions=[ConditionName.from_dict(c) for c in data.get("conditions", [])],
@@ -105,6 +147,7 @@ class CobolField:
             renames_from=data.get("renames_from", ""),
             renames_thru=data.get("renames_thru", ""),
             blank_when_zero=data.get("blank_when_zero", False),
+            currency_symbol=currency,
         )
 
     def to_dict(self) -> dict:
@@ -254,6 +297,10 @@ class CobolASG:
     statements: list[CobolStatementType] = field(default_factory=list)
     file_record_to_select: dict[str, str] = field(default_factory=dict)
     declaratives: list[CobolSection] = field(default_factory=list)
+    # SPECIAL-NAMES CURRENCY SIGN IS, '$' when the clause is absent. Held at
+    # the ASG level so to_dict can round-trip it — without that, reviving a
+    # serialised ASG silently reverts every edited field to '$'.
+    currency_symbol: str = DEFAULT_CURRENCY
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolASG:
@@ -264,19 +311,26 @@ class CobolASG:
             for f in data.get("file_fields", [])
             if f.get("fd_name") and f.get("level") == 1
         }
+        currency = _currency_from_special_names(data)
         return cls(
             program_id=data.get("program_id", ""),
             file_control=[
                 FileControlEntry.from_dict(e) for e in data.get("file_control", [])
             ],
-            data_fields=[CobolField.from_dict(f) for f in data.get("data_fields", [])],
+            data_fields=[
+                CobolField.from_dict(f, currency) for f in data.get("data_fields", [])
+            ],
             linkage_fields=[
-                CobolField.from_dict(f) for f in data.get("linkage_fields", [])
+                CobolField.from_dict(f, currency)
+                for f in data.get("linkage_fields", [])
             ],
             local_storage_fields=[
-                CobolField.from_dict(f) for f in data.get("local_storage_fields", [])
+                CobolField.from_dict(f, currency)
+                for f in data.get("local_storage_fields", [])
             ],
-            file_fields=[CobolField.from_dict(f) for f in data.get("file_fields", [])],
+            file_fields=[
+                CobolField.from_dict(f, currency) for f in data.get("file_fields", [])
+            ],
             sections=[CobolSection.from_dict(s) for s in data.get("sections", [])],
             paragraphs=[
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
@@ -286,12 +340,15 @@ class CobolASG:
             declaratives=[
                 CobolSection.from_dict(s) for s in data.get("declaratives", [])
             ],
+            currency_symbol=currency,
         )
 
     def to_dict(self) -> dict:
         result: dict = {}
         if self.program_id:
             result["program_id"] = self.program_id
+        if self.currency_symbol != DEFAULT_CURRENCY:
+            result["special_names"] = {"currency_sign": self.currency_symbol}
         if self.file_control:
             result["file_control"] = [e.to_dict() for e in self.file_control]
         if self.data_fields:

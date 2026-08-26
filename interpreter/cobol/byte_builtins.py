@@ -240,8 +240,14 @@ def _builtin_make_list(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Prepare digit list from a string value for COBOL numeric encoding.
 
-    Args: [value_str: str, total_digits: int, decimal_digits: int, signed: bool]
+    Args: [value_str: str, total_digits: int, decimal_digits: int, signed: bool,
+           scale: int (optional)]
     Returns: list[int] of digit values (0-9)
+
+    ``scale`` is the PIC P scaling exponent (Task 1's ``CobolTypeDescriptor.scale``).
+    It is optional so that IR emitted before red-dragon-qhtv (4-argument calls)
+    still runs, defaulting to 0 (unscaled) — mirrors how ``currency`` was added
+    to COBOL_APPLY_EDIT_PICTURE in red-dragon-3o5f.
     """
     if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
@@ -251,6 +257,7 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
         args[2].value,
         args[3].value,
     )
+    scale = args[4].value if len(args) > 4 else 0
     if not isinstance(total_digits, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if isinstance(value_str, (int, float)):
@@ -258,9 +265,44 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
     if not isinstance(value_str, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
 
+    from decimal import Decimal, InvalidOperation
+
     from interpreter.cobol.data_filters import align_decimal, left_adjust
+    from interpreter.cobol.pic_scale import descale
 
     clean = value_str.lstrip("+-")
+    try:
+        parsed = Decimal(clean)
+    except InvalidOperation:
+        # Non-numeric input (spaces, alphanumeric junk). Before scale-aware
+        # division existed, every input reaching this builtin was tolerated —
+        # non-digit characters simply became 0 further down (see the digit
+        # comprehension at the end of this function). Fall back to that
+        # behaviour instead of raising a Python-level exception for what is a
+        # routine COBOL data error (red-dragon-qhtv).
+        pass
+    else:
+        # Divide by the scaling factor BEFORE truncating to digit positions —
+        # order matters (12300 into PIC 999PP is 123, not 300). Reuses
+        # descale() rather than duplicating it a third time (emit_context.py's
+        # emit_decode_field does the IR-side multiply; encode_scaled_digits
+        # does the compile-time-literal divide).
+        #
+        # Normalizing through Decimal happens even when scale == 0, not only
+        # when it's non-zero: a NEGATIVE-scale P field (leading P, e.g.
+        # PIC PPPP9) decodes to a small-magnitude float whose plain str() is
+        # scientific notation once the magnitude drops below 1e-4 (Python's
+        # own threshold, e.g. str(1e-05) == '1e-05'). That string can reach
+        # this builtin as value_str for a TARGET field whose own scale is 0
+        # (e.g. MOVE-ing a P-scaled source into a plain integer field), so
+        # the guard must not be conditioned on this call's own scale. format(
+        # x, "f") avoids the same scientific-notation trap Task 2 hit on the
+        # Decimal-division side: str(Decimal) / str(float) can both render as
+        # exponential notation, which align_decimal cannot parse — it splits
+        # on '.', finds one inside the mantissa, and silently corrupts digits.
+        if scale:
+            parsed = descale(parsed, scale)
+        clean = str(int(parsed)) if decimal_digits == 0 else format(parsed, "f")
     if decimal_digits > 0:
         integer_digits = total_digits - decimal_digits
         digit_str = align_decimal(clean, integer_digits, decimal_digits)
@@ -664,15 +706,20 @@ def _builtin_cobol_apply_edit_picture(
 ) -> BuiltinResult:
     """Apply a COBOL numeric edit picture to a numeric value string.
 
-    Args: [value_str: str, pic_string: str]
+    Args: [value_str: str, pic_string: str, currency: str (optional)]
     Returns: str — the edited display string, exactly the picture's width.
+
+    ``currency`` is the program's CURRENCY SIGN symbol. It is optional so that
+    IR emitted before red-dragon-3o5f (two-argument calls) still runs, falling
+    back to '$'.
     """
     if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from interpreter.cobol.edit_picture import format_edited
+    from interpreter.cobol.edit_picture import DEFAULT_CURRENCY, format_edited
 
     value_str, pic_string = str(args[0].value), str(args[1].value)
-    return BuiltinResult(value=format_edited(value_str, pic_string))
+    currency = str(args[2].value) if len(args) > 2 else DEFAULT_CURRENCY
+    return BuiltinResult(value=format_edited(value_str, pic_string, currency))
 
 
 def _builtin_cobol_apply_alphanumeric_edit(

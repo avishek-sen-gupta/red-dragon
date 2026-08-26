@@ -217,4 +217,12 @@ fileignoreconfig:
     - filecontent
 - filename: interpreter/project/cobol_connections.py
   checksum: 5eed28ea03f5708a0a32e9cd4da154a347e1c226165c1681d6145b9bc15a3464
+- filename: tests/integration/test_cobol_pic_scaling.py
+  # Prose, not credentials: the base64/entropy detector matches docstring text
+  # such as "in both directions and passes against the broken pre-fix code".
+  checksum: 23e9e269d9b2fe83d184b83b0ecf8792986471ff9fb1d80237a75be7b1790a19
+- filename: docs/superpowers/plans/2026-08-22-pic-p-decimal-scaling.md
+  # Same false positive, eleven times over: TDD step text ("Expected: PASS, no
+  # regressions") and the PROLEAP_BRIDGE_JAR=$PWD/... command line.
+  checksum: 3d5166ecbfc33359b83e116e1f5770d3b8814fdac78b44a0d7f737a5c3d9182f
 version: "1.0"
