@@ -51,10 +51,24 @@ from decimal import Decimal, InvalidOperation
 
 _SIGN_SYMS = frozenset("+-")
 
-# Edit symbols that can FLOAT: a run of two or more is a floating insertion
-# (n-1 digit positions plus one reserved symbol position), which this module
-# does not implement. A run of exactly ONE is fixed insertion, which it does.
-_FLOAT_SYMS = frozenset("$+-")
+# The default currency symbol. A program may replace it via
+# SPECIAL-NAMES CURRENCY SIGN IS <literal> (red-dragon-3o5f), so every entry
+# point takes a `currency` parameter defaulting to this.
+DEFAULT_CURRENCY = "$"
+
+
+def _float_syms(currency: str) -> tuple[str, ...]:
+    """Edit symbols that can FLOAT, in deterministic precedence order.
+
+    A run of two or more is a floating insertion (n-1 digit positions plus one
+    reserved symbol slot); a run of exactly ONE is fixed insertion.
+
+    Ordered, not a set: iteration order decides which symbol wins when a
+    picture somehow contains runs of two different float symbols, and a
+    frozenset would make that arbitrary between runs.
+    """
+    return (currency, "+", "-")
+
 
 # Trailing two-character sign tokens. Valid only as the last two positions.
 _TRAILING_SIGN_TOKENS = ("CR", "DB")
@@ -77,6 +91,7 @@ class UnsupportedEditPictureError(ValueError):
 
 def find_float_string(
     template: list[str] | tuple[str, ...],
+    currency: str = DEFAULT_CURRENCY,
 ) -> tuple[str, tuple[int, ...]]:
     """Locate the floating insertion string in an expanded template.
 
@@ -93,7 +108,7 @@ def find_float_string(
     Returns ``(symbol, positions)`` where positions are the template indices
     of the float symbols in order, or ``("", ())`` if there is none.
     """
-    for sym in _FLOAT_SYMS:
+    for sym in _float_syms(currency):
         idxs = tuple(i for i, t in enumerate(template) if t == sym)
         if len(idxs) < 2:
             continue
@@ -216,7 +231,7 @@ class EditPicture:
     trailing_sign: str = ""
 
 
-def parse_edit_picture(pic: str) -> EditPicture:
+def parse_edit_picture(pic: str, currency: str = DEFAULT_CURRENCY) -> EditPicture:
     """Parse a numeric-edited PIC string into an :class:`EditPicture`."""
     # S (operational sign), V (implied decimal point) and P (decimal scaling)
     # occupy NO storage, so they are dropped before anything downstream sees
@@ -225,7 +240,7 @@ def parse_edit_picture(pic: str) -> EditPicture:
     # which excludes S/V/P by its uniform rule — allocated 3, so Python read
     # two bytes into the following field (red-dragon-ilb6 follow-up).
     template = [sym for sym in _expand(pic.upper()) if sym not in "SVP"]
-    float_symbol, float_positions = find_float_string(template)
+    float_symbol, float_positions = find_float_string(template, currency)
     trailing_sign = _trailing_sign_token(template)
     # The first float position is reserved for the symbol itself, not a digit.
     float_digit_positions = frozenset(float_positions[1:])
@@ -305,13 +320,13 @@ def _digit_strings(value: Decimal, ep: EditPicture) -> tuple[str, str]:
     return int_part, frac_part
 
 
-def format_edited(value: str, pic: str) -> str:
+def format_edited(value: str, pic: str, currency: str = DEFAULT_CURRENCY) -> str:
     """Format a numeric ``value`` string per the numeric-edited ``pic``.
 
     ``value`` is a decimal string such as ``"123.45"``, ``"-0.5"``, ``"0"``.
     Returns the edited display string, exactly ``width`` characters wide.
     """
-    ep = parse_edit_picture(pic)
+    ep = parse_edit_picture(pic, currency)
     try:
         dec = Decimal(str(value).strip() or "0")
     except (InvalidOperation, ValueError):

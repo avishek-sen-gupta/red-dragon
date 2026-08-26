@@ -88,6 +88,10 @@ class TestTableTwelveSizes:
         assert analysis.digit_positions == 6
         assert analysis.scaling_positions == 3
         assert analysis.char_positions == 3
+        # The point is not WRITTEN, so no digit is a fraction digit; the shift
+        # the leading Ps imply is reported as point_shift instead.
+        assert analysis.fraction_digits == 0
+        assert analysis.point_shift == -6
 
         desc = parse_pic("PPP999")
         assert desc.category == CobolDataCategory.ZONED_DECIMAL
@@ -96,13 +100,15 @@ class TestTableTwelveSizes:
         assert desc.byte_length == 3
 
     @covers(CobolFeature.USAGE_COMP_3)
-    def test_scaling_positions_count_towards_packed_decimal_size(self):
-        # Packed storage covers every digit position, scaling ones included, so
-        # PPP999 COMP-3 is six digits in (6 // 2) + 1 bytes. The bridge's
-        # uniform rule counts P for COMP-3/BINARY for the same reason.
+    def test_scaling_positions_are_excluded_from_packed_decimal_size_too(self):
+        # A scaling position holds no digit in any USAGE: PPP999 stores the three
+        # digits written as 9, and the Ps become the descriptor's scale
+        # (red-dragon-qhtv). So packed storage is three digits in (3 // 2) + 1
+        # bytes, and the bridge's uniform rule excludes P for the same reason.
         desc = parse_pic("PPP999", usage="COMP-3")
-        assert desc.total_digits == 6
-        assert desc.byte_length == 4
+        assert desc.total_digits == 3
+        assert desc.scale == -6
+        assert desc.byte_length == 2
 
     @covers(CobolFeature.PIC_CLAUSE)
     def test_a_picture_of_only_scaling_positions_stores_nothing(self):
@@ -195,7 +201,7 @@ class TestSpecialNamesTemplate:
         analysis = picture.analyse(parser.parse("ZZZ.ZZZ,99"))
         assert analysis.category == "numeric_edited"
         assert analysis.char_positions == 10
-        assert analysis.scale == 2
+        assert analysis.fraction_digits == 2
 
     @covers(CobolFeature.PIC_CLAUSE)
     def test_a_declared_currency_symbol_is_recognised(self):
