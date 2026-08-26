@@ -16,9 +16,9 @@ class CobolDataCategory(str, Enum):
     is ALPHANUMERIC here, because a PIC A item and a PIC X item are stored and
     moved identically in RedDragon, and the differences the spec does draw
     between them (which senders are legal, class checking) are not modelled.
-    The categories with no storage at all here — alphanumeric-edited, external
-    floating-point, and the multi-byte DBCS / national / UTF-8 families — are
-    refused at field ingestion by pic_parser rather than given a member.
+    The categories with no storage at all here — external floating-point and the
+    multi-byte DBCS / national / UTF-8 families — are refused at field ingestion
+    by pic_parser rather than given a member.
     """
 
     ZONED_DECIMAL = "ZONED_DECIMAL"
@@ -83,10 +83,22 @@ class CobolTypeDescriptor:
     sign_leading: bool = False
     justified_right: bool = False
     blank_when_zero: bool = False
-    # The original PICTURE character-string, kept verbatim. NUMERIC_EDITED needs
-    # it for the MOVE-time edit mask (sign/Z/comma/decimal positions); for the
-    # other categories it is retained for diagnostics. Empty when there is no
-    # PICTURE clause at all (COMP-1, COMP-2, USAGE POINTER).
+    # For NUMERIC_EDITED: the program's currency symbol, '$' unless
+    # SPECIAL-NAMES declared CURRENCY SIGN IS otherwise. The edit mask is
+    # applied at RUNTIME from pic_string, so the symbol has to travel with it
+    # or the formatter falls back to '$' (red-dragon-3o5f).
+    currency: str = "$"
+    # PIC P decimal scaling: the value is stored_digits * 10**scale. Positive
+    # for trailing P (999PP -> +2), negative for leading P (PP9 -> -3). P
+    # occupies no storage, so this never affects byte_length (red-dragon-qhtv).
+    # decimal_digits is the point the picture WRITES (V or .); scale is the
+    # further shift P implies, so the two are independent.
+    scale: int = 0
+    # The original PICTURE character-string, kept verbatim. The edited categories
+    # need it for the MOVE-time edit mask (sign/Z/comma/decimal positions, or the
+    # B/0/'/' insertion positions); for the others it is retained for
+    # diagnostics. Empty when there is no PICTURE clause at all (COMP-1, COMP-2,
+    # USAGE POINTER).
     pic_string: str = ""
 
     @property

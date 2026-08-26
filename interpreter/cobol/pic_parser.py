@@ -19,8 +19,13 @@ non-DISPLAY USAGE categories (COMP-3, binary, COMP-1/2). USAGE wins for those: a
 
 Edited pictures — numeric-edited and alphanumeric-edited — keep their original PIC
 string, because :mod:`interpreter.cobol.edit_picture` needs it to build the
-MOVE-time edit mask. Categorisation itself no longer goes through
+MOVE-time edit mask, and a numeric-edited one keeps the currency symbol beside
+it for the same reason. Categorisation itself no longer goes through
 ``is_numeric_edited``.
+
+The currency symbol is a grammar TERMINAL, so a compilation unit whose
+SPECIAL-NAMES declares CURRENCY SIGN IS needs its own parser rather than an
+extra parse-time argument; ``_parser_for`` caches one per symbol.
 
 One category the grammar recognises is refused here rather than described, because
 RedDragon has no way to store it: external floating-point, which would need an
@@ -31,11 +36,15 @@ not yet honour — a loud failure instead of a well-formed but wrong field.
 
 from __future__ import annotations
 
+from lark import Lark
 from lark.exceptions import UnexpectedInput
 
 from interpreter.cobol import picture
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.edit_picture import UnsupportedEditPictureError
+from interpreter.cobol.edit_picture import (
+    DEFAULT_CURRENCY,
+    UnsupportedEditPictureError,
+)
 
 _USAGE_TO_CATEGORY = {
     "COMP-3": CobolDataCategory.COMP3,
@@ -83,18 +92,6 @@ _WIDTH_AS_TOTAL_DIGITS = frozenset(
     }
 )
 
-# Categories whose storage covers every digit position the picture declares,
-# scaling positions included: a packed or binary field holds all of them. Zoned
-# decimal does not — it stores one byte per CHARACTER position, and a P is a
-# digit position that is not one — so its total_digits excludes the Ps, which is
-# what keeps it equal to the byte count the zoned encoders write.
-_DIGITS_INCLUDE_SCALING = frozenset(
-    {
-        CobolDataCategory.COMP3,
-        CobolDataCategory.BINARY,
-    }
-)
-
 # BLANK WHEN ZERO makes an otherwise numeric picture numeric-edited (p. 218), but
 # that reclassification is deliberately NOT applied to the descriptor: the flag
 # has its own encode-time wrapper (emit_context._emit_blank_when_zero_wrap) over
@@ -113,12 +110,23 @@ _BLANK_WHEN_ZERO_CATEGORIES = frozenset(
     }
 )
 
-# Built once, at import. The default SPECIAL-NAMES: currency symbol "$" and a
-# period for the decimal point. A compilation unit with a CURRENCY SIGN or
-# DECIMAL-POINT IS COMMA clause needs its own parser from
-# picture.build_parser(); wiring SPECIAL-NAMES through to here is not done yet
-# (red-dragon-3o5f).
-_parser = picture.build_parser()
+# One parser per currency symbol, built on first use. A compilation unit's
+# CURRENCY SIGN clause changes a TERMINAL of the grammar, so it cannot be a
+# parse-time argument; asg_types threads the symbol down from SPECIAL-NAMES
+# (red-dragon-3o5f). Building a Lark parser is expensive enough to be worth
+# caching, and a program has at most a handful of currency symbols.
+#
+# DECIMAL-POINT IS COMMA is not threaded through: it is a second SPECIAL-NAMES
+# clause the ASG does not yet carry, and picture.build_parser already takes it.
+_parsers: dict[str, Lark] = {}
+
+
+def _parser_for(currency: str) -> Lark:
+    parser = _parsers.get(currency)
+    if parser is None:
+        parser = picture.build_parser(currency_symbols=currency)
+        _parsers[currency] = parser
+    return parser
 
 
 def _digit_counts(
@@ -127,19 +135,16 @@ def _digit_counts(
     """The descriptor's (total_digits, decimal_digits) for one analysed picture.
 
     Character and numeric-edited items carry their width, because their content
-    IS the character string. Packed and binary items carry every digit position
-    the picture declares. Zoned decimal carries only the STORED digit positions:
-    the implied decimal-point shift a P denotes is not applied to the value
-    anywhere in RedDragon, so a scaling position that is counted here would
-    scale the value by a power of ten it never gets shifted back by, on top of
-    making total_digits disagree with the field's byte count.
+    IS the character string. Every numeric category carries the STORED digit
+    positions: a scaling position holds no digit in any USAGE — what a P-scaled
+    item stores is the digits written as 9, with the Ps applied as
+    CobolTypeDescriptor.scale — so total_digits stays equal to the number of
+    digits the encoders actually write, packed and binary included.
     """
     if category in _WIDTH_AS_TOTAL_DIGITS:
-        return analysis.char_positions, analysis.scale
-    if category in _DIGITS_INCLUDE_SCALING:
-        return analysis.digit_positions, analysis.scale
+        return analysis.char_positions, analysis.fraction_digits
     stored_digits = analysis.digit_positions - analysis.scaling_positions
-    return stored_digits, min(analysis.scale, stored_digits)
+    return stored_digits, min(analysis.fraction_digits, stored_digits)
 
 
 def parse_pic(
@@ -149,6 +154,7 @@ def parse_pic(
     sign_separate: bool = False,
     justified_right: bool = False,
     blank_when_zero: bool = False,
+    currency: str = DEFAULT_CURRENCY,
 ) -> CobolTypeDescriptor:
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
@@ -159,6 +165,10 @@ def parse_pic(
         sign_separate: SIGN IS SEPARATE CHARACTER — adds a character position.
         justified_right: JUSTIFIED RIGHT.
         blank_when_zero: BLANK WHEN ZERO.
+        currency: the program's currency symbol, '$' unless SPECIAL-NAMES
+            declared CURRENCY SIGN IS otherwise (red-dragon-3o5f). It is a
+            grammar terminal, so it selects the parser rather than being an
+            argument to the parse.
 
     Returns:
         A CobolTypeDescriptor describing the field's type and layout.
@@ -184,7 +194,7 @@ def parse_pic(
         return CobolTypeDescriptor(category=usage_category, total_digits=0)
 
     try:
-        tree = _parser.parse(pic)
+        tree = _parser_for(currency).parse(pic)
     except UnexpectedInput as exc:
         raise ValueError(f"Cannot parse PIC clause: {pic!r}") from exc
 
@@ -217,5 +227,7 @@ def parse_pic(
         sign_leading=sign_leading,
         justified_right=justified_right,
         blank_when_zero=blank_when_zero and category in _BLANK_WHEN_ZERO_CATEGORIES,
+        scale=analysis.point_shift,
+        currency=currency,
         pic_string=pic,
     )
