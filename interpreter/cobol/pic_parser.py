@@ -1,41 +1,41 @@
-"""PIC clause parser — Lark grammar + transformer.
+"""PIC clause parser — full PICTURE grammar plus a semantic pass.
 
-Parses COBOL PIC strings (e.g. "S9(5)V99", "X(8)") into
-:class:`CobolTypeDescriptor` instances. The repeat count ``(N)`` is a
-PARSER rule over a real integer terminal, so the count is read
-STRUCTURALLY — there is no regex / string slicing anywhere.
+Parses COBOL PIC strings into :class:`CobolTypeDescriptor` instances. The
+grammar lives in :mod:`interpreter.cobol.picture` (``picture.lark``) and covers
+every single-byte USAGE DISPLAY data category of the PICTURE clause, so the
+*category* is decided by which top-level alternative parses — nothing is
+classified by symbol-set membership beforehand. Sizes, digit counts, scale and
+the spec's non-context-free rules come from ``picture.analyse``.
 
-Grammar shape (ported from the retired ANTLR grammar):
-  - numeric "fraction": optional ``S`` sign, optional leading ``P*``
-    scaling, then digits (each ``9`` or ``Z``, optionally ``(N)``)
-    possibly split by a single ``V`` into integer/fraction parts, then
-    optional trailing ``P*`` scaling.
-  - alphanumeric: any sequence containing at least one ``X`` (with
-    ``9``/``Z`` digit positions allowed mixed on either side).
-  - ``POINTER`` USAGE.
+Repeat counts ``(N)`` are a parser rule over a real integer terminal, so a count
+is read STRUCTURALLY — there is no regex / string slicing anywhere. Counts are
+also never expanded: ``X(32767)`` parses as one token with a count, not as 32767
+symbols.
 
-Numeric-edited pictures (sign / Z suppression / comma / decimal insertion) are
-detected BEFORE the Lark parse (see ``is_numeric_edited`` / ``parse_edit_picture``
-in :mod:`interpreter.cobol.edit_picture`) and produce a ``NUMERIC_EDITED``
-descriptor sized by the picture's full character width. The Lark grammar below
-therefore only sees plain numeric / alphanumeric pictures; its ``%ignore`` of
-editing characters is a defensive fallback for any edited picture that slips
-past detection (e.g. B / 0 / '/' insertion — see red-dragon-r9s9).
+This module maps the spec's categories onto :class:`CobolDataCategory`, which is
+coarser (alphabetic and alphanumeric share one member) and also carries the
+non-DISPLAY USAGE categories (COMP-3, binary, COMP-1/2). USAGE wins for those: a
+``numeric`` picture under ``USAGE COMP-3`` is packed decimal.
+
+Edited pictures — numeric-edited and alphanumeric-edited — keep their original PIC
+string, because :mod:`interpreter.cobol.edit_picture` needs it to build the
+MOVE-time edit mask. Categorisation itself no longer goes through
+``is_numeric_edited``.
+
+One category the grammar recognises is refused here rather than described, because
+RedDragon has no way to store it: external floating-point, which would need an
+encoder and a decoder of its own for the display float form. Refusing at field
+ingestion is the stance red-dragon-0599 took for edit symbols the formatter could
+not yet honour — a loud failure instead of a well-formed but wrong field.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from lark import Lark, Transformer
 from lark.exceptions import UnexpectedInput
 
+from interpreter.cobol import picture
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.edit_picture import (
-    is_numeric_edited,
-    parse_edit_picture,
-    reject_unsupported,
-)
+from interpreter.cobol.edit_picture import UnsupportedEditPictureError
 
 _USAGE_TO_CATEGORY = {
     "COMP-3": CobolDataCategory.COMP3,
@@ -52,167 +52,94 @@ _USAGE_TO_CATEGORY = {
     "COMP2": CobolDataCategory.COMP2,
 }
 
+# The grammar's top-level alternatives, in the spec's own naming, mapped onto the
+# descriptor categories. The spec's alphabetic category maps onto ALPHANUMERIC:
+# storage and MOVE behaviour are identical, and the distinctions the spec draws
+# (legal senders, class checking) are not modelled — see CobolDataCategory.
+_PICTURE_CATEGORY = {
+    "alphabetic": CobolDataCategory.ALPHANUMERIC,
+    "alphanumeric": CobolDataCategory.ALPHANUMERIC,
+    "alphanumeric_edited": CobolDataCategory.ALPHANUMERIC_EDITED,
+    "numeric_edited": CobolDataCategory.NUMERIC_EDITED,
+    # "numeric" is deliberately absent: its descriptor category comes from USAGE
+    # (zoned decimal, packed decimal or binary), not from the picture.
+}
 
-# A digit position is either a bare digit symbol (9 or Z) or one carrying a
-# repeat count `(N)`. The count is matched as a real INT terminal — the
-# transformer reads int(token), never a regex/slice. POINTER is matched before
-# the digit symbols so the leading 'P' of "POINTER" is not mistaken for scaling.
-_GRAMMAR = r"""
-    start: pointer | alphanumeric | fraction
+# Categories the grammar recognises and sizes correctly but that no encode /
+# decode path can represent, mapped to the spec's name for the diagnostic.
+_UNSUPPORTED_CATEGORIES = {
+    "external_float": "external floating-point",
+}
 
-    pointer: POINTER
+# Categories for which total_digits carries the item's character width rather
+# than a digit count. Nothing reads total_digits as a digit count for these —
+# the encoders treat the formatted characters as the content — but the two stay
+# equal so the field keeps meaning "how long is this thing" for character data.
+_WIDTH_AS_TOTAL_DIGITS = frozenset(
+    {
+        CobolDataCategory.ALPHANUMERIC,
+        CobolDataCategory.ALPHANUMERIC_EDITED,
+        CobolDataCategory.NUMERIC_EDITED,
+    }
+)
 
-    fraction: SIGN? scaling* body scaling*
-            | SIGN? scaling+               -> scaling_only
+# Categories whose storage covers every digit position the picture declares,
+# scaling positions included: a packed or binary field holds all of them. Zoned
+# decimal does not — it stores one byte per CHARACTER position, and a P is a
+# digit position that is not one — so its total_digits excludes the Ps, which is
+# what keeps it equal to the byte count the zoned encoders write.
+_DIGITS_INCLUDE_SCALING = frozenset(
+    {
+        CobolDataCategory.COMP3,
+        CobolDataCategory.BINARY,
+    }
+)
 
-    body: integer_part DECPOINT fraction_part -> both_sides
-        | integer_part DECPOINT               -> only_left
-        | DECPOINT fraction_part              -> only_right
-        | integer_part                        -> integer_only
+# BLANK WHEN ZERO makes an otherwise numeric picture numeric-edited (p. 218), but
+# that reclassification is deliberately NOT applied to the descriptor: the flag
+# has its own encode-time wrapper (emit_context._emit_blank_when_zero_wrap) over
+# the ordinary numeric encoders, and routing such a field through the
+# numeric-edited encoder instead would drop the blanking altogether. The clause
+# is only meaningful on a numeric or numeric-edited item, so it is dropped for
+# every other category.
+_BLANK_WHEN_ZERO_CATEGORIES = frozenset(
+    {
+        CobolDataCategory.ZONED_DECIMAL,
+        CobolDataCategory.COMP3,
+        CobolDataCategory.BINARY,
+        CobolDataCategory.COMP1,
+        CobolDataCategory.COMP2,
+        CobolDataCategory.NUMERIC_EDITED,
+    }
+)
 
-    integer_part: digit+
-    fraction_part: digit+
-
-    // Alphanumeric: at least one X, with digit positions allowed on either side.
-    alphanumeric: alnum_pos* ALPHA_X count? alnum_pos*
-    alnum_pos: ALPHA_X count? | digit
-
-    digit: DIGIT_SYM count?
-    count: "(" INT ")"
-
-    POINTER: "POINTER"i
-    SIGN: "S"i
-    DECPOINT: "V"i
-    DIGIT_SYM: "9" | "Z"i
-    ALPHA_X: "X"i
-    SCALE: "P"i
-    scaling: SCALE
-
-    INT: /[0-9]+/
-
-    // Editing / display characters carry no stored-digit semantics — ignore them
-    // exactly as the old grammar's HIDDEN channel did. Note that genuinely
-    // numeric-edited pictures are intercepted before this grammar runs (see the
-    // module docstring) and sized by edit_picture; these %ignore rules only keep
-    // the grammar from rejecting stray edit chars on pictures that reach it.
-    %ignore /[ \t\f\r\n]+/
-    %ignore ","
-    %ignore "."
-    %ignore "-"
-    %ignore "+"
-"""
-
-_parser = Lark(_GRAMMAR, parser="earley")
-
-
-@dataclass(frozen=True)
-class _Count:
-    """A repeat count `(N)` read structurally from a real INT terminal."""
-
-    n: int
-
-
-class _PicTransformer(Transformer):
-    """Reduces the parse tree to (integer_digits, decimal_digits, ...) facts."""
-
-    def count(self, items: list) -> _Count:
-        # INT terminal -> a real integer; structural, no regex/slice.
-        return _Count(int(items[0]))
-
-    def digit(self, items: list) -> int:
-        # items: [DIGIT_SYM] or [DIGIT_SYM, count]; Z counts as a digit position.
-        if len(items) == 2:
-            return items[1].n
-        return 1
-
-    def integer_part(self, items: list) -> int:
-        return sum(items)
-
-    def fraction_part(self, items: list) -> int:
-        return sum(items)
-
-    # body alternatives -> (integer_digits, decimal_digits)
-    def both_sides(self, items: list) -> tuple[int, int]:
-        # items: [integer_digits, DECPOINT, fraction_digits]. Index by ends, not
-        # by the middle, so we don't break if Lark stops passing the DECPOINT token.
-        return (items[0], items[-1])
-
-    def only_left(self, items: list) -> tuple[int, int]:
-        return (items[0], 0)
-
-    def only_right(self, items: list) -> tuple[int, int]:
-        # items: [DECPOINT, fraction_digits]
-        return (0, items[1])
-
-    def integer_only(self, items: list) -> tuple[int, int]:
-        return (items[0], 0)
-
-    def fraction(self, items: list) -> dict:
-        signed = any(getattr(t, "type", None) == "SIGN" for t in items)
-        body = next(i for i in items if isinstance(i, tuple))
-        integer_digits, decimal_digits = body
-        return {
-            "alphanumeric": False,
-            "integer_digits": integer_digits,
-            "decimal_digits": decimal_digits,
-            "signed": signed,
-        }
-
-    def scaling_only(self, items: list) -> dict:
-        # A picture of only P scaling positions (e.g. "P", "PPP", "SPP"): no
-        # stored digit positions. The scaling shifts the implied decimal point
-        # but contributes zero digits to storage.
-        signed = any(getattr(t, "type", None) == "SIGN" for t in items)
-        return {
-            "alphanumeric": False,
-            "integer_digits": 0,
-            "decimal_digits": 0,
-            "signed": signed,
-        }
-
-    def alnum_pos(self, items: list) -> int:
-        # ALPHA_X (with optional count) or a digit position.
-        if isinstance(items[0], int):  # digit subtree already reduced to its count
-            return items[0]
-        if len(items) == 2:  # ALPHA_X count
-            return items[1].n
-        return 1  # bare ALPHA_X
-
-    def alphanumeric(self, items: list) -> dict:
-        # items are a mix of: ints (each a reduced alnum_pos / digit, already its
-        # own length), the central ALPHA_X token, and a _Count (present only when
-        # that central X carried `(N)`). The central X contributes its count if a
-        # _Count follows it, else 1 — computed directly, with no cross-iteration
-        # arithmetic between the bare X and its trailing count.
-        length = 0
-        for item in items:
-            if isinstance(item, int):
-                length += item
-            elif isinstance(item, _Count):
-                continue  # folded into the preceding central ALPHA_X below
-        # The central X: its trailing _Count (if any) gives the length, else 1.
-        central_count = next((i for i in items if isinstance(i, _Count)), None)
-        length += central_count.n if central_count is not None else 1
-        return {
-            "alphanumeric": True,
-            "alphanumeric_length": length,
-        }
-
-    def pointer(self, items: list) -> dict:
-        # POINTER is a USAGE keyword with no stored digits; treat as zero-size
-        # numeric so usage handling in parse_pic governs the result.
-        return {
-            "alphanumeric": False,
-            "integer_digits": 0,
-            "decimal_digits": 0,
-            "signed": False,
-        }
-
-    def start(self, items: list) -> dict:
-        return items[0]
+# Built once, at import. The default SPECIAL-NAMES: currency symbol "$" and a
+# period for the decimal point. A compilation unit with a CURRENCY SIGN or
+# DECIMAL-POINT IS COMMA clause needs its own parser from
+# picture.build_parser(); wiring SPECIAL-NAMES through to here is not done yet
+# (red-dragon-3o5f).
+_parser = picture.build_parser()
 
 
-_transformer = _PicTransformer()
+def _digit_counts(
+    category: CobolDataCategory, analysis: picture.PictureAnalysis
+) -> tuple[int, int]:
+    """The descriptor's (total_digits, decimal_digits) for one analysed picture.
+
+    Character and numeric-edited items carry their width, because their content
+    IS the character string. Packed and binary items carry every digit position
+    the picture declares. Zoned decimal carries only the STORED digit positions:
+    the implied decimal-point shift a P denotes is not applied to the value
+    anywhere in RedDragon, so a scaling position that is counted here would
+    scale the value by a power of ten it never gets shifted back by, on top of
+    making total_digits disagree with the field's byte count.
+    """
+    if category in _WIDTH_AS_TOTAL_DIGITS:
+        return analysis.char_positions, analysis.scale
+    if category in _DIGITS_INCLUDE_SCALING:
+        return analysis.digit_positions, analysis.scale
+    stored_digits = analysis.digit_positions - analysis.scaling_positions
+    return stored_digits, min(analysis.scale, stored_digits)
 
 
 def parse_pic(
@@ -226,74 +153,69 @@ def parse_pic(
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
     Args:
-        pic: The PIC string (e.g. "9(5)", "S9(5)V99", "X(8)").
+        pic: The PIC string (e.g. "9(5)", "S9(5)V99", "X(8)", "$$$,$$9.99CR").
         usage: USAGE clause value ("DISPLAY", "COMP-3", "COMP").
+        sign_leading: SIGN IS LEADING.
+        sign_separate: SIGN IS SEPARATE CHARACTER — adds a character position.
+        justified_right: JUSTIFIED RIGHT.
+        blank_when_zero: BLANK WHEN ZERO.
 
     Returns:
         A CobolTypeDescriptor describing the field's type and layout.
+
+    Raises:
+        ValueError: if the string is not a legal PICTURE character-string, or
+            parses but breaks a digit-count / run-length rule.
+        UnsupportedEditPictureError: if the picture's category has no runtime
+            representation (a ValueError subclass, so existing handling holds).
     """
-    category = _USAGE_TO_CATEGORY.get(usage, CobolDataCategory.ZONED_DECIMAL)
+    usage_category = _USAGE_TO_CATEGORY.get(usage, CobolDataCategory.ZONED_DECIMAL)
 
     # COMP-1 and COMP-2 have no PIC clause — return immediately with fixed size.
-    if category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
-        return CobolTypeDescriptor(
-            category=category,
-            total_digits=0,
-            decimal_digits=0,
-            signed=False,
-        )
+    if usage_category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
+        return CobolTypeDescriptor(category=usage_category, total_digits=0)
 
     if not pic:
-        return CobolTypeDescriptor(
-            category=category,
-            total_digits=0,
-            decimal_digits=0,
-            signed=False,
-        )
+        return CobolTypeDescriptor(category=usage_category, total_digits=0)
 
-    # Refuse edit symbols format_edited would mis-format, BEFORE the
-    # is_numeric_edited gate below — an all-float picture like "$$$$.$$" has no
-    # 9/Z, so it fails that gate and would otherwise reach the Lark grammar and
-    # die as an opaque "Cannot parse PIC clause" (red-dragon-0599).
-    reject_unsupported(pic)
-
-    # Numeric-edited pictures (sign / Z suppression / comma / decimal insertion)
-    # carry editing characters the Lark grammar deliberately drops. Their storage
-    # is the formatted character string, so size by the picture's character width
-    # and keep the original PIC for the MOVE-time edit mask (red-dragon edit_picture).
-    if usage == "DISPLAY" and is_numeric_edited(pic):
-        ep = parse_edit_picture(pic)
-        return CobolTypeDescriptor(
-            category=CobolDataCategory.NUMERIC_EDITED,
-            total_digits=ep.width,
-            decimal_digits=ep.frac_digits,
-            signed=ep.signed,
-            pic_string=pic,
-        )
+    if pic.upper() == "POINTER":
+        # A USAGE keyword that reaches this function as if it were a picture. No
+        # stored digits; let the usage-derived category govern the result.
+        return CobolTypeDescriptor(category=usage_category, total_digits=0)
 
     try:
         tree = _parser.parse(pic)
     except UnexpectedInput as exc:
         raise ValueError(f"Cannot parse PIC clause: {pic!r}") from exc
-    facts: dict = _transformer.transform(tree)
 
-    if facts["alphanumeric"]:
-        return CobolTypeDescriptor(
-            category=CobolDataCategory.ALPHANUMERIC,
-            total_digits=facts["alphanumeric_length"],
-            decimal_digits=0,
-            signed=False,
-            justified_right=justified_right,
+    analysis = picture.analyse(tree, sign_separate=sign_separate)
+    if analysis.errors:
+        # The string has the shape of a picture but breaks a rule that depends on
+        # a repeat count or on a run's length, so it would not compile (see
+        # picture.analyse for the rules and their spec citations).
+        raise ValueError(f"Invalid PIC clause: {pic!r}: " + "; ".join(analysis.errors))
+
+    unsupported = _UNSUPPORTED_CATEGORIES.get(analysis.category)
+    if unsupported is not None:
+        raise UnsupportedEditPictureError(
+            f"{unsupported} PICTURE is not supported: {pic!r}"
         )
 
-    total_digits = facts["integer_digits"] + facts["decimal_digits"]
+    # USAGE governs the category for numeric pictures; the picture governs it for
+    # every other category, because those are DISPLAY-only.
+    category = _PICTURE_CATEGORY.get(analysis.category, usage_category)
+
+    total_digits, decimal_digits = _digit_counts(category, analysis)
 
     return CobolTypeDescriptor(
         category=category,
         total_digits=total_digits,
-        decimal_digits=facts["decimal_digits"],
-        signed=facts["signed"],
+        decimal_digits=decimal_digits,
+        signed=analysis.signed,
+        char_positions=analysis.char_positions,
         sign_separate=sign_separate,
         sign_leading=sign_leading,
-        blank_when_zero=blank_when_zero,
+        justified_right=justified_right,
+        blank_when_zero=blank_when_zero and category in _BLANK_WHEN_ZERO_CATEGORIES,
+        pic_string=pic,
     )

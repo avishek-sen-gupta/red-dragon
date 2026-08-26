@@ -675,6 +675,26 @@ def _builtin_cobol_apply_edit_picture(
     return BuiltinResult(value=format_edited(value_str, pic_string))
 
 
+def _builtin_cobol_apply_alphanumeric_edit(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Apply a COBOL alphanumeric edit picture to a character value.
+
+    Args: [value_str: str, pic_string: str, justified_right: int]
+    Returns: str — the edited string, exactly the picture's width.
+    """
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    from interpreter.cobol.edit_picture import format_alphanumeric_edited
+
+    value_str, pic_string = str(args[0].value), str(args[1].value)
+    return BuiltinResult(
+        value=format_alphanumeric_edited(
+            value_str, pic_string, justified_right=bool(args[2].value)
+        )
+    )
+
+
 def _builtin_string_slice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Extract substring: value[start : start + length].
 
@@ -1837,6 +1857,9 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(
             BuiltinName.COBOL_APPLY_EDIT_PICTURE
         ): _builtin_cobol_apply_edit_picture,
+        FuncName(
+            BuiltinName.COBOL_APPLY_ALPHANUMERIC_EDIT
+        ): _builtin_cobol_apply_alphanumeric_edit,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
         FuncName(BuiltinName.STRING_BOUNDARY_SLICE): _builtin_string_boundary_slice,
         FuncName(BuiltinName.STRING_BOUNDARY_SPLIT): _builtin_string_boundary_split,

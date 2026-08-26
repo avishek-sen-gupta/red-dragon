@@ -13,47 +13,55 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.edit_picture import (
     format_edited,
-    is_numeric_edited,
     parse_edit_picture,
-    reject_unsupported,
 )
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.pic_parser import parse_pic
 from tests.covers import covers
 
 
-class TestIsNumericEdited:
+def _category(pic: str) -> CobolDataCategory:
+    return parse_pic(pic).category
+
+
+class TestNumericEditedCategory:
+    """The PICTURE grammar decides the category (it replaced is_numeric_edited).
+
+    These assertions are the same ones the retired symbol-scan gate carried; they
+    now go through parse_pic, which is the only classifier there is.
+    """
+
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_plain_numeric_is_not_edited(self):
-        assert not is_numeric_edited("9(4)")
-        assert not is_numeric_edited("S9(5)V99")
-        assert not is_numeric_edited("9(9)V99")
+        assert _category("9(4)") == CobolDataCategory.ZONED_DECIMAL
+        assert _category("S9(5)V99") == CobolDataCategory.ZONED_DECIMAL
+        assert _category("9(9)V99") == CobolDataCategory.ZONED_DECIMAL
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_repeat_count_zero_is_not_an_insertion_symbol(self):
         """A '0' inside a repeat count (e.g. the 0 in '9(10)') is a digit count,
         NOT a PIC '0' zero-insertion symbol — so wide plain-numeric pictures
         must not be classified as numeric-edited (red-dragon-r9s9 regression)."""
-        assert not is_numeric_edited("9(10)")
-        assert not is_numeric_edited("S9(10)V99")
-        assert not is_numeric_edited("9(20)")
-        assert not is_numeric_edited("9(100)")
+        assert _category("9(10)") == CobolDataCategory.ZONED_DECIMAL
+        assert _category("S9(10)V99") == CobolDataCategory.ZONED_DECIMAL
         # a genuine trailing '0' insertion is still edited
-        assert is_numeric_edited("9(3)09")
+        assert _category("9(3)09") == CobolDataCategory.NUMERIC_EDITED
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_alphanumeric_is_not_edited(self):
-        assert not is_numeric_edited("X(8)")
-        assert not is_numeric_edited("X(16)")
+        assert _category("X(8)") == CobolDataCategory.ALPHANUMERIC
+        assert _category("X(16)") == CobolDataCategory.ALPHANUMERIC
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_sign_and_suppression_pictures_are_edited(self):
-        assert is_numeric_edited("+99999999.99")
-        assert is_numeric_edited("+9999999999.99")
-        assert is_numeric_edited("+ZZZ,ZZZ,ZZZ.99")
-        assert is_numeric_edited("-ZZZ,ZZZ,ZZZ.ZZ")
-        assert is_numeric_edited("Z(9).99-")
+        assert _category("+99999999.99") == CobolDataCategory.NUMERIC_EDITED
+        assert _category("+9999999999.99") == CobolDataCategory.NUMERIC_EDITED
+        assert _category("+ZZZ,ZZZ,ZZZ.99") == CobolDataCategory.NUMERIC_EDITED
+        assert _category("-ZZZ,ZZZ,ZZZ.ZZ") == CobolDataCategory.NUMERIC_EDITED
+        assert _category("Z(9).99-") == CobolDataCategory.NUMERIC_EDITED
 
 
 class TestParseEditPicture:
@@ -145,19 +153,19 @@ class TestInsertionEditSymbols:
     """B / 0 / slash insertion symbols in numeric-edited PIC (red-dragon-r9s9)."""
 
     @covers(CobolFeature.NUMERIC_EDITED)
-    def test_is_numeric_edited_slash_date(self):
-        """PIC 99/99/9999 is recognised as numeric-edited."""
-        assert is_numeric_edited("99/99/9999") is True
+    def test_slash_date_is_numeric_edited(self):
+        """PIC 99/99/9999 is categorised as numeric-edited."""
+        assert _category("99/99/9999") == CobolDataCategory.NUMERIC_EDITED
 
     @covers(CobolFeature.NUMERIC_EDITED)
-    def test_is_numeric_edited_blank_insertion(self):
-        """PIC 9(5)BB9 is recognised as numeric-edited."""
-        assert is_numeric_edited("9(5)BB9") is True
+    def test_blank_insertion_is_numeric_edited(self):
+        """PIC 9(5)BB9 is categorised as numeric-edited."""
+        assert _category("9(5)BB9") == CobolDataCategory.NUMERIC_EDITED
 
     @covers(CobolFeature.NUMERIC_EDITED)
-    def test_is_numeric_edited_zero_insertion(self):
-        """PIC 9(3)09 is recognised as numeric-edited."""
-        assert is_numeric_edited("9(3)09") is True
+    def test_zero_insertion_is_numeric_edited(self):
+        """PIC 9(3)09 is categorised as numeric-edited."""
+        assert _category("9(3)09") == CobolDataCategory.NUMERIC_EDITED
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_format_edited_slash_date(self):
@@ -170,7 +178,7 @@ class TestInsertionEditSymbols:
         assert format_edited("123456", "9(5)BB9") == "12345  6"
 
 
-class TestRejectUnsupportedIsNowASeamOnly:
+class TestPreviouslyRejectedPictures:
     """red-dragon-0599's rejection of floating currency/sign, '*' check
     protection and CR/DB was a holding position while those symbols were
     unimplemented. red-dragon-5f4g implemented them, conformance-tested
@@ -190,11 +198,3 @@ class TestRejectUnsupportedIsNowASeamOnly:
         assert format_edited("12.3", "**,***.99") == "****12.30"
         assert format_edited("4.5", "ZZZ.99CR") == "  4.50  "
         assert format_edited("-4.5", "ZZZ.99CR") == "  4.50CR"
-
-    @covers(CobolFeature.NUMERIC_EDITED)
-    def test_seam_is_retained_for_future_gaps(self):
-        """reject_unsupported still exists and refuses nothing, so the next
-        genuinely unsupported symbol has one place to fail loudly rather than
-        being mis-formatted silently."""
-        for pic in ("$$,$$$.99", "**,***.99", "ZZZ.99CR", "9(4)", "X(8)"):
-            reject_unsupported(pic)

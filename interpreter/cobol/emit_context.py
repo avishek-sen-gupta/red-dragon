@@ -436,7 +436,10 @@ class EmitContext:
         td = fl.type_descriptor
         if td.blank_when_zero and self._is_zero_value(value):
             return self._emit_ebcdic_spaces(fl.byte_length)
-        if td.category == CobolDataCategory.ALPHANUMERIC:
+        if td.holds_characters:
+            # An alphanumeric-edited item's VALUE literal is stored verbatim: a
+            # VALUE clause literal "is not edited" (LR, "VALUE clause"), unlike
+            # the same characters arriving by MOVE.
             raw = parse_hex_literal(value)
             if raw is not None:
                 return self._emit_hex_literal_bytes(raw, fl.byte_length)
@@ -649,10 +652,7 @@ class EmitContext:
         )
 
         td = fl.type_descriptor
-        if td.category in (
-            CobolDataCategory.ALPHANUMERIC,
-            CobolDataCategory.NUMERIC_EDITED,
-        ):
+        if td.holds_characters or td.category == CobolDataCategory.NUMERIC_EDITED:
             # The FILE-section region holds the file's raw bytes; a real dataset
             # is EBCDIC, exactly like WS/LS/LK regions — so alphanumeric FD
             # fields decode as EBCDIC too. Decoding them as LATIN-1 (the removed
@@ -834,6 +834,27 @@ class EmitContext:
                 ),
             )
             ir = build_encode_alphanumeric_ir(f"enc_edited_{fl.name}", td.total_digits)
+            return self.inline_ir(ir, {"%p_value": formatted_reg})
+
+        if td.category == CobolDataCategory.ALPHANUMERIC_EDITED:
+            # Insertion editing: the sender's characters go into the A/X/9
+            # positions and each B/0/'/' position emits its insertion character.
+            # The result IS the field's content, so it stores as alphanumeric —
+            # already aligned by the formatter, hence the unjustified encoder
+            # even when JUSTIFIED RIGHT is in force.
+            formatted_reg = self.fresh_reg()
+            pic_reg = self.const_to_reg(td.pic_string)
+            justified_reg = self.const_to_reg(int(td.justified_right))
+            self.emit_inst(
+                CallFunction(
+                    result_reg=formatted_reg,
+                    func_name=FuncName(BuiltinName.COBOL_APPLY_ALPHANUMERIC_EDIT),
+                    args=(value_str_reg, pic_reg, justified_reg),
+                ),
+            )
+            ir = build_encode_alphanumeric_ir(
+                f"enc_an_edited_{fl.name}", td.total_digits
+            )
             return self.inline_ir(ir, {"%p_value": formatted_reg})
 
         if td.category == CobolDataCategory.ALPHANUMERIC:
