@@ -48,6 +48,8 @@ class TestCobolFieldTypeDescriptor:
             total_digits=7,
             decimal_digits=2,
             signed=True,
+            char_positions=7,
+            pic_string="S9(5)V99",
         )
 
 
