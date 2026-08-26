@@ -130,6 +130,14 @@ class CobolFeature(Enum):
         "Numeric-edited PIC (sign, Z suppression, comma/decimal insertion) "
         "applied on MOVE into the receiving item"
     )
+    ALPHANUMERIC_EDITED = (
+        "Alphanumeric-edited PIC (B / 0 / '/' insertion among A, X and 9 "
+        "positions) applied on MOVE into the receiving item"
+    )
+    EXTERNAL_FLOATING_POINT = (
+        "External floating-point PIC (mantissa E exponent) display-form "
+        "floating-point data items"
+    )
     VALUE_CLAUSE = "VALUE literal initial value clause on data items"
     VALUE_THRU_RANGE = "VALUE x THRU y range initial value clause"
     REDEFINES_CLAUSE = "REDEFINES other-field overlay type reuse"

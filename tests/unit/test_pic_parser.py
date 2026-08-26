@@ -12,6 +12,8 @@ class TestParsePicZonedDecimal:
             total_digits=5,
             decimal_digits=0,
             signed=False,
+            char_positions=5,
+            pic_string="9(5)",
         )
 
     def test_signed_with_decimal(self):
@@ -21,6 +23,8 @@ class TestParsePicZonedDecimal:
             total_digits=7,
             decimal_digits=2,
             signed=True,
+            char_positions=7,
+            pic_string="S9(5)V99",
         )
 
     def test_signed_bare_digits(self):
@@ -30,6 +34,8 @@ class TestParsePicZonedDecimal:
             total_digits=4,
             decimal_digits=2,
             signed=True,
+            char_positions=4,
+            pic_string="S99V99",
         )
 
     def test_only_fractional(self):
@@ -39,6 +45,8 @@ class TestParsePicZonedDecimal:
             total_digits=2,
             decimal_digits=2,
             signed=False,
+            char_positions=2,
+            pic_string="V99",
         )
 
     def test_integer_with_decimal_point_no_fraction(self):
@@ -48,6 +56,8 @@ class TestParsePicZonedDecimal:
             total_digits=5,
             decimal_digits=0,
             signed=False,
+            char_positions=5,
+            pic_string="9(5)V",
         )
 
     def test_bare_nine(self):
@@ -57,6 +67,8 @@ class TestParsePicZonedDecimal:
             total_digits=1,
             decimal_digits=0,
             signed=False,
+            char_positions=1,
+            pic_string="9",
         )
 
     def test_multiple_nines(self):
@@ -66,6 +78,8 @@ class TestParsePicZonedDecimal:
             total_digits=3,
             decimal_digits=0,
             signed=False,
+            char_positions=3,
+            pic_string="999",
         )
 
     def test_mixed_repeat_and_bare(self):
@@ -75,6 +89,8 @@ class TestParsePicZonedDecimal:
             total_digits=5,
             decimal_digits=2,
             signed=False,
+            char_positions=5,
+            pic_string="9(3)V9(2)",
         )
 
 
@@ -86,6 +102,8 @@ class TestParsePicAlphanumeric:
             total_digits=8,
             decimal_digits=0,
             signed=False,
+            char_positions=8,
+            pic_string="X(8)",
         )
 
     def test_bare_x(self):
@@ -95,6 +113,8 @@ class TestParsePicAlphanumeric:
             total_digits=1,
             decimal_digits=0,
             signed=False,
+            char_positions=1,
+            pic_string="X",
         )
 
     def test_mixed_alpha_and_digits(self):
@@ -105,6 +125,8 @@ class TestParsePicAlphanumeric:
             total_digits=5,
             decimal_digits=0,
             signed=False,
+            char_positions=5,
+            pic_string="99X(3)",
         )
 
     def test_multiple_bare_x(self):
@@ -114,6 +136,8 @@ class TestParsePicAlphanumeric:
             total_digits=3,
             decimal_digits=0,
             signed=False,
+            char_positions=3,
+            pic_string="XXX",
         )
 
 
@@ -125,6 +149,8 @@ class TestParsePicUsageOverride:
             total_digits=7,
             decimal_digits=2,
             signed=True,
+            char_positions=7,
+            pic_string="S9(5)V99",
         )
 
     def test_packed_decimal_usage(self):
@@ -134,6 +160,8 @@ class TestParsePicUsageOverride:
             total_digits=5,
             decimal_digits=0,
             signed=False,
+            char_positions=5,
+            pic_string="9(5)",
         )
 
     def test_display_usage_default(self):

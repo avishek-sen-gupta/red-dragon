@@ -295,8 +295,37 @@ public class AsgSerializerTest {
         assertEquals(8, DataFieldSerializer.computePicByteLength("9(15)", "COMP"));
     }
 
+    /**
+     * P is a digit position that occupies no character position, so packed and
+     * binary storage covers it while DISPLAY storage does not (LR Table 12). The
+     * Python side splits the same way (pic_parser._digit_counts); these lengths
+     * must agree or every later field's offset in the record is wrong
+     * (red-dragon-ilb6).
+     */
+    @Test
+    public void testScalingPositionsCountForPackedAndBinaryOnly() {
+        assertEquals(3, DataFieldSerializer.computePicByteLength("PPP999", "DISPLAY"));
+        assertEquals(4, DataFieldSerializer.computePicByteLength("PPP999", "COMP-3"));
+        assertEquals(4, DataFieldSerializer.computePicByteLength("PPP999", "COMP"));
+        // 9(5)PP: 5 character positions, 7 digit positions.
+        assertEquals(5, DataFieldSerializer.computePicByteLength("9(5)PP", "DISPLAY"));
+        assertEquals(4, DataFieldSerializer.computePicByteLength("9(5)PP", "COMP-3"));
+        assertEquals(4, DataFieldSerializer.computePicByteLength("9(5)PP", "COMP"));
+    }
+
+    @Test
+    public void testCountDigitPositionsIncludesScaling() {
+        assertEquals(6, DataFieldSerializer.countDigitPositions("PPP999"));
+        assertEquals(7, DataFieldSerializer.countDigitPositions("9(5)PP"));
+        assertEquals(3, DataFieldSerializer.countDigitPositions("P(3)"));
+        // S and V still occupy neither kind of position.
+        assertEquals(7, DataFieldSerializer.countDigitPositions("S9(5)V99"));
+    }
+
     @Test
     public void testCountStoragePositions() {
+        assertEquals(3, DataFieldSerializer.countStoragePositions("PPP999"));
+        assertEquals(0, DataFieldSerializer.countStoragePositions("P(3)"));
         assertEquals(5, DataFieldSerializer.countStoragePositions("9(5)"));
         assertEquals(3, DataFieldSerializer.countStoragePositions("X(3)"));
         assertEquals(7, DataFieldSerializer.countStoragePositions("S9(5)V99"));

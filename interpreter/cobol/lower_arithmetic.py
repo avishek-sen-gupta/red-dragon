@@ -551,7 +551,7 @@ def _store_move_value(
     if (
         zoned_display_reg.is_present()
         and target.ref_mod_start is None
-        and target_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
+        and target_ref.fl.type_descriptor.holds_characters
     ):
         source_value_reg = zoned_display_reg
 
@@ -1664,7 +1664,7 @@ def lower_initialize(
         for leaf_fl in _leaf_fields_of(ref.fl, section_layout):
             leaf_ref, leaf_rr = ctx.resolve_field_ref(leaf_fl.name, materialised)
             td = leaf_fl.type_descriptor
-            if td.category == CobolDataCategory.ALPHANUMERIC:
+            if td.holds_characters:
                 default = " " * td.total_digits
             else:
                 default = "0"
@@ -1696,7 +1696,7 @@ def _set_condition_name(
         parent_ref, parent_rr = ctx.resolve_field_ref(
             entry.parent_field_name, materialised
         )
-        if parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC:
+        if parent_ref.fl.type_descriptor.holds_characters:
             # WHEN SET TO FALSE IS not in scope — write SPACES (field-length fill)
             false_val: object = " " * max(parent_ref.fl.byte_length, 1)
         else:
@@ -1737,7 +1737,7 @@ def _set_condition_name(
     # written as the literal text 'LOW-VALUES' (CardDemo COACTUPC
     # ACUP-DETAILS-NOT-FETCHED VALUES LOW-VALUES, SPACES).
     fig_fill = COBOL_FIGURATIVE_CONSTANTS.get(cv.from_val.upper())
-    if parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC:
+    if parent_ref.fl.type_descriptor.holds_characters:
         if fig_fill is not None:
             filled = fig_fill * max(parent_ref.fl.byte_length, 1)
             value_reg = ctx.const_to_reg(filled)

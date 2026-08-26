@@ -1,0 +1,256 @@
+// COBOL PICTURE character-string grammar (template).
+//
+// Derived from IBM Enterprise COBOL for z/OS 6.4 Language Reference
+// (igy6lr40.pdf), "PICTURE clause", pp. 207-224:
+//   - Table 12, "PICTURE clause symbol meanings"          (pp. 208-210)
+//   - "P symbol" / "Currency symbol"                      (pp. 211-212)
+//   - "Data categories and PICTURE rules"                 (pp. 212-218)
+//   - "PICTURE clause editing"                            (pp. 219-224)
+//   - "CURRENCY SIGN clause" / "DECIMAL-POINT IS COMMA"   (pp. 129-130)
+//
+// THIS IS A TEMPLATE. Three terminals depend on the SPECIAL-NAMES paragraph of
+// the compilation unit, so they are substituted at parser-build time:
+//
+//   %%CS%%      the currency symbol alternation. "The currency symbol in a
+//               picture character-string is represented by the default currency
+//               symbol $ or by a single character specified either in the
+//               CURRENCY compiler option or in the CURRENCY SIGN clause"
+//               (p. 212). SPECIAL-NAMES may hold several CURRENCY SIGN clauses,
+//               each declaring a different symbol, hence an alternation.
+//   %%DOT%%     the decimal point character
+//   %%COMMA%%   the grouping character
+//               "DECIMAL-POINT IS COMMA exchanges the functions of the period
+//               and the comma in PICTURE character-strings" (p. 207) -- so the
+//               two literals swap, while the rule names stay semantic.
+//
+// The spec's exclusion list for currency symbols (p. 129) bars digits, the
+// letters A B C D E G N P R S U V X Z in either case, space, and
+// + - , . * / ; ( ) " = ' -- that is, exactly the characters this grammar uses
+// for other picture symbols. So a legal currency symbol can never collide with
+// another terminal, and substitution cannot make the grammar ambiguous.
+//
+// The top-level alternatives are the USAGE DISPLAY data categories. They are
+// pairwise disjoint by symbol set (see the category rules on pp. 213-218), so a
+// successful parse identifies the category -- there is nothing to disambiguate.
+// The multi-byte categories (DBCS, national, national-edited, UTF-8) are
+// deliberately absent: they need symbols G N U that no single-byte corpus uses.
+//
+// Category rules encoded here, verbatim from the spec:
+//   alphabetic           "can contain only the symbol A"
+//   alphanumeric         ">= 1 X", or combinations of A X 9 that are neither
+//                        all-A (that is alphabetic) nor all-9 (that is numeric)
+//   alphanumeric-edited  symbols A X 9 B 0 / ; ">= 1 A or X, and >= 1 B or 0 or /"
+//   numeric              "only the symbols 9 P S V"; S leftmost; P a continuous
+//                        run in the leftmost OR rightmost positions
+//   numeric-edited       symbols B P V Z 9 0 / , . + - CR DB * cs
+//   external floating-pt [+|-] mantissa(9 . V) E [+|-] 99
+//
+// Several categories are DFA-shaped (an_a9, ae_*) rather than written the
+// obvious way. That is deliberate: "contains at least one X somewhere" is a
+// regular predicate, and spelling it as a state machine is what makes each
+// string have exactly ONE parse tree. Written the obvious way
+// (`an_pos* a_pos an_pos* nine_pos an_pos*`) the grammar is ambiguous for
+// inputs like "A9A9" -- not ambiguous about the category, but ambiguous about
+// the derivation, which Earley reports as a conflict.
+//
+// What this grammar deliberately does NOT enforce, because none of it is
+// context-free -- all of it is enforced by the semantic pass over the tree
+// (see picture.py, PictureAnalysis):
+//   - digit-position count in 1..18 (ARITH(COMPAT)) or 1..31 (ARITH(EXTEND))
+//   - total character positions <= 249
+//   - "a string of at least two of the allowable floating insertion symbols"
+//     (p. 222): a run's length is the SUM of its symbols' repeat counts, so
+//     "$$" and "$(2)" are both floating while "$" is fixed insertion. A count
+//     is a token value, not a shape, so the grammar cannot tell them apart.
+//   - a floating cs run excludes a Z/* run ("Z * + - cs ... mutually exclusive
+//     as floating replacement symbols", p. 224), whereas a single FIXED cs
+//     before a Z/* run is legal ("$ZZ,ZZ9"). Again a length question.
+//   - a floating + or - run excludes any other sign or CR/DB (p. 218)
+//   - all cs tokens in one picture name the same currency symbol
+//   - BLANK WHEN ZERO as the alternative to requiring an edit symbol (p. 218):
+//     it is a different clause of the data description entry, not part of the
+//     PICTURE character-string, so it cannot appear in this grammar at all.
+
+start: alphabetic
+     | alphanumeric
+     | alphanumeric_edited
+     | numeric
+     | numeric_edited
+     | external_float
+
+// ------------------------------------------------------------------ alphabetic
+// "The PICTURE character-string can contain only the symbol A."
+alphabetic: a_pos+
+
+// ---------------------------------------------------------------- alphanumeric
+// ">= 1 X", or "combinations of the symbols A, X, and 9. (A character-string
+// containing all As or all 9s does not define an alphanumeric item.)"
+alphanumeric: an_has_x | an_a9
+
+// over {A,X,9}, containing at least one X
+an_has_x: an_no_x* x_pos an_any*
+an_no_x: a_pos | nine_pos
+an_any: a_pos | nine_pos | x_pos
+
+// over {A,9}, containing at least one A AND at least one 9
+an_a9: a_pos a9_seen_a | nine_pos a9_seen_9
+a9_seen_a: a_pos a9_seen_a | nine_pos a9_both
+a9_seen_9: nine_pos a9_seen_9 | a_pos a9_both
+a9_both: an_no_x*
+
+// --------------------------------------------------------- alphanumeric-edited
+// "can contain the following symbols: A X 9 B 0 /. The string must contain at
+// least one A or X, and at least one B or 0 (zero) or /."
+// DFA over the two required-symbol flags; 9 advances neither.
+alphanumeric_edited: ae_ax   ae_need_ins
+                   | ae_ins  ae_need_ax
+                   | ae_nine alphanumeric_edited
+ae_need_ins: ae_ax ae_need_ins | ae_nine ae_need_ins | ae_ins ae_done
+ae_need_ax:  ae_ins ae_need_ax | ae_nine ae_need_ax | ae_ax  ae_done
+ae_done: ae_any*
+ae_any: ae_ax | ae_ins | ae_nine
+ae_ax: a_pos | x_pos
+ae_ins: b_pos | zero_pos | slash_pos
+ae_nine: nine_pos
+
+// -------------------------------------------------------------------- numeric
+// "the PICTURE character-string can contain only the symbols 9, P, S, and V.
+//  The symbol S can be written only as the leftmost character in the PICTURE
+//  character-string. The symbol V can be written only once."
+// "The symbol P can be specified only as a continuous string of Ps in the
+//  leftmost or rightmost digit positions" -- hence the two alternatives below,
+//  which permit a leading run or a trailing run but never both.
+// A picture of nothing but scaling positions ("P", "PPP", "SPP") has no stored
+// digit position at all. NIST IX110A declares one -- 01 STATUS-TEST-10 PIC P
+// VALUE ZERO -- so it is a real shape, not a theoretical one (red-dragon-m0oa.2).
+numeric: SYM_S? num_core
+num_core: p_run num_mantissa
+        | num_mantissa p_run?
+        | p_run
+num_mantissa: nine_run (SYM_V nine_run?)?
+            | SYM_V nine_run
+nine_run: nine_pos+
+p_run: p_pos+
+
+// ------------------------------------------------------------- numeric-edited
+// Symbols: B P V Z 9 0 / , . + - CR DB * cs.
+//
+// Fixed insertion (p. 221): "only one currency symbol and one editing-sign
+// control symbol can be specified"; "unless it is preceded by a + or - symbol,
+// the currency symbol must be the first character in the character-string";
+// "when either + or - is used as a symbol, it must be the first or last
+// character"; "when CR or DB is used as a symbol, it must occupy the rightmost
+// two character positions".
+//
+// "Either the BLANK WHEN ZERO clause must be specified for the item, or the
+// string must contain at least one of the following symbols: B / Z 0 , . * + -
+// CR DB cs" (p. 218). That requirement is STRUCTURAL here, not a post-check:
+// without it every plain numeric picture ("9999") also derives as
+// numeric-edited with all the editing parts absent, and the two categories stop
+// being disjoint. Each alternative below is one way of satisfying it: a cs is
+// present, a Z/* run is present, a sign is present, a floating +/- run is
+// present, or a simple/special insertion symbol sits in the body.
+//
+// cs_run covers fixed AND floating currency insertion in one rule, because the
+// difference is the run's LENGTH (1 vs >= 2) and length is not a shape -- see
+// the note at the top of this file. Same for z_run and star_run, where a
+// one-symbol "run" is still zero suppression ("Specify zero suppression ... with
+// a string of one or more of the allowable symbols", p. 224).
+//
+// A floating +/- run does need its own rule with a >= 2 lower bound: a single
+// leading + or - is FIXED sign insertion, and merging the two shapes would make
+// "++,+++,+++.+++" derive both as a run of eleven and as a run of ten plus a
+// fixed trailing plus. "Only one of the following symbols can be written in a
+// given PICTURE character-string: + - CR DB" (p. 218) is what bars the second
+// reading, and giving the floating run no ne_trail slot is how that is spelled.
+numeric_edited: sign_pos? cs_run ne_suppress? ne_pos* ne_trail?
+              | sign_pos? ne_suppress ne_pos* ne_trail?
+              | sign_pos ne_pos* ne_trail?
+              | ne_float_sign ne_pos*
+              | ne_bare_pos* ne_edit_pos ne_pos* ne_trail?
+              | ne_bare_pos+ ne_trail
+
+ne_float_sign: plus_float | minus_float
+ne_suppress: z_run | star_run
+ne_trail: sign_pos | CR | DB
+sign_pos: plus_pos | minus_pos
+
+// "Any simple-insertion symbols (B 0 / ,) within or to the immediate right of
+// the string of floating insertion symbols are considered part of the floating
+// character-string. If the period (.) special-insertion symbol is included
+// within the floating string, it is considered to be part of the
+// character-string." (p. 222)
+//
+// A filler may appear only BEFORE a further run symbol, never trailing the run.
+// The spec calls a filler to the run's immediate right "part of the floating
+// character-string", but letting the run trail fillers makes "ZZZZ.99" derivable
+// two ways (the run takes ".", or ne_pos takes it). Category, digit count and
+// size are identical either way, so the tie is broken here in favour of one
+// parse.
+cs_run:      cs_pos    (float_filler* cs_pos)*
+z_run:       z_pos     (float_filler* z_pos)*
+star_run:    star_pos  (float_filler* star_pos)*
+plus_float:  plus_pos  (float_filler* plus_pos)+
+minus_float: minus_pos (float_filler* minus_pos)+
+float_filler: simple_ins | DOT
+
+ne_pos: ne_bare_pos | ne_edit_pos
+ne_bare_pos: nine_pos | p_pos | SYM_V
+ne_edit_pos: simple_ins | DOT
+simple_ins: b_pos | zero_pos | slash_pos | comma_pos
+
+// --------------------------------------------------- external floating-point
+// "[+|-] mantissa E [+|-] exponent"; the mantissa is drawn from 9 . V with a
+// decimal point required; "the exponent must consist of the symbol 99".
+external_float: sign_pos ef_mantissa SYM_E sign_pos NINE NINE
+ef_mantissa: nine_pos* ef_point nine_pos*
+ef_point: DOT | SYM_V
+
+// ----------------------------------------------------------------- positions
+// Every position carries an optional repeat count. "An unsigned nonzero integer
+// enclosed in parentheses immediately following any of these symbols specifies
+// the number of consecutive occurrences of that symbol" (p. 212). The count is
+// an INT terminal, read structurally -- never sliced out of the string.
+a_pos:     SYM_A count?
+x_pos:     SYM_X count?
+nine_pos:  NINE  count?
+b_pos:     SYM_B count?
+zero_pos:  ZERO  count?
+slash_pos: SLASH count?
+comma_pos: COMMA count?
+p_pos:     SYM_P count?
+z_pos:     SYM_Z count?
+star_pos:  STAR  count?
+cs_pos:    CS    count?
+plus_pos:  PLUS  count?
+minus_pos: MINUS count?
+
+count: "(" INT ")"
+
+// ----------------------------------------------------------------- terminals
+// "The lowercase letters that correspond to the uppercase letters that
+// represent the following PICTURE symbols are equivalent to their uppercase
+// representations: A, B, E, G, N, P, S, U, V, X, Z, CR, DB" (p. 208). Hence the
+// `i` flag on exactly those, and NOT on the currency symbol, which the spec
+// calls out as "unlike all other PICTURE clause symbols, currency symbols are
+// case sensitive" (p. 129).
+SYM_A: "A"i
+SYM_B: "B"i
+SYM_E: "E"i
+SYM_P: "P"i
+SYM_S: "S"i
+SYM_V: "V"i
+SYM_X: "X"i
+SYM_Z: "Z"i
+CR:    "CR"i
+DB:    "DB"i
+NINE:  "9"
+ZERO:  "0"
+STAR:  "*"
+SLASH: "/"
+PLUS:  "+"
+MINUS: "-"
+INT:   /[0-9]+/
+DOT:   %%DOT%%
+COMMA: %%COMMA%%
+CS:    %%CS%%

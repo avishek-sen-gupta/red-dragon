@@ -82,9 +82,7 @@ def _emit_single_value_test(
     parent_ref, parent_rr = ctx.resolve_field_ref(
         parent_field_name, materialised, subscripts=subscripts
     )
-    parent_is_alpha = (
-        parent_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
-    )
+    parent_is_alpha = parent_ref.fl.type_descriptor.holds_characters
     parent_reg = ctx.emit_decode_field(parent_rr, parent_ref.fl, parent_ref.offset_reg)
 
     parent_len = parent_ref.fl.byte_length
@@ -501,7 +499,7 @@ def _is_alphanumeric_field(
     if not ctx.has_field(name, materialised):
         return False
     ref, _ = ctx.resolve_field_ref(name, materialised)
-    return ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC
+    return ref.fl.type_descriptor.holds_characters
 
 
 def _is_alphanumeric_sibling(

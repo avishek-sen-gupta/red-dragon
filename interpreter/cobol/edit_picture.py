@@ -1,10 +1,16 @@
-"""COBOL numeric edit-picture formatting.
+"""COBOL edit-picture formatting.
 
-Applies COBOL numeric editing rules when a numeric value is MOVEd into a
-numeric-edited receiving item (e.g. ``PIC +99999999.99``, ``+ZZZ,ZZZ,ZZZ.99``,
-``Z(9).99-``). This is the software analogue of GnuCOBOL's ``cob_move_edited``
-(libcob) and IBM's hardware ``ED``/``EDMK`` instructions: a precompiled edit
-mask is applied to the numeric source at runtime.
+Applies COBOL editing rules when a value is MOVEd into an edited receiving item.
+Two categories are edited: numeric-edited (e.g. ``PIC +99999999.99``,
+``+ZZZ,ZZZ,ZZZ.99``, ``Z(9).99-``), handled by :func:`format_edited`, and
+alphanumeric-edited (e.g. ``PIC XXBXXBXX``, ``XX/XX/XXXX``), handled by
+:func:`format_alphanumeric_edited`. This is the software analogue of GnuCOBOL's
+``cob_move_edited`` (libcob) and IBM's hardware ``ED``/``EDMK`` instructions: a
+precompiled edit mask is applied to the source at runtime.
+
+The numeric rules are the intricate ones and are what the rest of this docstring
+describes; alphanumeric editing is only insertion, with no suppression, sign or
+scaling to reason about.
 
 Supported edit constructs:
   - Digit positions: ``9`` (always shown), ``Z`` (suppressible), ``*``
@@ -43,12 +49,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
-# Picture symbols that mark a position as numeric-edited (vs. plain numeric /
-# alphanumeric). The presence of any of these — or an actual '.' decimal point —
-# makes the PIC a numeric-edited item.
 _SIGN_SYMS = frozenset("+-")
-_EDIT_SYMS = frozenset("Z+-,.B0/*$")
-
 
 # Edit symbols that can FLOAT: a run of two or more is a floating insertion
 # (n-1 digit positions plus one reserved symbol position), which this module
@@ -60,30 +61,18 @@ _TRAILING_SIGN_TOKENS = ("CR", "DB")
 
 
 class UnsupportedEditPictureError(ValueError):
-    """An edit picture RedDragon cannot honour (red-dragon-0599).
+    """A picture RedDragon cannot store or format (red-dragon-0599).
 
-    Subclasses ValueError because ``parse_pic`` has always raised ValueError
-    for unparseable pictures; existing ``except ValueError`` handling keeps
-    working while callers that care can catch this precisely.
+    Raised by ``parse_pic`` for a picture whose category the runtime has no
+    representation for. Subclasses ValueError because ``parse_pic`` has always
+    raised ValueError for unparseable pictures; existing ``except ValueError``
+    handling keeps working while callers that care can catch this precisely.
+
+    The symbol-scan guard this class was introduced for (floating currency/sign,
+    ``*`` check protection, ``CR``/``DB``) is gone: red-dragon-5f4g implemented
+    all of them, and the PICTURE grammar now decides the category, so the refusal
+    is expressed per category in ``pic_parser`` instead of per symbol here.
     """
-
-
-def reject_unsupported(pic: str) -> None:
-    """Raise if ``pic`` uses an edit symbol this module would mis-format.
-
-    Floating currency/sign, ``*`` check protection and ``CR``/``DB`` were all
-    rejected here by red-dragon-0599 while they were unimplemented, because
-    the alternative was well-formed but WRONG output. They are now implemented
-    (red-dragon-5f4g, conformance-tested against NIST-85 NC124A/NC105A), so
-    the guard no longer protects anything and would instead block a working
-    feature.
-
-    The function is retained as the single seam where a genuinely unsupported
-    edit symbol should be refused, so that the next gap fails loudly at field
-    ingestion rather than silently mis-formatting. It currently refuses
-    nothing.
-    """
-    return
 
 
 def find_float_string(
@@ -153,35 +142,42 @@ def _expand(pic: str) -> list[str]:
     return out
 
 
-def is_numeric_edited(pic: str) -> bool:
-    """Return True if ``pic`` is a numeric-edited picture.
+_DATA_POSITIONS = frozenset("AX9")
 
-    A picture is numeric-edited when it contains digit positions and at least
-    one editing symbol (sign, Z suppression, comma, or an actual decimal point),
-    but no alphanumeric ``X``/``A`` positions. ``V`` is an *implied* decimal
-    point (plain numeric), not an editing symbol, so ``S9(5)V99`` is not edited.
+# B emits a space; 0 and / emit themselves. "The insertion characters are counted
+# in the size of the item" (Table 12) — every position here is one byte.
+_ALPHANUMERIC_INSERTIONS = {"B": " ", "0": "0", "/": "/"}
+
+
+def format_alphanumeric_edited(
+    value: str, pic: str, justified_right: bool = False
+) -> str:
+    """Place ``value``'s characters into the ``pic``'s A / X / 9 positions.
+
+    An alphanumeric-edited receiving item takes its sender as alphanumeric: the
+    characters fill the data positions left to right, space-filled if the sender
+    is shorter and truncated on the right if it is longer, while every B / 0 /
+    '/' position emits its insertion character. JUSTIFIED RIGHT reverses which
+    end is filled and which is truncated (LR p. 407, and "JUSTIFIED clause",
+    p. 189). Returns exactly the picture's character-position count.
     """
-    upper = pic.upper()
-    if "X" in upper or "A" in upper:
-        return False
-    # Scan the EXPANDED positions, not the raw string: a digit inside a repeat
-    # count (e.g. the '0' in "9(10)") is a count, not a PIC '0' zero-insertion
-    # symbol. _expand consumes "(10)" into ten '9's, while a genuine insertion
-    # '0' (as in "9(3)09") survives as its own position (red-dragon-r9s9).
-    try:
-        positions = _expand(upper)
-    except ValueError:
-        positions = list(upper)
-    # Digit positions are 9 / Z / '*' / the non-reserved slots of a floating
-    # string. Testing only for 9 and Z made an ALL-floating picture such as
-    # "$$$$.$$" fail this gate, fall through to the Lark grammar, and die as
-    # an opaque "Cannot parse PIC clause" (red-dragon-5f4g).
-    has_digit = any(c in "9Z*" for c in positions) or bool(
-        find_float_string(positions)[0]
-    )
-    if not has_digit:
-        return False
-    return any(c in _EDIT_SYMS for c in positions)
+    template = _expand(pic.upper())
+    slots = sum(1 for sym in template if sym in _DATA_POSITIONS)
+    chars = str(value)
+    if justified_right:
+        chars = chars[max(len(chars) - slots, 0) :].rjust(slots)
+    else:
+        chars = chars[:slots].ljust(slots)
+
+    out: list[str] = []
+    taken = 0
+    for sym in template:
+        if sym in _DATA_POSITIONS:
+            out.append(chars[taken])
+            taken += 1
+        else:
+            out.append(_ALPHANUMERIC_INSERTIONS.get(sym, sym))
+    return "".join(out)
 
 
 @dataclass(frozen=True)
