@@ -98,6 +98,7 @@ import io.proleap.cobol.asg.metamodel.procedure.rewrite.RewriteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.start.StartStatement;
 import io.proleap.cobol.asg.metamodel.procedure.execcics.ExecCicsStatement;
 import io.proleap.cobol.asg.metamodel.procedure.execsql.ExecSqlStatement;
+import io.proleap.cobol.asg.metamodel.procedure.xml.XmlGenerateStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.call.TableCall;
 import io.proleap.cobol.asg.metamodel.valuestmt.ArithmeticValueStmt;
@@ -201,6 +202,7 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.DELETE) return serializeDelete((DeleteStatement) stmt);
         if (stmtType == StatementTypeEnum.EXEC_CICS) return serializeExecCics((ExecCicsStatement) stmt);
         if (stmtType == StatementTypeEnum.EXEC_SQL) return serializeExecSql((ExecSqlStatement) stmt);
+        if (stmtType == StatementTypeEnum.XML_GENERATE) return serializeXmlGenerate((XmlGenerateStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -1805,6 +1807,39 @@ public final class StatementSerializer {
             }
         } catch (Exception e) {
             LOG.fine("Could not extract DELETE operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeXmlGenerate(XmlGenerateStatement stmt) {
+        JsonObject obj = newStatement("XML_GENERATE");
+        try {
+            if (stmt.getReceiverCall() != null) {
+                obj.addProperty("xml_document", extractCallName(stmt.getReceiverCall()));
+            }
+            if (stmt.getFromCall() != null) {
+                obj.addProperty("from_record", extractCallName(stmt.getFromCall()));
+            }
+            if (stmt.getCountCall() != null) {
+                obj.addProperty("count_in", extractCallName(stmt.getCountCall()));
+            }
+
+            // ON EXCEPTION / NOT ON EXCEPTION
+            io.proleap.cobol.asg.metamodel.procedure.OnExceptionClause onException = stmt.getOnExceptionClause();
+            if (onException != null && onException.getStatements() != null) {
+                obj.add("on_exception", serializeStatements(onException.getStatements()));
+            } else {
+                obj.add("on_exception", new JsonArray());
+            }
+            io.proleap.cobol.asg.metamodel.procedure.NotOnExceptionClause notOnException = stmt
+                    .getNotOnExceptionClause();
+            if (notOnException != null && notOnException.getStatements() != null) {
+                obj.add("not_on_exception", serializeStatements(notOnException.getStatements()));
+            } else {
+                obj.add("not_on_exception", new JsonArray());
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract XML GENERATE operands: " + e.getMessage());
         }
         return obj;
     }
