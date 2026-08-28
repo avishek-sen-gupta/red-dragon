@@ -56,6 +56,27 @@ def test_parse_no_dirs_emits_no_copybook_dir_args():
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_parse_appends_copybook_ext_args():
+    runner = _RecordingRunner()
+    parser = ProLeapCobolParser(runner, "bridge.jar", copybook_exts=["txt", "CPY"])
+    parser.parse(b"       PROGRAM-ID. T.\n")
+    assert runner.command is not None
+    idxs = [i for i, a in enumerate(runner.command) if a == "-copybook-ext"]
+    assert len(idxs) == 2
+    assert runner.command[idxs[0] + 1] == "txt"
+    assert runner.command[idxs[1] + 1] == "CPY"
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_parse_no_exts_leaves_the_bridge_default_in_place():
+    runner = _RecordingRunner()
+    parser = ProLeapCobolParser(runner, "bridge.jar")
+    parser.parse(b"       PROGRAM-ID. T.\n")
+    assert runner.command is not None
+    assert "-copybook-ext" not in runner.command
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
 def test_missing_copybook_raises_clean_error():
     raw = CobolParseError(
         "ProLeap bridge failed (exit 1): "

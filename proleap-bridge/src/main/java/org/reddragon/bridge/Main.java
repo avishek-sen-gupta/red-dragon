@@ -29,11 +29,22 @@ import java.util.logging.Logger;
  *   <li>One arg: reads from file path</li>
  *   <li>{@code -format FIXED|FREE|TANDEM}: sets source format (default FIXED)</li>
  *   <li>{@code -copybook-dir <dir>}: copybook search directory (repeatable)</li>
+ *   <li>{@code -copybook-ext <ext>}: copybook filename extension (repeatable;
+ *       defaults to {@link #DEFAULT_COPYBOOK_EXTENSIONS} when not given)</li>
  * </ul>
  *
  * <p>Writes JSON ASG to stdout, matching the RedDragon {@code CobolASG} contract.
  */
 public final class Main {
+
+    /**
+     * The extensions searched when the caller names none. ProLeap resolves a
+     * COPY by name + extension, so this list is corpus shape rather than a
+     * constant: a corpus whose members all carry one unconventional extension
+     * resolves nothing under it and must pass its own.
+     */
+    static final List<String> DEFAULT_COPYBOOK_EXTENSIONS =
+        Arrays.asList("", "cpy", "CPY", "cob", "cbl", "copy", "COPY");
 
     private static final Logger LOG = Logger.getLogger(Main.class.getName());
 
@@ -55,6 +66,8 @@ public final class Main {
             } else if ("-copybook-dir".equals(args[i]) && i + 1 < args.length) {
                 copyBookDirs.add(new File(args[i + 1]));
                 i++;
+            } else if ("-copybook-ext".equals(args[i]) && i + 1 < args.length) {
+                i++;  // value consumed by copyBookExtensions(args)
             } else {
                 filePath = args[i];
             }
@@ -70,8 +83,7 @@ public final class Main {
         try {
             CobolParserParams params = new CobolParserParamsImpl();
             params.setFormat(format);
-            params.setCopyBookExtensions(
-                Arrays.asList("", "cpy", "CPY", "cob", "cbl", "copy", "COPY"));
+            params.setCopyBookExtensions(copyBookExtensions(args));
             if (!copyBookDirs.isEmpty()) {
                 params.setCopyBookDirectories(copyBookDirs);
             }
@@ -87,6 +99,22 @@ public final class Main {
         if (filePath.isEmpty()) {
             cobolFile.delete();
         }
+    }
+
+    /**
+     * Every {@code -copybook-ext} value, in the order given, or
+     * {@link #DEFAULT_COPYBOOK_EXTENSIONS} when the flag is absent. Never
+     * empty: an empty list would make ProLeap search nothing.
+     */
+    static List<String> copyBookExtensions(String[] args) {
+        List<String> extensions = new ArrayList<>();
+        for (int i = 0; i < args.length - 1; i++) {
+            if ("-copybook-ext".equals(args[i])) {
+                extensions.add(args[i + 1]);
+                i++;
+            }
+        }
+        return extensions.isEmpty() ? DEFAULT_COPYBOOK_EXTENSIONS : extensions;
     }
 
     private static File resolveInputFile(String filePath) throws IOException {

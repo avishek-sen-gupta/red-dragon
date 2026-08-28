@@ -53,15 +53,19 @@ class ProLeapCobolParser(CobolParser):
         runner: SubprocessRunner,
         bridge_jar: str,
         copybook_dirs: list[Path] = [],
+        copybook_exts: list[str] = [],
     ):
         self._runner = runner
         self._bridge_jar = bridge_jar
         self._copybook_dirs: list[Path] = list(copybook_dirs)
+        self._copybook_exts: list[str] = list(copybook_exts)
 
     def _build_command(self) -> list[str]:
         command = ["java", "-jar", self._bridge_jar]
         for d in self._copybook_dirs:
             command += ["-copybook-dir", str(d)]
+        for ext in self._copybook_exts:
+            command += ["-copybook-ext", ext]
         return command
 
     def parse(
