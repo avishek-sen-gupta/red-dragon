@@ -102,6 +102,7 @@ CobolStatementType = Union[
     "RewriteStatement",
     "StartStatement",
     "DeleteStatement",
+    "XmlGenerateStatement",
 ]
 
 
@@ -1370,6 +1371,49 @@ class DeleteStatement:
         return result
 
 
+@dataclass(frozen=True)
+class XmlGenerateStatement:
+    """XML GENERATE xml-document FROM record [COUNT IN n] [ON EXCEPTION ...].
+
+    Data serialisation, so it moves no control and touches no file, queue or
+    map: the flow graph reads nothing from it. It is modelled because the type
+    is one the bridge emits, and an unmodelled type takes the whole program's
+    ASG down.
+    """
+
+    xml_document: str = ""
+    from_record: str = ""
+    count_in: str = ""
+    on_exception: list[CobolStatementType] = field(default_factory=list)
+    not_on_exception: list[CobolStatementType] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> XmlGenerateStatement:
+        return cls(
+            xml_document=data.get("xml_document", ""),
+            from_record=data.get("from_record", ""),
+            count_in=data.get("count_in", ""),
+            on_exception=[parse_statement(c) for c in data.get("on_exception", [])],
+            not_on_exception=[
+                parse_statement(c) for c in data.get("not_on_exception", [])
+            ],
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "type": "XML_GENERATE",
+            "xml_document": self.xml_document,
+            "from_record": self.from_record,
+        }
+        if self.count_in:
+            result["count_in"] = self.count_in
+        if self.on_exception:
+            result["on_exception"] = [c.to_dict() for c in self.on_exception]
+        if self.not_on_exception:
+            result["not_on_exception"] = [c.to_dict() for c in self.not_on_exception]
+        return result
+
+
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -1516,6 +1560,7 @@ _DISPATCH_TABLE: dict[str, type] = {
     "REWRITE": RewriteStatement,
     "START": StartStatement,
     "DELETE": DeleteStatement,
+    "XML_GENERATE": XmlGenerateStatement,
 }
 
 

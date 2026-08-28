@@ -4,15 +4,15 @@ import pytest
 
 from interpreter.cobol.cobol_statements import (
     AcceptStatement,
-    AlteredGoto,
     AlterStatement,
+    AlteredGoto,
     ArithmeticStatement,
     CallStatement,
     CancelStatement,
     CloseStatement,
-    ComputedGoto,
     ComputeStatement,
     ComputeTarget,
+    ComputedGoto,
     ContinueStatement,
     DeleteStatement,
     DisplayStatement,
@@ -43,6 +43,7 @@ from interpreter.cobol.cobol_statements import (
     WhenOtherStatement,
     WhenStatement,
     WriteStatement,
+    XmlGenerateStatement,
     parse_statement,
 )
 from interpreter.cobol.features import CobolFeature
@@ -637,6 +638,45 @@ class TestParseStatementDispatch:
         stmt = parse_statement({"type": "DELETE", "file_name": "CUST-FILE"})
         assert isinstance(stmt, DeleteStatement)
         assert stmt.file_name == "CUST-FILE"
+
+    def test_xml_generate_basic(self):
+        stmt = parse_statement(
+            {
+                "type": "XML_GENERATE",
+                "xml_document": "WRITE-REC",
+                "from_record": "SOME-RECORD",
+            }
+        )
+        assert stmt == XmlGenerateStatement(
+            xml_document="WRITE-REC", from_record="SOME-RECORD"
+        )
+
+    def test_xml_generate_carries_count_and_exception_phrases(self):
+        stmt = parse_statement(
+            {
+                "type": "XML_GENERATE",
+                "xml_document": "WRITE-REC",
+                "from_record": "SOME-RECORD",
+                "count_in": "WS-XML-LEN",
+                "on_exception": [{"type": "MOVE", "operands": ["'Y'", "WS-FAILED"]}],
+                "not_on_exception": [
+                    {"type": "MOVE", "operands": ["'N'", "WS-FAILED"]}
+                ],
+            }
+        )
+        assert isinstance(stmt, XmlGenerateStatement)
+        assert stmt.count_in == "WS-XML-LEN"
+        assert len(stmt.on_exception) == 1
+        assert len(stmt.not_on_exception) == 1
+
+    def test_xml_generate_round_trips(self):
+        data = {
+            "type": "XML_GENERATE",
+            "xml_document": "WRITE-REC",
+            "from_record": "SOME-RECORD",
+            "count_in": "WS-XML-LEN",
+        }
+        assert parse_statement(data).to_dict() == data
 
     def test_unknown_type_raises(self):
         with pytest.raises(ValueError, match="Unknown COBOL statement type"):
