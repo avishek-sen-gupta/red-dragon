@@ -16,6 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from interpreter.cobol.asg_types import CobolASG
+from interpreter.cobol.source_text import decode_source
 from interpreter.cobol.subprocess_runner import (
     CobolParseError,
     RealSubprocessRunner,
@@ -76,7 +77,7 @@ class ProLeapCobolParser(CobolParser):
         logger.debug("Parsing COBOL source (%d bytes) via ProLeap bridge", len(source))
         command = self._build_command()
         try:
-            json_str = self._runner.run(command, source.decode("utf-8"))
+            json_str = self._runner.run(command, decode_source(source))
         except CobolParseError as e:
             raise self._enrich_copybook_error(e) from e
         data: dict = json.loads(json_str)
@@ -98,7 +99,7 @@ class ProLeapCobolParser(CobolParser):
         """
         command = self._build_command()
         try:
-            json_str = self._runner.run(command, source.decode("utf-8"))
+            json_str = self._runner.run(command, decode_source(source))
         except CobolParseError as e:
             raise self._enrich_copybook_error(e) from e
         out_path.write_text(json_str, encoding="utf-8")

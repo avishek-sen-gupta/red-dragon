@@ -56,6 +56,18 @@ def test_parse_no_dirs_emits_no_copybook_dir_args():
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_parse_accepts_source_bytes_that_are_not_utf8():
+    """A fixed-format member is 8-bit text, not UTF-8. High bytes appear in real
+    members (HIGH-VALUES sentinels, VALUE literals in report layouts) and used to
+    raise UnicodeDecodeError before the source reached the bridge at all."""
+    runner = _RecordingRunner()
+    parser = ProLeapCobolParser(runner, "bridge.jar")
+    parser.parse(b"       01 WS-SENTINEL PIC X VALUE '\xff'.\n")
+    assert runner.input_data is not None
+    assert "\u00ff" in runner.input_data
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
 def test_parse_appends_copybook_ext_args():
     runner = _RecordingRunner()
     parser = ProLeapCobolParser(runner, "bridge.jar", copybook_exts=["txt", "CPY"])
