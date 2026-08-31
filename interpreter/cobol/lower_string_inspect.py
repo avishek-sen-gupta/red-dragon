@@ -107,7 +107,16 @@ def lower_string(
 
         operand_name = sending.value.name
         if ctx.has_field(operand_name, materialised):
-            source_ref, source_rr = ctx.resolve_field_ref(operand_name, materialised)
+            # A sending operand's OF/IN qualifiers must be passed on, exactly as
+            # _write_ref_mod_target does for the INTO target. Dropping them sends
+            # a name the program already qualified to the layout bare, which
+            # raises CobolAmbiguousReferenceError for any duplicated leaf name --
+            # a legal program rejected. The bridge serializes a sending through
+            # serializeMoveOperand -> serializeRef, so the qualifiers are in the
+            # JSON and already parsed into RefModOperand.qualifiers.
+            source_ref, source_rr = ctx.resolve_field_ref(
+                operand_name, materialised, sending.value.qualifiers
+            )
             decoded_reg = ctx.emit_decode_field(
                 source_rr, source_ref.fl, source_ref.offset_reg
             )
