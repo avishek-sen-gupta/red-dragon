@@ -57,6 +57,13 @@ class EdgeKind(Enum):
     SENDS_MAP = "SENDS_MAP"
     RECEIVES_MAP = "RECEIVES_MAP"
     JCL_STEP_RUNS = "JCL_STEP_RUNS"
+    # STEP -> PROGRAM, from a RUN PROGRAM(...) subcommand in the SYSTSIN of a
+    # step whose EXEC PGM= is the TSO terminal monitor. Distinct from
+    # JCL_STEP_RUNS because both facts are true and neither substitutes for the
+    # other: the step really does run IKJEFT01, and IKJEFT01 really does run
+    # this program under DB2. Collapsing them into one kind would claim the JCL
+    # names a program it never names.
+    TSO_RUNS_PROGRAM = "TSO_RUNS_PROGRAM"
     READS = "READS"
     WRITES = "WRITES"
     UPDATES = "UPDATES"
