@@ -1,0 +1,6 @@
+id: no-list-remove
+language: python
+rule:
+  pattern: $LIST.remove($ITEM)
+message: "list.remove() — use list comprehension filter"
+severity: warning

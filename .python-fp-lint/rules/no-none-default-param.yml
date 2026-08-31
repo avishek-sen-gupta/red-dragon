@@ -1,0 +1,8 @@
+id: no-none-default-param
+language: python
+rule:
+  kind: default_parameter
+  has:
+    kind: none
+message: "None default parameter — use empty structures or sentinel objects"
+severity: warning

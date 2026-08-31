@@ -1,4 +1,9 @@
 repos:
+  - repo: https://github.com/avishek-sen-gupta/python-fp-lint
+    rev: 7ed06f37912919a0e4c98502b4df36a1b782a6ec
+    hooks:
+      - id: python-fp-lint
+        args: [--config, fp.json]
   - repo: local
     hooks:
       - id: terminology-guard
