@@ -31,7 +31,13 @@ class RealSubprocessRunner(SubprocessRunner):
             command,
             input=input_data,
             capture_output=True,
-            text=True,
+            # latin-1 both ways, matching `decode_source` and the bridge's own
+            # SOURCE_CHARSET: this is the byte-identity codec, so a member's high
+            # bytes reach the parser unchanged and come back out of the JSON
+            # unchanged. `text=True` would use the locale encoding instead, which
+            # only round-trips by coincidence when that happens to be UTF-8 on
+            # both sides.
+            encoding="latin-1",
             check=False,
         )
         if result.returncode != 0:
