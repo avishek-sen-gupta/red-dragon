@@ -11,8 +11,12 @@ import io.proleap.cobol.preprocessor.CobolPreprocessor.CobolSourceFormatEnum;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,8 +56,32 @@ public final class Main {
         // prevent instantiation
     }
 
+    /**
+     * The codec for every byte crossing this bridge: source in, copybooks off
+     * disk, JSON out.
+     *
+     * <p>Fixed-format members are 8-bit text, not UTF-8, which is the same
+     * conclusion RedDragon's own {@code decode_source} reaches on the Python
+     * side. ISO-8859-1 is the byte-identity codec: defined for all 256 byte
+     * values, so it never raises and never loses a character, and one byte stays
+     * one character so column positions and PIC lengths are unaffected.
+     *
+     * <p>It matters most for copybooks, because those are the one input the
+     * Python side never decodes -- ProLeap opens them itself, and under strict
+     * UTF-8 a comment banner's box-drawing byte raises MalformedInputException.
+     * ProLeap catches that IOException and logs it through a logger with no
+     * provider bound, so the COPY expands to nothing and the parse *succeeds*
+     * with the whole record absent. The only symptom is a field-not-found error
+     * naming a copybook that is present and complete.
+     */
+    static final Charset SOURCE_CHARSET = StandardCharsets.ISO_8859_1;
+
     public static void main(String[] args) throws Exception {
         suppressProLeapLogging();
+        // Byte-identity on the way out too, so a high byte in a VALUE literal
+        // survives the round trip regardless of the JVM's default charset.
+        System.setOut(
+            new PrintStream(new FileOutputStream(FileDescriptor.out), true, SOURCE_CHARSET));
 
         CobolSourceFormatEnum format = CobolSourceFormatEnum.FIXED;
         String filePath = "";
@@ -83,6 +111,7 @@ public final class Main {
         try {
             CobolParserParams params = new CobolParserParamsImpl();
             params.setFormat(format);
+            params.setCharset(SOURCE_CHARSET);
             params.setCopyBookExtensions(copyBookExtensions(args));
             if (!copyBookDirs.isEmpty()) {
                 params.setCopyBookDirectories(copyBookDirs);
