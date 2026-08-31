@@ -32,6 +32,7 @@ def test_edge_kind_has_expected_members():
         "SENDS_MAP",
         "RECEIVES_MAP",
         "JCL_STEP_RUNS",
+        "TSO_RUNS_PROGRAM",
         "READS",
         "WRITES",
         "UPDATES",
