@@ -8042,3 +8042,38 @@ class TestAmbiguousFieldNameQualification:
         assert (
             _decode_zoned_unsigned(region, 3, 3) == 222
         ), "WS-ID OF WS-GROUP-B should be 222, unaffected by the other MOVE"
+
+    @covers(CobolFeature.STRING_VERB)
+    def test_of_qualification_disambiguates_a_string_sending_operand(self):
+        """A STRING *source* operand must honour its OF qualifier the way the
+        INTO target already does.
+
+        The bridge serializes a sending operand through serializeMoveOperand ->
+        serializeRef, so its qualifiers are present in the JSON and parsed into
+        RefModOperand.qualifiers; lower_string simply did not pass them on, so a
+        qualified sending arrived bare and raised CobolAmbiguousReferenceError.
+        A program is not required to disambiguate a name it already qualified.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-STR-QUAL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-GROUP-A.",
+                '   05 WS-DD PIC X(2) VALUE "AA".',
+                "01 WS-GROUP-B.",
+                '   05 WS-DD PIC X(2) VALUE "BB".',
+                "01 WS-OUT PIC X(2) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STRING WS-DD OF WS-GROUP-B DELIMITED BY SIZE",
+                "           INTO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-GROUP-A.WS-DD at 0, WS-GROUP-B.WS-DD at 2, WS-OUT at 4.
+        assert (
+            _decode_alpha(region, 4, 2) == "BB"
+        ), "the qualifier names WS-GROUP-B, so the B occurrence is the source"
