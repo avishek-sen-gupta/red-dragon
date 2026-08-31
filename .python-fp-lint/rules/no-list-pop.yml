@@ -1,0 +1,6 @@
+id: no-list-pop
+language: python
+rule:
+  pattern: $LIST.pop($INDEX)
+message: "list.pop() — use list slicing"
+severity: warning

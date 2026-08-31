@@ -1,0 +1,18 @@
+id: no-attribute-augmented-mutation
+language: python
+rule:
+  any:
+    - pattern: $OBJ.$ATTR += $VAL
+    - pattern: $OBJ.$ATTR -= $VAL
+    - pattern: $OBJ.$ATTR *= $VAL
+    - pattern: $OBJ.$ATTR /= $VAL
+    - pattern: $OBJ.$ATTR //= $VAL
+    - pattern: $OBJ.$ATTR **= $VAL
+    - pattern: $OBJ.$ATTR %= $VAL
+    - pattern: $OBJ.$ATTR &= $VAL
+    - pattern: $OBJ.$ATTR |= $VAL
+    - pattern: $OBJ.$ATTR ^= $VAL
+    - pattern: $OBJ.$ATTR >>= $VAL
+    - pattern: $OBJ.$ATTR <<= $VAL
+message: "Attribute augmented mutation — use immutable update patterns"
+severity: warning

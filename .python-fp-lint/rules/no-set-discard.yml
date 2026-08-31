@@ -1,0 +1,6 @@
+id: no-set-discard
+language: python
+rule:
+  pattern: $SET.discard($ITEM)
+message: "set.discard() — use set difference"
+severity: warning

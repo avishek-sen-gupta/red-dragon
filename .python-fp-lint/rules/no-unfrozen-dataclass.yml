@@ -1,0 +1,27 @@
+id: no-unfrozen-dataclass
+language: python
+rule:
+  kind: decorated_definition
+  has:
+    stopBy: end
+    kind: decorator
+    has:
+      any:
+        - kind: identifier
+          regex: "^dataclass$"
+        - kind: call
+          has:
+            kind: identifier
+            regex: "^dataclass$"
+  not:
+    has:
+      stopBy: end
+      kind: keyword_argument
+      all:
+        - has:
+            kind: identifier
+            regex: "^frozen$"
+        - has:
+            kind: "true"
+message: "dataclass without frozen=True — add frozen=True for immutability"
+severity: warning

@@ -1,0 +1,6 @@
+id: no-dict-clear
+language: python
+rule:
+  pattern: $DICT.clear()
+message: "dict.clear() — reassign to empty dict instead"
+severity: warning

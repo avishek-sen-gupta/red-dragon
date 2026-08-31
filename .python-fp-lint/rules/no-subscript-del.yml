@@ -1,0 +1,6 @@
+id: no-subscript-del
+language: python
+rule:
+  pattern: del $OBJ[$KEY]
+message: "Subscript deletion — use comprehensions or immutable update patterns"
+severity: warning

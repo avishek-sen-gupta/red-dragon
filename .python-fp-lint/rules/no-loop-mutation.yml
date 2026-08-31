@@ -1,0 +1,34 @@
+id: no-loop-mutation
+language: python
+rule:
+  kind: for_statement
+  has:
+    any:
+      - pattern: $OBJ.append($$$ARGS)
+      - pattern: $OBJ.extend($$$ARGS)
+      - pattern: $OBJ.insert($$$ARGS)
+      - pattern: $OBJ.pop($$$ARGS)
+      - pattern: $OBJ.remove($$$ARGS)
+      - pattern: $OBJ.add($$$ARGS)
+      - pattern: $OBJ.discard($$$ARGS)
+      - pattern: $OBJ.clear()
+      - pattern: $OBJ.update($$$ARGS)
+      - pattern: $OBJ.setdefault($$$ARGS)
+      - pattern: $OBJ[$KEY] = $VAL
+      - pattern: del $OBJ[$KEY]
+      - pattern: $VAR += $VAL
+      - pattern: $VAR -= $VAL
+      - pattern: $VAR *= $VAL
+      - pattern: $VAR /= $VAL
+      - pattern: $VAR //= $VAL
+      - pattern: $VAR **= $VAL
+      - pattern: $VAR %= $VAL
+      - pattern: $VAR &= $VAL
+      - pattern: $VAR |= $VAL
+      - pattern: $VAR ^= $VAL
+      - pattern: $VAR >>= $VAL
+      - pattern: $VAR <<= $VAL
+    stopBy:
+      kind: function_definition
+message: "Mutation inside loop — use comprehensions, reduce, or functional patterns"
+severity: warning

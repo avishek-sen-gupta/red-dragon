@@ -1,0 +1,7 @@
+id: no-any-type
+language: python
+rule:
+  kind: type
+  regex: "\\bAny\\b"
+message: "Avoid Any — use a precise type, Protocol, TypeVar, or a union of concrete types"
+severity: warning

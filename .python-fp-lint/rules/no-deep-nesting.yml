@@ -1,0 +1,20 @@
+id: no-deep-nesting
+language: python
+rule:
+  any:
+    - kind: for_statement
+      has:
+        any:
+          - kind: for_statement
+          - kind: if_statement
+        stopBy:
+          kind: function_definition
+    - kind: if_statement
+      has:
+        any:
+          - kind: for_statement
+          - kind: if_statement
+        stopBy:
+          kind: function_definition
+message: "Nested for/if — use comprehensions, itertools, or extract a helper function"
+severity: warning
