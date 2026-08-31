@@ -1,0 +1,20 @@
+id: test-vacuous
+language: python
+rule:
+  all:
+    - kind: function_definition
+    - has:
+        field: name
+        regex: "^test_"
+    - not:
+        has:
+          stopBy: end
+          any:
+            - pattern: assert $A == $B
+            - pattern: assert $A != $B
+            - pattern: assert $A < $B
+            - pattern: assert $A > $B
+            - pattern: assert $A <= $B
+            - pattern: assert $A >= $B
+message: "Vacuous test: no value-comparison assertion (==, !=, <, >, <=, >=) found — test may not verify concrete behaviour"
+severity: warning

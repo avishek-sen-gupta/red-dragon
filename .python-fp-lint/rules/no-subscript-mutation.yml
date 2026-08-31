@@ -1,0 +1,6 @@
+id: no-subscript-mutation
+language: python
+rule:
+  pattern: $OBJ[$KEY] = $VAL
+message: "Subscript mutation — use comprehensions or immutable update patterns"
+severity: warning

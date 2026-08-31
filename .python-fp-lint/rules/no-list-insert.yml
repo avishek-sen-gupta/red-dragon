@@ -1,0 +1,6 @@
+id: no-list-insert
+language: python
+rule:
+  pattern: $LIST.insert($IDX, $ITEM)
+message: "list.insert() — use list slicing + concatenation"
+severity: warning

@@ -1,0 +1,16 @@
+id: no-list-dict-param-annotation
+language: python
+rule:
+  kind: typed_parameter
+  has:
+    kind: type
+    has:
+      any:
+        - kind: identifier
+          regex: "^(list|dict)$"
+        - kind: generic_type
+          has:
+            kind: identifier
+            regex: "^(list|dict)$"
+message: "Use Sequence/Mapping from collections.abc instead of list/dict for parameter annotations"
+severity: warning

@@ -1,0 +1,28 @@
+id: no-local-augmented-mutation
+language: python
+rule:
+  any:
+    - pattern: $VAR += $VAL
+    - pattern: $VAR -= $VAL
+    - pattern: $VAR *= $VAL
+    - pattern: $VAR /= $VAL
+    - pattern: $VAR //= $VAL
+    - pattern: $VAR **= $VAL
+    - pattern: $VAR %= $VAL
+    - pattern: $VAR &= $VAL
+    - pattern: $VAR |= $VAL
+    - pattern: $VAR ^= $VAL
+    - pattern: $VAR >>= $VAL
+    - pattern: $VAR <<= $VAL
+  not:
+    any:
+      - has:
+          kind: attribute
+          stopBy: end
+          field: left
+      - has:
+          kind: subscript
+          stopBy: end
+          field: left
+message: "Local augmented mutation — use immutable update patterns"
+severity: warning

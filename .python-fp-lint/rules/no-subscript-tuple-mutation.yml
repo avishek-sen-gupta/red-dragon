@@ -1,0 +1,8 @@
+id: no-subscript-tuple-mutation
+language: python
+rule:
+  any:
+    - pattern: $OBJ[$KEY], $$$REST = $$$VALS
+    - pattern: $$$REST, $OBJ[$KEY] = $$$VALS
+message: "Tuple subscript mutation — use immutable update patterns"
+severity: warning

@@ -1,0 +1,11 @@
+id: no-optional-none
+language: python
+rule:
+  kind: type
+  any:
+    - regex: "Optional\\["
+    - regex: "\\| None"
+    - regex: "None \\|"
+    - regex: "Union\\[.*None"
+message: "Avoid Optional/None unions — use sentinel values or separate code paths"
+severity: warning

@@ -1,0 +1,18 @@
+id: no-subscript-augmented-mutation
+language: python
+rule:
+  any:
+    - pattern: $OBJ[$KEY] += $VAL
+    - pattern: $OBJ[$KEY] -= $VAL
+    - pattern: $OBJ[$KEY] *= $VAL
+    - pattern: $OBJ[$KEY] /= $VAL
+    - pattern: $OBJ[$KEY] //= $VAL
+    - pattern: $OBJ[$KEY] **= $VAL
+    - pattern: $OBJ[$KEY] %= $VAL
+    - pattern: $OBJ[$KEY] &= $VAL
+    - pattern: $OBJ[$KEY] |= $VAL
+    - pattern: $OBJ[$KEY] ^= $VAL
+    - pattern: $OBJ[$KEY] >>= $VAL
+    - pattern: $OBJ[$KEY] <<= $VAL
+message: "Subscript augmented mutation — use immutable update patterns"
+severity: warning
