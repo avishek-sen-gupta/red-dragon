@@ -46,6 +46,8 @@ class ImportRef:
         kind:           Import mechanism.
                         "import" | "include" | "use" | "require" | "mod" | "using"
         alias:          Optional alias name (``import X as Y``).
+        line:           1-based line in source_file the statement appears on, or
+                        None from an extractor that does not track positions.
     """
 
     source_file: Path
@@ -56,3 +58,4 @@ class ImportRef:
     is_system: bool = False
     kind: ImportKind = ImportKind.IMPORT
     alias: str | None = None
+    line: int | None = None
