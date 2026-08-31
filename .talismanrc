@@ -225,4 +225,8 @@ fileignoreconfig:
   # Same false positive, eleven times over: TDD step text ("Expected: PASS, no
   # regressions") and the PROLEAP_BRIDGE_JAR=$PWD/... command line.
   checksum: 3d5166ecbfc33359b83e116e1f5770d3b8814fdac78b44a0d7f737a5c3d9182f
+- filename: interpreter/cobol/lower_string_inspect.py
+  # The same prose false positive: a code comment reading "qualifiers must be
+  # passed on" trips the entropy detector. No credential in this file.
+  checksum: 5137a1c24eb8d93b8eabda545450c3c6b9fb2e995f62782f2c7075612d0f6a78
 version: "1.0"
