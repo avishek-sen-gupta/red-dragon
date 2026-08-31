@@ -187,6 +187,68 @@ def test_multiple_copybooks_inlined(tmp_path):
     assert _decode_zoned_unsigned(region, 4, 4) == 22
 
 
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_copybook_with_a_high_byte_in_a_comment_is_inlined(tmp_path):
+    """A copybook is 8-bit text, not UTF-8, and its comments do not have to decode.
+
+    Real layout members carry box-drawing and currency bytes in their comment
+    banners -- one production corpus has 110 members with bytes >= 0x80, none of
+    which is valid UTF-8. ``decode_source`` already settles the policy for a
+    program's own source (latin-1, byte-identity), but a copybook is read on the
+    Java side by ProLeap, and ProLeap read it as strict UTF-8. The high byte
+    raised ``MalformedInputException``, ProLeap caught the ``IOException`` and
+    logged it through a logger with no provider bound, and the COPY expanded to
+    nothing. The parse then succeeded with the whole record silently absent, and
+    the first symptom was ``Field 'X' not found in any DATA DIVISION section``
+    pointing at a copybook that is on the search path and complete -- a wrong
+    error naming the wrong culprit.
+    """
+    copybook = _to_fixed(
+        [
+            "* BANNER \xa6 WITH A HIGH BYTE",
+            "01 WS-HIGH PIC 9(4) VALUE 0.",
+        ]
+    )
+    (tmp_path / "HIBOOK.cpy").write_bytes(copybook.encode("latin-1"))
+    (tmp_path / "MAIN.cbl").write_text(
+        _to_fixed(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MAIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "COPY HIBOOK.",
+                "PROCEDURE DIVISION.",
+                "    MOVE 1234 TO WS-HIGH.",
+                "    STOP RUN.",
+            ]
+        )
+    )
+
+    linked = compile_directory(tmp_path, Language.COBOL)
+    vm = run_linked(
+        linked,
+        entry_point=EntryPoint.function(
+            lambda ref: str(ref.label).endswith("func_main_0")
+            and "init_params" not in str(ref.label)
+        ),
+        max_steps=500,
+        initial_vm=initial_vm_state(),
+    )
+
+    ptr = None
+    for frame in reversed(vm.call_stack):
+        if VarName("__prog_MAIN") in frame.local_vars:
+            ptr = frame.local_vars[VarName("__prog_MAIN")].value
+            break
+    assert ptr is not None and isinstance(ptr, Pointer)
+    region = vm.region_get(
+        Address(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value)
+    )
+    assert region is not None
+    assert _decode_zoned_unsigned(region, 0, 4) == 1234
+
+
 @covers(
     CobolFeature.MULTI_FILE_IMPORTS,
     CobolFeature.CALL_USING,
