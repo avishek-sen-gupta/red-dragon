@@ -44,6 +44,21 @@ def _table_occurrence_count(
     return fl.occurs_count or None
 
 
+def _implicit_index_for(
+    table: str, materialised: MaterialisedSectionedLayout
+) -> str | None:
+    """Return the index a Format 1 SEARCH over ``table`` implicitly advances.
+
+    Index items live in their own region (build_index_layout), which is also
+    where the index -> owning table map lives. first_index_for() matches both
+    names case-insensitively and preserves declaration order, so the table's
+    first INDEXED BY name wins — which is the one the standard says a SEARCH
+    without VARYING uses.
+    """
+    index_layout, _region_reg = materialised.indexes
+    return index_layout.first_index_for(table)
+
+
 def lower_search(
     ctx: EmitContext,
     stmt: SearchStatement,
@@ -126,10 +141,16 @@ def lower_search(
     ctx.emit_inst(Branch(label=increment_label))
     ctx.emit_inst(Label_(label=increment_label))
 
-    if stmt.varying and ctx.has_field(stmt.varying, materialised):
-        varying_ref, varying_rr = ctx.resolve_field_ref(stmt.varying, materialised)
+    # Format 1 SEARCH names only the table and advances its FIRST INDEXED BY
+    # index. That form is the common one; the explicit VARYING operand is not.
+    # Until index items were allocated there was nothing to advance, so the loop
+    # re-tested occurrence 1 until the bound.
+    implicit_name = _implicit_index_for(stmt.table, materialised)
+    advance_name = stmt.varying or implicit_name
+    if advance_name and ctx.has_field(advance_name, materialised):
+        advance_ref, advance_rr = ctx.resolve_field_ref(advance_name, materialised)
         decoded_reg = ctx.emit_decode_field(
-            varying_rr, varying_ref.fl, varying_ref.offset_reg
+            advance_rr, advance_ref.fl, advance_ref.offset_reg
         )
         one_reg = ctx.const_to_reg(1)
         inc_reg = ctx.fresh_reg()
@@ -143,7 +164,16 @@ def lower_search(
         )
         str_reg = ctx.emit_to_string(inc_reg)
         ctx.emit_encode_and_write(
-            varying_rr, varying_ref.fl, str_reg, varying_ref.offset_reg
+            advance_rr, advance_ref.fl, str_reg, advance_ref.offset_reg
+        )
+    else:
+        logger.warning(
+            "SEARCH over %r has no index to advance — the loop cannot progress. "
+            "VARYING operand: %r; table's implicit INDEXED BY index: %r; neither "
+            "resolves in the layout",
+            stmt.table,
+            stmt.varying,
+            implicit_name,
         )
 
     ctr_reg2 = ctx.fresh_reg()
