@@ -4,7 +4,7 @@
        WORKING-STORAGE SECTION.
        01  TBL-BYTES        PIC X(18).
        01  TBL REDEFINES TBL-BYTES.
-           05  TBL-ROW OCCURS 3 TIMES INDEXED BY TBL-IX, TBL-JX.
+           05  TBL-ROW OCCURS 3 TIMES INDEXED BY TBL-IX, TBL-JX, Tbl-Kx.
                10  TBL-KEY  PIC X(3).
                10  TBL-VAL  PIC X(3).
        PROCEDURE DIVISION.
