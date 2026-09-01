@@ -108,10 +108,11 @@ class DataLayout:
         total_bytes: Total record size in bytes (meaningful at root level).
         occurs_count: OCCURS count if this group is an OCCURS table.
         element_size: Per-element byte size for OCCURS group tables.
-        index_owner: index name -> the OCCURS item it indexes, for every
-            INDEXED BY name declared anywhere in this record. A Format 1
-            SEARCH names only the table, so this is how its implicit index
-            is found. Populated on the record root only.
+        index_owner: index name -> the OCCURS item it indexes. Populated only
+            on the index-item layout built by :func:`build_index_layout`; a
+            Format 1 SEARCH names only the table, so this is how its implicit
+            index is found. Query it via :meth:`owner_of` /
+            :meth:`first_index_for`, never by exact-match dict access.
     """
 
     fields: dict[str, FieldLayout] = field(default_factory=dict)
@@ -172,6 +173,29 @@ class DataLayout:
             return True
         except KeyError:
             return False
+
+    def owner_of(self, index_name: str) -> str | None:
+        """Return the name of the table ``index_name`` indexes, or None.
+
+        Matched case-insensitively (COBOL identifiers are case-insensitive)
+        while ``index_owner`` keeps the verbatim declared spelling.
+        """
+        return _ci_get(self.index_owner, index_name)
+
+    def first_index_for(self, table_name: str) -> str | None:
+        """Return the first ``INDEXED BY`` name declared on ``table_name``, or None.
+
+        A Format 1 SEARCH names only the table and implicitly uses its first
+        index; ``index_owner`` preserves declaration order, so the first match
+        wins. Both sides are compared case-insensitively — the table name is
+        lexed from a SEARCH statement and need not match the DATA DIVISION's
+        casing.
+        """
+        wanted = table_name.upper()
+        for index_name, owner in self.index_owner.items():
+            if owner.upper() == wanted:
+                return index_name
+        return None
 
     def lookup_or_raise(self, name: str) -> FieldLayout:
         result = self.lookup(name)
@@ -433,54 +457,11 @@ def _placed_child_extent(
     return end - group_offset
 
 
-@dataclass(frozen=True)
-class _IndexDeclaration:
-    """An ``INDEXED BY`` name awaiting storage, and where it is declared.
-
-    ``scope`` is the leaf dict of the table's OWN siblings: an index is not an
-    occurrence of anything, it selects one, so it lives beside the table rather
-    than inside its bytes.
-    """
-
-    name: str
-    table: str
-    scope: dict[str, FieldLayout]
-
-
-_INDEX_ITEM_TYPE = CobolTypeDescriptor(
-    category=CobolDataCategory.BINARY, total_digits=9
-)
-
-
-def _allocate_index_items(
-    declarations: list[_IndexDeclaration], record_end: int
-) -> int:
-    """Place one index item per declaration past ``record_end``; return the new end.
-
-    Each holds a 1-based occurrence NUMBER, not the byte displacement IBM
-    stores: nothing here reads an index's raw bytes, and a program cannot
-    legally observe the difference (REDEFINES of an index and a group MOVE of
-    one are both errors). They are appended past the whole record because the
-    bridge-assigned offsets leave no gap between a table and its successor.
-    """
-    end = record_end
-    for declaration in declarations:
-        declaration.scope[declaration.name] = FieldLayout(
-            name=declaration.name,
-            type_descriptor=_INDEX_ITEM_TYPE,
-            offset=end,
-            byte_length=_INDEX_ITEM_TYPE.byte_length,
-        )
-        end += _INDEX_ITEM_TYPE.byte_length
-    return end
-
-
 def _flatten_field(
     cobol_field: CobolField,
     base_offset: int,
     sibling_fields: dict[str, FieldLayout],
     sibling_groups: dict[str, DataLayout],
-    index_declarations: list[_IndexDeclaration],
 ) -> tuple[str, FieldLayout | DataLayout]:
     """Return (name, leaf) for elementary fields, (name, DataLayout) for groups."""
     # Offset resolution — REDEFINES gets offset of the field it redefines.
@@ -496,17 +477,12 @@ def _flatten_field(
     else:
         absolute_offset = base_offset + cobol_field.offset
 
-    index_declarations.extend(
-        _IndexDeclaration(name=index_name, table=cobol_field.name, scope=sibling_fields)
-        for index_name in cobol_field.indexed_by
-    )
-
     if cobol_field.children:
         sub_fields: dict[str, FieldLayout] = {}
         sub_groups: dict[str, DataLayout] = {}
         for child in cobol_field.children:
             child_name, child_result = _flatten_field(
-                child, absolute_offset, sub_fields, sub_groups, index_declarations
+                child, absolute_offset, sub_fields, sub_groups
             )
             if isinstance(child_result, DataLayout):
                 sub_groups[child_name] = child_result
@@ -654,9 +630,8 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
     non_renames_fields = [f for f in fields if not f.renames_from]
     top_fields: dict[str, FieldLayout] = {}
     top_groups: dict[str, DataLayout] = {}
-    index_declarations: list[_IndexDeclaration] = []
     for f in non_renames_fields:
-        name, result = _flatten_field(f, 0, top_fields, top_groups, index_declarations)
+        name, result = _flatten_field(f, 0, top_fields, top_groups)
         if isinstance(result, DataLayout):
             top_groups[name] = result
         else:
@@ -670,10 +645,7 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
             top_fields[rf.name] = _resolve_renames(rf, temp_layout)
 
     non_redefines_top = [f for f in non_renames_fields if not f.redefines]
-    total = _allocate_index_items(
-        index_declarations,
-        sum(_compute_group_length(f) for f in non_redefines_top),
-    )
+    total = sum(_compute_group_length(f) for f in non_redefines_top)
 
     logger.debug(
         "Data layout: %d top-level fields, %d top-level groups, %d total bytes",
@@ -682,9 +654,48 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
         total,
     )
 
-    return DataLayout(
-        fields=top_fields,
-        groups=top_groups,
-        total_bytes=total,
-        index_owner={d.name: d.table for d in index_declarations},
-    )
+    return DataLayout(fields=top_fields, groups=top_groups, total_bytes=total)
+
+
+_INDEX_ITEM_TYPE = CobolTypeDescriptor(
+    category=CobolDataCategory.BINARY, total_digits=9
+)
+
+
+def _index_declarations(fields: list[CobolField]) -> Iterator[tuple[str, str]]:
+    """Yield (index name, indexed table name) for every INDEXED BY, in source order."""
+    for f in fields:
+        for index_name in f.indexed_by:
+            yield index_name, f.name
+        yield from _index_declarations(f.children)
+
+
+def build_index_layout(*sections: list[CobolField]) -> DataLayout:
+    """Build the index-item region for every ``INDEXED BY`` name in ``sections``.
+
+    ``OCCURS ... INDEXED BY IX`` is the only declaration IX ever gets (``01 IX
+    PIC ...`` is an error), so the compiler allocates it. Index items belong to
+    no record: they get their OWN region, exactly like RETURN-CODE in
+    ``special_registers`` — which is also what keeps them out of LINKAGE, whose
+    region is the caller's argument storage and is NOT sized from
+    ``total_bytes``.
+
+    Each item holds a 1-based occurrence NUMBER, not the byte displacement IBM
+    stores. Nothing here reads an index's raw bytes, and a program cannot
+    legally observe the difference: REDEFINES of an index and a group MOVE of
+    one are both errors.
+    """
+    items: dict[str, FieldLayout] = {}
+    owners: dict[str, str] = {}
+    offset = 0
+    for section in sections:
+        for index_name, table_name in _index_declarations(section):
+            items[index_name] = FieldLayout(
+                name=index_name,
+                type_descriptor=_INDEX_ITEM_TYPE,
+                offset=offset,
+                byte_length=_INDEX_ITEM_TYPE.byte_length,
+            )
+            owners[index_name] = table_name
+            offset += _INDEX_ITEM_TYPE.byte_length
+    return DataLayout(fields=items, total_bytes=offset, index_owner=owners)
