@@ -7,13 +7,16 @@ import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryC
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryGroup;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryRename;
 import io.proleap.cobol.asg.metamodel.data.datadescription.BlankWhenZeroClause;
+import io.proleap.cobol.asg.metamodel.data.datadescription.Index;
 import io.proleap.cobol.asg.metamodel.data.datadescription.OccursClause;
+import io.proleap.cobol.asg.metamodel.data.datadescription.OccursIndexed;
 import io.proleap.cobol.asg.metamodel.data.datadescription.JustifiedClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.SignClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.SynchronizedClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.ValueInterval;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -102,6 +105,15 @@ public final class DataFieldSerializer {
             obj.addProperty("occurs", occursCount);
             int elementSize = computeElementSize(group);
             obj.addProperty("element_size", elementSize);
+        }
+
+        List<String> indexNames = extractIndexNames(group);
+        if (!indexNames.isEmpty()) {
+            JsonArray arr = new JsonArray();
+            for (String n : indexNames) {
+                arr.add(n);
+            }
+            obj.add("indexed_by", arr);
         }
 
         int occursMin = extractOccursMin(group);
@@ -652,6 +664,35 @@ public final class DataFieldSerializer {
             LOG.fine("Could not extract OCCURS for " + group.getName() + ": " + e.getMessage());
         }
         return 0;
+    }
+
+    /**
+     * The INDEXED BY names on a group's OccursClause, in declaration order.
+     *
+     * <p>An index declared this way is compiler-allocated: there is deliberately no
+     * `01 IX PIC ...` anywhere, so this clause is the item's only declaration. Order
+     * matters — a Format 1 SEARCH with no VARYING advances the FIRST index.
+     */
+    private static List<String> extractIndexNames(DataDescriptionEntryGroup group) {
+        List<String> names = new ArrayList<>();
+        try {
+            List<OccursClause> clauses = group.getOccursClauses();
+            if (clauses == null || clauses.isEmpty()) {
+                return names;
+            }
+            OccursIndexed indexed = clauses.get(0).getOccursIndexed();
+            if (indexed == null || indexed.getIndices() == null) {
+                return names;
+            }
+            for (Index ix : indexed.getIndices()) {
+                if (ix.getName() != null) {
+                    names.add(ix.getName().toUpperCase());
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("No INDEXED BY names: " + e.getMessage());
+        }
+        return names;
     }
 
     /**
