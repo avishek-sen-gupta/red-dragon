@@ -54,6 +54,10 @@ class EdgeKind(Enum):
     LINK = "LINK"
     RETURN_TRANSID = "RETURN_TRANSID"
     STARTS = "STARTS"
+    # PROGRAM -> TRANSACTION, from EXEC CICS START TRANSID(...): asynchronous
+    # dispatch, so it is neither STARTS (TRANSACTION -> PROGRAM, which says who
+    # serves a transaction) nor RETURN_TRANSID (the current task ending).
+    START_TRANSID = "START_TRANSID"
     SENDS_MAP = "SENDS_MAP"
     RECEIVES_MAP = "RECEIVES_MAP"
     JCL_STEP_RUNS = "JCL_STEP_RUNS"
