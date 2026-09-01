@@ -671,7 +671,10 @@ public final class DataFieldSerializer {
      *
      * <p>An index declared this way is compiler-allocated: there is deliberately no
      * `01 IX PIC ...` anywhere, so this clause is the item's only declaration. Order
-     * matters — a Format 1 SEARCH with no VARYING advances the FIRST index.
+     * matters — a Format 1 SEARCH with no VARYING advances the FIRST index. Names are
+     * preserved verbatim as declared, matching every other identifier extractor in
+     * this class (e.g. {@code extractRedefines}, {@code extractOccursDependingOn}) —
+     * case-insensitive matching is done by callers, not by upper-casing here.
      */
     private static List<String> extractIndexNames(DataDescriptionEntryGroup group) {
         List<String> names = new ArrayList<>();
@@ -686,7 +689,7 @@ public final class DataFieldSerializer {
             }
             for (Index ix : indexed.getIndices()) {
                 if (ix.getName() != null) {
-                    names.add(ix.getName().toUpperCase());
+                    names.add(ix.getName());
                 }
             }
         } catch (Exception e) {
