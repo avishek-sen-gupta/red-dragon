@@ -30,10 +30,17 @@ repos:
 
       - id: black
         name: Black (auto-fix)
-        entry: bash -c 'uv run python -m black . && git add -u'
+        # Formats and re-stages ONLY the files pre-commit hands us, which are the
+        # staged ones. It used to run `black .` then `git add -u`, and `git add -u`
+        # stages EVERY modified tracked file — so any edit in flight elsewhere in
+        # the tree was swept into whatever commit happened to be running. That
+        # mis-attributed a COBOL fix to a lint-config commit (f9142a4b/9f14b79f)
+        # and, in red-dragon-forge, bundled an unrelated reformat into a docs
+        # commit. Passing filenames also means black no longer walks the whole
+        # tree on every commit.
+        entry: bash -c 'uv run python -m black "$@" && git add -- "$@"' --
         language: system
-        pass_filenames: false
-        always_run: true
+        types: [python]
 
       - id: python-fp-lint
         name: Python FP lint (warnings only)
