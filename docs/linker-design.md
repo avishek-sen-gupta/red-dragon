@@ -429,8 +429,6 @@ interpreter/project/
     cobol_compile.py        compile_cobol()/compile_cobol_module() — COBOL-specific two-phase
                             AST-cache pipeline (parallel parse-to-disk, sequential lower) with
                             multi-program CALL linking (main + subprograms)
-    cobol_connections.py   extract_cobol_connections() — ProgramRef/Connection graph of a
-                            COBOL project's COPY/CALL edges, built on top of compile_cobol()
 
 interpreter/registry.py
     _is_func_label(), _is_class_label(), _is_end_class_label()
