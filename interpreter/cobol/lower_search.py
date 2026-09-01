@@ -34,16 +34,18 @@ _RUNAWAY_GUARD = 4096
 
 
 def _table_occurrence_count(
-    ctx: EmitContext, table: str, materialised: MaterialisedSectionedLayout
+    table: str, materialised: MaterialisedSectionedLayout
 ) -> int | None:
-    """Return the OCCURS count for the SEARCHed table, or None if it can't be
-    resolved in the layout. Modelled on how EmitContext.resolve_field_ref
-    reaches the layout: MaterialisedSectionedLayout.resolve() does the
-    case-insensitive lookup (see data_layout.py's _ci_get)."""
-    try:
-        fl, _region_reg = materialised.resolve(table)
-    except KeyError:
-        return None
+    """Return the OCCURS count for the SEARCHed table.
+
+    Returns ``None`` when ``table`` resolves in the layout but has no OCCURS
+    clause (it names a scalar, not a table). Raises ``KeyError`` when the name
+    does not resolve in the layout at all — callers must distinguish the two:
+    "not found" and "not a table" are different diagnoses. Modelled on how
+    EmitContext.resolve_field_ref reaches the layout: MaterialisedSectionedLayout
+    .resolve() does the case-insensitive lookup (see data_layout.py's _ci_get).
+    """
+    fl, _region_reg = materialised.resolve(table)
     return fl.occurs_count or None
 
 
@@ -102,13 +104,23 @@ def lower_search(
     # operand itself. The iteration counter survives only as the runaway guard for
     # a table whose occurrence count is unknown, and to terminate the degraded
     # loop that has no index to advance at all.
-    occurs = _table_occurrence_count(ctx, stmt.table, materialised)
-    if occurs is None:
+    try:
+        occurs = _table_occurrence_count(stmt.table, materialised)
+    except KeyError:
+        occurs = None
         logger.warning(
             "SEARCH table %r not found in layout — falling back to the runaway "
             "guard; the loop bound is not the table's own length",
             stmt.table,
         )
+    else:
+        if occurs is None:
+            logger.warning(
+                "SEARCH table %r is not a table (no OCCURS clause) — falling "
+                "back to the runaway guard; the loop bound is not the table's "
+                "own length",
+                stmt.table,
+            )
     bound_limit = occurs if occurs is not None else _RUNAWAY_GUARD
     bound_index_name = advance_name if occurs is not None else None
 

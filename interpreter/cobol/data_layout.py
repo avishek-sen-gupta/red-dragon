@@ -111,8 +111,8 @@ class DataLayout:
         index_owner: index name -> the OCCURS item it indexes. Populated only
             on the index-item layout built by :func:`build_index_layout`; a
             Format 1 SEARCH names only the table, so this is how its implicit
-            index is found. Query it via :meth:`owner_of` /
-            :meth:`first_index_for`, never by exact-match dict access.
+            index is found. Query it via :meth:`first_index_for`, never by
+            exact-match dict access.
     """
 
     fields: dict[str, FieldLayout] = field(default_factory=dict)
@@ -173,14 +173,6 @@ class DataLayout:
             return True
         except KeyError:
             return False
-
-    def owner_of(self, index_name: str) -> str | None:
-        """Return the name of the table ``index_name`` indexes, or None.
-
-        Matched case-insensitively (COBOL identifiers are case-insensitive)
-        while ``index_owner`` keeps the verbatim declared spelling.
-        """
-        return _ci_get(self.index_owner, index_name)
 
     def first_index_for(self, table_name: str) -> str | None:
         """Return the first ``INDEXED BY`` name declared on ``table_name``, or None.
