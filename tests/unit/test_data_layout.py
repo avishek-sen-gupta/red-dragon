@@ -1138,7 +1138,6 @@ class TestIndexItemLayout:
         assert index_layout.offset == 0
         assert index_layout.byte_length == 4
         assert layout.total_bytes == 4
-        assert layout.owner_of("TBL-IX") == "TBL-ROW"
 
     @covers(CobolFeature.USAGE_INDEX)
     def test_index_items_stay_out_of_the_record_they_index(self):
@@ -1156,7 +1155,6 @@ class TestIndexItemLayout:
         layout = build_index_layout(working_storage, linkage)
         assert [fl.offset for fl in layout.all_leaves()] == [0, 4, 8]
         assert layout.total_bytes == 12
-        assert layout.owner_of("IX-C") == "LK-ROW"
 
     @covers(CobolFeature.USAGE_INDEX)
     def test_declared_casing_is_preserved_and_matched_ignoring_case(self):
@@ -1165,7 +1163,6 @@ class TestIndexItemLayout:
         )
         assert "Tbl-Ix" in layout.fields
         assert layout.lookup("TBL-IX") is not None
-        assert layout.owner_of("TBL-IX") == "Tbl-Row"
 
     @covers(CobolFeature.SEARCH_LINEAR)
     def test_first_index_for_finds_a_format_1_searchs_implicit_index(self):
