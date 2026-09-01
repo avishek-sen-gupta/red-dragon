@@ -74,6 +74,15 @@ def lower_sectioned_data_division(
     else:
         file_reg = NO_REGISTER
 
+    # INDEXED BY items belong to no record, so they get their own region rather
+    # than being appended to one: LINKAGE in particular is the CALLER's argument
+    # storage, sized by the caller and not by total_bytes, so an index placed
+    # there would write past the arguments and corrupt them.
+    if layout.indexes.total_bytes > 0:
+        index_reg = lower_data_division(ctx, layout.indexes)
+    else:
+        index_reg = NO_REGISTER
+
     # RETURN-CODE (and future special registers) live in a dedicated region,
     # allocated fresh per run and isolated from WS/LS/LINKAGE/FILE storage. Its
     # handle is published on the program singleton under RETURN_CODE_HANDLE so the
@@ -90,12 +99,13 @@ def lower_sectioned_data_division(
     )
 
     logger.debug(
-        "Sectioned data division: WS=%s LK=%s LS=%s FILE=%s SR=%s",
+        "Sectioned data division: WS=%s LK=%s LS=%s FILE=%s SR=%s IX=%s",
         ws_reg,
         lk_reg,
         ls_reg,
         file_reg,
         sr_reg,
+        index_reg,
     )
 
     return MaterialisedSectionedLayout(
@@ -104,4 +114,5 @@ def lower_sectioned_data_division(
         local_storage=(layout.local_storage, ls_reg),
         file=(layout.file, file_reg),
         special_registers=(SPECIAL_REGISTERS_LAYOUT, sr_reg),
+        indexes=(layout.indexes, index_reg),
     )
