@@ -1831,8 +1831,47 @@ class TestSearchStatement:
         # No match found — AT END should execute
         assert _decode_zoned_unsigned(region, 4, 4) == 99
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_search_over_scalar_warns_not_a_table(self, caplog):
+        """SEARCHing a scalar (no OCCURS) must say "not a table", not "not
+        found in layout" — the name IS in the layout, so the "not found"
+        wording sends a reader hunting a layout bug that does not exist.
+        """
+        with caplog.at_level(logging.WARNING, logger="interpreter.cobol.lower_search"):
+            _run_cobol(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. TEST-SEARCH-SCALAR.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-IDX PIC 9(4) VALUE 1.",
+                    "77 WS-FOUND PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "MAIN-PARA.",
+                    "    SEARCH WS-IDX VARYING WS-IDX",
+                    "        AT END MOVE 99 TO WS-FOUND",
+                    "        WHEN WS-IDX = 9999",
+                    "            MOVE 1 TO WS-FOUND.",
+                    "    STOP RUN.",
+                ],
+                max_steps=600000,
+            )
+        messages = [record.message for record in caplog.records]
+        assert any(
+            "WS-IDX" in m and "not a table" in m and "no OCCURS clause" in m
+            for m in messages
+        ), f"expected a 'not a table' warning naming WS-IDX, got: {messages}"
+        assert not any(
+            "not found in layout" in m for m in messages
+        ), "WS-IDX IS in the layout — must not claim otherwise"
+
 
 class TestSearchBounds:
+    @covers(
+        CobolFeature.SEARCH_LINEAR,
+        CobolFeature.SEARCH_VARYING,
+        CobolFeature.SEARCH_AT_END,
+    )
     def test_short_table_ends_at_its_own_length(self):
         """A 3-occurrence table must not be walked to 256."""
         vm = _run_cobol(
@@ -1864,6 +1903,11 @@ class TestSearchBounds:
         # AT END must fire just past the last occurrence, not at 257.
         assert _decode_zoned_unsigned(region, 9, 4) == 4
 
+    @covers(
+        CobolFeature.SEARCH_LINEAR,
+        CobolFeature.SEARCH_VARYING,
+        CobolFeature.SEARCH_AT_END,
+    )
     def test_table_larger_than_256_is_fully_searched(self):
         vm = _run_cobol(
             [
@@ -1890,6 +1934,7 @@ class TestSearchBounds:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 1500, 4) == 301
 
+    @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_AT_END)
     def test_search_starting_past_one_still_stops_at_the_last_occurrence(self):
         """A SEARCH entered with the index at 2 must examine 2..n, then AT END.
 
@@ -1934,6 +1979,7 @@ class TestSearchBounds:
 
 
 class TestSearchImplicitIndex:
+    @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_WHEN_CONDITIONS)
     def test_plain_search_advances_the_tables_index(self):
         """SEARCH tbl with no VARYING advances the table's first INDEXED BY index.
 
@@ -1973,6 +2019,7 @@ class TestSearchImplicitIndex:
         # on entry 1 while leaving the target untouched.
         assert _decode_alpha(region, 46, 10) == "MSG-FOR-40"
 
+    @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_AT_END)
     def test_plain_search_reaches_at_end_on_a_genuine_miss(self):
         vm = _run_cobol(
             [
@@ -8325,6 +8372,7 @@ class TestUnresolvableNamePolicy:
         "    STOP RUN.",
     )
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_node_path_warns_on_unresolvable_name(self, caplog):
         """The node-based lowerer must route through the shared policy.
 
@@ -8343,6 +8391,7 @@ class TestUnresolvableNamePolicy:
             for record in caplog.records
         ), "node path must warn about the unresolvable name, like the dict path does"
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     @pytest.mark.xfail(
         reason=(
             "Sentinel is diagnosable, not correctness-preserving: the sentinel "
@@ -8362,10 +8411,74 @@ class TestUnresolvableNamePolicy:
         # An unresolvable subscript must NOT yield a value that matches 'ZZZ'.
         assert _decode_zoned_unsigned(region, 6, 4) == 0
 
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_ref_mod_operand_warns_on_unresolvable_name(self, caplog):
+        """A reference-modified operand on an undeclared name must warn too.
+
+        ``_lower_ref_mod_operand`` (condition_lowering.py) had its own silent
+        ``ctx.const_to_reg(ctx.parse_literal(name))`` fallback, 39 lines above
+        the shared ``_unresolvable_operand`` policy in the same file. It must
+        route through the shared helper like every other unresolvable-name site.
+        """
+        with caplog.at_level(
+            logging.WARNING, logger="interpreter.cobol.condition_lowering"
+        ):
+            _run_cobol(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. TEST-UNRESOLVABLE-REFMOD.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-FOUND PIC 9(4) VALUE 0.",
+                    "PROCEDURE DIVISION.",
+                    "MAIN-PARA.",
+                    "    IF NO-SUCH-NAME(1:3) = 'ABC'",
+                    "        MOVE 1 TO WS-FOUND",
+                    "    END-IF.",
+                    "    STOP RUN.",
+                ],
+                max_steps=2000,
+            )
+        assert any(
+            "NO-SUCH-NAME" in record.message and "unresolvable" in record.message
+            for record in caplog.records
+        ), "ref-mod operand path must warn about the unresolvable name"
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_intrinsic_function_arg_warns_on_unresolvable_name(self, caplog):
+        """An intrinsic-function argument on an undeclared name must warn too.
+
+        ``_lower_function_arg_to_string`` (lower_arithmetic.py) had its own
+        silent ``ctx.const_to_reg(ctx.parse_literal(name))`` fallback. It must
+        route through the shared ``_unresolvable_operand`` policy.
+        """
+        with caplog.at_level(
+            logging.WARNING, logger="interpreter.cobol.condition_lowering"
+        ):
+            _run_cobol(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. TEST-UNRESOLVABLE-FUNC-ARG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "01 WS-OUT PIC X(10) VALUE SPACES.",
+                    "PROCEDURE DIVISION.",
+                    "MAIN-PARA.",
+                    "    MOVE FUNCTION UPPER-CASE(NO-SUCH-NAME) TO WS-OUT.",
+                    "    STOP RUN.",
+                ],
+                max_steps=2000,
+            )
+        assert any(
+            "NO-SUCH-NAME" in record.message and "unresolvable" in record.message
+            for record in caplog.records
+        ), "intrinsic-function argument path must warn about the unresolvable name"
+
 
 class TestSetFromDataItem:
     """SET A TO B must read B, not write the two characters "B"."""
 
+    @covers(CobolFeature.SET_TO)
     def test_set_to_data_item_reads_the_item(self):
         vm = _run_cobol(
             [
@@ -8385,6 +8498,7 @@ class TestSetFromDataItem:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 4) == 7
 
+    @covers(CobolFeature.SET_UP_BY)
     def test_set_up_by_data_item_reads_the_item(self):
         vm = _run_cobol(
             [

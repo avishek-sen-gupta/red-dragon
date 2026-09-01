@@ -300,7 +300,9 @@ def _lower_function_arg_to_string(
             ref, rr = ctx.resolve_field_ref(name, materialised)
             decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
             return ctx.emit_to_string(decoded)
-        return ctx.const_to_reg(ctx.parse_literal(name))
+        from interpreter.cobol.condition_lowering import _unresolvable_operand
+
+        return _unresolvable_operand(ctx, name)
     if kind == "lit":
         return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")))
     # Arithmetic / other expression args: lower via the expression path, then

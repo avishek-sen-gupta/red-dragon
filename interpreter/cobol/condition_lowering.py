@@ -701,7 +701,7 @@ def _lower_ref_mod_operand(
     """
     name = expr.get("name", "")
     if not ctx.has_field(name, materialised):
-        return ctx.const_to_reg(ctx.parse_literal(name))
+        return _unresolvable_operand(ctx, name)
 
     subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
     ref, rr = ctx.resolve_field_ref(name, materialised, subscripts=subscripts)
