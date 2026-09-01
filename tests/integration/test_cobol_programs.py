@@ -8,6 +8,7 @@ Requires the ProLeap bridge JAR to be available (set PROLEAP_BRIDGE_JAR env var
 or have it at the default path). Tests skip gracefully when the JAR is absent.
 """
 
+import logging
 from decimal import Decimal
 
 import pytest
@@ -8110,3 +8111,76 @@ class TestAmbiguousFieldNameQualification:
         assert (
             _decode_alpha(region, 4, 2) == "BB"
         ), "the qualifier names WS-GROUP-B, so the B occurrence is the source"
+
+
+class TestUnresolvableNamePolicy:
+    """An undeclared data-name must not become a silent string literal.
+
+    Both expression lowerers must agree. They did not: the dict-based one emitted
+    a sentinel + warning while the node-based one silently produced the name as a
+    string. This class covers what the shared ``_unresolvable_operand`` policy
+    actually delivers — diagnosability, not correctness. A sentinel is a big
+    improvement on silence, but it is still a value that flows: the VM's
+    symbolic-execution branch policy (``_handle_branch_if`` assumes a symbolic
+    condition is True) means a sentinel that reaches subscript arithmetic can
+    still produce a false WHEN/IF match. Fixing that is out of scope here — it is
+    a VM-wide policy shared by every language this interpreter hosts, tracked
+    separately.
+    """
+
+    _UNRESOLVABLE_SUBSCRIPT_PROGRAM = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. TEST-UNRESOLVABLE.",
+        "DATA DIVISION.",
+        "WORKING-STORAGE SECTION.",
+        "01 TBL-BYTES.",
+        "   05 FILLER PIC X(3) VALUE 'AAA'.",
+        "   05 FILLER PIC X(3) VALUE 'BBB'.",
+        "01 TBL REDEFINES TBL-BYTES.",
+        "   05 TBL-ROW OCCURS 2 TIMES.",
+        "      10 TBL-KEY PIC X(3).",
+        "77 WS-FOUND PIC 9(4) VALUE 0.",
+        "PROCEDURE DIVISION.",
+        "MAIN-PARA.",
+        "    IF TBL-KEY (NO-SUCH-NAME) = 'ZZZ'",
+        "        MOVE 1 TO WS-FOUND",
+        "    END-IF.",
+        "    STOP RUN.",
+    ]
+
+    def test_node_path_warns_on_unresolvable_name(self, caplog):
+        """The node-based lowerer must route through the shared policy.
+
+        Before the unification, this path (subscripts lower through
+        ``lower_expr_node``) produced the bare name as a string with no warning
+        at all. This is the actual deliverable of the unification: both lowerers
+        now log the same diagnosable warning instead of one of them staying
+        silent.
+        """
+        with caplog.at_level(
+            logging.WARNING, logger="interpreter.cobol.condition_lowering"
+        ):
+            _run_cobol(self._UNRESOLVABLE_SUBSCRIPT_PROGRAM, max_steps=2000)
+        assert any(
+            "NO-SUCH-NAME" in record.message and "unresolvable" in record.message
+            for record in caplog.records
+        ), "node path must warn about the unresolvable name, like the dict path does"
+
+    @pytest.mark.xfail(
+        reason=(
+            "Sentinel is diagnosable, not correctness-preserving: the sentinel "
+            "string reaches subscript-offset arithmetic, which the VM cannot "
+            "compute on a string and turns into a SymbolicValue; "
+            "_handle_branch_if then takes the true branch on any symbolic "
+            "condition ('assumed true'), so the IF still matches 'ZZZ'. Fixing "
+            "the VM's symbolic-assume-true branch policy is out of scope for "
+            "this task (VM-wide, shared by every hosted language) and is "
+            "tracked as a separate follow-up."
+        ),
+        strict=False,
+    )
+    def test_unresolvable_subscript_does_not_compare_equal(self):
+        vm = _run_cobol(self._UNRESOLVABLE_SUBSCRIPT_PROGRAM, max_steps=2000)
+        region = _first_region(vm)
+        # An unresolvable subscript must NOT yield a value that matches 'ZZZ'.
+        assert _decode_zoned_unsigned(region, 6, 4) == 0

@@ -740,6 +740,27 @@ def _lower_ref_mod_operand(
     return sliced_reg
 
 
+def _unresolvable_operand(ctx: EmitContext, name: str) -> Register:
+    """Lower a data-name that is not in the layout.
+
+    The bridge sometimes tags a numeric literal as a ref (an abbreviated-condition
+    operand "1"), so try the literal reading first. Anything else is a genuinely
+    unresolvable name: emit an obviously-wrong sentinel rather than coercing the
+    name to a string literal, so the failure is visible in the log and in the IR.
+
+    Both expression lowerers route here on purpose. They disagreed once — the
+    node-based one produced the bare name, and since subscripts lower through that
+    path, `TBL-KEY (UNKNOWN-IX)` became string arithmetic yielding a SymbolicValue,
+    which compares equal to anything. The divergence was the root cause, not either
+    branch, so there is now one policy and one place to change it.
+    """
+    parsed = ctx.parse_literal(name)
+    if isinstance(parsed, (int, float)):
+        return ctx.const_to_reg(parsed)
+    logger.warning("unresolvable field reference %r — emitting sentinel", name)
+    return ctx.const_to_reg(f"UNRESOLVABLE__{name}")
+
+
 def _lower_expr_dict(
     ctx: EmitContext,
     expr: dict,
@@ -763,16 +784,7 @@ def _lower_expr_dict(
             subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
             ref, rr = ctx.resolve_field_ref(name, materialised, subscripts=subscripts)
             return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
-        # The bridge sometimes tags a numeric literal as a ref (e.g. an
-        # abbreviated-condition operand "1"); parse it as the literal it is.
-        parsed = ctx.parse_literal(name)
-        if isinstance(parsed, (int, float)):
-            return ctx.const_to_reg(parsed)
-        # A genuinely unresolvable data-name: emit an obviously-wrong sentinel
-        # (rather than silently coercing the name to a string literal) so the
-        # failure is visible in logs and in the IR.
-        logger.warning("unresolvable field reference %r — emitting sentinel", name)
-        return ctx.const_to_reg(f"UNRESOLVABLE__{name}")
+        return _unresolvable_operand(ctx, name)
 
     if kind == "lit":
         raw_val = expr.get("value", "")
@@ -949,7 +961,7 @@ def lower_expr_node(
                 node.name, materialised, subscripts=node.subscripts
             )
             return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
-        return ctx.const_to_reg(ctx.parse_literal(node.name))
+        return _unresolvable_operand(ctx, node.name)
     if isinstance(node, BinOpNode):
         left_reg = lower_expr_node(ctx, node.left, materialised, force_division_float)
         right_reg = lower_expr_node(ctx, node.right, materialised, force_division_float)
