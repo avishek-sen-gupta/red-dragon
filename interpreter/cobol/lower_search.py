@@ -22,6 +22,27 @@ from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
+# Only a runaway guard, never the intended terminating condition — reached only
+# on a path that already logs loudly that the bound is not the table's own
+# length. Sized to be unreachable by any real table (corpus max OCCURS is 357;
+# only 45 clauses exceed 256) while staying cheap on the diagnostic path: 4096
+# is more than an order of magnitude above the largest real table.
+_RUNAWAY_GUARD = 4096
+
+
+def _table_occurrence_count(
+    ctx: EmitContext, table: str, materialised: MaterialisedSectionedLayout
+) -> int | None:
+    """Return the OCCURS count for the SEARCHed table, or None if it can't be
+    resolved in the layout. Modelled on how EmitContext.resolve_field_ref
+    reaches the layout: MaterialisedSectionedLayout.resolve() does the
+    case-insensitive lookup (see data_layout.py's _ci_get)."""
+    try:
+        fl, _region_reg = materialised.resolve(table)
+    except KeyError:
+        return None
+    return fl.occurs_count or None
+
 
 def lower_search(
     ctx: EmitContext,
@@ -34,7 +55,21 @@ def lower_search(
     at_end_label = ctx.fresh_label("search_at_end")
     increment_label = ctx.fresh_label("search_incr")
 
-    max_iterations = 256
+    # Real SEARCH terminates when the index passes the table's occurrence count,
+    # and only then runs AT END. The old hard-coded 256 was wrong in both
+    # directions: a shorter table was subscripted past its end into adjacent
+    # storage (a WHEN could match whatever followed it), and a longer one had its
+    # occurrences beyond 256 silently unreachable with AT END reporting
+    # not-found. The corpus has 45 OCCURS clauses above 256.
+    occurs = _table_occurrence_count(ctx, stmt.table, materialised)
+    if occurs is None:
+        logger.warning(
+            "SEARCH table %r not found in layout — falling back to the runaway "
+            "guard; the loop bound is not the table's own length",
+            stmt.table,
+        )
+        occurs = _RUNAWAY_GUARD
+    max_iterations = occurs
     counter_var = ctx.fresh_name("__search_ctr")
     zero_reg = ctx.const_to_reg(0)
     ctx.emit_inst(
