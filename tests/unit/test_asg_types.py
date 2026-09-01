@@ -529,3 +529,31 @@ class TestCobolASG:
     def test_cobol_asg_program_id_round_trips(self):
         asg = CobolASG.from_dict({"program_id": "SUBPROG"})
         assert CobolASG.from_dict(asg.to_dict()) == asg
+
+
+def test_indexed_by_round_trips():
+    """INDEXED BY names survive from_dict -> to_dict.
+
+    They are the only declaration a compiler-allocated index gets; dropping them
+    here leaves data_layout with nothing to allocate.
+    """
+    d = {
+        "name": "TBL-ROW",
+        "level": 5,
+        "picture": "",
+        "usage": "DISPLAY",
+        "offset": 0,
+        "occurs": 3,
+        "indexed_by": ["TBL-IX", "TBL-JX"],
+    }
+    f = CobolField.from_dict(d)
+    assert f.indexed_by == ["TBL-IX", "TBL-JX"]
+    assert f.to_dict()["indexed_by"] == ["TBL-IX", "TBL-JX"]
+
+
+def test_absent_indexed_by_defaults_empty_and_is_omitted():
+    f = CobolField.from_dict(
+        {"name": "X", "level": 5, "picture": "X(3)", "usage": "DISPLAY", "offset": 0}
+    )
+    assert f.indexed_by == []
+    assert "indexed_by" not in f.to_dict()
