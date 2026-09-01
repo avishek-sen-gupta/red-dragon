@@ -22,6 +22,40 @@ class LiteralNode:
 
 
 @dataclass(frozen=True)
+class FigurativeNode:
+    """A figurative constant used as an operand: ``COMPUTE WS-PCT = ZEROES``.
+
+    ``value`` is the canonical spelling the bridge normalises to (ZEROS, SPACES,
+    LOW-VALUES, HIGH-VALUES, QUOTES), not the one the program wrote -- ZERO,
+    ZEROS and ZEROES all arrive as ZEROS.
+    """
+
+    value: str
+
+
+@dataclass(frozen=True)
+class LengthOfNode:
+    """``LENGTH OF <field>``: the field's byte length, a compile-time constant.
+
+    Not a read of the field's value, which is why this is not a FieldRefNode --
+    a consumer counting data dependencies must not treat it as one.
+    """
+
+    name: str
+
+
+@dataclass(frozen=True)
+class DfhRespNode:
+    """``DFHRESP(<condition>)`` as an operand.
+
+    The CICS translator substitutes the condition's number; the bridge keeps the
+    name instead, because the number is release-dependent.
+    """
+
+    condition: str
+
+
+@dataclass(frozen=True)
 class FieldRefNode:
     """Reference to a COBOL data field by name."""
 
@@ -62,7 +96,16 @@ class FunctionNode:
     args: tuple[ExprNode, ...] = ()
 
 
-ExprNode = LiteralNode | FieldRefNode | RefModNode | BinOpNode | FunctionNode
+ExprNode = (
+    LiteralNode
+    | FigurativeNode
+    | LengthOfNode
+    | DfhRespNode
+    | FieldRefNode
+    | RefModNode
+    | BinOpNode
+    | FunctionNode
+)
 
 
 def expr_from_dict(d: dict) -> ExprNode:
@@ -74,6 +117,15 @@ def expr_from_dict(d: dict) -> ExprNode:
     - {"kind": "ref", "name": "WS-FIELD", "ref_mod_start": {...}, "ref_mod_length": {...}} — reference modification
     - {"kind": "binop", "op": "+", "left": {...}, "right": {...}} — binary operation
     - {"kind": "neg", "expr": {...}} — unary negation (folded into binop * -1)
+    - {"kind": "function", "name": "TRIM", "args": [{...}]} — intrinsic function
+    - {"kind": "figurative", "value": "ZEROS"} — figurative constant operand
+    - {"kind": "length_of", "name": "WS-A"} — LENGTH OF special register
+    - {"kind": "dfhresp", "condition": "NORMAL"} — CICS response code
+
+    A kind the bridge writes and this side does not know raises, the raise
+    escapes ``CobolASG.from_dict``, and the program loses every fact it had --
+    not just the one operand. ``figurative``, ``length_of`` and ``dfhresp`` were
+    missing, so ``COMPUTE WS-PCT = ZEROES`` cost a whole member.
     """
     kind = d["kind"]
     if kind == "lit":
@@ -109,6 +161,12 @@ def expr_from_dict(d: dict) -> ExprNode:
             name=d.get("name", ""),
             args=tuple(expr_from_dict(a) for a in d.get("args", []) or []),
         )
+    if kind == "figurative":
+        return FigurativeNode(value=d.get("value", ""))
+    if kind == "length_of":
+        return LengthOfNode(name=d.get("name", ""))
+    if kind == "dfhresp":
+        return DfhRespNode(condition=d.get("condition", ""))
     raise ValueError(f"Unknown expression node kind: {kind!r}")
 
 
@@ -147,4 +205,10 @@ def expr_to_dict(node: ExprNode) -> dict:
             "name": node.name,
             "args": [expr_to_dict(a) for a in node.args],
         }
+    if isinstance(node, FigurativeNode):
+        return {"kind": "figurative", "value": node.value}
+    if isinstance(node, LengthOfNode):
+        return {"kind": "length_of", "name": node.name}
+    if isinstance(node, DfhRespNode):
+        return {"kind": "dfhresp", "condition": node.condition}
     raise ValueError(f"Unknown expression node type: {type(node).__name__}")
