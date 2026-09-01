@@ -1817,7 +1817,10 @@ class TestSearchStatement:
                 "            MOVE 1 TO WS-FOUND.",
                 "    STOP RUN.",
             ],
-            max_steps=50000,
+            # Budget tracks _RUNAWAY_GUARD (lower_search.py): this WHEN never
+            # matches, so the loop terminates only by hitting the guard —
+            # ~142 steps/iteration * 4096 iterations =~ 582k; 600000 headroom.
+            max_steps=600000,
         )
         region = _first_region(vm)
         # WS-IDX should have advanced beyond its initial value of 1
@@ -1826,6 +1829,65 @@ class TestSearchStatement:
         ), "WS-IDX should have incremented during search"
         # No match found — AT END should execute
         assert _decode_zoned_unsigned(region, 4, 4) == 99
+
+
+class TestSearchBounds:
+    def test_short_table_ends_at_its_own_length(self):
+        """A 3-occurrence table must not be walked to 256."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SHORT-TBL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 TBL-BYTES.",
+                "   05 FILLER PIC X(3) VALUE 'K01'.",
+                "   05 FILLER PIC X(3) VALUE 'K02'.",
+                "   05 FILLER PIC X(3) VALUE 'K03'.",
+                "01 TBL REDEFINES TBL-BYTES.",
+                "   05 TBL-ROW OCCURS 3 TIMES.",
+                "      10 TBL-KEY PIC X(3).",
+                "77 WS-SUB PIC 9(4) VALUE 1.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 1 TO WS-SUB.",
+                "    SEARCH TBL-ROW VARYING WS-SUB",
+                "        AT END CONTINUE",
+                "        WHEN TBL-KEY (WS-SUB) = 'ZZZ' CONTINUE",
+                "    END-SEARCH.",
+                "    STOP RUN.",
+            ],
+            max_steps=5000,
+        )
+        region = _first_region(vm)
+        # AT END must fire just past the last occurrence, not at 257.
+        assert _decode_zoned_unsigned(region, 9, 4) == 4
+
+    def test_table_larger_than_256_is_fully_searched(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-BIG-TBL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 BIG-BYTES PIC X(1500).",
+                "01 BIG REDEFINES BIG-BYTES.",
+                "   05 BIG-ROW OCCURS 300 TIMES.",
+                "      10 BIG-CELL PIC X(5).",
+                "77 WS-N PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 1 TO WS-N.",
+                "    SEARCH BIG-ROW VARYING WS-N",
+                "        AT END CONTINUE",
+                "        WHEN BIG-CELL (WS-N) = 'NEVER' CONTINUE",
+                "    END-SEARCH.",
+                "    STOP RUN.",
+            ],
+            max_steps=60000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 1500, 4) == 301
 
 
 class TestInspectTallying:
