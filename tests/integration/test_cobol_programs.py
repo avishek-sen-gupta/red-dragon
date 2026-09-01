@@ -1890,6 +1890,48 @@ class TestSearchBounds:
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 1500, 4) == 301
 
+    def test_search_starting_past_one_still_stops_at_the_last_occurrence(self):
+        """A SEARCH entered with the index at 2 must examine 2..n, then AT END.
+
+        The bound is the index VALUE against the OCCURS count, not a count of
+        iterations performed: an iteration counter starting at zero grants n
+        iterations from wherever the index already stands, so a search entered at
+        k reads through occurrence n + k - 1. NEXT-ITEM sits exactly where
+        occurrence 3 of this 2-occurrence table would be and is the only place
+        IN-CODE's value appears, so a loop that overruns matches it and writes
+        ADJACENT-1 where COBOL requires AT END.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-START-AT-2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 MSG-BYTES.",
+                "   05 FILLER PIC X(14) VALUE 'E401MSG-FOR-401'.",
+                "   05 FILLER PIC X(14) VALUE 'E408MSG-FOR-408'.",
+                "01 MSG-TAB REDEFINES MSG-BYTES.",
+                "   05 MSG-ROW OCCURS 2 TIMES INDEXED BY MSG-IX.",
+                "      10 MSG-KEY PIC X(4).",
+                "      10 MSG-TEXT PIC X(10).",
+                "01 NEXT-ITEM PIC X(14) VALUE 'E999ADJACENT-1'.",
+                "01 IN-CODE PIC X(4) VALUE 'E999'.",
+                "01 OUT-TEXT PIC X(10) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET MSG-IX TO 2.",
+                "    SEARCH MSG-ROW",
+                "        AT END MOVE 'NOTFOUND  ' TO OUT-TEXT",
+                "        WHEN MSG-KEY (MSG-IX) = IN-CODE",
+                "            MOVE MSG-TEXT (MSG-IX) TO OUT-TEXT",
+                "    END-SEARCH.",
+                "    STOP RUN.",
+            ],
+            max_steps=5000,
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 46, 10) == "NOTFOUND  "
+
 
 class TestSearchImplicitIndex:
     def test_plain_search_advances_the_tables_index(self):

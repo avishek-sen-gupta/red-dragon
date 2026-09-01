@@ -24,9 +24,12 @@ logger = logging.getLogger(__name__)
 
 # Only a runaway guard, never the intended terminating condition — reached only
 # on a path that already logs loudly that the bound is not the table's own
-# length. Sized to be unreachable by any real table (corpus max OCCURS is 357;
-# only 45 clauses exceed 256) while staying cheap on the diagnostic path: 4096
-# is more than an order of magnitude above the largest real table.
+# length. It counts ITERATIONS PERFORMED rather than comparing the index value,
+# so it cannot express "past the last occurrence"; that is exactly why it is
+# confined to the case where the table has no known occurrence count. Sized to
+# be unreachable by any real table (corpus max OCCURS is 357; only 45 clauses
+# exceed 256) while staying cheap on the diagnostic path: 4096 is more than an
+# order of magnitude above the largest real table.
 _RUNAWAY_GUARD = 4096
 
 
@@ -70,12 +73,35 @@ def lower_search(
     at_end_label = ctx.fresh_label("search_at_end")
     increment_label = ctx.fresh_label("search_incr")
 
-    # Real SEARCH terminates when the index passes the table's occurrence count,
-    # and only then runs AT END. The old hard-coded 256 was wrong in both
+    # Format 1 SEARCH names only the table and advances its FIRST INDEXED BY
+    # index. That form is the common one; the explicit VARYING operand is not.
+    # Until index items were allocated there was nothing to advance, so the loop
+    # re-tested occurrence 1 until the bound.
+    implicit_name = _implicit_index_for(stmt.table, materialised)
+    advance_name = stmt.varying or implicit_name
+    if not (advance_name and ctx.has_field(advance_name, materialised)):
+        logger.warning(
+            "SEARCH over %r has no index to advance — the loop cannot progress "
+            "(VARYING operand: %s; table's implicit INDEXED BY index: %s)",
+            stmt.table,
+            repr(stmt.varying) if stmt.varying else "none given",
+            repr(implicit_name) if implicit_name else "none declared",
+        )
+        advance_name = None
+
+    # Real SEARCH terminates when the INDEX VALUE passes the table's occurrence
+    # count, and only then runs AT END. The old hard-coded 256 was wrong in both
     # directions: a shorter table was subscripted past its end into adjacent
     # storage (a WHEN could match whatever followed it), and a longer one had its
     # occurrences beyond 256 silently unreachable with AT END reporting
     # not-found. The corpus has 45 OCCURS clauses above 256.
+    #
+    # Counting iterations instead reintroduces the overrun for any SEARCH entered
+    # with the index already past 1 — n iterations from occurrence k reads through
+    # occurrence n + k - 1 — so the comparison must be against the advancing
+    # operand itself. The iteration counter survives only as the runaway guard for
+    # a table whose occurrence count is unknown, and to terminate the degraded
+    # loop that has no index to advance at all.
     occurs = _table_occurrence_count(ctx, stmt.table, materialised)
     if occurs is None:
         logger.warning(
@@ -83,26 +109,36 @@ def lower_search(
             "guard; the loop bound is not the table's own length",
             stmt.table,
         )
-        occurs = _RUNAWAY_GUARD
-    max_iterations = occurs
-    counter_var = ctx.fresh_name("__search_ctr")
-    zero_reg = ctx.const_to_reg(0)
-    ctx.emit_inst(
-        StoreVar(name=VarName(counter_var), value_reg=Register(str(zero_reg)))
-    )
+    bound_limit = occurs if occurs is not None else _RUNAWAY_GUARD
+    bound_index_name = advance_name if occurs is not None else None
 
-    max_reg = ctx.const_to_reg(max_iterations)
+    if bound_index_name is None:
+        counter_var = ctx.fresh_name("__search_ctr")
+        zero_reg = ctx.const_to_reg(0)
+        ctx.emit_inst(
+            StoreVar(name=VarName(counter_var), value_reg=Register(str(zero_reg)))
+        )
+
+    max_reg = ctx.const_to_reg(bound_limit)
 
     ctx.emit_inst(Label_(label=loop_label))
 
-    ctr_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=ctr_reg, name=VarName(counter_var)))
+    if bound_index_name is not None:
+        bound_ref, bound_rr = ctx.resolve_field_ref(bound_index_name, materialised)
+        current_reg = ctx.emit_decode_field(
+            bound_rr, bound_ref.fl, bound_ref.offset_reg
+        )
+        bound_operator = ">"
+    else:
+        current_reg = ctx.fresh_reg()
+        ctx.emit_inst(LoadVar(result_reg=current_reg, name=VarName(counter_var)))
+        bound_operator = ">="
     bound_cond = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=bound_cond,
-            operator=resolve_binop(">="),
-            left=ctr_reg,
+            operator=resolve_binop(bound_operator),
+            left=Register(str(current_reg)),
             right=Register(str(max_reg)),
         )
     )
@@ -141,13 +177,7 @@ def lower_search(
     ctx.emit_inst(Branch(label=increment_label))
     ctx.emit_inst(Label_(label=increment_label))
 
-    # Format 1 SEARCH names only the table and advances its FIRST INDEXED BY
-    # index. That form is the common one; the explicit VARYING operand is not.
-    # Until index items were allocated there was nothing to advance, so the loop
-    # re-tested occurrence 1 until the bound.
-    implicit_name = _implicit_index_for(stmt.table, materialised)
-    advance_name = stmt.varying or implicit_name
-    if advance_name and ctx.has_field(advance_name, materialised):
+    if advance_name is not None:
         advance_ref, advance_rr = ctx.resolve_field_ref(advance_name, materialised)
         decoded_reg = ctx.emit_decode_field(
             advance_rr, advance_ref.fl, advance_ref.offset_reg
@@ -166,29 +196,21 @@ def lower_search(
         ctx.emit_encode_and_write(
             advance_rr, advance_ref.fl, str_reg, advance_ref.offset_reg
         )
-    else:
-        logger.warning(
-            "SEARCH over %r has no index to advance — the loop cannot progress. "
-            "VARYING operand: %r; table's implicit INDEXED BY index: %r; neither "
-            "resolves in the layout",
-            stmt.table,
-            stmt.varying,
-            implicit_name,
-        )
 
-    ctr_reg2 = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=VarName(counter_var)))
-    one_ctr = ctx.const_to_reg(1)
-    inc_ctr = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=inc_ctr,
-            operator=resolve_binop("+"),
-            left=ctr_reg2,
-            right=Register(str(one_ctr)),
+    if bound_index_name is None:
+        ctr_reg2 = ctx.fresh_reg()
+        ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=VarName(counter_var)))
+        one_ctr = ctx.const_to_reg(1)
+        inc_ctr = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=inc_ctr,
+                operator=resolve_binop("+"),
+                left=ctr_reg2,
+                right=Register(str(one_ctr)),
+            )
         )
-    )
-    ctx.emit_inst(StoreVar(name=VarName(counter_var), value_reg=inc_ctr))
+        ctx.emit_inst(StoreVar(name=VarName(counter_var), value_reg=inc_ctr))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=at_end_label))
