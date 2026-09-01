@@ -1775,7 +1775,17 @@ def lower_set(
                 logger.warning("SET target %s not found in layout", target_name)
                 continue
             target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
-            value_str_reg = ctx.const_to_reg(str(value_str))
+            # SET A TO B is legal when B is a data item; stmt.values[0] is raw
+            # operand text from the bridge and is never tested for being a name.
+            # Untested, it wrote the two characters "B" — which encodes into a
+            # numeric field as 0, so the symptom is a plausible zero, not a crash.
+            if ctx.has_field(str(value_str), materialised):
+                src_ref, src_rr = ctx.resolve_field_ref(str(value_str), materialised)
+                value_str_reg = ctx.emit_decode_field(
+                    src_rr, src_ref.fl, src_ref.offset_reg
+                )
+            else:
+                value_str_reg = ctx.const_to_reg(str(value_str))
             ctx.emit_encode_and_write(
                 target_rr, target_ref.fl, value_str_reg, target_ref.offset_reg
             )
@@ -1790,7 +1800,14 @@ def lower_set(
             tgt_decoded = ctx.emit_decode_field(
                 target_rr, target_ref.fl, target_ref.offset_reg
             )
-            step_reg = ctx.const_to_reg(ctx.parse_literal(step_val))
+            # SET ... UP/DOWN BY <data-item> takes the same path as TO above.
+            if ctx.has_field(str(step_val), materialised):
+                step_ref, step_rr = ctx.resolve_field_ref(str(step_val), materialised)
+                step_reg = ctx.emit_decode_field(
+                    step_rr, step_ref.fl, step_ref.offset_reg
+                )
+            else:
+                step_reg = ctx.const_to_reg(ctx.parse_literal(step_val))
             result_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(

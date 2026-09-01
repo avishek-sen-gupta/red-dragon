@@ -8184,3 +8184,45 @@ class TestUnresolvableNamePolicy:
         region = _first_region(vm)
         # An unresolvable subscript must NOT yield a value that matches 'ZZZ'.
         assert _decode_zoned_unsigned(region, 6, 4) == 0
+
+
+class TestSetFromDataItem:
+    """SET A TO B must read B, not write the two characters "B"."""
+
+    def test_set_to_data_item_reads_the_item(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET-FIELD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 0.",
+                "77 WS-B PIC 9(4) VALUE 7.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET WS-A TO WS-B.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 7
+
+    def test_set_up_by_data_item_reads_the_item(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET-BY-FIELD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 10.",
+                "77 WS-B PIC 9(4) VALUE 3.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET WS-A UP BY WS-B.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 13
