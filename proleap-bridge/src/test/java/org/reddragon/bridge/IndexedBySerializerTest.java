@@ -32,9 +32,18 @@ public class IndexedBySerializerTest {
         assertNotNull("TBL-ROW not found in serialized ASG", group);
         assertTrue("no indexed_by key emitted", group.has("indexed_by"));
         JsonArray names = group.getAsJsonArray("indexed_by");
-        assertEquals(2, names.size());
+        assertEquals(3, names.size());
         assertEquals("TBL-IX", names.get(0).getAsString());
         assertEquals("TBL-JX", names.get(1).getAsString());
+        assertEquals("Tbl-Kx", names.get(2).getAsString());
+    }
+
+    @Test
+    public void indexNamesArePreservedVerbatimNotUpperCased() throws Exception {
+        JsonObject group = findField(serializeFixture("indexed_by.cbl"), "TBL-ROW");
+        JsonArray names = group.getAsJsonArray("indexed_by");
+        assertEquals("mixed-case index name must survive verbatim, not be upper-cased",
+                "Tbl-Kx", names.get(2).getAsString());
     }
 
     @Test
