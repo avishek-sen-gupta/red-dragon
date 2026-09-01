@@ -59,6 +59,7 @@ def _decode_alpha(region: bytearray, offset: int, length: int) -> str:
     """Decode EBCDIC alphanumeric bytes from a memory region to an ASCII string."""
     ebcdic_to_ascii = {
         0x40: " ",
+        0x60: "-",
         0xC1: "A",
         0xC2: "B",
         0xC3: "C",
@@ -1888,6 +1889,78 @@ class TestSearchBounds:
         )
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 1500, 4) == 301
+
+
+class TestSearchImplicitIndex:
+    def test_plain_search_advances_the_tables_index(self):
+        """SEARCH tbl with no VARYING advances the table's first INDEXED BY index.
+
+        This is the overwhelmingly common form and the shape of the observed
+        production failure: the WHEN matched entry 1 regardless of contents.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-IMPLICIT-IX.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 MSG-BYTES.",
+                "   05 FILLER PIC X(14) VALUE 'E401MSG-FOR-401'.",
+                "   05 FILLER PIC X(14) VALUE 'E408MSG-FOR-408'.",
+                "   05 FILLER PIC X(14) VALUE 'E409MSG-FOR-409'.",
+                "01 MSG-TAB REDEFINES MSG-BYTES.",
+                "   05 MSG-ROW OCCURS 3 TIMES INDEXED BY MSG-IX.",
+                "      10 MSG-KEY PIC X(4).",
+                "      10 MSG-TEXT PIC X(10).",
+                "01 IN-CODE PIC X(4) VALUE 'E408'.",
+                "01 OUT-TEXT PIC X(10) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET MSG-IX TO 1.",
+                "    SEARCH MSG-ROW",
+                "        AT END MOVE 'NOTFOUND  ' TO OUT-TEXT",
+                "        WHEN MSG-KEY (MSG-IX) = IN-CODE",
+                "            MOVE MSG-TEXT (MSG-IX) TO OUT-TEXT",
+                "    END-SEARCH.",
+                "    STOP RUN.",
+            ],
+            max_steps=5000,
+        )
+        region = _first_region(vm)
+        # Assert the DATA, not that some branch ran: the old defect reported a hit
+        # on entry 1 while leaving the target untouched.
+        assert _decode_alpha(region, 46, 10) == "MSG-FOR-40"
+
+    def test_plain_search_reaches_at_end_on_a_genuine_miss(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-IMPLICIT-MISS.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 MSG-BYTES.",
+                "   05 FILLER PIC X(14) VALUE 'E401MSG-FOR-401'.",
+                "   05 FILLER PIC X(14) VALUE 'E408MSG-FOR-408'.",
+                "01 MSG-TAB REDEFINES MSG-BYTES.",
+                "   05 MSG-ROW OCCURS 2 TIMES INDEXED BY MSG-IX.",
+                "      10 MSG-KEY PIC X(4).",
+                "      10 MSG-TEXT PIC X(10).",
+                "01 IN-CODE PIC X(4) VALUE 'E999'.",
+                "01 OUT-TEXT PIC X(10) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET MSG-IX TO 1.",
+                "    SEARCH MSG-ROW",
+                "        AT END MOVE 'NOTFOUND  ' TO OUT-TEXT",
+                "        WHEN MSG-KEY (MSG-IX) = IN-CODE",
+                "            MOVE MSG-TEXT (MSG-IX) TO OUT-TEXT",
+                "    END-SEARCH.",
+                "    STOP RUN.",
+            ],
+            max_steps=5000,
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 32, 10) == "NOTFOUND  "
 
 
 class TestInspectTallying:
