@@ -8128,7 +8128,7 @@ class TestUnresolvableNamePolicy:
     separately.
     """
 
-    _UNRESOLVABLE_SUBSCRIPT_PROGRAM = [
+    _UNRESOLVABLE_SUBSCRIPT_PROGRAM = (
         "IDENTIFICATION DIVISION.",
         "PROGRAM-ID. TEST-UNRESOLVABLE.",
         "DATA DIVISION.",
@@ -8146,7 +8146,7 @@ class TestUnresolvableNamePolicy:
         "        MOVE 1 TO WS-FOUND",
         "    END-IF.",
         "    STOP RUN.",
-    ]
+    )
 
     def test_node_path_warns_on_unresolvable_name(self, caplog):
         """The node-based lowerer must route through the shared policy.
@@ -8160,7 +8160,7 @@ class TestUnresolvableNamePolicy:
         with caplog.at_level(
             logging.WARNING, logger="interpreter.cobol.condition_lowering"
         ):
-            _run_cobol(self._UNRESOLVABLE_SUBSCRIPT_PROGRAM, max_steps=2000)
+            _run_cobol(list(self._UNRESOLVABLE_SUBSCRIPT_PROGRAM), max_steps=2000)
         assert any(
             "NO-SUCH-NAME" in record.message and "unresolvable" in record.message
             for record in caplog.records
@@ -8180,7 +8180,7 @@ class TestUnresolvableNamePolicy:
         strict=False,
     )
     def test_unresolvable_subscript_does_not_compare_equal(self):
-        vm = _run_cobol(self._UNRESOLVABLE_SUBSCRIPT_PROGRAM, max_steps=2000)
+        vm = _run_cobol(list(self._UNRESOLVABLE_SUBSCRIPT_PROGRAM), max_steps=2000)
         region = _first_region(vm)
         # An unresolvable subscript must NOT yield a value that matches 'ZZZ'.
         assert _decode_zoned_unsigned(region, 6, 4) == 0
