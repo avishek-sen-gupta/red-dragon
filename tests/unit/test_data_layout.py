@@ -7,6 +7,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import (
     CobolAmbiguousReferenceError,
     build_data_layout,
+    build_index_layout,
 )
 from interpreter.cobol.features import CobolFeature
 from tests.covers import NotLanguageFeature, covers
@@ -1085,76 +1086,91 @@ class TestBuildDataLayoutRedefinesComplex:
         assert b_layout.offset == 0
 
 
-class TestIndexedByAllocation:
-    @covers(CobolFeature.USAGE_INDEX)
-    def test_indexed_by_allocates_an_index_item(self):
-        """An INDEXED BY name becomes a real 4-byte item, and records its table."""
-        fields = [
-            CobolField.from_dict(
+def _indexed_table(
+    table_name: str = "TBL-ROW",
+    index_names: list[str] | None = None,
+    occurs: int = 3,
+) -> CobolField:
+    return CobolField.from_dict(
+        {
+            "name": "TBL",
+            "level": 1,
+            "pic": "",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "children": [
                 {
-                    "name": "TBL",
-                    "level": 1,
+                    "name": table_name,
+                    "level": 5,
                     "pic": "",
                     "usage": "DISPLAY",
                     "offset": 0,
-                    "children": [
-                        {
-                            "name": "TBL-ROW",
-                            "level": 5,
-                            "pic": "",
-                            "usage": "DISPLAY",
-                            "offset": 0,
-                            "occurs": 3,
-                            "element_size": 3,
-                            "indexed_by": ["TBL-IX"],
-                            "children": [
-                                {
-                                    "name": "TBL-KEY",
-                                    "level": 10,
-                                    "pic": "X(3)",
-                                    "usage": "DISPLAY",
-                                    "offset": 0,
-                                }
-                            ],
-                        }
-                    ],
-                }
-            )
-        ]
-        layout = build_data_layout(fields)
-        index_layout = layout.lookup("TBL-IX")
-        assert index_layout is not None
-        assert index_layout.byte_length == 4
-        assert index_layout.offset == 9
-        assert layout.total_bytes == 13
-        assert layout.index_owner["TBL-IX"] == "TBL-ROW"
-
-    @covers(CobolFeature.USAGE_INDEX)
-    def test_index_item_preserves_declared_casing_and_matches_ignoring_case(self):
-        fields = [
-            CobolField.from_dict(
-                {
-                    "name": "Tbl-Row",
-                    "level": 1,
-                    "pic": "",
-                    "usage": "DISPLAY",
-                    "offset": 0,
-                    "occurs": 2,
-                    "element_size": 2,
-                    "indexed_by": ["Tbl-Ix"],
+                    "occurs": occurs,
+                    "element_size": 3,
+                    "indexed_by": index_names if index_names else ["TBL-IX"],
                     "children": [
                         {
                             "name": "TBL-KEY",
-                            "level": 5,
-                            "pic": "X(2)",
+                            "level": 10,
+                            "pic": "X(3)",
                             "usage": "DISPLAY",
                             "offset": 0,
                         }
                     ],
                 }
-            )
-        ]
-        layout = build_data_layout(fields)
+            ],
+        }
+    )
+
+
+class TestIndexItemLayout:
+    @covers(CobolFeature.USAGE_INDEX)
+    def test_indexed_by_allocates_a_four_byte_item_recording_its_table(self):
+        """An INDEXED BY name becomes a real 4-byte item holding an occurrence NUMBER.
+
+        Not the byte displacement IBM stores: nothing reads an index's raw bytes,
+        and a program cannot legally observe the difference (REDEFINES of an index
+        and a group MOVE of one are both errors).
+        """
+        layout = build_index_layout([_indexed_table()])
+        index_layout = layout.lookup("TBL-IX")
+        assert index_layout is not None
+        assert index_layout.offset == 0
+        assert index_layout.byte_length == 4
+        assert layout.total_bytes == 4
+        assert layout.owner_of("TBL-IX") == "TBL-ROW"
+
+    @covers(CobolFeature.USAGE_INDEX)
+    def test_index_items_stay_out_of_the_record_they_index(self):
+        """The record's own layout is byte-for-byte unchanged by INDEXED BY."""
+        table = _indexed_table()
+        record = build_data_layout([table])
+        assert record.total_bytes == 9
+        assert record.lookup("TBL-IX") is None
+        assert record.index_owner == {}
+
+    @covers(CobolFeature.USAGE_INDEX)
+    def test_indexes_are_packed_across_sections_in_declaration_order(self):
+        working_storage = [_indexed_table(index_names=["IX-A", "IX-B"])]
+        linkage = [_indexed_table(table_name="LK-ROW", index_names=["IX-C"])]
+        layout = build_index_layout(working_storage, linkage)
+        assert [fl.offset for fl in layout.all_leaves()] == [0, 4, 8]
+        assert layout.total_bytes == 12
+        assert layout.owner_of("IX-C") == "LK-ROW"
+
+    @covers(CobolFeature.USAGE_INDEX)
+    def test_declared_casing_is_preserved_and_matched_ignoring_case(self):
+        layout = build_index_layout(
+            [_indexed_table(table_name="Tbl-Row", index_names=["Tbl-Ix"])]
+        )
         assert "Tbl-Ix" in layout.fields
         assert layout.lookup("TBL-IX") is not None
-        assert layout.index_owner["Tbl-Ix"] == "Tbl-Row"
+        assert layout.owner_of("TBL-IX") == "Tbl-Row"
+
+    @covers(CobolFeature.SEARCH_LINEAR)
+    def test_first_index_for_finds_a_format_1_searchs_implicit_index(self):
+        layout = build_index_layout(
+            [_indexed_table(table_name="Tbl-Row", index_names=["Tbl-Ix", "Tbl-Jx"])]
+        )
+        assert layout.first_index_for("TBL-ROW") == "Tbl-Ix"
+        assert layout.first_index_for("NO-SUCH-TABLE") is None

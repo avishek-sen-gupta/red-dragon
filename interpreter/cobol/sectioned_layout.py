@@ -7,7 +7,12 @@ import logging
 from dataclasses import dataclass, field
 
 from interpreter.cobol.asg_types import CobolASG
-from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
+from interpreter.cobol.data_layout import (
+    DataLayout,
+    FieldLayout,
+    build_data_layout,
+    build_index_layout,
+)
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
@@ -21,6 +26,7 @@ class SectionedLayout:
     linkage: DataLayout
     local_storage: DataLayout
     file: DataLayout = field(default_factory=DataLayout)
+    indexes: DataLayout = field(default_factory=DataLayout)
 
 
 @dataclass(frozen=True)
@@ -34,6 +40,9 @@ class MaterialisedSectionedLayout:
         default_factory=lambda: (DataLayout(), NO_REGISTER)
     )
     special_registers: tuple[DataLayout, Register] = field(
+        default_factory=lambda: (DataLayout(), NO_REGISTER)
+    )
+    indexes: tuple[DataLayout, Register] = field(
         default_factory=lambda: (DataLayout(), NO_REGISTER)
     )
 
@@ -76,6 +85,11 @@ class MaterialisedSectionedLayout:
         if sr_fl is not None:
             return sr_fl, sr_reg
 
+        ix_layout, ix_reg = self.indexes
+        ix_fl = ix_layout.lookup_as_storage(name, qualifiers)
+        if ix_fl is not None:
+            return ix_fl, ix_reg
+
         raise KeyError(f"Field {name!r} not found in any DATA DIVISION section")
 
     def subscript_stride(self, name: str) -> int:
@@ -116,12 +130,14 @@ class MaterialisedSectionedLayout:
         lk_layout, _ = self.linkage
         file_layout, _ = self.file
         sr_layout, _ = self.special_registers
+        ix_layout, _ = self.indexes
         return (
             ls_layout.exists(name)
             or ws_layout.exists(name)
             or lk_layout.exists(name)
             or file_layout.exists(name)
             or sr_layout.exists(name)
+            or ix_layout.exists(name)
         )
 
     def group_leaf_names(self, group_name: str) -> list[str]:
@@ -151,4 +167,10 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
         linkage=build_data_layout(asg.linkage_fields),
         local_storage=build_data_layout(asg.local_storage_fields),
         file=build_data_layout(asg.file_fields),
+        indexes=build_index_layout(
+            asg.data_fields,
+            asg.local_storage_fields,
+            asg.linkage_fields,
+            asg.file_fields,
+        ),
     )
