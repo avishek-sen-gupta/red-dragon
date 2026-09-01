@@ -8255,3 +8255,76 @@ class TestIndexItemAllocation:
         )
         region = _first_region(vm)
         assert _decode_alpha(region, 8, 4) == "E408"
+
+    @covers(CobolFeature.SECTION_LINKAGE)
+    def test_linkage_index_does_not_corrupt_the_callers_argument(self, tmp_path):
+        """A LINKAGE index must not be written into the caller's argument region.
+
+        The LINKAGE region is not sized from its own ``total_bytes`` — it is the
+        params region the CALLER allocates, sized to the caller's USING fields
+        (lower_call). A callee whose LINKAGE declares items outside USING (the
+        norm for COMMAREA code) is therefore smaller than the region it is
+        handed, so an index item placed at the end of the LINKAGE record lands
+        INSIDE the caller's argument bytes. Index items live in their own region
+        instead, so nothing is written there at all.
+
+        MAINPROG passes a 20-byte WS-DATA; TABLEE's LINKAGE totals 12 bytes and
+        indexes a table, so the offending write would land on bytes 12-15.
+        """
+        (tmp_path / "MAINPROG.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. MAINPROG.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "01 WS-DATA PIC X(20) VALUE 'ABCDEFGHIJKLMNOPQRST'.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'TABLEE' USING BY REFERENCE WS-DATA.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "TABLEE.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. TABLEE.",
+                    "DATA DIVISION.",
+                    "LINKAGE SECTION.",
+                    "01 LK-DATA PIC X(4).",
+                    "01 LK-BYTES.",
+                    "   05 FILLER PIC X(4).",
+                    "   05 FILLER PIC X(4).",
+                    "01 LK-TAB REDEFINES LK-BYTES.",
+                    "   05 LK-ROW OCCURS 2 TIMES INDEXED BY LK-IX.",
+                    "      10 LK-KEY PIC X(4).",
+                    "PROCEDURE DIVISION USING LK-DATA.",
+                    "    SET LK-IX TO 2.",
+                    "    GOBACK.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainprog_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=2000,
+            initial_vm=initial_vm_state(),
+        )
+
+        key = VarName("__prog_MAINPROG")
+        ptr = next(
+            (f.local_vars[key] for f in reversed(vm.call_stack) if key in f.local_vars),
+            None,
+        )
+        assert ptr is not None, "__prog_MAINPROG not found"
+        region = vm.region_get(
+            Address(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+        )
+        assert region is not None
+        assert _decode_alpha(region, 0, 20) == "ABCDEFGHIJKLMNOPQRST"
