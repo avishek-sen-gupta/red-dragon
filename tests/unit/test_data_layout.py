@@ -1083,3 +1083,78 @@ class TestBuildDataLayoutRedefinesComplex:
         assert layout.total_bytes == 4
         b_layout = layout.lookup_group("WS-B")
         assert b_layout.offset == 0
+
+
+class TestIndexedByAllocation:
+    @covers(CobolFeature.USAGE_INDEX)
+    def test_indexed_by_allocates_an_index_item(self):
+        """An INDEXED BY name becomes a real 4-byte item, and records its table."""
+        fields = [
+            CobolField.from_dict(
+                {
+                    "name": "TBL",
+                    "level": 1,
+                    "pic": "",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "children": [
+                        {
+                            "name": "TBL-ROW",
+                            "level": 5,
+                            "pic": "",
+                            "usage": "DISPLAY",
+                            "offset": 0,
+                            "occurs": 3,
+                            "element_size": 3,
+                            "indexed_by": ["TBL-IX"],
+                            "children": [
+                                {
+                                    "name": "TBL-KEY",
+                                    "level": 10,
+                                    "pic": "X(3)",
+                                    "usage": "DISPLAY",
+                                    "offset": 0,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+        ]
+        layout = build_data_layout(fields)
+        index_layout = layout.lookup("TBL-IX")
+        assert index_layout is not None
+        assert index_layout.byte_length == 4
+        assert index_layout.offset == 9
+        assert layout.total_bytes == 13
+        assert layout.index_owner["TBL-IX"] == "TBL-ROW"
+
+    @covers(CobolFeature.USAGE_INDEX)
+    def test_index_item_preserves_declared_casing_and_matches_ignoring_case(self):
+        fields = [
+            CobolField.from_dict(
+                {
+                    "name": "Tbl-Row",
+                    "level": 1,
+                    "pic": "",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "occurs": 2,
+                    "element_size": 2,
+                    "indexed_by": ["Tbl-Ix"],
+                    "children": [
+                        {
+                            "name": "TBL-KEY",
+                            "level": 5,
+                            "pic": "X(2)",
+                            "usage": "DISPLAY",
+                            "offset": 0,
+                        }
+                    ],
+                }
+            )
+        ]
+        layout = build_data_layout(fields)
+        assert "Tbl-Ix" in layout.fields
+        assert layout.lookup("TBL-IX") is not None
+        assert layout.index_owner["Tbl-Ix"] == "Tbl-Row"

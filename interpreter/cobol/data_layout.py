@@ -108,6 +108,10 @@ class DataLayout:
         total_bytes: Total record size in bytes (meaningful at root level).
         occurs_count: OCCURS count if this group is an OCCURS table.
         element_size: Per-element byte size for OCCURS group tables.
+        index_owner: index name -> the OCCURS item it indexes, for every
+            INDEXED BY name declared anywhere in this record. A Format 1
+            SEARCH names only the table, so this is how its implicit index
+            is found. Populated on the record root only.
     """
 
     fields: dict[str, FieldLayout] = field(default_factory=dict)
@@ -117,6 +121,7 @@ class DataLayout:
     occurs_count: int = 0
     element_size: int = 0
     conditions: list[ConditionName] = field(default_factory=list)
+    index_owner: dict[str, str] = field(default_factory=dict)
 
     def lookup(self, name: str) -> FieldLayout | None:
         """Search for a leaf field by bare name within this subtree.
@@ -428,11 +433,54 @@ def _placed_child_extent(
     return end - group_offset
 
 
+@dataclass(frozen=True)
+class _IndexDeclaration:
+    """An ``INDEXED BY`` name awaiting storage, and where it is declared.
+
+    ``scope`` is the leaf dict of the table's OWN siblings: an index is not an
+    occurrence of anything, it selects one, so it lives beside the table rather
+    than inside its bytes.
+    """
+
+    name: str
+    table: str
+    scope: dict[str, FieldLayout]
+
+
+_INDEX_ITEM_TYPE = CobolTypeDescriptor(
+    category=CobolDataCategory.BINARY, total_digits=9
+)
+
+
+def _allocate_index_items(
+    declarations: list[_IndexDeclaration], record_end: int
+) -> int:
+    """Place one index item per declaration past ``record_end``; return the new end.
+
+    Each holds a 1-based occurrence NUMBER, not the byte displacement IBM
+    stores: nothing here reads an index's raw bytes, and a program cannot
+    legally observe the difference (REDEFINES of an index and a group MOVE of
+    one are both errors). They are appended past the whole record because the
+    bridge-assigned offsets leave no gap between a table and its successor.
+    """
+    end = record_end
+    for declaration in declarations:
+        declaration.scope[declaration.name] = FieldLayout(
+            name=declaration.name,
+            type_descriptor=_INDEX_ITEM_TYPE,
+            offset=end,
+            byte_length=_INDEX_ITEM_TYPE.byte_length,
+        )
+        end += _INDEX_ITEM_TYPE.byte_length
+    return end
+
+
 def _flatten_field(
     cobol_field: CobolField,
     base_offset: int,
     sibling_fields: dict[str, FieldLayout],
     sibling_groups: dict[str, DataLayout],
+    index_declarations: list[_IndexDeclaration],
 ) -> tuple[str, FieldLayout | DataLayout]:
     """Return (name, leaf) for elementary fields, (name, DataLayout) for groups."""
     # Offset resolution — REDEFINES gets offset of the field it redefines.
@@ -448,12 +496,17 @@ def _flatten_field(
     else:
         absolute_offset = base_offset + cobol_field.offset
 
+    index_declarations.extend(
+        _IndexDeclaration(name=index_name, table=cobol_field.name, scope=sibling_fields)
+        for index_name in cobol_field.indexed_by
+    )
+
     if cobol_field.children:
         sub_fields: dict[str, FieldLayout] = {}
         sub_groups: dict[str, DataLayout] = {}
         for child in cobol_field.children:
             child_name, child_result = _flatten_field(
-                child, absolute_offset, sub_fields, sub_groups
+                child, absolute_offset, sub_fields, sub_groups, index_declarations
             )
             if isinstance(child_result, DataLayout):
                 sub_groups[child_name] = child_result
@@ -601,8 +654,9 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
     non_renames_fields = [f for f in fields if not f.renames_from]
     top_fields: dict[str, FieldLayout] = {}
     top_groups: dict[str, DataLayout] = {}
+    index_declarations: list[_IndexDeclaration] = []
     for f in non_renames_fields:
-        name, result = _flatten_field(f, 0, top_fields, top_groups)
+        name, result = _flatten_field(f, 0, top_fields, top_groups, index_declarations)
         if isinstance(result, DataLayout):
             top_groups[name] = result
         else:
@@ -616,7 +670,10 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
             top_fields[rf.name] = _resolve_renames(rf, temp_layout)
 
     non_redefines_top = [f for f in non_renames_fields if not f.redefines]
-    total = sum(_compute_group_length(f) for f in non_redefines_top)
+    total = _allocate_index_items(
+        index_declarations,
+        sum(_compute_group_length(f) for f in non_redefines_top),
+    )
 
     logger.debug(
         "Data layout: %d top-level fields, %d top-level groups, %d total bytes",
@@ -625,4 +682,9 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
         total,
     )
 
-    return DataLayout(fields=top_fields, groups=top_groups, total_bytes=total)
+    return DataLayout(
+        fields=top_fields,
+        groups=top_groups,
+        total_bytes=total,
+        index_owner={d.name: d.table for d in index_declarations},
+    )

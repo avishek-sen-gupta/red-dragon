@@ -8226,3 +8226,32 @@ class TestSetFromDataItem:
         )
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 0, 4) == 13
+
+
+class TestIndexItemAllocation:
+    @covers(CobolFeature.SUBSCRIPT_ACCESS)
+    def test_index_subscript_resolves(self):
+        """MSG-KEY (MSG-IX) must read the table, not a sentinel."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-IDX-SUB.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 MSG-BYTES.",
+                "   05 FILLER PIC X(4) VALUE 'E401'.",
+                "   05 FILLER PIC X(4) VALUE 'E408'.",
+                "01 MSG-TAB REDEFINES MSG-BYTES.",
+                "   05 MSG-ROW OCCURS 2 TIMES INDEXED BY MSG-IX.",
+                "      10 MSG-KEY PIC X(4).",
+                "01 OUT-KEY PIC X(4) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET MSG-IX TO 2.",
+                "    MOVE MSG-KEY (MSG-IX) TO OUT-KEY.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 8, 4) == "E408"
