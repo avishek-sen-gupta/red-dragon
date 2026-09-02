@@ -2,16 +2,16 @@
 
 from collections.abc import Sequence
 
-from interpreter.cobol.asg_types import (
+from cobol_asg.asg_types import (
     CobolASG,
     CobolField,
     CobolParagraph,
     CobolSection,
 )
-from interpreter.cobol.cobol_expression import expr_from_dict
+from cobol_asg.cobol_expression import expr_from_dict
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from interpreter.cobol.cobol_parser import make_cobol_parser
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_parser import make_cobol_parser
+from cobol_asg.cobol_statements import (
     AcceptStatement,
     AlterProceedTo,
     AlterStatement,
@@ -57,7 +57,7 @@ from interpreter.cobol.cobol_statements import (
     WriteStatement,
 )
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.ref_mod import RefModOperand
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import AllocRegion, Const, InstructionBase
 from interpreter.ir import Opcode
@@ -1269,7 +1269,7 @@ class TestSectionPerform:
         CobolFeature.USAGE_DISPLAY,
     )
     def test_perform_section_branches_to_section_label(self):
-        from interpreter.cobol.asg_types import CobolSection
+        from cobol_asg.asg_types import CobolSection
 
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -1322,7 +1322,7 @@ class TestSectionPerform:
 
     @covers(CobolFeature.STOP_RUN, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_section_emits_end_resume_continuation(self):
-        from interpreter.cobol.asg_types import CobolSection
+        from cobol_asg.asg_types import CobolSection
 
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
@@ -2201,7 +2201,7 @@ class TestCallAlterEntryCancelLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
         ]
-        from interpreter.cobol.file_enums import OpenMode
+        from cobol_asg.file_enums import OpenMode
 
         stmts = [OpenStatement(mode_groups=[(OpenMode.INPUT, ["FILE-A", "FILE-B"])])]
         instructions = self._lower_with_field_and_stmts(fields, stmts)

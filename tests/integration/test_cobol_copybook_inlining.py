@@ -120,7 +120,7 @@ def test_copy_of_library_inlined(tmp_path):
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
 def test_missing_copybook_raises_clean_error(tmp_path):
     """An unresolvable COPY surfaces a clean error naming the copybook."""
-    from interpreter.cobol.subprocess_runner import CobolParseError
+    from cobol_asg.subprocess_runner import CobolParseError
 
     (tmp_path / "MAIN.cbl").write_text(
         _to_fixed(

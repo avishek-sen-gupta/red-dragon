@@ -2,8 +2,8 @@
 
 import pytest
 
-from interpreter.cobol.asg_types import CobolField
-from interpreter.cobol.cobol_types import CobolDataCategory
+from cobol_asg.asg_types import CobolField
+from cobol_asg.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import (
     CobolAmbiguousReferenceError,
     build_data_layout,

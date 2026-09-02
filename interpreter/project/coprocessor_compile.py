@@ -4,7 +4,7 @@ compile_cobol() call.
 
 Coprocessor-agnostic: this module never imports anything CICS/SQL-specific
 (it only knows RedDragonExtensionLoweringStrategy/DialectParser as Protocols
-from interpreter.frontend_extension). Consumers (Cicada, Squall,
+from cobol_asg.frontend_extension). Consumers (Cicada, Squall,
 red-dragon-forge) each build their own CoprocessorSpec(s) inline and hand
 them here — this module has no knowledge of what any of them are for.
 """
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from interpreter.frontend_extension import (
+from cobol_asg.frontend_extension import (
     DialectParser,
     NullDialectParser,
 )

@@ -1,4 +1,4 @@
-from interpreter.cobol.asg_types import CobolSection, UseClause
+from cobol_asg.asg_types import CobolSection, UseClause
 from tests.covers import NotLanguageFeature, covers
 
 

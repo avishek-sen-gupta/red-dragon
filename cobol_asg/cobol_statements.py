@@ -14,14 +14,14 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Union
 
-from interpreter.cobol.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
-from interpreter.cobol.file_enums import AccessMode, FileOrganization, OpenMode
-from interpreter.cobol.ref_mod import (
+from cobol_asg.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
+from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
+from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModOperand,
     is_function_operand,
 )
-from interpreter.frontend_extension import DialectParser
+from cobol_asg.frontend_extension import DialectParser
 
 # ── Dialect parser injection ──────────────────────────────────────
 # Set by CobolFrontend.lower() for the duration of each parse call. Cicada
@@ -111,7 +111,7 @@ CobolStatementType = Union[
 
 def _serialize_ref_mod_expr(expr) -> dict:
     """Serialize RefModExpr back to JSON dict format."""
-    from interpreter.cobol.ref_mod import (
+    from cobol_asg.ref_mod import (
         RefModBinOp,
         RefModLiteral,
         RefModReference,

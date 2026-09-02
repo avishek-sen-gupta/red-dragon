@@ -10,18 +10,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_statements import (
     CobolStatementType,
     FileControlEntry,
     parse_statement,
 )
-from interpreter.cobol.cobol_types import CobolTypeDescriptor
-from interpreter.cobol.condition_name import ConditionName, ConditionValue
-from interpreter.cobol.edit_picture import (
+from cobol_asg.cobol_types import CobolTypeDescriptor
+from cobol_asg.condition_name import ConditionName, ConditionValue
+from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
 )
-from interpreter.cobol.pic_parser import parse_pic
+from cobol_asg.pic_parser import parse_pic
 
 
 def _currency_from_special_names(data: dict) -> str:

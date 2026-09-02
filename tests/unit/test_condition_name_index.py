@@ -1,7 +1,7 @@
 """Tests for ConditionNameIndex and build_condition_index."""
 
-from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.condition_name import ConditionName, ConditionValue
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.condition_name_index import (
     ConditionEntry,
     ConditionNameIndex,

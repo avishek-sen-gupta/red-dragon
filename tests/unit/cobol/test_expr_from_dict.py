@@ -1,7 +1,7 @@
 # pyright: standard
 import pytest
 
-from interpreter.cobol.cobol_expression import (
+from cobol_asg.cobol_expression import (
     BinOpNode,
     DfhRespNode,
     FieldRefNode,

@@ -1,6 +1,20 @@
 [importlinter]
 root_packages =
     interpreter
+    cobol_asg
+
+# The reason cobol_asg is a sibling of interpreter rather than a subpackage of
+# it: an import of interpreter.anything runs interpreter/__init__.py, which
+# loads the VM. A consumer that only reads COBOL -- cobble's knowledge-graph
+# extractor -- imports cobol_asg and nothing else, so this contract is what
+# keeps that promise true. cobol_asg parses; interpreter.cobol lowers.
+[importlinter:contract:cobol-asg-is-a-leaf]
+name = The COBOL ASG surface must not import the interpreter
+type = forbidden
+source_modules =
+    cobol_asg
+forbidden_modules =
+    interpreter
 
 [importlinter:contract:vm-no-frontend]
 name = VM must not import frontend lowering code
@@ -70,11 +84,12 @@ source_modules =
     interpreter.run
 forbidden_modules =
     interpreter.cobol
+# Three exceptions used to live here -- interpreter.frontend reaching for
+# cobol_parser and subprocess_runner, and project.cobol_compile for ast_store.
+# They existed only because parsing and lowering shared interpreter.cobol; the
+# parsing half is cobol_asg now, which this contract does not police.
 ignore_imports =
     interpreter.vm.builtins -> interpreter.cobol.byte_builtins
     interpreter.frontend -> interpreter.cobol.cobol_frontend
-    interpreter.frontend -> interpreter.cobol.cobol_parser
-    interpreter.frontend -> interpreter.cobol.subprocess_runner
     interpreter.frontend_extension_lowering -> interpreter.cobol.emit_context
     interpreter.frontend_extension_lowering -> interpreter.cobol.sectioned_layout
-    interpreter.project.cobol_compile -> interpreter.cobol.ast_store

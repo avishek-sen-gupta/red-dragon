@@ -16,12 +16,12 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from interpreter.cobol.cobol_expression import ExprNode
+    from cobol_asg.cobol_expression import ExprNode
 
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
-from interpreter.cobol.asg_types import CobolASG
+from cobol_asg.asg_types import CobolASG
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
-from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef
@@ -1041,7 +1041,7 @@ class EmitContext:
         materialised: MaterialisedSectionedLayout,
     ) -> None:
         """Write I/O status code to the FILE STATUS variable if declared."""
-        from interpreter.cobol.cobol_statements import (
+        from cobol_asg.cobol_statements import (
             FileControlEntry,
         )  # avoid circular at module level
 

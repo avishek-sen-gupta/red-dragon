@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from interpreter.cobol.asg_types import CobolASG
+from cobol_asg.asg_types import CobolASG
 from interpreter.cobol.data_layout import (
     DataLayout,
     FieldLayout,

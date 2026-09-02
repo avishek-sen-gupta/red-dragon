@@ -715,7 +715,7 @@ def _builtin_cobol_apply_edit_picture(
     """
     if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from interpreter.cobol.edit_picture import DEFAULT_CURRENCY, format_edited
+    from cobol_asg.edit_picture import DEFAULT_CURRENCY, format_edited
 
     value_str, pic_string = str(args[0].value), str(args[1].value)
     currency = str(args[2].value) if len(args) > 2 else DEFAULT_CURRENCY
@@ -732,7 +732,7 @@ def _builtin_cobol_apply_alphanumeric_edit(
     """
     if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from interpreter.cobol.edit_picture import format_alphanumeric_edited
+    from cobol_asg.edit_picture import format_alphanumeric_edited
 
     value_str, pic_string = str(args[0].value), str(args[1].value)
     return BuiltinResult(

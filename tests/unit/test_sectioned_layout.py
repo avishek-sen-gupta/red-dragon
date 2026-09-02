@@ -1,6 +1,6 @@
 import logging
 
-from interpreter.cobol.asg_types import CobolASG, CobolField
+from cobol_asg.asg_types import CobolASG, CobolField
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.sectioned_layout import (

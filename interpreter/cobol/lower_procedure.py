@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 
-from interpreter.cobol.asg_types import CobolASG, CobolParagraph, CobolSection
+from cobol_asg.asg_types import CobolASG, CobolParagraph, CobolSection
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.continuation_name import ContinuationName

@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-import interpreter.cobol.ast_store as ast_store_module
-from interpreter.cobol.ast_store import AstStore, temp_ast_store
+import cobol_asg.ast_store as ast_store_module
+from cobol_asg.ast_store import AstStore, temp_ast_store
 
 _SRC = b"       IDENTIFICATION DIVISION.\n       PROGRAM-ID. HELLO.\n"
 
@@ -77,7 +77,7 @@ def test_temp_ast_store_removes_its_cache_on_the_way_out():
 def test_parse_failure_names_the_member(tmp_path):
     # The bridge names the temp file it was handed, not the corpus member, so a
     # failure thousands of subprocesses deep is unattributable without this.
-    from interpreter.cobol.ast_store import AstParseError
+    from cobol_asg.ast_store import AstParseError
 
     class _Exploding:
         def parse_to_file(self, source: bytes, out: Path) -> None:
@@ -90,7 +90,7 @@ def test_parse_failure_names_the_member(tmp_path):
 
 def test_full_hex_key_no_truncation(tmp_path):
     # the store keys on the FULL 32-char md5 hex — truncation ([:8]) collides at scale
-    from interpreter.cobol.ast_store import _digest
+    from cobol_asg.ast_store import _digest
 
     a, b = Path("A.cbl"), Path("B.cbl")
     assert len(_digest(a)) == 32  # full hex, not truncated

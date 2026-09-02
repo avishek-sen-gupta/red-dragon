@@ -18,10 +18,10 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
 from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel
-from interpreter.project.import_types import (
+from cobol_asg.import_types import (
     ImportKind as ImportKind,
 )
-from interpreter.project.import_types import (
+from cobol_asg.import_types import (
     ImportRef as ImportRef,
 )
 from interpreter.refs.class_ref import ClassRef

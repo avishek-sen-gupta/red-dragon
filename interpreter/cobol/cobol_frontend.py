@@ -16,9 +16,9 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from interpreter.cobol.asg_types import CobolASG
-from interpreter.cobol.cobol_parser import CobolParser
-from interpreter.cobol.cobol_statements import _dialect_parsers
+from cobol_asg.asg_types import CobolASG
+from cobol_asg.cobol_parser import CobolParser
+from cobol_asg.cobol_statements import _dialect_parsers
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
@@ -37,7 +37,7 @@ from interpreter.cobol.sectioned_layout import (
 )
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
-from interpreter.frontend_extension import DialectParser
+from cobol_asg.frontend_extension import DialectParser
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.symbol_table import SymbolTable
@@ -49,7 +49,7 @@ from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
 
 if TYPE_CHECKING:
-    from interpreter.cobol.cobol_expression import ExprNode
+    from cobol_asg.cobol_expression import ExprNode
 
 logger = logging.getLogger(__name__)
 

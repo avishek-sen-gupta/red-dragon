@@ -1,5 +1,5 @@
 [MAIN]
-# Scope: interpreter/ only (not tests)
+# Scope: interpreter/ and cobol_asg/ only (not tests)
 ignore=tests
 
 [MESSAGES CONTROL]

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from interpreter.cobol.cobol_statements import FileControlEntry
+from cobol_asg.cobol_statements import FileControlEntry
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from tests.covers import NotLanguageFeature, covers
 

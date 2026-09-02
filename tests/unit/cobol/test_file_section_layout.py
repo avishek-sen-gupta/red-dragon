@@ -3,7 +3,7 @@ no runtime wiring) — red-dragon-4q25.32."""
 
 from __future__ import annotations
 
-from interpreter.cobol.asg_types import CobolASG, CobolField
+from cobol_asg.asg_types import CobolASG, CobolField
 from tests.covers import NotLanguageFeature, covers
 
 

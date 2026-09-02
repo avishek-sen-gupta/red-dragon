@@ -1,7 +1,7 @@
 """Tests for COBOL PIC clause parser."""
 
-from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.pic_parser import parse_pic
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.pic_parser import parse_pic
 
 
 class TestParsePicZonedDecimal:

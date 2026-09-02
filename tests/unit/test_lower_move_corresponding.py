@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from interpreter.cobol.asg_types import CobolField
-from interpreter.cobol.cobol_statements import MoveCorrespondingStatement
+from cobol_asg.asg_types import CobolField
+from cobol_asg.cobol_statements import MoveCorrespondingStatement
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_arithmetic import lower_move_corresponding

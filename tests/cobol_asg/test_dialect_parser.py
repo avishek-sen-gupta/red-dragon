@@ -1,6 +1,6 @@
 import pytest
 
-from interpreter.frontend_extension import DialectParser, NullDialectParser
+from cobol_asg.frontend_extension import DialectParser, NullDialectParser
 
 
 def test_null_dialect_parser_never_applies():

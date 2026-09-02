@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from interpreter.cobol.cobol_parser import ProLeapCobolParser, make_cobol_parser
+from cobol_asg.cobol_parser import ProLeapCobolParser, make_cobol_parser
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.subprocess_runner import CobolParseError
+from cobol_asg.subprocess_runner import CobolParseError
 from tests.covers import NotLanguageFeature, covers
 
 _MINIMAL = b"""\

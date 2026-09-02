@@ -1,8 +1,8 @@
 """Tests for condition lowering with level-88 condition name expansion."""
 
-from interpreter.cobol.asg_types import CobolASG, CobolField
+from cobol_asg.asg_types import CobolASG, CobolField
 from interpreter.cobol.condition_lowering import lower_condition
-from interpreter.cobol.condition_name import ConditionName, ConditionValue
+from cobol_asg.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.condition_name_index import (
     build_condition_index,
 )

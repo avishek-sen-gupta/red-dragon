@@ -1,6 +1,6 @@
 import inspect
 
-from interpreter.cobol.cobol_parser import ProLeapCobolParser, make_cobol_parser
+from cobol_asg.cobol_parser import ProLeapCobolParser, make_cobol_parser
 from tests.covers import NotLanguageFeature, covers
 
 
