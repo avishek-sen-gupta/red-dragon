@@ -8,9 +8,12 @@ from functools import reduce
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.cobol_expression import (
     BinOpNode,
+    DfhRespNode,
     ExprNode,
     FieldRefNode,
+    FigurativeNode,
     FunctionNode,
+    LengthOfNode,
     LiteralNode,
     RefModNode,
     expr_from_dict,
@@ -1064,8 +1067,59 @@ def lower_expr_node(
             )
         )
         return result_reg
+    if isinstance(node, FigurativeNode):
+        return _lower_figurative_operand(ctx, node)
+    if isinstance(node, LengthOfNode):
+        # LENGTH OF <field> is the field's byte length, a compile-time constant
+        # and NOT a decode of its value -- the same reading eval_ref_mod_expr
+        # gives it inside a ref-mod subscript (red-dragon-oq2c).
+        if ctx.has_field(node.name, materialised):
+            field_ref, _ = ctx.resolve_field_ref(node.name, materialised)
+            return ctx.const_to_reg(field_ref.fl.byte_length)
+        logger.warning("LENGTH OF unknown field %s -> 0", node.name)
+        return ctx.const_to_reg(0)
+    if isinstance(node, DfhRespNode):
+        # DFHRESP(<cond>) never reaches lowering when CICS is configured: the
+        # condition's number is release-dependent, so the bridge keeps the name
+        # and cicada's dfhresp pre-pass rewrites the node to a literal before the
+        # expression tree is built. Arriving here means that pre-pass did not
+        # run, and there is no number to invent -- guessing one would silently
+        # mis-compare every EIBRESP test in the program.
+        raise ValueError(
+            f"DFHRESP({node.condition}) reached COBOL lowering unresolved: the "
+            f"CICS DFHRESP pre-pass did not run. Compile this program through "
+            f"the CICS coprocessor, which resolves DFHRESP to its response code."
+        )
     logger.warning("Unknown expression node type: %s", type(node).__name__)
     return ctx.const_to_reg(0)
+
+
+def _lower_figurative_operand(ctx: EmitContext, node: FigurativeNode) -> Register:
+    """A figurative constant used as an expression operand.
+
+    ``COMPUTE WS-PCT = ZEROES`` is the case that matters and the only one with an
+    unambiguous arithmetic reading, so the ZERO family becomes the integer 0.
+
+    The other figuratives have no numeric value at all, and this is an
+    arithmetic context with no sibling operand to size them against -- unlike
+    _figurative_value, which is reached from a comparison and knows the field
+    it is being compared to. One fill character is therefore all that can be
+    honestly emitted, and it is warned about rather than passed off as correct.
+    """
+    raw = node.value.upper()
+    if raw in ("ZERO", "ZEROS", "ZEROES"):
+        return ctx.const_to_reg(0)
+    fill = _FIGURATIVE_FILL.get(raw)
+    if fill is None:
+        logger.warning("Unknown figurative constant %r -> 0", node.value)
+        return ctx.const_to_reg(0)
+    logger.warning(
+        "Figurative %r in an arithmetic expression has no length to size it to "
+        "-- emitting one %r",
+        node.value,
+        fill,
+    )
+    return ctx.const_to_reg(fill)
 
 
 def _expr_node_to_arg_dict(node: ExprNode) -> dict:
