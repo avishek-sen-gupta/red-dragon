@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.cobol_statements import _DISPATCH_TABLE
+from cobol_asg.cobol_statements import _DISPATCH_TABLE
 from interpreter.cobol.features import CobolFeature
 from scripts.audit_cobol_frontend import (
     _BRIDGE_TO_DISPATCH,

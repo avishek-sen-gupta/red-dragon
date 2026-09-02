@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.subprocess_runner import RealSubprocessRunner
+from cobol_asg.subprocess_runner import RealSubprocessRunner
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401

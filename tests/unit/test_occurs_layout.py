@@ -1,6 +1,6 @@
 """Tests for OCCURS support in data layout computation."""
 
-from interpreter.cobol.asg_types import CobolField
+from cobol_asg.asg_types import CobolField
 from interpreter.cobol.data_layout import build_data_layout
 from tests.covers import NotLanguageFeature, covers
 

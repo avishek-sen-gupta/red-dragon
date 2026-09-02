@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.cobol.cobol_types import CobolDataCategory
-from interpreter.cobol.edit_picture import (
+from cobol_asg.cobol_types import CobolDataCategory
+from cobol_asg.edit_picture import (
     format_edited,
     parse_edit_picture,
 )
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.pic_parser import parse_pic
+from cobol_asg.pic_parser import parse_pic
 from tests.covers import covers
 
 

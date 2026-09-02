@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.cobol.asg_types import CobolASG, CobolField
-from interpreter.cobol.cobol_expression import (
+from cobol_asg.asg_types import CobolASG, CobolField
+from cobol_asg.cobol_expression import (
     DfhRespNode,
     FigurativeNode,
     LengthOfNode,

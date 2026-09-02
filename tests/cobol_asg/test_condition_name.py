@@ -1,6 +1,6 @@
 """Tests for ConditionValue and ConditionName dataclasses."""
 
-from interpreter.cobol.condition_name import ConditionName, ConditionValue
+from cobol_asg.condition_name import ConditionName, ConditionValue
 
 
 class TestConditionValue:

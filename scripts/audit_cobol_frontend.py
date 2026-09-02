@@ -30,7 +30,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from interpreter.cobol.cobol_statements import _DISPATCH_TABLE  # noqa: E402
+from cobol_asg.cobol_statements import _DISPATCH_TABLE  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -490,8 +490,8 @@ def _run_pass3_runtime() -> tuple[list[str], bool]:
 
     try:
         from interpreter.cobol.cobol_frontend import CobolFrontend
-        from interpreter.cobol.cobol_parser import ProLeapCobolParser
-        from interpreter.cobol.subprocess_runner import RealSubprocessRunner
+        from cobol_asg.cobol_parser import ProLeapCobolParser
+        from cobol_asg.subprocess_runner import RealSubprocessRunner
 
         parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
         frontend = CobolFrontend(parser)

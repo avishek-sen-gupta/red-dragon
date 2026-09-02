@@ -1,7 +1,7 @@
 """Tests for OCCURS support in the COBOL frontend — subscript parsing and resolution."""
 
-from interpreter.cobol.asg_types import CobolField
-from interpreter.cobol.cobol_expression import LiteralNode
+from cobol_asg.asg_types import CobolField
+from cobol_asg.cobol_expression import LiteralNode
 from interpreter.cobol.cobol_frontend import (
     CobolFrontend,
 )

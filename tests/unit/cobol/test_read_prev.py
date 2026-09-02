@@ -8,7 +8,7 @@ from interpreter.cobol.file_drivers import (
     RelativeDriver,
     SequentialDriver,
 )
-from interpreter.cobol.file_enums import OpenMode
+from cobol_asg.file_enums import OpenMode
 from tests.covers import NotLanguageFeature, covers
 
 

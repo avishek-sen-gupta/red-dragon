@@ -1,7 +1,7 @@
 # pyright: standard
 """RedDragonExtensionLoweringStrategy — the injectable extension-lowering seam.
 
-Split out of interpreter.frontend_extension so this module (the only one that
+Split out of cobol_asg.frontend_extension so this module (the only one that
 references interpreter.cobol.emit_context / sectioned_layout) is separate from
 the parse-time DialectParser seam, which is VM/lowering-free and copyable by
 static-analysis consumers. frontend_extension re-exports this name for

@@ -1,7 +1,7 @@
 """PIC clause parser — full PICTURE grammar plus a semantic pass.
 
 Parses COBOL PIC strings into :class:`CobolTypeDescriptor` instances. The
-grammar lives in :mod:`interpreter.cobol.picture` (``picture.lark``) and covers
+grammar lives in :mod:`cobol_asg.picture` (``picture.lark``) and covers
 every single-byte USAGE DISPLAY data category of the PICTURE clause, so the
 *category* is decided by which top-level alternative parses — nothing is
 classified by symbol-set membership beforehand. Sizes, digit counts, scale and
@@ -18,7 +18,7 @@ non-DISPLAY USAGE categories (COMP-3, binary, COMP-1/2). USAGE wins for those: a
 ``numeric`` picture under ``USAGE COMP-3`` is packed decimal.
 
 Edited pictures — numeric-edited and alphanumeric-edited — keep their original PIC
-string, because :mod:`interpreter.cobol.edit_picture` needs it to build the
+string, because :mod:`cobol_asg.edit_picture` needs it to build the
 MOVE-time edit mask, and a numeric-edited one keeps the currency symbol beside
 it for the same reason. Categorisation itself no longer goes through
 ``is_numeric_edited``.
@@ -39,9 +39,9 @@ from __future__ import annotations
 from lark import Lark
 from lark.exceptions import UnexpectedInput
 
-from interpreter.cobol import picture
-from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.edit_picture import (
+from cobol_asg import picture
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
 )
