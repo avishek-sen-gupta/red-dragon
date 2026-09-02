@@ -21,7 +21,7 @@ from typing import Any
 
 from interpreter import constants
 from interpreter.cfg import build_cfg
-from interpreter.cobol.ast_store import AstStore, AstStrategy, _key
+from interpreter.cobol.ast_store import AstStore, _digest
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.frontend_extension import DialectParser
@@ -51,9 +51,9 @@ def parallel_parse_to_cache(
     the JSON string immediately — ASTs never accumulate in memory across workers.
     Returns {source_path: ast_json_path}. cache_dir is created if absent.
     """
-    store = AstStore(AstStrategy.DISK, cache_dir=cache_dir, max_workers=max_workers)
+    store = AstStore(cache_dir, max_workers=max_workers)
     store.parse_all(sources, parser)
-    return {src: cache_dir / f"{src.stem}-{_key(src)}.ast.json" for src in sources}
+    return {src: cache_dir / f"{src.stem}-{_digest(src)}.ast.json" for src in sources}
 
 
 def compile_cobol_module(
@@ -152,7 +152,7 @@ def compile_cobol(
         parallel_parse_to_cache(all_sources, parser, cache_dir)
 
         def _ast_path(src_path: Path) -> Path:
-            return cache_dir / f"{src_path.stem}-{_key(src_path)}.ast.json"
+            return cache_dir / f"{src_path.stem}-{_digest(src_path)}.ast.json"
 
         main_frontend, main_module = compile_cobol_module(
             source,
