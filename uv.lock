@@ -2435,6 +2435,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-fp-lint" },
     { name = "sortedcontainers" },
+    { name = "tqdm" },
     { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
 ]
@@ -2465,6 +2466,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12.5,<3.0.0" },
     { name = "python-fp-lint", git = "https://github.com/avishek-sen-gupta/python-fp-lint.git" },
     { name = "sortedcontainers", specifier = ">=2.4.0,<3.0.0" },
+    { name = "tqdm", specifier = ">=4.67,<5.0" },
     { name = "tree-sitter", specifier = ">=0.25.2,<0.26.0" },
     { name = "tree-sitter-language-pack", specifier = ">=0.13.0,<0.14.0" },
 ]

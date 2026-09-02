@@ -125,6 +125,7 @@ class ProLeapCobolParser(CobolParser):
 
 def make_cobol_parser(
     copybook_dirs: list[Path] = [],
+    copybook_exts: list[str] = [],
 ) -> ProLeapCobolParser:
     """Construct a ProLeapCobolParser from PROLEAP_BRIDGE_JAR env var.
 
@@ -135,5 +136,8 @@ def make_cobol_parser(
         "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
     )
     return ProLeapCobolParser(
-        RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
+        RealSubprocessRunner(),
+        bridge_jar,
+        copybook_dirs=copybook_dirs,
+        copybook_exts=copybook_exts,
     )
