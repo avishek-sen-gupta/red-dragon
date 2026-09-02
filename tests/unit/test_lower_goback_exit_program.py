@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.asg_types import CobolASG
-from interpreter.cobol.cobol_statements import ExitProgramStatement, GobackStatement
+from cobol_asg.asg_types import CobolASG
+from cobol_asg.cobol_statements import ExitProgramStatement, GobackStatement
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_arithmetic import lower_exit_program, lower_goback

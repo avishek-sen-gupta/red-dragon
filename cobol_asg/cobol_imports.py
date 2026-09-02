@@ -21,7 +21,7 @@ from pathlib import Path
 from lark import Lark
 from lark import Transformer as LarkTransformer
 
-from interpreter.project.import_types import ImportKind, ImportRef
+from cobol_asg.import_types import ImportKind, ImportRef
 
 # ── COBOL import extraction (light grammar, no tree-sitter) ──────
 #

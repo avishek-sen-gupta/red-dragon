@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.asg_types import CobolASG, CobolField
-from interpreter.cobol.cobol_statements import CallStatement, CallUsingParam
+from cobol_asg.asg_types import CobolASG, CobolField
+from cobol_asg.cobol_statements import CallStatement, CallUsingParam
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_call import lower_call

@@ -38,13 +38,19 @@ repos:
         # and, in red-dragon-forge, bundled an unrelated reformat into a docs
         # commit. Passing filenames also means black no longer walks the whole
         # tree on every commit.
+        # require_serial because the `git add` takes .git/index.lock. Without it
+        # pre-commit splits the filenames across parallel invocations, and on a
+        # large commit those races lose: a 107-file change ran as ten batches and
+        # died with "Unable to create '.git/index.lock': File exists" (exit 128).
+        # Small commits fit in one batch, which is why this stayed hidden.
         entry: bash -c 'uv run python -m black "$@" && git add -- "$@"' --
         language: system
         types: [python]
+        require_serial: true
 
       - id: python-fp-lint
         name: Python FP lint (warnings only)
-        entry: bash -c 'uv run python -m python_fp_lint check interpreter/ || true'
+        entry: bash -c 'uv run python -m python_fp_lint check interpreter/ cobol_asg/ || true'
         language: system
         pass_filenames: false
         always_run: true

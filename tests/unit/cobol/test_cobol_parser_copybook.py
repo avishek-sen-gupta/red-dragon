@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from interpreter.cobol.cobol_parser import CobolParseError, ProLeapCobolParser
+from cobol_asg.cobol_parser import CobolParseError, ProLeapCobolParser
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.subprocess_runner import SubprocessRunner
+from cobol_asg.subprocess_runner import SubprocessRunner
 from tests.covers import covers
 
 
@@ -133,7 +133,7 @@ def test_get_frontend_passes_copybook_dirs(monkeypatch):
 
     # get_frontend imports ProLeapCobolParser locally at call time, so patching
     # the module attribute is picked up.
-    import interpreter.cobol.cobol_parser as cp
+    import cobol_asg.cobol_parser as cp
 
     monkeypatch.setattr(cp, "ProLeapCobolParser", _SpyParser)
 

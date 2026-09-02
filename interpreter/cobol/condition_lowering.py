@@ -6,7 +6,7 @@ import logging
 from functools import reduce
 
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.cobol_expression import (
+from cobol_asg.cobol_expression import (
     BinOpNode,
     DfhRespNode,
     ExprNode,
@@ -18,8 +18,8 @@ from interpreter.cobol.cobol_expression import (
     RefModNode,
     expr_from_dict,
 )
-from interpreter.cobol.cobol_types import CobolDataCategory
-from interpreter.cobol.condition_name import ConditionValue
+from cobol_asg.cobol_types import CobolDataCategory
+from cobol_asg.condition_name import ConditionValue
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -820,7 +820,7 @@ def _lower_expr_dict(
         # function-operand lowering so the call + args produce a computed value
         # register that compares normally.
         from interpreter.cobol.lower_arithmetic import lower_function_operand
-        from interpreter.cobol.ref_mod import FunctionCallOperand
+        from cobol_asg.ref_mod import FunctionCallOperand
 
         operand = FunctionCallOperand.from_dict(expr)
         return lower_function_operand(ctx, operand, materialised)

@@ -1,7 +1,7 @@
 # pyright: standard
 """Tests for COBOL I/O statement dataclasses and FileControlEntry."""
 
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_statements import (
     DeleteStatement,
     FileControlEntry,
     OpenStatement,
@@ -11,7 +11,7 @@ from interpreter.cobol.cobol_statements import (
     WriteStatement,
 )
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.file_enums import AccessMode, FileOrganization, OpenMode
+from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from tests.covers import NotLanguageFeature, covers
 
 
@@ -137,7 +137,7 @@ def test_start_statement_relop_and_invalid_key():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_cobol_asg_file_control():
-    from interpreter.cobol.asg_types import CobolASG
+    from cobol_asg.asg_types import CobolASG
 
     asg = CobolASG.from_dict(
         {

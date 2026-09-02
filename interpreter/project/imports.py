@@ -13,7 +13,7 @@ from typing import Any
 
 from interpreter.constants import Language
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.project.cobol_imports import extract_cobol_imports
+from cobol_asg.cobol_imports import extract_cobol_imports
 from interpreter.project.types import ImportKind, ImportRef
 
 _parser_factory = TreeSitterParserFactory()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_statements import (
     AcceptStatement,
     CloseStatement,
     DeleteStatement,
@@ -446,8 +446,8 @@ def _write_source_reg(
     if not ctx.has_field(record_name, materialised):
         return ctx.const_to_reg(from_field or record_name)
     if from_field:
-        from interpreter.cobol.cobol_statements import MoveStatement
-        from interpreter.cobol.ref_mod import RefModOperand
+        from cobol_asg.cobol_statements import MoveStatement
+        from cobol_asg.ref_mod import RefModOperand
 
         ctx.lower_statement(
             MoveStatement(

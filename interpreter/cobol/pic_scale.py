@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-from interpreter.cobol.cobol_types import CobolTypeDescriptor
+from cobol_asg.cobol_types import CobolTypeDescriptor
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 
 

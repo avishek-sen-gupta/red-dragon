@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_statements import (
     AlterStatement,
     CallStatement,
     CallUsingParam,

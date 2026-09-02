@@ -1,4 +1,4 @@
-from interpreter.cobol.asg_types import CobolField
+from cobol_asg.asg_types import CobolField
 from interpreter.cobol.data_layout import build_data_layout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_program_init import (

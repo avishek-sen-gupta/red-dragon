@@ -12,12 +12,12 @@ import inspect
 
 import pytest
 
-from interpreter.cobol import pic_parser
-from interpreter.cobol.asg_types import CobolField
-from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.edit_picture import UnsupportedEditPictureError
+from cobol_asg import pic_parser
+from cobol_asg.asg_types import CobolField
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.edit_picture import UnsupportedEditPictureError
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.pic_parser import parse_pic
+from cobol_asg.pic_parser import parse_pic
 from tests.covers import covers
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_statements import (
     PerformStatement,
     PerformTimesSpec,
     PerformUntilSpec,
