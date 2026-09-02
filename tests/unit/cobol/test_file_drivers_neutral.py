@@ -8,7 +8,7 @@ from pathlib import Path
 from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_drivers import IndexedDriver, SequentialDriver
-from interpreter.cobol.file_enums import OpenMode
+from cobol_asg.file_enums import OpenMode
 from tests.covers import covers
 
 

@@ -15,9 +15,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
 
-from interpreter.cobol.asg_types import CobolASG
-from interpreter.cobol.source_text import decode_source
-from interpreter.cobol.subprocess_runner import (
+from cobol_asg.asg_types import CobolASG
+from cobol_asg.source_text import decode_source
+from cobol_asg.subprocess_runner import (
     CobolParseError,
     RealSubprocessRunner,
     SubprocessRunner,

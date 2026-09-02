@@ -1,12 +1,12 @@
 """Tests for COBOL ASG type round-trip serialization."""
 
-from interpreter.cobol.asg_types import (
+from cobol_asg.asg_types import (
     CobolASG,
     CobolField,
     CobolParagraph,
     CobolSection,
 )
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_statements import (
     ArithmeticStatement,
     DisplayStatement,
     IfStatement,

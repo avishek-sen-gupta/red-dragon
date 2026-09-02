@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.cobol.asg_types import CobolASG, CobolField
-from interpreter.cobol.cobol_expression import (
+from cobol_asg.asg_types import CobolASG, CobolField
+from cobol_asg.cobol_expression import (
     BinOpNode,
     FieldRefNode,
     LiteralNode,
@@ -277,9 +277,9 @@ def test_lower_expr_node_threads_single_subscript_happy_path():
 def test_lower_display_threads_operand_subscripts():
     """DISPLAY of a subscripted operand threads operand.subscripts to the
     resolver (multi-dim subscripts raise, proving threading)."""
-    from interpreter.cobol.cobol_statements import DisplayStatement
+    from cobol_asg.cobol_statements import DisplayStatement
     from interpreter.cobol.lower_arithmetic import lower_display
-    from interpreter.cobol.ref_mod import RefModOperand
+    from cobol_asg.ref_mod import RefModOperand
 
     ctx, materialised = _occurs_ctx()
     stmt = DisplayStatement(
@@ -296,9 +296,9 @@ def test_lower_display_threads_operand_subscripts():
 @covers(CobolFeature.OCCURS_FIXED)
 def test_lower_display_threads_single_subscript_happy_path():
     """DISPLAY of an operand with a SINGLE valid subscript lowers cleanly to IR."""
-    from interpreter.cobol.cobol_statements import DisplayStatement
+    from cobol_asg.cobol_statements import DisplayStatement
     from interpreter.cobol.lower_arithmetic import lower_display
-    from interpreter.cobol.ref_mod import RefModOperand
+    from cobol_asg.ref_mod import RefModOperand
 
     ctx, materialised = _occurs_ctx()
     stmt = DisplayStatement(

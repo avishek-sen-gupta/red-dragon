@@ -21,10 +21,10 @@ from typing import Any
 
 from interpreter import constants
 from interpreter.cfg import build_cfg
-from interpreter.cobol.ast_store import AstStore, _digest
+from cobol_asg.ast_store import AstStore, _digest
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
-from interpreter.frontend_extension import DialectParser
+from cobol_asg.frontend_extension import DialectParser
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.ir import CodeLabel

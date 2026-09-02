@@ -10,7 +10,7 @@ and asserts PIC WWWWW holding 12 equals '  W12' (red-dragon-3o5f).
 
 import pytest
 
-from interpreter.cobol.edit_picture import UnsupportedEditPictureError
+from cobol_asg.edit_picture import UnsupportedEditPictureError
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (

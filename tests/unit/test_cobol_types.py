@@ -2,7 +2,7 @@
 
 import pytest
 
-from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 

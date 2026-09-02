@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from interpreter.cobol.cobol_expression import FieldRefNode, LiteralNode
+from cobol_asg.cobol_expression import FieldRefNode, LiteralNode
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.ref_mod import RefModLiteral, RefModOperand, RefModReference
+from cobol_asg.ref_mod import RefModLiteral, RefModOperand, RefModReference
 from tests.covers import covers
 
 

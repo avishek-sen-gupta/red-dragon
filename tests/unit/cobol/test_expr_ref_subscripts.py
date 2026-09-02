@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from interpreter.cobol.cobol_expression import (
+from cobol_asg.cobol_expression import (
     BinOpNode,
     FieldRefNode,
     LiteralNode,

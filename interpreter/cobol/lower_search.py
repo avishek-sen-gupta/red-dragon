@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from interpreter.cobol.cobol_statements import SearchStatement
+from cobol_asg.cobol_statements import SearchStatement
 from interpreter.cobol.condition_lowering import _lower_condition_str
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout

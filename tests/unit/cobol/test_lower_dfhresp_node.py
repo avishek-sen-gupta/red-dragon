@@ -8,8 +8,8 @@ These tests verify that lower_evaluate handles that resolved lit-kind dict corre
 
 from __future__ import annotations
 
-from interpreter.cobol.asg_types import CobolASG, CobolField
-from interpreter.cobol.cobol_statements import EvaluateStatement, WhenStatement
+from cobol_asg.asg_types import CobolASG, CobolField
+from cobol_asg.cobol_statements import EvaluateStatement, WhenStatement
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_arithmetic import lower_evaluate

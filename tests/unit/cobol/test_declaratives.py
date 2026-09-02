@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.asg_types import CobolASG
+from cobol_asg.asg_types import CobolASG
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
@@ -47,7 +47,7 @@ class TestDeclarativesModel:
         assert asg.declaratives == []
 
 
-from interpreter.cobol.asg_types import CobolParagraph, CobolSection
+from cobol_asg.asg_types import CobolParagraph, CobolSection
 from interpreter.instructions import Label_
 
 

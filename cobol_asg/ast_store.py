@@ -27,7 +27,7 @@ from typing import Protocol
 
 from tqdm import tqdm
 
-from interpreter.cobol.asg_types import CobolASG
+from cobol_asg.asg_types import CobolASG
 
 _IDENTITY: Callable[[dict], dict] = lambda d: d  # noqa: E731
 

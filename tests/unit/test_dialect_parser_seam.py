@@ -7,7 +7,7 @@ never Cicada's or Squall's real types. Renamed from test_exec_sql_seam.py
 (which used to import Squall's ExecSqlStatement directly; that type has
 relocated to Squall and RedDragon must not depend on it)."""
 
-from interpreter.cobol.cobol_statements import _dialect_parsers, parse_statement
+from cobol_asg.cobol_statements import _dialect_parsers, parse_statement
 from tests.unit.cobol.dialect_parser_fixtures import (
     FakeDialectParser,
     FakeExtensionStatement,
@@ -172,9 +172,9 @@ class TestArrayDispatch:
         assert "Unhandled" in caplog.text
 
 
-from interpreter.cobol.asg_types import CobolASG
+from cobol_asg.asg_types import CobolASG
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from interpreter.cobol.cobol_parser import CobolParser
+from cobol_asg.cobol_parser import CobolParser
 
 
 class _PreprocessRecordingParser(CobolParser):

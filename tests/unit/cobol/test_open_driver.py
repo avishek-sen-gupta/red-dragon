@@ -6,7 +6,7 @@ from interpreter.cobol.file_drivers import (
     SequentialDriver,
     open_driver,
 )
-from interpreter.cobol.file_enums import FileOrganization, OpenMode
+from cobol_asg.file_enums import FileOrganization, OpenMode
 from tests.covers import NotLanguageFeature, covers
 
 

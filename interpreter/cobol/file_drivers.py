@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import BinaryIO, Protocol, runtime_checkable
 
 from interpreter.cobol.access_result import AccessCondition, AccessResult
-from interpreter.cobol.file_enums import FileOrganization, OpenMode
+from cobol_asg.file_enums import FileOrganization, OpenMode
 
 logger = logging.getLogger(__name__)
 

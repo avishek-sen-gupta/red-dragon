@@ -14,10 +14,10 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import TypeVar
 
-from interpreter.cobol.asg_types import CobolField
-from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.condition_name import ConditionName, ConditionValue
-from interpreter.cobol.pic_parser import parse_pic
+from cobol_asg.asg_types import CobolField
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.condition_name import ConditionName, ConditionValue
+from cobol_asg.pic_parser import parse_pic
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_statements import (
     BeforeAfterBoundary,
     InspectStatement,
     StringStatement,
@@ -19,7 +19,7 @@ from interpreter.cobol.ir_encoders import (
     build_inspect_tally_ir,
 )
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
-from interpreter.cobol.ref_mod import RefModOperand
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction

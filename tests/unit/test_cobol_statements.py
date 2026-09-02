@@ -2,7 +2,7 @@
 
 import pytest
 
-from interpreter.cobol.cobol_statements import (
+from cobol_asg.cobol_statements import (
     AcceptStatement,
     AlterStatement,
     AlteredGoto,
@@ -47,7 +47,7 @@ from interpreter.cobol.cobol_statements import (
     parse_statement,
 )
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.ref_mod import RefModOperand
+from cobol_asg.ref_mod import RefModOperand
 from tests.covers import covers
 
 
@@ -145,7 +145,7 @@ class TestParseStatementDispatch:
         )
         assert isinstance(stmt, ComputeStatement)
         # expression is now an ExprNode, so we check its structure
-        from interpreter.cobol.cobol_expression import BinOpNode
+        from cobol_asg.cobol_expression import BinOpNode
 
         assert isinstance(stmt.expression, BinOpNode)
         assert stmt.targets == [ComputeTarget(name="WS-RESULT")]
@@ -553,7 +553,7 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.OPEN)
     def test_open(self):
-        from interpreter.cobol.file_enums import OpenMode
+        from cobol_asg.file_enums import OpenMode
 
         stmt = parse_statement(
             {
@@ -1056,7 +1056,7 @@ class TestRoundTrip:
         }
         stmt = parse_statement(data)
         assert isinstance(stmt, PerformStatement)
-        from interpreter.cobol.cobol_statements import _spec_to_dict
+        from cobol_asg.cobol_statements import _spec_to_dict
 
         result = _spec_to_dict(stmt.spec)
         assert result["after_specs"][0]["varying_var"] == "WS-J"
@@ -1303,7 +1303,7 @@ class TestRoundTrip:
 
     @covers(CobolFeature.MOVE_CORRESPONDING)
     def test_parse_move_corresponding_statement(self):
-        from interpreter.cobol.cobol_statements import MoveCorrespondingStatement
+        from cobol_asg.cobol_statements import MoveCorrespondingStatement
 
         data = {
             "type": "MOVE_CORRESPONDING",

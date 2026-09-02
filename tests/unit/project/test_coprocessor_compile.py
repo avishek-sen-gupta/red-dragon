@@ -5,7 +5,7 @@ import dataclasses
 import pytest
 
 from interpreter.frontend import make_cobol_parser
-from interpreter.frontend_extension import NullDialectParser
+from cobol_asg.frontend_extension import NullDialectParser
 from interpreter.project.coprocessor_compile import CoprocessorSpec, compile_program
 
 

@@ -1,6 +1,6 @@
 import pytest
 
-from interpreter.cobol.file_enums import AccessMode, FileOrganization, OpenMode
+from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from tests.covers import NotLanguageFeature, covers
 
 

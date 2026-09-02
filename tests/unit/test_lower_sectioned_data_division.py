@@ -1,4 +1,4 @@
-from interpreter.cobol.asg_types import CobolASG, CobolField
+from cobol_asg.asg_types import CobolASG, CobolField
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
