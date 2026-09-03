@@ -42,6 +42,15 @@ class Register:
             return self.name == other.name
         return NotImplemented
 
+    def may_alias(self, other: object) -> bool:
+        return isinstance(other, Register) and other.name == self.name
+
+    def must_cover(self, other: object) -> bool:
+        return self.may_alias(other)
+
+    def alias_key(self) -> tuple[str, str]:
+        return ("register", self.name)
+
     @classmethod
     def __get_pydantic_core_schema__(
         cls, _source: Any, _handler: Any
