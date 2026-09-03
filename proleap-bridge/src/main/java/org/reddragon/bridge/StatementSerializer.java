@@ -116,6 +116,7 @@ import io.proleap.cobol.asg.metamodel.valuestmt.condition.AndOrCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.CombinableCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.ClassCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.ConditionNameReference;
+import io.proleap.cobol.asg.metamodel.valuestmt.condition.ConditionNameSubscriptReference;
 import io.proleap.cobol.asg.metamodel.valuestmt.condition.SimpleCondition;
 import io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt;
 import io.proleap.cobol.asg.metamodel.Literal;
@@ -591,8 +592,7 @@ public final class StatementSerializer {
         for (Store store : stmt.getStores()) {
             Call storeCall = store.getStoreCall();
             if (storeCall != null) {
-                JsonObject t = new JsonObject();
-                t.addProperty("name", extractCallName(storeCall));
+                JsonObject t = serializeRef(storeCall);
                 t.addProperty("rounded", store.isRounded());
                 targets.add(t);
             }
@@ -1929,18 +1929,39 @@ public final class StatementSerializer {
      * any non-table call.
      */
     private static JsonArray extractSubscripts(Call call) {
-        JsonArray arr = new JsonArray();
         if (call == null) {
-            return arr;
+            return new JsonArray();
         }
         Call unwrapped = call.unwrap();
         if (unwrapped.getCallType() == Call.CallType.TABLE_CALL && unwrapped instanceof TableCall tableCall) {
-            List<Subscript> subscripts = tableCall.getSubscripts();
-            if (subscripts != null) {
-                for (Subscript sub : subscripts) {
-                    arr.add(serializeFromValue(sub.getSubscriptValueStmt()));
-                }
+            return serializeSubscripts(tableCall.getSubscripts());
+        }
+        return new JsonArray();
+    }
+
+    private static JsonArray serializeSubscripts(List<Subscript> subscripts) {
+        JsonArray arr = new JsonArray();
+        if (subscripts != null) {
+            for (Subscript sub : subscripts) {
+                arr.add(serializeFromValue(sub.getSubscriptValueStmt()));
             }
+        }
+        return arr;
+    }
+
+    /**
+     * Subscripts of a level-88 reference such as {@code FLAG-ON(2)}. A condition
+     * name is not a TABLE_CALL, so its subscripts hang off the reference's
+     * {@link ConditionNameSubscriptReference} list rather than off the condition
+     * call (red-dragon-8u47).
+     */
+    private static JsonArray extractConditionSubscripts(ConditionNameReference ref) {
+        JsonArray arr = new JsonArray();
+        if (ref == null || ref.getConditionNameSubscriptReferences() == null) {
+            return arr;
+        }
+        for (ConditionNameSubscriptReference subRef : ref.getConditionNameSubscriptReferences()) {
+            arr.addAll(serializeSubscripts(subRef.getSubscripts()));
         }
         return arr;
     }
@@ -2573,6 +2594,10 @@ public final class StatementSerializer {
             ConditionNameReference ref = sc.getConditionNameReference();
             if (ref != null && ref.getConditionCall() != null) {
                 obj.addProperty("condition_name", extractCallName(ref.getConditionCall()));
+                JsonArray conditionSubscripts = extractConditionSubscripts(ref);
+                if (conditionSubscripts.size() > 0) {
+                    obj.add("condition_subscripts", conditionSubscripts);
+                }
             } else {
                 obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
             }
