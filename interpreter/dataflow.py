@@ -7,7 +7,7 @@ import logging
 from collections import deque
 from dataclasses import dataclass, field
 from functools import reduce
-from typing import Any
+from typing import Any, Hashable
 
 from interpreter import constants
 from interpreter.cfg import CFG, BasicBlock
@@ -125,11 +125,12 @@ def collect_all_definitions(cfg: CFG) -> list[Definition]:
 
 def _build_defs_by_variable(
     all_defs: list[Definition],
-) -> dict[StorageIdentifier, set[Definition]]:
-    """Index definitions by storage identifier (variable or register)."""
+) -> dict[Hashable, set[Definition]]:
+    """Index definitions by alias bucket (coarse key shared by aliasing locations)."""
 
-    def _acc_def(acc: dict[StorageIdentifier, set[Definition]], d: Definition):
-        return {**acc, d.variable: acc.get(d.variable, set()) | {d}}
+    def _acc_def(acc: dict[Hashable, set[Definition]], d: Definition):
+        key = d.variable.alias_key()
+        return {**acc, key: acc.get(key, set()) | {d}}
 
     return reduce(_acc_def, all_defs, {})
 
@@ -137,12 +138,12 @@ def _build_defs_by_variable(
 def compute_gen_kill(
     block: BasicBlock,
     all_defs: list[Definition],
-    defs_by_var: dict[StorageIdentifier, set[Definition]],
+    defs_by_var: dict[Hashable, set[Definition]],
 ) -> tuple[set[Definition], set[Definition]]:
     """Compute GEN and KILL sets for a basic block.
 
-    GEN: the last definition of each variable within the block.
-    KILL: all definitions (from other blocks) of variables redefined in this block.
+    GEN: the writes that survive to the block exit, per the alias relation.
+    KILL: definitions elsewhere that this block's writes definitely overwrite.
     """
     block_defs = [
         Definition(
@@ -155,20 +156,25 @@ def compute_gen_kill(
         for var in _defs_of(inst)
     ]
 
-    # GEN = last definition of each variable in the block (walking forward, last wins)
-    gen_map: dict[StorageIdentifier, Definition] = {}
+    # GEN = the writes that survive to the block exit. A later write removes
+    # an earlier one only if it definitely overwrites all of it (must_cover);
+    # a write that merely MIGHT overlap coexists with what was there.
+    gen_list: list[Definition] = []
     for d in block_defs:
-        gen_map[d.variable] = d
-    gen = set(gen_map.values())
+        gen_list = [
+            prior for prior in gen_list if not d.variable.must_cover(prior.variable)
+        ]
+        gen_list.append(d)
+    gen = set(gen_list)
 
-    # KILL = all defs of redefined variables across the whole program, minus this block's own defs
-    redefined_vars = {d.variable for d in block_defs}
+    # KILL = definitions elsewhere that this block's writes definitely
+    # overwrite. Only a must-cover write kills; a may-overlap write cannot.
     block_def_set = set(block_defs)
     kill = {
-        d
-        for var in redefined_vars
-        for d in defs_by_var.get(var, set())
-        if d not in block_def_set
+        other
+        for d in block_defs
+        for other in defs_by_var.get(d.variable.alias_key(), set())
+        if other not in block_def_set and d.variable.must_cover(other.variable)
     }
 
     return gen, kill
@@ -251,7 +257,7 @@ def extract_def_use_chains(
                     chains.append(DefUseLink(definition=local_defs[var], use=use))
                 else:
                     # Look in reach_in for matching defs
-                    matching_defs = [d for d in reach_in if d.variable == var]
+                    matching_defs = [d for d in reach_in if d.variable.may_alias(var)]
                     chains.extend(
                         DefUseLink(definition=d, use=use) for d in matching_defs
                     )
