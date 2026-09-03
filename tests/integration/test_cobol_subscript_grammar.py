@@ -301,11 +301,6 @@ def test_subscripted_operand_in_a_compute(statement, expected):
     assert _outf(_two_dim(statement)) == expected
 
 
-@pytest.mark.xfail(
-    reason="red-dragon-0nj4: COMPUTE drops its receiving field's subscripts and "
-    "writes occurrence 1. Pre-existing, unrelated to the subscript grammar.",
-    strict=True,
-)
 @covers(CobolFeature.SUBSCRIPT_ACCESS)
 def test_compute_writes_through_a_subscripted_target():
     """COMPUTE's receiving field takes subscripts too."""
@@ -360,12 +355,6 @@ def _eighty_eight(condition: str) -> list[str]:
     ]
 
 
-@pytest.mark.xfail(
-    reason="red-dragon-8u47: a subscripted level-88 always evaluates false, so it "
-    "never fires for the occurrence it names. Pre-existing, unrelated to the "
-    "subscript grammar.",
-    strict=True,
-)
 @covers(CobolFeature.SUBSCRIPT_ACCESS)
 @pytest.mark.parametrize(
     "condition",

@@ -319,17 +319,24 @@ class ComputeTarget:
 
     name: str
     rounded: bool = False
+    subscripts: tuple[ExprNode, ...] = ()
 
     @classmethod
     def from_dict(cls, data: dict | str) -> ComputeTarget:
         if isinstance(data, str):
             return cls(name=data)
-        return cls(name=data["name"], rounded=data.get("rounded", False))
+        return cls(
+            name=data["name"],
+            rounded=data.get("rounded", False),
+            subscripts=tuple(expr_from_dict(s) for s in data.get("subscripts", [])),
+        )
 
     def to_dict(self) -> dict:
         d: dict = {"name": self.name}
         if self.rounded:
             d["rounded"] = True
+        if self.subscripts:
+            d["subscripts"] = [expr_to_dict(s) for s in self.subscripts]
         return d
 
 
