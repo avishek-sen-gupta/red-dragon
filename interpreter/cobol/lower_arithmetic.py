@@ -1229,7 +1229,9 @@ def lower_compute(
             if not ctx.has_field(target.name, materialised):
                 logger.warning("COMPUTE target %s not found in layout", target.name)
                 continue
-            target_ref, target_rr = ctx.resolve_field_ref(target.name, materialised)
+            target_ref, target_rr = ctx.resolve_field_ref(
+                target.name, materialised, subscripts=target.subscripts
+            )
             write_reg = result_str_reg
             if target.rounded:
                 dec_digits_reg = ctx.const_to_reg(
@@ -1259,7 +1261,9 @@ def lower_compute(
         if not ctx.has_field(target.name, materialised):
             logger.warning("COMPUTE target %s not found in layout", target.name)
             continue
-        ref, rr = ctx.resolve_field_ref(target.name, materialised)
+        ref, rr = ctx.resolve_field_ref(
+            target.name, materialised, subscripts=target.subscripts
+        )
         target_triples.append((ref, rr, target))
 
     # Guard: no valid targets means no writes and no overflow check — execute
