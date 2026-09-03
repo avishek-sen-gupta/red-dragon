@@ -156,6 +156,26 @@ class MaterialisedSectionedLayout:
                 return layout.all_enclosing_occurs_tables(name)
         return []
 
+    def enclosing_record_extent(self, name: str) -> tuple[int, int] | None:
+        """Return ``(offset, byte_length)`` of the 01/77 record holding ``name``.
+
+        Searches all six sections, not the four that carry OCCURS tables: this
+        is the last-resort bound for an access nothing else can bound, so it
+        must not come up empty for a field that resolved successfully.
+        """
+        for layout, _reg in (
+            self.local_storage,
+            self.working_storage,
+            self.linkage,
+            self.file,
+            self.special_registers,
+            self.indexes,
+        ):
+            found = layout.enclosing_record_extent(name)
+            if found is not None:
+                return found
+        return None
+
     def has_field(self, name: str) -> bool:
         ls_layout, _ = self.local_storage
         ws_layout, _ = self.working_storage
