@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import logging
 from collections import deque
+from collections.abc import Hashable
 from dataclasses import dataclass, field
 from functools import reduce
-from typing import Any, Hashable
+from typing import Any
 
 from interpreter import constants
 from interpreter.cfg import CFG, BasicBlock
