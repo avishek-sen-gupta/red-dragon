@@ -275,6 +275,7 @@ class EmitContext:
                 region=region,
                 subscripts=(),
                 tables=(),
+                record=None,
                 access_len=fl.byte_length,
             )
             return (
@@ -411,6 +412,7 @@ class EmitContext:
             region=region,
             subscripts=subscripts,
             tables=materialised.occurs_tables(base_name),
+            record=materialised.enclosing_record_extent(base_name),
             access_len=access_len,
         )
         return (
