@@ -50,6 +50,15 @@ class VarName:
     def startswith(self, prefix: str) -> bool:
         return self.value.startswith(prefix)
 
+    def may_alias(self, other: object) -> bool:
+        return isinstance(other, VarName) and other == self
+
+    def must_cover(self, other: object) -> bool:
+        return self.may_alias(other)
+
+    def alias_key(self) -> tuple[str, str]:
+        return ("varname", str(self))
+
 
 @dataclass(frozen=True, eq=False)
 class NoVarName(VarName):
