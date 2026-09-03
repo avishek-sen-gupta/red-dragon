@@ -704,7 +704,7 @@ def handle_list_opcodes() -> dict[str, Any]:
         fields = [
             {"name": f.name, "type": _type_str(get_type_hints(cls).get(f.name, f.type))}
             for f in dataclasses.fields(cls)
-            if f.name != "source_location"
+            if f.name not in ("source_location", "id")
         ]
         entries.append(
             {

@@ -55,6 +55,7 @@ from interpreter.instructions import (
     CallFunction,
     Const,
     InstructionBase,
+    InstructionId,
     Label_,
     LoadRegion,
     Return_,
@@ -111,6 +112,7 @@ class EmitContext:
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
+        self._inst_counter: int = 0
         self._section_paragraphs: dict[str, list[str]] = {}
         self.use_by_file: dict[str, str] = {}
         self.use_by_mode: dict[str, str] = {}
@@ -153,7 +155,9 @@ class EmitContext:
         return name
 
     def emit_inst(self, inst: InstructionBase) -> InstructionBase:
-        """Emit a typed instruction directly."""
+        """Emit a typed instruction directly, assigning it a stable id."""
+        inst = dataclasses.replace(inst, id=InstructionId(self._inst_counter))
+        self._inst_counter += 1
         self._instructions.append(inst)
         return inst
 
