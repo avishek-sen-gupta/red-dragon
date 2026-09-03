@@ -5,9 +5,11 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from interpreter.abstract_location import AbstractLocation
+
 
 @runtime_checkable
-class StorageIdentifier(Protocol):
+class StorageIdentifier(AbstractLocation, Protocol):
     """A named location where a value can live — either a variable or a register.
 
     Both VarName and Register satisfy this protocol structurally.
