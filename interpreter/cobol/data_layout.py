@@ -435,6 +435,27 @@ class DataLayout:
                 tables.pop()
         return False
 
+    def enclosing_record_extent(self, name: str) -> tuple[int, int] | None:
+        """Return ``(offset, byte_length)`` of the top-level 01/77 holding ``name``.
+
+        Called on a *section root* layout, whose ``fields`` are the level-01/77
+        elementary items and whose ``groups`` are the level-01 records. This is
+        the fallback bound for an access no OCCURS construct can bound: a 01
+        record is still a declared construct, so clamping to it keeps the
+        "never widens beyond a declared construct" invariant while staying far
+        away from a region-wide extent. Returns None if ``name`` is absent.
+        """
+        leaf = _ci_get(self.fields, name)
+        if leaf is not None:
+            return (leaf.offset, leaf.byte_length)
+        grp = _ci_get(self.groups, name)
+        if grp is not None:
+            return (grp.offset, grp.total_bytes)
+        for record in self.groups.values():
+            if record.exists(name):
+                return (record.offset, record.total_bytes)
+        return None
+
     def lookup_as_storage(
         self, name: str, qualifiers: tuple[str, ...] = ()
     ) -> FieldLayout | None:

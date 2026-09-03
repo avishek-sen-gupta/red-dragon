@@ -47,6 +47,13 @@ _PROBE_SRC = b"""\
            05  WS-TAIL PIC X(4).
        01  WS-IDX      PIC 9(4).
        01  WS-TRAIL    PIC X(3).
+       01  WS-MLEAD    PIC X(6).
+       01  WS-GRID.
+           05  WS-ROW OCCURS 5 TIMES.
+               10  WS-RLABEL PIC X(2).
+               10  WS-COL OCCURS 3 TIMES.
+                   15  WS-CELL PIC X(4).
+       01  WS-MTRAIL   PIC X(8).
        LINKAGE SECTION.
        01  LK-LEAD     PIC X(5).
        01  LK-MID      PIC X(9).
@@ -151,7 +158,10 @@ def test_computed_subscript_clamps_to_the_table(probe):
     """An unbounded offset must clamp to the OCCURS extent, never the region."""
     ref, _reg = probe.resolve_field_ref("WS-QTY", subscripts=(field_expr("WS-IDX"),))
     assert ref.extent.precision is Precision.CLAMPED
-    assert ref.extent.length == 50, "clamped to WS-TAB (10 entries x 5 bytes)"
+    assert ref.extent.length == 50, (
+        "clamped to the OCCURS construct WS-ENT (10 entries x 5 bytes), "
+        "not to its parent group"
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -186,6 +196,156 @@ def test_linkage_field_reports_the_linkage_region(probe):
     assert mid.extent.end == trail.extent.start
     assert not lead.extent.may_alias(mid.extent)
     assert not mid.extent.may_alias(trail.extent)
+
+
+# ── Multi-dimensional OCCURS ──────────────────────────────────────────────
+#
+# WS-GRID is 5 rows x (2-byte label + 3 x 4-byte cell) = 5 x 14 = 70 bytes,
+# starting at 94 (WS-LEAD 7 + WS-REC 74 + WS-IDX 4 + WS-TRAIL 3 + WS-MLEAD 6).
+# So WS-ROW is (offset 94, stride 14, 5 occurrences) and WS-COL is
+# (offset 96, stride 4, 3 occurrences).
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_two_dimensional_literal_subscripts_give_one_exact_element(probe):
+    """WS-CELL(2,3) is one 4-byte cell, at 96 + 1*14 + 2*4."""
+    mlead, _ = probe.resolve_field_ref("WS-MLEAD")
+    grid, _ = probe.resolve_field_ref("WS-GRID")
+    mtrail, _ = probe.resolve_field_ref("WS-MTRAIL")
+    assert (grid.extent.start, grid.extent.length) == (94, 70)
+    assert mlead.extent.end == grid.extent.start
+    assert grid.extent.end == mtrail.extent.start
+
+    cell, _ = probe.resolve_field_ref(
+        "WS-CELL", subscripts=(literal_expr(2), literal_expr(3))
+    )
+    assert cell.extent.precision is Precision.EXACT
+    assert (cell.extent.start, cell.extent.length) == (118, 4)
+    assert grid.extent.must_cover(cell.extent)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_two_dimensional_elements_tile_their_row_without_overlap(probe):
+    """WS-RLABEL(2) | cells (2,1..3) | WS-RLABEL(3) must abut exactly."""
+    label2, _ = probe.resolve_field_ref("WS-RLABEL", subscripts=(literal_expr(2),))
+    label3, _ = probe.resolve_field_ref("WS-RLABEL", subscripts=(literal_expr(3),))
+    cells = [
+        probe.resolve_field_ref(
+            "WS-CELL", subscripts=(literal_expr(2), literal_expr(col))
+        )[0]
+        for col in (1, 2, 3)
+    ]
+    assert (label2.extent.start, label2.extent.length) == (108, 2)
+    assert [(c.extent.start, c.extent.length) for c in cells] == [
+        (110, 4),
+        (114, 4),
+        (118, 4),
+    ]
+    assert label2.extent.end == cells[0].extent.start
+    assert cells[2].extent.end == label3.extent.start
+    assert not label2.extent.may_alias(cells[0].extent)
+    assert not cells[0].extent.may_alias(cells[1].extent)
+    assert not cells[2].extent.may_alias(label3.extent)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_inner_computed_subscript_clamps_to_one_row(probe):
+    """WS-CELL(2, WS-IDX): row 2 is known, so the clamp is row 2's cells only."""
+    ref, _ = probe.resolve_field_ref(
+        "WS-CELL", subscripts=(literal_expr(2), field_expr("WS-IDX"))
+    )
+    assert ref.extent.precision is Precision.CLAMPED
+    assert (ref.extent.start, ref.extent.length) == (
+        110,
+        12,
+    ), "clamped to WS-COL within row 2 (3 cells x 4 bytes), not the whole grid"
+
+    other_row_before, _ = probe.resolve_field_ref(
+        "WS-CELL", subscripts=(literal_expr(1), literal_expr(3))
+    )
+    other_row_after, _ = probe.resolve_field_ref(
+        "WS-CELL", subscripts=(literal_expr(3), literal_expr(1))
+    )
+    assert not ref.extent.may_alias(other_row_before.extent)
+    assert not ref.extent.may_alias(other_row_after.extent)
+
+    grid, _ = probe.resolve_field_ref("WS-GRID")
+    assert grid.extent.must_cover(ref.extent)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_outer_computed_subscript_clamps_to_the_whole_table(probe):
+    """WS-CELL(WS-IDX, 2): the row is unknown, so the clamp is WS-ROW entire."""
+    ref, _ = probe.resolve_field_ref(
+        "WS-CELL", subscripts=(field_expr("WS-IDX"), literal_expr(2))
+    )
+    assert ref.extent.precision is Precision.CLAMPED
+    assert (ref.extent.start, ref.extent.length) == (94, 70), (
+        "clamped to WS-ROW (5 rows x 14 bytes) — the widest declared construct "
+        "in play, and still not the region"
+    )
+
+    mlead, _ = probe.resolve_field_ref("WS-MLEAD")
+    mtrail, _ = probe.resolve_field_ref("WS-MTRAIL")
+    assert not ref.extent.may_alias(mlead.extent)
+    assert not ref.extent.may_alias(mtrail.extent)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_computed_subscript_without_occurs_clamps_to_the_01_record(probe):
+    """No OCCURS to clamp to: widen to the enclosing 01, never to the region.
+
+    The register path strides by the field's own width here, so the access can
+    leave WS-NAME. An extent of WS-NAME alone would UNDER-approximate and drop
+    a may_alias edge; WS-REC is the smallest declared construct that does not.
+    """
+    ref, _ = probe.resolve_field_ref("WS-NAME", subscripts=(field_expr("WS-IDX"),))
+    record, _ = probe.resolve_field_ref("WS-REC")
+    assert ref.extent.precision is Precision.CLAMPED
+    assert (ref.extent.start, ref.extent.length) == (record.extent.start, 74)
+    assert record.extent.must_cover(ref.extent)
+
+    tail, _ = probe.resolve_field_ref("WS-TAIL")
+    assert ref.extent.may_alias(tail.extent), "the widening is the point"
+
+    lead, _ = probe.resolve_field_ref("WS-LEAD")
+    trail, _ = probe.resolve_field_ref("WS-TRAIL")
+    assert not ref.extent.may_alias(lead.extent)
+    assert not ref.extent.may_alias(trail.extent)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_occurs_tables_and_subscript_strides_stay_in_lockstep(probe):
+    """The two mirrored DFS walks must never drift apart.
+
+    ``all_enclosing_occurs_tables`` duplicates ``all_enclosing_occurs_strides``
+    so that subscript k pairs with table k. Nothing but this test reconciles
+    them, and two functions computing the same thing by different code with no
+    reconciliation is exactly how red-dragon-ilb6, r9s9, qhtv and bqds shipped.
+    """
+    materialised = probe.materialised
+    names = (
+        "WS-CELL",
+        "WS-RLABEL",
+        "WS-COL",
+        "WS-ROW",
+        "WS-QTY",
+        "WS-CODE",
+        "WS-ENT",
+        "WS-NAME",
+        "WS-TRAIL",
+        "LK-MID",
+    )
+    for name in names:
+        tables = materialised.occurs_tables(name)
+        assert materialised.subscript_strides(name) == [
+            table.element_size for table in tables
+        ], f"strides and tables disagree for {name}"
+
+    # Guard against the assertion above going vacuous: the fixture really does
+    # exercise a nested table and a table-free field.
+    assert len(materialised.occurs_tables("WS-CELL")) == 2
+    assert materialised.occurs_tables("WS-NAME") == []
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
