@@ -50,14 +50,27 @@ def test_instruction_id_defaults_to_absent():
 
 
 def test_instruction_id_does_not_affect_equality():
+    # No hash assertion here: SourceLocation is an unhashable pydantic
+    # BaseModel and is a compared field on every instruction, so
+    # hash(instruction) raises TypeError on main today, independent of
+    # this change. Instruction identity deliberately never relies on
+    # hashing an instruction — sidecars key on inst.id instead.
     a = Const.int_(Register("%0"), 1)
     b = Const.int_(Register("%0"), 1)
     from dataclasses import replace
 
     assert a == b
     assert replace(a, id=7) == replace(b, id=9)
-    assert hash(replace(a, id=7)) == hash(replace(b, id=9))
 ```
+
+**Known latent bug, deliberately not fixed here.** `hash(instruction)` raises
+`TypeError` on `main`: `SourceLocation` (`interpreter/ir.py`) is a plain pydantic
+`BaseModel` with no `frozen` config, and it is a compared field on every
+`InstructionBase`. It stays latent because `Definition.__hash__` hashes
+`(variable, block_label, instruction_index)`, never the instruction object. The
+candidate fix is `model_config = ConfigDict(frozen=True)` on `SourceLocation`,
+but that is a behaviour change to a type shared by all 16 frontends and needs a
+check that nothing mutates a `SourceLocation` — out of scope for this plan.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1455,6 +1468,40 @@ If it is high, the recommendation is paragraph summaries (spec §8), which `inte
 
 Per the spec, explicitly out of scope: `CALL USING` region-to-region binding; dataset-mediated cross-program flow; control dependence; element-level subscript precision via strided intervals; retrofitting `Definition`/`Use` onto instruction ids; TUI `DataflowGraphPanel` wiring; MCP query tool.
 
-## Known unknown
+## Resolved: reference modification (spec risk 7.3)
 
-Spec risk 7.3: reference modification with **both** a computed start and a computed length (`WS-FIELD(I:J)`) is unverified. Everything else clamps to a declared extent. Probe this before Task 6 — read how `interpreter/cobol/ref_mod.py` (or `cobol_asg/ref_mod.py`) lowers it, and confirm the extent can be clamped to the field's own extent. If it cannot, that is the one remaining route back to the ⊤ cliff and Task 6 needs a design amendment before proceeding.
+**Probed 2026-09-04. No design amendment needed. Ref-mod cannot reach the ⊤ cliff.**
+
+Reference modification never performs region arithmetic. Both directions work in
+*string* space, on either side of a whole-field region access:
+
+- **Read** — `condition_lowering.py:697` `_lower_ref_mod_operand`:
+  `resolve_field_ref` → `emit_decode_field(rr, ref.fl, ref.offset_reg)` decodes
+  the **whole field**, then `BuiltinName.STRING_SLICE` slices the resulting
+  string. The computed start/length are arguments to `STRING_SLICE`, never
+  offsets into a region.
+- **Write** — `lower_string_inspect.py:32` `_write_ref_mod_target` (and the same
+  path in `lower_arithmetic.py`'s `_store_move_value`): decode the whole field →
+  `BuiltinName.STRING_SPLICE` the new value into the decoded string →
+  `emit_encode_and_write(target_rr, target_ref.fl, ..., target_ref.offset_reg)`
+  writes the **whole field** back.
+
+**Consequence for Task 6:** a ref-mod access gets `Precision.EXACT` over the
+field's full extent (`fl.offset`, `fl.byte_length`), in both directions,
+regardless of how computed the start and length are. No clamping is required and
+no special case is needed — the existing bare-field extent logic already covers
+it, because that is genuinely what the memory access is.
+
+**Consequence for Task 8, and this one matters:** a ref-mod write is a
+*read-modify-write* of the whole field. Modelling it as an EXACT whole-field
+write means it will `must_cover` and therefore **kill** prior definitions of that
+field. That is correct only because the lowering also emits a whole-field
+**read** of the same field immediately before the write, so the dependency on the
+prior value flows through the def-use chain (prior def → decode → splice → write)
+rather than through the kill relation. Do not "optimize away" that read effect,
+and do not model the ref-mod write as CLAMPED to avoid the kill: dropping the
+read effect would silently lose the dependency on the field's prior contents.
+
+Task 10 should include a case covering this: `MOVE X TO WS-DEST(3:2)` followed by
+a read of `WS-DEST` must show `WS-DEST` depending on **both** `X` and whatever
+previously defined `WS-DEST`.
