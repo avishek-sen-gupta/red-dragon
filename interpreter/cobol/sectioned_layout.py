@@ -13,6 +13,7 @@ from interpreter.cobol.data_layout import (
     build_data_layout,
     build_index_layout,
 )
+from interpreter.cobol.region_id import RegionId
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,18 @@ class MaterialisedSectionedLayout:
         ``qualifiers`` (``OF``/``IN`` ancestor group names) disambiguate a
         duplicated elementary name within the owning group (CardDemo CSUTLDTC's
         two Vstring groups share leaf names). red-dragon-p7qe."""
+        fl, reg, _region = self.resolve_with_region(name, qualifiers)
+        return fl, reg
+
+    def resolve_with_region(
+        self, name: str, qualifiers: tuple[str, ...] = ()
+    ) -> tuple[FieldLayout, Register, RegionId]:
+        """Return (FieldLayout, region_register, RegionId).
+
+        Precedence: LOCAL-STORAGE > WORKING-STORAGE > LINKAGE > FILE >
+        SPECIAL-REGISTERS > INDEXES. See resolve()'s docstring for the
+        ``qualifiers`` semantics; this is the sole place that precedence
+        logic lives — resolve() delegates here."""
         ls_layout, ls_reg = self.local_storage
         ls_fl = ls_layout.lookup_as_storage(name, qualifiers)
         if ls_fl is not None:
@@ -63,32 +76,32 @@ class MaterialisedSectionedLayout:
                     "Field %r found in both LOCAL-STORAGE and WORKING-STORAGE — LOCAL-STORAGE wins (collision)",
                     name,
                 )
-            return ls_fl, ls_reg
+            return ls_fl, ls_reg, RegionId.LOCAL_STORAGE
 
         ws_layout, ws_reg = self.working_storage
         ws_fl = ws_layout.lookup_as_storage(name, qualifiers)
         if ws_fl is not None:
-            return ws_fl, ws_reg
+            return ws_fl, ws_reg, RegionId.WORKING_STORAGE
 
         lk_layout, lk_reg = self.linkage
         lk_fl = lk_layout.lookup_as_storage(name, qualifiers)
         if lk_fl is not None:
-            return lk_fl, lk_reg
+            return lk_fl, lk_reg, RegionId.LINKAGE
 
         file_layout, file_reg = self.file
         file_fl = file_layout.lookup_as_storage(name, qualifiers)
         if file_fl is not None:
-            return file_fl, file_reg
+            return file_fl, file_reg, RegionId.FILE
 
         sr_layout, sr_reg = self.special_registers
         sr_fl = sr_layout.lookup_as_storage(name, qualifiers)
         if sr_fl is not None:
-            return sr_fl, sr_reg
+            return sr_fl, sr_reg, RegionId.SPECIAL_REGISTERS
 
         ix_layout, ix_reg = self.indexes
         ix_fl = ix_layout.lookup_as_storage(name, qualifiers)
         if ix_fl is not None:
-            return ix_fl, ix_reg
+            return ix_fl, ix_reg, RegionId.INDEXES
 
         raise KeyError(f"Field {name!r} not found in any DATA DIVISION section")
 
