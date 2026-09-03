@@ -13,20 +13,53 @@ from cobol_asg.cobol_statements import (
 )
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.field_extent import FieldExtent, Precision
+from interpreter.cobol.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AllocRegion,
     CallWithMemory,
     Label_,
-    LoadRegion,
     StoreVar,
-    WriteRegion,
 )
 from interpreter.ir import CodeLabel
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
+
+
+def _ws_extent(fl: FieldLayout) -> FieldExtent:
+    """A USING parameter's slot in the caller's WORKING-STORAGE region.
+
+    The CALL marshalling resolves each USING name with ``materialised.resolve``
+    — no subscripts are in play — so the access is the field's whole declared
+    range, EXACT.
+    """
+    return FieldExtent(
+        region=RegionId.WORKING_STORAGE,
+        start=fl.offset,
+        length=fl.byte_length,
+        precision=Precision.EXACT,
+        field_name=fl.name,
+    )
+
+
+def _params_extent(fl: FieldLayout, offset: int) -> FieldExtent:
+    """A USING parameter's slot in the freshly allocated marshalling buffer.
+
+    That buffer becomes the callee's LINKAGE storage, so it is named as a
+    LINKAGE extent. This deliberately carries NO cross-region binding: caller
+    and callee extents are recorded independently and no alias edge is drawn
+    between them, which is out of scope for this analysis.
+    """
+    return FieldExtent(
+        region=RegionId.LINKAGE,
+        start=offset,
+        length=fl.byte_length,
+        precision=Precision.EXACT,
+        field_name=fl.name,
+    )
 
 
 def lower_call(
@@ -71,22 +104,20 @@ def lower_call(
         for _, fl in param_fls:
             src_off = ctx.const_to_reg(fl.offset)
             tmp = ctx.fresh_reg()
-            ctx.emit_inst(
-                LoadRegion(
-                    result_reg=tmp,
-                    region_reg=ws_reg,
-                    offset_reg=src_off,
-                    length=fl.byte_length,
-                )
+            ctx._emit_load_region(
+                result_reg=tmp,
+                region_reg=ws_reg,
+                offset_reg=src_off,
+                length=fl.byte_length,
+                extent=_ws_extent(fl),
             )
             dst_off = ctx.const_to_reg(cumulative)
-            ctx.emit_inst(
-                WriteRegion(
-                    region_reg=params_reg,
-                    offset_reg=dst_off,
-                    length=fl.byte_length,
-                    value_reg=tmp,
-                )
+            ctx._emit_write_region(
+                region_reg=params_reg,
+                offset_reg=dst_off,
+                value_reg=tmp,
+                length=fl.byte_length,
+                extent=_params_extent(fl, cumulative),
             )
             cumulative += fl.byte_length
     else:
@@ -121,22 +152,20 @@ def lower_call(
             if param.param_type == "REFERENCE":
                 src_off = ctx.const_to_reg(cumulative)
                 tmp = ctx.fresh_reg()
-                ctx.emit_inst(
-                    LoadRegion(
-                        result_reg=tmp,
-                        region_reg=params_reg,
-                        offset_reg=src_off,
-                        length=fl.byte_length,
-                    )
+                ctx._emit_load_region(
+                    result_reg=tmp,
+                    region_reg=params_reg,
+                    offset_reg=src_off,
+                    length=fl.byte_length,
+                    extent=_params_extent(fl, cumulative),
                 )
                 dst_off = ctx.const_to_reg(fl.offset)
-                ctx.emit_inst(
-                    WriteRegion(
-                        region_reg=ws_reg,
-                        offset_reg=dst_off,
-                        length=fl.byte_length,
-                        value_reg=tmp,
-                    )
+                ctx._emit_write_region(
+                    region_reg=ws_reg,
+                    offset_reg=dst_off,
+                    value_reg=tmp,
+                    length=fl.byte_length,
+                    extent=_ws_extent(fl),
                 )
             cumulative += fl.byte_length
 
