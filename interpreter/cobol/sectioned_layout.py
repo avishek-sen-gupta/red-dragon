@@ -10,6 +10,7 @@ from cobol_asg.asg_types import CobolASG
 from interpreter.cobol.data_layout import (
     DataLayout,
     FieldLayout,
+    OccursTable,
     build_data_layout,
     build_index_layout,
 )
@@ -135,6 +136,24 @@ class MaterialisedSectionedLayout:
         ):
             if layout.exists(name):
                 return layout.all_enclosing_occurs_strides(name)
+        return []
+
+    def occurs_tables(self, name: str) -> list[OccursTable]:
+        """Return the OCCURS constructs enclosing ``name``, outermost first.
+
+        Positionally aligned with :meth:`subscript_strides` (same sections,
+        same precedence, same walk), so subscript *k* belongs to table *k*.
+        Used to bound a computed-subscript access to a declared table rather
+        than to the whole region.
+        """
+        for layout, _reg in (
+            self.local_storage,
+            self.working_storage,
+            self.linkage,
+            self.file,
+        ):
+            if layout.exists(name):
+                return layout.all_enclosing_occurs_tables(name)
         return []
 
     def has_field(self, name: str) -> bool:

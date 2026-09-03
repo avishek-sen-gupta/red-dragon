@@ -98,6 +98,25 @@ class FieldLayout:
 
 
 @dataclass(frozen=True)
+class OccursTable:
+    """A declared OCCURS construct, as a bounded byte span.
+
+    ``offset`` is where occurrence 1 starts, ``element_size`` the subscript
+    stride, and ``total_bytes`` the whole table. This is the tightest
+    *declared* bound an access with a computed subscript can be clamped to:
+    the index is unknown, but it cannot escape the table.
+    """
+
+    offset: int
+    element_size: int
+    occurs_count: int
+
+    @property
+    def total_bytes(self) -> int:
+        return self.element_size * self.occurs_count
+
+
+@dataclass(frozen=True)
 class DataLayout:
     """Recursive data layout for a COBOL record.
 
@@ -369,6 +388,51 @@ class DataLayout:
                 return True
             if child_grp.occurs_count > 0 and child_grp.element_size > 0:
                 strides.pop()
+        return False
+
+    def all_enclosing_occurs_tables(self, name: str) -> list[OccursTable]:
+        """Return the OCCURS constructs enclosing ``name``, outermost first.
+
+        The positional counterpart of :meth:`all_enclosing_occurs_strides` —
+        same tables in the same order, but carrying each table's offset and
+        occurrence count as well as its stride, which is what bounding a
+        computed-subscript access needs. Returns [] if ``name`` is not found
+        or has no enclosing OCCURS.
+        """
+        tables: list[OccursTable] = []
+        self._collect_occurs_tables(name, tables)
+        return tables
+
+    def _collect_occurs_tables(self, name: str, tables: list[OccursTable]) -> bool:
+        """DFS mirroring :meth:`_collect_occurs_strides`, collecting whole tables."""
+        leaf = _ci_get(self.fields, name)
+        if leaf is not None:
+            if leaf.occurs_count > 0 and leaf.element_size > 0:
+                tables.append(
+                    OccursTable(leaf.offset, leaf.element_size, leaf.occurs_count)
+                )
+            return True
+        grp = _ci_get(self.groups, name)
+        if grp is not None:
+            if grp.occurs_count > 0 and grp.element_size > 0:
+                tables.append(
+                    OccursTable(grp.offset, grp.element_size, grp.occurs_count)
+                )
+            return True
+        for child_grp in self.groups.values():
+            pushed = child_grp.occurs_count > 0 and child_grp.element_size > 0
+            if pushed:
+                tables.append(
+                    OccursTable(
+                        child_grp.offset,
+                        child_grp.element_size,
+                        child_grp.occurs_count,
+                    )
+                )
+            if child_grp._collect_occurs_tables(name, tables):
+                return True
+            if pushed:
+                tables.pop()
         return False
 
     def lookup_as_storage(

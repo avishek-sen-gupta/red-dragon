@@ -49,6 +49,7 @@ from cobol_asg.ref_mod import (
     RefModOperand,
     RefModReference,
 )
+from interpreter.cobol.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -612,8 +613,14 @@ def lower_move_corresponding(
     stmt: MoveCorrespondingStatement,
     layout: DataLayout,
     region_reg: Register,
+    region: RegionId,
 ) -> None:
-    """MOVE CORRESPONDING src TO dst — copy matching direct leaf fields."""
+    """MOVE CORRESPONDING src TO dst — copy matching direct leaf fields.
+
+    ``region`` names the section buffer ``layout``/``region_reg`` belong to;
+    it cannot be derived here because the FieldLayouts are taken straight out
+    of ``layout`` rather than resolved by name.
+    """
     src_layout = layout.lookup_group(stmt.source)
 
     for target_name in stmt.targets:
@@ -624,27 +631,32 @@ def lower_move_corresponding(
             src_fl = src_layout.fields[name]
             dst_fl = dst_layout.fields[name]
 
-            src_ref = ctx.resolve_field_ref_from(src_fl, region_reg)
+            src_ref = ctx.resolve_field_ref_from(src_fl, region_reg, region)
             decoded = ctx.emit_decode_field(region_reg, src_fl, src_ref.offset_reg)
             value_str = ctx.emit_to_string(decoded)
 
-            dst_ref = ctx.resolve_field_ref_from(dst_fl, region_reg)
+            dst_ref = ctx.resolve_field_ref_from(dst_fl, region_reg, region)
             ctx.emit_encode_and_write(region_reg, dst_fl, value_str, dst_ref.offset_reg)
 
 
 def _find_group_and_reg(
     name: str, materialised: MaterialisedSectionedLayout
-) -> tuple[DataLayout, Register] | None:
-    """Return (group DataLayout, region Register) for the named group, or None."""
-    for layout, reg in (
-        materialised.local_storage,
-        materialised.working_storage,
-        materialised.linkage,
-        materialised.file,
+) -> tuple[DataLayout, Register, RegionId] | None:
+    """Return (group DataLayout, region Register, RegionId) for the group, or None.
+
+    The RegionId is carried out alongside the register because the caller
+    builds field extents from the group's FieldLayouts, and an extent is only
+    comparable against another within the same region buffer.
+    """
+    for layout, reg, region in (
+        (*materialised.local_storage, RegionId.LOCAL_STORAGE),
+        (*materialised.working_storage, RegionId.WORKING_STORAGE),
+        (*materialised.linkage, RegionId.LINKAGE),
+        (*materialised.file, RegionId.FILE),
     ):
         try:
             grp = layout.lookup_group(name)
-            return grp, reg
+            return grp, reg, region
         except KeyError:
             pass
     return None
@@ -668,18 +680,18 @@ def lower_arithmetic_corresponding(
     if src_result is None or dst_result is None:
         return
 
-    src_group, src_rr = src_result
-    dst_group, dst_rr = dst_result
+    src_group, src_rr, src_region = src_result
+    dst_group, dst_rr, dst_region = dst_result
 
     matching_names = src_group.fields.keys() & dst_group.fields.keys()
     for name in matching_names:
         src_fl = src_group.fields[name]
         dst_fl = dst_group.fields[name]
 
-        src_ref = ctx.resolve_field_ref_from(src_fl, src_rr)
+        src_ref = ctx.resolve_field_ref_from(src_fl, src_rr, src_region)
         src_val = ctx.emit_decode_field(src_rr, src_fl, src_ref.offset_reg)
 
-        dst_ref = ctx.resolve_field_ref_from(dst_fl, dst_rr)
+        dst_ref = ctx.resolve_field_ref_from(dst_fl, dst_rr, dst_region)
         dst_val = ctx.emit_decode_field(dst_rr, dst_fl, dst_ref.offset_reg)
 
         result_reg = ctx.fresh_reg()

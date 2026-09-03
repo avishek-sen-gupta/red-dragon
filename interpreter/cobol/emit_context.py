@@ -24,7 +24,8 @@ from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolE
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import FieldLayout
-from interpreter.cobol.field_resolution import ResolvedFieldRef
+from interpreter.cobol.field_extent import FieldExtent, Precision
+from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
 from interpreter.cobol.figurative_constants import (
     COBOL_FIGURATIVE_CONSTANTS,
     COBOL_RAW_FIGURATIVE_BYTES,
@@ -45,6 +46,7 @@ from interpreter.cobol.ir_encoders import (
     build_encode_zoned_separate_ir,
 )
 from interpreter.cobol.pic_scale import encode_scaled_digits
+from interpreter.cobol.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.constants import FoundationTypeName
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
@@ -262,12 +264,23 @@ class EmitContext:
         from interpreter.cobol.condition_lowering import lower_expr_node
 
         base_name = name
-        fl, region_reg = materialised.resolve(base_name, qualifiers)
+        fl, region_reg, region = materialised.resolve_with_region(base_name, qualifiers)
 
         if not subscripts:
             offset_reg = self.fresh_reg()
             self.emit_inst(Const.int_(offset_reg, fl.offset))
-            return ResolvedFieldRef(fl=fl, offset_reg=offset_reg), region_reg
+            extent = field_access_extent(
+                name=base_name,
+                fl=fl,
+                region=region,
+                subscripts=(),
+                tables=(),
+                access_len=fl.byte_length,
+            )
+            return (
+                ResolvedFieldRef(fl=fl, offset_reg=offset_reg, extent=extent),
+                region_reg,
+            )
 
         # ── subscripted access (1-D or multi-D) ──────────────────────────────
         # Subscript stride vs. accessed-element width.
@@ -389,7 +402,21 @@ class EmitContext:
             redefines=fl.redefines,
             value=fl.value,
         )
-        return ResolvedFieldRef(fl=element_fl, offset_reg=final_offset_reg), region_reg
+        # The extent is parallel, statically-known information — it is derived
+        # from the SAME strides the register arithmetic above used, but from
+        # the structured subscript nodes rather than from the emitted BINOPs.
+        extent = field_access_extent(
+            name=base_name,
+            fl=fl,
+            region=region,
+            subscripts=subscripts,
+            tables=materialised.occurs_tables(base_name),
+            access_len=access_len,
+        )
+        return (
+            ResolvedFieldRef(fl=element_fl, offset_reg=final_offset_reg, extent=extent),
+            region_reg,
+        )
 
     def has_field(self, name: str, materialised: MaterialisedSectionedLayout) -> bool:
         """Check if a name (possibly subscripted) refers to a known field."""
@@ -402,15 +429,22 @@ class EmitContext:
         return materialised.group_leaf_names(group_name)
 
     def resolve_field_ref_from(
-        self, fl: FieldLayout, region_reg: Register
+        self, fl: FieldLayout, region_reg: Register, region: RegionId
     ) -> ResolvedFieldRef:
         """Resolve a FieldLayout to a ResolvedFieldRef without a name lookup.
 
         Used when the FieldLayout is already known (e.g. MOVE CORRESPONDING).
+        There is no name to look up and therefore no region to derive, so the
+        caller — which found the FieldLayout in a particular section's layout —
+        must say which region it came from. Always EXACT: the access is the
+        field's whole declared extent, with no subscript in play.
         """
         offset_reg = self.fresh_reg()
         self.emit_inst(Const.int_(offset_reg, fl.offset))
-        return ResolvedFieldRef(fl=fl, offset_reg=offset_reg)
+        extent = FieldExtent(
+            region, fl.offset, fl.byte_length, Precision.EXACT, fl.name
+        )
+        return ResolvedFieldRef(fl=fl, offset_reg=offset_reg, extent=extent)
 
     # ── Field Encode / Decode ─────────────────────────────────────
 
