@@ -82,6 +82,7 @@ from interpreter.cobol.lower_string_inspect import (
     lower_string,
     lower_unstring,
 )
+from interpreter.cobol.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ def dispatch_statement(
     elif isinstance(stmt, MoveCorrespondingStatement):
         # MoveCorrespondingStatement still uses (layout, region_reg) — uses first WS section
         ws_layout, ws_reg = materialised.working_storage
-        lower_move_corresponding(ctx, stmt, ws_layout, ws_reg)
+        lower_move_corresponding(ctx, stmt, ws_layout, ws_reg, RegionId.WORKING_STORAGE)
     elif isinstance(stmt, ArithmeticCorrespondingStatement):
         lower_arithmetic_corresponding(ctx, stmt, materialised)
     elif isinstance(stmt, ArithmeticStatement):
