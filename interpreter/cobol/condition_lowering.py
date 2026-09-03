@@ -284,8 +284,13 @@ def _lower_condition_node(
     if "condition_name" in node:
         # 88-level condition name reference
         name = node["condition_name"]
+        subscripts = tuple(
+            expr_from_dict(s) for s in node.get("condition_subscripts", [])
+        )
         if condition_index.has_condition(name):
-            inner = _expand_condition_name(ctx, name, condition_index, materialised)
+            inner = _expand_condition_name(
+                ctx, name, condition_index, materialised, subscripts=subscripts
+            )
         else:
             # Fall back to string lowering for unresolved names
             inner = _lower_condition_str(ctx, name, materialised, condition_index)
