@@ -62,6 +62,7 @@ def field_access_extent(
     region: RegionId,
     subscripts: Sequence[ExprNode],
     tables: Sequence[OccursTable],
+    record: tuple[int, int] | None,
     access_len: int,
 ) -> FieldExtent:
     """The byte range a field reference touches, bounded by declared structure.
@@ -76,11 +77,22 @@ def field_access_extent(
       subscripts, which *are* known) and its full ``element_size *
       occurs_count`` span.
 
+    When a computed subscript is written on something that declares no OCCURS
+    at all — a malformed program — there is no table to clamp to, and the
+    register path falls back to striding by the field's own width, so the
+    runtime address genuinely can leave the field. Clamping to the field would
+    UNDER-approximate, and an under-sized extent silently misses a real overlap
+    in ``may_alias`` — a dropped dependency edge, the very failure this design
+    exists to prevent. (Under-approximating is safe for ``must_cover``, which
+    refuses to fire on CLAMPED, and unsafe for ``may_alias``; both consume this
+    extent.) So the fallback is ``record``, the enclosing level-01 — still a
+    declared construct, and nowhere near a region-wide extent.
+
     There is deliberately no path to a region-wide extent. The widest thing
-    this can return is one declared OCCURS table, or — when a subscript is
-    written on something that declares no OCCURS at all, which is a malformed
-    program — the field's own extent. ``tables`` is positionally aligned with
-    ``subscripts`` exactly as the strides used for the register arithmetic are.
+    this can return is one declared OCCURS table or one declared 01 record.
+    ``tables`` is positionally aligned with ``subscripts`` exactly as the
+    strides used for the register arithmetic are. ``record`` is consulted only
+    in that degenerate branch.
     """
     if not subscripts:
         return FieldExtent(region, fl.offset, fl.byte_length, Precision.EXACT, name)
@@ -103,10 +115,13 @@ def field_access_extent(
         return FieldExtent(region, offset, access_len, Precision.EXACT, name)
 
     if not aligned:
-        # Computed subscript on something with no declared OCCURS. Nothing
-        # narrower is knowable, and widening to the region is the cliff — clamp
-        # to the field's own extent, the documented worst case.
-        return FieldExtent(region, fl.offset, fl.byte_length, Precision.CLAMPED, name)
+        # Computed subscript on something with no declared OCCURS. The register
+        # path strides by the field's own width, so the access can leave the
+        # field: clamping to the field would under-approximate and drop a
+        # may_alias edge. Clamp to the enclosing 01 record instead — still a
+        # declared construct, and still far from the region-wide cliff.
+        start, length = record if record is not None else (fl.offset, fl.byte_length)
+        return FieldExtent(region, start, length, Precision.CLAMPED, name)
 
     unknown_dim = next(index for index, value in enumerate(values) if value is None)
     if unknown_dim >= len(aligned):
