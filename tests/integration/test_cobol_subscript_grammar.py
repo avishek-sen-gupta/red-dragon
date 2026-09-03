@@ -236,3 +236,153 @@ _THREE_DIM_CASES = [
 )
 def test_three_dim_subscript_spelling_selects_the_named_cell(statement, expected):
     assert _outf(_THREE_DIM + [f"    {statement}", "    STOP RUN."]) == expected
+
+
+# ── the same subscripts in other statement contexts ─────────────────────────
+# `subscript` is shared by every subscriptable reference, not just MOVE
+# operands: relation conditions, arithmetic expressions and the level-88
+# conditionNameSubscriptReference all route through it. EXEC CICS does NOT —
+# ProLeap captures it as raw lines (`execCicsStatement : EXECCICSLINE*
+# EXECCICSENDLINE`), so its operands are cicada's grammar, not this one.
+
+_IF_CASES = [
+    ("literal subscripts", "IF WS-CELL(2, 3) = 23", 1),
+    ("data name subscripts", "IF WS-CELL(WS-I, WS-J) = 23", 1),
+    ("data name then literal", "IF WS-CELL(WS-I, 3) = 23", 1),
+    ("data name then literal, space", "IF WS-CELL(WS-I 3) = 23", 1),
+    ("relative subscript", "IF WS-CELL(WS-I, WS-I + 1) = 23", 1),
+    ("both sides subscripted", "IF WS-CELL(WS-I, 3) = WS-CELL(2, WS-J)", 1),
+    ("negative case stays false", "IF WS-CELL(WS-I, 3) = 99", 9),
+]
+
+
+@covers(CobolFeature.SUBSCRIPT_ACCESS)
+@pytest.mark.parametrize(
+    "condition,expected",
+    [(c, e) for _, c, e in _IF_CASES],
+    ids=[label for label, _, _ in _IF_CASES],
+)
+def test_subscripted_operand_in_an_if_condition(condition, expected):
+    """A relation condition resolves subscripts the same way a MOVE does."""
+    assert (
+        _outf(
+            _two_dim("CONTINUE")[:-1]
+            + [
+                f"    {condition}",
+                "        MOVE 1 TO OUTF",
+                "    ELSE",
+                "        MOVE 9 TO OUTF",
+                "    END-IF",
+                "    STOP RUN.",
+            ]
+        )
+        == expected
+    )
+
+
+_COMPUTE_CASES = [
+    ("literal subscripts", "COMPUTE OUTF = WS-CELL(2, 3)", 23),
+    ("data name subscripts", "COMPUTE OUTF = WS-CELL(WS-I, WS-J)", 23),
+    ("data name then literal", "COMPUTE OUTF = WS-CELL(WS-I, 3)", 23),
+    ("data name then literal, space", "COMPUTE OUTF = WS-CELL(WS-I 3)", 23),
+    ("relative subscript", "COMPUTE OUTF = WS-CELL(WS-I, WS-I + 1)", 23),
+    ("two subscripted terms", "COMPUTE OUTF = WS-CELL(WS-I, 3) + WS-CELL(1, 1)", 34),
+    ("subscripted term and literal", "COMPUTE OUTF = WS-CELL(WS-I, 3) * 2", 46),
+]
+
+
+@covers(CobolFeature.SUBSCRIPT_ACCESS)
+@pytest.mark.parametrize(
+    "statement,expected",
+    [(s, e) for _, s, e in _COMPUTE_CASES],
+    ids=[label for label, _, _ in _COMPUTE_CASES],
+)
+def test_subscripted_operand_in_a_compute(statement, expected):
+    assert _outf(_two_dim(statement)) == expected
+
+
+@pytest.mark.xfail(
+    reason="red-dragon-0nj4: COMPUTE drops its receiving field's subscripts and "
+    "writes occurrence 1. Pre-existing, unrelated to the subscript grammar.",
+    strict=True,
+)
+@covers(CobolFeature.SUBSCRIPT_ACCESS)
+def test_compute_writes_through_a_subscripted_target():
+    """COMPUTE's receiving field takes subscripts too."""
+    assert (
+        _outf(
+            _two_dim("COMPUTE WS-CELL(WS-I, 3) = 99")[:-1]
+            + ["    MOVE WS-CELL(2, 3) TO OUTF", "    STOP RUN."]
+        )
+        == 99
+    )
+
+
+# ── level-88 condition names: conditionNameSubscriptReference ───────────────
+_EIGHTY_EIGHT = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. SUBGRM88.",
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    "01 OUTF                      PIC 9(4) VALUE 0.",
+    "01 WS-TAB.",
+    "   05 WS-ROW OCCURS 3 TIMES.",
+    "      10 WS-FLAG             PIC X(01).",
+    "         88 FLAG-ON          VALUE 'Y'.",
+    "01 WS-I                      PIC 9(1) VALUE 2.",
+    "PROCEDURE DIVISION.",
+    "MAIN.",
+    "    MOVE 'N' TO WS-FLAG(1)",
+    "    MOVE 'Y' TO WS-FLAG(2)",
+    "    MOVE 'Y' TO WS-FLAG(3)",
+]
+
+_EIGHTY_EIGHT_TRUE = [
+    ("literal subscript", "IF FLAG-ON(2)"),
+    ("data name subscript", "IF FLAG-ON(WS-I)"),
+    ("relative subscript", "IF FLAG-ON(WS-I + 1)"),
+]
+
+_EIGHTY_EIGHT_FALSE = [
+    ("literal subscript", "IF FLAG-ON(1)"),
+    ("data name subscript", "IF FLAG-ON(WS-I - 1)"),
+]
+
+
+def _eighty_eight(condition: str) -> list[str]:
+    return _EIGHTY_EIGHT + [
+        f"    {condition}",
+        "        MOVE 1 TO OUTF",
+        "    ELSE",
+        "        MOVE 9 TO OUTF",
+        "    END-IF",
+        "    STOP RUN.",
+    ]
+
+
+@pytest.mark.xfail(
+    reason="red-dragon-8u47: a subscripted level-88 always evaluates false, so it "
+    "never fires for the occurrence it names. Pre-existing, unrelated to the "
+    "subscript grammar.",
+    strict=True,
+)
+@covers(CobolFeature.SUBSCRIPT_ACCESS)
+@pytest.mark.parametrize(
+    "condition",
+    [c for _, c in _EIGHTY_EIGHT_TRUE],
+    ids=[label for label, _ in _EIGHTY_EIGHT_TRUE],
+)
+def test_subscripted_condition_name_is_true_for_the_named_occurrence(condition):
+    """A level-88 under OCCURS is referenced through
+    conditionNameSubscriptReference, which shares the `subscript` rule."""
+    assert _outf(_eighty_eight(condition)) == 1
+
+
+@covers(CobolFeature.SUBSCRIPT_ACCESS)
+@pytest.mark.parametrize(
+    "condition",
+    [c for _, c in _EIGHTY_EIGHT_FALSE],
+    ids=[label for label, _ in _EIGHTY_EIGHT_FALSE],
+)
+def test_subscripted_condition_name_is_false_for_a_non_matching_occurrence(condition):
+    assert _outf(_eighty_eight(condition)) == 9
