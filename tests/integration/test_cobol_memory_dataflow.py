@@ -39,13 +39,14 @@ from dataclasses import dataclass
 import pytest
 
 from cobol_asg.cobol_parser import make_cobol_parser
-from interpreter.cfg import build_cfg
+from interpreter.cfg import CFG, build_cfg
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.field_extent import FieldExtent
 from interpreter.cobol.memory_dataflow import (
     MemoryDataflowResult,
     analyze_memory_dataflow,
     build_def_use_chains,
+    rewrite_cfg,
 )
 from interpreter.cobol.memory_effects import CollectingRecorder, NullRecorder
 from interpreter.dataflow import DefUseLink
@@ -65,6 +66,19 @@ from tests.covers import NotLanguageFeature, covers
 #   WS-AUDIT-REC   the unrelated record. Nothing in the program moves a value
 #                  between it and anything above, so an edge either way is
 #                  mush.
+#
+# The employee record is deliberately WRITTEN in 1000-LOAD-EMPLOYEE and READ in
+# 4000-REPORT-EMPLOYEE, three paragraphs later. That is not cosmetic. If every
+# data path sat inside one paragraph, every edge assertion below — the anti-mush
+# check included — would be satisfied by intra-block flow alone, and would pass
+# unchanged on a CFG whose PERFORM return edges were severed. The anti-mush
+# result would then mean "no definition ever arrived" rather than "definitions
+# arrived and were excluded by byte-disjointness", which is the claim being
+# made. The cross-paragraph path forces the definitions from 1000 through
+# ``reach_in`` at every read in 2000/3000/4000/5000, so disjointness is doing
+# the work. ``test_the_layout_program_really_exercises_cross_paragraph_flow``
+# pins it at the chain level and fails outright if the CFG comes apart.
+
 _LAYOUT_PROGRAM = """\
        IDENTIFICATION DIVISION.
        PROGRAM-ID. PAYROLL.
@@ -108,18 +122,18 @@ _LAYOUT_PROGRAM = """\
        01  WS-OUT-TABLE  PIC X(16).
        01  WS-OUT-FTR    PIC X(2).
        01  WS-OUT-AUDIT  PIC X(3).
+       01  WS-FINAL-AUDIT PIC X(3).
        PROCEDURE DIVISION.
        MAIN-PARA.
            PERFORM 1000-LOAD-EMPLOYEE.
            PERFORM 2000-PACK-NUMBER.
            PERFORM 3000-FILL-TABLE.
-           PERFORM 4000-WRITE-AUDIT.
+           PERFORM 4000-REPORT-EMPLOYEE.
+           PERFORM 5000-WRITE-AUDIT.
+           MOVE WS-OUT-AUDIT TO WS-FINAL-AUDIT.
            STOP RUN.
        1000-LOAD-EMPLOYEE.
            MOVE WS-IN-NAME TO WS-EMP-REC.
-           MOVE WS-EMP-LEAD TO WS-OUT-LEAD.
-           MOVE WS-EMP-NAME TO WS-OUT-NAME.
-           MOVE WS-EMP-TAIL TO WS-OUT-TAIL.
        2000-PACK-NUMBER.
            MOVE WS-IN-NUM TO WS-P-NUM.
            MOVE WS-IN-EDGE TO WS-U-LEAD.
@@ -134,7 +148,11 @@ _LAYOUT_PROGRAM = """\
            MOVE WS-TABLE TO WS-OUT-TABLE.
            MOVE WS-TAB-HDR TO WS-OUT-HDR.
            MOVE WS-TAB-FTR TO WS-OUT-FTR.
-       4000-WRITE-AUDIT.
+       4000-REPORT-EMPLOYEE.
+           MOVE WS-EMP-LEAD TO WS-OUT-LEAD.
+           MOVE WS-EMP-NAME TO WS-OUT-NAME.
+           MOVE WS-EMP-TAIL TO WS-OUT-TAIL.
+       5000-WRITE-AUDIT.
            MOVE WS-IN-AUDIT TO WS-AUD-ID.
            MOVE WS-AUD-ID TO WS-OUT-AUDIT.
 """
@@ -172,17 +190,28 @@ _PERFORM_PROGRAM = """\
 
 @dataclass
 class _Analysed:
-    """All three layers: the graphs, the flow-sensitive chains, and the raw
-    extents the lowering declared.
+    """All four layers: the graphs, the flow-sensitive chains, the analysed
+    CFG, and the raw extents the lowering declared.
 
-    The chains are not a luxury. A field-graph edge can be produced by
-    transitive closure over field-level nodes without any real flow behind it,
-    so for anything that is really a claim about CONTROL flow the graph is not
-    evidence — see ``test_a_value_written_before_a_perform_reaches_a_read``.
+    The chains are not a luxury, and this is the durable statement of why. A
+    field-graph edge can be manufactured with the CFG in pieces: the write of a
+    field traces its value REGISTER straight to the read that fed it — a value
+    edge needing no reaching definition at all — and transitive closure over
+    field-level nodes supplies the rest of the path. So a field-graph edge is
+    NOT evidence for any claim about CONTROL flow; assert those on ``chains``,
+    where a severed edge shows up as the link simply not existing. Measured,
+    not theorised: see
+    ``test_a_value_written_before_a_perform_reaches_a_read_after_it``.
+
+    ``cfg`` is the REWRITTEN one — the graph the analysis actually solved over,
+    including the PERFORM return edges ``build_cfg`` cannot derive. Asserting
+    against the pre-rewrite CFG would assert against a graph no result came
+    from.
     """
 
     result: MemoryDataflowResult
     chains: list[DefUseLink]
+    cfg: CFG
     extents: dict[str, set[FieldExtent]]
 
 
@@ -200,6 +229,7 @@ def _analyze(source: str) -> _Analysed:
     return _Analysed(
         result=analyze_memory_dataflow(cfg, recorder.effects),
         chains=build_def_use_chains(cfg, recorder.effects),
+        cfg=rewrite_cfg(cfg, recorder.effects),
         extents=extents,
     )
 
@@ -245,6 +275,109 @@ def _deps(analysed: _Analysed, field_name: str) -> set[str]:
     and must fail rather than quietly satisfy a negative assertion.
     """
     return analysed.result.field_graph[field_name]
+
+
+# ── Layout: the CFG the layout results were actually measured on ───
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_layout_program_really_exercises_cross_paragraph_flow(layout):
+    """The layout program's edges must come from flow, not from locality.
+
+    WS-EMP-REC is written in 1000-LOAD-EMPLOYEE and its children are read in
+    4000-REPORT-EMPLOYEE, with 2000 and 3000 in between. This asserts the
+    definition genuinely travels: the read's reaching definition is the one in
+    ``para_1000-LOAD-EMPLOYEE``.
+
+    Without a cross-paragraph path, every other assertion in this file about
+    ``_LAYOUT_PROGRAM`` would be satisfiable by intra-block flow alone. That
+    matters most for the anti-mush test, whose result only means "definitions
+    arrived and were excluded by byte-disjointness" if definitions arrive at
+    all. This test is what establishes that they do.
+
+    What CARRIES the flow here is paragraph FALL-THROUGH, not the PERFORM
+    return edges — measured, not assumed. ``rewrite_cfg`` deliberately keeps
+    the fall-through edge out of each paragraph (a COBOL paragraph entered by
+    falling into it really does continue into the next), and because MAIN-PARA
+    performs the paragraphs in the same order they are declared, the
+    fall-through chain 1000 → 2000 → 3000 → 4000 delivers the definition on its
+    own. So this assertion passes on a CFG with every PERFORM return severed,
+    and is NOT a test of that wiring:
+    ``test_a_value_from_the_last_paragraph_returns_to_the_driver`` is, and
+    ``test_no_perform_return_point_in_the_layout_program_is_orphaned`` guards
+    the structure directly.
+
+    Asserted on the chains, not the field graph — the field graph would report
+    this edge either way (see ``_Analysed``).
+    """
+    definitions = {
+        (str(link.definition.block_label), link.definition.variable.field_name)
+        for link in layout.chains
+        if isinstance(link.use.variable, FieldExtent)
+        and link.use.variable.field_name == "WS-EMP-NAME"
+        and str(link.use.block_label) == "para_4000-REPORT-EMPLOYEE"
+        and isinstance(link.definition.variable, FieldExtent)
+    }
+    assert definitions == {("para_1000-LOAD-EMPLOYEE", "WS-EMP-REC")}, (
+        "the group definition did not reach the reading paragraph; the layout "
+        f"program is not exercising cross-paragraph flow (got {sorted(definitions)})"
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_value_from_the_last_paragraph_returns_to_the_driver(layout):
+    """The one path in this program that ONLY a PERFORM return edge can carry.
+
+    5000-WRITE-AUDIT is the LAST paragraph, so it has no fall-through
+    successor to smuggle its definitions forward through. MAIN-PARA reads
+    WS-OUT-AUDIT after ``PERFORM 5000-WRITE-AUDIT``, and the only route from
+    ``para_5000-WRITE-AUDIT`` back to that read is the return edge
+    ``rewrite_cfg`` reconstructs from the SET_CONTINUATION binding.
+
+    This is the assertion that makes ``_LAYOUT_PROGRAM``'s CFG wiring
+    load-bearing rather than incidental. Measured both ways: it passes on the
+    real CFG and fails outright with the return edges removed, where the read
+    matches no definition at all.
+    """
+    definitions = {
+        (str(link.definition.block_label), link.definition.variable.field_name)
+        for link in layout.chains
+        if isinstance(link.use.variable, FieldExtent)
+        and link.use.variable.field_name == "WS-OUT-AUDIT"
+        and str(link.use.block_label).startswith("perform_return")
+        and isinstance(link.definition.variable, FieldExtent)
+    }
+    assert definitions == {("para_5000-WRITE-AUDIT", "WS-OUT-AUDIT")}, (
+        "the last paragraph's definition did not return to the driver; the "
+        f"PERFORM return edge is missing (got {sorted(definitions)})"
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_no_perform_return_point_in_the_layout_program_is_orphaned(layout):
+    """Every PERFORM return block must have a predecessor.
+
+    ``build_cfg`` cannot wire these: a paragraph ends in RESUME_CONTINUATION
+    whose target is resolved dynamically by name, so it gets a fall-through
+    edge and nothing else and each ``perform_return_N`` block is left with ZERO
+    predecessors. ``rewrite_cfg`` reconstructs the binding from the
+    SET_CONTINUATION that made it.
+
+    Mirrors the unit suite's ``test_every_perform_return_block_is_reachable``,
+    but on the program whose EDGE assertions depend on the answer — the unit
+    version runs against a different, single-paragraph CFG and cannot speak for
+    this one. Guarded against vacuity: a program with no PERFORM would have no
+    return blocks and would pass this trivially.
+    """
+    returns = [
+        label for label in layout.cfg.blocks if str(label).startswith("perform_return")
+    ]
+    assert len(returns) == 5, (
+        "the layout program should have one return point per PERFORM; "
+        f"found {len(returns)} — this test would otherwise be vacuous"
+    )
+    orphans = [str(l) for l in returns if not layout.cfg.blocks[l].predecessors]
+    assert orphans == [], f"PERFORM return points left unreachable: {orphans}"
 
 
 # ── Layout: the extents themselves, against their neighbours ───────
@@ -426,8 +559,15 @@ def test_unrelated_records_stay_disconnected(layout):
     """
     assert _deps(layout, "WS-AUD-ID") == {"WS-IN-AUDIT"}
     assert _deps(layout, "WS-OUT-AUDIT") == {"WS-IN-AUDIT", "WS-AUD-ID"}
+    # Read back in MAIN-PARA across the PERFORM return, so the audit chain is
+    # checked on the one path that leaves the paragraph entirely.
+    assert _deps(layout, "WS-FINAL-AUDIT") == {
+        "WS-IN-AUDIT",
+        "WS-AUD-ID",
+        "WS-OUT-AUDIT",
+    }
 
-    for target in ("WS-AUD-ID", "WS-OUT-AUDIT"):
+    for target in ("WS-AUD-ID", "WS-OUT-AUDIT", "WS-FINAL-AUDIT"):
         assert not (
             _deps(layout, target) & _EVERYTHING_ELSE
         ), f"{target} picked up dependencies on records it shares no bytes with"
@@ -523,7 +663,10 @@ def test_analysis_is_off_by_default():
        — ``vars()`` stays empty, so it is genuinely dropping effects rather
        than recording into an object that is later discarded;
     3. the emitted IR is identical with and without recording, so attaching
-       the recorder cannot change program behaviour.
+       the recorder cannot change program behaviour. Asserted on the full
+       instruction reprs rather than the opcode stream: opcodes alone would not
+       notice a changed operand, register or source location, and "the recorder
+       is free" is exactly a claim that NOTHING about the instruction moved.
     """
     default = inspect.signature(CobolFrontend.__init__).parameters["recorder"].default
     assert isinstance(default, NullRecorder)
@@ -538,7 +681,7 @@ def test_analysis_is_off_by_default():
     recorded_ir = CobolFrontend(make_cobol_parser(), recorder=recording).lower(source)
     assert recording.effects, "the recording lowering is inert; the comparison is void"
 
-    assert [i.opcode for i in silent_ir] == [i.opcode for i in recorded_ir]
+    assert [repr(i) for i in silent_ir] == [repr(i) for i in recorded_ir]
 
     # And the analysis over an empty sidecar is empty rather than an error:
     # running it against a lowering that recorded nothing is a caller mistake
