@@ -282,6 +282,20 @@ def _wire_continuation_returns(cfg: CFG) -> None:
     next paragraph, and nothing static distinguishes that entry from a
     PERFORM. Keeping the edge over-approximates (a spurious edge, tolerable);
     removing it would under-approximate (a dropped edge, not tolerable).
+
+    That kept edge has a consequence for anyone TESTING this function. In the
+    overwhelmingly common COBOL shape — a driver that performs its paragraphs
+    in the order they are declared — the fall-through chain runs parallel to
+    the PERFORM order and carries cross-paragraph flow entirely on its own. A
+    definition made in one performed paragraph and read in a later one
+    therefore arrives whether or not the return edges exist, so a fixture
+    built that way passes unchanged on a CFG with every return edge severed
+    and proves nothing about this function. To exercise the RETURN wiring a
+    test must read a value written by the LAST performed paragraph, which has
+    no fall-through successor to smuggle it forward: that is the only flow for
+    which the reconstructed edge is the sole route. Measured, not theorised —
+    see ``test_a_value_from_the_last_paragraph_returns_to_the_driver`` in
+    ``tests/integration/test_cobol_memory_dataflow.py``.
     """
     targets = _continuation_targets(cfg)
     for label, block in cfg.blocks.items():
