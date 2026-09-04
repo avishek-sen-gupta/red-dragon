@@ -30,6 +30,7 @@ from interpreter.cobol.memory_dataflow import (
     MemoryDataflowResult,
     analyze_memory_dataflow,
     build_def_use_chains,
+    rewrite_cfg,
 )
 from interpreter.cobol.memory_effects import CollectingRecorder
 from interpreter.dataflow import DefUseLink
@@ -144,8 +145,8 @@ def probe_chains():
 
 
 @pytest.fixture(scope="module")
-def paragraph_probe() -> MemoryDataflowResult:
-    return _analyze(_PARAGRAPH_PROBE).result
+def paragraph_probe() -> _Analysed:
+    return _analyze(_PARAGRAPH_PROBE)
 
 
 # ── Edges that must exist ──────────────────────────────────────────
@@ -170,6 +171,69 @@ def test_group_write_reaches_every_child(analyze_probe):
         "           MOVE WS-SRC TO WS-REC.\n           MOVE WS-NAME TO WS-DST."
     )
     assert "WS-SRC" in result.field_graph["WS-DST"]
+
+
+_CROSS_BLOCK_GROUP = (
+    "           MOVE WS-SRC TO WS-REC.\n"
+    "           IF WS-IDX = 1\n"
+    "               MOVE WS-NAME TO WS-DST\n"
+    "           END-IF."
+)
+
+_CROSS_BLOCK_REDEFINES = (
+    "           MOVE WS-SRC TO WS-BASE.\n"
+    "           IF WS-IDX = 1\n"
+    "               MOVE WS-A1 TO WS-DST\n"
+    "           END-IF."
+)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_rewritten_cfg_keeps_every_control_flow_edge(analyze_probe):
+    """The rewrite is a per-instruction substitution and must not touch the CFG.
+
+    Re-deriving the graph with ``build_cfg`` over a flattened block list loses
+    every edge: ``build_cfg`` strips the ``Label_`` from each block's
+    instruction list, so a re-flattened stream has no labels at all, every
+    block is renamed ``__block_N``, and the ``if target in cfg.blocks`` guard
+    on edge wiring never fires. ``reach_in`` is then empty everywhere and the
+    analysis silently degenerates to intra-block. Asserted structurally, not
+    just through its symptoms, because the symptoms are invisible.
+    """
+    recorder = CollectingRecorder()
+    frontend = CobolFrontend(make_cobol_parser(), recorder=recorder)
+    original = build_cfg(frontend.lower((_SKELETON % _CROSS_BLOCK_GROUP).encode()))
+    rewritten = rewrite_cfg(original, recorder.effects)
+
+    assert list(rewritten.blocks) == list(original.blocks)
+    assert rewritten.entry == original.entry
+    original_edges = sum(len(b.successors) for b in original.blocks.values())
+    assert original_edges > 0, "the probe produced no control flow to preserve"
+    for label, block in original.blocks.items():
+        assert rewritten.blocks[label].successors == block.successors
+        assert rewritten.blocks[label].predecessors == block.predecessors
+        assert len(rewritten.blocks[label].instructions) == len(block.instructions)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_group_write_reaches_a_child_read_in_another_block(analyze_probe):
+    """The aliasing case that only works if reach_in survives the rewrite.
+
+    Nothing writes WS-NAME by name, and the read sits inside an IF, so the
+    definition of the group must cross a block boundary to reach it. With the
+    control-flow edges lost this edge simply disappears — no error, no
+    warning, just a missing dependency in the report.
+    """
+    deps = analyze_probe(_CROSS_BLOCK_GROUP).field_graph["WS-DST"]
+    assert "WS-SRC" in deps, "the group definition did not cross the block boundary"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_redefines_overlap_survives_a_block_boundary(analyze_probe):
+    """The same check where the overlap comes from REDEFINES rather than
+    containment: WS-A1 and WS-BASE share bytes and share no declaration."""
+    deps = analyze_probe(_CROSS_BLOCK_REDEFINES).field_graph["WS-DST"]
+    assert "WS-SRC" in deps, "the redefines alias did not cross the block boundary"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -258,11 +322,11 @@ def test_two_unrelated_records_stay_unconnected(analyze_probe):
     result = analyze_probe(
         "           MOVE WS-SRC TO WS-NAME.\n           MOVE WS-SRC TO WS-P."
     )
-    assert "WS-P" not in result.field_graph.get("WS-NAME", set())
-    assert "WS-Q" not in result.field_graph.get("WS-NAME", set())
-    assert "WS-NAME" not in result.field_graph.get("WS-P", set())
-    assert "WS-REC" not in result.field_graph.get("WS-P", set())
-    assert "WS-REC2" not in result.field_graph.get("WS-NAME", set())
+    # Hard equality, not `not in`: `.get(..., set())` would let an EMPTY graph
+    # satisfy every negative assertion, and a test that passes when the
+    # analysis produces nothing is not an anti-mush test.
+    assert result.field_graph["WS-NAME"] == {"WS-SRC"}
+    assert result.field_graph["WS-P"] == {"WS-SRC"}
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -341,18 +405,54 @@ def test_the_field_graph_is_flow_insensitive_about_rewrites(analyze_probe):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_perform_merges_paragraph_contexts(paragraph_probe):
-    """KNOWN IMPRECISION (spec 7.4): the analysis is context-insensitive, so
-    every PERFORM of 9000-FORMAT-* shares one CFG entry and the values written
-    to WS-WORK before EITHER call reach the reads after BOTH.
+def test_a_shared_work_field_merges_all_of_its_writers(paragraph_probe):
+    """KNOWN IMPRECISION: WS-WORK is one node, so every value ever moved into
+    it becomes a dependency of every field ever formatted from it.
 
-    WS-FIRST-OUT is formatted before 2000-FEES has run, so it cannot really
-    depend on WS-FEE — but the merged paragraph context says it does. The
-    upgrade path is per-paragraph summaries (call-site-indexed reaching
-    definitions); until then this edge is accepted and asserted here so the
-    imprecision is visible and its scope tracked, not silently tolerated.
+    WS-FIRST-OUT is formatted before 2000-FEES runs, so it cannot really
+    depend on WS-FEE. The edge is nonetheless present, and the mechanism is
+    the field-node collapse — NOT context-insensitive PERFORM merging, which
+    an earlier version of this docstring claimed. The next test measures what
+    the CFG actually contributes; it is not this.
+
+    Note the uncomfortable corollary asserted on the first line: WS-AMT is a
+    REAL dependency of WS-FIRST-OUT, and today it is recovered only by the
+    same collapse that fabricates the WS-FEE edge. Sharpening the graph to
+    per-definition nodes must restore that edge by modelling PERFORM returns,
+    or it will trade a spurious edge for a missing one.
     """
-    assert "WS-AMT" in paragraph_probe.field_graph["WS-FIRST-OUT"], "the real edge"
-    assert (
-        "WS-FEE" in paragraph_probe.field_graph["WS-FIRST-OUT"]
-    ), "the accepted spurious edge — see the docstring before changing this"
+    deps = paragraph_probe.result.field_graph["WS-FIRST-OUT"]
+    assert "WS-AMT" in deps, "the real edge — see the docstring's corollary"
+    assert "WS-FEE" in deps, "the accepted spurious edge"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_perform_return_edges_are_not_modelled(paragraph_probe):
+    """KNOWN IMPRECISION, measured rather than asserted from theory.
+
+    A PERFORM lowers to SET_CONTINUATION + BRANCH into the paragraph, and the
+    paragraph ends in a RESUME_CONTINUATION whose target is dynamic.
+    ``build_cfg`` gives that only a fall-through edge, so control appears to
+    fall out of each paragraph into the NEXT one textually. Reaching
+    definitions therefore follow textual paragraph order, not call order.
+
+    Concretely: the read of WS-WORK inside 9000-FORMAT-FIRST is reached by
+    exactly ONE definition — the one in 2000-FEES, which falls through to it
+    — even though the PERFORM order means 1000-CALC's value is what it should
+    see. Asserted at the flow-sensitive layer, because that is the only place
+    the CFG's contribution is visible at all.
+
+    Upgrade path is modelling continuation returns (or paragraph summaries).
+    """
+    reaching = {
+        (str(link.definition.block_label), link.definition.instruction_index)
+        for link in paragraph_probe.chains
+        if isinstance(link.use.variable, FieldExtent)
+        and link.use.variable.field_name == "WS-WORK"
+        and str(link.use.block_label) == "para_9000-FORMAT-FIRST"
+        and isinstance(link.definition.variable, FieldExtent)
+    }
+    assert reaching, "the read of WS-WORK matched no definition at all"
+    assert {block for block, _ in reaching} == {
+        "para_2000-FEES"
+    }, f"expected only the textual fall-through predecessor; got {reaching}"
