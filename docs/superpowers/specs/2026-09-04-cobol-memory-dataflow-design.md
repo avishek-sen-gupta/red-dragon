@@ -1,7 +1,7 @@
 # Memory-Level Dataflow Analysis for COBOL
 
 **Date:** 2026-09-04
-**Status:** Design approved, not yet implemented
+**Status:** Implemented. Shipped with one blocking limitation — file-region aliasing (red-dragon-7211) makes the graph unusable on file-heavy programs; see `2026-09-04-cobol-memory-dataflow-evaluation.md` §5c.
 **Branch:** `worktree-cobol-memory-dataflow`
 
 ---

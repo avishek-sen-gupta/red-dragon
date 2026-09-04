@@ -101,6 +101,29 @@ DispatchFn = Callable[
 ]  # Any: CobolStatementType, circular-import boundary
 
 
+class InstructionIdSource:
+    """Mints ``InstructionId``s, and may outlive any one ``EmitContext``.
+
+    Ids exist to key the ``MemoryEffect`` sidecar. A ``CollectingRecorder`` is
+    held at FRONTEND level while a fresh ``EmitContext`` is built per program,
+    so a counter owned by the context restarts at 0 for program 2 and its ids
+    collide with program 1's in the one shared ``effects`` dict — silently
+    attaching the wrong extent to a region access, which is precisely the
+    dropped-edge failure this analysis exists to prevent. The frontend
+    therefore owns the source and hands the SAME one to every context, making
+    ids unique across every program it lowers. A context constructed without
+    one gets its own, so standalone lowering is unaffected.
+    """
+
+    def __init__(self, start: int = 0) -> None:
+        self._next = start
+
+    def mint(self) -> InstructionId:
+        inst_id = InstructionId(self._next)
+        self._next += 1
+        return inst_id
+
+
 class EmitContext:
     """Shared state and emit primitives for COBOL IR lowering."""
 
@@ -112,6 +135,7 @@ class EmitContext:
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
         asg: CobolASG = CobolASG(),
         recorder: MemoryEffectRecorder = NullRecorder(),
+        inst_ids: InstructionIdSource | None = None,
     ) -> None:
         self._dispatch_fn = dispatch_fn
         self._recorder: MemoryEffectRecorder = recorder
@@ -122,7 +146,7 @@ class EmitContext:
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
-        self._inst_counter: int = 0
+        self._inst_ids: InstructionIdSource = inst_ids or InstructionIdSource()
         self._section_paragraphs: dict[str, list[str]] = {}
         self.use_by_file: dict[str, str] = {}
         self.use_by_mode: dict[str, str] = {}
@@ -166,8 +190,7 @@ class EmitContext:
 
     def emit_inst(self, inst: InstructionBase) -> InstructionBase:
         """Emit a typed instruction directly, assigning it a stable id."""
-        inst = dataclasses.replace(inst, id=InstructionId(self._inst_counter))
-        self._inst_counter += 1
+        inst = dataclasses.replace(inst, id=self._inst_ids.mint())
         self._instructions.append(inst)
         return inst
 
