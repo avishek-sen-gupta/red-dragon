@@ -103,7 +103,12 @@ class MemoryDataflowResult:
 
         ``nodes`` and ``edges`` are both sorted, so two runs over unchanged
         input produce byte-identical output rather than differing by
-        set-iteration order.
+        set-iteration order. ``via`` is sorted and de-duplicated too: its
+        source order traces back to a ``reach_in: set[Definition]`` whose
+        iteration order is subject to hash randomisation across processes
+        (see ``interpreter/dataflow.py``), so leaving it unsorted would make
+        the list order incidental rather than guaranteed — a visualiser
+        diffing two runs would see phantom reorderings.
         """
         nodes = sorted(
             set(self.field_graph)
@@ -113,7 +118,9 @@ class MemoryDataflowResult:
             {
                 "from": dep,
                 "to": target,
-                "via": [str(loc) for loc in self.edge_locations.get((dep, target), [])],
+                "via": sorted(
+                    {str(loc) for loc in self.edge_locations.get((dep, target), [])}
+                ),
             }
             for target in sorted(self.field_graph)
             for dep in sorted(self.field_graph[target])
