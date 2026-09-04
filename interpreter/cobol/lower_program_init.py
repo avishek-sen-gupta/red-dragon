@@ -28,6 +28,7 @@ from __future__ import annotations
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import lower_data_division
+from interpreter.cobol.region_id import RegionId
 from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Branch,
@@ -66,7 +67,7 @@ def lower_program_init(
     ptr_reg = ctx.fresh_reg()
     ctx.emit_inst(NewObject(result_reg=ptr_reg))
 
-    ws_reg = lower_data_division(ctx, ws_layout)
+    ws_reg = lower_data_division(ctx, ws_layout, RegionId.WORKING_STORAGE)
 
     ctx.emit_inst(
         StoreField(obj_reg=ptr_reg, field_name=FieldName("ws_handle"), value_reg=ws_reg)

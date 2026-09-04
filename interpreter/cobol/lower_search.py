@@ -138,7 +138,10 @@ def lower_search(
     if bound_index_name is not None:
         bound_ref, bound_rr = ctx.resolve_field_ref(bound_index_name, materialised)
         current_reg = ctx.emit_decode_field(
-            bound_rr, bound_ref.fl, bound_ref.offset_reg
+            bound_rr,
+            bound_ref.fl,
+            bound_ref.offset_reg,
+            extent=bound_ref.extent,
         )
         bound_operator = ">"
     else:
@@ -192,7 +195,10 @@ def lower_search(
     if advance_name is not None:
         advance_ref, advance_rr = ctx.resolve_field_ref(advance_name, materialised)
         decoded_reg = ctx.emit_decode_field(
-            advance_rr, advance_ref.fl, advance_ref.offset_reg
+            advance_rr,
+            advance_ref.fl,
+            advance_ref.offset_reg,
+            extent=advance_ref.extent,
         )
         one_reg = ctx.const_to_reg(1)
         inc_reg = ctx.fresh_reg()
@@ -206,7 +212,11 @@ def lower_search(
         )
         str_reg = ctx.emit_to_string(inc_reg)
         ctx.emit_encode_and_write(
-            advance_rr, advance_ref.fl, str_reg, advance_ref.offset_reg
+            advance_rr,
+            advance_ref.fl,
+            str_reg,
+            advance_ref.offset_reg,
+            extent=advance_ref.extent,
         )
 
     if bound_index_name is None:
