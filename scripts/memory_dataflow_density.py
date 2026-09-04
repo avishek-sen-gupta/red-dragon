@@ -56,6 +56,7 @@ import logging
 import sys
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -69,7 +70,6 @@ from interpreter.cobol.memory_dataflow import (  # noqa: E402
     EffectKind,
     MemoryAccess,
     _extract_def_use_chains,
-    _project_to_fields,
     _trace_to_extents,
     _produced_from,
     rewrite_cfg,
@@ -247,9 +247,202 @@ def _report(title: str, graph: FieldGraph) -> None:
     print(f"  {title:<24} nodes={len(nodes):<6} edges={edges}")
 
 
+@dataclass
+class _Stats:
+    """One program's measurement, enough for the table and the detail view."""
+
+    name: str
+    converged: bool
+    ir_length: int
+    effects: int
+    nodes: list[str]
+    direct: FieldGraph
+    closed: FieldGraph
+    value: FieldGraph
+    reaching: FieldGraph
+    flow_sensitive: float
+    impact: dict[str, set[str]]
+    timings: tuple[float, float, float]
+
+    @property
+    def edges(self) -> int:
+        return _edge_count(self.direct)
+
+    @property
+    def fraction(self) -> float:
+        n = len(self.nodes)
+        return _connected_pairs(self.closed) / (n * (n - 1)) if n > 1 else 0.0
+
+    @property
+    def impact_sizes(self) -> list[int]:
+        return sorted((len(self.impact.get(f, ())) for f in self.nodes), reverse=True)
+
+
+def _impact_map(closed: FieldGraph) -> dict[str, set[str]]:
+    """field -> the fields it reaches. ``closed`` maps the other way."""
+    impact: dict[str, set[str]] = defaultdict(set)
+    for target, deps in closed.items():
+        for dep in deps - {target}:
+            impact[dep].add(target)
+    return impact
+
+
+def _drop(graph: FieldGraph, drop: set[str]) -> FieldGraph:
+    return {
+        t: {d for d in deps if d not in drop}
+        for t, deps in graph.items()
+        if t not in drop
+    }
+
+
+def _analyse(
+    source: Path,
+    copybook_dirs: list[Path],
+    copybook_exts: list[str],
+    drop_region: str | None = None,
+) -> _Stats:
+    """Parse, lower, solve and project one program.
+
+    ``drop_region`` removes every field of one region (e.g. ``FILE``) from
+    the GRAPH, after the solve — an ablation, for attributing connectivity to
+    a region. It deliberately does not remove the effects, which would change
+    the fixpoint and measure a different program.
+    """
+    truncated = _TruncationWatch()
+    logger = logging.getLogger("interpreter.dataflow")
+    logger.addHandler(truncated)
+    logger.setLevel(logging.WARNING)
+    try:
+        started = time.monotonic()
+        recorder = CollectingRecorder()
+        frontend = CobolFrontend(
+            make_cobol_parser(
+                copybook_dirs=list(copybook_dirs), copybook_exts=list(copybook_exts)
+            ),
+            recorder=recorder,
+        )
+        ir = frontend.lower(source.read_bytes())
+        parsed_at = time.monotonic()
+
+        cfg = build_cfg(ir)
+        rewritten = rewrite_cfg(cfg, recorder.effects)
+        chains = _extract_def_use_chains(
+            rewritten, solve_reaching_definitions(rewritten)
+        )
+        solved_at = time.monotonic()
+
+        dropped = (
+            {
+                e.extent.field_name
+                for e in recorder.effects.values()
+                if e.extent.region.name == drop_region
+            }
+            if drop_region
+            else set()
+        )
+        value = _drop(_value_edges(rewritten, chains), dropped)
+        reaching = _drop(_reaching_edges(chains), dropped)
+        direct: FieldGraph = {}
+        for part in (value, reaching):
+            for target, deps in part.items():
+                direct.setdefault(target, set()).update(deps)
+        closed = _transitive_closure(direct)
+        closed_at = time.monotonic()
+
+        nodes = sorted(_nodes(direct))
+        return _Stats(
+            name=source.name,
+            converged=not truncated.fired,
+            ir_length=len(ir),
+            effects=len(recorder.effects),
+            nodes=nodes,
+            direct=direct,
+            closed=closed,
+            value=value,
+            reaching=reaching,
+            flow_sensitive=_flow_sensitive_fraction(rewritten, chains, nodes),
+            impact=_impact_map(closed),
+            timings=(
+                parsed_at - started,
+                solved_at - parsed_at,
+                closed_at - solved_at,
+            ),
+        )
+    finally:
+        logger.removeHandler(truncated)
+
+
+def _run_corpus(args: argparse.Namespace) -> int:
+    """Measure EVERY program in a directory, and say what failed.
+
+    The corpus is enumerated from the filesystem rather than from a list
+    typed by hand. A hand-typed list is how an evaluation ends up quietly
+    reporting a subset and calling it the whole: a program that is never
+    named is never noticed missing. Failures are printed as rows too, for
+    the same reason.
+    """
+    sources = sorted(
+        p for p in args.corpus.iterdir() if p.suffix.lower() == ".cbl" and p.is_file()
+    )
+    print(f"corpus {args.corpus}  ({len(sources)} source files)")
+    print(
+        f"{'program':<14}{'lines':>7}{'nodes':>7}{'edges':>7}"
+        f"{'out-deg':>9}{'fraction':>10}{'flow-sens':>11}"
+        f"{'med':>6}{'max':>6}  conv"
+    )
+    failures: list[tuple[str, str]] = []
+    for source in sources:
+        lines = len(source.read_bytes().splitlines())
+        try:
+            stats = _analyse(
+                source, args.copybook_dirs, args.copybook_exts, args.drop_region
+            )
+        except Exception as exc:  # noqa: BLE001 - a failure is a result here
+            failures.append(
+                (source.name, f"{type(exc).__name__}: {exc}".split("\n")[0])
+            )
+            print(f"{source.name:<14}{lines:>7}   FAILED — {type(exc).__name__}")
+            continue
+        sizes = stats.impact_sizes
+        n = len(stats.nodes)
+        print(
+            f"{source.name:<14}{lines:>7}{n:>7}{stats.edges:>7}"
+            f"{stats.edges / n if n else 0:>9.2f}{stats.fraction:>10.3f}"
+            f"{stats.flow_sensitive:>11.3f}"
+            f"{(sizes[len(sizes) // 2] if sizes else 0):>6}"
+            f"{(sizes[0] if sizes else 0):>6}"
+            f"  {'yes' if stats.converged else 'NO'}"
+        )
+    if failures:
+        print(f"\n{len(failures)} program(s) could not be analysed:")
+        for name, why in failures:
+            print(f"  {name}: {why}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path, help="COBOL source file")
+    parser.add_argument(
+        "source", type=Path, nargs="?", help="COBOL source file (omit with --corpus)"
+    )
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help=(
+            "measure every *.cbl in this directory and print one table row "
+            "each, failures included. Enumerating the corpus from disk is the "
+            "point: a hand-typed program list silently becomes a subset."
+        ),
+    )
+    parser.add_argument(
+        "--drop-region",
+        default=None,
+        help=(
+            "ablation: remove every field of this region (e.g. FILE) from the "
+            "graph after the solve, to attribute connectivity to it"
+        ),
+    )
     parser.add_argument(
         "--copybook-dir", type=Path, action="append", default=[], dest="copybook_dirs"
     )
@@ -279,56 +472,35 @@ def main() -> int:
     if args.max_iterations is not None:
         constants.DATAFLOW_MAX_ITERATIONS = args.max_iterations
 
-    truncated = _TruncationWatch()
-    logging.getLogger("interpreter.dataflow").addHandler(truncated)
-    logging.getLogger("interpreter.dataflow").setLevel(logging.WARNING)
+    if args.corpus is not None:
+        return _run_corpus(args)
+    if args.source is None:
+        parser.error("give a source file, or --corpus DIR")
 
-    started = time.monotonic()
-    recorder = CollectingRecorder()
-    frontend = CobolFrontend(
-        make_cobol_parser(
-            copybook_dirs=list(args.copybook_dirs),
-            copybook_exts=list(args.copybook_exts),
-        ),
-        recorder=recorder,
+    stats = _analyse(
+        args.source, args.copybook_dirs, args.copybook_exts, args.drop_region
     )
-    ir = frontend.lower(args.source.read_bytes())
-    parsed_at = time.monotonic()
-
-    cfg = build_cfg(ir)
-    rewritten = rewrite_cfg(cfg, recorder.effects)
-    chains = _extract_def_use_chains(rewritten, solve_reaching_definitions(rewritten))
-    solved_at = time.monotonic()
-
-    value = _value_edges(rewritten, chains)
-    reaching = _reaching_edges(chains)
-    direct: FieldGraph = {}
-    for part in (value, reaching):
-        for target, deps in part.items():
-            direct.setdefault(target, set()).update(deps)
-    closed = _transitive_closure(direct)
-    closed_at = time.monotonic()
-
-    nodes = sorted(_nodes(direct))
+    direct, closed, nodes = stats.direct, stats.closed, stats.nodes
+    value, reaching = stats.value, stats.reaching
     n = len(nodes)
-    edges = _edge_count(direct)
+    edges = stats.edges
     pairs = n * (n - 1)
     connected = _connected_pairs(closed)
+    parse_s, solve_s, closure_s = stats.timings
 
-    print(f"program              {args.source.name}")
+    print(f"program              {stats.name}")
     print(
         "solver converged     "
         + (
-            "NO — truncated at the iteration cap, edges are MISSING"
-            if truncated.fired
-            else "yes"
+            "yes"
+            if stats.converged
+            else "NO — truncated at the iteration cap, edges are MISSING"
         )
     )
-    print(f"IR instructions      {len(ir)}")
-    print(f"recorded effects     {len(recorder.effects)}")
-    print(
-        f"declared fields hit  {len({e.extent.field_name for e in recorder.effects.values()})}"
-    )
+    if args.drop_region:
+        print(f"ABLATION             region {args.drop_region} dropped from the graph")
+    print(f"IR instructions      {stats.ir_length}")
+    print(f"recorded effects     {stats.effects}")
     print()
     print(f"nodes (fields)       {n}")
     print(f"edges (direct)       {edges}")
@@ -341,8 +513,18 @@ def main() -> int:
     )
     print()
 
-    fs = _flow_sensitive_fraction(rewritten, chains, nodes)
-    print(f"flow-sensitive frac  {fs:.4f}   (def-site nodes, no field collapse)")
+    if args.drop_region:
+        # Under an ablation this number would be misleading: the dropped
+        # fields are gone from the INDEX but their definition sites are still
+        # in the chains, so a path may still travel through the region that
+        # was supposedly removed. The field-graph fraction has no such
+        # problem — dropping the nodes removes the edges with them.
+        print("flow-sensitive frac  n/a under --drop-region")
+    else:
+        print(
+            f"flow-sensitive frac  {stats.flow_sensitive:.4f}"
+            "   (def-site nodes, no field collapse)"
+        )
     print()
 
     if args.decompose:
@@ -368,11 +550,8 @@ def main() -> int:
     # forward closure of that field, so its DISTRIBUTION decides usability. A
     # graph can have a low mean and still be useless if the fields anyone
     # actually asks about are the ones that reach everything.
-    impact: dict[str, set[str]] = defaultdict(set)
-    for target, deps in closed.items():
-        for dep in deps - {target}:
-            impact[dep].add(target)
-    sizes = sorted((len(impact.get(name, ())) for name in nodes), reverse=True)
+    impact = stats.impact
+    sizes = stats.impact_sizes
     median = sizes[len(sizes) // 2] if sizes else 0
     print("impact-set size (fields reached FROM a field, after closure):")
     print(
@@ -392,9 +571,9 @@ def main() -> int:
         )
     print()
     print(
-        f"timing  parse+lower {parsed_at - started:.1f}s  "
-        f"solve {solved_at - parsed_at:.1f}s  "
-        f"graph+closure {closed_at - solved_at:.1f}s"
+        f"timing  parse+lower {parse_s:.1f}s  "
+        f"solve {solve_s:.1f}s  "
+        f"graph+closure {closure_s:.1f}s"
     )
     return 0
 
