@@ -86,6 +86,40 @@ class MemoryDataflowResult:
     field_graph: dict[str, set[str]]
     edge_locations: dict[tuple[str, str], list[SourceLocation]]
 
+    def to_json(self) -> dict:
+        """Edge-oriented projection for graph visualisation.
+
+        Direction follows DATA FLOW, not ``field_graph``'s mapping direction:
+        ``{"from": "WS-SRC", "to": "WS-DST"}`` means a value flowed from
+        ``WS-SRC`` into ``WS-DST``. ``field_graph`` maps the opposite way —
+        target -> the fields it depends on — so every edge here is emitted
+        with source and target swapped relative to that dict.
+
+        ``via`` lists the source locations of the statements that produced
+        the edge, stringified because ``SourceLocation`` is not itself JSON
+        serialisable. It is empty for a TRANSITIVE edge: no single statement
+        produced it, so an empty ``via`` is expected, not a sign of missing
+        evidence.
+
+        ``nodes`` and ``edges`` are both sorted, so two runs over unchanged
+        input produce byte-identical output rather than differing by
+        set-iteration order.
+        """
+        nodes = sorted(
+            set(self.field_graph)
+            | {dep for deps in self.field_graph.values() for dep in deps}
+        )
+        edges = [
+            {
+                "from": dep,
+                "to": target,
+                "via": [str(loc) for loc in self.edge_locations.get((dep, target), [])],
+            }
+            for target in sorted(self.field_graph)
+            for dep in sorted(self.field_graph[target])
+        ]
+        return {"nodes": nodes, "edges": edges}
+
 
 @dataclass(frozen=True)
 class MemoryAccess(InstructionBase):
