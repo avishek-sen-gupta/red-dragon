@@ -13,7 +13,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 BLOCKLIST_PATH = Path.home() / ".config" / "git" / "blocklist.txt"
 REDACTED = "[REDACTED]"
 
@@ -28,7 +27,16 @@ def load_patterns() -> list[re.Pattern]:
         if not line or line.startswith("#"):
             continue
         try:
-            patterns.append(re.compile(line))
+            # Case-insensitive, to match the checker. blocklist.txt's header says
+            # matching is case-insensitive (grep -iE) and its patterns are written
+            # in lowercase accordingly, so compiling them case-sensitively silently
+            # missed every uppercase occurrence. That is how an all-caps token
+            # matching the five-letters-then-three-digits pattern reached a staged
+            # export: the guard blocked the commit while this script, whose whole
+            # job is to clean such tokens, reported zero hits against the same
+            # blocklist. A cleaner that misses what the gate catches is worse than
+            # no cleaner, because it reports success.
+            patterns.append(re.compile(line, re.IGNORECASE))
         except re.error as e:
             print(f"  Skipping bad pattern {line!r}: {e}", file=sys.stderr)
     return patterns
