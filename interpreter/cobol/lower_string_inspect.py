@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 
 from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
@@ -13,6 +14,7 @@ from cobol_asg.cobol_statements import (
 )
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.field_extent import Precision
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ir_encoders import (
     build_inspect_replace_ir,
@@ -50,7 +52,10 @@ def _write_ref_mod_target(
     target_value_reg = value_reg
     if target.ref_mod_start is not None:
         target_decoded = ctx.emit_decode_field(
-            target_rr, target_ref.fl, target_ref.offset_reg
+            target_rr,
+            target_ref.fl,
+            target_ref.offset_reg,
+            extent=target_ref.extent,
         )
         target_str_reg = ctx.emit_to_string(target_decoded)
         tgt_start_reg = eval_ref_mod_expr(ctx, target.ref_mod_start, materialised)
@@ -83,7 +88,11 @@ def _write_ref_mod_target(
         )
         target_value_reg = spliced_reg
     ctx.emit_encode_and_write(
-        target_rr, target_ref.fl, target_value_reg, target_ref.offset_reg
+        target_rr,
+        target_ref.fl,
+        target_value_reg,
+        target_ref.offset_reg,
+        extent=target_ref.extent,
     )
 
 
@@ -124,7 +133,10 @@ def lower_string(
                 subscripts=sending.value.subscripts,
             )
             decoded_reg = ctx.emit_decode_field(
-                source_rr, source_ref.fl, source_ref.offset_reg
+                source_rr,
+                source_ref.fl,
+                source_ref.offset_reg,
+                extent=source_ref.extent,
             )
             src_str_reg = ctx.emit_to_string(decoded_reg)
         else:
@@ -236,7 +248,10 @@ def lower_string(
             # what was just written (red-dragon-4q25.15).
             ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
             ptr_decoded_reg = ctx.emit_decode_field(
-                ptr_rr, ptr_ref.fl, ptr_ref.offset_reg
+                ptr_rr,
+                ptr_ref.fl,
+                ptr_ref.offset_reg,
+                extent=ptr_ref.extent,
             )
             one_reg = ctx.const_to_reg(1)
             start_0indexed_reg = ctx.fresh_reg()
@@ -257,8 +272,19 @@ def lower_string(
                     right=start_0indexed_reg,
                 )
             )
+            # WITH POINTER writes at a RUNTIME offset inside the target, not
+            # at the field's own offset, so the exact bytes touched are not
+            # statically known. Clamp the target's extent: the write lands
+            # somewhere in this field, and a CLAMPED extent can never
+            # must_cover, so it cannot kill a definition it may not overwrite.
             ctx.emit_encode_and_write(
-                target_rr, target_ref.fl, concat_reg, write_offset_reg
+                target_rr,
+                target_ref.fl,
+                concat_reg,
+                write_offset_reg,
+                extent=dataclasses.replace(
+                    target_ref.extent, precision=Precision.CLAMPED
+                ),
             )
             written_len_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -279,11 +305,19 @@ def lower_string(
             )
             new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg)
             ctx.emit_encode_and_write(
-                ptr_rr, ptr_ref.fl, new_ptr_str_reg, ptr_ref.offset_reg
+                ptr_rr,
+                ptr_ref.fl,
+                new_ptr_str_reg,
+                ptr_ref.offset_reg,
+                extent=ptr_ref.extent,
             )
         else:
             ctx.emit_encode_and_write(
-                target_rr, target_ref.fl, concat_reg, target_ref.offset_reg
+                target_rr,
+                target_ref.fl,
+                concat_reg,
+                target_ref.offset_reg,
+                extent=target_ref.extent,
             )
     else:
         logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
@@ -299,7 +333,10 @@ def lower_unstring(
     if ctx.has_field(source_name, materialised):
         source_ref, source_rr = ctx.resolve_field_ref(source_name, materialised)
         decoded_reg = ctx.emit_decode_field(
-            source_rr, source_ref.fl, source_ref.offset_reg
+            source_rr,
+            source_ref.fl,
+            source_ref.offset_reg,
+            extent=source_ref.extent,
         )
         src_str_reg = ctx.emit_to_string(decoded_reg)
     else:
@@ -346,7 +383,9 @@ def lower_unstring(
         # same tradeoff already made for WITH POINTER's own part-length
         # recomputation above).
         ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
-        ptr_decoded_reg = ctx.emit_decode_field(ptr_rr, ptr_ref.fl, ptr_ref.offset_reg)
+        ptr_decoded_reg = ctx.emit_decode_field(
+            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg, extent=ptr_ref.extent
+        )
         one_reg = ctx.const_to_reg(1)
         ptr_start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -414,7 +453,9 @@ def lower_unstring(
         # delim_regs is already in scope from the MULTI_DELIMITER_SPLIT call
         # earlier in this same function (Task 2).
         ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
-        ptr_decoded_reg = ctx.emit_decode_field(ptr_rr, ptr_ref.fl, ptr_ref.offset_reg)
+        ptr_decoded_reg = ctx.emit_decode_field(
+            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg, extent=ptr_ref.extent
+        )
         target_count_reg = ctx.const_to_reg(len(stmt.into))
         consumed_len_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -435,7 +476,11 @@ def lower_unstring(
         )
         new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg)
         ctx.emit_encode_and_write(
-            ptr_rr, ptr_ref.fl, new_ptr_str_reg, ptr_ref.offset_reg
+            ptr_rr,
+            ptr_ref.fl,
+            new_ptr_str_reg,
+            ptr_ref.offset_reg,
+            extent=ptr_ref.extent,
         )
 
     if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
@@ -462,7 +507,10 @@ def lower_unstring(
             ),
         )
         existing_decoded_reg = ctx.emit_decode_field(
-            tally_rr, tally_ref.fl, tally_ref.offset_reg
+            tally_rr,
+            tally_ref.fl,
+            tally_ref.offset_reg,
+            extent=tally_ref.extent,
         )
         new_total_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -475,7 +523,11 @@ def lower_unstring(
         )
         count_str_reg = ctx.emit_to_string(new_total_reg)
         ctx.emit_encode_and_write(
-            tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+            tally_rr,
+            tally_ref.fl,
+            count_str_reg,
+            tally_ref.offset_reg,
+            extent=tally_ref.extent,
         )
 
 
@@ -490,7 +542,9 @@ def lower_inspect(
         return
     source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
     source_fl = source_ref.fl
-    decoded_reg = ctx.emit_decode_field(source_rr, source_fl, source_ref.offset_reg)
+    decoded_reg = ctx.emit_decode_field(
+        source_rr, source_fl, source_ref.offset_reg, extent=source_ref.extent
+    )
     src_str_reg = ctx.emit_to_string(decoded_reg)
 
     if stmt.source.ref_mod_start is not None:
@@ -538,7 +592,7 @@ def _resolve_convert_operand(
     runtime; otherwise it is a figurative / quoted-literal constant."""
     if ctx.has_field(operand, materialised):
         ref, rr = ctx.resolve_field_ref(operand, materialised)
-        decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+        decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
         return ctx.emit_to_string(decoded)
     if operand in ("SPACES", "SPACE", "ZEROS", "ZEROES", "ZERO", "LOW-VALUES"):
         return ctx.const_to_reg(translate_cobol_figurative(operand))
@@ -568,8 +622,12 @@ def lower_inspect_converting(
         )
     )
     if ctx.has_field(stmt.source.name, materialised):
-        _, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
-        ctx.emit_encode_and_write(source_rr, source_fl, converted_reg)
+        source_ref_wb, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        # Write-back of the whole INSPECT source at its own offset — the
+        # re-resolved ref is unsubscripted, so its extent is the exact field.
+        ctx.emit_encode_and_write(
+            source_rr, source_fl, converted_reg, extent=source_ref_wb.extent
+        )
     else:
         logger.warning(
             "INSPECT CONVERTING: source field %s not found in materialised layout;"
@@ -599,7 +657,10 @@ def lower_inspect_tallying(
             # each time (red-dragon-pvxc).
             tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
             total_count_reg = ctx.emit_decode_field(
-                tally_rr, tally_ref.fl, tally_ref.offset_reg
+                tally_rr,
+                tally_ref.fl,
+                tally_ref.offset_reg,
+                extent=tally_ref.extent,
             )
         else:
             total_count_reg = ctx.const_to_reg(0)
@@ -644,7 +705,11 @@ def lower_inspect_tallying(
             tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
             count_str_reg = ctx.emit_to_string(total_count_reg)
             ctx.emit_encode_and_write(
-                tally_rr, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+                tally_rr,
+                tally_ref.fl,
+                count_str_reg,
+                tally_ref.offset_reg,
+                extent=tally_ref.extent,
             )
 
 
@@ -730,8 +795,12 @@ def lower_inspect_replacing(
 
     # Resolve the source region register for the write-back
     if ctx.has_field(stmt.source.name, materialised):
-        _, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
-        ctx.emit_encode_and_write(source_rr, source_fl, current_str_reg)
+        source_ref_wb, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        # Write-back of the whole INSPECT source at its own offset — the
+        # re-resolved ref is unsubscripted, so its extent is the exact field.
+        ctx.emit_encode_and_write(
+            source_rr, source_fl, current_str_reg, extent=source_ref_wb.extent
+        )
     else:
         # Fallback: source_fl carries offset; need a region register — skip write
         logger.warning(

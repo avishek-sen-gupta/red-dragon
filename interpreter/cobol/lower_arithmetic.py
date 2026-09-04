@@ -185,7 +185,9 @@ def eval_ref_mod_expr(
         name = expr.name
         if ctx.has_field(name, materialised):
             field_ref, rr = ctx.resolve_field_ref(name, materialised)
-            decoded_reg = ctx.emit_decode_field(rr, field_ref.fl, field_ref.offset_reg)
+            decoded_reg = ctx.emit_decode_field(
+                rr, field_ref.fl, field_ref.offset_reg, extent=field_ref.extent
+            )
             # Return the decoded numeric value directly
             return decoded_reg
         else:
@@ -299,7 +301,9 @@ def _lower_function_arg_to_string(
         name = arg.get("name", "")
         if ctx.has_field(name, materialised):
             ref, rr = ctx.resolve_field_ref(name, materialised)
-            decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+            decoded = ctx.emit_decode_field(
+                rr, ref.fl, ref.offset_reg, extent=ref.extent
+            )
             return ctx.emit_to_string(decoded)
         from interpreter.cobol.condition_lowering import _unresolvable_operand
 
@@ -420,7 +424,11 @@ def lower_move(
                     subscripts=target.subscripts,
                 )
                 ctx.emit_fill_raw_byte(
-                    target_rr, target_ref.fl, fill_byte, target_ref.offset_reg
+                    target_rr,
+                    target_ref.fl,
+                    fill_byte,
+                    target_ref.offset_reg,
+                    extent=target_ref.extent,
                 )
             return
 
@@ -438,7 +446,10 @@ def lower_move(
         )
         source_fl = source_ref.fl
         decoded_reg = ctx.emit_decode_field(
-            source_rr, source_ref.fl, source_ref.offset_reg
+            source_rr,
+            source_ref.fl,
+            source_ref.offset_reg,
+            extent=source_ref.extent,
         )
         value_str_reg = ctx.emit_to_string(decoded_reg)
     else:
@@ -503,7 +514,10 @@ def lower_move(
         and source_fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
     ):
         zoned_display_reg = ctx.emit_decode_zoned_display(
-            source_rr, source_fl, source_ref.offset_reg
+            source_rr,
+            source_fl,
+            source_ref.offset_reg,
+            extent=source_ref.extent,
         )
 
     # Store the (once-evaluated) source value into each receiving field. Each
@@ -564,7 +578,10 @@ def _store_move_value(
     if target.ref_mod_start is not None:
         # Load current target field value as string (needed for SPLICE)
         target_decoded = ctx.emit_decode_field(
-            target_rr, target_ref.fl, target_ref.offset_reg
+            target_rr,
+            target_ref.fl,
+            target_ref.offset_reg,
+            extent=target_ref.extent,
         )
         target_str_reg = ctx.emit_to_string(target_decoded)
 
@@ -604,7 +621,11 @@ def _store_move_value(
         target_value_reg = spliced_reg
 
     ctx.emit_encode_and_write(
-        target_rr, target_ref.fl, target_value_reg, target_ref.offset_reg
+        target_rr,
+        target_ref.fl,
+        target_value_reg,
+        target_ref.offset_reg,
+        extent=target_ref.extent,
     )
 
 
@@ -632,11 +653,15 @@ def lower_move_corresponding(
             dst_fl = dst_layout.fields[name]
 
             src_ref = ctx.resolve_field_ref_from(src_fl, region_reg, region)
-            decoded = ctx.emit_decode_field(region_reg, src_fl, src_ref.offset_reg)
+            decoded = ctx.emit_decode_field(
+                region_reg, src_fl, src_ref.offset_reg, extent=src_ref.extent
+            )
             value_str = ctx.emit_to_string(decoded)
 
             dst_ref = ctx.resolve_field_ref_from(dst_fl, region_reg, region)
-            ctx.emit_encode_and_write(region_reg, dst_fl, value_str, dst_ref.offset_reg)
+            ctx.emit_encode_and_write(
+                region_reg, dst_fl, value_str, dst_ref.offset_reg, extent=dst_ref.extent
+            )
 
 
 def _find_group_and_reg(
@@ -689,10 +714,14 @@ def lower_arithmetic_corresponding(
         dst_fl = dst_group.fields[name]
 
         src_ref = ctx.resolve_field_ref_from(src_fl, src_rr, src_region)
-        src_val = ctx.emit_decode_field(src_rr, src_fl, src_ref.offset_reg)
+        src_val = ctx.emit_decode_field(
+            src_rr, src_fl, src_ref.offset_reg, extent=src_ref.extent
+        )
 
         dst_ref = ctx.resolve_field_ref_from(dst_fl, dst_rr, dst_region)
-        dst_val = ctx.emit_decode_field(dst_rr, dst_fl, dst_ref.offset_reg)
+        dst_val = ctx.emit_decode_field(
+            dst_rr, dst_fl, dst_ref.offset_reg, extent=dst_ref.extent
+        )
 
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -704,7 +733,9 @@ def lower_arithmetic_corresponding(
             )
         )
         result_str = ctx.emit_to_string(result_reg)
-        ctx.emit_encode_and_write(dst_rr, dst_fl, result_str, dst_ref.offset_reg)
+        ctx.emit_encode_and_write(
+            dst_rr, dst_fl, result_str, dst_ref.offset_reg, extent=dst_ref.extent
+        )
 
 
 def _emit_arithmetic_writeback(
@@ -726,7 +757,9 @@ def _emit_arithmetic_writeback(
     offset_reg = target_ref.offset_reg
 
     if target_op.ref_mod_start is not None:
-        target_decoded = ctx.emit_decode_field(target_rr, fl, offset_reg)
+        target_decoded = ctx.emit_decode_field(
+            target_rr, fl, offset_reg, extent=target_ref.extent
+        )
         target_str_reg = ctx.emit_to_string(target_decoded)
 
         tgt_start_reg = eval_ref_mod_expr(ctx, target_op.ref_mod_start, materialised)
@@ -787,7 +820,9 @@ def _emit_arithmetic_writeback(
                 ),
             )
         )
-        ctx.emit_encode_and_write(target_rr, fl, spliced_reg, offset_reg)
+        ctx.emit_encode_and_write(
+            target_rr, fl, spliced_reg, offset_reg, extent=target_ref.extent
+        )
     else:
         if target_op.rounded:
             dec_digits_reg = ctx.const_to_reg(fl.type_descriptor.decimal_digits)
@@ -800,7 +835,9 @@ def _emit_arithmetic_writeback(
                 )
             )
             result_str_reg = rounded_reg
-        ctx.emit_encode_and_write(target_rr, fl, result_str_reg, offset_reg)
+        ctx.emit_encode_and_write(
+            target_rr, fl, result_str_reg, offset_reg, extent=target_ref.extent
+        )
 
 
 def lower_arithmetic(
@@ -826,7 +863,10 @@ def lower_arithmetic(
             stmt.source.name, materialised, subscripts=stmt.source.subscripts
         )
         src_decoded = ctx.emit_decode_field(
-            source_rr, source_ref.fl, source_ref.offset_reg
+            source_rr,
+            source_ref.fl,
+            source_ref.offset_reg,
+            extent=source_ref.extent,
         )
 
         # Handle reference modification on source
@@ -879,7 +919,9 @@ def lower_arithmetic(
             float(translate_cobol_figurative(stmt.source.name))
         )
 
-    tgt_decoded = ctx.emit_decode_field(target_rr, target_ref.fl, target_ref.offset_reg)
+    tgt_decoded = ctx.emit_decode_field(
+        target_rr, target_ref.fl, target_ref.offset_reg, extent=target_ref.extent
+    )
 
     # Apply target ref-mod on the READ side: ADD 5 TO Y(4:3) should add to
     # the Y(4:3) substring value, not to the entire Y field.
@@ -1013,7 +1055,9 @@ def lower_arithmetic_giving(
             ref, rr = ctx.resolve_field_ref(
                 field_name, materialised, subscripts=operand.subscripts
             )
-            decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+            decoded = ctx.emit_decode_field(
+                rr, ref.fl, ref.offset_reg, extent=ref.extent
+            )
 
             # Apply ref_mod if present
             if operand.ref_mod_start is not None:
@@ -1259,7 +1303,11 @@ def lower_compute(
                 )
                 write_reg = rounded_reg
             ctx.emit_encode_and_write(
-                target_rr, target_ref.fl, write_reg, target_ref.offset_reg
+                target_rr,
+                target_ref.fl,
+                write_reg,
+                target_ref.offset_reg,
+                extent=target_ref.extent,
             )
         return
 
@@ -1328,7 +1376,9 @@ def lower_compute(
                 )
             )
             write_reg = rounded_reg
-        ctx.emit_encode_and_write(rr, ref.fl, write_reg, ref.offset_reg)
+        ctx.emit_encode_and_write(
+            rr, ref.fl, write_reg, ref.offset_reg, extent=ref.extent
+        )
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
     ctx.emit_inst(Branch(label=end_label))
@@ -1418,7 +1468,10 @@ def lower_evaluate(
                                 stmt.subject, materialised
                             )
                             subject_reg = ctx.emit_decode_field(
-                                subject_rr, subject_ref.fl, subject_ref.offset_reg
+                                subject_rr,
+                                subject_ref.fl,
+                                subject_ref.offset_reg,
+                                extent=subject_ref.extent,
                             )
                         else:
                             subject_reg = ctx.const_to_reg(
@@ -1504,7 +1557,10 @@ def lower_evaluate(
                             also_subj, materialised
                         )
                         also_subj_reg = ctx.emit_decode_field(
-                            also_rr, also_ref.fl, also_ref.offset_reg
+                            also_rr,
+                            also_ref.fl,
+                            also_ref.offset_reg,
+                            extent=also_ref.extent,
                         )
                     else:
                         also_subj_reg = ctx.const_to_reg(ctx.parse_literal(also_subj))
@@ -1686,7 +1742,9 @@ def lower_initialize(
                 default = " " * td.total_digits
             else:
                 default = "0"
-            ctx.emit_field_encode(leaf_rr, leaf_fl, default, leaf_ref.offset_reg)
+            ctx.emit_field_encode(
+                leaf_rr, leaf_fl, default, leaf_ref.offset_reg, extent=leaf_ref.extent
+            )
 
 
 def _set_condition_name(
@@ -1720,7 +1778,11 @@ def _set_condition_name(
         else:
             false_val = 0
         ctx.emit_encode_and_write(
-            parent_rr, parent_ref.fl, ctx.const_to_reg(false_val), parent_ref.offset_reg
+            parent_rr,
+            parent_ref.fl,
+            ctx.const_to_reg(false_val),
+            parent_ref.offset_reg,
+            extent=parent_ref.extent,
         )
         return
 
@@ -1766,7 +1828,11 @@ def _set_condition_name(
     else:
         value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
     ctx.emit_encode_and_write(
-        parent_rr, parent_ref.fl, value_reg, parent_ref.offset_reg
+        parent_rr,
+        parent_ref.fl,
+        value_reg,
+        parent_ref.offset_reg,
+        extent=parent_ref.extent,
     )
 
 
@@ -1800,12 +1866,19 @@ def lower_set(
             if ctx.has_field(str(value_str), materialised):
                 src_ref, src_rr = ctx.resolve_field_ref(str(value_str), materialised)
                 value_str_reg = ctx.emit_decode_field(
-                    src_rr, src_ref.fl, src_ref.offset_reg
+                    src_rr,
+                    src_ref.fl,
+                    src_ref.offset_reg,
+                    extent=src_ref.extent,
                 )
             else:
                 value_str_reg = ctx.const_to_reg(str(value_str))
             ctx.emit_encode_and_write(
-                target_rr, target_ref.fl, value_str_reg, target_ref.offset_reg
+                target_rr,
+                target_ref.fl,
+                value_str_reg,
+                target_ref.offset_reg,
+                extent=target_ref.extent,
             )
     elif stmt.set_type == "BY":
         step_val = stmt.values[0] if stmt.values else "1"
@@ -1816,13 +1889,19 @@ def lower_set(
                 continue
             target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
             tgt_decoded = ctx.emit_decode_field(
-                target_rr, target_ref.fl, target_ref.offset_reg
+                target_rr,
+                target_ref.fl,
+                target_ref.offset_reg,
+                extent=target_ref.extent,
             )
             # SET ... UP/DOWN BY <data-item> takes the same path as TO above.
             if ctx.has_field(str(step_val), materialised):
                 step_ref, step_rr = ctx.resolve_field_ref(str(step_val), materialised)
                 step_reg = ctx.emit_decode_field(
-                    step_rr, step_ref.fl, step_ref.offset_reg
+                    step_rr,
+                    step_ref.fl,
+                    step_ref.offset_reg,
+                    extent=step_ref.extent,
                 )
             else:
                 step_reg = ctx.const_to_reg(ctx.parse_literal(step_val))
@@ -1837,7 +1916,11 @@ def lower_set(
             )
             result_str_reg = ctx.emit_to_string(result_reg)
             ctx.emit_encode_and_write(
-                target_rr, target_ref.fl, result_str_reg, target_ref.offset_reg
+                target_rr,
+                target_ref.fl,
+                result_str_reg,
+                target_ref.offset_reg,
+                extent=target_ref.extent,
             )
 
 
@@ -1851,7 +1934,9 @@ def _lower_display_operand(
         ref, rr = ctx.resolve_field_ref(
             operand.name, materialised, subscripts=operand.subscripts
         )
-        decoded_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+        decoded_reg = ctx.emit_decode_field(
+            rr, ref.fl, ref.offset_reg, extent=ref.extent
+        )
         display_reg = ctx.emit_to_string(decoded_reg)
     else:
         display_reg = ctx.const_to_reg(str(operand.name))
@@ -1966,7 +2051,7 @@ def _lower_computed_goto(
     ref, rr = ctx.resolve_field_ref(
         index.name, materialised, index.qualifiers, subscripts=index.subscripts
     )
-    idx_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+    idx_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
     for k, target in enumerate(computed.targets, start=1):
         k_reg = ctx.const_to_reg(k)
         cmp_reg = ctx.fresh_reg()

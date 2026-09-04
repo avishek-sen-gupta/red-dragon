@@ -244,41 +244,17 @@ class EmitContext:
             ),
         )
 
-    def _resolve_access(
-        self,
-        fl: FieldLayout,
-        offset_reg: Register,
-        extent: FieldExtent | None,
-        region: RegionId,
-    ) -> tuple[Register, FieldExtent]:
-        """Materialise a missing offset register and settle the access extent.
+    def _materialise_offset(self, fl: FieldLayout, offset_reg: Register) -> Register:
+        """Emit the base-offset CONST when the caller passed no offset register.
 
-        Emits the base-offset CONST when the caller passed no offset register,
-        so this must be called at exactly the point in the instruction stream
-        where that CONST belongs.
-
-        ``extent`` is what the caller knows: a ``ResolvedFieldRef.extent``
-        carries the real subscript precision and must always be preferred. The
-        fallback covers ``fl``'s own declared byte range, and is EXACT only when
-        the offset register provably holds ``fl.offset`` because this helper
-        synthesised it. When the caller supplied the offset register its
-        provenance is unknown — it may be subscript arithmetic — so the extent
-        is CLAMPED and can never ``must_cover``, and so can never falsely kill
-        a definition it does not actually overwrite.
+        Emits an instruction, so it must be called at exactly the point in the
+        instruction stream where that CONST belongs.
         """
-        caller_supplied = offset_reg.is_present()
-        if not caller_supplied:
-            offset_reg = self.fresh_reg()
-            self.emit_inst(Const.int_(offset_reg, fl.offset))
-        if extent is None:
-            extent = FieldExtent(
-                region=region,
-                start=fl.offset,
-                length=fl.byte_length,
-                precision=(Precision.CLAMPED if caller_supplied else Precision.EXACT),
-                field_name=fl.name,
-            )
-        return offset_reg, extent
+        if offset_reg.is_present():
+            return offset_reg
+        offset_reg = self.fresh_reg()
+        self.emit_inst(Const.int_(offset_reg, fl.offset))
+        return offset_reg
 
     def const_to_reg(self, value: Any) -> Register:
         """Emit a typed CONST for a Python literal and return its register."""
@@ -573,18 +549,18 @@ class EmitContext:
         fl: FieldLayout,
         value: str,
         offset_reg: Register = NO_REGISTER,
-        extent: FieldExtent | None = None,
-        region: RegionId = RegionId.WORKING_STORAGE,
+        *,
+        extent: FieldExtent,
     ) -> None:
         """Emit IR to encode a value and write it to the region."""
         encoded_reg = self.emit_encode_value(fl, value)
-        offset_reg, access = self._resolve_access(fl, offset_reg, extent, region)
+        offset_reg = self._materialise_offset(fl, offset_reg)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
             value_reg=encoded_reg,
             length=fl.byte_length,
-            extent=access,
+            extent=extent,
         )
 
     def emit_encode_value(self, fl: FieldLayout, value: str) -> Register:
@@ -658,8 +634,8 @@ class EmitContext:
         fl: FieldLayout,
         fill_byte: int,
         offset_reg: Register = NO_REGISTER,
-        extent: FieldExtent | None = None,
-        region: RegionId = RegionId.WORKING_STORAGE,
+        *,
+        extent: FieldExtent,
     ) -> None:
         """Fill a field's whole region slot with a single raw byte, verbatim.
 
@@ -676,13 +652,13 @@ class EmitContext:
                 type_expr=array_of(scalar(FoundationTypeName.INT)),
             )
         )
-        offset_reg, access = self._resolve_access(fl, offset_reg, extent, region)
+        offset_reg = self._materialise_offset(fl, offset_reg)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
             value_reg=result,
             length=fl.byte_length,
-            extent=access,
+            extent=extent,
         )
 
     def _emit_ebcdic_spaces(self, byte_length: int) -> Register:
@@ -788,11 +764,11 @@ class EmitContext:
         region_reg: Register,
         fl: FieldLayout,
         offset_reg: Register = NO_REGISTER,
-        extent: FieldExtent | None = None,
-        region: RegionId = RegionId.WORKING_STORAGE,
+        *,
+        extent: FieldExtent,
     ) -> Register:
         """Emit IR to load and decode a field from the region. Returns decoded value register."""
-        offset_reg, access = self._resolve_access(fl, offset_reg, extent, region)
+        offset_reg = self._materialise_offset(fl, offset_reg)
 
         data_reg = self.fresh_reg()
         self._emit_load_region(
@@ -800,7 +776,7 @@ class EmitContext:
             region_reg=region_reg,
             offset_reg=offset_reg,
             length=fl.byte_length,
-            extent=access,
+            extent=extent,
         )
 
         td = fl.type_descriptor
@@ -864,8 +840,8 @@ class EmitContext:
         region_reg: Register,
         fl: FieldLayout,
         offset_reg: Register = NO_REGISTER,
-        extent: FieldExtent | None = None,
-        region: RegionId = RegionId.WORKING_STORAGE,
+        *,
+        extent: FieldExtent,
     ) -> Register:
         """Emit IR to read a zoned (USAGE DISPLAY) numeric field's raw character
         representation, decoded as alphanumeric (its zoned digit characters).
@@ -876,7 +852,7 @@ class EmitContext:
         when a numeric-DISPLAY source feeds an alphanumeric receiver, where COBOL
         moves the sending field's characters left-justified (red-dragon-0fqr).
         """
-        offset_reg, access = self._resolve_access(fl, offset_reg, extent, region)
+        offset_reg = self._materialise_offset(fl, offset_reg)
 
         data_reg = self.fresh_reg()
         self._emit_load_region(
@@ -884,7 +860,7 @@ class EmitContext:
             region_reg=region_reg,
             offset_reg=offset_reg,
             length=fl.byte_length,
-            extent=access,
+            extent=extent,
         )
         ir = build_decode_alphanumeric_ir(f"dec_zoned_disp_{fl.name}")
         return self.inline_ir(ir, {"%p_data": data_reg})
@@ -896,8 +872,8 @@ class EmitContext:
         region_reg: Register,
         fl: FieldLayout,
         offset_reg: Register = NO_REGISTER,
-        extent: FieldExtent | None = None,
-        region: RegionId = RegionId.WORKING_STORAGE,
+        *,
+        extent: FieldExtent,
     ) -> Register:
         """Read a region slot as its verbatim byte-image (LATIN1 identity).
 
@@ -907,14 +883,14 @@ class EmitContext:
         the group through the EBCDIC→ASCII alphanumeric decoder would mangle
         packed bytes (red-dragon-zwzg).
         """
-        offset_reg, access = self._resolve_access(fl, offset_reg, extent, region)
+        offset_reg = self._materialise_offset(fl, offset_reg)
         data_reg = self.fresh_reg()
         self._emit_load_region(
             result_reg=data_reg,
             region_reg=region_reg,
             offset_reg=offset_reg,
             length=fl.byte_length,
-            extent=access,
+            extent=extent,
         )
         encoding_reg = self.const_to_reg(CobolEncoding.LATIN1.value)
         result = self.fresh_reg()
@@ -933,8 +909,8 @@ class EmitContext:
         fl: FieldLayout,
         value_str_reg: Register,
         offset_reg: Register = NO_REGISTER,
-        extent: FieldExtent | None = None,
-        region: RegionId = RegionId.WORKING_STORAGE,
+        *,
+        extent: FieldExtent,
     ) -> None:
         """Write a latin-1 str's verbatim bytes into a region slot (no PICTURE
         encode). The byte-faithful inverse of ``emit_read_region_raw``: used for
@@ -949,13 +925,13 @@ class EmitContext:
                 args=(value_str_reg, encoding_reg),
             ),
         )
-        offset_reg, access = self._resolve_access(fl, offset_reg, extent, region)
+        offset_reg = self._materialise_offset(fl, offset_reg)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
             value_reg=bytes_reg,
             length=fl.byte_length,
-            extent=access,
+            extent=extent,
         )
 
     # ── String Conversion Helpers ─────────────────────────────────
@@ -1165,18 +1141,18 @@ class EmitContext:
         fl: FieldLayout,
         value_str_reg: Register,
         offset_reg: Register = NO_REGISTER,
-        extent: FieldExtent | None = None,
-        region: RegionId = RegionId.WORKING_STORAGE,
+        *,
+        extent: FieldExtent,
     ) -> None:
         """Encode a string value and write it to the field's region slot."""
         encoded_reg = self.emit_encode_from_string(fl, value_str_reg)
-        offset_reg, access = self._resolve_access(fl, offset_reg, extent, region)
+        offset_reg = self._materialise_offset(fl, offset_reg)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
             value_reg=encoded_reg,
             length=fl.byte_length,
-            extent=access,
+            extent=extent,
         )
 
     # ── Condition Lowering ───────────────────────────────────────
@@ -1216,7 +1192,11 @@ class EmitContext:
         )
         str_reg = self.emit_to_string(status_reg)
         self.emit_encode_and_write(
-            target_rr, target_ref.fl, str_reg, target_ref.offset_reg
+            target_rr,
+            target_ref.fl,
+            str_reg,
+            target_ref.offset_reg,
+            extent=target_ref.extent,
         )
 
     # ── Parse Literal ─────────────────────────────────────────────

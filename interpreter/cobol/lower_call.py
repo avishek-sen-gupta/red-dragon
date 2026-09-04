@@ -173,7 +173,11 @@ def lower_call(
         giving_ref, giving_rr = ctx.resolve_field_ref(stmt.giving, materialised)
         str_reg = ctx.emit_to_string(result_reg)
         ctx.emit_encode_and_write(
-            giving_rr, giving_ref.fl, str_reg, giving_ref.offset_reg
+            giving_rr,
+            giving_ref.fl,
+            str_reg,
+            giving_ref.offset_reg,
+            extent=giving_ref.extent,
         )
 
     logger.info(
