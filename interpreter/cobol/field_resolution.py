@@ -59,6 +59,32 @@ def whole_field_extent(fl: FieldLayout, region: RegionId) -> FieldExtent:
     )
 
 
+def runtime_offset_extent(
+    *,
+    name: str,
+    fl: FieldLayout,
+    region: RegionId,
+    record: tuple[int, int] | None,
+) -> FieldExtent:
+    """CLAMPED bound for an access whose byte offset is computed at runtime.
+
+    The same doctrine as ``field_access_extent``'s no-OCCURS branch, named so
+    the two cannot drift. When the offset register is built by arithmetic the
+    lowering cannot see through, the access can leave the field it nominally
+    targets — COBOL's ``STRING ... WITH POINTER`` writes ``byte_length`` bytes
+    starting ``ptr - 1`` bytes into the receiver, so it runs past the end.
+
+    Clamping to the field itself would UNDER-approximate, and an under-sized
+    extent silently misses a real overlap in ``may_alias`` — a dropped
+    dependency edge, which is the failure this whole design exists to prevent.
+    Downgrading the precision protects ``must_cover`` but does nothing for
+    ``may_alias``, so the RANGE has to widen too. The bound is ``record``, the
+    enclosing level-01: still a declared construct, nowhere near region-wide.
+    """
+    start, length = record if record is not None else (fl.offset, fl.byte_length)
+    return FieldExtent(region, start, length, Precision.CLAMPED, name)
+
+
 def literal_subscript_value(node: ExprNode) -> int | None:
     """The integer a subscript denotes, or None when it is not a literal.
 

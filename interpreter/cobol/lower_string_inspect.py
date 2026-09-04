@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import logging
 
 from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
@@ -14,7 +13,7 @@ from cobol_asg.cobol_statements import (
 )
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
-from interpreter.cobol.field_extent import Precision
+from interpreter.cobol.field_resolution import runtime_offset_extent
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ir_encoders import (
     build_inspect_replace_ir,
@@ -272,18 +271,24 @@ def lower_string(
                     right=start_0indexed_reg,
                 )
             )
-            # WITH POINTER writes at a RUNTIME offset inside the target, not
-            # at the field's own offset, so the exact bytes touched are not
-            # statically known. Clamp the target's extent: the write lands
-            # somewhere in this field, and a CLAMPED extent can never
-            # must_cover, so it cannot kill a definition it may not overwrite.
+            # WITH POINTER writes byte_length bytes starting (ptr - 1) bytes
+            # into the receiver, so the bytes touched run up to byte_length - 1
+            # PAST the target field's own end. Clamping to the field would be
+            # under-sized and would silently drop may_alias edges to whatever
+            # follows it, so this clamps to the enclosing 01 — the same rule
+            # field_access_extent applies to a computed subscript it cannot
+            # bound. (The overrun in the emitted instruction is pre-existing;
+            # the extent's job is to describe honestly what it can touch.)
             ctx.emit_encode_and_write(
                 target_rr,
                 target_ref.fl,
                 concat_reg,
                 write_offset_reg,
-                extent=dataclasses.replace(
-                    target_ref.extent, precision=Precision.CLAMPED
+                extent=runtime_offset_extent(
+                    name=target_ref.extent.field_name,
+                    fl=target_ref.fl,
+                    region=target_ref.extent.region,
+                    record=materialised.enclosing_record_extent(stmt.into.name),
                 ),
             )
             written_len_reg = ctx.fresh_reg()
