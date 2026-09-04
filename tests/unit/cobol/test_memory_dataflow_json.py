@@ -87,3 +87,37 @@ def test_edges_carry_via_source_locations(analyze_probe):
     """)
     edge = next(e for e in result.to_json()["edges"] if e["to"] == "WS-DST")
     assert edge["via"], "an edge must say which statements produced it"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_via_is_sorted_and_deduplicated_across_multiple_statements(analyze_probe):
+    """Two MOVEs feed the same edge -> via must not depend on set order.
+
+    ``reach_in`` (interpreter/dataflow.py) is a ``set[Definition]`` whose
+    iteration order is subject to hash randomisation across processes, so a
+    ``via`` list built without sorting would be nondeterministic between
+    runs -- exactly the phantom-diff hazard a visualiser must not see.
+
+    NOTE: the COBOL frontend currently records ``NO_SOURCE_LOCATION`` (which
+    stringifies to ``"<unknown>"``) on every ``WriteRegion``/``LoadRegion``
+    it emits, so both MOVEs below contribute the identical location string.
+    That is a pre-existing gap in the frontend's location threading, out of
+    scope for this additive task -- but it still exercises de-duplication
+    directly: two contributing statements must collapse to ONE ``via``
+    entry, not two copies of the same string. Sortedness is asserted
+    generally (``via == sorted(via)``), which holds vacuously for a
+    single-element list; a genuine multi-*distinct*-location regression test
+    needs the underlying location-threading gap fixed first.
+    """
+    result = analyze_probe("""
+           MOVE WS-SRC TO WS-DST.
+           MOVE WS-SRC TO WS-DST.
+    """)
+    edge = next(e for e in result.to_json()["edges"] if e["to"] == "WS-DST")
+    via = edge["via"]
+    assert via == ["<unknown>"], (
+        "two statements contributing the identical location string must "
+        "collapse to one de-duplicated via entry"
+    )
+    assert via == sorted(via), "via must be sorted, not incidentally ordered"
+    assert len(via) == len(set(via)), "via must be de-duplicated"
