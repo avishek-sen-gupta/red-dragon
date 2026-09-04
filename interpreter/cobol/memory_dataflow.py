@@ -45,7 +45,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from interpreter.cfg import CFG, build_cfg
+from interpreter.cfg import CFG, BasicBlock
 from interpreter.cobol.field_extent import FieldExtent
 from interpreter.cobol.memory_effects import EffectKind, MemoryEffect
 from interpreter.dataflow import (
@@ -158,16 +158,32 @@ def _substitute(
     )
 
 
-def rewrite_cfg(
-    cfg: CFG, effects: dict[InstructionId, MemoryEffect]
-) -> tuple[CFG, list[InstructionBase]]:
-    """Rebuild the CFG with region accesses expressed as extent accesses."""
-    rewritten = [
-        _substitute(inst, effects)
-        for label in cfg.blocks
-        for inst in cfg.blocks[label].instructions
-    ]
-    return build_cfg(rewritten), rewritten
+def rewrite_cfg(cfg: CFG, effects: dict[InstructionId, MemoryEffect]) -> CFG:
+    """Copy the CFG, substituting region accesses for extent accesses.
+
+    Block-by-block, carrying the label, successors, predecessors and entry
+    across verbatim. It must NOT round-trip through ``build_cfg``: that
+    partitions a flat instruction stream and strips each block's leading
+    ``Label_``, so re-flattening ``block.instructions`` yields a stream with
+    no labels at all. Every block is then renamed ``__block_N``, the
+    ``if target in cfg.blocks`` guard on edge wiring never fires, and the
+    result has ZERO edges — ``reach_in`` empty everywhere, the analysis
+    silently degenerated to intra-block, and every cross-block aliasing edge
+    gone without a word. Guarded by
+    ``test_the_rewritten_cfg_keeps_every_control_flow_edge``.
+
+    The substitution is per-instruction and changes no control flow, so
+    control flow should not be re-derived here at all.
+    """
+    rewritten = CFG(entry=cfg.entry)
+    for label, block in cfg.blocks.items():
+        rewritten.blocks[label] = BasicBlock(
+            label=block.label,
+            instructions=[_substitute(inst, effects) for inst in block.instructions],
+            successors=list(block.successors),
+            predecessors=list(block.predecessors),
+        )
+    return rewritten
 
 
 def _extract_def_use_chains(
@@ -350,7 +366,7 @@ def build_def_use_chains(
     separated them stops being observable there. A caller (or a test) that
     needs to know which particular write a read saw asks here.
     """
-    rewritten_cfg, _ = rewrite_cfg(cfg, effects)
+    rewritten_cfg = rewrite_cfg(cfg, effects)
     return _extract_def_use_chains(
         rewritten_cfg, solve_reaching_definitions(rewritten_cfg)
     )
@@ -366,7 +382,7 @@ def analyze_memory_dataflow(
     the analysis is opt-in, and running it against a lowering that recorded
     nothing is a caller mistake the caller can see.
     """
-    rewritten_cfg, _ = rewrite_cfg(cfg, effects)
+    rewritten_cfg = rewrite_cfg(cfg, effects)
     block_facts = solve_reaching_definitions(rewritten_cfg)
     chains = _extract_def_use_chains(rewritten_cfg, block_facts)
     logger.info("memory dataflow: %d def-use links over extents", len(chains))
