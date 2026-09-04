@@ -35,6 +35,30 @@ class ResolvedFieldRef:
     extent: FieldExtent
 
 
+def whole_field_extent(fl: FieldLayout, region: RegionId) -> FieldExtent:
+    """The EXACT extent of an access covering ``fl``'s own declared byte range.
+
+    For the call sites that have no ``ResolvedFieldRef`` to hand — a
+    ``FieldLayout`` found by walking a group, a record read wholesale, a
+    synthesised special register. ``region`` is required and has no default:
+    two extents in different regions can never alias, so a guessed region does
+    not blur an answer, it silently deletes every edge that field participates
+    in.
+
+    Only correct when the access really is the whole field at its declared
+    offset. A subscripted access must use ``field_access_extent`` (via
+    ``ResolvedFieldRef.extent``) instead, which clamps to the OCCURS construct
+    rather than naming the first element.
+    """
+    return FieldExtent(
+        region=region,
+        start=fl.offset,
+        length=fl.byte_length,
+        precision=Precision.EXACT,
+        field_name=fl.name,
+    )
+
+
 def literal_subscript_value(node: ExprNode) -> int | None:
     """The integer a subscript denotes, or None when it is not a literal.
 

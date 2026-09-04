@@ -138,7 +138,9 @@ def lower_perform_times(
 
     if ctx.has_field(spec.times, materialised):
         times_ref, times_rr = ctx.resolve_field_ref(spec.times, materialised)
-        times_reg = ctx.emit_decode_field(times_rr, times_ref.fl, times_ref.offset_reg)
+        times_reg = ctx.emit_decode_field(
+            times_rr, times_ref.fl, times_ref.offset_reg, extent=times_ref.extent
+        )
     else:
         times_reg = ctx.const_to_reg(ctx.parse_literal(spec.times))
 
@@ -233,7 +235,11 @@ def _init_varying_var(
     from_val_reg = _eval_varying_from(ctx, spec.varying_from, materialised)
     from_str_reg = ctx.emit_to_string(from_val_reg)
     ctx.emit_encode_and_write(
-        varying_rr, varying_ref.fl, from_str_reg, varying_ref.offset_reg
+        varying_rr,
+        varying_ref.fl,
+        from_str_reg,
+        varying_ref.offset_reg,
+        extent=varying_ref.extent,
     )
 
 
@@ -446,7 +452,7 @@ def _eval_varying_from(
     text = str(varying_from)
     if ctx.has_field(text, materialised):
         ref, rr = ctx.resolve_field_ref(text, materialised)
-        return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+        return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
     return ctx.const_to_reg(ctx.parse_literal(text))
 
 
@@ -461,7 +467,9 @@ def emit_varying_increment(
         return
 
     varying_ref, varying_rr = ctx.resolve_field_ref(spec.varying_var, materialised)
-    val_reg = ctx.emit_decode_field(varying_rr, varying_ref.fl, varying_ref.offset_reg)
+    val_reg = ctx.emit_decode_field(
+        varying_rr, varying_ref.fl, varying_ref.offset_reg, extent=varying_ref.extent
+    )
 
     by_reg = ctx.const_to_reg(ctx.parse_literal(spec.varying_by))
     new_val_reg = ctx.fresh_reg()
@@ -476,5 +484,9 @@ def emit_varying_increment(
 
     new_str_reg = ctx.emit_to_string(new_val_reg)
     ctx.emit_encode_and_write(
-        varying_rr, varying_ref.fl, new_str_reg, varying_ref.offset_reg
+        varying_rr,
+        varying_ref.fl,
+        new_str_reg,
+        varying_ref.offset_reg,
+        extent=varying_ref.extent,
     )

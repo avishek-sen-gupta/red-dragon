@@ -6,6 +6,8 @@ import logging
 
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.field_resolution import whole_field_extent
+from interpreter.cobol.region_id import RegionId
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     SectionedLayout,
@@ -21,8 +23,17 @@ from interpreter.var_name import VarName
 logger = logging.getLogger(__name__)
 
 
-def lower_data_division(ctx: EmitContext, layout: DataLayout) -> Register:
-    """Emit ALLOC_REGION + initial VALUE encodings. Returns region register."""
+def lower_data_division(
+    ctx: EmitContext, layout: DataLayout, region: RegionId
+) -> Register:
+    """Emit ALLOC_REGION + initial VALUE encodings. Returns region register.
+
+    ``region`` says which DATA DIVISION section this layout is, and is required:
+    this one function initialises WORKING-STORAGE, LOCAL-STORAGE, FILE, INDEXES
+    and SPECIAL-REGISTERS, so there is no defensible default. Extents in
+    different regions never alias, so a wrong region here would silently erase
+    every dependency edge on the fields it initialises.
+    """
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const.int_(size_reg, layout.total_bytes))
     region_reg = ctx.fresh_reg()
@@ -32,7 +43,12 @@ def lower_data_division(ctx: EmitContext, layout: DataLayout) -> Register:
 
     fields_with_values = [fl for fl in layout.all_leaves() if fl.value]
     for fl in fields_with_values:
-        ctx.emit_field_encode(region_reg, fl, fl.value)
+        # A VALUE clause initialises the whole declared field at its own
+        # offset — no subscript is in play — so the whole-field extent is
+        # exactly right here.
+        ctx.emit_field_encode(
+            region_reg, fl, fl.value, extent=whole_field_extent(fl, region)
+        )
 
     logger.debug(
         "Data Division: allocated %d bytes, initialized %d fields",
@@ -65,12 +81,12 @@ def lower_sectioned_data_division(
         lk_reg = NO_REGISTER
 
     if layout.local_storage.total_bytes > 0:
-        ls_reg = lower_data_division(ctx, layout.local_storage)
+        ls_reg = lower_data_division(ctx, layout.local_storage, RegionId.LOCAL_STORAGE)
     else:
         ls_reg = NO_REGISTER
 
     if layout.file.total_bytes > 0:
-        file_reg = lower_data_division(ctx, layout.file)
+        file_reg = lower_data_division(ctx, layout.file, RegionId.FILE)
     else:
         file_reg = NO_REGISTER
 
@@ -79,7 +95,7 @@ def lower_sectioned_data_division(
     # storage, sized by the caller and not by total_bytes, so an index placed
     # there would write past the arguments and corrupt them.
     if layout.indexes.total_bytes > 0:
-        index_reg = lower_data_division(ctx, layout.indexes)
+        index_reg = lower_data_division(ctx, layout.indexes, RegionId.INDEXES)
     else:
         index_reg = NO_REGISTER
 
@@ -87,7 +103,9 @@ def lower_sectioned_data_division(
     # allocated fresh per run and isolated from WS/LS/LINKAGE/FILE storage. Its
     # handle is published on the program singleton under RETURN_CODE_HANDLE so the
     # final value is recoverable from the returned VMState (see special_registers).
-    sr_reg = lower_data_division(ctx, SPECIAL_REGISTERS_LAYOUT)
+    sr_reg = lower_data_division(
+        ctx, SPECIAL_REGISTERS_LAYOUT, RegionId.SPECIAL_REGISTERS
+    )
     singleton_reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadVar(result_reg=singleton_reg, name=VarName(f"__prog_{program_id.upper()}"))

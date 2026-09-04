@@ -86,7 +86,9 @@ def _emit_single_value_test(
         parent_field_name, materialised, subscripts=subscripts
     )
     parent_is_alpha = parent_ref.fl.type_descriptor.holds_characters
-    parent_reg = ctx.emit_decode_field(parent_rr, parent_ref.fl, parent_ref.offset_reg)
+    parent_reg = ctx.emit_decode_field(
+        parent_rr, parent_ref.fl, parent_ref.offset_reg, extent=parent_ref.extent
+    )
 
     parent_len = parent_ref.fl.byte_length
 
@@ -106,7 +108,10 @@ def _emit_single_value_test(
             parent_field_name, materialised, subscripts=subscripts
         )
         parent_reg2 = ctx.emit_decode_field(
-            parent_rr2, parent_ref2.fl, parent_ref2.offset_reg
+            parent_rr2,
+            parent_ref2.fl,
+            parent_ref2.offset_reg,
+            extent=parent_ref2.extent,
         )
         to_reg = _emit_88_value_reg(ctx, cv.to_val, parent_is_alpha, parent_len)
         le_result = ctx.fresh_reg()
@@ -548,7 +553,9 @@ def _lower_relation_operand(
         name = expr.get("name", "")
         subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
         ref, rr = ctx.resolve_field_ref(name, materialised, subscripts=subscripts)
-        return ctx.emit_decode_zoned_display(rr, ref.fl, ref.offset_reg)
+        return ctx.emit_decode_zoned_display(
+            rr, ref.fl, ref.offset_reg, extent=ref.extent
+        )
     if (
         _is_alphanumeric_operand(expr)
         and expr.get("kind") == "lit"
@@ -713,7 +720,7 @@ def _lower_ref_mod_operand(
 
     subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
     ref, rr = ctx.resolve_field_ref(name, materialised, subscripts=subscripts)
-    full_str_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+    full_str_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
 
     start_1based_reg = _lower_expr_dict(ctx, expr["ref_mod_start"], materialised)
     one_reg = ctx.const_to_reg(1)
@@ -791,7 +798,7 @@ def _lower_expr_dict(
         if ctx.has_field(name, materialised):
             subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
             ref, rr = ctx.resolve_field_ref(name, materialised, subscripts=subscripts)
-            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
         return _unresolvable_operand(ctx, name)
 
     if kind == "lit":
@@ -911,7 +918,9 @@ def _lower_condition_str(
 
         if ctx.has_field(left_name, materialised):
             left_ref, left_rr = ctx.resolve_field_ref(left_name, materialised)
-            left_reg = ctx.emit_decode_field(left_rr, left_ref.fl, left_ref.offset_reg)
+            left_reg = ctx.emit_decode_field(
+                left_rr, left_ref.fl, left_ref.offset_reg, extent=left_ref.extent
+            )
         else:
             left_reg = ctx.const_to_reg(ctx.parse_literal(left_name))
 
@@ -919,7 +928,10 @@ def _lower_condition_str(
         if isinstance(right_parsed, str) and ctx.has_field(right_parsed, materialised):
             right_ref, right_rr = ctx.resolve_field_ref(right_parsed, materialised)
             right_reg = ctx.emit_decode_field(
-                right_rr, right_ref.fl, right_ref.offset_reg
+                right_rr,
+                right_ref.fl,
+                right_ref.offset_reg,
+                extent=right_ref.extent,
             )
         else:
             right_reg = ctx.const_to_reg(right_parsed)
@@ -968,7 +980,7 @@ def lower_expr_node(
             ref, rr = ctx.resolve_field_ref(
                 node.name, materialised, subscripts=node.subscripts
             )
-            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
         return _unresolvable_operand(ctx, node.name)
     if isinstance(node, BinOpNode):
         left_reg = lower_expr_node(ctx, node.left, materialised, force_division_float)
@@ -1002,7 +1014,9 @@ def lower_expr_node(
         ref, rr = ctx.resolve_field_ref(
             node.name, materialised, subscripts=node.subscripts
         )
-        full_str_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg)
+        full_str_reg = ctx.emit_decode_field(
+            rr, ref.fl, ref.offset_reg, extent=ref.extent
+        )
         start_1based_reg = lower_expr_node(ctx, node.ref_mod_start, materialised)
         one_reg = ctx.const_to_reg(1)
         start_0based_reg = ctx.fresh_reg()
