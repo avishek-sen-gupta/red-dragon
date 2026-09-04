@@ -16,6 +16,7 @@ from cobol_asg.cobol_statements import (
     WriteStatement,
 )
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.continuation_name import ContinuationName
 from interpreter.func_name import FuncName
@@ -154,7 +155,11 @@ def lower_accept(
         target_ref, target_rr = ctx.resolve_field_ref(stmt.target, materialised)
         str_reg = ctx.emit_to_string(result_reg)
         ctx.emit_encode_and_write(
-            target_rr, target_ref.fl, str_reg, target_ref.offset_reg
+            target_rr,
+            target_ref.fl,
+            str_reg,
+            target_ref.offset_reg,
+            extent=target_ref.extent,
         )
     logger.info("ACCEPT %s FROM %s", stmt.target, stmt.from_device)
 
@@ -273,7 +278,9 @@ def lower_read(
     # Key for random access
     if stmt.key and materialised.has_field(stmt.key):
         key_ref, key_rr = ctx.resolve_field_ref(stmt.key, materialised)
-        key_val_reg = ctx.emit_decode_field(key_rr, key_ref.fl, key_ref.offset_reg)
+        key_val_reg = ctx.emit_decode_field(
+            key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent
+        )
         key_str_reg = ctx.emit_to_string(key_val_reg)
     else:
         key_str_reg = ctx.const_to_reg("")
@@ -320,11 +327,23 @@ def lower_read(
     rec_name = s2r.get(stmt.file_name.upper())
     if rec_name:
         try:
-            file_fl, file_rr = materialised.resolve(rec_name)
+            file_fl, file_rr, file_region = materialised.resolve_with_region(rec_name)
             # Byte-faithful: land the file's raw bytes into the FD record region
             # verbatim (data_reg is a LATIN1 identity str of the record bytes),
             # preserving binary subfields (red-dragon-zwzg).
-            ctx.emit_write_region_raw(file_rr, file_fl, data_reg, NO_REGISTER)
+            #
+            # The whole-field extent is exact here: READ lands a whole record at
+            # the FD record's own offset, with no subscript. The region comes
+            # from resolve_with_region rather than being assumed — an FD record
+            # resolves to FILE, and a FILE extent must never be recorded as
+            # WORKING-STORAGE or it would alias nothing at all.
+            ctx.emit_write_region_raw(
+                file_rr,
+                file_fl,
+                data_reg,
+                NO_REGISTER,
+                extent=whole_field_extent(file_fl, file_region),
+            )
         except KeyError:
             pass
 
@@ -332,7 +351,11 @@ def lower_read(
     if stmt.into and materialised.has_field(stmt.into):
         target_ref, target_rr = ctx.resolve_field_ref(stmt.into, materialised)
         ctx.emit_write_region_raw(
-            target_rr, target_ref.fl, data_reg, target_ref.offset_reg
+            target_rr,
+            target_ref.fl,
+            data_reg,
+            target_ref.offset_reg,
+            extent=target_ref.extent,
         )
 
     after_label = ctx.fresh_label("read_after")
@@ -457,7 +480,7 @@ def _write_source_reg(
             materialised,
         )
     ref, rr = ctx.resolve_field_ref(record_name, materialised)
-    return ctx.emit_read_region_raw(rr, ref.fl, ref.offset_reg)
+    return ctx.emit_read_region_raw(rr, ref.fl, ref.offset_reg, extent=ref.extent)
 
 
 def lower_write(
