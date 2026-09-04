@@ -80,8 +80,8 @@ _SRC = b"""\
 class _Probe:
     """A lowered probe program plus the effects its lowering declared."""
 
-    def __init__(self):
-        asg = make_cobol_parser().parse(_SRC)
+    def __init__(self, src: bytes = _SRC):
+        asg = make_cobol_parser().parse(src)
         sectioned = build_sectioned_layout(asg)
         self.recorder = CollectingRecorder()
         self.ctx = EmitContext(dispatch_fn=dispatch_statement, recorder=self.recorder)
@@ -275,3 +275,100 @@ def test_string_with_pointer_extent_stays_inside_its_own_record(probe):
     assert buf_ref.extent.must_cover(effect.extent)
     assert not effect.extent.may_alias(name_ref.extent)
     assert not effect.extent.may_alias(idx_ref.extent)
+
+
+# A LINKAGE item handed straight on to a further CALL — the ordinary "pass my
+# caller's parameter down the chain" shape. LK-ARG must NOT also exist in WS,
+# or resolution would pick WS and prove nothing.
+#
+# WS-SHADOW is placed to OCCUPY the byte range LK-ARG would be misattributed
+# to. LK-ARG is at LINKAGE 5..13; WS-SHADOW spans WORKING-STORAGE 4..15. The
+# two overlap on bytes but not on region, so they must never alias — and a
+# region hardcoded back to WORKING_STORAGE makes them alias, which is exactly
+# the false edge the region distinction exists to prevent. Without WS-SHADOW
+# the contrast test would pass under the hardcode by byte-range luck.
+_CALL_SRC = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. CALLPROBE.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-OTHER    PIC X(4).
+       01  WS-SHADOW   PIC X(12).
+       LINKAGE SECTION.
+       01  LK-LEAD     PIC X(5).
+       01  LK-ARG      PIC X(9).
+       PROCEDURE DIVISION USING LK-LEAD LK-ARG.
+       MAIN-PARA.
+           MOVE 'ZZZZ' TO WS-OTHER.
+           MOVE 'YYYY' TO WS-SHADOW.
+           CALL 'SUBPROG' USING LK-ARG.
+           STOP RUN.
+"""
+
+
+@pytest.fixture
+def call_probe() -> _Probe:
+    return _Probe(_CALL_SRC)
+
+
+def _caller_side(effects):
+    """The caller-side half of a CALL's marshalling, by byte range.
+
+    Each USING argument produces TWO recorded effects per direction under the
+    SAME field name: one against the argument's slot in its own section (what
+    this module is about) and one against its slot in the freshly allocated
+    marshalling buffer, which ``_params_extent`` deliberately names as a
+    LINKAGE extent at a cumulative offset from zero. LK-ARG sits at LINKAGE
+    offset 5, so the caller-side extent is the one starting there; the buffer
+    slot for the sole argument starts at 0.
+    """
+    return [e for e in effects if e.extent.start == 5]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_call_using_a_linkage_item_records_the_linkage_region(call_probe):
+    """CALL marshalling must name the argument's OWN section, not WORKING-STORAGE.
+
+    The lowering used to marshal every USING argument out of the caller's WS
+    region regardless of where it was declared (red-dragon-8krz), and the
+    recorded extent hardcoded ``RegionId.WORKING_STORAGE`` to stay faithful to
+    that. Once the lowering was fixed to read from the resolved owning region,
+    a leftover hardcode would make the analysis describe WS bytes while the
+    instruction touches LINKAGE bytes — and because cross-region pairs never
+    alias, every alias edge for a non-WS ``CALL USING`` argument would vanish
+    with no error anywhere.
+
+    LK-ARG is at offset 5 in LINKAGE, 9 bytes long. Hard equality on the region
+    set: a stray WORKING_STORAGE entry fails here even if a LINKAGE one is also
+    present.
+    """
+    assert call_probe.regions("LK-ARG") == {RegionId.LINKAGE}
+
+    (read,) = _caller_side(call_probe.effects("LK-ARG", EffectKind.READ))
+    assert read.extent.region is RegionId.LINKAGE
+    assert (read.extent.start, read.extent.length) == (5, 9)
+
+    # BY REFERENCE is the default, so the copy-back write is emitted too.
+    (write,) = _caller_side(call_probe.effects("LK-ARG", EffectKind.WRITE))
+    assert write.extent.region is RegionId.LINKAGE
+    assert (write.extent.start, write.extent.length) == (5, 9)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_call_argument_extent_cannot_alias_working_storage(call_probe):
+    """The concrete cost of a hardcoded region, stated as a false alias edge.
+
+    LK-ARG occupies LINKAGE 5..13; WS-SHADOW occupies WORKING-STORAGE 4..15.
+    They overlap on bytes and differ only in region, so the region is the ONLY
+    thing keeping them apart. Record the CALL's read as WORKING-STORAGE and the
+    analysis invents a dependency between a subprogram argument and an
+    unrelated WS field.
+    """
+    (call_read,) = _caller_side(call_probe.effects("LK-ARG", EffectKind.READ))
+    (shadow_write,) = call_probe.effects("WS-SHADOW", EffectKind.WRITE)
+    assert shadow_write.extent.region is RegionId.WORKING_STORAGE
+    assert (
+        shadow_write.extent.start < call_read.extent.end
+        and call_read.extent.start < shadow_write.extent.end
+    ), "WS-SHADOW must overlap LK-ARG's byte range for this test to bite"
+    assert not call_read.extent.may_alias(shadow_write.extent)
