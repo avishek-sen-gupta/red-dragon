@@ -163,3 +163,62 @@ def test_lower_call_by_content_no_copy_back():
     assert (
         Opcode.WRITE_REGION not in post_call
     ), "BY CONTENT must not emit copy-back WriteRegion"
+
+
+def _materialised_with_sections() -> tuple[EmitContext, MaterialisedSectionedLayout]:
+    asg = CobolASG(
+        data_fields=[_make_field("WS-DECOY", "X(8)")],
+        linkage_fields=[_make_field("LK-ARG", "X(8)")],
+        local_storage_fields=[_make_field("LS-ARG", "X(8)")],
+    )
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    return ctx, lower_sectioned_data_division(
+        ctx, build_sectioned_layout(asg), "SECPGM"
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_call_marshals_from_the_argument_own_section():
+    """An argument declared outside WORKING-STORAGE is read from its own region.
+
+    Every section's field offsets are relative to that section, so marshalling a
+    LINKAGE or LOCAL-STORAGE argument out of WS hands the callee whatever bytes
+    sit at that offset in WS, and the BY REFERENCE copy-back overwrites them.
+    """
+    from interpreter.instructions import LoadRegion, WriteRegion
+
+    for name in ("LK-ARG", "LS-ARG"):
+        ctx, materialised = _materialised_with_sections()
+        _fl, owning_reg = materialised.resolve(name)
+        _ws_layout, ws_reg = materialised.working_storage
+        assert str(owning_reg) != str(ws_reg), f"{name} must not resolve to WS"
+
+        lower_call(
+            ctx,
+            CallStatement(
+                program="SUBPROG",
+                using=[CallUsingParam(name=name, param_type="REFERENCE")],
+                giving="",
+            ),
+            materialised,
+        )
+
+        copy_in = [
+            i
+            for i in ctx.instructions
+            if isinstance(i, LoadRegion) and str(i.region_reg) == str(owning_reg)
+        ]
+        assert len(copy_in) == 1, (
+            f"{name}: expected one copy-in reading region {owning_reg}, "
+            f"got {len(copy_in)}"
+        )
+
+        copy_back = [
+            i
+            for i in ctx.instructions
+            if isinstance(i, WriteRegion) and str(i.region_reg) == str(ws_reg)
+        ]
+        assert copy_back == [], (
+            f"{name}: BY REFERENCE copy-back wrote to WORKING-STORAGE "
+            f"({ws_reg}) instead of {owning_reg}"
+        )
