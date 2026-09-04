@@ -21,7 +21,7 @@ from cobol_asg.cobol_parser import CobolParser
 from cobol_asg.cobol_statements import _dialect_parsers
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout
-from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.emit_context import EmitContext, InstructionIdSource
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
@@ -81,11 +81,18 @@ class CobolFrontend(Frontend):
         # nothing is retained. Pass a CollectingRecorder to obtain the sidecar
         # that interpreter.cobol.memory_dataflow consumes.
         self._recorder: MemoryEffectRecorder = recorder
+        # Instruction ids key the recorder's sidecar, and the recorder outlives
+        # any one EmitContext (a fresh context is built per _lower_asg call).
+        # The id source is therefore owned HERE, so ids stay unique across
+        # every program this frontend lowers and program 2 cannot overwrite
+        # program 1's effects. See InstructionIdSource.
+        self._inst_ids = InstructionIdSource()
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
             observer=observer,
             extension_strategies=self._extension_strategies,
             recorder=recorder,
+            inst_ids=self._inst_ids,
         )
 
     @property
@@ -234,6 +241,7 @@ class CobolFrontend(Frontend):
             extension_strategies=self._extension_strategies,
             asg=asg,
             recorder=self._recorder,
+            inst_ids=self._inst_ids,
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))

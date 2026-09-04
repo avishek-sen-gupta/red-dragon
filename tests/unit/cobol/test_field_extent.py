@@ -74,6 +74,13 @@ def test_zero_length_extent_aliases_nothing():
 def test_alias_key_buckets_by_region():
     assert ext(0, 10, region=WS).alias_key() == ext(99, 1, region=WS).alias_key()
     assert ext(0, 10, region=WS).alias_key() != ext(0, 10, region=LK).alias_key()
+    # Precision must NOT enter the key. The KILL step narrows candidates to one
+    # bucket and only then filters pairwise, so any two extents where may_alias
+    # or must_cover could hold have to share a key. A key of
+    # ("extent", region, precision) would still satisfy the two lines above and
+    # would be a live soundness bug: a CLAMPED read would bucket away from the
+    # EXACT definition reaching it, and that edge would silently disappear.
+    assert ext(0, 10).alias_key() == ext(0, 10, precision=Precision.CLAMPED).alias_key()
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -18,6 +18,16 @@ from tests.covers import NotLanguageFeature, covers
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
+# A deliberate regex, not an oversight, despite the project's
+# ast-grep-over-grep mandate (the design calls for an ast-grep test in §4.4 and
+# §5). What is being detected is a class NAME immediately followed by ``(`` — a
+# single-line, unambiguous token sequence with no multi-line shape and no
+# syntactic ambiguity for an AST matcher to resolve. ast-grep would buy nothing
+# here and would add a subprocess and a binary dependency to a test that must
+# run everywhere. The mandate targets structural patterns regexes get wrong
+# (multi-line calls, nested expressions); this is not one. Over-matching is
+# also the safe direction: a false hit names an extra file for a human to
+# clear, never a missed construction site.
 CONSTRUCTION = re.compile(r"\b(LoadRegion|WriteRegion)\(")
 
 # emit_context.py owns the funnel helpers; instructions.py owns the classes
