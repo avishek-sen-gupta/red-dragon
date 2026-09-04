@@ -104,10 +104,13 @@ def test_write_funnel_emits_the_instruction_and_records_a_write():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_recording_is_off_by_default():
+def test_recording_is_off_by_default_and_still_emits_the_instruction():
+    """The default recorder discards, and emitting does not depend on one."""
     from interpreter.cobol.emit_context import EmitContext
+    from interpreter.cobol.memory_effects import NullRecorder
 
     ctx = EmitContext(dispatch_fn=lambda *_: None)
+    assert isinstance(ctx._recorder, NullRecorder)
     ctx._emit_write_region(
         region_reg=Register("%1"),
         offset_reg=Register("%2"),

@@ -55,6 +55,12 @@ _SRC = b"""\
                    15  WS-QTY  PIC 999.
            05  WS-TAIL PIC X(4).
        01  WS-IDX      PIC 9(4).
+       01  WS-BUF.
+           05  WS-B1   PIC X(4).
+           05  WS-B2   PIC X(6).
+       01  WS-PTR      PIC 9(2).
+       LOCAL-STORAGE SECTION.
+       01  LS-FLAG     PIC X(3) VALUE 'ABC'.
        LINKAGE SECTION.
        01  LK-LEAD     PIC X(5).
        01  LK-MID      PIC X(9).
@@ -65,6 +71,8 @@ _SRC = b"""\
            MOVE WS-QTY(WS-IDX) TO WS-IDX.
            MOVE 'HELLO' TO LK-MID.
            MOVE LK-MID TO WS-NAME.
+           MOVE 1 TO WS-PTR.
+           STRING 'AB' DELIMITED BY SIZE INTO WS-B1 WITH POINTER WS-PTR.
            STOP RUN.
 """
 
@@ -77,13 +85,22 @@ class _Probe:
         sectioned = build_sectioned_layout(asg)
         self.recorder = CollectingRecorder()
         self.ctx = EmitContext(dispatch_fn=dispatch_statement, recorder=self.recorder)
-        materialised = lower_sectioned_data_division(self.ctx, sectioned, "PROBE")
+        self.materialised = lower_sectioned_data_division(self.ctx, sectioned, "PROBE")
+        materialised = self.materialised
         statements = [
             stmt for para in asg.paragraphs for stmt in para.statements
         ] + list(asg.statements)
         assert statements, "probe program produced no statements to lower"
         for stmt in statements:
             self.ctx.lower_statement(stmt, materialised)
+
+    def regions(self, name: str) -> set[RegionId]:
+        """Every region any recorded effect attributes to field ``name``."""
+        return {
+            effect.extent.region
+            for effect in self.recorder.effects.values()
+            if effect.extent.field_name == name
+        }
 
     def effects(self, name: str, kind: EffectKind):
         """Every recorded effect of ``kind`` naming field ``name``."""
@@ -187,12 +204,74 @@ def test_a_linkage_extent_never_aliases_a_working_storage_one(probe):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_working_storage_value_initialisation_is_not_mislabelled(probe):
-    """SPECIAL-REGISTERS are initialised by the same lower_data_division call
-    that initialises WORKING-STORAGE; they must not share a region."""
-    regions = {
-        effect.extent.region
-        for effect in probe.recorder.effects.values()
-        if effect.extent.field_name.upper() == "RETURN-CODE"
-    }
-    assert regions in ({RegionId.SPECIAL_REGISTERS}, set())
+def test_local_storage_value_clause_is_recorded_in_the_local_storage_region(probe):
+    """HOLE 2 as it appeared in the wild, and the guard the headline fix lacked.
+
+    ``lower_data_division`` initialises WORKING-STORAGE, LOCAL-STORAGE, FILE,
+    INDEXES and SPECIAL-REGISTERS through ONE function, which used to record
+    every one of them as WORKING-STORAGE. LS-FLAG's VALUE clause is written by
+    that path, so a wrong RegionId at any of those five callers shows up here.
+
+    Hard equality on purpose: an earlier version of this test tolerated the
+    empty set and therefore passed while asserting nothing (the field it probed,
+    RETURN-CODE, has no VALUE clause, so no effect was ever recorded for it).
+    """
+    assert probe.regions("LS-FLAG") == {RegionId.LOCAL_STORAGE}
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_local_storage_and_working_storage_inits_are_kept_apart(probe):
+    """Both go through lower_data_division; they must not collapse together."""
+    ls_writes = probe.effects("LS-FLAG", EffectKind.WRITE)
+    assert ls_writes, "the LOCAL-STORAGE VALUE clause declared no effect"
+    for effect in ls_writes:
+        assert effect.extent.region is RegionId.LOCAL_STORAGE
+        assert not effect.extent.may_alias(
+            probe.effects("WS-NAME", EffectKind.WRITE)[0].extent
+        )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_string_with_pointer_extent_covers_bytes_past_the_target_field(probe):
+    """FIX 1: the write runs off the end of WS-B1, so the extent must too.
+
+    ``STRING ... INTO WS-B1 WITH POINTER WS-PTR`` emits a write of
+    ``byte_length`` bytes starting ``ptr - 1`` bytes into WS-B1, so it can
+    touch WS-B2 — which sits immediately after it inside WS-BUF. An extent
+    stopping at WS-B1's own end would be under-sized, and ``may_alias`` would
+    silently miss that overlap. Precision alone does not fix this: CLAMPED
+    protects ``must_cover`` only.
+    """
+    b1_ref, _ = probe.ctx.resolve_field_ref("WS-B1", probe.materialised)
+    b2_ref, _ = probe.ctx.resolve_field_ref("WS-B2", probe.materialised)
+    buf_ref, _ = probe.ctx.resolve_field_ref("WS-BUF", probe.materialised)
+
+    writes = probe.effects("WS-B1", EffectKind.WRITE)
+    assert writes, "the STRING WITH POINTER write declared no effect"
+    effect = writes[-1]
+
+    assert effect.extent.precision is Precision.CLAMPED
+    assert effect.extent.end > b1_ref.extent.end, (
+        f"{effect.extent} stops at the target field's own end; the write can "
+        "run up to byte_length - 1 bytes past it"
+    )
+    assert effect.extent.may_alias(
+        b2_ref.extent
+    ), "the overrun reaches WS-B2, so that alias edge must not be dropped"
+    assert (effect.extent.start, effect.extent.length) == (
+        buf_ref.extent.start,
+        buf_ref.extent.length,
+    ), "clamped to the enclosing 01 WS-BUF, per field_extent's stated doctrine"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_string_with_pointer_extent_stays_inside_its_own_record(probe):
+    """The other cliff: widening must stop at the 01, not reach the region."""
+    buf_ref, _ = probe.ctx.resolve_field_ref("WS-BUF", probe.materialised)
+    name_ref, _ = probe.ctx.resolve_field_ref("WS-NAME", probe.materialised)
+    idx_ref, _ = probe.ctx.resolve_field_ref("WS-IDX", probe.materialised)
+
+    effect = probe.effects("WS-B1", EffectKind.WRITE)[-1]
+    assert buf_ref.extent.must_cover(effect.extent)
+    assert not effect.extent.may_alias(name_ref.extent)
+    assert not effect.extent.may_alias(idx_ref.extent)
