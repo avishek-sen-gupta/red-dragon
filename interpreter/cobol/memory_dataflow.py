@@ -471,6 +471,16 @@ def build_def_use_chains(
     extent, so two writes to the same field collapse and the KILL that
     separated them stops being observable there. A caller (or a test) that
     needs to know which particular write a read saw asks here.
+
+    The stronger trap, which has now caught three authors: value-register
+    tracing plus transitive closure can MANUFACTURE a field-graph edge with the
+    CFG in pieces. ``_build_raw_extent_graph`` walks writes directly and traces
+    each stored value back to the extents that produced it, needing no reaching
+    definition at all, and ``_transitive_closure`` then joins that to anything
+    else touching the same field node. So a field-graph edge is not evidence
+    for any claim about CONTROL flow — that a definition survives a PERFORM, a
+    branch or a block boundary. Assert such claims HERE, where a lost
+    control-flow edge shows up as the link simply not existing.
     """
     rewritten_cfg = rewrite_cfg(cfg, effects)
     return _extract_def_use_chains(
