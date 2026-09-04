@@ -309,6 +309,15 @@ is the reverse of `DataflowResult.dependency_graph`, which maps
 *var → vars it depends on*; the JSON is edge-oriented for viz consumption while
 the in-memory result keeps the existing dependency-map orientation.
 
+> **Known limitation — `via` renders `<unknown>` today.** The COBOL frontend
+> never populates `InstructionBase.source_location`: measured 0 of 151
+> instructions on a representative program. The `via` mechanism is plumbed
+> correctly end to end and will populate itself the moment the lowering stamps
+> locations, but until then every entry is `<unknown>`. This is pre-existing and
+> COBOL-wide, not specific to this analysis — filed as **red-dragon-bmx3**.
+> A consumer must not read `<unknown>` as "no statement produced this edge";
+> that meaning is reserved for the empty list on a transitive edge.
+
 No TUI panel, MCP tool, or report generator in this spec.
 
 ## 5. Testing
