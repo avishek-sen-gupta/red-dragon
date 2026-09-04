@@ -27,6 +27,7 @@ from interpreter.cfg import build_cfg
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.field_extent import FieldExtent
 from interpreter.cobol.memory_dataflow import (
+    MemoryAccess,
     MemoryDataflowResult,
     analyze_memory_dataflow,
     build_def_use_chains,
@@ -189,7 +190,7 @@ _CROSS_BLOCK_REDEFINES = (
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_the_rewritten_cfg_keeps_every_control_flow_edge(analyze_probe):
+def test_the_rewritten_cfg_keeps_every_control_flow_edge():
     """The rewrite is a per-instruction substitution and must not touch the CFG.
 
     Re-deriving the graph with ``build_cfg`` over a flattened block list loses
@@ -209,10 +210,121 @@ def test_the_rewritten_cfg_keeps_every_control_flow_edge(analyze_probe):
     assert rewritten.entry == original.entry
     original_edges = sum(len(b.successors) for b in original.blocks.values())
     assert original_edges > 0, "the probe produced no control flow to preserve"
+
+    substituted = 0
     for label, block in original.blocks.items():
-        assert rewritten.blocks[label].successors == block.successors
-        assert rewritten.blocks[label].predecessors == block.predecessors
-        assert len(rewritten.blocks[label].instructions) == len(block.instructions)
+        new_block = rewritten.blocks[label]
+        # Every original edge is still there. The rewrite may ADD edges (the
+        # PERFORM returns build_cfg cannot wire), so this is containment, not
+        # equality — and the added edges have their own test.
+        assert set(block.successors) <= set(new_block.successors)
+        assert set(block.predecessors) <= set(new_block.predecessors)
+        assert len(new_block.instructions) == len(block.instructions)
+        for old_inst, new_inst in zip(block.instructions, new_block.instructions):
+            if isinstance(new_inst, MemoryAccess):
+                substituted += 1
+                assert new_inst.origin is old_inst
+            else:
+                # Not merely the same shape: the identical object. Anything
+                # without a recorded effect must pass through untouched.
+                assert new_inst is old_inst
+    assert substituted > 0, "no region access was substituted; the probe is inert"
+
+
+_PERFORM_FLOW_PROBE = """\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. PROBE.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-A  PIC X(3).
+       01  WS-B  PIC X(3).
+       01  WS-C  PIC X(3).
+       01  WS-D  PIC X(3).
+       01  WS-E  PIC X(3).
+       01  WS-F  PIC X(3).
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           MOVE WS-A TO WS-B.
+           PERFORM 1000-SUB.
+           MOVE WS-B TO WS-C.
+           MOVE WS-E TO WS-F.
+           STOP RUN.
+       1000-SUB.
+           MOVE WS-D TO WS-E.
+"""
+
+
+@pytest.fixture(scope="module")
+def perform_flow_probe() -> _Analysed:
+    return _analyze(_PERFORM_FLOW_PROBE)
+
+
+def _defs_reaching_reads_after_a_perform(chains, field_name: str) -> set[str]:
+    """Blocks defining ``field_name`` for reads sited at a PERFORM return."""
+    return {
+        str(link.definition.block_label)
+        for link in chains
+        if isinstance(link.use.variable, FieldExtent)
+        and link.use.variable.field_name == field_name
+        and str(link.use.block_label).startswith("perform_return")
+        and isinstance(link.definition.variable, FieldExtent)
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_every_perform_return_block_is_reachable(perform_flow_probe):
+    """A PERFORM's return point must have a predecessor.
+
+    ``build_cfg`` cannot wire it: a paragraph ends in RESUME_CONTINUATION
+    whose target is dynamic, so it gets a fall-through edge and nothing else,
+    and every ``perform_return_N`` block is left with ZERO predecessors. The
+    driver paragraph is then severed at each PERFORM — no definition made
+    before one reaches anything after it, and the block holding everything
+    after the LAST perform (including STOP RUN) is unreachable outright.
+
+    ``rewrite_cfg`` reconnects them by matching each RESUME_CONTINUATION's
+    name against the SET_CONTINUATIONs that bind it.
+    """
+    recorder = CollectingRecorder()
+    frontend = CobolFrontend(make_cobol_parser(), recorder=recorder)
+    original = build_cfg(frontend.lower(_PERFORM_FLOW_PROBE.encode()))
+    rewritten = rewrite_cfg(original, recorder.effects)
+
+    returns = [
+        label for label in rewritten.blocks if str(label).startswith("perform_return")
+    ]
+    assert returns, "the probe contains no PERFORM; this test would be vacuous"
+    orphans = [
+        str(label) for label in returns if not rewritten.blocks[label].predecessors
+    ]
+    assert orphans == [], f"PERFORM return points left unreachable: {orphans}"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_definition_before_a_perform_reaches_a_read_after_it(perform_flow_probe):
+    """WS-B is written before the PERFORM and read after it. Nothing in
+    1000-SUB touches WS-B, so the definition must survive across the call."""
+    assert _defs_reaching_reads_after_a_perform(perform_flow_probe.chains, "WS-B") == {
+        "para_MAIN-PARA"
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_definition_inside_a_performed_paragraph_reaches_the_return_point(
+    perform_flow_probe,
+):
+    """WS-E is written only inside 1000-SUB and read only after the PERFORM,
+    so the edge exists only if the return point is wired to the paragraph."""
+    assert _defs_reaching_reads_after_a_perform(perform_flow_probe.chains, "WS-E") == {
+        "para_1000-SUB"
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_values_cross_a_perform_in_the_field_graph(perform_flow_probe):
+    """The same two flows, as a reader of the report would see them."""
+    assert "WS-A" in perform_flow_probe.result.field_graph["WS-C"]
+    assert "WS-D" in perform_flow_probe.result.field_graph["WS-F"]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -405,54 +517,52 @@ def test_the_field_graph_is_flow_insensitive_about_rewrites(analyze_probe):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_shared_work_field_merges_all_of_its_writers(paragraph_probe):
-    """KNOWN IMPRECISION: WS-WORK is one node, so every value ever moved into
-    it becomes a dependency of every field ever formatted from it.
+def test_perform_call_sites_are_merged_context_insensitively(paragraph_probe):
+    """KNOWN IMPRECISION (spec 7.4), now genuinely what the code does.
 
-    WS-FIRST-OUT is formatted before 2000-FEES runs, so it cannot really
-    depend on WS-FEE. The edge is nonetheless present, and the mechanism is
-    the field-node collapse — NOT context-insensitive PERFORM merging, which
-    an earlier version of this docstring claimed. The next test measures what
-    the CFG actually contributes; it is not this.
+    9000-FORMAT-FIRST is performed from one site and 9000-FORMAT-SECOND from
+    another, but each paragraph has ONE CFG entry that every PERFORM of it
+    branches to, and one RESUME_CONTINUATION that returns to every site that
+    bound it. Contexts are therefore merged: both writers of WS-WORK reach the
+    read inside 9000-FORMAT-FIRST, even though only 1000-CALC has run by then.
 
-    Note the uncomfortable corollary asserted on the first line: WS-AMT is a
-    REAL dependency of WS-FIRST-OUT, and today it is recovered only by the
-    same collapse that fabricates the WS-FEE edge. Sharpening the graph to
-    per-definition nodes must restore that edge by modelling PERFORM returns,
-    or it will trade a spurious edge for a missing one.
-    """
-    deps = paragraph_probe.result.field_graph["WS-FIRST-OUT"]
-    assert "WS-AMT" in deps, "the real edge — see the docstring's corollary"
-    assert "WS-FEE" in deps, "the accepted spurious edge"
+    That merge is sound — it over-approximates — and it is the deliberate
+    scope decision. The upgrade path is per-paragraph summaries (call-site
+    indexed reaching definitions).
 
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_perform_return_edges_are_not_modelled(paragraph_probe):
-    """KNOWN IMPRECISION, measured rather than asserted from theory.
-
-    A PERFORM lowers to SET_CONTINUATION + BRANCH into the paragraph, and the
-    paragraph ends in a RESUME_CONTINUATION whose target is dynamic.
-    ``build_cfg`` gives that only a fall-through edge, so control appears to
-    fall out of each paragraph into the NEXT one textually. Reaching
-    definitions therefore follow textual paragraph order, not call order.
-
-    Concretely: the read of WS-WORK inside 9000-FORMAT-FIRST is reached by
-    exactly ONE definition — the one in 2000-FEES, which falls through to it
-    — even though the PERFORM order means 1000-CALC's value is what it should
-    see. Asserted at the flow-sensitive layer, because that is the only place
-    the CFG's contribution is visible at all.
-
-    Upgrade path is modelling continuation returns (or paragraph summaries).
+    Asserted at the def-use layer, where the CFG's contribution is visible.
+    An earlier version of this test asserted the same OUTPUT via a false
+    mechanism: with PERFORM returns unmodelled the paragraph was severed and
+    exactly one definition reached, so the edge came from field-node collapse
+    instead. Both writers reaching is what "context-insensitive" means.
     """
     reaching = {
-        (str(link.definition.block_label), link.definition.instruction_index)
+        str(link.definition.block_label)
         for link in paragraph_probe.chains
         if isinstance(link.use.variable, FieldExtent)
         and link.use.variable.field_name == "WS-WORK"
         and str(link.use.block_label) == "para_9000-FORMAT-FIRST"
         and isinstance(link.definition.variable, FieldExtent)
     }
-    assert reaching, "the read of WS-WORK matched no definition at all"
-    assert {block for block, _ in reaching} == {
-        "para_2000-FEES"
-    }, f"expected only the textual fall-through predecessor; got {reaching}"
+    assert reaching == {"para_1000-CALC", "para_2000-FEES"}, (
+        "both PERFORM contexts must reach the merged paragraph entry; "
+        f"got {sorted(reaching)}"
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_merged_context_shows_up_as_a_field_edge(paragraph_probe):
+    """The same imprecision as a reader of the report sees it.
+
+    WS-FIRST-OUT is formatted before 2000-FEES runs, so it cannot really
+    depend on WS-FEE; the merged paragraph context says it does. Accepted, and
+    asserted so its scope stays tracked.
+
+    WS-AMT is now a REAL edge carried by real flow. Before PERFORM returns
+    were wired it survived only by field-node collapse — the correct edge was
+    being produced by an imprecision, which is why that is no longer the
+    documented mechanism.
+    """
+    deps = paragraph_probe.result.field_graph["WS-FIRST-OUT"]
+    assert "WS-AMT" in deps, "the real edge, now carried by real flow"
+    assert "WS-FEE" in deps, "the accepted spurious edge from context merging"

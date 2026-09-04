@@ -56,10 +56,13 @@ from interpreter.dataflow import (
     _transitive_closure,
     solve_reaching_definitions,
 )
+from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import (
     InstructionBase,
     InstructionId,
     LoadRegion,
+    ResumeContinuation,
+    SetContinuation,
     WriteRegion,
 )
 from interpreter.ir import CodeLabel, Opcode, SourceLocation
@@ -183,7 +186,69 @@ def rewrite_cfg(cfg: CFG, effects: dict[InstructionId, MemoryEffect]) -> CFG:
             successors=list(block.successors),
             predecessors=list(block.predecessors),
         )
+    _wire_continuation_returns(rewritten)
     return rewritten
+
+
+def _link(cfg: CFG, src: CodeLabel, dst: CodeLabel) -> None:
+    """Add a control-flow edge, keeping both directions consistent."""
+    if dst not in cfg.blocks[src].successors:
+        cfg.blocks[src].successors.append(dst)
+    if src not in cfg.blocks[dst].predecessors:
+        cfg.blocks[dst].predecessors.append(src)
+
+
+def _continuation_targets(cfg: CFG) -> dict[ContinuationName, list[CodeLabel]]:
+    """Continuation name -> every return point bound to it.
+
+    A PERFORM lowers to ``SET_CONTINUATION <para>_end <return point>`` plus a
+    ``BRANCH`` into the paragraph. A name maps to MORE than one target exactly
+    when the paragraph is performed from more than one site, and every one of
+    them is kept: that merge IS context-insensitive PERFORM, and it
+    over-approximates in the safe direction.
+    """
+    targets: dict[ContinuationName, list[CodeLabel]] = {}
+    for block in cfg.blocks.values():
+        for inst in block.instructions:
+            if not isinstance(inst, SetContinuation):
+                continue
+            if inst.target_label not in cfg.blocks:
+                continue
+            bound = targets.setdefault(inst.name, [])
+            if inst.target_label not in bound:
+                bound.append(inst.target_label)
+    return targets
+
+
+def _wire_continuation_returns(cfg: CFG) -> None:
+    """Add the PERFORM return edges ``build_cfg`` cannot derive.
+
+    A paragraph ends in ``RESUME_CONTINUATION``, whose target is a *dynamic*
+    lookup by name. ``build_cfg`` therefore gives it a fall-through edge and
+    nothing else, leaving every ``perform_return_N`` block with ZERO
+    predecessors: the driver paragraph is severed at each PERFORM, no
+    definition made before one reaches anything after it, and the block after
+    the last PERFORM is unreachable outright. The result is unsound in the
+    dropped-edge direction, which is the one failure mode that must not
+    happen here.
+
+    The binding is fully recoverable from the IR — ``SetContinuation`` carries
+    both the name and the return label — so this reconstructs it rather than
+    guessing.
+
+    The existing fall-through edge out of the paragraph is deliberately KEPT.
+    A COBOL paragraph entered by falling into it really does continue into the
+    next paragraph, and nothing static distinguishes that entry from a
+    PERFORM. Keeping the edge over-approximates (a spurious edge, tolerable);
+    removing it would under-approximate (a dropped edge, not tolerable).
+    """
+    targets = _continuation_targets(cfg)
+    for label, block in cfg.blocks.items():
+        last = block.instructions[-1] if block.instructions else None
+        if not isinstance(last, ResumeContinuation):
+            continue
+        for target in targets.get(last.name, ()):
+            _link(cfg, label, target)
 
 
 def _extract_def_use_chains(
