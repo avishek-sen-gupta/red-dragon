@@ -141,8 +141,9 @@ would be wrong.
 ## 5. Which construct carries the connectivity
 
 Measured by ablation, not guessed. Each row re-runs the whole analysis with
-one thing removed (`--drop-region FILE` for the file rows) and re-reports the
-fraction.
+one thing removed and re-reports the fraction; both ablations are flags on the
+committed tool (`--sever-perform`, `--drop-region FILE`), so every number in
+these tables is reproducible without a scratch script.
 
 | Ablation | CBACT01C | CBTRN02C | CBEXPORT |
 |---|---:|---:|---:|
@@ -245,8 +246,9 @@ uv run python scripts/memory_dataflow_density.py <carddemo>/app/cbl/CBEXPORT.cbl
     --copybook-dir <carddemo>/app/cpy --copybook-ext cpy --copybook-ext CPY \
     --max-iterations 2000000 --decompose
 
-# the file-region ablation
-... --drop-region FILE
+# the two ablations
+... --drop-region FILE        # attribute connectivity to the file region
+... --sever-perform           # UNSOUND; differential against the full run only
 ```
 
 CardDemo is not vendored in this repo; point the paths at a local checkout
