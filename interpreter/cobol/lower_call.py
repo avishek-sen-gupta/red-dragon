@@ -38,17 +38,20 @@ def lower_call(
 
     When stmt.using is non-empty:
       1. Allocate a fresh params region (sum of USING field byte lengths).
-      2. Copy each USING field from WS into the params region at cumulative byte offsets.
+      2. Copy each USING field from ITS OWN section's region into the params
+         region at cumulative byte offsets. An argument may be declared in
+         LINKAGE or LOCAL-STORAGE -- passing a LINKAGE item on to a further
+         CALL is the ordinary "hand my caller's parameter down" chain -- so the
+         region comes from materialised.resolve, never from a section chosen here.
       3. Emit CallWithMemory with params_reg pointing at the fresh region.
-      4. For BY REFERENCE params, copy bytes back from the params region into WS.
+      4. For BY REFERENCE params, copy bytes back from the params region into
+         that same owning region.
 
     When stmt.using is empty, the caller's WS region is passed as params_reg (legacy behaviour).
     """
-    _ws_layout, ws_reg = materialised.working_storage
-    param_fls: list[tuple[CallUsingParam, FieldLayout]] = []
+    param_fls: list[tuple[CallUsingParam, FieldLayout, Register]] = []
 
     if stmt.using:
-        # Resolve field layouts for all USING params (all are in WS).
         for param in stmt.using:
             if param.omitted:
                 # OMITTED: no value passed — skip entirely (red-dragon-i1rb).
@@ -57,24 +60,24 @@ def lower_call(
                 # Literal BY CONTENT/VALUE: no WS field to resolve.  Skip for
                 # static analysis — the callee's LINKAGE slot gets no write.
                 continue
-            fl, _ = materialised.resolve(param.name)
-            param_fls.append((param, fl))
+            fl, owning_reg = materialised.resolve(param.name)
+            param_fls.append((param, fl, owning_reg))
 
         # Allocate fresh params region sized to total USING bytes.
-        total_bytes = sum(fl.byte_length for _, fl in param_fls)
+        total_bytes = sum(fl.byte_length for _, fl, _ in param_fls)
         size_reg = ctx.const_to_reg(total_bytes)
         params_reg = ctx.fresh_reg()
         ctx.emit_inst(AllocRegion(result_reg=params_reg, size_reg=size_reg))
 
         # Copy-in: write each USING field from WS into the params region.
         cumulative = 0
-        for _, fl in param_fls:
+        for _, fl, owning_reg in param_fls:
             src_off = ctx.const_to_reg(fl.offset)
             tmp = ctx.fresh_reg()
             ctx.emit_inst(
                 LoadRegion(
                     result_reg=tmp,
-                    region_reg=ws_reg,
+                    region_reg=owning_reg,
                     offset_reg=src_off,
                     length=fl.byte_length,
                 )
@@ -90,7 +93,7 @@ def lower_call(
             )
             cumulative += fl.byte_length
     else:
-        params_reg = ws_reg
+        _ws_layout, params_reg = materialised.working_storage
 
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -108,16 +111,17 @@ def lower_call(
     # caller's __ws_region binding does not reliably survive, so consumers that
     # read __ws_region directly (e.g. CICS SEND/RECEIVE MAP via
     # _get_ws_region_addr) would otherwise see the callee's region after the CALL.
-    # ws_reg already holds the caller's WS region (loaded at function entry), so
+    # caller_ws_reg holds the caller's WS region (loaded at function entry), so
     # re-binding __ws_region to it is a no-op for field access but repairs the var
     # for direct readers. (Field access reloads via the singleton, so it was never
     # affected; this only matters for the shared __ws_region var.)
-    ctx.emit_inst(StoreVar(name=VarName("__ws_region"), value_reg=ws_reg))
+    _ws_layout, caller_ws_reg = materialised.working_storage
+    ctx.emit_inst(StoreVar(name=VarName("__ws_region"), value_reg=caller_ws_reg))
 
     # Copy-back: for BY REFERENCE params, write updated bytes from params region back to WS.
     if stmt.using:
         cumulative = 0
-        for param, fl in param_fls:
+        for param, fl, owning_reg in param_fls:
             if param.param_type == "REFERENCE":
                 src_off = ctx.const_to_reg(cumulative)
                 tmp = ctx.fresh_reg()
@@ -132,7 +136,7 @@ def lower_call(
                 dst_off = ctx.const_to_reg(fl.offset)
                 ctx.emit_inst(
                     WriteRegion(
-                        region_reg=ws_reg,
+                        region_reg=owning_reg,
                         offset_reg=dst_off,
                         length=fl.byte_length,
                         value_reg=tmp,
