@@ -5828,6 +5828,111 @@ class TestCallUsingByReference:
         ), f"WS-VALUE: expected 8 (5 + 3 written by DOUBLIT), got {ws_value}"
 
     @covers(CobolFeature.SECTION_LINKAGE)
+    def test_linkage_argument_passed_down_marshals_from_linkage(self, tmp_path):
+        """A LINKAGE item passed to a further CALL must marshal from LINKAGE.
+
+        MAIN passes WS-VALUE=5 to MID. MID receives it as LS-VALUE and hands
+        that same LINKAGE item down to LEAF, which adds 3. This is the ordinary
+        "pass my caller's parameter along" chain.
+
+        lower_call resolved LS-VALUE's offset in the LINKAGE layout but read the
+        bytes from MID's WORKING-STORAGE region, so LEAF saw WS-DECOY (9999) and
+        the copy-back wrote LEAF's result over WS-DECOY instead of the argument.
+        """
+        (tmp_path / "CHAINA.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. CHAINA.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-VALUE PIC 9(4) VALUE 5.",
+                    "PROCEDURE DIVISION.",
+                    "    CALL 'CHAINB' USING BY REFERENCE WS-VALUE.",
+                    "    STOP RUN.",
+                ]
+            )
+        )
+        (tmp_path / "CHAINB.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. CHAINB.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-DECOY PIC 9(4) VALUE 9999.",
+                    "LINKAGE SECTION.",
+                    "01 LS-VALUE PIC 9(4).",
+                    "PROCEDURE DIVISION USING LS-VALUE.",
+                    "    CALL 'CHAINC' USING BY REFERENCE LS-VALUE.",
+                    "    GOBACK.",
+                ]
+            )
+        )
+        (tmp_path / "CHAINC.cbl").write_text(
+            _to_fixed(
+                [
+                    "IDENTIFICATION DIVISION.",
+                    "PROGRAM-ID. CHAINC.",
+                    "DATA DIVISION.",
+                    "WORKING-STORAGE SECTION.",
+                    "77 WS-SEEN PIC 9(4) VALUE 0.",
+                    "LINKAGE SECTION.",
+                    "01 LS-ARG PIC 9(4).",
+                    "PROCEDURE DIVISION USING LS-ARG.",
+                    "    MOVE LS-ARG TO WS-SEEN.",
+                    "    ADD 3 TO LS-ARG.",
+                    "    GOBACK.",
+                ]
+            )
+        )
+
+        linked = compile_directory(tmp_path, Language.COBOL)
+        vm = run_linked(
+            linked,
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_chaina_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=2000,
+            initial_vm=initial_vm_state(),
+        )
+
+        def _ws(prog_name: str) -> bytearray:
+            key = VarName(f"__prog_{prog_name}")
+            ptr = next(
+                (
+                    f.local_vars[key]
+                    for f in reversed(vm.call_stack)
+                    if key in f.local_vars
+                ),
+                None,
+            )
+            assert ptr is not None, f"__prog_{prog_name} not found"
+            region = vm.region_get(
+                Address(
+                    vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                )
+            )
+            assert region is not None, f"WS region for {prog_name} not found"
+            return region
+
+        seen = _decode_zoned_unsigned(_ws("CHAINC"), offset=0, length=4)
+        assert seen == 5, (
+            f"CHAINC received {seen}, expected 5 — the argument was marshalled "
+            "from CHAINB's WORKING-STORAGE, not its LINKAGE"
+        )
+
+        decoy = _decode_zoned_unsigned(_ws("CHAINB"), offset=0, length=4)
+        assert decoy == 9999, (
+            f"CHAINB WS-DECOY is {decoy}, expected 9999 — the BY REFERENCE "
+            "copy-back wrote into WORKING-STORAGE instead of LINKAGE"
+        )
+
+        final = _decode_zoned_unsigned(_ws("CHAINA"), offset=0, length=4)
+        assert final == 8, f"CHAINA WS-VALUE is {final}, expected 8 (5 + 3 from CHAINC)"
+
+    @covers(CobolFeature.SECTION_LINKAGE)
     def test_linkage_only_subprogram_reads_parameter(self, tmp_path):
         """Regression (red-dragon-irl8): a subprogram with a LINKAGE SECTION and
         NO WORKING-STORAGE SECTION must read its USING BY REFERENCE parameter.
