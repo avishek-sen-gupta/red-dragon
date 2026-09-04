@@ -689,4 +689,6 @@ def test_analysis_is_off_by_default():
     empty = analyze_memory_dataflow(build_cfg(silent_ir), {})
     assert empty.field_graph == {}
     assert empty.extent_graph == {}
-    assert empty.to_json() == {"nodes": [], "edges": []}
+    # An empty result is a COMPLETE empty result, not a truncated one, so the
+    # convergence flag says so rather than being omitted.
+    assert empty.to_json() == {"nodes": [], "edges": [], "converged": True}

@@ -23,7 +23,15 @@ from interpreter.ir import CodeLabel, Opcode
 
 
 def build_cfg(instructions: list[InstructionBase]) -> CFG:
-    """Partition instructions into basic blocks and wire edges."""
+    """Partition instructions into basic blocks and wire edges.
+
+    KNOWN GAP (red-dragon-picc): ``SetContinuation``/``ResumeContinuation`` —
+    how COBOL lowers ``PERFORM`` — get no return edge, so a COBOL CFG is
+    severed at every PERFORM and paragraph bodies look like dead ends. There is
+    no error; the graph is just missing edges. ``memory_dataflow.rewrite_cfg``
+    reconstructs them locally (``_wire_continuation_returns``); every other
+    consumer silently gets the severed CFG.
+    """
     cfg = CFG()
 
     typed_instructions = instructions

@@ -185,6 +185,31 @@ def solve_reaching_definitions(cfg: CFG) -> dict[CodeLabel, BlockDataflowFacts]:
     """Classic worklist-based reaching definitions analysis.
 
     Returns a mapping of block label -> BlockDataflowFacts with reach_in/reach_out populated.
+
+    The result may be TRUNCATED: see ``solve_reaching_definitions_checked``,
+    which returns the same facts plus whether the fixpoint was actually
+    reached. This signature is kept unchanged because it is shared by all 16
+    frontends.
+    """
+    facts, _converged = solve_reaching_definitions_checked(cfg)
+    return facts
+
+
+def solve_reaching_definitions_checked(
+    cfg: CFG,
+) -> tuple[dict[CodeLabel, BlockDataflowFacts], bool]:
+    """As ``solve_reaching_definitions``, but says whether it converged.
+
+    ``DATAFLOW_MAX_ITERATIONS`` counts worklist POPS, not sweeps, so a large
+    program exhausts it and the solve stops mid-flight. What comes back then is
+    not a smaller answer, it is a WRONG one: definitions that had not yet
+    propagated are simply absent, so edges are missing with nothing but a log
+    line to say so. A caller that cannot distinguish a complete result from a
+    truncated one will report the truncated one as fact.
+
+    ``converged`` is ``False`` exactly when the worklist was still non-empty at
+    the cap. Callers that must not publish a partial answer check it; the
+    cap itself is red-dragon-aso9's business, not this function's.
     """
     all_defs = collect_all_definitions(cfg)
     defs_by_var = _build_defs_by_variable(all_defs)
@@ -224,7 +249,11 @@ def solve_reaching_definitions(cfg: CFG) -> dict[CodeLabel, BlockDataflowFacts]:
             constants.DATAFLOW_MAX_ITERATIONS,
         )
 
-    return facts
+    # A non-empty worklist is the truncation itself, and is what the caller
+    # needs to know. The warning above is deliberately left on its original,
+    # slightly coarser predicate: a solve whose LAST allowed pop settled the
+    # fixpoint hits the cap without having lost anything.
+    return facts, not worklist
 
 
 def extract_def_use_chains(
