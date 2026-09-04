@@ -57,4 +57,16 @@ class CollectingRecorder:
     effects: dict[InstructionId, MemoryEffect] = field(default_factory=dict)
 
     def record(self, inst_id: InstructionId, effect: MemoryEffect) -> None:
+        # An id recorded twice means two distinct region accesses are sharing a
+        # sidecar key, so one silently inherits the other's extent — a wrong or
+        # vanished dependency edge with no error anywhere. That is the one
+        # failure mode this whole analysis exists to prevent, so it fails loudly
+        # here rather than being discovered in the graph. Ids come from
+        # ``EmitContext``'s ``InstructionIdSource``; a collision means the
+        # source was not shared across the contexts feeding this recorder.
+        assert inst_id not in self.effects, (
+            f"memory effect already recorded for instruction id {inst_id}: "
+            f"existing={self.effects[inst_id]!r} new={effect!r}. Instruction "
+            "ids must be unique across every program lowered into one recorder."
+        )
         self.effects[inst_id] = effect

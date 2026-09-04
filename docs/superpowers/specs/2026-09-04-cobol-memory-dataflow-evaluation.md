@@ -42,7 +42,7 @@ mode exists so that cannot recur.
 
 Of the 31 sources in that directory, **14 analyse** and **17 fail** — every
 failure is an online CICS program, and all of them fail the same way (see
-§5). Corpus checkout: CardDemo at commit `a8292010`, a local vendored
+§6). Corpus checkout: CardDemo at commit `a8292010`, a local vendored
 checkout; the sources are not in this repo, so the ablation numbers below are
 reproducible only against that checkout.
 
@@ -50,7 +50,7 @@ reproducible only against that checkout.
 
 Every analysable program, in directory order, at `--max-iterations 2000000`
 with `solver converged: yes` printed for each — so none of these figures is
-truncated by the `DATAFLOW_MAX_ITERATIONS` hazard described in §5.
+truncated by the `DATAFLOW_MAX_ITERATIONS` hazard described in §6.
 
 | Program | Lines | Fields (nodes) | Direct edges | Mean out-degree | **Connected fraction** | Flow-sensitive | Impact median / max |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -106,7 +106,7 @@ Ablating it decides what is responsible:
 Removing the `PERFORM` merge takes it from 0.660 to 0.454 — still unusable.
 Removing the file-region fields takes it to **0.015**. The connectivity is not
 coming from context insensitivity. It is coming from `file`-region aliasing
-(§4c), and once that is fixed CBEXPORT becomes the *sparsest* program in the
+(§5c), and once that is fixed CBEXPORT becomes the *sparsest* program in the
 corpus rather than the densest.
 
 ## 4. Verdict on risk 7.4 — conditional

@@ -36,6 +36,18 @@ Accepted imprecision, all asserted in ``tests/unit/cobol/test_memory_dataflow``:
   field, so ``A -> B`` and a later ``C -> A`` make B look dependent on C.
   This is the same property the existing ``dependency_graph`` has, and it is
   inherent in the requested ``dict[str, set[str]]`` shape.
+* **File-region aliasing (red-dragon-7211) makes the result unusable on
+  file-heavy programs, and this is the one accepted imprecision that is not
+  merely a loss of sharpness.** Every FD record area is laid out at offset 0
+  of one shared ``file`` region, so all record areas mutually alias and every
+  field reachable from any of them collapses into one blob. On CardDemo's
+  CBEXPORT a median impact query returns 103 of 141 fields — 73% of the
+  program — and ablation shows the connectivity is this, not the PERFORM
+  merge: removing the PERFORM merge takes CBEXPORT's connected fraction from
+  0.660 only to 0.454, while removing the file-region fields takes it to
+  0.015. So the verdict that context-insensitive PERFORM does not mush the
+  graph is CONDITIONAL on 7211 being fixed. Measured in
+  ``docs/superpowers/specs/2026-09-04-cobol-memory-dataflow-evaluation.md``.
 """
 
 from __future__ import annotations
@@ -55,6 +67,7 @@ from interpreter.dataflow import (
     Use,
     _transitive_closure,
     solve_reaching_definitions,
+    solve_reaching_definitions_checked,
 )
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import (
@@ -80,11 +93,21 @@ class MemoryDataflowResult:
     the one a human reads (declared names); ``edge_locations`` says which
     statements produced each named edge, and carries only DIRECT edges — a
     transitive edge was produced by no single statement.
+
+    ``converged`` says whether the underlying fixpoint actually settled.
+    ``DATAFLOW_MAX_ITERATIONS`` counts worklist POPS, so programs from roughly
+    650 lines up exhaust it and the solve stops mid-flight. A truncated result
+    is not a coarser graph, it is one with edges MISSING — which is the single
+    failure mode this analysis exists to eliminate — so a ``False`` here means
+    the graphs below must not be reported as complete. Tracked as
+    red-dragon-aso9; raising the cap is that issue's business, not this
+    module's.
     """
 
     extent_graph: dict[FieldExtent, set[FieldExtent]]
     field_graph: dict[str, set[str]]
     edge_locations: dict[tuple[str, str], list[SourceLocation]]
+    converged: bool = True
 
     def to_json(self) -> dict:
         """Edge-oriented projection for graph visualisation.
@@ -125,7 +148,7 @@ class MemoryDataflowResult:
             for target in sorted(self.field_graph)
             for dep in sorted(self.field_graph[target])
         ]
-        return {"nodes": nodes, "edges": edges}
+        return {"nodes": nodes, "edges": edges, "converged": self.converged}
 
 
 @dataclass(frozen=True)
@@ -511,9 +534,30 @@ def analyze_memory_dataflow(
     frontend. An empty sidecar yields an empty graph rather than an error:
     the analysis is opt-in, and running it against a lowering that recorded
     nothing is a caller mistake the caller can see.
+
+    TWO THINGS A CALLER MUST KNOW BEFORE TRUSTING THE RESULT:
+
+    * On a program with FILE SECTION records the graph is currently far too
+      dense to act on. All FD record areas sit at offset 0 of one shared
+      ``file`` region, so they mutually alias and drag everything touching
+      them into a single blob — on CardDemo's CBEXPORT a median impact query
+      returns 103 of 141 fields, 73% of the program. Filed as red-dragon-7211;
+      measured in
+      ``docs/superpowers/specs/2026-09-04-cobol-memory-dataflow-evaluation.md``.
+      Until it is fixed, treat a file-heavy program's result as an upper bound
+      of little use, not an answer.
+    * Check ``result.converged``. It is ``False`` when the fixpoint hit
+      ``DATAFLOW_MAX_ITERATIONS``, which counts worklist pops and so is
+      exhausted by programs from roughly 650 lines up. A ``False`` result is
+      missing edges (red-dragon-aso9).
     """
     rewritten_cfg = rewrite_cfg(cfg, effects)
-    block_facts = solve_reaching_definitions(rewritten_cfg)
+    block_facts, converged = solve_reaching_definitions_checked(rewritten_cfg)
+    if not converged:
+        logger.warning(
+            "memory dataflow: solver truncated at DATAFLOW_MAX_ITERATIONS; "
+            "the result is missing edges (red-dragon-aso9)"
+        )
     chains = _extract_def_use_chains(rewritten_cfg, block_facts)
     logger.info("memory dataflow: %d def-use links over extents", len(chains))
 
@@ -542,4 +586,5 @@ def analyze_memory_dataflow(
         extent_graph=extent_graph,
         field_graph=field_graph,
         edge_locations=edge_locations,
+        converged=converged,
     )
