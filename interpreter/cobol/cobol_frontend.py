@@ -27,6 +27,7 @@ from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
 from interpreter.cobol.lower_procedure import lower_procedure_division
+from interpreter.cobol.memory_effects import MemoryEffectRecorder, NullRecorder
 from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
@@ -68,16 +69,23 @@ class CobolFrontend(Frontend):
         observer: FrontendObserver = NullFrontendObserver(),
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
         dialect_parsers: Sequence[DialectParser] = (),
+        recorder: MemoryEffectRecorder = NullRecorder(),
     ):
         self._parser = cobol_parser
         self._observer = observer
         self._extension_strategies = tuple(extension_strategies)
         self._dialect_parsers = tuple(dialect_parsers)
         self._layout = DataLayout()
+        # Opt-in memory-effect recording. The default NullRecorder makes this
+        # free: the funnel still calls record(), which returns immediately, and
+        # nothing is retained. Pass a CollectingRecorder to obtain the sidecar
+        # that interpreter.cobol.memory_dataflow consumes.
+        self._recorder: MemoryEffectRecorder = recorder
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
             observer=observer,
             extension_strategies=self._extension_strategies,
+            recorder=recorder,
         )
 
     @property
@@ -225,6 +233,7 @@ class CobolFrontend(Frontend):
             condition_index=condition_index,
             extension_strategies=self._extension_strategies,
             asg=asg,
+            recorder=self._recorder,
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))

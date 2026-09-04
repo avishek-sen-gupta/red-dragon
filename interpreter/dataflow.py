@@ -8,7 +8,7 @@ from collections import deque
 from collections.abc import Hashable
 from dataclasses import dataclass, field
 from functools import reduce
-from typing import Any
+from typing import Any, TypeVar
 
 from interpreter import constants
 from interpreter.cfg import CFG, BasicBlock
@@ -325,10 +325,18 @@ def _build_raw_dependency_graph(
     )
 
 
+_Node = TypeVar("_Node", bound=Hashable)
+
+
 def _transitive_closure(
-    raw_graph: dict[VarName, set[VarName]],
-) -> dict[VarName, set[VarName]]:
-    """Compute transitive closure of a dependency graph."""
+    raw_graph: dict[_Node, set[_Node]],
+) -> dict[_Node, set[_Node]]:
+    """Compute transitive closure of a dependency graph.
+
+    Node-generic: the register/variable analysis closes over ``VarName``, the
+    COBOL memory analysis over ``FieldExtent`` and then over field-name
+    strings. The algorithm never inspects a node, only hashes it.
+    """
     dep_graph = {var: set(deps) for var, deps in raw_graph.items()}
     changed = True
     while changed:
