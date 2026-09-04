@@ -63,18 +63,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cobol_asg.cobol_parser import make_cobol_parser  # noqa: E402
 from interpreter import constants  # noqa: E402
-from interpreter.cfg import CFG, build_cfg  # noqa: E402
+from interpreter.cfg import CFG, BasicBlock, build_cfg  # noqa: E402
 from interpreter.cobol.cobol_frontend import CobolFrontend  # noqa: E402
 from interpreter.cobol.field_extent import FieldExtent  # noqa: E402
 from interpreter.cobol.memory_dataflow import (  # noqa: E402
     EffectKind,
     MemoryAccess,
     _extract_def_use_chains,
+    _substitute,
     _trace_to_extents,
     _produced_from,
     rewrite_cfg,
 )
-from interpreter.cobol.memory_effects import CollectingRecorder  # noqa: E402
+from interpreter.cobol.memory_effects import (  # noqa: E402
+    CollectingRecorder,
+    MemoryEffect,
+)
+from interpreter.instructions import InstructionId  # noqa: E402
 from interpreter.dataflow import (  # noqa: E402
     DefUseLink,
     _transitive_closure,
@@ -295,11 +300,33 @@ def _drop(graph: FieldGraph, drop: set[str]) -> FieldGraph:
     }
 
 
+def _rewrite_without_perform_returns(
+    cfg: CFG, effects: dict[InstructionId, MemoryEffect]
+) -> CFG:
+    """``rewrite_cfg`` minus ``_wire_continuation_returns``.
+
+    Mirrors that function's body deliberately rather than calling it and
+    deleting edges afterwards: the edges to delete are exactly the ones the
+    wiring adds, and re-deriving which those are would be a second, drifting
+    encoding of the same rule.
+    """
+    rewritten = CFG(entry=cfg.entry)
+    for label, block in cfg.blocks.items():
+        rewritten.blocks[label] = BasicBlock(
+            label=block.label,
+            instructions=[_substitute(inst, effects) for inst in block.instructions],
+            successors=list(block.successors),
+            predecessors=list(block.predecessors),
+        )
+    return rewritten
+
+
 def _analyse(
     source: Path,
     copybook_dirs: list[Path],
     copybook_exts: list[str],
     drop_region: str | None = None,
+    sever_perform: bool = False,
 ) -> _Stats:
     """Parse, lower, solve and project one program.
 
@@ -307,6 +334,13 @@ def _analyse(
     the GRAPH, after the solve — an ablation, for attributing connectivity to
     a region. It deliberately does not remove the effects, which would change
     the fixpoint and measure a different program.
+
+    ``sever_perform`` skips the reconstruction of the ``PERFORM`` return
+    edges, leaving every ``perform_return_N`` block without predecessors.
+    The result is UNSOUND — it is the pre-return-wiring bug, reproduced on
+    purpose — and is meaningful only as a differential against the full run,
+    to say how much connectivity the context merge contributes. Never quote
+    a severed figure on its own.
     """
     truncated = _TruncationWatch()
     logger = logging.getLogger("interpreter.dataflow")
@@ -325,7 +359,11 @@ def _analyse(
         parsed_at = time.monotonic()
 
         cfg = build_cfg(ir)
-        rewritten = rewrite_cfg(cfg, recorder.effects)
+        rewritten = (
+            _rewrite_without_perform_returns(cfg, recorder.effects)
+            if sever_perform
+            else rewrite_cfg(cfg, recorder.effects)
+        )
         chains = _extract_def_use_chains(
             rewritten, solve_reaching_definitions(rewritten)
         )
@@ -395,7 +433,11 @@ def _run_corpus(args: argparse.Namespace) -> int:
         lines = len(source.read_bytes().splitlines())
         try:
             stats = _analyse(
-                source, args.copybook_dirs, args.copybook_exts, args.drop_region
+                source,
+                args.copybook_dirs,
+                args.copybook_exts,
+                args.drop_region,
+                args.sever_perform,
             )
         except Exception as exc:  # noqa: BLE001 - a failure is a result here
             failures.append(
@@ -433,6 +475,15 @@ def main() -> int:
             "measure every *.cbl in this directory and print one table row "
             "each, failures included. Enumerating the corpus from disk is the "
             "point: a hand-typed program list silently becomes a subset."
+        ),
+    )
+    parser.add_argument(
+        "--sever-perform",
+        action="store_true",
+        help=(
+            "ablation: drop the reconstructed PERFORM return edges. UNSOUND - "
+            "use only as a differential against the full run, to size the "
+            "context merge's contribution"
         ),
     )
     parser.add_argument(
@@ -478,7 +529,11 @@ def main() -> int:
         parser.error("give a source file, or --corpus DIR")
 
     stats = _analyse(
-        args.source, args.copybook_dirs, args.copybook_exts, args.drop_region
+        args.source,
+        args.copybook_dirs,
+        args.copybook_exts,
+        args.drop_region,
+        args.sever_perform,
     )
     direct, closed, nodes = stats.direct, stats.closed, stats.nodes
     value, reaching = stats.value, stats.reaching
@@ -499,6 +554,8 @@ def main() -> int:
     )
     if args.drop_region:
         print(f"ABLATION             region {args.drop_region} dropped from the graph")
+    if args.sever_perform:
+        print("ABLATION             PERFORM return edges severed — UNSOUND")
     print(f"IR instructions      {stats.ir_length}")
     print(f"recorded effects     {stats.effects}")
     print()
