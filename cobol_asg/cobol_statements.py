@@ -163,11 +163,19 @@ class MoveStatement:
         return cls(source=source, targets=targets)
 
     def _operand_dict(self, operand: RefModOperand) -> dict:
+        if operand.length_of:
+            return {"kind": "length_of", "name": operand.length_of}
         d: dict = {"name": operand.name}
         if operand.ref_mod_start is not None:
             d["ref_mod_start"] = _serialize_ref_mod_expr(operand.ref_mod_start)
         if operand.ref_mod_length is not None:
             d["ref_mod_length"] = _serialize_ref_mod_expr(operand.ref_mod_length)
+        if operand.qualifiers:
+            d["qualifiers"] = list(operand.qualifiers)
+        if operand.subscripts:
+            d["subscripts"] = [expr_to_dict(s) for s in operand.subscripts]
+        if operand.rounded:
+            d["rounded"] = True
         return d
 
     def to_dict(self) -> dict:
