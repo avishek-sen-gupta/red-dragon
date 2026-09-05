@@ -856,6 +856,59 @@ class TestRoundTrip:
         data = {"type": "MOVE", "operands": [{"name": "123"}, {"name": "WS-A"}]}
         assert self._round_trip(data) == data
 
+    def _round_tripped(self, operands: list[dict]) -> list[dict]:
+        statement = MoveStatement.from_dict({"type": "MOVE", "operands": operands})
+        return statement.to_dict()["operands"]
+
+    @covers(CobolFeature.MOVE)
+    def test_a_plain_operand_serialises_exactly_as_before(self):
+        """The compact form is load-bearing: existing caches and fixtures use it."""
+        operands = [{"name": "FLD-A"}, {"name": "FLD-B"}]
+        assert self._round_tripped(operands) == operands
+
+    @covers(CobolFeature.MOVE)
+    def test_reference_modification_survives_the_round_trip(self):
+        operands = [
+            {
+                "name": "FLD-A",
+                "ref_mod_start": {"kind": "lit", "value": "2"},
+                "ref_mod_length": {"kind": "lit", "value": "3"},
+            },
+            {"name": "FLD-B"},
+        ]
+        assert self._round_tripped(operands) == operands
+
+    @covers(CobolFeature.MOVE)
+    def test_a_subscript_survives_the_round_trip(self):
+        operands = [
+            {"name": "TBL-ROW", "subscripts": [{"kind": "ref", "name": "IDX-A"}]},
+            {"name": "FLD-B"},
+        ]
+        assert self._round_tripped(operands) == operands
+
+    @covers(CobolFeature.MOVE)
+    def test_a_length_of_source_keeps_its_data_name(self):
+        """from_dict puts the data name in length_of and leaves name empty.
+
+        Without a matching writer this operand serialises to {"name": ""} -- an
+        operand that resolves as no field at all.
+        """
+        operands = [{"kind": "length_of", "name": "REC-MASTER"}, {"name": "FLD-N"}]
+        assert self._round_tripped(operands) == operands
+
+    @covers(CobolFeature.MOVE)
+    def test_qualifiers_survive_the_round_trip(self):
+        operands = [
+            {"name": "FLD-A", "qualifiers": ["REC-A", "GRP-X"]},
+            {"name": "FLD-B"},
+        ]
+        assert self._round_tripped(operands) == operands
+
+    @covers(CobolFeature.MOVE)
+    def test_rounded_survives_the_round_trip(self):
+        operands = [{"name": "FLD-A"}, {"name": "FLD-B", "rounded": True}]
+        assert self._round_tripped(operands) == operands
+
     @covers(CobolFeature.ADD)
     def test_add_round_trip(self):
         data = {"type": "ADD", "operands": [{"name": "5"}, {"name": "WS-A"}]}

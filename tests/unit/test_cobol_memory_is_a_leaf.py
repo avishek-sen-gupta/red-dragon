@@ -1,7 +1,10 @@
 import subprocess
 import sys
 
+from tests.covers import NotLanguageFeature, covers
 
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_importing_cobol_memory_does_not_load_the_interpreter():
     """The reason cobol_memory is a sibling of interpreter, not a subpackage.
 
@@ -21,6 +24,7 @@ def test_importing_cobol_memory_does_not_load_the_interpreter():
     assert result.stdout.strip() == "False"
 
 
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_field_extent_surface_is_importable_from_the_new_home():
     from cobol_memory.field_extent import FieldExtent, Precision
     from cobol_memory.region_id import RegionId
