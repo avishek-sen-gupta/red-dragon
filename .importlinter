@@ -2,17 +2,29 @@
 root_packages =
     interpreter
     cobol_asg
+    cobol_memory
 
 # The reason cobol_asg is a sibling of interpreter rather than a subpackage of
 # it: an import of interpreter.anything runs interpreter/__init__.py, which
 # loads the VM. A consumer that only reads COBOL -- cobble's knowledge-graph
 # extractor -- imports cobol_asg and nothing else, so this contract is what
 # keeps that promise true. cobol_asg parses; interpreter.cobol lowers.
+# cobol_memory holds storage algebra rather than ASG nodes, and it is a sibling
+# for the same reason -- a consumer that only computes byte ranges must not
+# load the VM.
 [importlinter:contract:cobol-asg-is-a-leaf]
 name = The COBOL ASG surface must not import the interpreter
 type = forbidden
 source_modules =
     cobol_asg
+forbidden_modules =
+    interpreter
+
+[importlinter:contract:cobol-memory-is-a-leaf]
+name = The byte-extent algebra must not import the interpreter
+type = forbidden
+source_modules =
+    cobol_memory
 forbidden_modules =
     interpreter
 

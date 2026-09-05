@@ -13,8 +13,8 @@ from cobol_asg.cobol_statements import (
 )
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.field_extent import FieldExtent, Precision
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.field_extent import FieldExtent, Precision
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import (

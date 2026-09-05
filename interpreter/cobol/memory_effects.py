@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Protocol
 
-from interpreter.cobol.field_extent import FieldExtent
+from cobol_memory.field_extent import FieldExtent
 from interpreter.instructions import InstructionId
 from interpreter.ir import SourceLocation
 

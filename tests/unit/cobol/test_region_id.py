@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from cobol_asg.cobol_parser import make_cobol_parser
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,

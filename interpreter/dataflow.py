@@ -19,7 +19,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import VAR_DEFINITION_OPCODES, CodeLabel
 from interpreter.register import Register
-from interpreter.storage_identifier import StorageIdentifier
+from cobol_memory.storage_identifier import StorageIdentifier
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)

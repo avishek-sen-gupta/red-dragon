@@ -2,8 +2,8 @@
 
 import pytest
 
-from interpreter.cobol.field_extent import FieldExtent, Precision
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.field_extent import FieldExtent, Precision
+from cobol_memory.region_id import RegionId
 from tests.covers import NotLanguageFeature, covers
 
 WS = RegionId.WORKING_STORAGE
@@ -85,7 +85,7 @@ def test_alias_key_buckets_by_region():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_field_extent_satisfies_abstract_location():
-    from interpreter.abstract_location import AbstractLocation
+    from cobol_memory.abstract_location import AbstractLocation
 
     assert isinstance(ext(0, 10), AbstractLocation)
 

@@ -21,10 +21,10 @@ import pytest
 from cobol_asg.cobol_expression import ExprNode, FieldRefNode, LiteralNode
 from cobol_asg.cobol_parser import make_cobol_parser
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.field_extent import Precision
+from cobol_memory.field_extent import Precision
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,

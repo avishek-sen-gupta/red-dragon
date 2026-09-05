@@ -28,10 +28,10 @@ import pytest
 
 from cobol_asg.cobol_parser import make_cobol_parser
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.field_extent import Precision
+from cobol_memory.field_extent import Precision
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.memory_effects import CollectingRecorder, EffectKind
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.instructions import LoadRegion, WriteRegion

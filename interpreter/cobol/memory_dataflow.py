@@ -58,7 +58,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from interpreter.cfg import CFG, BasicBlock
-from interpreter.cobol.field_extent import FieldExtent
+from cobol_memory.field_extent import FieldExtent
 from interpreter.cobol.memory_effects import EffectKind, MemoryEffect
 from interpreter.dataflow import (
     BlockDataflowFacts,
@@ -80,7 +80,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel, Opcode, SourceLocation
 from interpreter.register import NO_REGISTER, Register
-from interpreter.storage_identifier import StorageIdentifier
+from cobol_memory.storage_identifier import StorageIdentifier
 
 logger = logging.getLogger(__name__)
 
