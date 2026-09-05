@@ -3,7 +3,7 @@
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import lower_data_division
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.register import Register
 from tests.covers import NotLanguageFeature, covers

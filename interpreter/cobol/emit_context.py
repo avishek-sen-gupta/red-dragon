@@ -24,7 +24,7 @@ from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolE
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import FieldLayout
-from interpreter.cobol.field_extent import FieldExtent, Precision
+from cobol_memory.field_extent import FieldExtent, Precision
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
 from interpreter.cobol.figurative_constants import (
     COBOL_FIGURATIVE_CONSTANTS,
@@ -52,7 +52,7 @@ from interpreter.cobol.memory_effects import (
     NullRecorder,
 )
 from interpreter.cobol.pic_scale import encode_scaled_digits
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.constants import FoundationTypeName
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy

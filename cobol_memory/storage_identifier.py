@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from interpreter.abstract_location import AbstractLocation
+from cobol_memory.abstract_location import AbstractLocation
 
 
 @runtime_checkable

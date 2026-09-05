@@ -1,6 +1,6 @@
 """AbstractLocation — the alias relation, extracted from Definition.__eq__."""
 
-from interpreter.abstract_location import AbstractLocation
+from cobol_memory.abstract_location import AbstractLocation
 from interpreter.register import Register
 from interpreter.var_name import VarName
 from tests.covers import NotLanguageFeature, covers
