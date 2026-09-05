@@ -82,7 +82,7 @@ from interpreter.cobol.lower_string_inspect import (
     lower_string,
     lower_unstring,
 )
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 
 logger = logging.getLogger(__name__)

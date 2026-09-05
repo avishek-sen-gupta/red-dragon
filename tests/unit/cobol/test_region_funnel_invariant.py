@@ -9,9 +9,9 @@ shape of the ``WriteRegion.writes() -> None`` bug this work exists to fix.
 import re
 from pathlib import Path
 
-from interpreter.cobol.field_extent import FieldExtent, Precision
+from cobol_memory.field_extent import FieldExtent, Precision
 from interpreter.cobol.memory_effects import CollectingRecorder, EffectKind
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.instructions import LoadRegion, WriteRegion
 from interpreter.register import Register
 from tests.covers import NotLanguageFeature, covers

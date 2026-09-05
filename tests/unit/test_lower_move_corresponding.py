@@ -9,7 +9,7 @@ from cobol_asg.cobol_statements import MoveCorrespondingStatement
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_arithmetic import lower_move_corresponding
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from tests.covers import covers
 
 

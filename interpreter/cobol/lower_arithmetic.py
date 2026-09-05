@@ -49,7 +49,7 @@ from cobol_asg.ref_mod import (
     RefModOperand,
     RefModReference,
 )
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import (

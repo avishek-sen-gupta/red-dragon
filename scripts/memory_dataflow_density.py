@@ -65,7 +65,7 @@ from cobol_asg.cobol_parser import make_cobol_parser  # noqa: E402
 from interpreter import constants  # noqa: E402
 from interpreter.cfg import CFG, BasicBlock, build_cfg  # noqa: E402
 from interpreter.cobol.cobol_frontend import CobolFrontend  # noqa: E402
-from interpreter.cobol.field_extent import FieldExtent  # noqa: E402
+from cobol_memory.field_extent import FieldExtent  # noqa: E402
 from interpreter.cobol.memory_dataflow import (  # noqa: E402
     EffectKind,
     MemoryAccess,

@@ -14,7 +14,7 @@ from interpreter.cobol.data_layout import (
     build_data_layout,
     build_index_layout,
 )
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
