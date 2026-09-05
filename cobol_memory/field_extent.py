@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, auto
 
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 
 
 class Precision(Enum):
@@ -74,7 +74,7 @@ class FieldExtent:
         must_cover. If this bucketed by offset, a must-covering extent at a
         different offset could fall outside the bucket and escape KILL
         entirely — a silently dropped dependency. See
-        ``interpreter.abstract_location.AbstractLocation.alias_key``.
+        ``cobol_memory.abstract_location.AbstractLocation.alias_key``.
         """
         return ("extent", self.region.value)
 

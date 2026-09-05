@@ -7,7 +7,7 @@ import logging
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
-from interpreter.cobol.region_id import RegionId
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     SectionedLayout,
