@@ -208,16 +208,32 @@ class CobolParagraph:
 
     name: str
     statements: list[CobolStatementType] = field(default_factory=list)
+    line_start: int | None = None
+    col_start: int | None = None
+    line_end: int | None = None
+    col_end: int | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolParagraph:
         return cls(
             name=data["name"],
             statements=[parse_statement(s) for s in data.get("statements", [])],
+            line_start=data.get("line_start"),
+            col_start=data.get("col_start"),
+            line_end=data.get("line_end"),
+            col_end=data.get("col_end"),
         )
 
     def to_dict(self) -> dict:
         result: dict = {"name": self.name}
+        if self.line_start is not None:
+            result["line_start"] = self.line_start
+        if self.col_start is not None:
+            result["col_start"] = self.col_start
+        if self.line_end is not None:
+            result["line_end"] = self.line_end
+        if self.col_end is not None:
+            result["col_end"] = self.col_end
         if self.statements:
             result["statements"] = [s.to_dict() for s in self.statements]
         return result
