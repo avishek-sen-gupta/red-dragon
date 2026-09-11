@@ -386,6 +386,12 @@ public final class AsgSerializer {
         for (Paragraph para : paragraphs) {
             JsonObject paraObj = new JsonObject();
             paraObj.addProperty("name", para.getName());
+            if (para.getCtx() != null) {
+                paraObj.addProperty("line_start", para.getCtx().getStart().getLine());
+                paraObj.addProperty("col_start",  para.getCtx().getStart().getCharPositionInLine());
+                paraObj.addProperty("line_end",   para.getCtx().getStop().getLine());
+                paraObj.addProperty("col_end",    para.getCtx().getStop().getCharPositionInLine());
+            }
 
             if (para.getStatements() != null && !para.getStatements().isEmpty()) {
                 JsonArray stmts = StatementSerializer.serializeStatements(para.getStatements());
