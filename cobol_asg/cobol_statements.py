@@ -23,6 +23,19 @@ from cobol_asg.ref_mod import (
 )
 from cobol_asg.frontend_extension import DialectParser
 
+# ── Source position ───────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class SourceSpan:
+    """Source position of a statement in the original COBOL file."""
+
+    line_start: int
+    col_start: int
+    line_end: int
+    col_end: int
+
+
 # ── Dialect parser injection ──────────────────────────────────────
 # Set by CobolFrontend.lower() for the duration of each parse call. Cicada
 # and Squall each inject their own DialectParser (interpreter.frontend)
@@ -144,6 +157,7 @@ class MoveStatement:
 
     source: RefModOperand | FunctionCallOperand
     targets: list[RefModOperand]
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> MoveStatement:
@@ -160,7 +174,20 @@ class MoveStatement:
             source = RefModOperand.from_dict(source_data)
         targets = [RefModOperand.from_dict(t) for t in target_data]
 
-        return cls(source=source, targets=targets)
+        return cls(
+            source=source,
+            targets=targets,
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def _operand_dict(self, operand: RefModOperand) -> dict:
         if operand.length_of:
@@ -189,7 +216,13 @@ class MoveStatement:
             source_dict = self._operand_dict(self.source)
         operands = [source_dict]
         operands.extend(self._operand_dict(t) for t in self.targets)
-        return {"type": "MOVE", "operands": operands}
+        result = {"type": "MOVE", "operands": operands}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
@@ -198,18 +231,34 @@ class MoveCorrespondingStatement:
 
     source: str
     targets: list[str] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> MoveCorrespondingStatement:
         return cls(
             source=data.get("source", ""),
             targets=data.get("targets", []),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "MOVE_CORRESPONDING", "source": self.source}
         if self.targets:
             result["targets"] = list(self.targets)
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -220,6 +269,7 @@ class ArithmeticCorrespondingStatement:
     op: str  # "ADD" | "SUBTRACT"
     source: str  # source group name
     target: str  # target group name
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> ArithmeticCorrespondingStatement:
@@ -228,14 +278,30 @@ class ArithmeticCorrespondingStatement:
             op=op,
             source=data.get("source", ""),
             target=data.get("target", ""),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "type": f"{self.op}_CORRESPONDING",
             "source": self.source,
             "target": self.target,
         }
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
@@ -255,6 +321,7 @@ class ArithmeticStatement:
     remainder: RefModOperand | None = None
     on_size_error: list[CobolStatementType] = field(default_factory=list)
     not_on_size_error: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> ArithmeticStatement:
@@ -303,6 +370,16 @@ class ArithmeticStatement:
             not_on_size_error=[
                 parse_statement(c) for c in data.get("not_on_size_error", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -318,6 +395,11 @@ class ArithmeticStatement:
             result["on_size_error"] = [c.to_dict() for c in self.on_size_error]
         if self.not_on_size_error:
             result["not_on_size_error"] = [c.to_dict() for c in self.not_on_size_error]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -356,6 +438,7 @@ class ComputeStatement:
     targets: list[ComputeTarget] = field(default_factory=list)  # target variable names
     on_size_error: list[CobolStatementType] = field(default_factory=list)
     not_on_size_error: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> ComputeStatement:
@@ -366,6 +449,16 @@ class ComputeStatement:
             not_on_size_error=[
                 parse_statement(c) for c in data.get("not_on_size_error", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -376,6 +469,11 @@ class ComputeStatement:
             result["on_size_error"] = [c.to_dict() for c in self.on_size_error]
         if self.not_on_size_error:
             result["not_on_size_error"] = [c.to_dict() for c in self.not_on_size_error]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -386,6 +484,7 @@ class IfStatement:
     condition: dict
     children: list[CobolStatementType] = field(default_factory=list)
     else_children: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> IfStatement:
@@ -393,6 +492,16 @@ class IfStatement:
             condition=data.get("condition", {}),
             children=[parse_statement(c) for c in data.get("children", [])],
             else_children=[parse_statement(c) for c in data.get("else_children", [])],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -401,6 +510,11 @@ class IfStatement:
             result["children"] = [c.to_dict() for c in self.children]
         if self.else_children:
             result["else_children"] = [c.to_dict() for c in self.else_children]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -421,6 +535,7 @@ class WhenStatement:
     also_conditions: tuple[dict | str, ...] = ()
     children: list[CobolStatementType] = field(default_factory=list)
     condition_thru: str | None = None
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> WhenStatement:
@@ -430,6 +545,16 @@ class WhenStatement:
             also_conditions=tuple(raw_also),
             children=[parse_statement(c) for c in data.get("children", [])],
             condition_thru=data.get("condition_thru"),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -440,6 +565,11 @@ class WhenStatement:
             result["also_conditions"] = list(self.also_conditions)
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -448,17 +578,33 @@ class WhenOtherStatement:
     """EVALUATE WHEN OTHER branch."""
 
     children: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> WhenOtherStatement:
         return cls(
             children=[parse_statement(c) for c in data.get("children", [])],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "WHEN_OTHER"}
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -473,6 +619,7 @@ class EvaluateStatement:
     subject: str = ""
     also_subjects: tuple[str, ...] = ()
     children: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> EvaluateStatement:
@@ -480,6 +627,16 @@ class EvaluateStatement:
             subject=data.get("subject", ""),
             also_subjects=tuple(data.get("also_subjects", [])),
             children=[parse_statement(c) for c in data.get("children", [])],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -490,6 +647,11 @@ class EvaluateStatement:
             result["also_subjects"] = list(self.also_subjects)
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -498,6 +660,7 @@ class DisplayStatement:
     """DISPLAY operand [operand ...] — operands are concatenated onto one line."""
 
     operands: tuple[RefModOperand, ...]
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> DisplayStatement:
@@ -505,11 +668,27 @@ class DisplayStatement:
             operands=tuple(
                 RefModOperand.from_dict({"name": raw} if isinstance(raw, str) else raw)
                 for raw in data.get("operands", [])
-            )
+            ),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
-        return {"type": "DISPLAY", "operands": [op.to_dict() for op in self.operands]}
+        result = {"type": "DISPLAY", "operands": [op.to_dict() for op in self.operands]}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
@@ -554,6 +733,7 @@ class GotoStatement:
     """GO TO — one of three mutually exclusive forms."""
 
     form: SimpleGoto | ComputedGoto | AlteredGoto
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> GotoStatement:
@@ -561,7 +741,19 @@ class GotoStatement:
         if form_kind == "computed":
             targets = tuple(ProcedureRef.from_dict(t) for t in data.get("targets", []))
             index = RefModOperand.from_dict(data.get("index", {}))
-            return cls(form=ComputedGoto(targets=targets, index=index))
+            return cls(
+                form=ComputedGoto(targets=targets, index=index),
+                span=(
+                    SourceSpan(
+                        data["line_start"],
+                        data["col_start"],
+                        data["line_end"],
+                        data["col_end"],
+                    )
+                    if "line_start" in data
+                    else None
+                ),
+            )
         if form_kind == "altered":
             return cls(form=AlteredGoto())
         return cls(
@@ -579,67 +771,168 @@ class GotoStatement:
             }
         if isinstance(form, AlteredGoto):
             return {"type": "GOTO", "form": "altered"}
-        return {"type": "GOTO", "form": "simple", "target": form.target.to_dict()}
+        result = {"type": "GOTO", "form": "simple", "target": form.target.to_dict()}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
 class StopRunStatement:
     """STOP RUN."""
 
+    span: SourceSpan | None = None
+
     @classmethod
     def from_dict(cls, data: dict) -> StopRunStatement:
-        return cls()
+        return cls(
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "STOP_RUN"}
+        result = {"type": "STOP_RUN"}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
 class GobackStatement:
     """GOBACK — return control to the caller (or terminate if called as main program)."""
 
+    span: SourceSpan | None = None
+
     @classmethod
     def from_dict(cls, data: dict) -> GobackStatement:
-        return cls()
+        return cls(
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "GOBACK"}
+        result = {"type": "GOBACK"}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
 class ExitProgramStatement:
     """EXIT PROGRAM — return control to the caller (no-op in main program)."""
 
+    span: SourceSpan | None = None
+
     @classmethod
     def from_dict(cls, data: dict) -> ExitProgramStatement:
-        return cls()
+        return cls(
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "EXIT_PROGRAM"}
+        result = {"type": "EXIT_PROGRAM"}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
 class ContinueStatement:
     """CONTINUE — no-op sentinel."""
 
+    span: SourceSpan | None = None
+
     @classmethod
     def from_dict(cls, data: dict) -> ContinueStatement:
-        return cls()
+        return cls(
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "CONTINUE"}
+        result = {"type": "CONTINUE"}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
 class ExitStatement:
     """EXIT — no-op sentinel at paragraph end."""
 
+    span: SourceSpan | None = None
+
     @classmethod
     def from_dict(cls, data: dict) -> ExitStatement:
-        return cls()
+        return cls(
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "EXIT"}
+        result = {"type": "EXIT"}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
@@ -647,13 +940,32 @@ class InitializeStatement:
     """INITIALIZE field1 field2 ... — reset fields to type-appropriate defaults."""
 
     operands: list[str] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> InitializeStatement:
-        return cls(operands=data.get("operands", []))
+        return cls(
+            operands=data.get("operands", []),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "INITIALIZE", "operands": list(self.operands)}
+        result = {"type": "INITIALIZE", "operands": list(self.operands)}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
@@ -664,6 +976,7 @@ class SetStatement:
     targets: list[str] = field(default_factory=list)
     values: list[str] = field(default_factory=list)
     by_type: str = ""  # "UP" or "DOWN" (only for BY)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> SetStatement:
@@ -676,6 +989,16 @@ class SetStatement:
                 else [data.get("value", "")]
             ),
             by_type=data.get("by_type", ""),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -689,6 +1012,11 @@ class SetStatement:
         else:
             result["by_type"] = self.by_type
             result["value"] = self.values[0] if self.values else ""
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -746,6 +1074,7 @@ class StringStatement:
     sendings: list[StringSending] = field(default_factory=list)
     into: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     pointer: str = ""
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> StringStatement:
@@ -753,6 +1082,16 @@ class StringStatement:
             sendings=[StringSending.from_dict(s) for s in data.get("sendings", [])],
             into=RefModOperand.from_dict(data.get("into", {})),
             pointer=data.get("pointer", ""),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -763,6 +1102,11 @@ class StringStatement:
         }
         if self.pointer:
             result["pointer"] = self.pointer
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -780,6 +1124,7 @@ class UnstringStatement:
     into: list[RefModOperand] = field(default_factory=list)
     tallying_target: str = ""
     pointer: str = ""
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> UnstringStatement:
@@ -789,6 +1134,16 @@ class UnstringStatement:
             into=[RefModOperand.from_dict(i) for i in data.get("into", [])],
             tallying_target=data.get("tallying_target", ""),
             pointer=data.get("pointer", ""),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -802,6 +1157,11 @@ class UnstringStatement:
             result["tallying_target"] = self.tallying_target
         if self.pointer:
             result["pointer"] = self.pointer
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -917,6 +1277,7 @@ class InspectStatement:
     replacings: list[Replacing] = field(default_factory=list)
     converting_from: str = ""  # INSPECT ... CONVERTING <from> TO <to>
     converting_to: str = ""
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> InspectStatement:
@@ -929,6 +1290,16 @@ class InspectStatement:
             replacings=[Replacing.from_dict(r) for r in data.get("replacings", [])],
             converting_from=data.get("converting_from", ""),
             converting_to=data.get("converting_to", ""),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -944,6 +1315,11 @@ class InspectStatement:
         elif self.inspect_type == "CONVERTING":
             result["converting_from"] = self.converting_from
             result["converting_to"] = self.converting_to
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -976,6 +1352,7 @@ class SearchStatement:
     varying: str = ""
     whens: list[SearchWhen] = field(default_factory=list)
     at_end: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> SearchStatement:
@@ -984,6 +1361,16 @@ class SearchStatement:
             varying=data.get("varying", ""),
             whens=[SearchWhen.from_dict(w) for w in data.get("whens", [])],
             at_end=[parse_statement(c) for c in data.get("at_end", [])],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -993,6 +1380,11 @@ class SearchStatement:
         result["whens"] = [w.to_dict() for w in self.whens]
         if self.at_end:
             result["at_end"] = [c.to_dict() for c in self.at_end]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1030,6 +1422,7 @@ class CallStatement:
     program: str = ""
     using: list[CallUsingParam] = field(default_factory=list)
     giving: str = ""
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CallStatement:
@@ -1037,6 +1430,16 @@ class CallStatement:
             program=data.get("program", ""),
             using=[CallUsingParam.from_dict(p) for p in data.get("using", [])],
             giving=data.get("giving", ""),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -1045,6 +1448,11 @@ class CallStatement:
             result["using"] = [p.to_dict() for p in self.using]
         if self.giving:
             result["giving"] = self.giving
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1071,6 +1479,7 @@ class AlterStatement:
     """ALTER para-1 TO PROCEED TO para-2."""
 
     proceed_tos: list[AlterProceedTo] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> AlterStatement:
@@ -1078,12 +1487,27 @@ class AlterStatement:
             proceed_tos=[
                 AlterProceedTo.from_dict(p) for p in data.get("proceed_tos", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "ALTER"}
         if self.proceed_tos:
             result["proceed_tos"] = [p.to_dict() for p in self.proceed_tos]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1093,18 +1517,34 @@ class EntryStatement:
 
     entry_name: str = ""
     using: list[str] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> EntryStatement:
         return cls(
             entry_name=data.get("entry_name", ""),
             using=data.get("using", []),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "ENTRY", "entry_name": self.entry_name}
         if self.using:
             result["using"] = self.using
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1113,13 +1553,32 @@ class CancelStatement:
     """CANCEL program-name(s)."""
 
     programs: list[str] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CancelStatement:
-        return cls(programs=data.get("programs", []))
+        return cls(
+            programs=data.get("programs", []),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "CANCEL", "programs": self.programs}
+        result = {"type": "CANCEL", "programs": self.programs}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 # ── I/O Statement types ─────────────────────────────────────────
@@ -1131,18 +1590,34 @@ class AcceptStatement:
 
     target: str = ""
     from_device: str = "CONSOLE"
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> AcceptStatement:
         return cls(
             target=data.get("target", ""),
             from_device=data.get("from_device", "CONSOLE"),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "ACCEPT", "target": self.target}
         if self.from_device != "CONSOLE":
             result["from_device"] = self.from_device
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1187,22 +1662,41 @@ class OpenStatement:
     """OPEN [mode file1 file2 ...] ... — one or more mode groups."""
 
     mode_groups: list[tuple[OpenMode, list[str]]] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> OpenStatement:
         groups = [
             (OpenMode(g["mode"]), list(g["files"])) for g in data.get("mode_groups", [])
         ]
-        return cls(mode_groups=groups)
+        return cls(
+            mode_groups=groups,
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "type": "OPEN",
             "mode_groups": [
                 {"mode": mode.value, "files": list(files)}
                 for mode, files in self.mode_groups
             ],
         }
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
@@ -1210,13 +1704,32 @@ class CloseStatement:
     """CLOSE file1 file2 ..."""
 
     files: list[str] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CloseStatement:
-        return cls(files=data.get("files", []))
+        return cls(
+            files=data.get("files", []),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
+        )
 
     def to_dict(self) -> dict:
-        return {"type": "CLOSE", "files": list(self.files)}
+        result = {"type": "CLOSE", "files": list(self.files)}
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
+        return result
 
 
 @dataclass(frozen=True)
@@ -1230,6 +1743,7 @@ class ReadStatement:
     not_at_end: list[CobolStatementType] = field(default_factory=list)
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> ReadStatement:
@@ -1243,6 +1757,16 @@ class ReadStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -1259,6 +1783,11 @@ class ReadStatement:
             result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1270,6 +1799,7 @@ class WriteStatement:
     from_field: str = ""
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> WriteStatement:
@@ -1280,6 +1810,16 @@ class WriteStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -1290,6 +1830,11 @@ class WriteStatement:
             result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1301,6 +1846,7 @@ class RewriteStatement:
     from_field: str = ""
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> RewriteStatement:
@@ -1311,6 +1857,16 @@ class RewriteStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -1321,6 +1877,11 @@ class RewriteStatement:
             result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1333,6 +1894,7 @@ class StartStatement:
     relop: str = ""
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> StartStatement:
@@ -1344,6 +1906,16 @@ class StartStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -1356,6 +1928,11 @@ class StartStatement:
             result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1366,6 +1943,7 @@ class DeleteStatement:
     file_name: str = ""
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> DeleteStatement:
@@ -1375,6 +1953,16 @@ class DeleteStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -1383,6 +1971,11 @@ class DeleteStatement:
             result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1401,6 +1994,7 @@ class XmlGenerateStatement:
     count_in: str = ""
     on_exception: list[CobolStatementType] = field(default_factory=list)
     not_on_exception: list[CobolStatementType] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> XmlGenerateStatement:
@@ -1412,6 +2006,16 @@ class XmlGenerateStatement:
             not_on_exception=[
                 parse_statement(c) for c in data.get("not_on_exception", [])
             ],
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -1426,6 +2030,11 @@ class XmlGenerateStatement:
             result["on_exception"] = [c.to_dict() for c in self.on_exception]
         if self.not_on_exception:
             result["not_on_exception"] = [c.to_dict() for c in self.not_on_exception]
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
@@ -1508,6 +2117,7 @@ class PerformStatement:
     thru: str = ""
     children: list[CobolStatementType] = field(default_factory=list)
     spec: PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None = None
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> PerformStatement:
@@ -1517,6 +2127,16 @@ class PerformStatement:
             thru=data.get("thru", ""),
             children=[parse_statement(c) for c in data.get("children", [])],
             spec=_parse_perform_spec(data),
+            span=(
+                SourceSpan(
+                    data["line_start"],
+                    data["col_start"],
+                    data["line_end"],
+                    data["col_end"],
+                )
+                if "line_start" in data
+                else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -1528,6 +2148,11 @@ class PerformStatement:
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         result.update(_spec_to_dict(self.spec))
+        if self.span is not None:
+            result["line_start"] = self.span.line_start
+            result["col_start"] = self.span.col_start
+            result["line_end"] = self.span.line_end
+            result["col_end"] = self.span.col_end
         return result
 
 
