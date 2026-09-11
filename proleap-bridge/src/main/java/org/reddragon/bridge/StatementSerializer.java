@@ -155,6 +155,12 @@ public final class StatementSerializer {
         for (Statement stmt : statements) {
             JsonObject obj = serializeStatement(stmt);
             if (obj != null) {
+                if (stmt.getCtx() != null) {
+                    obj.addProperty("line_start", stmt.getCtx().getStart().getLine());
+                    obj.addProperty("col_start",  stmt.getCtx().getStart().getCharPositionInLine());
+                    obj.addProperty("line_end",   stmt.getCtx().getStop().getLine());
+                    obj.addProperty("col_end",    stmt.getCtx().getStop().getCharPositionInLine());
+                }
                 arr.add(obj);
             }
         }
