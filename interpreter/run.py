@@ -489,8 +489,21 @@ def _run_loop(
             ip = 0
         else:
             ip += 1
+    else:
+        _warn_step_budget_exhausted(config.max_steps, current_label, ip)
 
     return _LoopResult(suspended=False, steps=step + 1, llm_calls=llm_calls)
+
+
+def _warn_step_budget_exhausted(max_steps: int, label: CodeLabel, ip: int) -> None:
+    """Report that execution stopped on the step budget, not on program termination."""
+    logger.warning(
+        "VM ran out of step budget (%d steps) before the program ended; "
+        "stopped at %s:%d",
+        max_steps,
+        label,
+        ip,
+    )
 
 
 def initial_vm_state(io_provider: Any = None) -> VMState:
@@ -849,6 +862,8 @@ def execute_cfg_traced(
             ip = 0
         else:
             ip += 1
+    else:
+        _warn_step_budget_exhausted(config.max_steps, current_label, ip)
 
     stats = ExecutionStats(
         steps=step + 1,
