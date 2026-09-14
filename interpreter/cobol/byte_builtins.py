@@ -860,19 +860,28 @@ def _builtin_current_date(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 
 
 def _builtin_is_numeric(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """COBOL `IS NUMERIC` class test for an alphanumeric operand.
+    """COBOL ``IS NUMERIC`` class test.
 
     Args: [value: str]
-    Returns: bool — True when the value is non-empty and all characters are
-    digits. Sign/decimal handling for signed display numerics is deferred; the
-    common all-digits case is covered (red-dragon-pz9g.20).
+    Returns: bool — True when the string represents a valid numeric value:
+    digits with an optional decimal point and optional leading sign (+/-).
+    The ``emit_to_string`` path for USAGE DISPLAY numeric fields with implied
+    decimal (``V``) produces strings like ``'180038.30'``; these must pass.
     """
     if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
     value = args[0].value
     if not isinstance(value, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=len(value) > 0 and value.isdigit())
+    if not value:
+        return BuiltinResult(value=False)
+    check = value.lstrip("+-")
+    if "." in check:
+        parts = check.split(".", 1)
+        result = any(p for p in parts) and all(p.isdigit() for p in parts if p)
+    else:
+        result = check.isdigit()
+    return BuiltinResult(value=result)
 
 
 def _builtin_is_alphabetic(args: list[TypedValue], vm: VMState) -> BuiltinResult:
