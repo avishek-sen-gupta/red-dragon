@@ -8377,6 +8377,33 @@ class TestAmbiguousFieldNameQualification:
             )
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_tolerant_compile_skips_unqualified_ambiguous_reference(self, caplog):
+        """With tolerant=True the same ambiguous MOVE is skipped with a WARNING
+        instead of failing compilation."""
+        source = _to_fixed(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-AMBIG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-GROUP-A.",
+                "   05 WS-ID PIC 9(3).",
+                "01 WS-GROUP-B.",
+                "   05 WS-ID PIC 9(3).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 5 TO WS-ID.",
+                "    STOP RUN.",
+            ]
+        )
+        with caplog.at_level(logging.WARNING, logger="interpreter.cobol.emit_context"):
+            run(source=source, language="cobol", max_steps=1000, tolerant=True)
+
+        skipped = [r for r in caplog.records if r.getMessage().startswith("skipped")]
+        assert len(skipped) == 1
+        assert "WS-ID" in skipped[0].getMessage()
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_of_qualification_disambiguates_both_occurrences(self):
         """The same ambiguous WS-ID resolves correctly when qualified with OF,
         each qualifier picking its own distinct field (not the same one twice)."""

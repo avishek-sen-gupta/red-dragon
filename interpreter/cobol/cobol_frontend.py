@@ -70,8 +70,10 @@ class CobolFrontend(Frontend):
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
         dialect_parsers: Sequence[DialectParser] = (),
         recorder: MemoryEffectRecorder = NullRecorder(),
+        tolerant: bool = False,
     ):
         self._parser = cobol_parser
+        self._tolerant = tolerant
         self._observer = observer
         self._extension_strategies = tuple(extension_strategies)
         self._dialect_parsers = tuple(dialect_parsers)
@@ -93,6 +95,7 @@ class CobolFrontend(Frontend):
             extension_strategies=self._extension_strategies,
             recorder=recorder,
             inst_ids=self._inst_ids,
+            tolerant=tolerant,
         )
 
     @property
@@ -242,6 +245,7 @@ class CobolFrontend(Frontend):
             asg=asg,
             recorder=self._recorder,
             inst_ids=self._inst_ids,
+            tolerant=self._tolerant,
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))

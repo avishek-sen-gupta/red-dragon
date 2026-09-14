@@ -1246,6 +1246,7 @@ def run(
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
     copybook_dirs: list[Path] = [],
+    tolerant: bool = False,
 ) -> VMState:
     """End-to-end: parse → lower → build LinkedProgram → run_linked.
 
@@ -1262,6 +1263,8 @@ def run(
         frontend_type: "deterministic" (tree-sitter) or "llm".
         llm_client: Pre-built LLMClient for DI/testing (used by LLM frontend).
         unresolved_call_strategy: Resolution strategy for unknown calls.
+        tolerant: Skip (with a WARNING) COBOL statements whose lowering
+            raises, instead of failing compilation. Default off. COBOL only.
     """
     lang = Language(language)
     pipeline_start = time.perf_counter()
@@ -1294,6 +1297,7 @@ def run(
             parser=make_cobol_parser(copybook_dirs=copybook_dirs),
             copybook_dirs=copybook_dirs,
             observer=observer,
+            tolerant=tolerant,
         )
         stats.ir_instruction_count = len(linked.merged_ir)
         stats.cfg_block_count = len(linked.merged_cfg.blocks)
