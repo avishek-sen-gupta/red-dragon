@@ -302,6 +302,27 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
         # on '.', finds one inside the mantissa, and silently corrupts digits.
         if scale:
             parsed = descale(parsed, scale)
+        if decimal_digits > 0:
+            # Two-step: round to a guard precision to eliminate binary-float
+            # representation noise, then truncate (COBOL default, no ROUNDED).
+            #
+            # Float64 arithmetic over non-binary-exact values (e.g. 38.30)
+            # can produce strings like '76.59999999999994' that are only ~1e-14
+            # away from the correct '76.60'.  Rounding to decimal_digits+6
+            # collapses that noise while still correctly truncating genuine
+            # fractional values (e.g. 1.237 → 1.23 with dd=2).
+            #
+            # Caveat: a genuine value whose last 6 digits are all 9s (e.g.
+            # 0.999999) would be incorrectly rounded up.  That sub-millicent
+            # granularity does not arise in practice with standard COBOL
+            # fixed-point fields.
+            from decimal import ROUND_DOWN, ROUND_HALF_UP
+
+            guard = int(decimal_digits) + 6
+            parsed = parsed.quantize(Decimal(10) ** -guard, rounding=ROUND_HALF_UP)
+            parsed = parsed.quantize(
+                Decimal(10) ** -int(decimal_digits), rounding=ROUND_DOWN
+            )
         clean = str(int(parsed)) if decimal_digits == 0 else format(parsed, "f")
     if decimal_digits > 0:
         integer_digits = total_digits - decimal_digits
