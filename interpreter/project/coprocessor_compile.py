@@ -85,6 +85,7 @@ def compile_program(
     specs: Sequence[CoprocessorSpec],
     *,
     program_source_dirs: Sequence[Path] = (),
+    tolerant: bool = False,
 ) -> tuple[Any, LinkedProgram]:
     """Compile ``source`` with every spec's prepass and strategy composed.
 
@@ -111,4 +112,5 @@ def compile_program(
         extension_strategies=strategies,
         dialect_parsers=dialect_parsers,
         program_source_dirs=all_program_source_dirs,
+        tolerant=tolerant,
     )
