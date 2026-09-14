@@ -1805,6 +1805,35 @@ class TestIsNumeric:
         result = _builtin_is_numeric([typed_from_runtime(sym)], None)
         assert result.value is _UNCOMPUTABLE
 
+    def test_decimal_point_true(self):
+        """PIC 9(7)V99 fields are stringified as '180038.30' by emit_to_string."""
+        result = _builtin_is_numeric([typed_from_runtime("180038.30")], None)
+        assert result.value is True
+
+    def test_decimal_zero_true(self):
+        result = _builtin_is_numeric([typed_from_runtime("0.0")], None)
+        assert result.value is True
+
+    def test_leading_sign_plus_true(self):
+        result = _builtin_is_numeric([typed_from_runtime("+123")], None)
+        assert result.value is True
+
+    def test_leading_sign_minus_true(self):
+        result = _builtin_is_numeric([typed_from_runtime("-45.67")], None)
+        assert result.value is True
+
+    def test_multiple_dots_false(self):
+        result = _builtin_is_numeric([typed_from_runtime("1.2.3")], None)
+        assert result.value is False
+
+    def test_non_digit_after_dot_false(self):
+        result = _builtin_is_numeric([typed_from_runtime("12.AB")], None)
+        assert result.value is False
+
+    def test_only_dot_false(self):
+        result = _builtin_is_numeric([typed_from_runtime(".")], None)
+        assert result.value is False
+
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.IS_NUMERIC) in BYTE_BUILTINS
 
