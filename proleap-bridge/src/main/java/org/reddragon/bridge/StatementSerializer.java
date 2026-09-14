@@ -2863,18 +2863,23 @@ public final class StatementSerializer {
 
     private static JsonElement serializePowers(Powers p) {
         if (p == null) return litNode("");
-        // Exponentiation (**) is extremely rare in COBOL conditions; fall back to getText
-        if (!p.getPowers().isEmpty()) {
-            return litNode(p.getCtx() != null ? p.getCtx().getText() : "");
+        JsonElement result = serializeBasis(p.getBasis());
+        // Exponentiation (**): chain each power operand as a nested binop node.
+        for (io.proleap.cobol.asg.metamodel.valuestmt.arithmetic.Power exp : p.getPowers()) {
+            JsonObject binop = new JsonObject();
+            binop.addProperty("kind", "binop");
+            binop.addProperty("op", "**");
+            binop.add("left", result);
+            binop.add("right", serializeBasis(exp.getBasis()));
+            result = binop;
         }
-        JsonElement base = serializeBasis(p.getBasis());
         if (p.getPowersType() == Powers.PowersType.MINUS) {
             JsonObject neg = new JsonObject();
             neg.addProperty("kind", "neg");
-            neg.add("expr", base);
+            neg.add("expr", result);
             return neg;
         }
-        return base;
+        return result;
     }
 
     private static JsonElement serializeBasis(Basis b) {
