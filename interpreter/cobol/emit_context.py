@@ -344,7 +344,12 @@ class EmitContext:
         self, stmt: Any, materialised: MaterialisedSectionedLayout
     ) -> None:  # Any: CobolStatementType, circular-import boundary
         """Dispatch a statement through the injected callback."""
-        self._dispatch_fn(self, stmt, materialised)
+        try:
+            self._dispatch_fn(self, stmt, materialised)
+        except Exception as exc:
+            logger.warning(
+                "skipped %s: %s", type(stmt).__name__, exc
+            )
 
     # ── Field Reference Resolution ────────────────────────────────
 
