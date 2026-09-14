@@ -435,6 +435,8 @@ def lower_move(
     # Resolve the source field once (when it is a field). A numeric-DISPLAY
     # (zoned) source carries an extra character representation, picked per target
     # by category-pair in _store_move_value (red-dragon-0fqr).
+    # Track whether the source is a figurative constant — see per-target loop.
+    _figurative_fill_char: str | None = None
     source_fl: FieldLayout | None = None
     # Get the source value (decode field or literal) — evaluated ONCE.
     if ctx.has_field(stmt.source.name, materialised):
@@ -455,6 +457,16 @@ def lower_move(
     else:
         literal = strip_cobol_literal(translate_cobol_figurative(stmt.source.name))
         value_str_reg = ctx.const_to_reg(literal)
+        # COBOL figurative constants (SPACES/ZEROS/ZEROES/QUOTES) fill ALL
+        # receiver positions with the same character — MOVE ZEROES TO X(3)
+        # produces '000', not '0  '. Track the fill char here; the per-target
+        # loop repeats it to the target's width before encoding.
+        # HIGH-VALUES/LOW-VALUES are already handled by the raw-byte path above.
+        # Only applies when no source reference modification is present.
+        if stmt.source.ref_mod_start is None:
+            _figurative_fill_char = COBOL_FIGURATIVE_CONSTANTS.get(
+                stmt.source.name.upper()
+            )
 
     # Handle reference modification if present
     if stmt.source.ref_mod_start is not None:
@@ -525,12 +537,6 @@ def lower_move(
     # base source value (source_value_reg) is never clobbered across targets.
     source_value_reg = value_str_reg
     for target in stmt.targets:
-        # The ProLeap bridge does not model COBOL special registers (e.g.
-        # RETURN-CODE); a MOVE into one surfaces here with an unresolved/null
-        # operand name. There is no DATA DIVISION field to write, so skip it
-        # rather than crashing. (e.g. CSUTLDTC's `MOVE WS-SEVERITY-N TO
-        # RETURN-CODE` — its callers read the program's LINKAGE result, not the
-        # RETURN-CODE register, so dropping this write is behaviour-preserving.)
         if not ctx.has_field(target.name, materialised) and _is_special_register(
             target.name
         ):
@@ -538,8 +544,23 @@ def lower_move(
                 "MOVE into special register %r is not modelled — skipping", target.name
             )
             continue
+        # Figurative constants fill ALL receiver positions with the same character.
+        # MOVE ZEROES TO PIC X(3) → '000', not '0  '.  Build a target-width
+        # repeated string at compile time (constant folding) and use it instead of
+        # the single-character source for this target only.  Only applies when
+        # there is no target reference modification (a ref-mod write targets a
+        # specific slice, so the fill character must remain single for SPLICE).
+        effective_source = source_value_reg
+        if _figurative_fill_char is not None and target.ref_mod_start is None:
+            if ctx.has_field(target.name, materialised):
+                tgt_ref, _ = ctx.resolve_field_ref(
+                    target.name, materialised, target.qualifiers
+                )
+                fill_width = tgt_ref.fl.byte_length
+                filled = ctx.const_to_reg(_figurative_fill_char * fill_width)
+                effective_source = filled
         _store_move_value(
-            ctx, target, source_value_reg, materialised, zoned_display_reg
+            ctx, target, effective_source, materialised, zoned_display_reg
         )
 
 
