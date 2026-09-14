@@ -84,6 +84,7 @@ def get_frontend(
     copybook_dirs: list[Path] = [],
     extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
     dialect_parsers: Sequence[DialectParser] = (),
+    tolerant: bool = False,
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -101,6 +102,8 @@ def get_frontend(
             Passed to CobolFrontend. COBOL only.
         dialect_parsers: Dialect parsers (e.g. CICS/SQL). Passed to
             CobolFrontend. COBOL only.
+        tolerant: Skip (with a WARNING) COBOL statements whose lowering
+            raises, instead of failing compilation. Default off. COBOL only.
 
     Returns:
         A Frontend instance.
@@ -128,6 +131,7 @@ def get_frontend(
             observer=observer,
             extension_strategies=list(extension_strategies),
             dialect_parsers=list(dialect_parsers),
+            tolerant=tolerant,
         )
 
     if frontend_type == constants.FRONTEND_DETERMINISTIC:

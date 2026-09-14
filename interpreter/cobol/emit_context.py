@@ -136,8 +136,13 @@ class EmitContext:
         asg: CobolASG = CobolASG(),
         recorder: MemoryEffectRecorder = NullRecorder(),
         inst_ids: InstructionIdSource | None = None,
+        tolerant: bool = False,
     ) -> None:
         self._dispatch_fn = dispatch_fn
+        # Opt-in: skip (with a WARNING) statements whose lowering raises, e.g.
+        # references to fields from missing/stub copybooks. Off by default so
+        # lowering errors (ambiguous references etc.) surface.
+        self._tolerant = tolerant
         self._recorder: MemoryEffectRecorder = recorder
         self._observer = observer
         self._condition_index = condition_index
@@ -344,12 +349,13 @@ class EmitContext:
         self, stmt: Any, materialised: MaterialisedSectionedLayout
     ) -> None:  # Any: CobolStatementType, circular-import boundary
         """Dispatch a statement through the injected callback."""
+        if not self._tolerant:
+            self._dispatch_fn(self, stmt, materialised)
+            return
         try:
             self._dispatch_fn(self, stmt, materialised)
         except Exception as exc:
-            logger.warning(
-                "skipped %s: %s", type(stmt).__name__, exc
-            )
+            logger.warning("skipped %s: %s", type(stmt).__name__, exc)
 
     # ── Field Reference Resolution ────────────────────────────────
 
