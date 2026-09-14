@@ -66,6 +66,7 @@ def compile_cobol_module(
     observer: FrontendObserver = NullFrontendObserver(),
     path: Path = Path("__main__.cbl"),
     ast_path: Path,
+    tolerant: bool = False,
 ) -> tuple[Any, ModuleUnit]:
     """Lower one COBOL source into a (frontend, ModuleUnit). The shared core."""
     frontend: Any = get_frontend(
@@ -75,6 +76,7 @@ def compile_cobol_module(
         copybook_dirs=copybook_dirs,
         extension_strategies=extension_strategies,
         dialect_parsers=dialect_parsers,
+        tolerant=tolerant,
     )
     ir = frontend.lower_from_ast_dict(json.loads(ast_path.read_text("utf-8")))
     exports = build_export_table(
@@ -104,6 +106,7 @@ def compile_cobol(
     extra_subprogram_sources: dict[str, bytes] = {},
     source_transform: Callable[[str], str] = lambda s: s,
     ast_cache_dir: Path | None = None,
+    tolerant: bool = False,
 ) -> tuple[Any, LinkedProgram]:
     """Compile a COBOL program (single or multi-module) into a LinkedProgram.
 
@@ -162,6 +165,7 @@ def compile_cobol(
             dialect_parsers=dialect_parsers,
             observer=observer,
             path=main_path,
+            tolerant=tolerant,
             ast_path=_ast_path(main_path),
         )
         modules: dict[Path, ModuleUnit] = {main_path: main_module}
@@ -176,6 +180,7 @@ def compile_cobol(
                     extension_strategies=extension_strategies,
                     dialect_parsers=dialect_parsers,
                     observer=observer,
+                    tolerant=tolerant,
                     path=sub_path,
                     ast_path=_ast_path(sub_path),
                 )
@@ -199,6 +204,7 @@ def compile_cobol(
                     extension_strategies=extension_strategies,
                     dialect_parsers=dialect_parsers,
                     observer=observer,
+                    tolerant=tolerant,
                     path=disk_path,
                     ast_path=_ast_path(disk_path),
                 )
