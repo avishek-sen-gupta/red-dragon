@@ -51,7 +51,7 @@ from interpreter.cobol.memory_effects import (
     MemoryEffectRecorder,
     NullRecorder,
 )
-from interpreter.cobol.pic_scale import encode_scaled_digits
+from interpreter.cobol.pic_scale import encode_digits
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.constants import FoundationTypeName
@@ -743,9 +743,9 @@ class EmitContext:
         self, field_name: str, value: str, td: CobolTypeDescriptor
     ) -> Register:
         """Emit inline numeric encoding IR. Returns result register."""
-        negative = value.startswith("-")
-
-        digit_str = encode_scaled_digits(value, td)
+        negative, digit_str = encode_digits(
+            value, td.total_digits, td.decimal_digits, td.scale
+        )
 
         digits = [int(ch) if ch.isdigit() else 0 for ch in digit_str]
 
@@ -971,12 +971,12 @@ class EmitContext:
     # ── String Conversion Helpers ─────────────────────────────────
 
     def emit_to_string(self, value_reg: Register) -> Register:
-        """Emit IR to convert a value to a string."""
+        """Emit IR converting a COBOL value to its text (numbers rendered plainly)."""
         result = self.fresh_reg()
         self.emit_inst(
             CallFunction(
                 result_reg=result,
-                func_name=FuncName("str"),
+                func_name=FuncName(BuiltinName.COBOL_TO_TEXT),
                 args=(value_reg,),
             ),
         )
