@@ -23,14 +23,6 @@
         ]
       },
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/plugins/context-injector/hooks/bd-terminology-guard.sh"
-          }
-        ]
-      },
-      {
         "matcher": "Edit",
         "hooks": [
           {
@@ -53,6 +45,14 @@
           {
             "type": "command",
             "command": "python3 /Users/asgupta/code/red-dragon/.claude/hooks/covers-guard.py"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/plugins/guvnah/hooks/bd-terminology-guard.sh"
           }
         ]
       }
