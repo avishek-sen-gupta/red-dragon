@@ -150,14 +150,8 @@ def digits_for_encode(
     runtime sign-nibble builtin (a value like -0.001 keeps a negative sign).
     """
     exact = _exact(value)
-    scaled = scale_by(exact, -scale)
-    if scale < 0:
-        # Negative scale: don't truncate; scale by (decimal_digits - scale)
-        unscaled = abs(int(scale_by(scaled, decimal_digits - scale)))
-    else:
-        # Non-negative scale: truncate then scale by decimal_digits
-        stored = truncate_to(scaled, decimal_digits)
-        unscaled = abs(int(scale_by(stored, decimal_digits)))
+    stored = truncate_to(scale_by(exact, -scale), decimal_digits)
+    unscaled = abs(int(scale_by(stored, decimal_digits)))
     digit_str = (
         str(unscaled).rjust(total_digits, "0")[-total_digits:] if total_digits else ""
     )

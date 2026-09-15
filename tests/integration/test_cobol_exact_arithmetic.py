@@ -185,6 +185,37 @@ class TestGuardRegression:
         assert bytes(first_region(vm)[:3]).hex() == "f0f1f2"
 
 
+class TestFloatingPointRule:
+    """IBM computes a whole expression in floating point when a COMP-1/COMP-2
+    field or a floating literal takes part. Both operands must be converted:
+    an exact value meeting a float raises TypeError, which the VM turns into
+    UNCOMPUTABLE and the receiver silently stores as zeros."""
+
+    @covers(CobolFeature.USAGE_COMP_2, CobolFeature.ADD)
+    def test_verb_mixing_comp2_and_an_exact_field(self):
+        """ADD of an exact fixed-point field into a COMP-2 receiver. Both
+        operands must reach the Binop as floats; mixing an exact value with a
+        float raises TypeError, which the VM turns into UNCOMPUTABLE and the
+        receiver stores as zeros.
+
+        The COMP-2 field is declared LAST deliberately: an 01-level COMP-2
+        declared before other fields is given offset 0 and overlaps its
+        neighbour (red-dragon-t4qm), which would mask this assertion.
+        """
+        vm = _program(
+            ["01 A PIC 9V9 VALUE 0.5.", "01 X PIC 9V9.", "01 D COMP-2 VALUE 1.5."],
+            ["    ADD A TO D.", "    MOVE D TO X."],
+        )
+        region = first_region(vm)
+        assert bytes(region[2:4]).hex() == "f2f0"
+        assert bytes(region[4:12]).hex() == "4000000000000000"
+
+    @covers(CobolFeature.COMPUTE)
+    def test_floating_point_literal_still_computes(self):
+        vm = _program(["01 X PIC 9(4)."], ["    COMPUTE X = 1.5E3."])
+        assert bytes(first_region(vm)[:4]).hex() == "f1f5f0f0"
+
+
 class TestExactLowering:
     @covers(CobolFeature.COMPUTE, CobolFeature.ARITHMETIC_EXPRESSION)
     def test_fixed_point_operators_lower_to_exact_builtins(self):

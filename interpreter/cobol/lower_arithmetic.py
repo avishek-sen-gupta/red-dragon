@@ -42,7 +42,11 @@ from cobol_numeric.scale import (
 )
 from interpreter.cobol.arithmetic_scale import field_scale, is_floating_type
 from interpreter.cobol.arithmetic_scale import receiver_decimals as _receiver_decimals
-from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
+from interpreter.cobol.condition_lowering import (
+    _float_operand,
+    _lower_condition_str,
+    lower_expr_node,
+)
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef
@@ -152,12 +156,17 @@ def _emit_verb_operation(
         for operand in (left_operand, right_operand, *receivers)
     ]
     if any(td is not None and is_floating_type(td) for td in types):
+        # Convert BOTH operands first, exactly as the expression path does.
+        # One side is a COMP-1/COMP-2 float while the other may be an exact
+        # fixed-point value, and Python raises TypeError for Decimal + float:
+        # the VM turns that into UNCOMPUTABLE and the receiver silently
+        # stores zeros (e.g. ADD 0.5 TO WS-COMP2).
         ctx.emit_inst(
             Binop(
                 result_reg=result_reg,
                 operator=resolve_binop(ARITHMETIC_OPS[op]),
-                left=left_reg,
-                right=right_reg,
+                left=_float_operand(ctx, left_reg, True),
+                right=_float_operand(ctx, right_reg, True),
             )
         )
         return result_reg
@@ -903,10 +912,10 @@ def _emit_arithmetic_writeback(
 
         # Parse the text as an exact number, then normalise → int → zero-padded
         # string ('015') before splicing to fill the exact ref-mod width.
-        float_norm = ctx.fresh_reg()
+        parsed_norm = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=float_norm,
+                result_reg=parsed_norm,
                 func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                 args=(result_str_reg,),
             )
@@ -914,7 +923,7 @@ def _emit_arithmetic_writeback(
         int_norm = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
-                result_reg=int_norm, func_name=FuncName("int"), args=(float_norm,)
+                result_reg=int_norm, func_name=FuncName("int"), args=(parsed_norm,)
             )
         )
         int_str_reg = ctx.emit_to_string(int_norm)

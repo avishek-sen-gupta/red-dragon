@@ -90,6 +90,21 @@ def test_comp2_operand_makes_the_expression_floating():
     )
 
 
+@covers(CobolFeature.COMPUTE)
+def test_floating_point_literals_make_the_expression_floating():
+    from interpreter.cobol.arithmetic_scale import is_floating_literal
+
+    assert is_floating_literal("1.5E3")
+    assert not is_floating_literal("1.5")
+    assert not is_floating_literal("ABC")
+    assert expression_is_floating(
+        BinOpNode("*", LiteralNode("1.5E3"), LiteralNode("2")), _types
+    )
+    assert not expression_is_floating(
+        BinOpNode("*", LiteralNode("1.5"), LiteralNode("2")), _types
+    )
+
+
 @covers(CobolFeature.INTRINSIC_FUNCTION)
 def test_floating_intrinsics_make_the_expression_floating():
     assert expression_is_floating(FunctionNode("SQRT", (LiteralNode("2"),)), _types)
