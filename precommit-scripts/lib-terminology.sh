@@ -1,93 +1,25 @@
 #!/bin/bash
-# Shared library for terminology scanning (pre-commit + history scan).
+# Shared helpers for the betterleaks-backed terminology guard.
 # Source this file; do not execute directly.
 
-BLOCKLIST="$HOME/.config/git/blocklist.txt"
-EXCLUDELIST="$HOME/.config/git/blocklist-exclude.txt"
+RULES="$HOME/.config/git/terminology.toml"
 
-# ── Colors ──────────────────────────────────────────────────────
-
-RED="\033[1;31m"
-GREEN="\033[1;32m"
-YELLOW="\033[1;33m"
-CYAN="\033[0;36m"
-DIM="\033[2m"
-BOLD="\033[1m"
-RESET="\033[0m"
-
-# ── Blocklist loading ──────────────────────────────────────────
-
-load_pattern() {
-  if [ ! -f "$BLOCKLIST" ]; then
-    echo "No blocklist found at $BLOCKLIST"
-    return 1
-  fi
-  PATTERN=$(grep -v '^\s*#' "$BLOCKLIST" | grep -v '^\s*$' | paste -sd '|' -)
-  if [ -z "$PATTERN" ]; then
-    echo "Blocklist is empty."
-    return 1
-  fi
-  return 0
+# Returns 1 (with a note) when no rules file exists — callers allow in that case.
+bl_require_rules() {
+  [ -f "$RULES" ] && return 0
+  echo "[terminology-guard] No rules file at $RULES — skipping." >&2
+  echo "[terminology-guard] Generate it with: blocklist-to-toml > $RULES" >&2
+  return 1
 }
 
-load_excludes() {
-  EXCLUDE_ARGS=""
-  if [ -f "$EXCLUDELIST" ]; then
-    while IFS= read -r line; do
-      [[ "$line" =~ ^[[:space:]]*# ]] && continue
-      [[ -z "${line// }" ]] && continue
-      EXCLUDE_ARGS="$EXCLUDE_ARGS -- ':!$line'"
-    done < "$EXCLUDELIST"
-  fi
+bl_require_binary() {
+  command -v betterleaks > /dev/null 2>&1 && return 0
+  echo "[terminology-guard] betterleaks not found on PATH (brew install betterleaks)." >&2
+  return 1
 }
 
-# ── Formatting ─────────────────────────────────────────────────
-
-snippet_around() {
-  # Extract ~30 chars before and after the term, highlight the term in red
-  local line="$1" term="$2"
-  local raw
-  raw=$(echo "$line" | awk -v t="$term" '{
-    i = index($0, t)
-    if (i > 0) {
-      s = (i > 31) ? i - 30 : 1
-      print substr($0, s, 60 + length(t))
-    }
-  }')
-  # Highlight the matched term in the snippet
-  echo "$raw" | sed "s/$term/$(printf "${RED}${term}${RESET}")/g"
-}
-
-print_table_header() {
-  local title="$1"
-  echo ""
-  echo -e "${RED}${BOLD} $title ${RESET}"
-  echo -e "${DIM}$(printf '%.0s─' {1..110})${RESET}"
-  printf "  ${BOLD}%-14s %-20s %-30s %-10s %s${RESET}\n" "COMMIT" "BRANCH" "LOCATION" "TERM" "CONTEXT"
-  echo -e "${DIM}$(printf '%.0s─' {1..110})${RESET}"
-}
-
-print_table_row() {
-  local sha="$1" branch="$2" location="$3" term="$4" context="$5"
-  printf "  ${CYAN}%-14s${RESET} %-20s %-30s ${YELLOW}%-10s${RESET} ${DIM}...${RESET}%b${DIM}...${RESET}\n" \
-    "$sha" "$branch" "$location" "\"$term\"" "$context"
-}
-
-print_table_footer() {
-  local count="$1"
-  echo -e "${DIM}$(printf '%.0s─' {1..90})${RESET}"
-  echo -e "  ${BOLD}$count hit(s)${RESET}"
-  echo ""
-}
-
-print_clean() {
-  echo ""
-  echo -e "  ${GREEN}${BOLD}No forbidden terms found.${RESET}"
-  echo ""
-}
-
-print_blocked() {
-  echo -e "  ${RED}Blocklist:${RESET} $BLOCKLIST"
-  echo -e "  Fix the content or update the blocklist to proceed."
-  echo ""
+bl_blocked() {
+  echo "" >&2
+  echo "[terminology-guard] Forbidden terms found. Rules: $RULES" >&2
+  echo "[terminology-guard] Fix the content or update the rules to proceed." >&2
 }
