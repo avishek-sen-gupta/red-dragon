@@ -644,8 +644,8 @@ class EmitContext:
     def _is_zero_value(self, value: str) -> bool:
         """Check if a literal value is numerically zero."""
         try:
-            return float(value) == 0.0
-        except (ValueError, TypeError):
+            return from_literal(value) == 0
+        except ValueError:
             return False
 
     def _emit_hex_literal_bytes(self, raw: bytes, byte_length: int) -> Register:

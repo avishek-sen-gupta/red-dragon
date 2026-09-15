@@ -14,7 +14,6 @@ from cobol_numeric.number import (
     CobolNumber,
     digits_for_encode,
     is_cobol_number,
-    round_half_up,
     scale_by,
     to_number,
 )
@@ -38,15 +37,17 @@ def encode_digits(
     total_digits: int,
     decimal_digits: int,
     scale: int,
-    float_noise_guard: bool = False,
 ) -> tuple[bool, str]:
     """``(negative, digit_str)`` for ``value`` in a field of the given shape.
 
     Non-numeric text (spaces, alphanumeric junk) keeps the historical tolerance:
     its characters are aligned as-is and non-digits later become 0.
 
-    ``float_noise_guard`` is the temporary 96651c84 workaround (red-dragon-5b93):
-    round to ``decimal_digits + 6`` places before truncating. Removed in Task 7.
+    Values arrive exact, so they are truncated toward zero with no rounding:
+    COBOL truncates unless ROUNDED is given. The guard step 96651c84 added
+    here — rounding to ``decimal_digits + 6`` places first, to hide binary
+    float noise — is gone with the floats it existed for, and with it the
+    bug where genuine nines beyond the scale rounded up (red-dragon-5b93).
     """
     number = _parse(value)
     if number is None:
@@ -62,8 +63,6 @@ def encode_digits(
         integer_part = clean.split(".")[0] if "." in clean else clean
         return negative, left_adjust(integer_part, total_digits)
     descaled = scale_by(number, -scale)
-    if float_noise_guard and decimal_digits > 0:
-        descaled = round_half_up(descaled, decimal_digits + 6)
     negative, digit_str = digits_for_encode(descaled, total_digits, decimal_digits)
     return negative, digit_str
 

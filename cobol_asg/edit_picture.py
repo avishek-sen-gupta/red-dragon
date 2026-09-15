@@ -47,7 +47,12 @@ expected values:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from cobol_numeric.number import (
+    CobolNumber,
+    digits_for_encode,
+    from_digits,
+    from_literal,
+)
 
 _SIGN_SYMS = frozenset("+-")
 
@@ -296,28 +301,12 @@ def parse_edit_picture(pic: str, currency: str = DEFAULT_CURRENCY) -> EditPictur
     )
 
 
-def _digit_strings(value: Decimal, ep: EditPicture) -> tuple[str, str]:
+def _digit_strings(value: CobolNumber, ep: EditPicture) -> tuple[str, str]:
     """Return (integer_digits, fraction_digits) zero-padded/truncated to the
-    picture's digit-position counts. Truncates toward zero (no ROUNDED)."""
-    magnitude = abs(value)
-    # Scale to an integer holding all fractional digit positions, truncating
-    # any excess fraction (COBOL truncates unless ROUNDED is specified).
-    scaled = int(magnitude * (10**ep.frac_digits))
-    all_digits = str(scaled)
-    # Split off the fractional positions from the right.
-    if ep.frac_digits:
-        frac_part = all_digits[-ep.frac_digits :].rjust(ep.frac_digits, "0")
-        int_part = all_digits[: -ep.frac_digits]
-    else:
-        frac_part = ""
-        int_part = all_digits
-    # Pad / truncate the integer part to the picture's positions (low-order
-    # digits win on overflow, mirroring COBOL high-order truncation).
-    if ep.int_digits:
-        int_part = int_part.rjust(ep.int_digits, "0")[-ep.int_digits :]
-    else:
-        int_part = ""
-    return int_part, frac_part
+    picture's digit-position counts. Truncates toward zero (no ROUNDED); on
+    overflow the low-order integer digits win (COBOL high-order truncation)."""
+    _, digits = digits_for_encode(value, ep.int_digits + ep.frac_digits, ep.frac_digits)
+    return digits[: ep.int_digits], digits[ep.int_digits :]
 
 
 def format_edited(value: str, pic: str, currency: str = DEFAULT_CURRENCY) -> str:
@@ -328,9 +317,9 @@ def format_edited(value: str, pic: str, currency: str = DEFAULT_CURRENCY) -> str
     """
     ep = parse_edit_picture(pic, currency)
     try:
-        dec = Decimal(str(value).strip() or "0")
-    except (InvalidOperation, ValueError):
-        dec = Decimal(0)
+        dec = from_literal(str(value).strip() or "0")
+    except ValueError:
+        dec = from_digits(0, 0)
 
     negative = dec < 0
     is_zero = dec == 0

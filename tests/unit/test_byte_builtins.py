@@ -3424,7 +3424,7 @@ class TestPresentValue:
         result = _builtin_present_value(
             [typed_from_runtime("0.10"), typed_from_runtime(110)], None
         ).value
-        assert math.isclose(float(result), 100.0, rel_tol=1e-9)
+        assert result == 100
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_no_cashflows_uncomputable(self):
