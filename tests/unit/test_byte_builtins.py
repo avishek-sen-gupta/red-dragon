@@ -501,6 +501,7 @@ class TestByteBuiltinsRegistration:
             "__date_to_yyyymmdd",
             "__day_to_yyyyddd",
             "__year_to_yyyy",
+            "__cobol_to_text",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import struct
 
+from cobol_numeric.number import is_cobol_number
 from interpreter.cobol.cobol_constants import (
     BuiltinName,
     ByteConstants,
@@ -19,6 +20,7 @@ from interpreter.cobol.cobol_constants import (
     TallyMode,
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import Operators, VMState, _is_symbolic
@@ -251,7 +253,7 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
     """
     if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    value_str, total_digits, decimal_digits, signed = (
+    value, total_digits, decimal_digits, signed = (
         args[0].value,
         args[1].value,
         args[2].value,
@@ -260,77 +262,14 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
     scale = args[4].value if len(args) > 4 else 0
     if not isinstance(total_digits, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    if isinstance(value_str, (int, float)):
-        value_str = str(value_str)
-    if not isinstance(value_str, str):
+    if not (isinstance(value, (str, float)) or is_cobol_number(value)):
         return BuiltinResult(value=_UNCOMPUTABLE)
 
-    from decimal import Decimal, InvalidOperation
+    from interpreter.cobol.pic_scale import encode_digits
 
-    from interpreter.cobol.data_filters import align_decimal, left_adjust
-    from interpreter.cobol.pic_scale import descale
-
-    clean = value_str.lstrip("+-")
-    try:
-        parsed = Decimal(clean)
-    except InvalidOperation:
-        # Non-numeric input (spaces, alphanumeric junk). Before scale-aware
-        # division existed, every input reaching this builtin was tolerated —
-        # non-digit characters simply became 0 further down (see the digit
-        # comprehension at the end of this function). Fall back to that
-        # behaviour instead of raising a Python-level exception for what is a
-        # routine COBOL data error (red-dragon-qhtv).
-        pass
-    else:
-        # Divide by the scaling factor BEFORE truncating to digit positions —
-        # order matters (12300 into PIC 999PP is 123, not 300). Reuses
-        # descale() rather than duplicating it a third time (emit_context.py's
-        # emit_decode_field does the IR-side multiply; encode_scaled_digits
-        # does the compile-time-literal divide).
-        #
-        # Normalizing through Decimal happens even when scale == 0, not only
-        # when it's non-zero: a NEGATIVE-scale P field (leading P, e.g.
-        # PIC PPPP9) decodes to a small-magnitude float whose plain str() is
-        # scientific notation once the magnitude drops below 1e-4 (Python's
-        # own threshold, e.g. str(1e-05) == '1e-05'). That string can reach
-        # this builtin as value_str for a TARGET field whose own scale is 0
-        # (e.g. MOVE-ing a P-scaled source into a plain integer field), so
-        # the guard must not be conditioned on this call's own scale. format(
-        # x, "f") avoids the same scientific-notation trap Task 2 hit on the
-        # Decimal-division side: str(Decimal) / str(float) can both render as
-        # exponential notation, which align_decimal cannot parse — it splits
-        # on '.', finds one inside the mantissa, and silently corrupts digits.
-        if scale:
-            parsed = descale(parsed, scale)
-        if decimal_digits > 0:
-            # Two-step: round to a guard precision to eliminate binary-float
-            # representation noise, then truncate (COBOL default, no ROUNDED).
-            #
-            # Float64 arithmetic over non-binary-exact values (e.g. 38.30)
-            # can produce strings like '76.59999999999994' that are only ~1e-14
-            # away from the correct '76.60'.  Rounding to decimal_digits+6
-            # collapses that noise while still correctly truncating genuine
-            # fractional values (e.g. 1.237 → 1.23 with dd=2).
-            #
-            # Caveat: a genuine value whose last 6 digits are all 9s (e.g.
-            # 0.999999) would be incorrectly rounded up.  That sub-millicent
-            # granularity does not arise in practice with standard COBOL
-            # fixed-point fields.
-            from decimal import ROUND_DOWN, ROUND_HALF_UP
-
-            guard = int(decimal_digits) + 6
-            parsed = parsed.quantize(Decimal(10) ** -guard, rounding=ROUND_HALF_UP)
-            parsed = parsed.quantize(
-                Decimal(10) ** -int(decimal_digits), rounding=ROUND_DOWN
-            )
-        clean = str(int(parsed)) if decimal_digits == 0 else format(parsed, "f")
-    if decimal_digits > 0:
-        integer_digits = total_digits - decimal_digits
-        digit_str = align_decimal(clean, integer_digits, decimal_digits)
-    else:
-        integer_part = clean.split(".")[0] if "." in clean else clean
-        digit_str = left_adjust(integer_part, total_digits)
-
+    _, digit_str = encode_digits(
+        value, total_digits, int(decimal_digits), int(scale), float_noise_guard=True
+    )
     return BuiltinResult(value=[int(ch) if ch.isdigit() else 0 for ch in digit_str])
 
 
@@ -342,17 +281,16 @@ def _builtin_cobol_prepare_sign(args: list[TypedValue], vm: VMState) -> BuiltinR
     """
     if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    value_str, signed = args[0].value, args[1].value
-    if isinstance(value_str, (int, float)):
-        value_str = str(value_str)
-    if not isinstance(value_str, str):
+    value, signed = args[0].value, args[1].value
+    if not (isinstance(value, (str, float)) or is_cobol_number(value)):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if not signed:
         return BuiltinResult(value=ByteConstants.SIGN_NIBBLE_UNSIGNED)
-    negative = value_str.startswith("-")
-    clean = value_str.lstrip("+-").replace(".", "")
-    has_nonzero = any(ch != "0" for ch in clean if ch.isdigit())
-    if negative and has_nonzero:
+
+    from interpreter.cobol.pic_scale import encode_digits
+
+    negative, _ = encode_digits(value, 1, 0, 0)
+    if negative:
         return BuiltinResult(value=ByteConstants.SIGN_NIBBLE_NEGATIVE)
     return BuiltinResult(value=ByteConstants.SIGN_NIBBLE_POSITIVE)
 
@@ -1999,5 +1937,6 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.DATE_TO_YYYYMMDD): _builtin_date_to_yyyymmdd,
         FuncName(BuiltinName.DAY_TO_YYYYDDD): _builtin_day_to_yyyyddd,
         FuncName(BuiltinName.YEAR_TO_YYYY): _builtin_year_to_yyyy,
+        **NUMERIC_BUILTINS,
     }
 )
