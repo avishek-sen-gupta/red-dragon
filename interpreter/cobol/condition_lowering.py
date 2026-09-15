@@ -5,6 +5,11 @@ from __future__ import annotations
 import logging
 from functools import reduce
 
+from interpreter.cobol.arithmetic_scale import (
+    expression_is_floating,
+    node_scale,
+    operand_dmax,
+)
 from interpreter.cobol.cobol_constants import BuiltinName
 from cobol_asg.cobol_expression import (
     BinOpNode,
@@ -957,56 +962,80 @@ def _lower_condition_str(
     return result
 
 
-def lower_expr_node(
+_EXACT_OPERATORS = {
+    "+": BuiltinName.COBOL_ADD,
+    "-": BuiltinName.COBOL_SUBTRACT,
+    "*": BuiltinName.COBOL_MULTIPLY,
+    "/": BuiltinName.COBOL_DIVIDE,
+}
+
+
+def _float_operand(ctx: EmitContext, reg: Register, floating: bool) -> Register:
+    if not floating:
+        return reg
+    converted = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=converted,
+            func_name=FuncName(BuiltinName.COBOL_TO_FLOAT),
+            args=(Register(str(reg)),),
+        )
+    )
+    return converted
+
+
+def _lower_expr_node_body(
     ctx: EmitContext,
     node: ExprNode,
     materialised: MaterialisedSectionedLayout,
-    force_division_float: bool = False,
+    dmax: int,
+    floating: bool,
+    field_types,
 ) -> Register:
     """Walk an expression tree node and emit IR. Returns result register.
 
-    ``force_division_float`` controls division typing. COBOL integer division
-    truncates (int/int -> int), which the common mod idiom ``A - (A / B) * B``
-    relies on; the VM's ``_coerce_typed_register`` delivers that when both
-    operands are Int. Only when the result feeds a ROUNDED target must the
-    fraction survive division so ``__cobol_round`` can round it — callers set
-    this flag then. Forcing it unconditionally corrupts integer division
-    (2023 / 4 * 4 -> 2023.0 instead of 2020; red-dragon-apoq).
+    Fixed-point ``BinOpNode``s lower to an exact ``cobol_numeric`` builtin
+    truncating to the statically carried decimal places (``node_scale``); a
+    floating expression lowers to an ordinary ``Binop`` on IEEE floats, with
+    every leaf operand converted through ``__cobol_to_float`` first.
     """
     if isinstance(node, LiteralNode):
-        return ctx.const_to_reg(ctx.parse_literal(node.value))
+        reg = ctx.const_to_reg(ctx.parse_literal(node.value))
+        return _float_operand(ctx, reg, floating)
     if isinstance(node, FieldRefNode):
         if ctx.has_field(node.name, materialised):
             ref, rr = ctx.resolve_field_ref(
                 node.name, materialised, subscripts=node.subscripts
             )
-            return ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
-        return _unresolvable_operand(ctx, node.name)
+            reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
+            return _float_operand(ctx, reg, floating)
+        return _float_operand(ctx, _unresolvable_operand(ctx, node.name), floating)
     if isinstance(node, BinOpNode):
-        left_reg = lower_expr_node(ctx, node.left, materialised, force_division_float)
-        right_reg = lower_expr_node(ctx, node.right, materialised, force_division_float)
-        # Preserve the division fraction only for a ROUNDED result (see the
-        # force_division_float docstring): force the right operand to float so the
-        # division is typed Int/Float=Float rather than Int/Int=Int, keeping
-        # 1.666… intact for __cobol_round. Non-ROUNDED division stays integer
-        # (COBOL truncation), so the mod idiom works (red-dragon-apoq).
-        if node.op == "/" and force_division_float:
-            float_right_reg = ctx.fresh_reg()
+        left_reg = _lower_expr_node_body(
+            ctx, node.left, materialised, dmax, floating, field_types
+        )
+        right_reg = _lower_expr_node_body(
+            ctx, node.right, materialised, dmax, floating, field_types
+        )
+        result_reg = ctx.fresh_reg()
+        if floating:
             ctx.emit_inst(
-                CallFunction(
-                    result_reg=float_right_reg,
-                    func_name=FuncName("float"),
-                    args=(Register(str(right_reg)),),
+                Binop(
+                    result_reg=result_reg,
+                    operator=resolve_binop(node.op),
+                    left=Register(str(left_reg)),
+                    right=Register(str(right_reg)),
                 )
             )
-            right_reg = float_right_reg
-        result_reg = ctx.fresh_reg()
+            return result_reg
+        decimals_reg = ctx.const_to_reg(
+            node_scale(node, dmax, field_types).decimal_places
+        )
         ctx.emit_inst(
-            Binop(
+            CallFunction(
                 result_reg=result_reg,
-                operator=resolve_binop(node.op),
-                left=Register(str(left_reg)),
-                right=Register(str(right_reg)),
+                func_name=FuncName(_EXACT_OPERATORS[node.op]),
+                args=(Register(str(left_reg)), Register(str(right_reg)), decimals_reg),
             )
         )
         return result_reg
@@ -1044,16 +1073,16 @@ def lower_expr_node(
                 ),
             )
         )
-        # Convert string slice result back to float for arithmetic operations
+        # Parse the sliced text as an exact number
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=result_reg,
-                func_name=FuncName("float"),
+                func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                 args=(Register(str(sliced_reg)),),
             )
         )
-        return result_reg
+        return _float_operand(ctx, result_reg, floating)
     if isinstance(node, FunctionNode):
         # Intrinsic FUNCTION call as an expression/relation operand (e.g.
         # FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B), or COMPUTE X =
@@ -1076,7 +1105,8 @@ def lower_expr_node(
                 "Unsupported COBOL intrinsic FUNCTION %r — falling back to first argument",
                 node.name,
             )
-            return arg_regs[0] if arg_regs else ctx.const_to_reg("")
+            result_reg = arg_regs[0] if arg_regs else ctx.const_to_reg("")
+            return _float_operand(ctx, result_reg, floating)
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
@@ -1085,18 +1115,20 @@ def lower_expr_node(
                 args=arg_regs,
             )
         )
-        return result_reg
+        return _float_operand(ctx, result_reg, floating)
     if isinstance(node, FigurativeNode):
-        return _lower_figurative_operand(ctx, node)
+        return _float_operand(ctx, _lower_figurative_operand(ctx, node), floating)
     if isinstance(node, LengthOfNode):
         # LENGTH OF <field> is the field's byte length, a compile-time constant
         # and NOT a decode of its value -- the same reading eval_ref_mod_expr
         # gives it inside a ref-mod subscript (red-dragon-oq2c).
         if ctx.has_field(node.name, materialised):
             field_ref, _ = ctx.resolve_field_ref(node.name, materialised)
-            return ctx.const_to_reg(field_ref.fl.byte_length)
+            return _float_operand(
+                ctx, ctx.const_to_reg(field_ref.fl.byte_length), floating
+            )
         logger.warning("LENGTH OF unknown field %s -> 0", node.name)
-        return ctx.const_to_reg(0)
+        return _float_operand(ctx, ctx.const_to_reg(0), floating)
     if isinstance(node, DfhRespNode):
         # DFHRESP(<cond>) never reaches lowering when CICS is configured: the
         # condition's number is release-dependent, so the bridge keeps the name
@@ -1110,7 +1142,35 @@ def lower_expr_node(
             f"the CICS coprocessor, which resolves DFHRESP to its response code."
         )
     logger.warning("Unknown expression node type: %s", type(node).__name__)
-    return ctx.const_to_reg(0)
+    return _float_operand(ctx, ctx.const_to_reg(0), floating)
+
+
+def lower_expr_node(
+    ctx: EmitContext,
+    node: ExprNode,
+    materialised: MaterialisedSectionedLayout,
+    receiver_decimals: int = 0,
+    floating_receiver: bool = False,
+) -> Register:
+    """Walk an expression tree and emit IR. Returns the result register.
+
+    Fixed-point expressions follow IBM ARITH(COMPAT): each operator lowers to an
+    exact cobol_numeric builtin truncating to its statically carried decimal
+    places, with dmax the larger of ``receiver_decimals`` and the non-divisor
+    operand decimals. Integer-only division therefore truncates (the mod idiom
+    ``A - (A / B) * B``, red-dragon-apoq) while receivers with decimal places
+    keep the fraction. An expression with a COMP-1/COMP-2 operand or receiver,
+    or a floating intrinsic, is computed in IEEE floating point.
+    """
+
+    def field_types(name: str):
+        if not ctx.has_field(name, materialised):
+            return None
+        return materialised.resolve(name)[0].type_descriptor
+
+    floating = floating_receiver or expression_is_floating(node, field_types)
+    dmax = max(receiver_decimals, operand_dmax(node, field_types))
+    return _lower_expr_node_body(ctx, node, materialised, dmax, floating, field_types)
 
 
 def _lower_figurative_operand(ctx: EmitContext, node: FigurativeNode) -> Register:

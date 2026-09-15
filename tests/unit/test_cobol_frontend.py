@@ -724,15 +724,21 @@ class TestComputeLowering:
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        # The WRITE_REGION for the target comes after expr evaluation.
-        # The expression BINOPs (the last 2 before the str conversion) should be * then +.
-        # Extract the last 2 BINOPs with arithmetic operators before the final CALL_FUNCTION "str".
-        all_binops = _find_opcodes(instructions, Opcode.BINOP)
+        # Fixed-point COMPUTE arithmetic no longer lowers to Opcode.BINOP: each
+        # operator calls the matching cobol_numeric exact boundary builtin
+        # (ADR-148 / red-dragon-4q25.1). The WRITE_REGION for the target comes
+        # after expr evaluation; the expression's CALL_FUNCTIONs (the last 2
+        # exact-arithmetic calls) should be __cobol_multiply then __cobol_add.
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         arith_ops = [
-            b.operands[0] for b in all_binops if b.operands[0] in ("+", "-", "*", "/")
+            c.operands[0]
+            for c in calls
+            if c.operands
+            and c.operands[0]
+            in ("__cobol_add", "__cobol_subtract", "__cobol_multiply", "__cobol_divide")
         ]
-        # Last two arithmetic BINOPs are from the expression: * (higher prec) then +
-        assert arith_ops[-2:] == ["*", "+"]
+        # Last two exact-arithmetic calls are from the expression: * (higher prec) then +
+        assert arith_ops[-2:] == ["__cobol_multiply", "__cobol_add"]
 
     @covers(
         CobolFeature.COMPUTE,
@@ -771,13 +777,20 @@ class TestComputeLowering:
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        # The expression BINOPs should be + then * (parentheses override precedence)
-        all_binops = _find_opcodes(instructions, Opcode.BINOP)
+        # Fixed-point COMPUTE arithmetic no longer lowers to Opcode.BINOP: each
+        # operator calls the matching cobol_numeric exact boundary builtin
+        # (ADR-148 / red-dragon-4q25.1). The expression's CALL_FUNCTIONs should
+        # be __cobol_add then __cobol_multiply (parentheses override precedence).
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         arith_ops = [
-            b.operands[0] for b in all_binops if b.operands[0] in ("+", "-", "*", "/")
+            c.operands[0]
+            for c in calls
+            if c.operands
+            and c.operands[0]
+            in ("__cobol_add", "__cobol_subtract", "__cobol_multiply", "__cobol_divide")
         ]
-        # Last two arithmetic BINOPs: + (inside parens, evaluated first) then *
-        assert arith_ops[-2:] == ["+", "*"]
+        # Last two exact-arithmetic calls: + (inside parens, evaluated first) then *
+        assert arith_ops[-2:] == ["__cobol_add", "__cobol_multiply"]
 
     @covers(
         CobolFeature.COMPUTE,
@@ -853,9 +866,11 @@ class TestComputeLowering:
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        binops = _find_opcodes(instructions, Opcode.BINOP)
-        add_ops = [b for b in binops if b.operands[0] == "+"]
-        assert len(add_ops) >= 1
+        # Fixed-point COMPUTE arithmetic no longer lowers to Opcode.BINOP: "+"
+        # calls the __cobol_add exact boundary builtin (ADR-148 / red-dragon-4q25.1).
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        add_calls = [c for c in calls if c.operands and c.operands[0] == "__cobol_add"]
+        assert len(add_calls) >= 1
 
 
 class TestPerformLoopLowering:

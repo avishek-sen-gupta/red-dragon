@@ -6,12 +6,12 @@ results to the reference Python implementations when executed through the VM.
 
 from typing import Any
 
-import pytest
-
+from cobol_numeric.number import from_literal
 from interpreter.cobol.alphanumeric import decode_alphanumeric, encode_alphanumeric
 from interpreter.cobol.binary import decode_binary, encode_binary
 from interpreter.cobol.comp3 import decode_comp3, encode_comp3
 from interpreter.cobol.data_filters import align_decimal, left_adjust
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.float_encoding import (
     decode_comp1,
     decode_comp2,
@@ -45,6 +45,7 @@ from interpreter.vm.executor import (
 )
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame
+from tests.covers import covers
 
 
 def _execute_ir(instructions: list[InstructionBase], registers: dict[str, Any]) -> Any:
@@ -168,8 +169,10 @@ class TestDecodeZonedIR:
         assert self._run_decode(data, 5, 0) == decode_zoned(data, 0)
 
     def test_with_decimal(self):
+        """Exact CobolNumber now (red-dragon-4q25.1); decode_zoned's float is not
+        comparable to it directly."""
         data = bytes([0xF1, 0xF2, 0xF3, 0xF4, 0xF5])
-        assert self._run_decode(data, 5, 2) == decode_zoned(data, 2)
+        assert self._run_decode(data, 5, 2) == from_literal("123.45")
 
     def test_signed_negative(self):
         data = bytes([0xF1, 0xF2, 0xF3, 0xF4, 0xD5])
@@ -263,8 +266,10 @@ class TestDecodeComp3IR:
         assert self._run_decode(data, 5, 0) == decode_comp3(data, 0)
 
     def test_with_decimal(self):
+        """Exact CobolNumber now (red-dragon-4q25.1); decode_comp3's float is not
+        comparable to it directly."""
         data = bytes([0x12, 0x34, 0x5F])
-        assert self._run_decode(data, 5, 2) == decode_comp3(data, 2)
+        assert self._run_decode(data, 5, 2) == from_literal("123.45")
 
 
 class TestComp3RoundTripIR:
@@ -428,10 +433,10 @@ class TestDecodeBinaryIR:
         )
 
     def test_with_decimal(self):
+        """Exact CobolNumber now (red-dragon-4q25.1); decode_binary's float is not
+        comparable to it directly."""
         data = (12345).to_bytes(4, "big", signed=False)
-        assert self._run_decode(data, 4, 2, signed=False) == decode_binary(
-            data, 2, signed=False
-        )
+        assert self._run_decode(data, 4, 2, signed=False) == from_literal("123.45")
 
 
 class TestBinaryRoundTripIR:
@@ -685,7 +690,7 @@ class TestDecodeZonedSeparateIR:
             "dec_zs", total_digits=4, decimal_digits=2, sign_leading=False
         )
         result = _execute_ir(ir, {"%p_data": data})
-        assert result == -12.34
+        assert result == from_literal("-12.34")
 
 
 class TestZonedSeparateRoundTripIR:
@@ -765,8 +770,10 @@ class TestEncodeAlphanumericJustifiedIR:
 class TestIntegerFieldsDecodeToInt:
     """Integer COBOL fields (decimal_digits == 0) must decode to Python int,
     not float — converting to float silently corrupts integers beyond 2^53
-    (e.g. PIC 9(18)). Decimal fields (decimal_digits > 0) stay float."""
+    (e.g. PIC 9(18)). Decimal fields (decimal_digits > 0) decode to an exact
+    CobolNumber (red-dragon-4q25.1)."""
 
+    @covers(CobolFeature.NUMERIC_EXECUTION)
     def test_zoned_integer_returns_int(self):
         data = [0xF1, 0xF2, 0xF3, 0xF4, 0xF5]  # zoned 12345
         ir = build_decode_zoned_ir("z", total_digits=5, decimal_digits=0)
@@ -774,13 +781,30 @@ class TestIntegerFieldsDecodeToInt:
         assert result == 12345
         assert isinstance(result, int)
 
-    def test_zoned_decimal_still_float(self):
+    @covers(CobolFeature.NUMERIC_EXECUTION)
+    def test_zoned_decimal_decodes_exactly(self):
         data = [0xF1, 0xF2, 0xF3, 0xF4, 0xF5]
         ir = build_decode_zoned_ir("z", total_digits=5, decimal_digits=2)
         result = _execute_ir(ir, {"%p_data": data})
-        assert isinstance(result, float)
-        assert result == pytest.approx(123.45)
+        assert not isinstance(result, float)
+        assert result == from_literal("123.45")
 
+    @covers(CobolFeature.NUMERIC_EXECUTION)
+    def test_binary_decimal_decodes_exactly(self):
+        """red-dragon-0dvs: the int divisor floor-divided COMP fractions away."""
+        data = list((12345).to_bytes(4, "big", signed=True))
+        ir = build_decode_binary_ir("bin", byte_count=4, decimal_digits=2, signed=True)
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == from_literal("123.45")
+
+    @covers(CobolFeature.NUMERIC_EXECUTION)
+    def test_comp3_negative_decimal_decodes_exactly(self):
+        data = [0x12, 0x34, 0x5D]  # packed -123.45
+        ir = build_decode_comp3_ir("c3", total_digits=5, decimal_digits=2)
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == from_literal("-123.45")
+
+    @covers(CobolFeature.NUMERIC_EXECUTION)
     def test_zoned_separate_integer_returns_int(self):
         data = [0xF1, 0xF2, 0xF3, 0x4E]  # digits 1-2-3 followed by EBCDIC '+' (0x4E)
         ir = build_decode_zoned_separate_ir(
@@ -790,6 +814,7 @@ class TestIntegerFieldsDecodeToInt:
         assert result == 123
         assert isinstance(result, int)
 
+    @covers(CobolFeature.NUMERIC_EXECUTION)
     def test_comp3_integer_returns_int(self):
         data = [0x12, 0x34, 0x5F]  # packed 12345, positive
         ir = build_decode_comp3_ir("c3", total_digits=5, decimal_digits=0)
@@ -797,6 +822,7 @@ class TestIntegerFieldsDecodeToInt:
         assert result == 12345
         assert isinstance(result, int)
 
+    @covers(CobolFeature.NUMERIC_EXECUTION)
     def test_binary_integer_returns_int(self):
         data = list((1234).to_bytes(2, "big", signed=False))
         ir = build_decode_binary_ir("bin", byte_count=2, decimal_digits=0, signed=False)
@@ -804,6 +830,7 @@ class TestIntegerFieldsDecodeToInt:
         assert result == 1234
         assert isinstance(result, int)
 
+    @covers(CobolFeature.NUMERIC_EXECUTION)
     def test_large_zoned_integer_exact(self):
         """18-digit value must be exact — the failure mode that motivated this."""
         data = [0xF0 | int(ch) for ch in "123456789012345678"]

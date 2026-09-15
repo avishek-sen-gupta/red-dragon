@@ -32,6 +32,7 @@ DEFAULT_TYPE_NODES: tuple[TypeNode, ...] = (
     TypeNode(name=FoundationTypeName.ARRAY, parents=(FoundationTypeName.ANY,)),
     TypeNode(name=FoundationTypeName.INT, parents=(FoundationTypeName.NUMBER,)),
     TypeNode(name=FoundationTypeName.FLOAT, parents=(FoundationTypeName.NUMBER,)),
+    TypeNode(name=FoundationTypeName.DECIMAL, parents=(FoundationTypeName.NUMBER,)),
     TypeNode(name=FoundationTypeName.POINTER, parents=(FoundationTypeName.ANY,)),
     TypeNode(name=FoundationTypeName.MAP, parents=(FoundationTypeName.ANY,)),
     TypeNode(name=FoundationTypeName.TUPLE, parents=(FoundationTypeName.ANY,)),

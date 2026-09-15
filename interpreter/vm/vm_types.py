@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from cobol_numeric.number import is_cobol_number, to_plain_str
 from interpreter.address import Address
 from interpreter.closure_id import NO_CLOSURE_ID, ClosureId
 from interpreter.constants import FoundationTypeName
@@ -139,6 +140,8 @@ def _serialize_value(v: Any) -> Any:
         return v.to_dict()
     if isinstance(v, Pointer):
         return {"__pointer__": True, "base": str(v.base), "offset": v.offset}
+    if is_cobol_number(v) and not isinstance(v, int):
+        return to_plain_str(v)
     return v
 
 

@@ -966,21 +966,28 @@ class TestRelationArithmeticOperators:
         assert self._cmp("WS-A / 2 = 5") == "YES"
 
 
-# ── red-dragon-apoq / red-dragon-vaxz: COMPUTE division semantics ─────────────
-# COBOL COMPUTE uses full-precision intermediate arithmetic.  Division fractions
-# survive within the expression; integer truncation happens only at the final
-# store to the target field.  red-dragon-vaxz: without float division, the
-# expression ``1 / (1 + R) ** N`` evaluates to 0 because _coerce_typed_register
-# truncates the float result to int.
+# ── red-dragon-apoq / red-dragon-vaxz / red-dragon-4q25.1: division semantics ──
+# COMPUTE follows IBM ARITH(COMPAT): a quotient carries max(d2 - d1, dmax)
+# decimal places, where dmax is the largest of the receiver's decimal places
+# (plus one for ROUNDED) and any non-divisor operand's.  Integer operands with
+# an integer receiver therefore truncate mid-expression, which is what the mod
+# idiom A - (A / B) * B relies on (red-dragon-apoq), while a receiver with
+# decimal places keeps the fraction — which is how red-dragon-vaxz's
+# ``1 / (1 + R) ** N`` into PIC 9V9(8) computes correctly, without forcing every
+# division to float.  See ADR-149.
 
 
 class TestIntegerDivisionSemantics:
     @covers(CobolFeature.COMPUTE)
-    def test_mod_idiom_full_precision(self):
-        """COMPUTE WS-R = WS-Y - (WS-Y / 4 * 4) with full-precision intermediate
-        arithmetic: 2023/4=505.75, *4=2023.0, 2023-2023=0 → stored in PIC 9(4)
-        as 0.  The 'mod 4' result is 0 under COBOL COMPUTE semantics (use DIVIDE
-        ... REMAINDER for integer mod).  red-dragon-vaxz supersedes red-dragon-apoq."""
+    def test_mod_idiom_integer_division_truncates(self):
+        """COMPUTE WS-R = WS-Y - (WS-Y / 4 * 4) is the COBOL 'WS-Y mod 4' idiom.
+
+        Every operand and the receiver are integers, so IBM's dmax is 0 and the
+        quotient carries no decimal places: 2023/4=505 (truncated), *4=2020,
+        2023-2020=3 (red-dragon-apoq).  red-dragon-vaxz's own case is not
+        affected — its receiver (PIC 9V9(8)) sets dmax to 8, so that division
+        keeps its fraction; see test_division_in_power_expression_preserves_fraction
+        and ADR-149."""
         vm = _run(
             [
                 "IDENTIFICATION DIVISION.",
@@ -995,8 +1002,8 @@ class TestIntegerDivisionSemantics:
                 "    STOP RUN.",
             ]
         )
-        # Full-precision: 2023 / 4.0 = 505.75, * 4 = 2023.0, 2023 - 2023 = 0.
-        assert _decode(_first_region(vm), 4, 4) == 0
+        # IBM dmax = 0: 2023 / 4 = 505 (truncated), * 4 = 2020, 2023 - 2020 = 3.
+        assert _decode(_first_region(vm), 4, 4) == 3
 
     @covers(CobolFeature.COMPUTE, CobolFeature.ROUNDED_CLAUSE)
     def test_rounded_division_still_rounds(self):

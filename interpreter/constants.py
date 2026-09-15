@@ -84,6 +84,7 @@ class FoundationTypeName:
     NUMBER = TypeName("Number")
     INT = TypeName("Int")
     FLOAT = TypeName("Float")
+    DECIMAL = TypeName("Decimal")
     STRING = TypeName("String")
     BOOL = TypeName("Bool")
     OBJECT = TypeName("Object")

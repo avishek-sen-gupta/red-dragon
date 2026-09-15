@@ -501,6 +501,16 @@ class TestByteBuiltinsRegistration:
             "__date_to_yyyymmdd",
             "__day_to_yyyyddd",
             "__year_to_yyyy",
+            "__cobol_to_text",
+            "__cobol_add",
+            "__cobol_subtract",
+            "__cobol_multiply",
+            "__cobol_divide",
+            "__cobol_to_float",
+            "__cobol_from_digits",
+            "__cobol_scale_by",
+            "__cobol_parse_number",
+            "__cobol_binary_unscaled",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:
@@ -3414,7 +3424,7 @@ class TestPresentValue:
         result = _builtin_present_value(
             [typed_from_runtime("0.10"), typed_from_runtime(110)], None
         ).value
-        assert math.isclose(float(result), 100.0, rel_tol=1e-9)
+        assert result == 100
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_no_cashflows_uncomputable(self):

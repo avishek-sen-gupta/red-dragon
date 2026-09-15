@@ -238,7 +238,7 @@ Conditions are serialized by the Java bridge as recursive JSON trees (not raw so
 
 ## Known Gaps
 
-- **All arithmetic routes through Python `float`** for decimal/fixed-point fields, not true fixed-point/decimal arithmetic (red-dragon-4q25.1, P0 — the largest remaining gap).
+- **Exponentiation (`**`) is not parsed or lowered** (red-dragon-wxur). Fixed-point arithmetic itself is exact: values, IBM `ARITH(COMPAT)` intermediate scales and every conversion live behind the `cobol_numeric` boundary (ADR-148, ADR-149), and only COMP-1/COMP-2 fields and floating intrinsics use IEEE floats.
 - **SORT/MERGE/RELEASE/RETURN are entirely unlowered** (red-dragon-429q).
 - **CANCEL is a no-op** — doesn't reset the cancelled subprogram's WORKING-STORAGE on next CALL (red-dragon-8dpn).
 - **BY REFERENCE parameter writes are lost if the callee halts via STOP RUN** instead of returning normally — a direct consequence of the STOP RUN/`Halt_` fix above: caller-emitted copy-back IR for `CALL ... USING BY REFERENCE` only runs on normal return (`Return_`), never on `Halt_` (red-dragon-zerg).

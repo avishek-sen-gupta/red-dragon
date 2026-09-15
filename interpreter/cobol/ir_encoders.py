@@ -67,6 +67,28 @@ def _lit(rc: _RegCounter, instructions: list[InstructionBase], value: Any) -> Re
     return reg
 
 
+def _scale_decoded(
+    rc: _RegCounter,
+    instructions: list[InstructionBase],
+    digits_reg: Register,
+    decimal_digits: int,
+) -> Register:
+    """Apply implied decimal places to the signed integer digits, exactly
+    (red-dragon-4q25.1). Integer fields keep their int."""
+    if decimal_digits == 0:
+        return digits_reg
+    decimals_reg = _lit(rc, instructions, decimal_digits)
+    scaled = rc.next()
+    instructions.append(
+        CallFunction(
+            result_reg=scaled,
+            func_name=FuncName(BuiltinName.COBOL_FROM_DIGITS),
+            args=(digits_reg, decimals_reg),
+        )
+    )
+    return scaled
+
+
 def _encode_digit_step(
     rc: _RegCounter,
     source_list: Register,
@@ -317,7 +339,7 @@ def build_decode_zoned_ir(
     """Generate IR for zoned decimal decoding (embedded sign).
 
     Inputs: %p_data (list[int] of bytes)
-    Output: int when decimal_digits == 0, else float
+    Output: int when decimal_digits == 0, else CobolNumber
 
     When sign_leading=True, sign nibble is extracted from byte 0.
     Otherwise (default), sign nibble is extracted from the last byte.
@@ -337,28 +359,6 @@ def build_decode_zoned_ir(
         (accum, []),
     )
     instructions.extend(decode_instructions)
-
-    # Apply decimal scaling
-    if decimal_digits > 0:
-        # Use a float divisor so the division types as Float → Int (accumulated
-        # digits) / Float (divisor) = Float.  DefaultTypeConversionRules.resolve
-        # maps (Int, Int) / → result_type=Int with operator_override="//", which
-        # causes _coerce_typed_register to truncate the runtime float back to int
-        # (e.g. 1234.56 → 1234).  A float divisor avoids that path entirely.
-        divisor = float(10**decimal_digits)
-        scaled = rc.next()
-        divisor_reg = _lit(rc, instructions, divisor)
-        instructions.append(
-            Binop(
-                result_reg=scaled,
-                operator=resolve_binop("/"),
-                left=accum,
-                right=divisor_reg,
-            )
-        )
-        accum = scaled
-    # Integer field (decimal_digits == 0): keep accum as int. Converting to
-    # float silently corrupts integers beyond 2^53 (e.g. PIC 9(18)).
 
     # Extract sign from the sign byte's high nibble
     sign_byte = rc.next()
@@ -429,7 +429,11 @@ def build_decode_zoned_ir(
         )
     )
 
-    instructions.append(Return_(value_reg=final_result))
+    instructions.append(
+        Return_(
+            value_reg=_scale_decoded(rc, instructions, final_result, decimal_digits)
+        )
+    )
 
     return instructions
 
@@ -576,7 +580,7 @@ def build_decode_zoned_separate_ir(
     """Generate IR for zoned decimal decoding with SEPARATE sign character.
 
     Inputs: %p_data (list[int] of bytes, length = total_digits + 1)
-    Output: int when decimal_digits == 0, else float
+    Output: int when decimal_digits == 0, else CobolNumber
 
     sign_leading=True: byte 0 is the sign, bytes 1..N are digits.
     sign_leading=False: bytes 0..N-1 are digits, byte N is the sign.
@@ -616,24 +620,6 @@ def build_decode_zoned_separate_ir(
         (accum, []),
     )
     instructions.extend(decode_instructions)
-
-    # Apply decimal scaling
-    if decimal_digits > 0:
-        # Use a float divisor so the division types as Float — see the same fix
-        # in build_decode_zoned_ir for the full rationale.
-        divisor = float(10**decimal_digits)
-        scaled = rc.next()
-        divisor_reg = _lit(rc, instructions, divisor)
-        instructions.append(
-            Binop(
-                result_reg=scaled,
-                operator=resolve_binop("/"),
-                left=accum,
-                right=divisor_reg,
-            )
-        )
-        accum = scaled
-    # Integer field (decimal_digits == 0): keep accum as int (see build_decode_zoned_ir).
 
     # Apply sign: 0x60 = negative
     is_neg = rc.next()
@@ -676,7 +662,11 @@ def build_decode_zoned_separate_ir(
         )
     )
 
-    instructions.append(Return_(value_reg=final_result))
+    instructions.append(
+        Return_(
+            value_reg=_scale_decoded(rc, instructions, final_result, decimal_digits)
+        )
+    )
     return instructions
 
 
@@ -860,7 +850,7 @@ def build_decode_comp3_ir(
     """Generate IR for COMP-3 packed BCD decoding.
 
     Inputs: %p_data (list[int] of bytes)
-    Output: int when decimal_digits == 0, else float
+    Output: int when decimal_digits == 0, else CobolNumber
     """
     rc = _RegCounter(func_name)
     instructions: list[InstructionBase] = []
@@ -955,24 +945,6 @@ def build_decode_comp3_ir(
     )
     instructions.extend(accum_instructions)
 
-    # Apply decimal scaling
-    if decimal_digits > 0:
-        # Use a float divisor so the division types as Float — see the same fix
-        # in build_decode_zoned_ir for the full rationale.
-        divisor = float(10**decimal_digits)
-        scaled = rc.next()
-        divisor_reg = _lit(rc, instructions, divisor)
-        instructions.append(
-            Binop(
-                result_reg=scaled,
-                operator=resolve_binop("/"),
-                left=accum,
-                right=divisor_reg,
-            )
-        )
-        accum = scaled
-    # Integer field (decimal_digits == 0): keep accum as int (see build_decode_zoned_ir).
-
     # Apply sign: sign_nibble == 0xD → negative
     is_neg = rc.next()
     neg_const = _lit(rc, instructions, ByteConstants.SIGN_NIBBLE_NEGATIVE)
@@ -1014,7 +986,11 @@ def build_decode_comp3_ir(
         )
     )
 
-    instructions.append(Return_(value_reg=final_result))
+    instructions.append(
+        Return_(
+            value_reg=_scale_decoded(rc, instructions, final_result, decimal_digits)
+        )
+    )
 
     return instructions
 
@@ -1113,7 +1089,7 @@ def build_decode_binary_ir(
     """Generate IR for COMP/BINARY decoding.
 
     Inputs: %p_data (list[int] of bytes)
-    Output: int when decimal_digits == 0, else float
+    Output: int when decimal_digits == 0, else CobolNumber
     """
     rc = _RegCounter(func_name)
     instructions: list[InstructionBase] = []
@@ -1133,23 +1109,9 @@ def build_decode_binary_ir(
         )
     )
 
-    # Apply decimal scaling
-    if decimal_digits > 0:
-        divisor = 10**decimal_digits
-        scaled = rc.next()
-        divisor_reg = _lit(rc, instructions, divisor)
-        instructions.append(
-            Binop(
-                result_reg=scaled,
-                operator=resolve_binop("/"),
-                left=int_val,
-                right=divisor_reg,
-            )
-        )
-        int_val = scaled
-    # Integer field (decimal_digits == 0): keep int_val as int (see build_decode_zoned_ir).
-
-    instructions.append(Return_(value_reg=int_val))
+    instructions.append(
+        Return_(value_reg=_scale_decoded(rc, instructions, int_val, decimal_digits))
+    )
     return instructions
 
 
