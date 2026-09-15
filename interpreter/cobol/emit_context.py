@@ -1257,4 +1257,12 @@ class EmitContext:
             return from_literal(stripped)
         except ValueError:
             pass
+        # COBOL floating-point literal (1.5E3): not a fixed-point value, so it
+        # stays an IEEE float and makes its whole expression floating —
+        # arithmetic_scale.expression_is_floating recognises the same form.
+        if "e" in stripped.lower():
+            try:
+                return float(stripped)
+            except ValueError:
+                pass
         return stripped
