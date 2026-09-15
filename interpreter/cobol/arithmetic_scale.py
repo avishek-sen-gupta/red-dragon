@@ -116,10 +116,29 @@ def _numeric_literal_scale(text: str) -> Scale | None:
     return literal_scale(text)
 
 
+def is_floating_literal(text: str) -> bool:
+    """A COBOL floating-point literal (``1.5E3``): exponent form, not fixed-point."""
+    if "e" not in text.lower():
+        return False
+    try:
+        from_literal(text)
+    except ValueError:
+        pass
+    else:
+        return False
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
+
+
 def expression_is_floating(node: ExprNode, field_types: FieldTypes) -> bool:
     if isinstance(node, (FieldRefNode, RefModNode)):
         td = field_types(node.name)
         return td is not None and is_floating_type(td)
+    if isinstance(node, LiteralNode):
+        return is_floating_literal(node.value)
     if isinstance(node, BinOpNode):
         return expression_is_floating(node.left, field_types) or expression_is_floating(
             node.right, field_types
