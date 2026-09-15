@@ -901,13 +901,13 @@ def _emit_arithmetic_writeback(
         else:
             tgt_length_reg = ctx.const_to_reg(999999)
 
-        # Normalise float arithmetic results (e.g. 15.0) → int → zero-padded
+        # Parse the text as an exact number, then normalise → int → zero-padded
         # string ('015') before splicing to fill the exact ref-mod width.
         float_norm = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=float_norm,
-                func_name=FuncName("float"),
+                func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                 args=(result_str_reg,),
             )
         )
@@ -1025,18 +1025,18 @@ def lower_arithmetic(
                 )
             )
 
-            # Convert back to float for arithmetic
+            # Parse the text as an exact number for arithmetic
             src_decoded = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
                     result_reg=src_decoded,
-                    func_name=FuncName("float"),
+                    func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                     args=(sliced_reg,),
                 )
             )
     else:
         src_decoded = ctx.const_to_reg(
-            float(translate_cobol_figurative(stmt.source.name))
+            ctx.parse_literal(translate_cobol_figurative(stmt.source.name))
         )
 
     tgt_decoded = ctx.emit_decode_field(
@@ -1211,19 +1211,21 @@ def lower_arithmetic_giving(
                     )
                 )
 
-                # Convert result back to float
+                # Parse the sliced text as an exact number
                 result = ctx.fresh_reg()
                 ctx.emit_inst(
                     CallFunction(
                         result_reg=result,
-                        func_name=FuncName("float"),
+                        func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                         args=(sliced,),
                     )
                 )
                 return result
 
             return decoded
-        return ctx.const_to_reg(float(translate_cobol_figurative(field_name)))
+        return ctx.const_to_reg(
+            ctx.parse_literal(translate_cobol_figurative(field_name))
+        )
 
     left_reg = _decode_operand(stmt.source)
     right_reg = _decode_operand(stmt.target)
