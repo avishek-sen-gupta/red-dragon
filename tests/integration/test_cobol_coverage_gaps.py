@@ -966,16 +966,21 @@ class TestRelationArithmeticOperators:
         assert self._cmp("WS-A / 2 = 5") == "YES"
 
 
-# ── red-dragon-apoq: ROUNDED must not force integer division to float ──────────
-# COBOL integer division truncates; the mod idiom A - (A / B) * B relies on it.
+# ── red-dragon-apoq / red-dragon-vaxz: COMPUTE division semantics ─────────────
+# COBOL COMPUTE uses full-precision intermediate arithmetic.  Division fractions
+# survive within the expression; integer truncation happens only at the final
+# store to the target field.  red-dragon-vaxz: without float division, the
+# expression ``1 / (1 + R) ** N`` evaluates to 0 because _coerce_typed_register
+# truncates the float result to int.
 
 
 class TestIntegerDivisionSemantics:
     @covers(CobolFeature.COMPUTE)
-    def test_mod_idiom_integer_division_truncates(self):
-        """WS-Y - (WS-Y / 4 * 4) is the COBOL 'WS-Y mod 4' idiom: 2023/4=505
-        (truncated), *4=2020, 2023-2020=3. red-dragon-apoq: the ROUNDED work
-        forced ALL division to float (505.75*4=2023 -> 0), breaking this."""
+    def test_mod_idiom_full_precision(self):
+        """COMPUTE WS-R = WS-Y - (WS-Y / 4 * 4) with full-precision intermediate
+        arithmetic: 2023/4=505.75, *4=2023.0, 2023-2023=0 → stored in PIC 9(4)
+        as 0.  The 'mod 4' result is 0 under COBOL COMPUTE semantics (use DIVIDE
+        ... REMAINDER for integer mod).  red-dragon-vaxz supersedes red-dragon-apoq."""
         vm = _run(
             [
                 "IDENTIFICATION DIVISION.",
@@ -990,13 +995,13 @@ class TestIntegerDivisionSemantics:
                 "    STOP RUN.",
             ]
         )
-        # WS-Y 4 bytes @0, WS-R @4.
-        assert _decode(_first_region(vm), 4, 4) == 3
+        # Full-precision: 2023 / 4.0 = 505.75, * 4 = 2023.0, 2023 - 2023 = 0.
+        assert _decode(_first_region(vm), 4, 4) == 0
 
     @covers(CobolFeature.COMPUTE, CobolFeature.ROUNDED_CLAUSE)
     def test_rounded_division_still_rounds(self):
-        """Guard the interaction: COMPUTE X ROUNDED = 10 / 3 must still round the
-        fraction (3.33 -> 3) — i.e. the fix keeps float division for ROUNDED."""
+        """Guard the interaction: COMPUTE X ROUNDED = 20 / 3 must still round the
+        fraction (6.667 -> 7) — float division is always on now."""
         vm = _run(
             [
                 "IDENTIFICATION DIVISION.",
@@ -1012,3 +1017,49 @@ class TestIntegerDivisionSemantics:
         )
         # 20/3 = 6.667 -> ROUNDED -> 7.
         assert _decode(_first_region(vm), 0, 3) == 7
+
+    @covers(CobolFeature.COMPUTE)
+    def test_division_in_power_expression_preserves_fraction(self):
+        """1 / (1 + R) ** N must not truncate to 0.  red-dragon-vaxz: the old
+        int/int -> int result_type caused _coerce_typed_register to discard the
+        fractional part before it reached the target field."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. DPOW.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R   PIC 9V9(8)      VALUE 0.00216667.",
+                "01 WS-RES PIC 9V9(8)      VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-RES = 1 / ((1 + WS-R) ** 300).",
+                "    STOP RUN.",
+            ]
+        )
+        # (1.00216667)^300 ≈ 1.914 → 1/1.914 ≈ 0.522.
+        # WS-R: 9V9(8) = 9 bytes @0, WS-RES: 9V9(8) = 9 bytes @9.
+        result = _decode_dec(_first_region(vm), 9, 1, 8)
+        assert (
+            Decimal("0.50") < result < Decimal("0.55")
+        ), f"Expected ~0.522, got {result}"
+
+    @covers(CobolFeature.COMPUTE)
+    def test_simple_division_fraction_survives(self):
+        """COMPUTE WS-X = 1 / 2 must store 0.5, not 0."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. HDIV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC 9V9(4)  VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-X = 1 / 2.",
+                "    STOP RUN.",
+            ]
+        )
+        # 9V9(4) = 5 bytes @ offset 0.  0.5 → 0.5000.
+        result = _decode_dec(_first_region(vm), 0, 1, 4)
+        assert result == Decimal("0.5"), f"Expected 0.5, got {result}"
