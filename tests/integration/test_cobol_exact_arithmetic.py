@@ -49,3 +49,48 @@ class TestNumericText:
             ["    IF T IS NUMERIC", "        MOVE 1 TO FLAG", "    END-IF."],
         )
         assert first_region(vm)[6] == 0xF1
+
+
+class TestIbmDivision:
+    @covers(CobolFeature.COMPUTE)
+    def test_receiver_decimals_keep_the_quotient_fraction(self):
+        """IBM dmax = 1: 7 / 2 = 3.5, * 2 = 7.0 (stored 6.0 before)."""
+        vm = _program(["01 X PIC 9V9."], ["    COMPUTE X = 7 / 2 * 2."])
+        assert bytes(first_region(vm)[:2]).hex() == "f7f0"
+
+    @covers(CobolFeature.COMPUTE)
+    def test_integer_mod_idiom_still_truncates(self):
+        """red-dragon-apoq regression guard: 2023 / 4 * 4 = 2020."""
+        vm = _program(["01 X PIC 9(4)."], ["    COMPUTE X = 2023 / 4 * 4."])
+        assert bytes(first_region(vm)[:4]).hex() == "f2f0f2f0"
+
+    @covers(CobolFeature.COMPUTE)
+    def test_one_third_into_nine_decimals(self):
+        vm = _program(["01 X PIC 9V9(9)."], ["    COMPUTE X = 1 / 3."])
+        assert bytes(first_region(vm)[:10]).hex() == "f0f3f3f3f3f3f3f3f3f3"
+
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    def test_rounded_two_thirds(self):
+        vm = _program(["01 X PIC 9V99."], ["    COMPUTE X ROUNDED = 2 / 3."])
+        assert bytes(first_region(vm)[:3]).hex() == "f0f6f7"
+
+
+class TestExactOperators:
+    @covers(CobolFeature.COMPUTE)
+    def test_multiply_into_integer_receiver_is_exact(self):
+        """4.35 * 100 stored 434 through float."""
+        vm = _program(["01 X PIC 999."], ["    COMPUTE X = 4.35 * 100."])
+        assert bytes(first_region(vm)[:3]).hex() == "f4f3f5"
+
+    @covers(CobolFeature.COMPUTE)
+    def test_point_one_plus_point_seven(self):
+        vm = _program(["01 X PIC 9V99."], ["    COMPUTE X = 0.1 + 0.7."])
+        assert bytes(first_region(vm)[:3]).hex() == "f0f8f0"
+
+    @covers(CobolFeature.USAGE_COMP_2, CobolFeature.COMPUTE)
+    def test_comp2_expression_computes_in_floating_point(self):
+        vm = _program(
+            ["01 X PIC 9V9.", "01 D COMP-2 VALUE 1.5."],
+            ["    COMPUTE X = D * 2."],
+        )
+        assert bytes(first_region(vm)[:2]).hex() == "f3f0"
