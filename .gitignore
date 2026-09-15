@@ -23,14 +23,7 @@ proleap-bridge/.settings/
 .DS_Store
 
 # Claude Code
-.claude/*
-!.claude/skills/
-!.claude/core/
-!.claude/conditional/
-!.claude/classify-prompt.sh
-!.claude/inject-for-code-review.sh
-!.claude/hooks/
-!.claude/settings.json
+.claude/
 
 # Dolt database files (added by bd init)
 .dolt/
