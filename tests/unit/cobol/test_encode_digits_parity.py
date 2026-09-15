@@ -164,3 +164,9 @@ def test_cobol_to_text_renders_numbers_plainly():
 def test_every_plain_number_text_is_numeric(value):
     rendered = to_plain_str(value)
     assert _builtin_is_numeric([typed_from_runtime(rendered)], None).value is True
+
+
+@covers(CobolFeature.PIC_CLAUSE)
+def test_genuine_nines_beyond_the_scale_truncate():
+    """red-dragon-5b93: the 96651c84 guard rounded 0.129999999 up to 0.13."""
+    assert _runtime_digits("0.129999999", 3, 2, 0) == "012"

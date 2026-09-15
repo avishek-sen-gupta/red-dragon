@@ -139,3 +139,83 @@ class TestExactOperands:
             ["    IF X = 0.1", "        MOVE 1 TO FLAG", "    END-IF."],
         )
         assert first_region(vm)[2] == 0xF1
+
+
+class TestBoundaryBuiltins:
+    @covers(CobolFeature.ROUNDED_CLAUSE)
+    def test_rounded_division_of_an_exact_field(self):
+        vm = _program(
+            ["01 X PIC 9V99.", "01 A PIC 9V99 VALUE 2.00."],
+            ["    COMPUTE X ROUNDED = A / 3."],
+        )
+        assert bytes(first_region(vm)[:3]).hex() == "f0f6f7"
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_numeric_edited_move_of_an_exact_field(self):
+        vm = _program(
+            ["01 E PIC ZZ9.99.", "01 A PIC 9(3)V99 VALUE 1.50."], ["    MOVE A TO E."]
+        )
+        assert bytes(first_region(vm)[:6]).hex() == "4040f14bf5f0"
+
+    @covers(CobolFeature.USAGE_COMP_2)
+    def test_exact_field_round_trips_through_comp2(self):
+        vm = _program(
+            ["01 X PIC 9V99.", "01 A PIC 9V99 VALUE 1.25.", "01 D COMP-2."],
+            ["    MOVE A TO D.", "    MOVE D TO X."],
+        )
+        assert bytes(first_region(vm)[:3]).hex() == "f1f2f5"
+
+
+class TestGuardRegression:
+    """red-dragon-5b93: the 96651c84 guard rounded genuine nines up before
+    truncating. With exact arithmetic the guard is gone and COBOL truncation
+    is restored."""
+
+    @covers(CobolFeature.COMPUTE)
+    def test_compute_of_genuine_nines_truncates(self):
+        vm = _program(["01 X PIC 9V99."], ["    COMPUTE X = 0.129999999."])
+        assert bytes(first_region(vm)[:3]).hex() == "f0f1f2"
+
+    @covers(CobolFeature.ADD)
+    def test_add_of_genuine_nines_truncates(self):
+        vm = _program(
+            ["01 X PIC 9V99.", "01 A PIC 9V9(9) VALUE 0.009999999."],
+            ["    MOVE 0.12 TO X.", "    ADD A TO X."],
+        )
+        assert bytes(first_region(vm)[:3]).hex() == "f0f1f2"
+
+
+class TestExactLowering:
+    @covers(CobolFeature.COMPUTE, CobolFeature.ARITHMETIC_EXPRESSION)
+    def test_fixed_point_operators_lower_to_exact_builtins(self):
+        """Every fixed-point operator lowers to a cobol_numeric boundary
+        builtin, never a Binop evaluated by the VM's operator table."""
+        from interpreter.frontend import make_cobol_parser
+        from interpreter.instructions import CallFunction
+        from interpreter.project.cobol_compile import compile_cobol
+        from tests.integration.cobol_helpers import to_fixed
+
+        source = to_fixed(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. LOWER.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 A PIC 9V99 VALUE 1.25.",
+                "01 X PIC 9(3)V99.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE X = A * 2 + A / 3 - 1.",
+                "    STOP RUN.",
+            ]
+        )
+        _, linked = compile_cobol(source.encode("utf-8"), parser=make_cobol_parser())
+        called = {
+            str(i.func_name) for i in linked.merged_ir if isinstance(i, CallFunction)
+        }
+        assert {
+            "__cobol_multiply",
+            "__cobol_add",
+            "__cobol_divide",
+            "__cobol_subtract",
+        } <= called
