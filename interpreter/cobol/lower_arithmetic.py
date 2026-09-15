@@ -31,6 +31,17 @@ from cobol_asg.cobol_statements import (
     WhenStatement,
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_numeric.number import from_literal
+from cobol_numeric.scale import (
+    Scale,
+    add_scale,
+    carry,
+    div_scale,
+    literal_scale,
+    mul_scale,
+)
+from interpreter.cobol.arithmetic_scale import field_scale, is_floating_type
+from interpreter.cobol.arithmetic_scale import receiver_decimals as _receiver_decimals
 from interpreter.cobol.condition_lowering import _lower_condition_str, lower_expr_node
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
@@ -93,6 +104,94 @@ ARITHMETIC_OPS = {
     "MULTIPLY": "*",
     "DIVIDE": "/",
 }
+
+_EXACT_VERB_BUILTINS = {
+    "ADD": BuiltinName.COBOL_ADD,
+    "SUBTRACT": BuiltinName.COBOL_SUBTRACT,
+    "MULTIPLY": BuiltinName.COBOL_MULTIPLY,
+    "DIVIDE": BuiltinName.COBOL_DIVIDE,
+}
+
+
+def _operand_type(
+    ctx: EmitContext, name: str, materialised: MaterialisedSectionedLayout
+):
+    if not ctx.has_field(name, materialised):
+        return None
+    return materialised.resolve(name)[0].type_descriptor
+
+
+def _operand_scale(
+    ctx: EmitContext, name: str, materialised: MaterialisedSectionedLayout
+) -> Scale:
+    td = _operand_type(ctx, name, materialised)
+    if td is not None:
+        return field_scale(td)
+    try:
+        from_literal(translate_cobol_figurative(name))
+    except ValueError:
+        return Scale(1, 0)
+    return literal_scale(translate_cobol_figurative(name))
+
+
+def _emit_verb_operation(
+    ctx: EmitContext,
+    op: str,
+    left_reg: Register,
+    right_reg: Register,
+    left_operand: RefModOperand,
+    right_operand: RefModOperand,
+    receivers: list[RefModOperand],
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Emit ``left <op> right`` for an arithmetic verb, exact unless IBM's
+    floating-point rule applies (a COMP-1/COMP-2 operand or receiver)."""
+    result_reg = ctx.fresh_reg()
+    types = [
+        _operand_type(ctx, operand.name, materialised)
+        for operand in (left_operand, right_operand, *receivers)
+    ]
+    if any(td is not None and is_floating_type(td) for td in types):
+        ctx.emit_inst(
+            Binop(
+                result_reg=result_reg,
+                operator=resolve_binop(ARITHMETIC_OPS[op]),
+                left=left_reg,
+                right=right_reg,
+            )
+        )
+        return result_reg
+    left_scale = _operand_scale(ctx, left_operand.name, materialised)
+    right_scale = _operand_scale(ctx, right_operand.name, materialised)
+    receiver_places = max(
+        (
+            _receiver_decimals(td, receiver.rounded)
+            for receiver, td in zip(receivers, types[2:])
+            if td is not None
+        ),
+        default=0,
+    )
+    operand_places = (
+        left_scale.decimal_places
+        if op == "DIVIDE"
+        else max(left_scale.decimal_places, right_scale.decimal_places)
+    )
+    dmax = max(receiver_places, operand_places)
+    if op in ("ADD", "SUBTRACT"):
+        combined = add_scale(left_scale, right_scale)
+    elif op == "MULTIPLY":
+        combined = mul_scale(left_scale, right_scale)
+    else:
+        combined = div_scale(left_scale, right_scale, dmax)
+    decimals_reg = ctx.const_to_reg(carry(combined, dmax).decimal_places)
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name=FuncName(_EXACT_VERB_BUILTINS[op]),
+            args=(left_reg, right_reg, decimals_reg),
+        )
+    )
+    return result_reg
 
 
 def _compute_overflow_flag(
@@ -985,15 +1084,15 @@ def lower_arithmetic(
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 
     if not has_clause:
-        op = ARITHMETIC_OPS[stmt.op]
-        result_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=result_reg,
-                operator=resolve_binop(op),
-                left=tgt_decoded,
-                right=src_decoded,
-            )
+        result_reg = _emit_verb_operation(
+            ctx,
+            stmt.op,
+            tgt_decoded,
+            src_decoded,
+            stmt.target,
+            stmt.source,
+            [stmt.target],
+            materialised,
         )
         result_str_reg = ctx.emit_to_string(result_reg)
         _emit_arithmetic_writeback(
@@ -1027,15 +1126,15 @@ def lower_arithmetic(
         )
         ctx.emit_inst(Label_(label=compute_label))
 
-    op = ARITHMETIC_OPS[stmt.op]
-    result_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=result_reg,
-            operator=resolve_binop(op),
-            left=tgt_decoded,
-            right=src_decoded,
-        )
+    result_reg = _emit_verb_operation(
+        ctx,
+        stmt.op,
+        tgt_decoded,
+        src_decoded,
+        stmt.target,
+        stmt.source,
+        [stmt.target],
+        materialised,
     )
 
     emit_overflow_check(
@@ -1158,15 +1257,15 @@ def lower_arithmetic_giving(
         not_on_size_err_label = ctx.fresh_label("not_on_size_err")
         end_label = ctx.fresh_label("size_err_end")
 
-    op = ARITHMETIC_OPS[stmt.op]
-    result_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=result_reg,
-            operator=resolve_binop(op),
-            left=left_reg,
-            right=right_reg,
-        )
+    result_reg = _emit_verb_operation(
+        ctx,
+        stmt.op,
+        left_reg,
+        right_reg,
+        stmt.source,
+        stmt.target,
+        list(stmt.giving),
+        materialised,
     )
 
     def _emit_remainder_writeback() -> None:
@@ -1291,11 +1390,20 @@ def lower_compute(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
-    # Preserve division fractions only when a target is ROUNDED; otherwise COBOL
-    # integer division truncates (the mod idiom A - (A / B) * B; red-dragon-apoq).
-    rounded_target = any(t.rounded for t in stmt.targets)
+    # IBM ARITH(COMPAT): receivers (+1 for ROUNDED) size the division fraction.
+    target_types = [
+        (materialised.resolve(t.name)[0].type_descriptor, t.rounded)
+        for t in stmt.targets
+        if ctx.has_field(t.name, materialised)
+    ]
     result_reg = lower_expr_node(
-        ctx, stmt.expression, materialised, force_division_float=rounded_target
+        ctx,
+        stmt.expression,
+        materialised,
+        receiver_decimals=max(
+            (_receiver_decimals(td, rounded) for td, rounded in target_types), default=0
+        ),
+        floating_receiver=any(is_floating_type(td) for td, _ in target_types),
     )
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
