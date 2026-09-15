@@ -9,7 +9,7 @@ IBM ARITH(COMPAT) intermediates carry up to 30.
 from __future__ import annotations
 
 import math
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import TypeAlias
 
 CobolNumber: TypeAlias = Decimal
