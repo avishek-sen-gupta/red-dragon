@@ -3,6 +3,7 @@ root_packages =
     interpreter
     cobol_asg
     cobol_memory
+    cobol_numeric
 
 # The reason cobol_asg is a sibling of interpreter rather than a subpackage of
 # it: an import of interpreter.anything runs interpreter/__init__.py, which
@@ -25,6 +26,14 @@ name = The byte-extent algebra must not import the interpreter
 type = forbidden
 source_modules =
     cobol_memory
+forbidden_modules =
+    interpreter
+
+[importlinter:contract:cobol-numeric-is-a-leaf]
+name = The COBOL numeric boundary must not import the interpreter
+type = forbidden
+source_modules =
+    cobol_numeric
 forbidden_modules =
     interpreter
 
