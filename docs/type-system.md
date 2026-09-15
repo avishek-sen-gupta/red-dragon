@@ -264,7 +264,7 @@ Java `implements`, C# `implements`, and similar clauses create class→interface
 
 ## Type Hierarchy
 
-The default type hierarchy is a DAG rooted at `ANY` with 12 nodes, defined via the `TypeName` enum (`interpreter/constants.py`):
+The default type hierarchy is a DAG rooted at `ANY` with 13 nodes, defined via the `TypeName` enum (`interpreter/constants.py`):
 
 ```mermaid
 graph TD
@@ -272,6 +272,7 @@ graph TD
     NUMBER["Number"]
     INT["Int"]
     FLOAT["Float"]
+    DECIMAL["Decimal"]
     STRING["String"]
     BOOL["Bool"]
     OBJECT["Object"]
@@ -292,6 +293,7 @@ graph TD
     ANY --> REGION
     NUMBER --> INT
     NUMBER --> FLOAT
+    NUMBER --> DECIMAL
 ```
 
 ### TypeName Enum
@@ -302,7 +304,10 @@ All canonical type names (`interpreter/constants.py`):
 ANY = "Any"       NUMBER = "Number"     INT = "Int"        FLOAT = "Float"
 STRING = "String"  BOOL = "Bool"        OBJECT = "Object"  ARRAY = "Array"
 POINTER = "Pointer" MAP = "Map"         TUPLE = "Tuple"    REGION = "Region"
+DECIMAL = "Decimal"
 ```
+
+`Decimal` carries exact COBOL fixed-point values and is COBOL-only: it enters the pipeline through COBOL lowering and the `cobol_numeric` boundary, never through another frontend (ADR-148).
 
 ### TypeNode
 
