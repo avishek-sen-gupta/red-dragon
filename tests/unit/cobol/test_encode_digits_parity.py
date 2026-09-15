@@ -9,18 +9,18 @@ import pytest
 
 from cobol_numeric.number import from_digits, from_literal, scale_by, to_plain_str
 from interpreter.cobol.byte_builtins import (
+    BYTE_BUILTINS,
     _builtin_cobol_prepare_digits,
     _builtin_cobol_prepare_sign,
     _builtin_is_numeric,
 )
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
-from interpreter.cobol.byte_builtins import BYTE_BUILTINS
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.numeric_builtins import _builtin_cobol_to_text
-from interpreter.cobol.pic_scale import encode_scaled_digits
+from interpreter.cobol.pic_scale import encode_digits, encode_scaled_digits
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import typed_from_runtime
-from tests.covers import NotLanguageFeature, covers
+from tests.covers import covers
 
 _CORPUS = [
     ("123.45", 5, 2, 0),
@@ -109,6 +109,31 @@ def test_sign_nibble_follows_the_pre_truncation_sign(value, expected):
         [typed_from_runtime(value), typed_from_runtime(True)], None
     )
     assert result.value == expected
+
+
+@covers(CobolFeature.PIC_CLAUSE)
+def test_value_and_runtime_sign_paths_agree_when_truncation_zeroes_the_digits():
+    """VALUE -0.001 into PIC S9V99 truncates to digits '00'. Both the
+    VALUE-clause path (emit_encode_numeric, mirrored here via encode_digits'
+    ``negative``) and the runtime path (__cobol_prepare_sign) now trust
+    encode_digits' pre-truncation sign directly, with no post-truncation
+    "any digit nonzero" gate — so they cannot diverge (that gate was the
+    exact source of a VALUE-vs-runtime encode divergence this task exists to
+    end). Whether real IBM/GnuCOBOL actually stores 0xD or 0xC for a signed
+    value that truncates to zero is UNVERIFIED against a compiler or the
+    NIST-85 corpus; tracked separately (see beads issue) rather than
+    asserted here — this test only pins that the two paths agree.
+    """
+    negative, _ = encode_digits("-0.001", 2, 2, 0)
+    value_path_nibble = (
+        ByteConstants.SIGN_NIBBLE_NEGATIVE
+        if negative
+        else ByteConstants.SIGN_NIBBLE_POSITIVE
+    )
+    runtime_result = _builtin_cobol_prepare_sign(
+        [typed_from_runtime("-0.001"), typed_from_runtime(True)], None
+    )
+    assert value_path_nibble == runtime_result.value
 
 
 @covers(CobolFeature.DISPLAY)
