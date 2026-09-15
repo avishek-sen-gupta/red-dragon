@@ -751,7 +751,7 @@ class EmitContext:
 
         if not td.signed:
             sign_nibble = ByteConstants.SIGN_NIBBLE_UNSIGNED
-        elif negative and any(d != 0 for d in digits):
+        elif negative:
             sign_nibble = ByteConstants.SIGN_NIBBLE_NEGATIVE
         else:
             sign_nibble = ByteConstants.SIGN_NIBBLE_POSITIVE
