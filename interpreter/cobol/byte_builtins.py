@@ -10,6 +10,34 @@ from __future__ import annotations
 import math
 import struct
 
+from cobol_numeric.intrinsics import (
+    absolute,
+    annuity,
+    coerce_argument as _coerce_intrinsic_decimal,
+    floor_integer,
+    fraction_part,
+    integer_part,
+    is_integral,
+    mean,
+    median,
+    midrange,
+    parse_numval_digits,
+    present_value,
+    remainder,
+    square_root,
+    to_result as _decimal_to_intrinsic,
+    total,
+    value_range,
+    variance,
+)
+from cobol_numeric.number import (
+    as_whole_int,
+    is_cobol_number,
+    round_half_up,
+    to_float,
+    to_number,
+    to_plain_str,
+)
 from interpreter.cobol.cobol_constants import (
     BuiltinName,
     ByteConstants,
@@ -19,6 +47,7 @@ from interpreter.cobol.cobol_constants import (
     TallyMode,
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import Operators, VMState, _is_symbolic
@@ -251,7 +280,7 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
     """
     if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    value_str, total_digits, decimal_digits, signed = (
+    value, total_digits, decimal_digits, signed = (
         args[0].value,
         args[1].value,
         args[2].value,
@@ -260,77 +289,12 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
     scale = args[4].value if len(args) > 4 else 0
     if not isinstance(total_digits, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    if isinstance(value_str, (int, float)):
-        value_str = str(value_str)
-    if not isinstance(value_str, str):
+    if not (isinstance(value, (str, float)) or is_cobol_number(value)):
         return BuiltinResult(value=_UNCOMPUTABLE)
 
-    from decimal import Decimal, InvalidOperation
+    from interpreter.cobol.pic_scale import encode_digits
 
-    from interpreter.cobol.data_filters import align_decimal, left_adjust
-    from interpreter.cobol.pic_scale import descale
-
-    clean = value_str.lstrip("+-")
-    try:
-        parsed = Decimal(clean)
-    except InvalidOperation:
-        # Non-numeric input (spaces, alphanumeric junk). Before scale-aware
-        # division existed, every input reaching this builtin was tolerated —
-        # non-digit characters simply became 0 further down (see the digit
-        # comprehension at the end of this function). Fall back to that
-        # behaviour instead of raising a Python-level exception for what is a
-        # routine COBOL data error (red-dragon-qhtv).
-        pass
-    else:
-        # Divide by the scaling factor BEFORE truncating to digit positions —
-        # order matters (12300 into PIC 999PP is 123, not 300). Reuses
-        # descale() rather than duplicating it a third time (emit_context.py's
-        # emit_decode_field does the IR-side multiply; encode_scaled_digits
-        # does the compile-time-literal divide).
-        #
-        # Normalizing through Decimal happens even when scale == 0, not only
-        # when it's non-zero: a NEGATIVE-scale P field (leading P, e.g.
-        # PIC PPPP9) decodes to a small-magnitude float whose plain str() is
-        # scientific notation once the magnitude drops below 1e-4 (Python's
-        # own threshold, e.g. str(1e-05) == '1e-05'). That string can reach
-        # this builtin as value_str for a TARGET field whose own scale is 0
-        # (e.g. MOVE-ing a P-scaled source into a plain integer field), so
-        # the guard must not be conditioned on this call's own scale. format(
-        # x, "f") avoids the same scientific-notation trap Task 2 hit on the
-        # Decimal-division side: str(Decimal) / str(float) can both render as
-        # exponential notation, which align_decimal cannot parse — it splits
-        # on '.', finds one inside the mantissa, and silently corrupts digits.
-        if scale:
-            parsed = descale(parsed, scale)
-        if decimal_digits > 0:
-            # Two-step: round to a guard precision to eliminate binary-float
-            # representation noise, then truncate (COBOL default, no ROUNDED).
-            #
-            # Float64 arithmetic over non-binary-exact values (e.g. 38.30)
-            # can produce strings like '76.59999999999994' that are only ~1e-14
-            # away from the correct '76.60'.  Rounding to decimal_digits+6
-            # collapses that noise while still correctly truncating genuine
-            # fractional values (e.g. 1.237 → 1.23 with dd=2).
-            #
-            # Caveat: a genuine value whose last 6 digits are all 9s (e.g.
-            # 0.999999) would be incorrectly rounded up.  That sub-millicent
-            # granularity does not arise in practice with standard COBOL
-            # fixed-point fields.
-            from decimal import ROUND_DOWN, ROUND_HALF_UP
-
-            guard = int(decimal_digits) + 6
-            parsed = parsed.quantize(Decimal(10) ** -guard, rounding=ROUND_HALF_UP)
-            parsed = parsed.quantize(
-                Decimal(10) ** -int(decimal_digits), rounding=ROUND_DOWN
-            )
-        clean = str(int(parsed)) if decimal_digits == 0 else format(parsed, "f")
-    if decimal_digits > 0:
-        integer_digits = total_digits - decimal_digits
-        digit_str = align_decimal(clean, integer_digits, decimal_digits)
-    else:
-        integer_part = clean.split(".")[0] if "." in clean else clean
-        digit_str = left_adjust(integer_part, total_digits)
-
+    _, digit_str = encode_digits(value, total_digits, int(decimal_digits), int(scale))
     return BuiltinResult(value=[int(ch) if ch.isdigit() else 0 for ch in digit_str])
 
 
@@ -342,17 +306,16 @@ def _builtin_cobol_prepare_sign(args: list[TypedValue], vm: VMState) -> BuiltinR
     """
     if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    value_str, signed = args[0].value, args[1].value
-    if isinstance(value_str, (int, float)):
-        value_str = str(value_str)
-    if not isinstance(value_str, str):
+    value, signed = args[0].value, args[1].value
+    if not (isinstance(value, (str, float)) or is_cobol_number(value)):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if not signed:
         return BuiltinResult(value=ByteConstants.SIGN_NIBBLE_UNSIGNED)
-    negative = value_str.startswith("-")
-    clean = value_str.lstrip("+-").replace(".", "")
-    has_nonzero = any(ch != "0" for ch in clean if ch.isdigit())
-    if negative and has_nonzero:
+
+    from interpreter.cobol.pic_scale import encode_digits
+
+    negative, _ = encode_digits(value, 1, 0, 0)
+    if negative:
         return BuiltinResult(value=ByteConstants.SIGN_NIBBLE_NEGATIVE)
     return BuiltinResult(value=ByteConstants.SIGN_NIBBLE_POSITIVE)
 
@@ -658,6 +621,8 @@ def _builtin_float_to_bytes(args: list[TypedValue], vm: VMState) -> BuiltinResul
     if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
     value, byte_count = args[0].value, args[1].value
+    if is_cobol_number(value) and not isinstance(value, int):
+        value = to_float(value)
     if not isinstance(value, (int, float)) or not isinstance(byte_count, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     fmt = ">f" if byte_count == 4 else ">d"
@@ -694,7 +659,7 @@ def _builtin_cobol_blank_when_zero(
     if not isinstance(encoded_bytes, list) or not isinstance(byte_length, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     try:
-        is_zero = float(str(value_str)) == 0.0
+        is_zero = to_number(value_str) == 0
     except (ValueError, TypeError):
         return BuiltinResult(value=encoded_bytes)
     return BuiltinResult(
@@ -714,12 +679,12 @@ def _builtin_cobol_round(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         or any(a.value is _UNCOMPUTABLE for a in args)
     ):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from decimal import ROUND_HALF_UP, Decimal
-
-    decimal_digits = int(args[1].value)
-    quantizer = Decimal(10) ** -decimal_digits
-    d = Decimal(str(args[0].value)).quantize(quantizer, rounding=ROUND_HALF_UP)
-    return BuiltinResult(value=str(d))
+    try:
+        decimal_digits = int(args[1].value)
+        rounded = round_half_up(to_number(args[0].value), decimal_digits)
+    except (ValueError, TypeError):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=to_plain_str(rounded))
 
 
 def _builtin_cobol_apply_edit_picture(
@@ -961,8 +926,6 @@ def _numval_to_number(text: str):
     value has no fractional part, otherwise a Decimal (mirrors how other COBOL
     numeric builtins keep exact decimals).
     """
-    from decimal import Decimal, InvalidOperation
-
     s = text.strip().upper()
     if not s:
         return 0
@@ -982,16 +945,7 @@ def _numval_to_number(text: str):
     s = s.replace(" ", "")
     if not s:
         return 0
-    try:
-        dec = Decimal(s)
-    except InvalidOperation:
-        return None
-    if negative:
-        dec = -dec
-    # Collapse to int when integral so callers comparing against 0 see ints.
-    if dec == dec.to_integral_value():
-        return int(dec)
-    return dec
+    return parse_numval_digits(s, negative)
 
 
 def _numval_c_clean(text: str) -> str:
@@ -1165,6 +1119,11 @@ def _builtin_integer_of_date(args: list[TypedValue], vm: VMState) -> BuiltinResu
     raw = args[0].value
     if isinstance(raw, float):
         raw = int(raw)
+    if is_cobol_number(raw) and not isinstance(raw, int):
+        whole = as_whole_int(raw)
+        if whole is None:
+            return BuiltinResult(value=_UNCOMPUTABLE)
+        raw = whole
     if isinstance(raw, str):
         raw = raw.strip()
         if not raw.isdigit():
@@ -1190,6 +1149,8 @@ def _coerce_intrinsic_int(raw: object) -> int | None:
         return None
     if isinstance(raw, int):
         return raw
+    if is_cobol_number(raw):
+        return as_whole_int(raw)
     if isinstance(raw, float):
         return int(raw) if raw == int(raw) else None
     if isinstance(raw, str):
@@ -1278,37 +1239,6 @@ def _builtin_reverse(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=value[::-1])
 
 
-def _coerce_intrinsic_decimal(raw: object):
-    """Coerce a builtin argument value to a Decimal, or None if not numeric.
-
-    Accepts ints, floats, Decimals, and numeric strings. Shared by MAX/MIN/SUM
-    so mixed int/float/string arguments compare and combine without the
-    ``TypeError`` Python raises for direct Decimal-vs-float comparison.
-    """
-    from decimal import Decimal, InvalidOperation
-
-    if isinstance(raw, bool):
-        return None
-    if isinstance(raw, (int, Decimal)):
-        return Decimal(raw)
-    if isinstance(raw, float):
-        return Decimal(str(raw))
-    if isinstance(raw, str):
-        s = raw.strip()
-        if not s:
-            return None
-        try:
-            return Decimal(s)
-        except InvalidOperation:
-            return None
-    return None
-
-
-def _decimal_to_intrinsic(value):
-    """Decimal -> int when integral, else Decimal (mirrors NUMVAL's convention)."""
-    return int(value) if value == value.to_integral_value() else value
-
-
 def _builtin_max(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION MAX(a, b, ...): the largest numeric argument."""
     if not args:
@@ -1344,8 +1274,6 @@ def _builtin_sum(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 
     No arguments sums to 0 (matches the ISO definition of an empty SUM).
     """
-    from decimal import Decimal
-
     values = []
     for a in args:
         if _is_symbolic(a.value):
@@ -1354,7 +1282,7 @@ def _builtin_sum(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         if d is None:
             return BuiltinResult(value=_UNCOMPUTABLE)
         values.append(d)
-    return BuiltinResult(value=_decimal_to_intrinsic(sum(values, Decimal(0))))
+    return BuiltinResult(value=_decimal_to_intrinsic(total(values)))
 
 
 def _builtin_random(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1395,7 +1323,7 @@ def _builtin_random(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 def _coerce_intrinsic_float(raw: object) -> float | None:
     """Coerce a builtin argument value to a float, or None if not numeric."""
     d = _coerce_intrinsic_decimal(raw)
-    return float(d) if d is not None else None
+    return to_float(d) if d is not None else None
 
 
 def _builtin_abs(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1405,7 +1333,7 @@ def _builtin_abs(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     d = _coerce_intrinsic_decimal(args[0].value)
     if d is None:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=_decimal_to_intrinsic(abs(d)))
+    return BuiltinResult(value=_decimal_to_intrinsic(absolute(d)))
 
 
 def _builtin_sqrt(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1420,7 +1348,7 @@ def _builtin_sqrt(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     d = _coerce_intrinsic_decimal(args[0].value)
     if d is None or d < 0:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=_decimal_to_intrinsic(d.sqrt()))
+    return BuiltinResult(value=_decimal_to_intrinsic(square_root(d)))
 
 
 def _builtin_sin(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1501,19 +1429,15 @@ def _builtin_range(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     values = _coerce_intrinsic_decimal_list(args)
     if not values:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=_decimal_to_intrinsic(max(values) - min(values)))
+    return BuiltinResult(value=_decimal_to_intrinsic(value_range(values)))
 
 
 def _builtin_mean(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION MEAN(a, b, ...): the arithmetic mean of the arguments."""
-    from decimal import Decimal
-
     values = _coerce_intrinsic_decimal_list(args)
     if not values:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(
-        value=_decimal_to_intrinsic(sum(values, Decimal(0)) / len(values))
-    )
+    return BuiltinResult(value=_decimal_to_intrinsic(mean(values)))
 
 
 def _builtin_median(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1522,10 +1446,7 @@ def _builtin_median(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     values = _coerce_intrinsic_decimal_list(args)
     if not values:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    ordered = sorted(values)
-    n = len(ordered)
-    mid = n // 2
-    result = ordered[mid] if n % 2 == 1 else (ordered[mid - 1] + ordered[mid]) / 2
+    result = median(values)
     return BuiltinResult(value=_decimal_to_intrinsic(result))
 
 
@@ -1534,24 +1455,20 @@ def _builtin_midrange(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     values = _coerce_intrinsic_decimal_list(args)
     if not values:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=_decimal_to_intrinsic((max(values) + min(values)) / 2))
+    return BuiltinResult(value=_decimal_to_intrinsic(midrange(values)))
 
 
 def _builtin_variance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION VARIANCE(a, b, ...): sample variance (n-1 divisor),
     matching the ISO/IBM definition; a single argument yields 0 by convention
     (avoids a division by zero)."""
-    from decimal import Decimal
-
     values = _coerce_intrinsic_decimal_list(args)
     if not values:
         return BuiltinResult(value=_UNCOMPUTABLE)
     n = len(values)
     if n == 1:
         return BuiltinResult(value=0)
-    mean = sum(values, Decimal(0)) / n
-    sq_dev = sum(((v - mean) ** 2 for v in values), Decimal(0))
-    return BuiltinResult(value=_decimal_to_intrinsic(sq_dev / (n - 1)))
+    return BuiltinResult(value=_decimal_to_intrinsic(variance(values)))
 
 
 def _builtin_ord_max(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1613,46 +1530,39 @@ def _builtin_factorial(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
     d = _coerce_intrinsic_decimal(args[0].value)
-    if d is None or d < 0 or d != d.to_integral_value():
+    if d is None or d < 0 or not is_integral(d):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(value=math.factorial(int(d)))
 
 
 def _builtin_integer(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION INTEGER(x): the greatest integer not greater than x (floor)."""
-    from decimal import ROUND_FLOOR
-
     if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
     d = _coerce_intrinsic_decimal(args[0].value)
     if d is None:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=int(d.to_integral_value(rounding=ROUND_FLOOR)))
+    return BuiltinResult(value=floor_integer(d))
 
 
 def _builtin_integer_part(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION INTEGER-PART(x): x truncated toward zero."""
-    from decimal import ROUND_DOWN
-
     if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
     d = _coerce_intrinsic_decimal(args[0].value)
     if d is None:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=int(d.to_integral_value(rounding=ROUND_DOWN)))
+    return BuiltinResult(value=integer_part(d))
 
 
 def _builtin_fraction_part(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION FRACTION-PART(x): x - FUNCTION INTEGER-PART(x)."""
-    from decimal import ROUND_DOWN
-
     if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
     d = _coerce_intrinsic_decimal(args[0].value)
     if d is None:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    trunc = d.to_integral_value(rounding=ROUND_DOWN)
-    return BuiltinResult(value=_decimal_to_intrinsic(d - trunc))
+    return BuiltinResult(value=_decimal_to_intrinsic(fraction_part(d)))
 
 
 def _builtin_rem(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1661,16 +1571,13 @@ def _builtin_rem(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     Unlike MOD (floored, sign follows the divisor), REM truncates toward zero
     so its result's sign follows the dividend x.
     """
-    from decimal import ROUND_DOWN
-
     if len(args) < 2 or _is_symbolic(args[0].value) or _is_symbolic(args[1].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
     x = _coerce_intrinsic_decimal(args[0].value)
     y = _coerce_intrinsic_decimal(args[1].value)
     if x is None or y is None or y == 0:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    trunc = (x / y).to_integral_value(rounding=ROUND_DOWN)
-    return BuiltinResult(value=_decimal_to_intrinsic(x - y * trunc))
+    return BuiltinResult(value=_decimal_to_intrinsic(remainder(x, y)))
 
 
 def _builtin_substitute(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1797,12 +1704,7 @@ def _builtin_annuity(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     periods = _coerce_intrinsic_int(args[1].value)
     if rate is None or periods is None or periods < 1 or rate == -1:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from decimal import Decimal
-
-    if rate == 0:
-        return BuiltinResult(value=_decimal_to_intrinsic(Decimal(1) / periods))
-    denominator = 1 - (1 + rate) ** (-periods)
-    return BuiltinResult(value=_decimal_to_intrinsic(rate / denominator))
+    return BuiltinResult(value=_decimal_to_intrinsic(annuity(rate, periods)))
 
 
 def _builtin_present_value(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1816,12 +1718,7 @@ def _builtin_present_value(args: list[TypedValue], vm: VMState) -> BuiltinResult
     cashflows = _coerce_intrinsic_decimal_list(args[1:])
     if not cashflows:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from decimal import Decimal
-
-    total = sum(
-        (cf / (1 + rate) ** (i + 1) for i, cf in enumerate(cashflows)), Decimal(0)
-    )
-    return BuiltinResult(value=_decimal_to_intrinsic(total))
+    return BuiltinResult(value=_decimal_to_intrinsic(present_value(rate, cashflows)))
 
 
 _DEFAULT_YY_CUTOFF = 50
@@ -1999,5 +1896,6 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.DATE_TO_YYYYMMDD): _builtin_date_to_yyyymmdd,
         FuncName(BuiltinName.DAY_TO_YYYYDDD): _builtin_day_to_yyyyddd,
         FuncName(BuiltinName.YEAR_TO_YYYY): _builtin_year_to_yyyy,
+        **NUMERIC_BUILTINS,
     }
 )
