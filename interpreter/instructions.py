@@ -24,6 +24,7 @@ from typing import (
     get_type_hints,
 )
 
+from cobol_numeric.number import CobolNumber, from_literal
 from interpreter.constants import FoundationTypeName
 from interpreter.continuation_name import NO_CONTINUATION_NAME, ContinuationName
 from interpreter.field_name import NO_FIELD_NAME, FieldName
@@ -216,7 +217,7 @@ class Const(InstructionBase):
     """CONST: load a literal value into a register.
 
     ``type_expr`` is required (keyword-only).  Use the typed factory classmethods
-    (``Const.int_``, ``Const.float_``, ``Const.string``, ``Const.bool_``,
+    (``Const.int_``, ``Const.float_``, ``Const.decimal_``, ``Const.string``, ``Const.bool_``,
     ``Const.null_``, ``Const.func_ref``, ``Const.class_ref``) rather than
     constructing ``Const`` directly.
     """
@@ -255,6 +256,17 @@ class Const(InstructionBase):
             value=float(value),
             has_value=True,
             type_expr=scalar(FoundationTypeName.FLOAT),
+            **kw,
+        )
+
+    @classmethod
+    def decimal_(cls, result_reg: Register, value: CobolNumber, **kw: Any) -> Const:
+        """Create an exact COBOL fixed-point constant (COBOL lowering only)."""
+        return cls(
+            result_reg=result_reg,
+            value=value,
+            has_value=True,
+            type_expr=scalar(FoundationTypeName.DECIMAL),
             **kw,
         )
 
@@ -1216,7 +1228,7 @@ def _const(inst: Any) -> Const:
     """Convert a flat CONST instruction to a typed ``Const``.
 
     The flat instruction must carry a ``literal_type`` field (one of
-    "Int", "Float", "String", "Bool", "Null", "FuncRef", "ClassRef").
+    "Int", "Float", "Decimal", "String", "Bool", "Null", "FuncRef", "ClassRef").
     Raises ``ValueError`` when the field is absent or unrecognised.
     """
     reg: Register = inst.result_reg
@@ -1228,6 +1240,8 @@ def _const(inst: Any) -> Const:
         return Const.int_(reg, int(raw), source_location=sl)
     if lit == "Float":
         return Const.float_(reg, float(raw), source_location=sl)
+    if lit == "Decimal":
+        return Const.decimal_(reg, from_literal(str(raw)), source_location=sl)
     if lit == "String":
         return Const.string(reg, str(raw), source_location=sl)
     if lit == "Bool":
