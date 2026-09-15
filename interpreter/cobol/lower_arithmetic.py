@@ -1291,11 +1291,12 @@ def lower_compute(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
-    # Preserve division fractions only when a target is ROUNDED; otherwise COBOL
-    # integer division truncates (the mod idiom A - (A / B) * B; red-dragon-apoq).
-    rounded_target = any(t.rounded for t in stmt.targets)
+    # COBOL COMPUTE uses full-precision intermediate decimal arithmetic —
+    # division must preserve fractions so that expressions like
+    # ``1 / (1 + R) ** N`` compute correctly (red-dragon-vaxz).
+    # Integer truncation happens at the target-field store, not mid-expression.
     result_reg = lower_expr_node(
-        ctx, stmt.expression, materialised, force_division_float=rounded_target
+        ctx, stmt.expression, materialised, force_division_float=True
     )
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
