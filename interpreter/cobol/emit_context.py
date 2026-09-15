@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from cobol_asg.cobol_expression import ExprNode
 
+from cobol_numeric.number import from_literal, is_cobol_number
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from cobol_asg.asg_types import CobolASG
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
@@ -293,6 +294,8 @@ class EmitContext:
             inst = Const.int_(reg, value)
         elif isinstance(value, float):
             inst = Const.float_(reg, value)
+        elif is_cobol_number(value):
+            inst = Const.decimal_(reg, value)
         elif value is None:
             inst = Const.null_(reg)
         else:
@@ -858,13 +861,12 @@ class EmitContext:
         # build_decode_*_ir builders — one site instead of four, and those
         # builders keep their existing signatures (red-dragon-qhtv).
         scaled = self.fresh_reg()
-        factor_reg = self.const_to_reg(float(10**td.scale))
+        scale_reg = self.const_to_reg(td.scale)
         self.emit_inst(
-            Binop(
+            CallFunction(
                 result_reg=scaled,
-                operator=resolve_binop("*"),
-                left=decoded,
-                right=factor_reg,
+                func_name=FuncName(BuiltinName.COBOL_SCALE_BY),
+                args=(decoded, scale_reg),
             )
         )
         return scaled
@@ -1074,21 +1076,16 @@ class EmitContext:
             # by byte width (2/4/8), not decimal digit count. Decimal truncation
             # via COBOL_PREPARE_DIGITS would zero out values that exceed the digit
             # count (e.g. 50000 in PIC 9(4) → "0000" → 0). Convert the string
-            # directly to int and pack as bytes instead.
-            float_reg = self.fresh_reg()
-            self.emit_inst(
-                CallFunction(
-                    result_reg=float_reg,
-                    func_name=FuncName("float"),
-                    args=(value_str_reg,),
-                ),
-            )
+            # directly to int and pack as bytes instead. Implied decimal places
+            # and PIC P scale are applied exactly (red-dragon-0dvs).
             int_reg = self.fresh_reg()
+            decimals_reg = self.const_to_reg(td.decimal_digits)
+            scale_reg = self.const_to_reg(td.scale)
             self.emit_inst(
                 CallFunction(
                     result_reg=int_reg,
-                    func_name=FuncName("int"),
-                    args=(float_reg,),
+                    func_name=FuncName(BuiltinName.COBOL_BINARY_UNSCALED),
+                    args=(value_str_reg, decimals_reg, scale_reg),
                 ),
             )
             byte_count_reg = self.const_to_reg(td.byte_length)
@@ -1243,7 +1240,7 @@ class EmitContext:
         contents as a ``str`` unconditionally — no numeric coercion.
 
         Only when the raw value has NO surrounding delimiters (i.e. it is a
-        bare numeric token such as ``10`` or ``3.14``) is int→float→str
+        bare numeric token such as ``10`` or ``3.14``) is int→exact number→str
         coercion attempted.
         """
         stripped = strip_cobol_literal(text)
@@ -1257,7 +1254,7 @@ class EmitContext:
         except ValueError:
             pass
         try:
-            return float(stripped)
+            return from_literal(stripped)
         except ValueError:
             pass
         return stripped

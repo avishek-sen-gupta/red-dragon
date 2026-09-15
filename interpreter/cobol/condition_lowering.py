@@ -1073,12 +1073,12 @@ def _lower_expr_node_body(
                 ),
             )
         )
-        # Convert string slice result back to float for arithmetic operations
+        # Parse the sliced text as an exact number
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=result_reg,
-                func_name=FuncName("float"),
+                func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                 args=(Register(str(sliced_reg)),),
             )
         )

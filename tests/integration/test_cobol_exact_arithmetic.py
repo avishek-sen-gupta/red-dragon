@@ -94,3 +94,48 @@ class TestExactOperators:
             ["    COMPUTE X = D * 2."],
         )
         assert bytes(first_region(vm)[:2]).hex() == "f3f0"
+
+
+class TestExactOperands:
+    @covers(CobolFeature.ADD)
+    def test_eighteen_digit_add_keeps_the_last_digit(self):
+        vm = _program(
+            ["01 Y PIC S9(9)V9(9) VALUE 123456789.123456788."],
+            ["    ADD 0.000000001 TO Y."],
+        )
+        assert (
+            bytes(first_region(vm)[:18]).hex() == "f1f2f3f4f5f6f7f8f9f1f2f3f4f5f6f7f8c9"
+        )
+
+    @covers(CobolFeature.USAGE_COMP)
+    def test_comp_decimal_field_decodes_its_fraction(self):
+        """red-dragon-0dvs (decode half)."""
+        vm = _program(
+            ["01 C PIC S9(5)V99 COMP VALUE 123.45.", "01 D PIC 9(5)V99."],
+            ["    MOVE C TO D."],
+        )
+        assert bytes(first_region(vm)[:11]).hex() == "00003039f0f0f1f2f3f4f5"
+
+    @covers(CobolFeature.USAGE_COMP)
+    def test_comp_decimal_field_stores_its_fraction(self):
+        """red-dragon-0dvs (store half): MOVE 123.45 stored 123."""
+        vm = _program(
+            ["01 C PIC S9(5)V99 COMP.", "01 D PIC 9(5)V99."],
+            ["    MOVE 123.45 TO C.", "    MOVE C TO D."],
+        )
+        assert bytes(first_region(vm)[:11]).hex() == "00003039f0f0f1f2f3f4f5"
+
+    @covers(CobolFeature.PIC_CLAUSE)
+    def test_pic_p_field_round_trips(self):
+        vm = _program(
+            ["01 P PIC 999PP VALUE 12300.", "01 D PIC 9(5)."], ["    MOVE P TO D."]
+        )
+        assert bytes(first_region(vm)[:8]).hex() == "f1f2f3f1f2f3f0f0"
+
+    @covers(CobolFeature.ARITHMETIC_EXPRESSION)
+    def test_decimal_field_equals_decimal_literal(self):
+        vm = _program(
+            ["01 X PIC 9V9 VALUE 0.1.", "01 FLAG PIC 9 VALUE 0."],
+            ["    IF X = 0.1", "        MOVE 1 TO FLAG", "    END-IF."],
+        )
+        assert first_region(vm)[2] == 0xF1

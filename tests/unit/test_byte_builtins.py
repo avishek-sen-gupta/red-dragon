@@ -507,6 +507,10 @@ class TestByteBuiltinsRegistration:
             "__cobol_multiply",
             "__cobol_divide",
             "__cobol_to_float",
+            "__cobol_from_digits",
+            "__cobol_scale_by",
+            "__cobol_parse_number",
+            "__cobol_binary_unscaled",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:
