@@ -26,6 +26,7 @@ from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
+from cobol_asg.source_span import SourceSpan
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,8 @@ def _write_ref_mod_target(
     target: RefModOperand,
     value_reg: Register,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> None:
     """Write value_reg into target's field.
 
@@ -46,7 +49,11 @@ def _write_ref_mod_target(
     confirming ctx.has_field(target.name, materialised) first.
     """
     target_ref, target_rr = ctx.resolve_field_ref(
-        target.name, materialised, target.qualifiers, subscripts=target.subscripts
+        target.name,
+        materialised,
+        target.qualifiers,
+        subscripts=target.subscripts,
+        span=span,
     )
     target_value_reg = value_reg
     if target.ref_mod_start is not None:
@@ -55,10 +62,13 @@ def _write_ref_mod_target(
             target_ref.fl,
             target_ref.offset_reg,
             extent=target_ref.extent,
+            span=span,
         )
-        target_str_reg = ctx.emit_to_string(target_decoded)
-        tgt_start_reg = eval_ref_mod_expr(ctx, target.ref_mod_start, materialised)
-        one_reg = ctx.const_to_reg(1)
+        target_str_reg = ctx.emit_to_string(target_decoded, span=span)
+        tgt_start_reg = eval_ref_mod_expr(
+            ctx, target.ref_mod_start, materialised, span=span
+        )
+        one_reg = ctx.const_to_reg(1, span=span)
         tgt_start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -66,12 +76,15 @@ def _write_ref_mod_target(
                 operator=resolve_binop("-"),
                 left=tgt_start_reg,
                 right=one_reg,
-            )
+            ),
+            span=span,
         )
         if target.ref_mod_length is not None:
-            tgt_length_reg = eval_ref_mod_expr(ctx, target.ref_mod_length, materialised)
+            tgt_length_reg = eval_ref_mod_expr(
+                ctx, target.ref_mod_length, materialised, span=span
+            )
         else:
-            tgt_length_reg = ctx.const_to_reg(999999)
+            tgt_length_reg = ctx.const_to_reg(999999, span=span)
         spliced_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
@@ -83,7 +96,8 @@ def _write_ref_mod_target(
                     tgt_length_reg,
                     value_reg,
                 ),
-            )
+            ),
+            span=span,
         )
         target_value_reg = spliced_reg
     ctx.emit_encode_and_write(
@@ -92,6 +106,7 @@ def _write_ref_mod_target(
         target_value_reg,
         target_ref.offset_reg,
         extent=target_ref.extent,
+        span=span,
     )
 
 
@@ -101,6 +116,7 @@ def lower_string(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """STRING ... DELIMITED BY ... INTO target."""
+    span = stmt.span
     part_regs: list[Register] = []
     for sending in stmt.sendings:
         # An intrinsic FUNCTION sending (e.g. FUNCTION TRIM(WS-VAR)) is evaluated
@@ -109,8 +125,10 @@ def lower_string(
         if sending.function is not None:
             from interpreter.cobol.lower_arithmetic import lower_function_operand
 
-            func_reg = lower_function_operand(ctx, sending.function, materialised)
-            part_regs.append(ctx.emit_to_string(func_reg))
+            func_reg = lower_function_operand(
+                ctx, sending.function, materialised, span=span
+            )
+            part_regs.append(ctx.emit_to_string(func_reg, span=span))
             continue
 
         operand_name = sending.value.name
@@ -130,22 +148,26 @@ def lower_string(
                 materialised,
                 sending.value.qualifiers,
                 subscripts=sending.value.subscripts,
+                span=span,
             )
             decoded_reg = ctx.emit_decode_field(
                 source_rr,
                 source_ref.fl,
                 source_ref.offset_reg,
                 extent=source_ref.extent,
+                span=span,
             )
-            src_str_reg = ctx.emit_to_string(decoded_reg)
+            src_str_reg = ctx.emit_to_string(decoded_reg, span=span)
         else:
-            src_str_reg = ctx.const_to_reg(strip_cobol_literal(str(sending.value.name)))
+            src_str_reg = ctx.const_to_reg(
+                strip_cobol_literal(str(sending.value.name)), span=span
+            )
 
         if sending.value.ref_mod_start is not None:
             raw_start_reg = eval_ref_mod_expr(
-                ctx, sending.value.ref_mod_start, materialised
+                ctx, sending.value.ref_mod_start, materialised, span=span
             )
-            one_reg = ctx.const_to_reg(1)
+            one_reg = ctx.const_to_reg(1, span=span)
             start_0indexed_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
@@ -153,21 +175,23 @@ def lower_string(
                     operator=resolve_binop("-"),
                     left=raw_start_reg,
                     right=one_reg,
-                )
+                ),
+                span=span,
             )
             if sending.value.ref_mod_length is not None:
                 length_reg = eval_ref_mod_expr(
-                    ctx, sending.value.ref_mod_length, materialised
+                    ctx, sending.value.ref_mod_length, materialised, span=span
                 )
             else:
-                length_reg = ctx.const_to_reg(9999)
+                length_reg = ctx.const_to_reg(9999, span=span)
             sliced_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
                     result_reg=sliced_reg,
                     func_name=FuncName(BuiltinName.STRING_SLICE),
                     args=(src_str_reg, start_0indexed_reg, length_reg),
-                )
+                ),
+                span=span,
             )
             src_str_reg = sliced_reg
 
@@ -177,7 +201,8 @@ def lower_string(
             delim_reg = ctx.const_to_reg(
                 strip_cobol_literal(
                     translate_cobol_figurative(str(sending.delimited_by))
-                )
+                ),
+                span=span,
             )
             find_pos = ctx.fresh_reg()
             ctx.emit_inst(
@@ -186,6 +211,7 @@ def lower_string(
                     func_name=FuncName(BuiltinName.STRING_FIND),
                     args=(src_str_reg, delim_reg),
                 ),
+                span=span,
             )
             parts = ctx.fresh_reg()
             ctx.emit_inst(
@@ -194,20 +220,22 @@ def lower_string(
                     func_name=FuncName(BuiltinName.STRING_SPLIT),
                     args=(src_str_reg, delim_reg),
                 ),
+                span=span,
             )
             first_part = ctx.fresh_reg()
-            zero_reg = ctx.const_to_reg(0)
+            zero_reg = ctx.const_to_reg(0, span=span)
             ctx.emit_inst(
                 CallFunction(
                     result_reg=first_part,
                     func_name=FuncName(BuiltinName.LIST_GET),
                     args=(parts, zero_reg),
                 ),
+                span=span,
             )
             part_regs.append(first_part)
 
     if not part_regs:
-        concat_reg = ctx.const_to_reg("")
+        concat_reg = ctx.const_to_reg("", span=span)
     elif len(part_regs) == 1:
         concat_reg = part_regs[0]
     else:
@@ -220,6 +248,7 @@ def lower_string(
                     func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
                     args=(concat_reg, next_reg),
                 ),
+                span=span,
             )
             concat_reg = new_concat
 
@@ -238,21 +267,26 @@ def lower_string(
                     "ignoring the pointer",
                     stmt.into.name,
                 )
-            _write_ref_mod_target(ctx, stmt.into, concat_reg, materialised)
+            _write_ref_mod_target(ctx, stmt.into, concat_reg, materialised, span=span)
             return
-        target_ref, target_rr = ctx.resolve_field_ref(stmt.into.name, materialised)
+        target_ref, target_rr = ctx.resolve_field_ref(
+            stmt.into.name, materialised, span=span
+        )
         if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
             # WITH POINTER: read the cursor (1-based), write starting there
             # instead of at offset 0, then advance the cursor by the length of
             # what was just written (red-dragon-4q25.15).
-            ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
+            ptr_ref, ptr_rr = ctx.resolve_field_ref(
+                stmt.pointer, materialised, span=span
+            )
             ptr_decoded_reg = ctx.emit_decode_field(
                 ptr_rr,
                 ptr_ref.fl,
                 ptr_ref.offset_reg,
                 extent=ptr_ref.extent,
+                span=span,
             )
-            one_reg = ctx.const_to_reg(1)
+            one_reg = ctx.const_to_reg(1, span=span)
             start_0indexed_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
@@ -260,16 +294,18 @@ def lower_string(
                     operator=resolve_binop("-"),
                     left=ptr_decoded_reg,
                     right=one_reg,
-                )
+                ),
+                span=span,
             )
             write_offset_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
                     result_reg=write_offset_reg,
                     operator=resolve_binop("+"),
-                    left=ctx.const_to_reg(target_ref.fl.offset),
+                    left=ctx.const_to_reg(target_ref.fl.offset, span=span),
                     right=start_0indexed_reg,
-                )
+                ),
+                span=span,
             )
             # WITH POINTER writes byte_length bytes starting (ptr - 1) bytes
             # into the receiver, so the bytes touched run up to byte_length - 1
@@ -290,6 +326,7 @@ def lower_string(
                     region=target_ref.extent.region,
                     record=materialised.enclosing_record_extent(stmt.into.name),
                 ),
+                span=span,
             )
             written_len_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -298,6 +335,7 @@ def lower_string(
                     func_name=FuncName(BuiltinName.LENGTH),
                     args=(concat_reg,),
                 ),
+                span=span,
             )
             new_ptr_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -306,15 +344,17 @@ def lower_string(
                     operator=resolve_binop("+"),
                     left=ptr_decoded_reg,
                     right=written_len_reg,
-                )
+                ),
+                span=span,
             )
-            new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg)
+            new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg, span=span)
             ctx.emit_encode_and_write(
                 ptr_rr,
                 ptr_ref.fl,
                 new_ptr_str_reg,
                 ptr_ref.offset_reg,
                 extent=ptr_ref.extent,
+                span=span,
             )
         else:
             ctx.emit_encode_and_write(
@@ -323,6 +363,7 @@ def lower_string(
                 concat_reg,
                 target_ref.offset_reg,
                 extent=target_ref.extent,
+                span=span,
             )
     else:
         logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
@@ -334,22 +375,30 @@ def lower_unstring(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """UNSTRING source DELIMITED BY ... INTO targets."""
+    span = stmt.span
     source_name = stmt.source.name
     if ctx.has_field(source_name, materialised):
-        source_ref, source_rr = ctx.resolve_field_ref(source_name, materialised)
+        source_ref, source_rr = ctx.resolve_field_ref(
+            source_name, materialised, span=span
+        )
         decoded_reg = ctx.emit_decode_field(
             source_rr,
             source_ref.fl,
             source_ref.offset_reg,
             extent=source_ref.extent,
+            span=span,
         )
-        src_str_reg = ctx.emit_to_string(decoded_reg)
+        src_str_reg = ctx.emit_to_string(decoded_reg, span=span)
     else:
-        src_str_reg = ctx.const_to_reg(strip_cobol_literal(str(stmt.source.name)))
+        src_str_reg = ctx.const_to_reg(
+            strip_cobol_literal(str(stmt.source.name)), span=span
+        )
 
     if stmt.source.ref_mod_start is not None:
-        raw_start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
-        one_reg = ctx.const_to_reg(1)
+        raw_start_reg = eval_ref_mod_expr(
+            ctx, stmt.source.ref_mod_start, materialised, span=span
+        )
+        one_reg = ctx.const_to_reg(1, span=span)
         start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -357,21 +406,23 @@ def lower_unstring(
                 operator=resolve_binop("-"),
                 left=raw_start_reg,
                 right=one_reg,
-            )
+            ),
+            span=span,
         )
         if stmt.source.ref_mod_length is not None:
             length_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_length, materialised
+                ctx, stmt.source.ref_mod_length, materialised, span=span
             )
         else:
-            length_reg = ctx.const_to_reg(9999)
+            length_reg = ctx.const_to_reg(9999, span=span)
         sliced_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=sliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
                 args=(src_str_reg, start_0indexed_reg, length_reg),
-            )
+            ),
+            span=span,
         )
         src_str_reg = sliced_reg
 
@@ -387,11 +438,11 @@ def lower_unstring(
         # it in between, and keeps each block independently readable (the
         # same tradeoff already made for WITH POINTER's own part-length
         # recomputation above).
-        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
+        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised, span=span)
         ptr_decoded_reg = ctx.emit_decode_field(
-            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg, extent=ptr_ref.extent
+            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg, extent=ptr_ref.extent, span=span
         )
-        one_reg = ctx.const_to_reg(1)
+        one_reg = ctx.const_to_reg(1, span=span)
         ptr_start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -399,16 +450,18 @@ def lower_unstring(
                 operator=resolve_binop("-"),
                 left=ptr_decoded_reg,
                 right=one_reg,
-            )
+            ),
+            span=span,
         )
-        rest_len_reg = ctx.const_to_reg(9999)
+        rest_len_reg = ctx.const_to_reg(9999, span=span)
         ptr_sliced_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=ptr_sliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
                 args=(src_str_reg, ptr_start_0indexed_reg, rest_len_reg),
-            )
+            ),
+            span=span,
         )
         src_str_reg = ptr_sliced_reg
 
@@ -418,7 +471,9 @@ def lower_unstring(
     # repeated-nearest-match scan across all of them at runtime — a single
     # delimiter is just the N=1 case of the same builtin (red-dragon-4q25.12).
     delim_regs = tuple(
-        ctx.const_to_reg(strip_cobol_literal(translate_cobol_figurative(str(d))))
+        ctx.const_to_reg(
+            strip_cobol_literal(translate_cobol_figurative(str(d))), span=span
+        )
         for d in stmt.delimiters
     )
     parts_reg = ctx.fresh_reg()
@@ -428,6 +483,7 @@ def lower_unstring(
             func_name=FuncName(BuiltinName.MULTI_DELIMITER_SPLIT),
             args=(src_str_reg,) + delim_regs,
         ),
+        span=span,
     )
 
     for i, target_operand in enumerate(stmt.into):
@@ -436,7 +492,7 @@ def lower_unstring(
                 "UNSTRING INTO target %s not found in layout", target_operand.name
             )
             continue
-        idx_reg = ctx.const_to_reg(i)
+        idx_reg = ctx.const_to_reg(i, span=span)
         part_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
@@ -444,11 +500,12 @@ def lower_unstring(
                 func_name=FuncName(BuiltinName.LIST_GET),
                 args=(parts_reg, idx_reg),
             ),
+            span=span,
         )
         # INTO dest(start:length) splices into the sliced region only,
         # leaving the rest of the field untouched (red-dragon-2fxq); a bare
         # target writes the whole field, as before.
-        _write_ref_mod_target(ctx, target_operand, part_reg, materialised)
+        _write_ref_mod_target(ctx, target_operand, part_reg, materialised, span=span)
 
     if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
         # WITH POINTER: advance the cursor past however much of the source
@@ -457,11 +514,11 @@ def lower_unstring(
         # performs — not an assumed fixed delimiter width (red-dragon-4q25.15).
         # delim_regs is already in scope from the MULTI_DELIMITER_SPLIT call
         # earlier in this same function (Task 2).
-        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised)
+        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised, span=span)
         ptr_decoded_reg = ctx.emit_decode_field(
-            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg, extent=ptr_ref.extent
+            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg, extent=ptr_ref.extent, span=span
         )
-        target_count_reg = ctx.const_to_reg(len(stmt.into))
+        target_count_reg = ctx.const_to_reg(len(stmt.into), span=span)
         consumed_len_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
@@ -469,6 +526,7 @@ def lower_unstring(
                 func_name=FuncName(BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH),
                 args=(src_str_reg, target_count_reg) + delim_regs,
             ),
+            span=span,
         )
         new_ptr_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -477,19 +535,23 @@ def lower_unstring(
                 operator=resolve_binop("+"),
                 left=ptr_decoded_reg,
                 right=consumed_len_reg,
-            )
+            ),
+            span=span,
         )
-        new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg)
+        new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg, span=span)
         ctx.emit_encode_and_write(
             ptr_rr,
             ptr_ref.fl,
             new_ptr_str_reg,
             ptr_ref.offset_reg,
             extent=ptr_ref.extent,
+            span=span,
         )
 
     if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
-        tally_ref, tally_rr = ctx.resolve_field_ref(stmt.tallying_target, materialised)
+        tally_ref, tally_rr = ctx.resolve_field_ref(
+            stmt.tallying_target, materialised, span=span
+        )
         # Real UNSTRING TALLYING IN semantics (IBM Enterprise COBOL Language
         # Reference): the counter ACCUMULATES — final value = initial value +
         # number of receiving areas actually populated, capped at len(into)
@@ -501,8 +563,9 @@ def lower_unstring(
                 func_name=FuncName(BuiltinName.LIST_LEN),
                 args=(parts_reg,),
             ),
+            span=span,
         )
-        into_count_reg = ctx.const_to_reg(len(stmt.into))
+        into_count_reg = ctx.const_to_reg(len(stmt.into), span=span)
         populated_count_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
@@ -510,12 +573,14 @@ def lower_unstring(
                 func_name=FuncName(BuiltinName.MIN),
                 args=(len_reg, into_count_reg),
             ),
+            span=span,
         )
         existing_decoded_reg = ctx.emit_decode_field(
             tally_rr,
             tally_ref.fl,
             tally_ref.offset_reg,
             extent=tally_ref.extent,
+            span=span,
         )
         new_total_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -525,14 +590,16 @@ def lower_unstring(
                 left=existing_decoded_reg,
                 right=populated_count_reg,
             ),
+            span=span,
         )
-        count_str_reg = ctx.emit_to_string(new_total_reg)
+        count_str_reg = ctx.emit_to_string(new_total_reg, span=span)
         ctx.emit_encode_and_write(
             tally_rr,
             tally_ref.fl,
             count_str_reg,
             tally_ref.offset_reg,
             extent=tally_ref.extent,
+            span=span,
         )
 
 
@@ -542,19 +609,24 @@ def lower_inspect(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """INSPECT source TALLYING|REPLACING ..."""
+    span = stmt.span
     if not ctx.has_field(stmt.source.name, materialised):
         logger.warning("INSPECT source %s not found in layout", stmt.source.name)
         return
-    source_ref, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+    source_ref, source_rr = ctx.resolve_field_ref(
+        stmt.source.name, materialised, span=span
+    )
     source_fl = source_ref.fl
     decoded_reg = ctx.emit_decode_field(
-        source_rr, source_fl, source_ref.offset_reg, extent=source_ref.extent
+        source_rr, source_fl, source_ref.offset_reg, extent=source_ref.extent, span=span
     )
-    src_str_reg = ctx.emit_to_string(decoded_reg)
+    src_str_reg = ctx.emit_to_string(decoded_reg, span=span)
 
     if stmt.source.ref_mod_start is not None:
-        raw_start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
-        one_reg = ctx.const_to_reg(1)
+        raw_start_reg = eval_ref_mod_expr(
+            ctx, stmt.source.ref_mod_start, materialised, span=span
+        )
+        one_reg = ctx.const_to_reg(1, span=span)
         start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -562,21 +634,23 @@ def lower_inspect(
                 operator=resolve_binop("-"),
                 left=raw_start_reg,
                 right=one_reg,
-            )
+            ),
+            span=span,
         )
         if stmt.source.ref_mod_length is not None:
             length_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_length, materialised
+                ctx, stmt.source.ref_mod_length, materialised, span=span
             )
         else:
-            length_reg = ctx.const_to_reg(9999)
+            length_reg = ctx.const_to_reg(9999, span=span)
         sliced_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=sliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
                 args=(src_str_reg, start_0indexed_reg, length_reg),
-            )
+            ),
+            span=span,
         )
         src_str_reg = sliced_reg
 
@@ -592,16 +666,20 @@ def _resolve_convert_operand(
     ctx: EmitContext,
     operand: str,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> Register:
     """Resolve a CONVERTING from/to operand: a data-item name is decoded at
     runtime; otherwise it is a figurative / quoted-literal constant."""
     if ctx.has_field(operand, materialised):
-        ref, rr = ctx.resolve_field_ref(operand, materialised)
-        decoded = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
-        return ctx.emit_to_string(decoded)
+        ref, rr = ctx.resolve_field_ref(operand, materialised, span=span)
+        decoded = ctx.emit_decode_field(
+            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+        )
+        return ctx.emit_to_string(decoded, span=span)
     if operand in ("SPACES", "SPACE", "ZEROS", "ZEROES", "ZERO", "LOW-VALUES"):
-        return ctx.const_to_reg(translate_cobol_figurative(operand))
-    return ctx.const_to_reg(strip_cobol_literal(str(operand)))
+        return ctx.const_to_reg(translate_cobol_figurative(operand), span=span)
+    return ctx.const_to_reg(strip_cobol_literal(str(operand)), span=span)
 
 
 def lower_inspect_converting(
@@ -616,22 +694,30 @@ def lower_inspect_converting(
     Builds the converted string via the STRING_CONVERT builtin and writes it back
     to the source field (red-dragon-zuhj — unblocks CardDemo's alphabetic edits).
     """
-    from_reg = _resolve_convert_operand(ctx, str(stmt.converting_from), materialised)
-    to_reg = _resolve_convert_operand(ctx, str(stmt.converting_to), materialised)
+    span = stmt.span
+    from_reg = _resolve_convert_operand(
+        ctx, str(stmt.converting_from), materialised, span=span
+    )
+    to_reg = _resolve_convert_operand(
+        ctx, str(stmt.converting_to), materialised, span=span
+    )
     converted_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
             result_reg=converted_reg,
             func_name=FuncName(BuiltinName.STRING_CONVERT),
             args=(src_str_reg, from_reg, to_reg),
-        )
+        ),
+        span=span,
     )
     if ctx.has_field(stmt.source.name, materialised):
-        source_ref_wb, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        source_ref_wb, source_rr = ctx.resolve_field_ref(
+            stmt.source.name, materialised, span=span
+        )
         # Write-back of the whole INSPECT source at its own offset — the
         # re-resolved ref is unsubscripted, so its extent is the exact field.
         ctx.emit_encode_and_write(
-            source_rr, source_fl, converted_reg, extent=source_ref_wb.extent
+            source_rr, source_fl, converted_reg, extent=source_ref_wb.extent, span=span
         )
     else:
         logger.warning(
@@ -653,6 +739,7 @@ def lower_inspect_tallying(
     ``INSPECT src TALLYING cnt1 FOR ALL 'A' cnt2 FOR ALL 'B'`` updates both
     counters independently in one statement (red-dragon-4q25.17).
     """
+    span = stmt.span
     for group in stmt.tallying_groups:
         has_target = bool(group.target) and ctx.has_field(group.target, materialised)
         if has_target:
@@ -660,22 +747,26 @@ def lower_inspect_tallying(
             # Reference): the counter ACCUMULATES into its existing value
             # across separate statement executions — it is not reset to zero
             # each time (red-dragon-pvxc).
-            tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
+            tally_ref, tally_rr = ctx.resolve_field_ref(
+                group.target, materialised, span=span
+            )
             total_count_reg = ctx.emit_decode_field(
                 tally_rr,
                 tally_ref.fl,
                 tally_ref.offset_reg,
                 extent=tally_ref.extent,
+                span=span,
             )
         else:
-            total_count_reg = ctx.const_to_reg(0)
+            total_count_reg = ctx.const_to_reg(0, span=span)
         for tally_for in group.patterns:
             bounded_str_reg = src_str_reg
             if isinstance(tally_for.boundary, BeforeAfterBoundary):
                 boundary_text_reg = ctx.const_to_reg(
-                    strip_cobol_literal(str(tally_for.boundary.boundary_text))
+                    strip_cobol_literal(str(tally_for.boundary.boundary_text)),
+                    span=span,
                 )
-                kind_reg = ctx.const_to_reg(tally_for.boundary.kind.lower())
+                kind_reg = ctx.const_to_reg(tally_for.boundary.kind.lower(), span=span)
                 bounded_str_reg = ctx.fresh_reg()
                 ctx.emit_inst(
                     CallFunction(
@@ -683,9 +774,12 @@ def lower_inspect_tallying(
                         func_name=FuncName(BuiltinName.STRING_BOUNDARY_SLICE),
                         args=(src_str_reg, boundary_text_reg, kind_reg),
                     ),
+                    span=span,
                 )
-            pattern_reg = ctx.const_to_reg(strip_cobol_literal(str(tally_for.pattern)))
-            mode_reg = ctx.const_to_reg(tally_for.mode.lower())
+            pattern_reg = ctx.const_to_reg(
+                strip_cobol_literal(str(tally_for.pattern)), span=span
+            )
+            mode_reg = ctx.const_to_reg(tally_for.mode.lower(), span=span)
             ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
             count_reg = ctx.inline_ir(
                 ir,
@@ -694,6 +788,7 @@ def lower_inspect_tallying(
                     "%p_pattern": pattern_reg,
                     "%p_mode": mode_reg,
                 },
+                span=span,
             )
             new_total = ctx.fresh_reg()
             ctx.emit_inst(
@@ -703,18 +798,22 @@ def lower_inspect_tallying(
                     left=total_count_reg,
                     right=count_reg,
                 ),
+                span=span,
             )
             total_count_reg = new_total
 
         if has_target:
-            tally_ref, tally_rr = ctx.resolve_field_ref(group.target, materialised)
-            count_str_reg = ctx.emit_to_string(total_count_reg)
+            tally_ref, tally_rr = ctx.resolve_field_ref(
+                group.target, materialised, span=span
+            )
+            count_str_reg = ctx.emit_to_string(total_count_reg, span=span)
             ctx.emit_encode_and_write(
                 tally_rr,
                 tally_ref.fl,
                 count_str_reg,
                 tally_ref.offset_reg,
                 extent=tally_ref.extent,
+                span=span,
             )
 
 
@@ -726,15 +825,16 @@ def lower_inspect_replacing(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """INSPECT REPLACING — apply replacements and write back."""
+    span = stmt.span
     current_str_reg: Register = src_str_reg
 
     for replacing in stmt.replacings:
         remainder_reg: Register = NO_REGISTER
         if isinstance(replacing.boundary, BeforeAfterBoundary):
             boundary_text_reg = ctx.const_to_reg(
-                strip_cobol_literal(str(replacing.boundary.boundary_text))
+                strip_cobol_literal(str(replacing.boundary.boundary_text)), span=span
             )
-            kind_reg = ctx.const_to_reg(replacing.boundary.kind.lower())
+            kind_reg = ctx.const_to_reg(replacing.boundary.kind.lower(), span=span)
             split_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
@@ -742,9 +842,10 @@ def lower_inspect_replacing(
                     func_name=FuncName(BuiltinName.STRING_BOUNDARY_SPLIT),
                     args=(current_str_reg, boundary_text_reg, kind_reg),
                 ),
+                span=span,
             )
-            zero_reg = ctx.const_to_reg(0)
-            one_reg = ctx.const_to_reg(1)
+            zero_reg = ctx.const_to_reg(0, span=span)
+            one_reg = ctx.const_to_reg(1, span=span)
             bounded_str_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
@@ -752,6 +853,7 @@ def lower_inspect_replacing(
                     func_name=FuncName(BuiltinName.LIST_GET),
                     args=(split_reg, zero_reg),
                 ),
+                span=span,
             )
             remainder_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -760,13 +862,18 @@ def lower_inspect_replacing(
                     func_name=FuncName(BuiltinName.LIST_GET),
                     args=(split_reg, one_reg),
                 ),
+                span=span,
             )
         else:
             bounded_str_reg = current_str_reg
 
-        from_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.from_pattern)))
-        to_reg = ctx.const_to_reg(strip_cobol_literal(str(replacing.to_pattern)))
-        mode_reg = ctx.const_to_reg(replacing.mode.lower())
+        from_reg = ctx.const_to_reg(
+            strip_cobol_literal(str(replacing.from_pattern)), span=span
+        )
+        to_reg = ctx.const_to_reg(
+            strip_cobol_literal(str(replacing.to_pattern)), span=span
+        )
+        mode_reg = ctx.const_to_reg(replacing.mode.lower(), span=span)
         ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")
         replaced_bounded_reg = ctx.inline_ir(
             ir,
@@ -776,6 +883,7 @@ def lower_inspect_replacing(
                 "%p_to": to_reg,
                 "%p_mode": mode_reg,
             },
+            span=span,
         )
 
         if remainder_reg.is_present():
@@ -793,6 +901,7 @@ def lower_inspect_replacing(
                     func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
                     args=args,
                 ),
+                span=span,
             )
             current_str_reg = spliced_reg
         else:
@@ -800,11 +909,17 @@ def lower_inspect_replacing(
 
     # Resolve the source region register for the write-back
     if ctx.has_field(stmt.source.name, materialised):
-        source_ref_wb, source_rr = ctx.resolve_field_ref(stmt.source.name, materialised)
+        source_ref_wb, source_rr = ctx.resolve_field_ref(
+            stmt.source.name, materialised, span=span
+        )
         # Write-back of the whole INSPECT source at its own offset — the
         # re-resolved ref is unsubscripted, so its extent is the exact field.
         ctx.emit_encode_and_write(
-            source_rr, source_fl, current_str_reg, extent=source_ref_wb.extent
+            source_rr,
+            source_fl,
+            current_str_reg,
+            extent=source_ref_wb.extent,
+            span=span,
         )
     else:
         # Fallback: source_fl carries offset; need a region register — skip write

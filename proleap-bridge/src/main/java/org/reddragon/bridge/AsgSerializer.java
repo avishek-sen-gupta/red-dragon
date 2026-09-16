@@ -269,6 +269,7 @@ public final class AsgSerializer {
         for (Section section : sections) {
             JsonObject sectionObj = new JsonObject();
             sectionObj.addProperty("name", section.getName());
+            StatementSerializer.addSpan(sectionObj, section.getCtx());
 
             Collection<Paragraph> paras = section.getParagraphs();
             if (paras != null && !paras.isEmpty()) {
@@ -324,6 +325,9 @@ public final class AsgSerializer {
             String name = ((CobolParser.ProcedureSectionHeaderContext)
                     d.getSectionHeader().getCtx()).sectionName().getText();
             secObj.addProperty("name", name);
+            // d.getCtx() is the whole procedureDeclarative: it starts at the
+            // "<name> SECTION." header, like a regular section's ctx does.
+            StatementSerializer.addSpan(secObj, d.getCtx());
 
             UseStatement us = d.getUseStament();
             // USE FOR DEBUGGING is out of scope; only AFTER ERROR/EXCEPTION is serialized.

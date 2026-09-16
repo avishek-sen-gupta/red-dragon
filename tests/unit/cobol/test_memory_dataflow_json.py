@@ -10,6 +10,7 @@ brief's instruction to reuse probe fixtures rather than hand-build results.
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -91,33 +92,57 @@ def test_edges_carry_via_source_locations(analyze_probe):
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_via_is_sorted_and_deduplicated_across_multiple_statements(analyze_probe):
-    """Two MOVEs feed the same edge -> via must not depend on set order.
+    """``via`` lists one location per contributing statement, sorted, deduped.
 
-    ``reach_in`` (interpreter/dataflow.py) is a ``set[Definition]`` whose
-    iteration order is subject to hash randomisation across processes, so a
-    ``via`` list built without sorting would be nondeterministic between
-    runs -- exactly the phantom-diff hazard a visualiser must not see.
+    Two MOVE statements on different lines now produce two genuinely
+    DISTINCT locations (MOVE lowering threads ``stmt.span`` as of
+    ``lower_arithmetic.py``'s span-threading), so ``via`` must contain both,
+    in sorted order -- ``reach_in`` (interpreter/dataflow.py) is a
+    ``set[Definition]`` whose iteration order is subject to hash
+    randomisation across processes, so an unsorted ``via`` would be
+    nondeterministic between runs, exactly the phantom-diff hazard a
+    visualiser must not see.
 
-    NOTE: the COBOL frontend currently records ``NO_SOURCE_LOCATION`` (which
-    stringifies to ``"<unknown>"``) on every ``WriteRegion``/``LoadRegion``
-    it emits, so both MOVEs below contribute the identical location string.
-    That is a pre-existing gap in the frontend's location threading, out of
-    scope for this additive task -- but it still exercises de-duplication
-    directly: two contributing statements must collapse to ONE ``via``
-    entry, not two copies of the same string. Sortedness is asserted
-    generally (``via == sorted(via)``), which holds vacuously for a
-    single-element list; a genuine multi-*distinct*-location regression test
-    needs the underlying location-threading gap fixed first.
+    De-duplication is exercised separately, by a construction that still
+    produces two contributions sharing ONE identical location string: a
+    SINGLE ``MOVE WS-SRC TO WS-DST WS-DST.`` statement names its target
+    field twice, so ``lower_move`` emits two ``WriteRegion`` instructions
+    for ``WS-DST`` -- one per target occurrence -- both carrying the same
+    statement's span. Those must still collapse into ONE ``via`` entry,
+    not two copies of the same string.
     """
-    result = analyze_probe("""
+    # -- Two statements -> two distinct locations, sorted. --
+    distinct = analyze_probe("""
            MOVE WS-SRC TO WS-DST.
            MOVE WS-SRC TO WS-DST.
     """)
-    edge = next(e for e in result.to_json()["edges"] if e["to"] == "WS-DST")
+    edge = next(e for e in distinct.to_json()["edges"] if e["to"] == "WS-DST")
     via = edge["via"]
-    assert via == ["<unknown>"], (
-        "two statements contributing the identical location string must "
-        "collapse to one de-duplicated via entry"
-    )
+    assert len(via) == 2, f"two distinct MOVEs must produce two via entries: {via}"
     assert via == sorted(via), "via must be sorted, not incidentally ordered"
     assert len(via) == len(set(via)), "via must be de-duplicated"
+    assert all(
+        v != "<unknown>" for v in via
+    ), f"MOVE now threads real source spans, expected no <unknown>: {via}"
+    # Line numbers are pinned by the fixed skeleton + probe text below (the
+    # first MOVE lands on line 10, the second on line 11); columns are left
+    # unpinned since they are an implementation detail of tree-sitter's node
+    # boundaries, not something this test should hardcode.
+    assert re.match(r"^10:\d+-10:\d+$", via[0]), via
+    assert re.match(r"^11:\d+-11:\d+$", via[1]), via
+
+    # -- One statement, same target named twice -> one shared location,
+    # still collapsed to a single via entry. --
+    duplicate_target = analyze_probe("""
+           MOVE WS-SRC TO WS-DST WS-DST.
+    """)
+    dup_edge = next(
+        e for e in duplicate_target.to_json()["edges"] if e["to"] == "WS-DST"
+    )
+    dup_via = dup_edge["via"]
+    assert len(dup_via) == 1, (
+        "one MOVE statement writing the same target twice must still "
+        f"collapse to a single via entry: {dup_via}"
+    )
+    assert dup_via[0] != "<unknown>"
+    assert re.match(r"^10:\d+-10:\d+$", dup_via[0]), dup_via
