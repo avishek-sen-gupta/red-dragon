@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -29,6 +30,8 @@ class VMConfig:
     io_provider: Any = (
         None  # Any: COBOL isolation boundary — CobolIOProvider avoided in core VM
     )
+    step_callback: Callable[[int, str], None] | None = None
+    step_callback_interval: int = 1_000_000
 
 
 @dataclass
