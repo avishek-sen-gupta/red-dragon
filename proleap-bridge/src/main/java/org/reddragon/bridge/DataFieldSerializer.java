@@ -77,6 +77,7 @@ public final class DataFieldSerializer {
         obj.addProperty("pic", extractPic(group));
         obj.addProperty("usage", extractUsage(group));
         obj.addProperty("offset", offset);
+        StatementSerializer.addSpan(obj, group.getCtx());
 
         String value = extractFirstValue(group);
         if (!value.isEmpty()) {
@@ -173,6 +174,7 @@ public final class DataFieldSerializer {
         obj.addProperty("pic", "");
         obj.addProperty("usage", "DISPLAY");
         obj.addProperty("offset", 0);
+        StatementSerializer.addSpan(obj, rename.getCtx());
 
         if (rename.getRenamesClause() != null) {
             if (rename.getRenamesClause().getFrom() != null) {

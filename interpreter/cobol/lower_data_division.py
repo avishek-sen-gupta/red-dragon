@@ -35,10 +35,14 @@ def lower_data_division(
     every dependency edge on the fields it initialises.
     """
     size_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.int_(size_reg, layout.total_bytes))
+    ctx.emit_inst(
+        Const.int_(size_reg, layout.total_bytes),
+        span=None,  # region-level: no single declaration
+    )
     region_reg = ctx.fresh_reg()
     ctx.emit_inst(
         AllocRegion(result_reg=region_reg, size_reg=size_reg),
+        span=None,  # region-level: no single declaration
     )
 
     fields_with_values = [fl for fl in layout.all_leaves() if fl.value]
@@ -47,7 +51,11 @@ def lower_data_division(
         # offset — no subscript is in play — so the whole-field extent is
         # exactly right here.
         ctx.emit_field_encode(
-            region_reg, fl, fl.value, extent=whole_field_extent(fl, region)
+            region_reg,
+            fl,
+            fl.value,
+            extent=whole_field_extent(fl, region),
+            span=fl.span,
         )
 
     logger.debug(

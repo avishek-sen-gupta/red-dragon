@@ -70,6 +70,7 @@ def lower_search(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """SEARCH table VARYING index WHEN cond ... AT END ..."""
+    span = stmt.span
     loop_label = ctx.fresh_label("search_loop")
     end_label = ctx.fresh_label("search_end")
     at_end_label = ctx.fresh_label("search_at_end")
@@ -126,27 +127,33 @@ def lower_search(
 
     if bound_index_name is None:
         counter_var = ctx.fresh_name("__search_ctr")
-        zero_reg = ctx.const_to_reg(0)
+        zero_reg = ctx.const_to_reg(0, span=span)
         ctx.emit_inst(
-            StoreVar(name=VarName(counter_var), value_reg=Register(str(zero_reg)))
+            StoreVar(name=VarName(counter_var), value_reg=Register(str(zero_reg))),
+            span=span,
         )
 
-    max_reg = ctx.const_to_reg(bound_limit)
+    max_reg = ctx.const_to_reg(bound_limit, span=span)
 
-    ctx.emit_inst(Label_(label=loop_label))
+    ctx.emit_inst(Label_(label=loop_label), span=span)
 
     if bound_index_name is not None:
-        bound_ref, bound_rr = ctx.resolve_field_ref(bound_index_name, materialised)
+        bound_ref, bound_rr = ctx.resolve_field_ref(
+            bound_index_name, materialised, span=span
+        )
         current_reg = ctx.emit_decode_field(
             bound_rr,
             bound_ref.fl,
             bound_ref.offset_reg,
             extent=bound_ref.extent,
+            span=span,
         )
         bound_operator = ">"
     else:
         current_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=current_reg, name=VarName(counter_var)))
+        ctx.emit_inst(
+            LoadVar(result_reg=current_reg, name=VarName(counter_var)), span=span
+        )
         bound_operator = ">="
     bound_cond = ctx.fresh_reg()
     ctx.emit_inst(
@@ -155,25 +162,27 @@ def lower_search(
             operator=resolve_binop(bound_operator),
             left=Register(str(current_reg)),
             right=Register(str(max_reg)),
-        )
+        ),
+        span=span,
     )
     body_label = ctx.fresh_label("search_body")
     ctx.emit_inst(
         BranchIf(
             cond_reg=Register(str(bound_cond)),
             branch_targets=(at_end_label, body_label),
-        )
+        ),
+        span=span,
     )
 
-    ctx.emit_inst(Label_(label=body_label))
+    ctx.emit_inst(Label_(label=body_label), span=span)
     for when in stmt.whens:
         if not when.condition:
             continue
         if isinstance(when.condition, dict):
-            cond_reg = ctx.lower_condition(when.condition, materialised)
+            cond_reg = ctx.lower_condition(when.condition, materialised, span=span)
         else:
             cond_reg = _lower_condition_str(
-                ctx, when.condition, materialised, ctx._condition_index
+                ctx, when.condition, materialised, ctx._condition_index, span=span
             )
         when_true = ctx.fresh_label("search_when_true")
         when_next = ctx.fresh_label("search_when_next")
@@ -181,26 +190,30 @@ def lower_search(
             BranchIf(
                 cond_reg=Register(str(cond_reg)),
                 branch_targets=(when_true, when_next),
-            )
+            ),
+            span=span,
         )
-        ctx.emit_inst(Label_(label=when_true))
+        ctx.emit_inst(Label_(label=when_true), span=span)
         for child in when.children:
             ctx.lower_statement(child, materialised)
-        ctx.emit_inst(Branch(label=end_label))
-        ctx.emit_inst(Label_(label=when_next))
+        ctx.emit_inst(Branch(label=end_label), span=span)
+        ctx.emit_inst(Label_(label=when_next), span=span)
 
-    ctx.emit_inst(Branch(label=increment_label))
-    ctx.emit_inst(Label_(label=increment_label))
+    ctx.emit_inst(Branch(label=increment_label), span=span)
+    ctx.emit_inst(Label_(label=increment_label), span=span)
 
     if advance_name is not None:
-        advance_ref, advance_rr = ctx.resolve_field_ref(advance_name, materialised)
+        advance_ref, advance_rr = ctx.resolve_field_ref(
+            advance_name, materialised, span=span
+        )
         decoded_reg = ctx.emit_decode_field(
             advance_rr,
             advance_ref.fl,
             advance_ref.offset_reg,
             extent=advance_ref.extent,
+            span=span,
         )
-        one_reg = ctx.const_to_reg(1)
+        one_reg = ctx.const_to_reg(1, span=span)
         inc_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -208,21 +221,25 @@ def lower_search(
                 operator=resolve_binop("+"),
                 left=Register(str(decoded_reg)),
                 right=Register(str(one_reg)),
-            )
+            ),
+            span=span,
         )
-        str_reg = ctx.emit_to_string(inc_reg)
+        str_reg = ctx.emit_to_string(inc_reg, span=span)
         ctx.emit_encode_and_write(
             advance_rr,
             advance_ref.fl,
             str_reg,
             advance_ref.offset_reg,
             extent=advance_ref.extent,
+            span=span,
         )
 
     if bound_index_name is None:
         ctr_reg2 = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=VarName(counter_var)))
-        one_ctr = ctx.const_to_reg(1)
+        ctx.emit_inst(
+            LoadVar(result_reg=ctr_reg2, name=VarName(counter_var)), span=span
+        )
+        one_ctr = ctx.const_to_reg(1, span=span)
         inc_ctr = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -230,13 +247,14 @@ def lower_search(
                 operator=resolve_binop("+"),
                 left=ctr_reg2,
                 right=Register(str(one_ctr)),
-            )
+            ),
+            span=span,
         )
-        ctx.emit_inst(StoreVar(name=VarName(counter_var), value_reg=inc_ctr))
-    ctx.emit_inst(Branch(label=loop_label))
+        ctx.emit_inst(StoreVar(name=VarName(counter_var), value_reg=inc_ctr), span=span)
+    ctx.emit_inst(Branch(label=loop_label), span=span)
 
-    ctx.emit_inst(Label_(label=at_end_label))
+    ctx.emit_inst(Label_(label=at_end_label), span=span)
     for child in stmt.at_end:
         ctx.lower_statement(child, materialised)
 
-    ctx.emit_inst(Label_(label=end_label))
+    ctx.emit_inst(Label_(label=end_label), span=span)

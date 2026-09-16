@@ -22,6 +22,7 @@ from cobol_asg.edit_picture import (
     UnsupportedEditPictureError,
 )
 from cobol_asg.pic_parser import parse_pic
+from cobol_asg.source_span import SourceSpan
 
 
 def _currency_from_special_names(data: dict) -> str:
@@ -100,6 +101,7 @@ class CobolField:
     # descriptor at construction, so it has to arrive as constructor state
     # (red-dragon-3o5f).
     currency_symbol: str = DEFAULT_CURRENCY
+    span: SourceSpan | None = None
     type_descriptor: CobolTypeDescriptor = field(init=False)
 
     def __post_init__(self) -> None:
@@ -152,6 +154,7 @@ class CobolField:
             renames_thru=data.get("renames_thru", ""),
             blank_when_zero=data.get("blank_when_zero", False),
             currency_symbol=currency,
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -162,6 +165,8 @@ class CobolField:
             "usage": self.usage,
             "offset": self.offset,
         }
+        if self.span is not None:
+            self.span.write_into(result)
         if self.value:
             result["value"] = self.value
         if self.value_is_figurative:
@@ -208,32 +213,20 @@ class CobolParagraph:
 
     name: str
     statements: list[CobolStatementType] = field(default_factory=list)
-    line_start: int | None = None
-    col_start: int | None = None
-    line_end: int | None = None
-    col_end: int | None = None
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolParagraph:
         return cls(
             name=data["name"],
             statements=[parse_statement(s) for s in data.get("statements", [])],
-            line_start=data.get("line_start"),
-            col_start=data.get("col_start"),
-            line_end=data.get("line_end"),
-            col_end=data.get("col_end"),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result: dict = {"name": self.name}
-        if self.line_start is not None:
-            result["line_start"] = self.line_start
-        if self.col_start is not None:
-            result["col_start"] = self.col_start
-        if self.line_end is not None:
-            result["line_end"] = self.line_end
-        if self.col_end is not None:
-            result["col_end"] = self.col_end
+        if self.span is not None:
+            self.span.write_into(result)
         if self.statements:
             result["statements"] = [s.to_dict() for s in self.statements]
         return result
@@ -256,6 +249,7 @@ class CobolSection:
     paragraphs: list[CobolParagraph] = field(default_factory=list)
     statements: list[CobolStatementType] = field(default_factory=list)
     use: UseClause | None = None
+    span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolSection:
@@ -266,6 +260,7 @@ class CobolSection:
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
             ],
             statements=[parse_statement(s) for s in data.get("statements", [])],
+            span=SourceSpan.from_dict(data),
             use=(
                 UseClause(
                     is_global=bool(use_d.get("global", False)),
@@ -279,6 +274,8 @@ class CobolSection:
 
     def to_dict(self) -> dict:
         result: dict = {"name": self.name}
+        if self.span is not None:
+            self.span.write_into(result)
         if self.paragraphs:
             result["paragraphs"] = [p.to_dict() for p in self.paragraphs]
         if self.statements:

@@ -148,6 +148,21 @@ public final class StatementSerializer {
     }
 
     /**
+     * Adds the four flat position keys for a parser context, or nothing when
+     * the context is absent. Shared with DataFieldSerializer so every
+     * positioned object in the ASG uses one spelling.
+     */
+    static void addSpan(JsonObject obj, org.antlr.v4.runtime.ParserRuleContext ctx) {
+        if (ctx == null || ctx.getStart() == null || ctx.getStop() == null) {
+            return;
+        }
+        obj.addProperty("line_start", ctx.getStart().getLine());
+        obj.addProperty("col_start",  ctx.getStart().getCharPositionInLine());
+        obj.addProperty("line_end",   ctx.getStop().getLine());
+        obj.addProperty("col_end",    ctx.getStop().getCharPositionInLine());
+    }
+
+    /**
      * Serializes a list of statements to a JSON array.
      */
     public static JsonArray serializeStatements(List<Statement> statements) {
@@ -155,12 +170,7 @@ public final class StatementSerializer {
         for (Statement stmt : statements) {
             JsonObject obj = serializeStatement(stmt);
             if (obj != null) {
-                if (stmt.getCtx() != null) {
-                    obj.addProperty("line_start", stmt.getCtx().getStart().getLine());
-                    obj.addProperty("col_start",  stmt.getCtx().getStart().getCharPositionInLine());
-                    obj.addProperty("line_end",   stmt.getCtx().getStop().getLine());
-                    obj.addProperty("col_end",    stmt.getCtx().getStop().getCharPositionInLine());
-                }
+                addSpan(obj, stmt.getCtx());
                 arr.add(obj);
             }
         }
@@ -633,12 +643,7 @@ public final class StatementSerializer {
         JsonArray children = new JsonArray();
         Then thenBlock = stmt.getThen();
         if (thenBlock != null && thenBlock.getStatements() != null) {
-            for (Statement thenStmt : thenBlock.getStatements()) {
-                JsonObject child = serializeStatement(thenStmt);
-                if (child != null) {
-                    children.add(child);
-                }
-            }
+            children = serializeStatements(thenBlock.getStatements());
         }
         if (children.size() > 0) {
             obj.add("children", children);
@@ -647,12 +652,7 @@ public final class StatementSerializer {
         JsonArray elseChildren = new JsonArray();
         Else elseBlock = stmt.getElse();
         if (elseBlock != null && elseBlock.getStatements() != null) {
-            for (Statement elseStmt : elseBlock.getStatements()) {
-                JsonObject child = serializeStatement(elseStmt);
-                if (child != null) {
-                    elseChildren.add(child);
-                }
-            }
+            elseChildren = serializeStatements(elseBlock.getStatements());
         }
         if (elseChildren.size() > 0) {
             obj.add("else_children", elseChildren);

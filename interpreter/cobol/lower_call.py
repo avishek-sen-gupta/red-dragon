@@ -11,10 +11,10 @@ from cobol_asg.cobol_statements import (
     CancelStatement,
     EntryStatement,
 )
-from interpreter.cobol.data_layout import FieldLayout
-from interpreter.cobol.emit_context import EmitContext
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
+from interpreter.cobol.data_layout import FieldLayout
+from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -95,6 +95,7 @@ def lower_call(
 
     When stmt.using is empty, the caller's WS region is passed as params_reg (legacy behaviour).
     """
+    span = stmt.span
     param_fls: list[tuple[CallUsingParam, FieldLayout, Register, RegionId]] = []
 
     if stmt.using:
@@ -111,15 +112,15 @@ def lower_call(
 
         # Allocate fresh params region sized to total USING bytes.
         total_bytes = sum(fl.byte_length for _, fl, _, _ in param_fls)
-        size_reg = ctx.const_to_reg(total_bytes)
+        size_reg = ctx.const_to_reg(total_bytes, span=span)
         params_reg = ctx.fresh_reg()
-        ctx.emit_inst(AllocRegion(result_reg=params_reg, size_reg=size_reg))
+        ctx.emit_inst(AllocRegion(result_reg=params_reg, size_reg=size_reg), span=span)
 
         # Copy-in: write each USING field from its own section's region into
         # the params region.
         cumulative = 0
         for _, fl, owning_reg, owning_region in param_fls:
-            src_off = ctx.const_to_reg(fl.offset)
+            src_off = ctx.const_to_reg(fl.offset, span=span)
             tmp = ctx.fresh_reg()
             ctx._emit_load_region(
                 result_reg=tmp,
@@ -127,14 +128,16 @@ def lower_call(
                 offset_reg=src_off,
                 length=fl.byte_length,
                 extent=_owning_extent(fl, owning_region),
+                span=span,
             )
-            dst_off = ctx.const_to_reg(cumulative)
+            dst_off = ctx.const_to_reg(cumulative, span=span)
             ctx._emit_write_region(
                 region_reg=params_reg,
                 offset_reg=dst_off,
                 value_reg=tmp,
                 length=fl.byte_length,
                 extent=_params_extent(fl, cumulative),
+                span=span,
             )
             cumulative += fl.byte_length
     else:
@@ -147,7 +150,8 @@ def lower_call(
             func_name=FuncName(stmt.program),
             params_reg=params_reg,
             results_reg=params_reg,
-        )
+        ),
+        span=span,
     )
 
     # Restore the caller's __ws_region binding. CallWithMemory dispatches into the
@@ -161,7 +165,9 @@ def lower_call(
     # for direct readers. (Field access reloads via the singleton, so it was never
     # affected; this only matters for the shared __ws_region var.)
     _ws_layout, caller_ws_reg = materialised.working_storage
-    ctx.emit_inst(StoreVar(name=VarName("__ws_region"), value_reg=caller_ws_reg))
+    ctx.emit_inst(
+        StoreVar(name=VarName("__ws_region"), value_reg=caller_ws_reg), span=span
+    )
 
     # Copy-back: for BY REFERENCE params, write updated bytes from the params
     # region back into each argument's OWN section region.
@@ -169,7 +175,7 @@ def lower_call(
         cumulative = 0
         for param, fl, owning_reg, owning_region in param_fls:
             if param.param_type == "REFERENCE":
-                src_off = ctx.const_to_reg(cumulative)
+                src_off = ctx.const_to_reg(cumulative, span=span)
                 tmp = ctx.fresh_reg()
                 ctx._emit_load_region(
                     result_reg=tmp,
@@ -177,26 +183,31 @@ def lower_call(
                     offset_reg=src_off,
                     length=fl.byte_length,
                     extent=_params_extent(fl, cumulative),
+                    span=span,
                 )
-                dst_off = ctx.const_to_reg(fl.offset)
+                dst_off = ctx.const_to_reg(fl.offset, span=span)
                 ctx._emit_write_region(
                     region_reg=owning_reg,
                     offset_reg=dst_off,
                     value_reg=tmp,
                     length=fl.byte_length,
                     extent=_owning_extent(fl, owning_region),
+                    span=span,
                 )
             cumulative += fl.byte_length
 
     if stmt.giving and ctx.has_field(stmt.giving, materialised):
-        giving_ref, giving_rr = ctx.resolve_field_ref(stmt.giving, materialised)
-        str_reg = ctx.emit_to_string(result_reg)
+        giving_ref, giving_rr = ctx.resolve_field_ref(
+            stmt.giving, materialised, span=span
+        )
+        str_reg = ctx.emit_to_string(result_reg, span=span)
         ctx.emit_encode_and_write(
             giving_rr,
             giving_ref.fl,
             str_reg,
             giving_ref.offset_reg,
             extent=giving_ref.extent,
+            span=span,
         )
 
     logger.info(
@@ -210,13 +221,15 @@ def lower_alter(
     _materialised: MaterialisedSectionedLayout,
 ) -> None:
     """ALTER para-1 TO PROCEED TO para-2."""
+    span = stmt.span
     for pt in stmt.proceed_tos:
-        target_reg = ctx.const_to_reg(f"para_{pt.target}")
+        target_reg = ctx.const_to_reg(f"para_{pt.target}", span=span)
         ctx.emit_inst(
             StoreVar(
                 name=VarName(f"__alter_{pt.source}"),
                 value_reg=target_reg,
-            )
+            ),
+            span=span,
         )
         logger.info("ALTER %s TO PROCEED TO %s", pt.source, pt.target)
 
@@ -228,7 +241,9 @@ def lower_entry(
 ) -> None:
     """ENTRY 'name' — alternate entry point for a subprogram."""
     if stmt.entry_name:
-        ctx.emit_inst(Label_(label=CodeLabel(f"entry_{stmt.entry_name}")))
+        ctx.emit_inst(
+            Label_(label=CodeLabel(f"entry_{stmt.entry_name}")), span=stmt.span
+        )
         logger.info("ENTRY %s", stmt.entry_name)
 
 

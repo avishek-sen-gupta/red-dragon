@@ -65,13 +65,15 @@ def lower_section(
     section: CobolSection,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    ctx.emit_inst(Label_(label=CodeLabel(f"section_{section.name}")))
+    span = section.span
+    ctx.emit_inst(Label_(label=CodeLabel(f"section_{section.name}")), span=span)
     for stmt in section.statements:
         ctx.lower_statement(stmt, materialised)
     for para in section.paragraphs:
         lower_paragraph(ctx, para, materialised)
     ctx.emit_inst(
-        ResumeContinuation(name=ContinuationName(f"section_{section.name}_end"))
+        ResumeContinuation(name=ContinuationName(f"section_{section.name}_end")),
+        span=span,
     )
 
 
@@ -80,7 +82,10 @@ def lower_paragraph(
     para: CobolParagraph,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    ctx.emit_inst(Label_(label=CodeLabel(f"para_{para.name}")))
+    span = para.span
+    ctx.emit_inst(Label_(label=CodeLabel(f"para_{para.name}")), span=span)
     for stmt in para.statements:
         ctx.lower_statement(stmt, materialised)
-    ctx.emit_inst(ResumeContinuation(name=ContinuationName(f"para_{para.name}_end")))
+    ctx.emit_inst(
+        ResumeContinuation(name=ContinuationName(f"para_{para.name}_end")), span=span
+    )
