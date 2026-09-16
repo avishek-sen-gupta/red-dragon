@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from pathlib import Path
@@ -388,6 +389,8 @@ def _run_loop(
     llm_calls = 0
     step = 0
     for step in range(config.max_steps):
+        if config.step_callback and step and step % config.step_callback_interval == 0:
+            config.step_callback(step, str(current_label))
         block = cfg.blocks[current_label]
 
         if ip >= len(block.instructions):
@@ -973,6 +976,8 @@ def run_linked(
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
     *,
     initial_vm: VMState,
+    step_callback: Callable[[int, str], None] | None = None,
+    step_callback_interval: int = 1_000_000,
 ) -> VMState:
     """Execute a LinkedProgram with the given entry point.
 
@@ -986,6 +991,9 @@ def run_linked(
         io_provider: Optional COBOL I/O provider (e.g. StubIOProvider for testing).
         initial_vm: VM state to execute against. Use ``initial_vm_state()`` for a
             fresh one.
+        step_callback: Optional callable(step, label) invoked every
+            step_callback_interval steps for progress reporting.
+        step_callback_interval: How often to invoke step_callback (default 1M steps).
     """
     strategies = _build_strategies_from_linked(linked)
 
@@ -996,6 +1004,8 @@ def run_linked(
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
+        step_callback=step_callback,
+        step_callback_interval=step_callback_interval,
     )
 
     # Make the data layout visible to builtins that run *during* execution
