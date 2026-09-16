@@ -18,6 +18,7 @@ from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
 from cobol_asg.pic_parser import parse_pic
+from cobol_asg.source_span import SourceSpan
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,13 @@ class FieldLayout:
     occurs_min: int = 0
     renames_from: str = ""
     renames_thru: str = ""
+    span: SourceSpan | None = None
+    """Where this field was declared, or None for compiler-allocated items.
+
+    OCCURS elements inherit their parent's span: a subscripted access and
+    its declaration share a source line. Index items have none — they
+    correspond to no source text.
+    """
 
 
 @dataclass(frozen=True)
@@ -142,6 +150,7 @@ class DataLayout:
     element_size: int = 0
     conditions: list[ConditionName] = field(default_factory=list)
     index_owner: dict[str, str] = field(default_factory=dict)
+    span: SourceSpan | None = None
 
     def lookup(self, name: str) -> FieldLayout | None:
         """Search for a leaf field by bare name within this subtree.
@@ -314,6 +323,7 @@ class DataLayout:
                 byte_length=grp.total_bytes,
                 occurs_count=grp.occurs_count,
                 element_size=elem_size,
+                span=grp.span,
             )
             # Recurse into group's children
             yield from grp.all_fields()
@@ -487,6 +497,7 @@ class DataLayout:
             byte_length=grp.total_bytes,
             occurs_count=grp.occurs_count,
             element_size=elem_size,
+            span=grp.span,
         )
 
 
@@ -591,6 +602,7 @@ def _flatten_field(
             occurs_count=cobol_field.occurs,
             element_size=elem_size,
             conditions=list(cobol_field.conditions),
+            span=cobol_field.span,
         )
         return cobol_field.name, group_layout
 
@@ -623,6 +635,7 @@ def _flatten_field(
         justified_right=cobol_field.justified_right,
         occurs_depending_on=cobol_field.occurs_depending_on,
         occurs_min=cobol_field.occurs_min,
+        span=cobol_field.span,
     )
     return cobol_field.name, fl
 
@@ -692,6 +705,7 @@ def _resolve_renames(
         byte_length=byte_length,
         renames_from=renames_field.renames_from,
         renames_thru=renames_field.renames_thru,
+        span=renames_field.span,
     )
 
 

@@ -78,7 +78,7 @@ class TestDeclarativesLoweringOrder:
             extension_strategies = []
             section_paragraphs: dict = {}
 
-            def emit_inst(self, inst):
+            def emit_inst(self, inst, *, span=None):
                 emitted.append(inst)
 
             def lower_statement(self, stmt, materialised):

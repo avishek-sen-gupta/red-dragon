@@ -18,14 +18,16 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from cobol_asg.cobol_expression import ExprNode
 
+from cobol_asg.asg_types import CobolASG
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.source_span import SourceSpan
+from cobol_memory.field_extent import FieldExtent, Precision
+from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal, is_cobol_number
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
-from cobol_asg.asg_types import CobolASG
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
-from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import FieldLayout
-from cobol_memory.field_extent import FieldExtent, Precision
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
 from interpreter.cobol.figurative_constants import (
     COBOL_FIGURATIVE_CONSTANTS,
@@ -53,8 +55,8 @@ from interpreter.cobol.memory_effects import (
     NullRecorder,
 )
 from interpreter.cobol.pic_scale import encode_digits
-from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.source_spans import to_source_location
 from interpreter.constants import FoundationTypeName
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
@@ -194,9 +196,19 @@ class EmitContext:
         self._label_counter += 1
         return name
 
-    def emit_inst(self, inst: InstructionBase) -> InstructionBase:
-        """Emit a typed instruction directly, assigning it a stable id."""
+    def emit_inst(
+        self, inst: InstructionBase, *, span: SourceSpan | None = None
+    ) -> InstructionBase:
+        """Emit a typed instruction directly, assigning it a stable id.
+
+        ``span`` is the COBOL construct this instruction was lowered from.
+        Precedence matches the tree-sitter frontends' ``node=`` parameter
+        (``frontends/context.py:219-222``): a source location already on
+        the instruction wins, then ``span``, then unknown.
+        """
         inst = dataclasses.replace(inst, id=self._inst_ids.mint())
+        if inst.source_location.is_unknown() and span is not None:
+            inst = dataclasses.replace(inst, source_location=to_source_location(span))
         self._instructions.append(inst)
         return inst
 
@@ -213,6 +225,8 @@ class EmitContext:
         offset_reg: Register,
         length: int,
         extent: FieldExtent,
+        *,
+        span: SourceSpan | None = None,
     ) -> None:
         """Emit a region read AND declare its memory effect.
 
@@ -232,6 +246,7 @@ class EmitContext:
                 offset_reg=offset_reg,
                 length=length,
             ),
+            span=span,
         )
         self._recorder.record(
             inst.id,
@@ -249,6 +264,8 @@ class EmitContext:
         value_reg: Register,
         length: int,
         extent: FieldExtent,
+        *,
+        span: SourceSpan | None = None,
     ) -> None:
         """Emit a region write AND declare its memory effect.
 
@@ -263,6 +280,7 @@ class EmitContext:
                 length=length,
                 value_reg=value_reg,
             ),
+            span=span,
         )
         self._recorder.record(
             inst.id,
@@ -273,7 +291,13 @@ class EmitContext:
             ),
         )
 
-    def _materialise_offset(self, fl: FieldLayout, offset_reg: Register) -> Register:
+    def _materialise_offset(
+        self,
+        fl: FieldLayout,
+        offset_reg: Register,
+        *,
+        span: SourceSpan | None = None,
+    ) -> Register:
         """Emit the base-offset CONST when the caller passed no offset register.
 
         Emits an instruction, so it must be called at exactly the point in the
@@ -282,10 +306,10 @@ class EmitContext:
         if offset_reg.is_present():
             return offset_reg
         offset_reg = self.fresh_reg()
-        self.emit_inst(Const.int_(offset_reg, fl.offset))
+        self.emit_inst(Const.int_(offset_reg, fl.offset), span=span)
         return offset_reg
 
-    def const_to_reg(self, value: Any) -> Register:
+    def const_to_reg(self, value: Any, *, span: SourceSpan | None = None) -> Register:
         """Emit a typed CONST for a Python literal and return its register."""
         reg = self.fresh_reg()
         if isinstance(value, bool):
@@ -300,13 +324,15 @@ class EmitContext:
             inst = Const.null_(reg)
         else:
             inst = Const.string(reg, str(value))
-        self.emit_inst(inst)
+        self.emit_inst(inst, span=span)
         return reg
 
     def inline_ir(
         self,
         ir_instructions: Sequence[InstructionBase],
         param_regs: dict[str, Register],
+        *,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Inline a generated IR function body, mapping parameter registers.
 
@@ -329,7 +355,7 @@ class EmitContext:
                     if resolved_str.startswith("%"):
                         return_reg = resolved
                     else:
-                        return_reg = self.const_to_reg(resolved_str)
+                        return_reg = self.const_to_reg(resolved_str, span=span)
                 continue
 
             # Allocate fresh result register and record the mapping
@@ -342,7 +368,7 @@ class EmitContext:
             # Remap all register operands, then override result_reg with the fresh one
             remapped = inst.map_registers(remap)
             remapped = dataclasses.replace(remapped, result_reg=new_result)
-            self.emit_inst(remapped)
+            self.emit_inst(remapped, span=span)
 
         return return_reg
 
@@ -368,6 +394,8 @@ class EmitContext:
         materialised: MaterialisedSectionedLayout,
         qualifiers: tuple[str, ...] = (),
         subscripts: tuple[ExprNode, ...] = (),
+        *,
+        span: SourceSpan | None = None,
     ) -> tuple[ResolvedFieldRef, Register]:
         """Resolve a field reference that may contain subscript notation.
 
@@ -398,7 +426,7 @@ class EmitContext:
 
         if not subscripts:
             offset_reg = self.fresh_reg()
-            self.emit_inst(Const.int_(offset_reg, fl.offset))
+            self.emit_inst(Const.int_(offset_reg, fl.offset), span=span)
             extent = field_access_extent(
                 name=base_name,
                 fl=fl,
@@ -443,11 +471,11 @@ class EmitContext:
                     f"{len(strides)} for {name!r} (red-dragon-1wy3)"
                 )
 
-        one_reg = self.const_to_reg(1)
+        one_reg = self.const_to_reg(1, span=span)
 
         if len(subscripts) == 1:
             # Single subscript — original 3-BINOP form: (idx-1)*stride + base.
-            idx_reg = lower_expr_node(self, subscripts[0], materialised)
+            idx_reg = lower_expr_node(self, subscripts[0], materialised, span=span)
             idx_minus_one = self.fresh_reg()
             self.emit_inst(
                 Binop(
@@ -455,9 +483,10 @@ class EmitContext:
                     operator=resolve_binop("-"),
                     left=idx_reg,
                     right=one_reg,
-                )
+                ),
+                span=span,
             )
-            stride_reg = self.const_to_reg(strides[0])
+            stride_reg = self.const_to_reg(strides[0], span=span)
             displacement = self.fresh_reg()
             self.emit_inst(
                 Binop(
@@ -465,9 +494,10 @@ class EmitContext:
                     operator=resolve_binop("*"),
                     left=idx_minus_one,
                     right=stride_reg,
-                )
+                ),
+                span=span,
             )
-            base_offset_reg = self.const_to_reg(fl.offset)
+            base_offset_reg = self.const_to_reg(fl.offset, span=span)
             final_offset_reg = self.fresh_reg()
             self.emit_inst(
                 Binop(
@@ -475,14 +505,15 @@ class EmitContext:
                     operator=resolve_binop("+"),
                     left=base_offset_reg,
                     right=displacement,
-                )
+                ),
+                span=span,
             )
         else:
             # Multi-dimensional: accumulate sum of (idx_k - 1) * stride_k, then
             # add the field's base offset once at the end.
-            total_disp_reg = self.const_to_reg(0)
+            total_disp_reg = self.const_to_reg(0, span=span)
             for sub_node, stride_k in zip(subscripts, strides):
-                idx_reg = lower_expr_node(self, sub_node, materialised)
+                idx_reg = lower_expr_node(self, sub_node, materialised, span=span)
                 idx_minus_one = self.fresh_reg()
                 self.emit_inst(
                     Binop(
@@ -490,9 +521,10 @@ class EmitContext:
                         operator=resolve_binop("-"),
                         left=idx_reg,
                         right=one_reg,
-                    )
+                    ),
+                    span=span,
                 )
-                stride_reg = self.const_to_reg(stride_k)
+                stride_reg = self.const_to_reg(stride_k, span=span)
                 disp_k = self.fresh_reg()
                 self.emit_inst(
                     Binop(
@@ -500,7 +532,8 @@ class EmitContext:
                         operator=resolve_binop("*"),
                         left=idx_minus_one,
                         right=stride_reg,
-                    )
+                    ),
+                    span=span,
                 )
                 new_total = self.fresh_reg()
                 self.emit_inst(
@@ -509,11 +542,12 @@ class EmitContext:
                         operator=resolve_binop("+"),
                         left=total_disp_reg,
                         right=disp_k,
-                    )
+                    ),
+                    span=span,
                 )
                 total_disp_reg = new_total
 
-            base_offset_reg = self.const_to_reg(fl.offset)
+            base_offset_reg = self.const_to_reg(fl.offset, span=span)
             final_offset_reg = self.fresh_reg()
             self.emit_inst(
                 Binop(
@@ -521,7 +555,8 @@ class EmitContext:
                     operator=resolve_binop("+"),
                     left=base_offset_reg,
                     right=total_disp_reg,
-                )
+                ),
+                span=span,
             )
 
         # For subscripted access, use element-level FieldLayout
@@ -532,6 +567,7 @@ class EmitContext:
             byte_length=access_len,
             redefines=fl.redefines,
             value=fl.value,
+            span=fl.span,
         )
         # The extent is parallel, statically-known information — it is derived
         # from the SAME strides the register arithmetic above used, but from
@@ -561,7 +597,12 @@ class EmitContext:
         return materialised.group_leaf_names(group_name)
 
     def resolve_field_ref_from(
-        self, fl: FieldLayout, region_reg: Register, region: RegionId
+        self,
+        fl: FieldLayout,
+        region_reg: Register,
+        region: RegionId,
+        *,
+        span: SourceSpan | None = None,
     ) -> ResolvedFieldRef:
         """Resolve a FieldLayout to a ResolvedFieldRef without a name lookup.
 
@@ -572,7 +613,7 @@ class EmitContext:
         field's whole declared extent, with no subscript in play.
         """
         offset_reg = self.fresh_reg()
-        self.emit_inst(Const.int_(offset_reg, fl.offset))
+        self.emit_inst(Const.int_(offset_reg, fl.offset), span=span)
         extent = FieldExtent(
             region, fl.offset, fl.byte_length, Precision.EXACT, fl.name
         )
@@ -588,30 +629,34 @@ class EmitContext:
         offset_reg: Register = NO_REGISTER,
         *,
         extent: FieldExtent,
+        span: SourceSpan | None = None,
     ) -> None:
         """Emit IR to encode a value and write it to the region."""
-        encoded_reg = self.emit_encode_value(fl, value)
-        offset_reg = self._materialise_offset(fl, offset_reg)
+        encoded_reg = self.emit_encode_value(fl, value, span=span)
+        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
             value_reg=encoded_reg,
             length=fl.byte_length,
             extent=extent,
+            span=span,
         )
 
-    def emit_encode_value(self, fl: FieldLayout, value: str) -> Register:
+    def emit_encode_value(
+        self, fl: FieldLayout, value: str, *, span: SourceSpan | None = None
+    ) -> Register:
         """Emit inline IR to encode a value per the field's type. Returns result register."""
         td = fl.type_descriptor
         if td.blank_when_zero and self._is_zero_value(value):
-            return self._emit_ebcdic_spaces(fl.byte_length)
+            return self._emit_ebcdic_spaces(fl.byte_length, span=span)
         if td.holds_characters:
             # An alphanumeric-edited item's VALUE literal is stored verbatim: a
             # VALUE clause literal "is not edited" (LR, "VALUE clause"), unlike
             # the same characters arriving by MOVE.
             raw = parse_hex_literal(value)
             if raw is not None:
-                return self._emit_hex_literal_bytes(raw, fl.byte_length)
+                return self._emit_hex_literal_bytes(raw, fl.byte_length, span=span)
             # A figurative VALUE (SPACES / ZEROS / LOW-VALUES / ...) fills the
             # WHOLE field with its fill character, not the literal keyword text
             # (e.g. PIC X(52) VALUE SPACES is 52 spaces, not "SPACES" + padding).
@@ -625,7 +670,8 @@ class EmitContext:
                             result_reg=result,
                             value=[COBOL_RAW_FIGURATIVE_BYTES[value]] * fl.byte_length,
                             type_expr=array_of(scalar(FoundationTypeName.INT)),
-                        )
+                        ),
+                        span=span,
                     )
                     return result
                 return self.emit_encode_alphanumeric(
@@ -633,13 +679,18 @@ class EmitContext:
                     COBOL_FIGURATIVE_CONSTANTS[value] * fl.byte_length,
                     td.total_digits,
                     justified_right=td.justified_right,
+                    span=span,
                 )
             return self.emit_encode_alphanumeric(
-                fl.name, value, td.total_digits, justified_right=td.justified_right
+                fl.name,
+                value,
+                td.total_digits,
+                justified_right=td.justified_right,
+                span=span,
             )
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
-            return self.emit_encode_float(fl.name, value, td)
-        return self.emit_encode_numeric(fl.name, value, td)
+            return self.emit_encode_float(fl.name, value, td, span=span)
+        return self.emit_encode_numeric(fl.name, value, td, span=span)
 
     def _is_zero_value(self, value: str) -> bool:
         """Check if a literal value is numerically zero."""
@@ -648,7 +699,9 @@ class EmitContext:
         except ValueError:
             return False
 
-    def _emit_hex_literal_bytes(self, raw: bytes, byte_length: int) -> Register:
+    def _emit_hex_literal_bytes(
+        self, raw: bytes, byte_length: int, *, span: SourceSpan | None = None
+    ) -> Register:
         """Emit a Const holding raw hex-literal bytes padded to the field length.
 
         COBOL hex literals (X'nn') denote raw bytes and bypass ASCII→EBCDIC
@@ -661,7 +714,8 @@ class EmitContext:
                 result_reg=result,
                 value=list(padded),
                 type_expr=array_of(scalar(FoundationTypeName.INT)),
-            )
+            ),
+            span=span,
         )
         return result
 
@@ -673,6 +727,7 @@ class EmitContext:
         offset_reg: Register = NO_REGISTER,
         *,
         extent: FieldExtent,
+        span: SourceSpan | None = None,
     ) -> None:
         """Fill a field's whole region slot with a single raw byte, verbatim.
 
@@ -687,21 +742,25 @@ class EmitContext:
                 result_reg=result,
                 value=[fill_byte] * fl.byte_length,
                 type_expr=array_of(scalar(FoundationTypeName.INT)),
-            )
+            ),
+            span=span,
         )
-        offset_reg = self._materialise_offset(fl, offset_reg)
+        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
             value_reg=result,
             length=fl.byte_length,
             extent=extent,
+            span=span,
         )
 
-    def _emit_ebcdic_spaces(self, byte_length: int) -> Register:
+    def _emit_ebcdic_spaces(
+        self, byte_length: int, *, span: SourceSpan | None = None
+    ) -> Register:
         """Emit IR to create a list of EBCDIC spaces (0x40). Returns result register."""
-        length_reg = self.const_to_reg(byte_length)
-        space_reg = self.const_to_reg(ByteConstants.EBCDIC_SPACE)
+        length_reg = self.const_to_reg(byte_length, span=span)
+        space_reg = self.const_to_reg(ByteConstants.EBCDIC_SPACE, span=span)
         result = self.fresh_reg()
         self.emit_inst(
             CallFunction(
@@ -709,6 +768,7 @@ class EmitContext:
                 func_name=FuncName(BuiltinName.MAKE_LIST),
                 args=(length_reg, space_reg),
             ),
+            span=span,
         )
         return result
 
@@ -718,10 +778,12 @@ class EmitContext:
         value: str,
         length: int,
         justified_right: bool = False,
+        *,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Emit inline alphanumeric encoding IR. Returns result register."""
         value_reg = self.fresh_reg()
-        self.emit_inst(Const.string(value_reg, value))
+        self.emit_inst(Const.string(value_reg, value), span=span)
 
         if justified_right:
             ir = build_encode_alphanumeric_justified_ir(
@@ -729,21 +791,31 @@ class EmitContext:
             )
         else:
             ir = build_encode_alphanumeric_ir(f"enc_alpha_{field_name}", length)
-        return self.inline_ir(ir, {"%p_value": value_reg})
+        return self.inline_ir(ir, {"%p_value": value_reg}, span=span)
 
     def emit_encode_float(
-        self, field_name: str, value: str, td: CobolTypeDescriptor
+        self,
+        field_name: str,
+        value: str,
+        td: CobolTypeDescriptor,
+        *,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Emit inline float encoding IR for COMP-1/COMP-2. Returns result register."""
         float_val = float(value)
         value_reg = self.fresh_reg()
-        self.emit_inst(Const.float_(value_reg, float_val))
+        self.emit_inst(Const.float_(value_reg, float_val), span=span)
 
         ir = build_encode_float_ir(f"enc_float_{field_name}", td.byte_length)
-        return self.inline_ir(ir, {"%p_float_value": value_reg})
+        return self.inline_ir(ir, {"%p_float_value": value_reg}, span=span)
 
     def emit_encode_numeric(
-        self, field_name: str, value: str, td: CobolTypeDescriptor
+        self,
+        field_name: str,
+        value: str,
+        td: CobolTypeDescriptor,
+        *,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Emit inline numeric encoding IR. Returns result register."""
         negative, digit_str = encode_digits(
@@ -765,11 +837,12 @@ class EmitContext:
                 result_reg=digits_reg,
                 value=digits,
                 type_expr=array_of(scalar(FoundationTypeName.INT)),
-            )
+            ),
+            span=span,
         )
 
         sign_reg = self.fresh_reg()
-        self.emit_inst(Const.int_(sign_reg, sign_nibble))
+        self.emit_inst(Const.int_(sign_reg, sign_nibble), span=span)
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
             if td.sign_separate:
@@ -794,7 +867,9 @@ class EmitContext:
         else:
             ir = build_encode_comp3_ir(f"enc_comp3_{field_name}", td.total_digits)
 
-        return self.inline_ir(ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg})
+        return self.inline_ir(
+            ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg}, span=span
+        )
 
     def emit_decode_field(
         self,
@@ -803,9 +878,10 @@ class EmitContext:
         offset_reg: Register = NO_REGISTER,
         *,
         extent: FieldExtent,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Emit IR to load and decode a field from the region. Returns decoded value register."""
-        offset_reg = self._materialise_offset(fl, offset_reg)
+        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
 
         data_reg = self.fresh_reg()
         self._emit_load_region(
@@ -814,6 +890,7 @@ class EmitContext:
             offset_reg=offset_reg,
             length=fl.byte_length,
             extent=extent,
+            span=span,
         )
 
         td = fl.type_descriptor
@@ -853,7 +930,7 @@ class EmitContext:
                 f"dec_comp3_{fl.name}", td.total_digits, td.decimal_digits
             )
 
-        decoded = self.inline_ir(ir, {"%p_data": data_reg})
+        decoded = self.inline_ir(ir, {"%p_data": data_reg}, span=span)
         if not td.scale:
             return decoded
         # PIC P: the stored digits are the value divided by the scaling factor,
@@ -861,13 +938,14 @@ class EmitContext:
         # build_decode_*_ir builders — one site instead of four, and those
         # builders keep their existing signatures (red-dragon-qhtv).
         scaled = self.fresh_reg()
-        scale_reg = self.const_to_reg(td.scale)
+        scale_reg = self.const_to_reg(td.scale, span=span)
         self.emit_inst(
             CallFunction(
                 result_reg=scaled,
                 func_name=FuncName(BuiltinName.COBOL_SCALE_BY),
                 args=(decoded, scale_reg),
-            )
+            ),
+            span=span,
         )
         return scaled
 
@@ -878,6 +956,7 @@ class EmitContext:
         offset_reg: Register = NO_REGISTER,
         *,
         extent: FieldExtent,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Emit IR to read a zoned (USAGE DISPLAY) numeric field's raw character
         representation, decoded as alphanumeric (its zoned digit characters).
@@ -888,7 +967,7 @@ class EmitContext:
         when a numeric-DISPLAY source feeds an alphanumeric receiver, where COBOL
         moves the sending field's characters left-justified (red-dragon-0fqr).
         """
-        offset_reg = self._materialise_offset(fl, offset_reg)
+        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
 
         data_reg = self.fresh_reg()
         self._emit_load_region(
@@ -897,9 +976,10 @@ class EmitContext:
             offset_reg=offset_reg,
             length=fl.byte_length,
             extent=extent,
+            span=span,
         )
         ir = build_decode_alphanumeric_ir(f"dec_zoned_disp_{fl.name}")
-        return self.inline_ir(ir, {"%p_data": data_reg})
+        return self.inline_ir(ir, {"%p_data": data_reg}, span=span)
 
     # ── Byte-faithful (raw) region read/write ─────────────────────
 
@@ -910,6 +990,7 @@ class EmitContext:
         offset_reg: Register = NO_REGISTER,
         *,
         extent: FieldExtent,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Read a region slot as its verbatim byte-image (LATIN1 identity).
 
@@ -919,7 +1000,7 @@ class EmitContext:
         the group through the EBCDIC→ASCII alphanumeric decoder would mangle
         packed bytes (red-dragon-zwzg).
         """
-        offset_reg = self._materialise_offset(fl, offset_reg)
+        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
         data_reg = self.fresh_reg()
         self._emit_load_region(
             result_reg=data_reg,
@@ -927,8 +1008,9 @@ class EmitContext:
             offset_reg=offset_reg,
             length=fl.byte_length,
             extent=extent,
+            span=span,
         )
-        encoding_reg = self.const_to_reg(CobolEncoding.LATIN1.value)
+        encoding_reg = self.const_to_reg(CobolEncoding.LATIN1.value, span=span)
         result = self.fresh_reg()
         self.emit_inst(
             CallFunction(
@@ -936,6 +1018,7 @@ class EmitContext:
                 func_name=FuncName(BuiltinName.BYTES_TO_STRING),
                 args=(data_reg, encoding_reg),
             ),
+            span=span,
         )
         return result
 
@@ -947,12 +1030,13 @@ class EmitContext:
         offset_reg: Register = NO_REGISTER,
         *,
         extent: FieldExtent,
+        span: SourceSpan | None = None,
     ) -> None:
         """Write a latin-1 str's verbatim bytes into a region slot (no PICTURE
         encode). The byte-faithful inverse of ``emit_read_region_raw``: used for
         byte-faithful READ, landing the file's raw bytes into the FD record region
         unchanged (red-dragon-zwzg)."""
-        encoding_reg = self.const_to_reg(CobolEncoding.LATIN1.value)
+        encoding_reg = self.const_to_reg(CobolEncoding.LATIN1.value, span=span)
         bytes_reg = self.fresh_reg()
         self.emit_inst(
             CallFunction(
@@ -960,19 +1044,23 @@ class EmitContext:
                 func_name=FuncName(BuiltinName.STRING_TO_BYTES),
                 args=(value_str_reg, encoding_reg),
             ),
+            span=span,
         )
-        offset_reg = self._materialise_offset(fl, offset_reg)
+        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
             value_reg=bytes_reg,
             length=fl.byte_length,
             extent=extent,
+            span=span,
         )
 
     # ── String Conversion Helpers ─────────────────────────────────
 
-    def emit_to_string(self, value_reg: Register) -> Register:
+    def emit_to_string(
+        self, value_reg: Register, *, span: SourceSpan | None = None
+    ) -> Register:
         """Emit IR converting a COBOL value to its text (numbers rendered plainly)."""
         result = self.fresh_reg()
         self.emit_inst(
@@ -981,26 +1069,37 @@ class EmitContext:
                 func_name=FuncName(BuiltinName.COBOL_TO_TEXT),
                 args=(value_reg,),
             ),
+            span=span,
         )
         return result
 
     def _emit_blank_when_zero_wrap(
-        self, encoded_reg: Register, value_str_reg: Register, byte_length: int
+        self,
+        encoded_reg: Register,
+        value_str_reg: Register,
+        byte_length: int,
+        *,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Wrap encoded bytes with BLANK WHEN ZERO check via builtin."""
         result = self.fresh_reg()
-        length_reg = self.const_to_reg(byte_length)
+        length_reg = self.const_to_reg(byte_length, span=span)
         self.emit_inst(
             CallFunction(
                 result_reg=result,
                 func_name=FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO),
                 args=(encoded_reg, value_str_reg, length_reg),
             ),
+            span=span,
         )
         return result
 
     def emit_encode_from_string(
-        self, fl: FieldLayout, value_str_reg: Register
+        self,
+        fl: FieldLayout,
+        value_str_reg: Register,
+        *,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Emit encoding IR from a string value register."""
         td = fl.type_descriptor
@@ -1009,17 +1108,18 @@ class EmitContext:
             # character string as alphanumeric (the formatted bytes ARE the
             # field's content). Mirrors GnuCOBOL's cob_move_edited.
             formatted_reg = self.fresh_reg()
-            pic_reg = self.const_to_reg(td.pic_string)
-            currency_reg = self.const_to_reg(td.currency)
+            pic_reg = self.const_to_reg(td.pic_string, span=span)
+            currency_reg = self.const_to_reg(td.currency, span=span)
             self.emit_inst(
                 CallFunction(
                     result_reg=formatted_reg,
                     func_name=FuncName(BuiltinName.COBOL_APPLY_EDIT_PICTURE),
                     args=(value_str_reg, pic_reg, currency_reg),
                 ),
+                span=span,
             )
             ir = build_encode_alphanumeric_ir(f"enc_edited_{fl.name}", td.total_digits)
-            return self.inline_ir(ir, {"%p_value": formatted_reg})
+            return self.inline_ir(ir, {"%p_value": formatted_reg}, span=span)
 
         if td.category == CobolDataCategory.ALPHANUMERIC_EDITED:
             # Insertion editing: the sender's characters go into the A/X/9
@@ -1028,19 +1128,20 @@ class EmitContext:
             # already aligned by the formatter, hence the unjustified encoder
             # even when JUSTIFIED RIGHT is in force.
             formatted_reg = self.fresh_reg()
-            pic_reg = self.const_to_reg(td.pic_string)
-            justified_reg = self.const_to_reg(int(td.justified_right))
+            pic_reg = self.const_to_reg(td.pic_string, span=span)
+            justified_reg = self.const_to_reg(int(td.justified_right), span=span)
             self.emit_inst(
                 CallFunction(
                     result_reg=formatted_reg,
                     func_name=FuncName(BuiltinName.COBOL_APPLY_ALPHANUMERIC_EDIT),
                     args=(value_str_reg, pic_reg, justified_reg),
                 ),
+                span=span,
             )
             ir = build_encode_alphanumeric_ir(
                 f"enc_an_edited_{fl.name}", td.total_digits
             )
-            return self.inline_ir(ir, {"%p_value": formatted_reg})
+            return self.inline_ir(ir, {"%p_value": formatted_reg}, span=span)
 
         if td.category == CobolDataCategory.ALPHANUMERIC:
             if td.justified_right:
@@ -1051,7 +1152,7 @@ class EmitContext:
                 ir = build_encode_alphanumeric_ir(
                     f"enc_alpha_{fl.name}", td.total_digits
                 )
-            return self.inline_ir(ir, {"%p_value": value_str_reg})
+            return self.inline_ir(ir, {"%p_value": value_str_reg}, span=span)
 
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
             # Convert string to float, then encode
@@ -1062,12 +1163,13 @@ class EmitContext:
                     func_name=FuncName("float"),
                     args=(value_str_reg,),
                 ),
+                span=span,
             )
             ir = build_encode_float_ir(f"enc_float_{fl.name}", td.byte_length)
-            encoded = self.inline_ir(ir, {"%p_float_value": float_reg})
+            encoded = self.inline_ir(ir, {"%p_float_value": float_reg}, span=span)
             if td.blank_when_zero:
                 return self._emit_blank_when_zero_wrap(
-                    encoded, value_str_reg, fl.byte_length
+                    encoded, value_str_reg, fl.byte_length, span=span
                 )
             return encoded
 
@@ -1079,17 +1181,18 @@ class EmitContext:
             # directly to int and pack as bytes instead. Implied decimal places
             # and PIC P scale are applied exactly (red-dragon-0dvs).
             int_reg = self.fresh_reg()
-            decimals_reg = self.const_to_reg(td.decimal_digits)
-            scale_reg = self.const_to_reg(td.scale)
+            decimals_reg = self.const_to_reg(td.decimal_digits, span=span)
+            scale_reg = self.const_to_reg(td.scale, span=span)
             self.emit_inst(
                 CallFunction(
                     result_reg=int_reg,
                     func_name=FuncName(BuiltinName.COBOL_BINARY_UNSCALED),
                     args=(value_str_reg, decimals_reg, scale_reg),
                 ),
+                span=span,
             )
-            byte_count_reg = self.const_to_reg(td.byte_length)
-            signed_reg = self.const_to_reg(td.signed)
+            byte_count_reg = self.const_to_reg(td.byte_length, span=span)
+            signed_reg = self.const_to_reg(td.signed, span=span)
             result = self.fresh_reg()
             self.emit_inst(
                 CallFunction(
@@ -1097,25 +1200,30 @@ class EmitContext:
                     func_name=FuncName(BuiltinName.INT_TO_BINARY_BYTES),
                     args=(int_reg, byte_count_reg, signed_reg),
                 ),
+                span=span,
             )
             return result
 
-        encoded = self.emit_numeric_encode_from_string(fl, value_str_reg)
+        encoded = self.emit_numeric_encode_from_string(fl, value_str_reg, span=span)
         if td.blank_when_zero:
             return self._emit_blank_when_zero_wrap(
-                encoded, value_str_reg, fl.byte_length
+                encoded, value_str_reg, fl.byte_length, span=span
             )
         return encoded
 
     def emit_numeric_encode_from_string(
-        self, fl: FieldLayout, value_str_reg: Register
+        self,
+        fl: FieldLayout,
+        value_str_reg: Register,
+        *,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Emit IR to parse a string into digits + sign, then encode numerically."""
         td = fl.type_descriptor
-        total_digits_reg = self.const_to_reg(td.total_digits)
-        decimal_digits_reg = self.const_to_reg(td.decimal_digits)
-        signed_reg = self.const_to_reg(td.signed)
-        scale_reg = self.const_to_reg(td.scale)
+        total_digits_reg = self.const_to_reg(td.total_digits, span=span)
+        decimal_digits_reg = self.const_to_reg(td.decimal_digits, span=span)
+        signed_reg = self.const_to_reg(td.signed, span=span)
+        scale_reg = self.const_to_reg(td.scale, span=span)
         digits_reg = self.fresh_reg()
         self.emit_inst(
             CallFunction(
@@ -1129,9 +1237,10 @@ class EmitContext:
                     scale_reg,
                 ),
             ),
+            span=span,
         )
 
-        signed_reg2 = self.const_to_reg(td.signed)
+        signed_reg2 = self.const_to_reg(td.signed, span=span)
         sign_reg = self.fresh_reg()
         self.emit_inst(
             CallFunction(
@@ -1139,6 +1248,7 @@ class EmitContext:
                 func_name=FuncName(BuiltinName.COBOL_PREPARE_SIGN),
                 args=(value_str_reg, signed_reg2),
             ),
+            span=span,
         )
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
@@ -1164,7 +1274,9 @@ class EmitContext:
         else:
             ir = build_encode_comp3_ir(f"enc_comp3_{fl.name}", td.total_digits)
 
-        return self.inline_ir(ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg})
+        return self.inline_ir(
+            ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg}, span=span
+        )
 
     def emit_encode_and_write(
         self,
@@ -1174,29 +1286,37 @@ class EmitContext:
         offset_reg: Register = NO_REGISTER,
         *,
         extent: FieldExtent,
+        span: SourceSpan | None = None,
     ) -> None:
         """Encode a string value and write it to the field's region slot."""
-        encoded_reg = self.emit_encode_from_string(fl, value_str_reg)
-        offset_reg = self._materialise_offset(fl, offset_reg)
+        encoded_reg = self.emit_encode_from_string(fl, value_str_reg, span=span)
+        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
             value_reg=encoded_reg,
             length=fl.byte_length,
             extent=extent,
+            span=span,
         )
 
     # ── Condition Lowering ───────────────────────────────────────
 
     def lower_condition(
-        self, condition: dict, materialised: MaterialisedSectionedLayout
+        self,
+        condition: dict,
+        materialised: MaterialisedSectionedLayout,
+        *,
+        span: SourceSpan | None = None,
     ) -> Register:
         """Lower a condition — delegates to condition_lowering module."""
         from interpreter.cobol.condition_lowering import (
             lower_condition as _lower_condition,
         )
 
-        return _lower_condition(self, condition, materialised, self._condition_index)
+        return _lower_condition(
+            self, condition, materialised, self._condition_index, span=span
+        )
 
     # ── File I/O Status Helper ────────────────────────────────────
 
@@ -1205,6 +1325,8 @@ class EmitContext:
         file_name: str,
         status_reg: Register,
         materialised: MaterialisedSectionedLayout,
+        *,
+        span: SourceSpan | None = None,
     ) -> None:
         """Write I/O status code to the FILE STATUS variable if declared."""
         from cobol_asg.cobol_statements import (
@@ -1219,15 +1341,16 @@ class EmitContext:
         if not materialised.has_field(fce.file_status_var):
             return
         target_ref, target_rr = self.resolve_field_ref(
-            fce.file_status_var, materialised
+            fce.file_status_var, materialised, span=span
         )
-        str_reg = self.emit_to_string(status_reg)
+        str_reg = self.emit_to_string(status_reg, span=span)
         self.emit_encode_and_write(
             target_rr,
             target_ref.fl,
             str_reg,
             target_ref.offset_reg,
             extent=target_ref.extent,
+            span=span,
         )
 
     # ── Parse Literal ─────────────────────────────────────────────

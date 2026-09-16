@@ -31,6 +31,7 @@ from cobol_asg.cobol_statements import (
     WhenStatement,
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.source_span import SourceSpan
 from cobol_numeric.number import from_literal
 from cobol_numeric.scale import (
     Scale,
@@ -147,6 +148,8 @@ def _emit_verb_operation(
     right_operand: RefModOperand,
     receivers: list[RefModOperand],
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> Register:
     """Emit ``left <op> right`` for an arithmetic verb, exact unless IBM's
     floating-point rule applies (a COMP-1/COMP-2 operand or receiver)."""
@@ -165,9 +168,10 @@ def _emit_verb_operation(
             Binop(
                 result_reg=result_reg,
                 operator=resolve_binop(ARITHMETIC_OPS[op]),
-                left=_float_operand(ctx, left_reg, True),
-                right=_float_operand(ctx, right_reg, True),
-            )
+                left=_float_operand(ctx, left_reg, True, span=span),
+                right=_float_operand(ctx, right_reg, True, span=span),
+            ),
+            span=span,
         )
         return result_reg
     left_scale = _operand_scale(ctx, left_operand.name, materialised)
@@ -192,13 +196,14 @@ def _emit_verb_operation(
         combined = mul_scale(left_scale, right_scale)
     else:
         combined = div_scale(left_scale, right_scale, dmax)
-    decimals_reg = ctx.const_to_reg(carry(combined, dmax).decimal_places)
+    decimals_reg = ctx.const_to_reg(carry(combined, dmax).decimal_places, span=span)
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
             func_name=FuncName(_EXACT_VERB_BUILTINS[op]),
             args=(left_reg, right_reg, decimals_reg),
-        )
+        ),
+        span=span,
     )
     return result_reg
 
@@ -207,6 +212,8 @@ def _compute_overflow_flag(
     ctx: EmitContext,
     result_reg: Register,
     td: CobolTypeDescriptor,
+    *,
+    span: SourceSpan | None = None,
 ) -> Register:
     """Emit CONST/BINOP sequence to compute overflow bool register.
 
@@ -219,7 +226,7 @@ def _compute_overflow_flag(
     # by a factor of 10**decimal_digits (red-dragon-oiec).
     integer_digits = td.total_digits - td.decimal_digits
     max_val = 10**integer_digits - 1
-    max_reg = ctx.const_to_reg(max_val)
+    max_reg = ctx.const_to_reg(max_val, span=span)
     over_max = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -227,10 +234,11 @@ def _compute_overflow_flag(
             operator=resolve_binop(">"),
             left=result_reg,
             right=max_reg,
-        )
+        ),
+        span=span,
     )
     if td.signed:
-        min_reg = ctx.const_to_reg(-max_val)
+        min_reg = ctx.const_to_reg(-max_val, span=span)
         under_min = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -238,7 +246,8 @@ def _compute_overflow_flag(
                 operator=resolve_binop("<"),
                 left=result_reg,
                 right=min_reg,
-            )
+            ),
+            span=span,
         )
         overflow_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -247,7 +256,8 @@ def _compute_overflow_flag(
                 operator=resolve_binop("or"),
                 left=over_max,
                 right=under_min,
-            )
+            ),
+            span=span,
         )
         return overflow_reg
     return over_max
@@ -259,14 +269,17 @@ def emit_overflow_check(
     td: CobolTypeDescriptor,
     on_size_err_label: CodeLabel,
     not_on_size_err_label: CodeLabel,
+    *,
+    span: SourceSpan | None = None,
 ) -> None:
     """Emit overflow detection and BRANCH_IF to the supplied labels."""
-    overflow_reg = _compute_overflow_flag(ctx, result_reg, td)
+    overflow_reg = _compute_overflow_flag(ctx, result_reg, td, span=span)
     ctx.emit_inst(
         BranchIf(
             cond_reg=overflow_reg,
             branch_targets=(on_size_err_label, not_on_size_err_label),
-        )
+        ),
+        span=span,
     )
 
 
@@ -274,6 +287,8 @@ def eval_ref_mod_expr(
     ctx: EmitContext,
     expr: RefModExpr,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> Register:
     """Evaluate a reference modification expression to an IR register.
 
@@ -285,22 +300,26 @@ def eval_ref_mod_expr(
     if isinstance(expr, RefModLiteral):
         # Literal: numeric value for reference modification.
         # parse_literal converts e.g. "2" → int 2 so arithmetic Binops work.
-        return ctx.const_to_reg(ctx.parse_literal(expr.value))
+        return ctx.const_to_reg(ctx.parse_literal(expr.value), span=span)
 
     elif isinstance(expr, RefModReference):
         # Field reference: resolve field → decode
         # Return the decoded numeric value (don't convert to string)
         name = expr.name
         if ctx.has_field(name, materialised):
-            field_ref, rr = ctx.resolve_field_ref(name, materialised)
+            field_ref, rr = ctx.resolve_field_ref(name, materialised, span=span)
             decoded_reg = ctx.emit_decode_field(
-                rr, field_ref.fl, field_ref.offset_reg, extent=field_ref.extent
+                rr,
+                field_ref.fl,
+                field_ref.offset_reg,
+                extent=field_ref.extent,
+                span=span,
             )
             # Return the decoded numeric value directly
             return decoded_reg
         else:
             # Unknown field: treat as literal numeric 0
-            return ctx.const_to_reg(0)
+            return ctx.const_to_reg(0, span=span)
 
     elif isinstance(expr, RefModLengthOf):
         # LENGTH OF <field>: the field's byte length (a compile-time constant),
@@ -308,15 +327,15 @@ def eval_ref_mod_expr(
         # such as DEST(LENGTH OF G + 1 : LENGTH OF H) (red-dragon-oq2c).
         name = expr.name
         if ctx.has_field(name, materialised):
-            field_ref, _ = ctx.resolve_field_ref(name, materialised)
-            return ctx.const_to_reg(field_ref.fl.byte_length)
+            field_ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
+            return ctx.const_to_reg(field_ref.fl.byte_length, span=span)
         logging.warning("eval_ref_mod_expr: LENGTH OF unknown field %s → 0", name)
-        return ctx.const_to_reg(0)
+        return ctx.const_to_reg(0, span=span)
 
     elif isinstance(expr, RefModBinOp):
         # Binary operation: evaluate left and right, emit Binop
-        left_reg = eval_ref_mod_expr(ctx, expr.left, materialised)
-        right_reg = eval_ref_mod_expr(ctx, expr.right, materialised)
+        left_reg = eval_ref_mod_expr(ctx, expr.left, materialised, span=span)
+        right_reg = eval_ref_mod_expr(ctx, expr.right, materialised, span=span)
         result_reg = ctx.fresh_reg()
 
         op_str = expr.op
@@ -328,13 +347,14 @@ def eval_ref_mod_expr(
                 left=left_reg,
                 right=right_reg,
                 result_reg=result_reg,
-            )
+            ),
+            span=span,
         )
         return result_reg
 
     else:
         # Fallback: treat as literal zero
-        return ctx.const_to_reg(0)
+        return ctx.const_to_reg(0, span=span)
 
 
 # Maps canonical COBOL intrinsic function names to COBOL-layer builtin names.
@@ -398,6 +418,8 @@ def _lower_function_arg_to_string(
     ctx: EmitContext,
     arg: dict,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> Register:
     """Lower one intrinsic-function argument dict to a string-valued register.
 
@@ -408,28 +430,30 @@ def _lower_function_arg_to_string(
     if kind == "ref":
         name = arg.get("name", "")
         if ctx.has_field(name, materialised):
-            ref, rr = ctx.resolve_field_ref(name, materialised)
+            ref, rr = ctx.resolve_field_ref(name, materialised, span=span)
             decoded = ctx.emit_decode_field(
-                rr, ref.fl, ref.offset_reg, extent=ref.extent
+                rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
             )
-            return ctx.emit_to_string(decoded)
+            return ctx.emit_to_string(decoded, span=span)
         from interpreter.cobol.condition_lowering import _unresolvable_operand
 
-        return _unresolvable_operand(ctx, name)
+        return _unresolvable_operand(ctx, name, span=span)
     if kind == "lit":
-        return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")))
+        return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")), span=span)
     # Arithmetic / other expression args: lower via the expression path, then
     # stringify so the builtin (e.g. UPPER-CASE) receives character data.
     from interpreter.cobol.condition_lowering import _lower_expr_dict
 
-    value_reg = _lower_expr_dict(ctx, arg, materialised)
-    return ctx.emit_to_string(value_reg)
+    value_reg = _lower_expr_dict(ctx, arg, materialised, span=span)
+    return ctx.emit_to_string(value_reg, span=span)
 
 
 def lower_function_operand(
     ctx: EmitContext,
     operand: FunctionCallOperand,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> Register:
     """Lower an intrinsic FUNCTION call operand to a value register.
 
@@ -444,11 +468,14 @@ def lower_function_operand(
             operand.name,
         )
         if operand.args:
-            return _lower_function_arg_to_string(ctx, operand.args[0], materialised)
-        return ctx.const_to_reg("")
+            return _lower_function_arg_to_string(
+                ctx, operand.args[0], materialised, span=span
+            )
+        return ctx.const_to_reg("", span=span)
 
     arg_regs = tuple(
-        _lower_function_arg_to_string(ctx, arg, materialised) for arg in operand.args
+        _lower_function_arg_to_string(ctx, arg, materialised, span=span)
+        for arg in operand.args
     )
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -456,7 +483,8 @@ def lower_function_operand(
             result_reg=result_reg,
             func_name=FuncName(builtin),
             args=arg_regs,
-        )
+        ),
+        span=span,
     )
     return result_reg
 
@@ -471,14 +499,17 @@ def lower_move(
     The source is evaluated ONCE and stored into every receiving field, each with
     its own reference modification and PICTURE conversion (COBOL semantics).
     """
+    span = stmt.span
 
     # Intrinsic FUNCTION source (e.g. FUNCTION UPPER-CASE(...)): evaluate to a
     # value register, then distribute to every receiving field. Functions carry
     # no source-side reference modification, so the ref-mod block is skipped.
     if isinstance(stmt.source, FunctionCallOperand):
-        source_value_reg = lower_function_operand(ctx, stmt.source, materialised)
+        source_value_reg = lower_function_operand(
+            ctx, stmt.source, materialised, span=span
+        )
         for target in stmt.targets:
-            _store_move_value(ctx, target, source_value_reg, materialised)
+            _store_move_value(ctx, target, source_value_reg, materialised, span=span)
         return
 
     # LENGTH OF <field> source: the field's byte length (a compile-time constant
@@ -488,14 +519,14 @@ def lower_move(
     if stmt.source.length_of:
         name = stmt.source.length_of
         if ctx.has_field(name, materialised):
-            field_ref, _ = ctx.resolve_field_ref(name, materialised)
+            field_ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
             length_value = field_ref.fl.byte_length
         else:
             logger.warning("MOVE LENGTH OF unknown field %r — using 0", name)
             length_value = 0
-        source_value_reg = ctx.const_to_reg(length_value)
+        source_value_reg = ctx.const_to_reg(length_value, span=span)
         for target in stmt.targets:
-            _store_move_value(ctx, target, source_value_reg, materialised)
+            _store_move_value(ctx, target, source_value_reg, materialised, span=span)
         return
 
     # Raw figurative source (HIGH-VALUES / LOW-VALUES): these denote raw bytes —
@@ -522,14 +553,15 @@ def lower_move(
                     # Ref-modified receiver: fall back to the character path so the
                     # SPLICE write still works (rare combination).
                     raw_str = chr(fill_byte)
-                    src_reg = ctx.const_to_reg(raw_str)
-                    _store_move_value(ctx, target, src_reg, materialised)
+                    src_reg = ctx.const_to_reg(raw_str, span=span)
+                    _store_move_value(ctx, target, src_reg, materialised, span=span)
                     continue
                 target_ref, target_rr = ctx.resolve_field_ref(
                     target.name,
                     materialised,
                     target.qualifiers,
                     subscripts=target.subscripts,
+                    span=span,
                 )
                 ctx.emit_fill_raw_byte(
                     target_rr,
@@ -537,6 +569,7 @@ def lower_move(
                     fill_byte,
                     target_ref.offset_reg,
                     extent=target_ref.extent,
+                    span=span,
                 )
             return
 
@@ -553,6 +586,7 @@ def lower_move(
             materialised,
             stmt.source.qualifiers,
             subscripts=stmt.source.subscripts,
+            span=span,
         )
         source_fl = source_ref.fl
         decoded_reg = ctx.emit_decode_field(
@@ -560,11 +594,12 @@ def lower_move(
             source_ref.fl,
             source_ref.offset_reg,
             extent=source_ref.extent,
+            span=span,
         )
-        value_str_reg = ctx.emit_to_string(decoded_reg)
+        value_str_reg = ctx.emit_to_string(decoded_reg, span=span)
     else:
         literal = strip_cobol_literal(translate_cobol_figurative(stmt.source.name))
-        value_str_reg = ctx.const_to_reg(literal)
+        value_str_reg = ctx.const_to_reg(literal, span=span)
         # COBOL figurative constants (SPACES/ZEROS/ZEROES/QUOTES) fill ALL
         # receiver positions with the same character — MOVE ZEROES TO X(3)
         # produces '000', not '0  '. Track the fill char here; the per-target
@@ -579,10 +614,12 @@ def lower_move(
     # Handle reference modification if present
     if stmt.source.ref_mod_start is not None:
         # Evaluate start and length expressions
-        start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
+        start_reg = eval_ref_mod_expr(
+            ctx, stmt.source.ref_mod_start, materialised, span=span
+        )
         # COBOL uses 1-indexed positions, but SLICE uses 0-indexed.
         # Convert: start_0indexed = start_1indexed - 1
-        one_reg = ctx.const_to_reg(1)
+        one_reg = ctx.const_to_reg(1, span=span)
         start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -590,13 +627,14 @@ def lower_move(
                 left=start_reg,
                 right=one_reg,
                 result_reg=start_0indexed_reg,
-            )
+            ),
+            span=span,
         )
 
         if stmt.source.ref_mod_length is not None:
             # Both start and length specified: SLICE operation
             length_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_length, materialised
+                ctx, stmt.source.ref_mod_length, materialised, span=span
             )
             result_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -604,20 +642,22 @@ def lower_move(
                     result_reg=result_reg,
                     func_name=FuncName(BuiltinName.STRING_SLICE),
                     args=(value_str_reg, start_0indexed_reg, length_reg),
-                )
+                ),
+                span=span,
             )
             value_str_reg = result_reg
         else:
             # Only start specified, no length: SLICE from start to end
             # Use a large sentinel as length to get the substring to end.
-            large_length = ctx.const_to_reg(999999)
+            large_length = ctx.const_to_reg(999999, span=span)
             result_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
                     result_reg=result_reg,
                     func_name=FuncName(BuiltinName.STRING_SLICE),
                     args=(value_str_reg, start_0indexed_reg, large_length),
-                )
+                ),
+                span=span,
             )
             value_str_reg = result_reg
 
@@ -638,6 +678,7 @@ def lower_move(
             source_fl,
             source_ref.offset_reg,
             extent=source_ref.extent,
+            span=span,
         )
 
     # Store the (once-evaluated) source value into each receiving field. Each
@@ -662,13 +703,13 @@ def lower_move(
         if _figurative_fill_char is not None and target.ref_mod_start is None:
             if ctx.has_field(target.name, materialised):
                 tgt_ref, _ = ctx.resolve_field_ref(
-                    target.name, materialised, target.qualifiers
+                    target.name, materialised, target.qualifiers, span=span
                 )
                 fill_width = tgt_ref.fl.byte_length
-                filled = ctx.const_to_reg(_figurative_fill_char * fill_width)
+                filled = ctx.const_to_reg(_figurative_fill_char * fill_width, span=span)
                 effective_source = filled
         _store_move_value(
-            ctx, target, effective_source, materialised, zoned_display_reg
+            ctx, target, effective_source, materialised, zoned_display_reg, span=span
         )
 
 
@@ -678,6 +719,8 @@ def _store_move_value(
     source_value_reg: Register,
     materialised: MaterialisedSectionedLayout,
     zoned_display_reg: Register = NO_REGISTER,
+    *,
+    span: SourceSpan | None = None,
 ) -> None:
     """Store an already-evaluated MOVE source value into one receiving field.
 
@@ -691,7 +734,11 @@ def _store_move_value(
     alphanumeric receivers without target reference modification (red-dragon-0fqr).
     """
     target_ref, target_rr = ctx.resolve_field_ref(
-        target.name, materialised, target.qualifiers, subscripts=target.subscripts
+        target.name,
+        materialised,
+        target.qualifiers,
+        subscripts=target.subscripts,
+        span=span,
     )
 
     if (
@@ -711,12 +758,15 @@ def _store_move_value(
             target_ref.fl,
             target_ref.offset_reg,
             extent=target_ref.extent,
+            span=span,
         )
-        target_str_reg = ctx.emit_to_string(target_decoded)
+        target_str_reg = ctx.emit_to_string(target_decoded, span=span)
 
         # Evaluate target ref mod start; convert 1-indexed → 0-indexed
-        tgt_start_reg = eval_ref_mod_expr(ctx, target.ref_mod_start, materialised)
-        one_reg = ctx.const_to_reg(1)
+        tgt_start_reg = eval_ref_mod_expr(
+            ctx, target.ref_mod_start, materialised, span=span
+        )
+        one_reg = ctx.const_to_reg(1, span=span)
         tgt_start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -724,14 +774,17 @@ def _store_move_value(
                 left=tgt_start_reg,
                 right=one_reg,
                 result_reg=tgt_start_0indexed_reg,
-            )
+            ),
+            span=span,
         )
 
         # Evaluate target ref mod length (or use large sentinel for "to end")
         if target.ref_mod_length is not None:
-            tgt_length_reg = eval_ref_mod_expr(ctx, target.ref_mod_length, materialised)
+            tgt_length_reg = eval_ref_mod_expr(
+                ctx, target.ref_mod_length, materialised, span=span
+            )
         else:
-            tgt_length_reg = ctx.const_to_reg(999999)
+            tgt_length_reg = ctx.const_to_reg(999999, span=span)
 
         # Emit SPLICE: replace substring in target with source value
         spliced_reg = ctx.fresh_reg()
@@ -745,7 +798,8 @@ def _store_move_value(
                     tgt_length_reg,
                     source_value_reg,
                 ),
-            )
+            ),
+            span=span,
         )
         target_value_reg = spliced_reg
 
@@ -755,6 +809,7 @@ def _store_move_value(
         target_value_reg,
         target_ref.offset_reg,
         extent=target_ref.extent,
+        span=span,
     )
 
 
@@ -771,6 +826,7 @@ def lower_move_corresponding(
     it cannot be derived here because the FieldLayouts are taken straight out
     of ``layout`` rather than resolved by name.
     """
+    span = stmt.span
     src_layout = layout.lookup_group(stmt.source)
 
     for target_name in stmt.targets:
@@ -781,15 +837,20 @@ def lower_move_corresponding(
             src_fl = src_layout.fields[name]
             dst_fl = dst_layout.fields[name]
 
-            src_ref = ctx.resolve_field_ref_from(src_fl, region_reg, region)
+            src_ref = ctx.resolve_field_ref_from(src_fl, region_reg, region, span=span)
             decoded = ctx.emit_decode_field(
-                region_reg, src_fl, src_ref.offset_reg, extent=src_ref.extent
+                region_reg, src_fl, src_ref.offset_reg, extent=src_ref.extent, span=span
             )
-            value_str = ctx.emit_to_string(decoded)
+            value_str = ctx.emit_to_string(decoded, span=span)
 
-            dst_ref = ctx.resolve_field_ref_from(dst_fl, region_reg, region)
+            dst_ref = ctx.resolve_field_ref_from(dst_fl, region_reg, region, span=span)
             ctx.emit_encode_and_write(
-                region_reg, dst_fl, value_str, dst_ref.offset_reg, extent=dst_ref.extent
+                region_reg,
+                dst_fl,
+                value_str,
+                dst_ref.offset_reg,
+                extent=dst_ref.extent,
+                span=span,
             )
 
 
@@ -826,6 +887,7 @@ def lower_arithmetic_corresponding(
     For each field name present in both src and dst groups, emit the
     equivalent of ADD src.field TO dst.field (or SUBTRACT).
     """
+    span = stmt.span
     op_str = "+" if stmt.op == "ADD" else "-"
 
     src_result = _find_group_and_reg(stmt.source, materialised)
@@ -842,14 +904,14 @@ def lower_arithmetic_corresponding(
         src_fl = src_group.fields[name]
         dst_fl = dst_group.fields[name]
 
-        src_ref = ctx.resolve_field_ref_from(src_fl, src_rr, src_region)
+        src_ref = ctx.resolve_field_ref_from(src_fl, src_rr, src_region, span=span)
         src_val = ctx.emit_decode_field(
-            src_rr, src_fl, src_ref.offset_reg, extent=src_ref.extent
+            src_rr, src_fl, src_ref.offset_reg, extent=src_ref.extent, span=span
         )
 
-        dst_ref = ctx.resolve_field_ref_from(dst_fl, dst_rr, dst_region)
+        dst_ref = ctx.resolve_field_ref_from(dst_fl, dst_rr, dst_region, span=span)
         dst_val = ctx.emit_decode_field(
-            dst_rr, dst_fl, dst_ref.offset_reg, extent=dst_ref.extent
+            dst_rr, dst_fl, dst_ref.offset_reg, extent=dst_ref.extent, span=span
         )
 
         result_reg = ctx.fresh_reg()
@@ -859,11 +921,17 @@ def lower_arithmetic_corresponding(
                 operator=resolve_binop(op_str),
                 left=Register(str(dst_val)),
                 right=Register(str(src_val)),
-            )
+            ),
+            span=span,
         )
-        result_str = ctx.emit_to_string(result_reg)
+        result_str = ctx.emit_to_string(result_reg, span=span)
         ctx.emit_encode_and_write(
-            dst_rr, dst_fl, result_str, dst_ref.offset_reg, extent=dst_ref.extent
+            dst_rr,
+            dst_fl,
+            result_str,
+            dst_ref.offset_reg,
+            extent=dst_ref.extent,
+            span=span,
         )
 
 
@@ -874,6 +942,8 @@ def _emit_arithmetic_writeback(
     target_rr: Register,
     result_str_reg: Register,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> None:
     """Write arithmetic result into target, applying target ref-mod if present.
 
@@ -887,12 +957,14 @@ def _emit_arithmetic_writeback(
 
     if target_op.ref_mod_start is not None:
         target_decoded = ctx.emit_decode_field(
-            target_rr, fl, offset_reg, extent=target_ref.extent
+            target_rr, fl, offset_reg, extent=target_ref.extent, span=span
         )
-        target_str_reg = ctx.emit_to_string(target_decoded)
+        target_str_reg = ctx.emit_to_string(target_decoded, span=span)
 
-        tgt_start_reg = eval_ref_mod_expr(ctx, target_op.ref_mod_start, materialised)
-        one_reg = ctx.const_to_reg(1)
+        tgt_start_reg = eval_ref_mod_expr(
+            ctx, target_op.ref_mod_start, materialised, span=span
+        )
+        one_reg = ctx.const_to_reg(1, span=span)
         tgt_start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -900,15 +972,16 @@ def _emit_arithmetic_writeback(
                 left=tgt_start_reg,
                 right=one_reg,
                 result_reg=tgt_start_0indexed_reg,
-            )
+            ),
+            span=span,
         )
 
         if target_op.ref_mod_length is not None:
             tgt_length_reg = eval_ref_mod_expr(
-                ctx, target_op.ref_mod_length, materialised
+                ctx, target_op.ref_mod_length, materialised, span=span
             )
         else:
-            tgt_length_reg = ctx.const_to_reg(999999)
+            tgt_length_reg = ctx.const_to_reg(999999, span=span)
 
         # Parse the text as an exact number, then normalise → int → zero-padded
         # string ('015') before splicing to fill the exact ref-mod width.
@@ -918,22 +991,25 @@ def _emit_arithmetic_writeback(
                 result_reg=parsed_norm,
                 func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                 args=(result_str_reg,),
-            )
+            ),
+            span=span,
         )
         int_norm = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=int_norm, func_name=FuncName("int"), args=(parsed_norm,)
-            )
+            ),
+            span=span,
         )
-        int_str_reg = ctx.emit_to_string(int_norm)
+        int_str_reg = ctx.emit_to_string(int_norm, span=span)
         padded_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(
                 result_reg=padded_reg,
                 func_name=FuncName(BuiltinName.STRING_ZFILL),
                 args=(int_str_reg, tgt_length_reg),
-            )
+            ),
+            span=span,
         )
 
         spliced_reg = ctx.fresh_reg()
@@ -947,25 +1023,34 @@ def _emit_arithmetic_writeback(
                     tgt_length_reg,
                     padded_reg,
                 ),
-            )
+            ),
+            span=span,
         )
         ctx.emit_encode_and_write(
-            target_rr, fl, spliced_reg, offset_reg, extent=target_ref.extent
+            target_rr, fl, spliced_reg, offset_reg, extent=target_ref.extent, span=span
         )
     else:
         if target_op.rounded:
-            dec_digits_reg = ctx.const_to_reg(fl.type_descriptor.decimal_digits)
+            dec_digits_reg = ctx.const_to_reg(
+                fl.type_descriptor.decimal_digits, span=span
+            )
             rounded_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
                     result_reg=rounded_reg,
                     func_name=FuncName(BuiltinName.COBOL_ROUND),
                     args=(result_str_reg, dec_digits_reg),
-                )
+                ),
+                span=span,
             )
             result_str_reg = rounded_reg
         ctx.emit_encode_and_write(
-            target_rr, fl, result_str_reg, offset_reg, extent=target_ref.extent
+            target_rr,
+            fl,
+            result_str_reg,
+            offset_reg,
+            extent=target_ref.extent,
+            span=span,
         )
 
 
@@ -975,6 +1060,7 @@ def lower_arithmetic(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """ADD/SUBTRACT/MULTIPLY/DIVIDE X TO/FROM/BY/INTO Y [GIVING Z]."""
+    span = stmt.span
     if stmt.giving:
         lower_arithmetic_giving(ctx, stmt, materialised)
         return
@@ -984,29 +1070,33 @@ def lower_arithmetic(
         materialised,
         stmt.target.qualifiers,
         subscripts=stmt.target.subscripts,
+        span=span,
     )
 
     # Decode source operand
     if ctx.has_field(stmt.source.name, materialised):
         source_ref, source_rr = ctx.resolve_field_ref(
-            stmt.source.name, materialised, subscripts=stmt.source.subscripts
+            stmt.source.name, materialised, subscripts=stmt.source.subscripts, span=span
         )
         src_decoded = ctx.emit_decode_field(
             source_rr,
             source_ref.fl,
             source_ref.offset_reg,
             extent=source_ref.extent,
+            span=span,
         )
 
         # Handle reference modification on source
         if stmt.source.ref_mod_start is not None:
             # Convert to string first
-            src_str_reg = ctx.emit_to_string(src_decoded)
+            src_str_reg = ctx.emit_to_string(src_decoded, span=span)
 
             # Evaluate start and length
-            start_reg = eval_ref_mod_expr(ctx, stmt.source.ref_mod_start, materialised)
+            start_reg = eval_ref_mod_expr(
+                ctx, stmt.source.ref_mod_start, materialised, span=span
+            )
             # Convert 1-indexed to 0-indexed
-            one_reg = ctx.const_to_reg(1)
+            one_reg = ctx.const_to_reg(1, span=span)
             start_0indexed_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
@@ -1014,16 +1104,17 @@ def lower_arithmetic(
                     left=start_reg,
                     right=one_reg,
                     result_reg=start_0indexed_reg,
-                )
+                ),
+                span=span,
             )
 
             # Perform slice
             if stmt.source.ref_mod_length is not None:
                 length_reg = eval_ref_mod_expr(
-                    ctx, stmt.source.ref_mod_length, materialised
+                    ctx, stmt.source.ref_mod_length, materialised, span=span
                 )
             else:
-                length_reg = ctx.const_to_reg(999999)
+                length_reg = ctx.const_to_reg(999999, span=span)
 
             sliced_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -1031,7 +1122,8 @@ def lower_arithmetic(
                     result_reg=sliced_reg,
                     func_name=FuncName(BuiltinName.STRING_SLICE),
                     args=(src_str_reg, start_0indexed_reg, length_reg),
-                )
+                ),
+                span=span,
             )
 
             # Parse the text as an exact number for arithmetic
@@ -1041,23 +1133,30 @@ def lower_arithmetic(
                     result_reg=src_decoded,
                     func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                     args=(sliced_reg,),
-                )
+                ),
+                span=span,
             )
     else:
         src_decoded = ctx.const_to_reg(
-            ctx.parse_literal(translate_cobol_figurative(stmt.source.name))
+            ctx.parse_literal(translate_cobol_figurative(stmt.source.name)), span=span
         )
 
     tgt_decoded = ctx.emit_decode_field(
-        target_rr, target_ref.fl, target_ref.offset_reg, extent=target_ref.extent
+        target_rr,
+        target_ref.fl,
+        target_ref.offset_reg,
+        extent=target_ref.extent,
+        span=span,
     )
 
     # Apply target ref-mod on the READ side: ADD 5 TO Y(4:3) should add to
     # the Y(4:3) substring value, not to the entire Y field.
     if stmt.target.ref_mod_start is not None:
-        tgt_str = ctx.emit_to_string(tgt_decoded)
-        tgt_rm_start = eval_ref_mod_expr(ctx, stmt.target.ref_mod_start, materialised)
-        one_reg2 = ctx.const_to_reg(1)
+        tgt_str = ctx.emit_to_string(tgt_decoded, span=span)
+        tgt_rm_start = eval_ref_mod_expr(
+            ctx, stmt.target.ref_mod_start, materialised, span=span
+        )
+        one_reg2 = ctx.const_to_reg(1, span=span)
         tgt_rm_start_0idx = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -1065,12 +1164,13 @@ def lower_arithmetic(
                 left=tgt_rm_start,
                 right=one_reg2,
                 result_reg=tgt_rm_start_0idx,
-            )
+            ),
+            span=span,
         )
         tgt_rm_len = (
-            eval_ref_mod_expr(ctx, stmt.target.ref_mod_length, materialised)
+            eval_ref_mod_expr(ctx, stmt.target.ref_mod_length, materialised, span=span)
             if stmt.target.ref_mod_length is not None
-            else ctx.const_to_reg(999999)
+            else ctx.const_to_reg(999999, span=span)
         )
         tgt_sliced = ctx.fresh_reg()
         ctx.emit_inst(
@@ -1078,7 +1178,8 @@ def lower_arithmetic(
                 result_reg=tgt_sliced,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
                 args=(tgt_str, tgt_rm_start_0idx, tgt_rm_len),
-            )
+            ),
+            span=span,
         )
         tgt_decoded_as_num = ctx.fresh_reg()
         ctx.emit_inst(
@@ -1086,7 +1187,8 @@ def lower_arithmetic(
                 result_reg=tgt_decoded_as_num,
                 func_name=FuncName("int"),
                 args=(tgt_sliced,),
-            )
+            ),
+            span=span,
         )
         tgt_decoded = tgt_decoded_as_num
 
@@ -1102,10 +1204,17 @@ def lower_arithmetic(
             stmt.source,
             [stmt.target],
             materialised,
+            span=span,
         )
-        result_str_reg = ctx.emit_to_string(result_reg)
+        result_str_reg = ctx.emit_to_string(result_reg, span=span)
         _emit_arithmetic_writeback(
-            ctx, stmt.target, target_ref, target_rr, result_str_reg, materialised
+            ctx,
+            stmt.target,
+            target_ref,
+            target_rr,
+            result_str_reg,
+            materialised,
+            span=span,
         )
         return
 
@@ -1116,7 +1225,7 @@ def lower_arithmetic(
 
     # DIVIDE only: pre-Binop division-by-zero guard
     if stmt.op == "DIVIDE":
-        zero_reg = ctx.const_to_reg(0)
+        zero_reg = ctx.const_to_reg(0, span=span)
         divzero_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -1124,16 +1233,18 @@ def lower_arithmetic(
                 operator=resolve_binop("=="),
                 left=src_decoded,
                 right=zero_reg,
-            )
+            ),
+            span=span,
         )
         compute_label = ctx.fresh_label("divide_compute")
         ctx.emit_inst(
             BranchIf(
                 cond_reg=divzero_reg,
                 branch_targets=(on_size_err_label, compute_label),
-            )
+            ),
+            span=span,
         )
-        ctx.emit_inst(Label_(label=compute_label))
+        ctx.emit_inst(Label_(label=compute_label), span=span)
 
     result_reg = _emit_verb_operation(
         ctx,
@@ -1144,6 +1255,7 @@ def lower_arithmetic(
         stmt.source,
         [stmt.target],
         materialised,
+        span=span,
     )
 
     emit_overflow_check(
@@ -1152,23 +1264,24 @@ def lower_arithmetic(
         target_ref.fl.type_descriptor,
         on_size_err_label,
         not_on_size_err_label,
+        span=span,
     )
 
-    ctx.emit_inst(Label_(label=on_size_err_label))
+    ctx.emit_inst(Label_(label=on_size_err_label), span=span)
     for child in stmt.on_size_error:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
-    ctx.emit_inst(Label_(label=not_on_size_err_label))
-    result_str_reg = ctx.emit_to_string(result_reg)
+    ctx.emit_inst(Label_(label=not_on_size_err_label), span=span)
+    result_str_reg = ctx.emit_to_string(result_reg, span=span)
     _emit_arithmetic_writeback(
-        ctx, stmt.target, target_ref, target_rr, result_str_reg, materialised
+        ctx, stmt.target, target_ref, target_rr, result_str_reg, materialised, span=span
     )
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
-    ctx.emit_inst(Label_(label=end_label))
+    ctx.emit_inst(Label_(label=end_label), span=span)
 
 
 def lower_arithmetic_giving(
@@ -1177,23 +1290,26 @@ def lower_arithmetic_giving(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """MULTIPLY/DIVIDE X BY/INTO Y GIVING Z."""
+    span = stmt.span
 
     def _decode_operand(operand: RefModOperand) -> Register:
         field_name = operand.name
         if ctx.has_field(field_name, materialised):
             ref, rr = ctx.resolve_field_ref(
-                field_name, materialised, subscripts=operand.subscripts
+                field_name, materialised, subscripts=operand.subscripts, span=span
             )
             decoded = ctx.emit_decode_field(
-                rr, ref.fl, ref.offset_reg, extent=ref.extent
+                rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
             )
 
             # Apply ref_mod if present
             if operand.ref_mod_start is not None:
-                src_str = ctx.emit_to_string(decoded)
-                start_reg = eval_ref_mod_expr(ctx, operand.ref_mod_start, materialised)
+                src_str = ctx.emit_to_string(decoded, span=span)
+                start_reg = eval_ref_mod_expr(
+                    ctx, operand.ref_mod_start, materialised, span=span
+                )
                 # Convert 1-indexed to 0-indexed
-                one_reg = ctx.const_to_reg(1)
+                one_reg = ctx.const_to_reg(1, span=span)
                 zero_indexed_start = ctx.fresh_reg()
                 ctx.emit_inst(
                     Binop(
@@ -1201,13 +1317,16 @@ def lower_arithmetic_giving(
                         operator=resolve_binop("-"),
                         left=start_reg,
                         right=one_reg,
-                    )
+                    ),
+                    span=span,
                 )
 
                 length_reg = (
-                    eval_ref_mod_expr(ctx, operand.ref_mod_length, materialised)
+                    eval_ref_mod_expr(
+                        ctx, operand.ref_mod_length, materialised, span=span
+                    )
                     if operand.ref_mod_length is not None
-                    else ctx.const_to_reg(999999)
+                    else ctx.const_to_reg(999999, span=span)
                 )
 
                 # Emit STRING_SLICE
@@ -1217,7 +1336,8 @@ def lower_arithmetic_giving(
                         result_reg=sliced,
                         func_name=FuncName("STRING_SLICE"),
                         args=(src_str, zero_indexed_start, length_reg),
-                    )
+                    ),
+                    span=span,
                 )
 
                 # Parse the sliced text as an exact number
@@ -1227,13 +1347,14 @@ def lower_arithmetic_giving(
                         result_reg=result,
                         func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
                         args=(sliced,),
-                    )
+                    ),
+                    span=span,
                 )
                 return result
 
             return decoded
         return ctx.const_to_reg(
-            ctx.parse_literal(translate_cobol_figurative(field_name))
+            ctx.parse_literal(translate_cobol_figurative(field_name)), span=span
         )
 
     left_reg = _decode_operand(stmt.source)
@@ -1245,7 +1366,7 @@ def lower_arithmetic_giving(
         on_size_err_label = ctx.fresh_label("on_size_err")
         not_on_size_err_label = ctx.fresh_label("not_on_size_err")
         end_label = ctx.fresh_label("size_err_end")
-        zero_reg = ctx.const_to_reg(0)
+        zero_reg = ctx.const_to_reg(0, span=span)
         divzero_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -1253,16 +1374,18 @@ def lower_arithmetic_giving(
                 operator=resolve_binop("=="),
                 left=right_reg,
                 right=zero_reg,
-            )
+            ),
+            span=span,
         )
         compute_label = ctx.fresh_label("divide_compute")
         ctx.emit_inst(
             BranchIf(
                 cond_reg=divzero_reg,
                 branch_targets=(on_size_err_label, compute_label),
-            )
+            ),
+            span=span,
         )
-        ctx.emit_inst(Label_(label=compute_label))
+        ctx.emit_inst(Label_(label=compute_label), span=span)
     elif has_clause:
         on_size_err_label = ctx.fresh_label("on_size_err")
         not_on_size_err_label = ctx.fresh_label("not_on_size_err")
@@ -1277,6 +1400,7 @@ def lower_arithmetic_giving(
         stmt.target,
         list(stmt.giving),
         materialised,
+        span=span,
     )
 
     def _emit_remainder_writeback() -> None:
@@ -1290,7 +1414,8 @@ def lower_arithmetic_giving(
         ctx.emit_inst(
             CallFunction(
                 result_reg=trunc_reg, func_name=FuncName("int"), args=(result_reg,)
-            )
+            ),
+            span=span,
         )
         product_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -1299,7 +1424,8 @@ def lower_arithmetic_giving(
                 operator=resolve_binop("*"),
                 left=trunc_reg,
                 right=right_reg,
-            )
+            ),
+            span=span,
         )
         remainder_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -1308,7 +1434,8 @@ def lower_arithmetic_giving(
                 operator=resolve_binop("-"),
                 left=left_reg,
                 right=product_reg,
-            )
+            ),
+            span=span,
         )
         remainder_op = stmt.remainder
         remainder_ref, remainder_rr = ctx.resolve_field_ref(
@@ -1316,8 +1443,9 @@ def lower_arithmetic_giving(
             materialised,
             remainder_op.qualifiers,
             subscripts=remainder_op.subscripts,
+            span=span,
         )
-        remainder_str_reg = ctx.emit_to_string(remainder_reg)
+        remainder_str_reg = ctx.emit_to_string(remainder_reg, span=span)
         _emit_arithmetic_writeback(
             ctx,
             remainder_op,
@@ -1325,6 +1453,7 @@ def lower_arithmetic_giving(
             remainder_rr,
             remainder_str_reg,
             materialised,
+            span=span,
         )
 
     if not has_clause:
@@ -1334,10 +1463,17 @@ def lower_arithmetic_giving(
                 materialised,
                 giving_op.qualifiers,
                 subscripts=giving_op.subscripts,
+                span=span,
             )
-            result_str_reg = ctx.emit_to_string(result_reg)
+            result_str_reg = ctx.emit_to_string(result_reg, span=span)
             _emit_arithmetic_writeback(
-                ctx, giving_op, giving_ref, giving_rr, result_str_reg, materialised
+                ctx,
+                giving_op,
+                giving_ref,
+                giving_rr,
+                result_str_reg,
+                materialised,
+                span=span,
             )
         _emit_remainder_writeback()
         return
@@ -1348,14 +1484,14 @@ def lower_arithmetic_giving(
         (
             g,
             *ctx.resolve_field_ref(
-                g.name, materialised, g.qualifiers, subscripts=g.subscripts
+                g.name, materialised, g.qualifiers, subscripts=g.subscripts, span=span
             ),
         )
         for g in stmt.giving
     ]
     giving_pairs = [(ref, rr) for (_, ref, rr) in giving_triples]
     overflow_flags = [
-        _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
+        _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor, span=span)
         for ref, _ in giving_pairs
     ]
     combined_flag = overflow_flags[0]
@@ -1367,7 +1503,8 @@ def lower_arithmetic_giving(
                 operator=resolve_binop("or"),
                 left=combined_flag,
                 right=flag,
-            )
+            ),
+            span=span,
         )
         combined_flag = new_combined
 
@@ -1375,24 +1512,27 @@ def lower_arithmetic_giving(
         BranchIf(
             cond_reg=combined_flag,
             branch_targets=(on_size_err_label, not_on_size_err_label),
-        )
+        ),
+        span=span,
     )
 
-    ctx.emit_inst(Label_(label=on_size_err_label))
+    ctx.emit_inst(Label_(label=on_size_err_label), span=span)
     for child in stmt.on_size_error:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
-    ctx.emit_inst(Label_(label=not_on_size_err_label))
+    ctx.emit_inst(Label_(label=not_on_size_err_label), span=span)
     for g_op, ref, rr in giving_triples:
-        result_str_reg = ctx.emit_to_string(result_reg)
-        _emit_arithmetic_writeback(ctx, g_op, ref, rr, result_str_reg, materialised)
+        result_str_reg = ctx.emit_to_string(result_reg, span=span)
+        _emit_arithmetic_writeback(
+            ctx, g_op, ref, rr, result_str_reg, materialised, span=span
+        )
     _emit_remainder_writeback()
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
-    ctx.emit_inst(Label_(label=end_label))
+    ctx.emit_inst(Label_(label=end_label), span=span)
 
 
 def lower_compute(
@@ -1401,6 +1541,7 @@ def lower_compute(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
+    span = stmt.span
     # IBM ARITH(COMPAT): receivers (+1 for ROUNDED) size the division fraction.
     # This supersedes the unconditional force_division_float of red-dragon-vaxz:
     # a fraction mid-expression now survives because dmax takes it from the
@@ -1419,23 +1560,24 @@ def lower_compute(
             (_receiver_decimals(td, rounded) for td, rounded in target_types), default=0
         ),
         floating_receiver=any(is_floating_type(td) for td, _ in target_types),
+        span=span,
     )
 
     has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
 
     if not has_clause:
-        result_str_reg = ctx.emit_to_string(result_reg)
+        result_str_reg = ctx.emit_to_string(result_reg, span=span)
         for target in stmt.targets:
             if not ctx.has_field(target.name, materialised):
                 logger.warning("COMPUTE target %s not found in layout", target.name)
                 continue
             target_ref, target_rr = ctx.resolve_field_ref(
-                target.name, materialised, subscripts=target.subscripts
+                target.name, materialised, subscripts=target.subscripts, span=span
             )
             write_reg = result_str_reg
             if target.rounded:
                 dec_digits_reg = ctx.const_to_reg(
-                    target_ref.fl.type_descriptor.decimal_digits
+                    target_ref.fl.type_descriptor.decimal_digits, span=span
                 )
                 rounded_reg = ctx.fresh_reg()
                 ctx.emit_inst(
@@ -1443,7 +1585,8 @@ def lower_compute(
                         result_reg=rounded_reg,
                         func_name=FuncName(BuiltinName.COBOL_ROUND),
                         args=(write_reg, dec_digits_reg),
-                    )
+                    ),
+                    span=span,
                 )
                 write_reg = rounded_reg
             ctx.emit_encode_and_write(
@@ -1452,6 +1595,7 @@ def lower_compute(
                 write_reg,
                 target_ref.offset_reg,
                 extent=target_ref.extent,
+                span=span,
             )
         return
 
@@ -1466,7 +1610,7 @@ def lower_compute(
             logger.warning("COMPUTE target %s not found in layout", target.name)
             continue
         ref, rr = ctx.resolve_field_ref(
-            target.name, materialised, subscripts=target.subscripts
+            target.name, materialised, subscripts=target.subscripts, span=span
         )
         target_triples.append((ref, rr, target))
 
@@ -1477,7 +1621,7 @@ def lower_compute(
 
     # OR overflow flags across all targets (all-or-nothing semantics)
     overflow_flags = [
-        _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor)
+        _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor, span=span)
         for ref, rr, _ in target_triples
     ]
     combined_flag = overflow_flags[0]
@@ -1489,7 +1633,8 @@ def lower_compute(
                 operator=resolve_binop("or"),
                 left=combined_flag,
                 right=flag,
-            )
+            ),
+            span=span,
         )
         combined_flag = new_combined
 
@@ -1497,37 +1642,41 @@ def lower_compute(
         BranchIf(
             cond_reg=combined_flag,
             branch_targets=(on_size_err_label, not_on_size_err_label),
-        )
+        ),
+        span=span,
     )
 
-    ctx.emit_inst(Label_(label=on_size_err_label))
+    ctx.emit_inst(Label_(label=on_size_err_label), span=span)
     for child in stmt.on_size_error:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
-    ctx.emit_inst(Label_(label=not_on_size_err_label))
-    result_str_reg = ctx.emit_to_string(result_reg)
+    ctx.emit_inst(Label_(label=not_on_size_err_label), span=span)
+    result_str_reg = ctx.emit_to_string(result_reg, span=span)
     for ref, rr, target in target_triples:
         write_reg = result_str_reg
         if target.rounded:
-            dec_digits_reg = ctx.const_to_reg(ref.fl.type_descriptor.decimal_digits)
+            dec_digits_reg = ctx.const_to_reg(
+                ref.fl.type_descriptor.decimal_digits, span=span
+            )
             rounded_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 CallFunction(
                     result_reg=rounded_reg,
                     func_name=FuncName(BuiltinName.COBOL_ROUND),
                     args=(write_reg, dec_digits_reg),
-                )
+                ),
+                span=span,
             )
             write_reg = rounded_reg
         ctx.emit_encode_and_write(
-            rr, ref.fl, write_reg, ref.offset_reg, extent=ref.extent
+            rr, ref.fl, write_reg, ref.offset_reg, extent=ref.extent, span=span
         )
     for child in stmt.not_on_size_error:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
-    ctx.emit_inst(Label_(label=end_label))
+    ctx.emit_inst(Label_(label=end_label), span=span)
 
 
 def lower_if(
@@ -1536,7 +1685,8 @@ def lower_if(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """IF condition ... [ELSE ...] END-IF."""
-    cond_reg = ctx.lower_condition(stmt.condition, materialised)
+    span = stmt.span
+    cond_reg = ctx.lower_condition(stmt.condition, materialised, span=span)
     true_label = ctx.fresh_label("if_true")
     false_label = ctx.fresh_label("if_false")
     end_label = ctx.fresh_label("if_end")
@@ -1545,20 +1695,21 @@ def lower_if(
         BranchIf(
             cond_reg=cond_reg,
             branch_targets=(true_label, false_label),
-        )
+        ),
+        span=span,
     )
 
-    ctx.emit_inst(Label_(label=true_label))
+    ctx.emit_inst(Label_(label=true_label), span=span)
     for child in stmt.children:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
-    ctx.emit_inst(Label_(label=false_label))
+    ctx.emit_inst(Label_(label=false_label), span=span)
     for child in stmt.else_children:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
-    ctx.emit_inst(Label_(label=end_label))
+    ctx.emit_inst(Label_(label=end_label), span=span)
 
 
 def _when_operand_node(value: str) -> dict:
@@ -1585,6 +1736,7 @@ def lower_evaluate(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """EVALUATE subject WHEN value ..."""
+    span = stmt.span
     end_label = ctx.fresh_label("eval_end")
 
     for child in stmt.children:
@@ -1596,7 +1748,7 @@ def lower_evaluate(
                 # WHEN ANY on the primary subject is a wildcard that always
                 # matches (mirrors the existing ANY handling for ALSO
                 # conditions below) — red-dragon-9j01.
-                cond_reg = ctx.const_to_reg(True)
+                cond_reg = ctx.const_to_reg(True, span=span)
             elif isinstance(child.condition, dict):
                 cond_dict = child.condition
                 if "kind" in cond_dict:
@@ -1604,22 +1756,23 @@ def lower_evaluate(
                     # has already resolved DFHRESP nodes to lit nodes before we get here.
                     # Compare the evaluated value against the EVALUATE subject.
                     val_reg = lower_expr_node(
-                        ctx, expr_from_dict(cond_dict), materialised
+                        ctx, expr_from_dict(cond_dict), materialised, span=span
                     )
                     if stmt.subject and stmt.subject.upper() != "TRUE":
                         if ctx.has_field(stmt.subject, materialised):
                             subject_ref, subject_rr = ctx.resolve_field_ref(
-                                stmt.subject, materialised
+                                stmt.subject, materialised, span=span
                             )
                             subject_reg = ctx.emit_decode_field(
                                 subject_rr,
                                 subject_ref.fl,
                                 subject_ref.offset_reg,
                                 extent=subject_ref.extent,
+                                span=span,
                             )
                         else:
                             subject_reg = ctx.const_to_reg(
-                                ctx.parse_literal(stmt.subject)
+                                ctx.parse_literal(stmt.subject), span=span
                             )
                         cond_reg = ctx.fresh_reg()
                         ctx.emit_inst(
@@ -1628,14 +1781,15 @@ def lower_evaluate(
                                 operator=resolve_binop("=="),
                                 left=Register(str(subject_reg)),
                                 right=Register(str(val_reg)),
-                            )
+                            ),
+                            span=span,
                         )
                     else:
                         cond_reg = val_reg
                 else:
                     # Full conditional expression (EVALUATE TRUE WHEN ...): route through
                     # the same structured lowering the IF path uses.
-                    cond_reg = ctx.lower_condition(cond_dict, materialised)
+                    cond_reg = ctx.lower_condition(cond_dict, materialised, span=span)
             elif stmt.subject and stmt.subject.upper() != "TRUE":
                 # WHEN <value> against an EVALUATE subject: lower "subject = value"
                 # through the SAME structured relation path the IF lowering uses,
@@ -1655,6 +1809,7 @@ def lower_evaluate(
                             }
                         },
                         materialised,
+                        span=span,
                     )
                     le_reg = ctx.lower_condition(
                         {
@@ -1665,6 +1820,7 @@ def lower_evaluate(
                             }
                         },
                         materialised,
+                        span=span,
                     )
                     cond_reg = ctx.fresh_reg()
                     ctx.emit_inst(
@@ -1673,7 +1829,8 @@ def lower_evaluate(
                             operator=resolve_binop("&&"),
                             left=Register(str(ge_reg)),
                             right=Register(str(le_reg)),
-                        )
+                        ),
+                        span=span,
                     )
                 else:
                     relation = {
@@ -1681,12 +1838,14 @@ def lower_evaluate(
                         "op": "==",
                         "right": _when_operand_node(child.condition),
                     }
-                    cond_reg = ctx.lower_condition({"relation": relation}, materialised)
+                    cond_reg = ctx.lower_condition(
+                        {"relation": relation}, materialised, span=span
+                    )
             else:
                 # subject is TRUE with a flat string condition (e.g. a level-88
                 # name): keep the text-condition path.
                 cond_reg = _lower_condition_str(
-                    ctx, child.condition, materialised, ctx._condition_index
+                    ctx, child.condition, materialised, ctx._condition_index, span=span
                 )
             # AND in also-subject=also-condition pairs (EVALUATE A ALSO B WHEN x ALSO y)
             for also_subj, also_cond in zip(stmt.also_subjects, child.also_conditions):
@@ -1694,20 +1853,23 @@ def lower_evaluate(
                     continue
                 if isinstance(also_cond, dict) and "kind" in also_cond:
                     also_val_reg = lower_expr_node(
-                        ctx, expr_from_dict(also_cond), materialised
+                        ctx, expr_from_dict(also_cond), materialised, span=span
                     )
                     if ctx.has_field(also_subj, materialised):
                         also_ref, also_rr = ctx.resolve_field_ref(
-                            also_subj, materialised
+                            also_subj, materialised, span=span
                         )
                         also_subj_reg = ctx.emit_decode_field(
                             also_rr,
                             also_ref.fl,
                             also_ref.offset_reg,
                             extent=also_ref.extent,
+                            span=span,
                         )
                     else:
-                        also_subj_reg = ctx.const_to_reg(ctx.parse_literal(also_subj))
+                        also_subj_reg = ctx.const_to_reg(
+                            ctx.parse_literal(also_subj), span=span
+                        )
                     also_cond_reg = ctx.fresh_reg()
                     ctx.emit_inst(
                         Binop(
@@ -1715,7 +1877,8 @@ def lower_evaluate(
                             operator=resolve_binop("=="),
                             left=Register(str(also_subj_reg)),
                             right=Register(str(also_val_reg)),
-                        )
+                        ),
+                        span=span,
                     )
                 elif (
                     isinstance(also_cond, dict)
@@ -1733,6 +1896,7 @@ def lower_evaluate(
                             }
                         },
                         materialised,
+                        span=span,
                     )
                     also_le_reg = ctx.lower_condition(
                         {
@@ -1743,6 +1907,7 @@ def lower_evaluate(
                             }
                         },
                         materialised,
+                        span=span,
                     )
                     also_cond_reg = ctx.fresh_reg()
                     ctx.emit_inst(
@@ -1751,10 +1916,13 @@ def lower_evaluate(
                             operator=resolve_binop("&&"),
                             left=Register(str(also_ge_reg)),
                             right=Register(str(also_le_reg)),
-                        )
+                        ),
+                        span=span,
                     )
                 elif isinstance(also_cond, dict):
-                    also_cond_reg = ctx.lower_condition(also_cond, materialised)
+                    also_cond_reg = ctx.lower_condition(
+                        also_cond, materialised, span=span
+                    )
                 else:
                     relation = {
                         "left": {"kind": "ref", "name": also_subj},
@@ -1762,7 +1930,7 @@ def lower_evaluate(
                         "right": _when_operand_node(also_cond),
                     }
                     also_cond_reg = ctx.lower_condition(
-                        {"relation": relation}, materialised
+                        {"relation": relation}, materialised, span=span
                     )
                 and_reg = ctx.fresh_reg()
                 ctx.emit_inst(
@@ -1771,7 +1939,8 @@ def lower_evaluate(
                         operator=resolve_binop("&&"),
                         left=Register(str(cond_reg)),
                         right=Register(str(also_cond_reg)),
-                    )
+                    ),
+                    span=span,
                 )
                 cond_reg = and_reg
             when_true = ctx.fresh_label("when_true")
@@ -1780,18 +1949,19 @@ def lower_evaluate(
                 BranchIf(
                     cond_reg=cond_reg,
                     branch_targets=(when_true, when_false),
-                )
+                ),
+                span=span,
             )
-            ctx.emit_inst(Label_(label=when_true))
+            ctx.emit_inst(Label_(label=when_true), span=span)
             for grandchild in child.children:
                 ctx.lower_statement(grandchild, materialised)
-            ctx.emit_inst(Branch(label=end_label))
-            ctx.emit_inst(Label_(label=when_false))
+            ctx.emit_inst(Branch(label=end_label), span=span)
+            ctx.emit_inst(Label_(label=when_false), span=span)
         elif isinstance(child, WhenOtherStatement):
             for grandchild in child.children:
                 ctx.lower_statement(grandchild, materialised)
 
-    ctx.emit_inst(Label_(label=end_label))
+    ctx.emit_inst(Label_(label=end_label), span=span)
 
 
 def lower_continue(
@@ -1858,11 +2028,12 @@ def lower_initialize(
     For group items, each elementary (leaf) child is reset with the
     type-appropriate default: spaces for ALPHANUMERIC, zeros for numeric.
     """
+    span = stmt.span
     for operand in stmt.operands:
         if not ctx.has_field(operand, materialised):
             logger.warning("INITIALIZE target %s not found in layout", operand)
             continue
-        ref, rr = ctx.resolve_field_ref(operand, materialised)
+        ref, rr = ctx.resolve_field_ref(operand, materialised, span=span)
         # Look up the layout section that owns this field for _leaf_fields_of
         fl_layout, _ = materialised.resolve(operand)
         # Determine which DataLayout to use for leaf enumeration
@@ -1880,14 +2051,21 @@ def lower_initialize(
         else:
             section_layout = lk_layout
         for leaf_fl in _leaf_fields_of(ref.fl, section_layout):
-            leaf_ref, leaf_rr = ctx.resolve_field_ref(leaf_fl.name, materialised)
+            leaf_ref, leaf_rr = ctx.resolve_field_ref(
+                leaf_fl.name, materialised, span=span
+            )
             td = leaf_fl.type_descriptor
             if td.holds_characters:
                 default = " " * td.total_digits
             else:
                 default = "0"
             ctx.emit_field_encode(
-                leaf_rr, leaf_fl, default, leaf_ref.offset_reg, extent=leaf_ref.extent
+                leaf_rr,
+                leaf_fl,
+                default,
+                leaf_ref.offset_reg,
+                extent=leaf_ref.extent,
+                span=span,
             )
 
 
@@ -1896,6 +2074,8 @@ def _set_condition_name(
     condition_name: str,
     value_str: str,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> None:
     """SET <88-condition-name> TO TRUE|FALSE — write the VALUE into the parent.
 
@@ -1914,7 +2094,7 @@ def _set_condition_name(
             )
             return
         parent_ref, parent_rr = ctx.resolve_field_ref(
-            entry.parent_field_name, materialised
+            entry.parent_field_name, materialised, span=span
         )
         if parent_ref.fl.type_descriptor.holds_characters:
             # WHEN SET TO FALSE IS not in scope — write SPACES (field-length fill)
@@ -1924,9 +2104,10 @@ def _set_condition_name(
         ctx.emit_encode_and_write(
             parent_rr,
             parent_ref.fl,
-            ctx.const_to_reg(false_val),
+            ctx.const_to_reg(false_val, span=span),
             parent_ref.offset_reg,
             extent=parent_ref.extent,
+            span=span,
         )
         return
 
@@ -1947,7 +2128,9 @@ def _set_condition_name(
 
     # First discrete value / range-low is what makes the condition true.
     cv = entry.values[0]
-    parent_ref, parent_rr = ctx.resolve_field_ref(entry.parent_field_name, materialised)
+    parent_ref, parent_rr = ctx.resolve_field_ref(
+        entry.parent_field_name, materialised, span=span
+    )
 
     # For an ALPHANUMERIC (PIC X) parent, the 88 VALUE is a character literal —
     # write its characters verbatim. It must reach the alphanumeric encoder as a
@@ -1964,19 +2147,20 @@ def _set_condition_name(
     if parent_ref.fl.type_descriptor.holds_characters:
         if fig_fill is not None:
             filled = fig_fill * max(parent_ref.fl.byte_length, 1)
-            value_reg = ctx.const_to_reg(filled)
+            value_reg = ctx.const_to_reg(filled, span=span)
         else:
-            value_reg = ctx.const_to_reg(cv.from_val)
+            value_reg = ctx.const_to_reg(cv.from_val, span=span)
     elif fig_fill is not None and cv.from_val.upper() in ("ZERO", "ZEROS", "ZEROES"):
-        value_reg = ctx.const_to_reg(0)
+        value_reg = ctx.const_to_reg(0, span=span)
     else:
-        value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
+        value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val), span=span)
     ctx.emit_encode_and_write(
         parent_rr,
         parent_ref.fl,
         value_reg,
         parent_ref.offset_reg,
         extent=parent_ref.extent,
+        span=span,
     )
 
 
@@ -1992,37 +2176,46 @@ def lower_set(
     reads true. SET <88> TO FALSE requires a captured false-value; absent one it
     warns rather than guessing.
     """
+    span = stmt.span
     condition_index = ctx._condition_index
     if stmt.set_type == "TO":
         value_str = stmt.values[0] if stmt.values else "0"
         for target_name in stmt.targets:
             if condition_index.has_condition(target_name):
-                _set_condition_name(ctx, target_name, value_str, materialised)
+                _set_condition_name(
+                    ctx, target_name, value_str, materialised, span=span
+                )
                 continue
             if not ctx.has_field(target_name, materialised):
                 logger.warning("SET target %s not found in layout", target_name)
                 continue
-            target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
+            target_ref, target_rr = ctx.resolve_field_ref(
+                target_name, materialised, span=span
+            )
             # SET A TO B is legal when B is a data item; stmt.values[0] is raw
             # operand text from the bridge and is never tested for being a name.
             # Untested, it wrote the two characters "B" — which encodes into a
             # numeric field as 0, so the symptom is a plausible zero, not a crash.
             if ctx.has_field(str(value_str), materialised):
-                src_ref, src_rr = ctx.resolve_field_ref(str(value_str), materialised)
+                src_ref, src_rr = ctx.resolve_field_ref(
+                    str(value_str), materialised, span=span
+                )
                 value_str_reg = ctx.emit_decode_field(
                     src_rr,
                     src_ref.fl,
                     src_ref.offset_reg,
                     extent=src_ref.extent,
+                    span=span,
                 )
             else:
-                value_str_reg = ctx.const_to_reg(str(value_str))
+                value_str_reg = ctx.const_to_reg(str(value_str), span=span)
             ctx.emit_encode_and_write(
                 target_rr,
                 target_ref.fl,
                 value_str_reg,
                 target_ref.offset_reg,
                 extent=target_ref.extent,
+                span=span,
             )
     elif stmt.set_type == "BY":
         step_val = stmt.values[0] if stmt.values else "1"
@@ -2031,24 +2224,30 @@ def lower_set(
             if not ctx.has_field(target_name, materialised):
                 logger.warning("SET target %s not found in layout", target_name)
                 continue
-            target_ref, target_rr = ctx.resolve_field_ref(target_name, materialised)
+            target_ref, target_rr = ctx.resolve_field_ref(
+                target_name, materialised, span=span
+            )
             tgt_decoded = ctx.emit_decode_field(
                 target_rr,
                 target_ref.fl,
                 target_ref.offset_reg,
                 extent=target_ref.extent,
+                span=span,
             )
             # SET ... UP/DOWN BY <data-item> takes the same path as TO above.
             if ctx.has_field(str(step_val), materialised):
-                step_ref, step_rr = ctx.resolve_field_ref(str(step_val), materialised)
+                step_ref, step_rr = ctx.resolve_field_ref(
+                    str(step_val), materialised, span=span
+                )
                 step_reg = ctx.emit_decode_field(
                     step_rr,
                     step_ref.fl,
                     step_ref.offset_reg,
                     extent=step_ref.extent,
+                    span=span,
                 )
             else:
-                step_reg = ctx.const_to_reg(ctx.parse_literal(step_val))
+                step_reg = ctx.const_to_reg(ctx.parse_literal(step_val), span=span)
             result_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
@@ -2056,15 +2255,17 @@ def lower_set(
                     operator=resolve_binop(op),
                     left=tgt_decoded,
                     right=step_reg,
-                )
+                ),
+                span=span,
             )
-            result_str_reg = ctx.emit_to_string(result_reg)
+            result_str_reg = ctx.emit_to_string(result_reg, span=span)
             ctx.emit_encode_and_write(
                 target_rr,
                 target_ref.fl,
                 result_str_reg,
                 target_ref.offset_reg,
                 extent=target_ref.extent,
+                span=span,
             )
 
 
@@ -2072,22 +2273,26 @@ def _lower_display_operand(
     ctx: EmitContext,
     operand: RefModOperand,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> Register:
     """Lower one DISPLAY operand to a register holding its display string."""
     if ctx.has_field(operand.name, materialised):
         ref, rr = ctx.resolve_field_ref(
-            operand.name, materialised, subscripts=operand.subscripts
+            operand.name, materialised, subscripts=operand.subscripts, span=span
         )
         decoded_reg = ctx.emit_decode_field(
-            rr, ref.fl, ref.offset_reg, extent=ref.extent
+            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
-        display_reg = ctx.emit_to_string(decoded_reg)
+        display_reg = ctx.emit_to_string(decoded_reg, span=span)
     else:
-        display_reg = ctx.const_to_reg(str(operand.name))
+        display_reg = ctx.const_to_reg(str(operand.name), span=span)
 
     if operand.ref_mod_start is not None:
-        raw_start_reg = eval_ref_mod_expr(ctx, operand.ref_mod_start, materialised)
-        one_reg = ctx.const_to_reg(1)
+        raw_start_reg = eval_ref_mod_expr(
+            ctx, operand.ref_mod_start, materialised, span=span
+        )
+        one_reg = ctx.const_to_reg(1, span=span)
         start_0indexed_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -2095,12 +2300,13 @@ def _lower_display_operand(
                 operator=resolve_binop("-"),
                 left=raw_start_reg,
                 right=one_reg,
-            )
+            ),
+            span=span,
         )
         length_reg = (
-            eval_ref_mod_expr(ctx, operand.ref_mod_length, materialised)
+            eval_ref_mod_expr(ctx, operand.ref_mod_length, materialised, span=span)
             if operand.ref_mod_length is not None
-            else ctx.const_to_reg(9999)
+            else ctx.const_to_reg(9999, span=span)
         )
         sliced_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -2108,7 +2314,8 @@ def _lower_display_operand(
                 result_reg=sliced_reg,
                 func_name=FuncName(BuiltinName.STRING_SLICE),
                 args=(display_reg, start_0indexed_reg, length_reg),
-            )
+            ),
+            span=span,
         )
         display_reg = sliced_reg
 
@@ -2125,8 +2332,10 @@ def lower_display(
     COBOL concatenates the operands with no separator; we lower each to its
     display string, fold them with string-concat, and print the result ONCE.
     """
+    span = stmt.span
     operand_regs = [
-        _lower_display_operand(ctx, operand, materialised) for operand in stmt.operands
+        _lower_display_operand(ctx, operand, materialised, span=span)
+        for operand in stmt.operands
     ]
     if not operand_regs:
         return
@@ -2139,7 +2348,8 @@ def lower_display(
                 result_reg=folded,
                 func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
                 args=(combined_reg, next_reg),
-            )
+            ),
+            span=span,
         )
         combined_reg = folded
 
@@ -2148,7 +2358,8 @@ def lower_display(
             result_reg=ctx.fresh_reg(),
             func_name=FuncName("print"),
             args=(combined_reg,),
-        )
+        ),
+        span=span,
     )
 
 
@@ -2159,7 +2370,7 @@ def lower_stop_run(
 ) -> None:
     """STOP RUN — unconditionally terminates the entire run unit, unlike
     GOBACK/EXIT PROGRAM (which return control to the caller)."""
-    ctx.emit_inst(Halt_())
+    ctx.emit_inst(Halt_(), span=stmt.span)
 
 
 def lower_goback(
@@ -2168,9 +2379,10 @@ def lower_goback(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """GOBACK — return control to the caller (same as STOP RUN at the IR level)."""
+    span = stmt.span
     zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.int_(zero_reg, 0))
-    ctx.emit_inst(Return_(value_reg=zero_reg))
+    ctx.emit_inst(Const.int_(zero_reg, 0), span=span)
+    ctx.emit_inst(Return_(value_reg=zero_reg), span=span)
 
 
 def lower_exit_program(
@@ -2179,25 +2391,34 @@ def lower_exit_program(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """EXIT PROGRAM — return control to the caller."""
+    span = stmt.span
     zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.int_(zero_reg, 0))
-    ctx.emit_inst(Return_(value_reg=zero_reg))
+    ctx.emit_inst(Const.int_(zero_reg, 0), span=span)
+    ctx.emit_inst(Return_(value_reg=zero_reg), span=span)
 
 
 def _lower_computed_goto(
     ctx: EmitContext,
     computed: ComputedGoto,
     materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
 ) -> None:
     """GO TO p1 ... pN DEPENDING ON idx — branch to the idx-th (1-based) target;
     out-of-range (idx <= 0 or idx > N) falls through to the next statement."""
     index = computed.index
     ref, rr = ctx.resolve_field_ref(
-        index.name, materialised, index.qualifiers, subscripts=index.subscripts
+        index.name,
+        materialised,
+        index.qualifiers,
+        subscripts=index.subscripts,
+        span=span,
     )
-    idx_reg = ctx.emit_decode_field(rr, ref.fl, ref.offset_reg, extent=ref.extent)
+    idx_reg = ctx.emit_decode_field(
+        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    )
     for k, target in enumerate(computed.targets, start=1):
-        k_reg = ctx.const_to_reg(k)
+        k_reg = ctx.const_to_reg(k, span=span)
         cmp_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -2205,14 +2426,18 @@ def _lower_computed_goto(
                 operator=resolve_binop("=="),
                 left=Register(str(idx_reg)),
                 right=Register(str(k_reg)),
-            )
+            ),
+            span=span,
         )
         match_lbl = ctx.fresh_label("goto_dep_match")
         next_lbl = ctx.fresh_label("goto_dep_next")
-        ctx.emit_inst(BranchIf(cond_reg=cmp_reg, branch_targets=(match_lbl, next_lbl)))
-        ctx.emit_inst(Label_(label=match_lbl))
-        ctx.emit_inst(Branch(label=CodeLabel(f"para_{target.paragraph}")))
-        ctx.emit_inst(Label_(label=next_lbl))
+        ctx.emit_inst(
+            BranchIf(cond_reg=cmp_reg, branch_targets=(match_lbl, next_lbl)),
+            span=span,
+        )
+        ctx.emit_inst(Label_(label=match_lbl), span=span)
+        ctx.emit_inst(Branch(label=CodeLabel(f"para_{target.paragraph}")), span=span)
+        ctx.emit_inst(Label_(label=next_lbl), span=span)
 
 
 def lower_goto(
@@ -2221,10 +2446,13 @@ def lower_goto(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """GO TO — simple, computed (DEPENDING ON), or altered."""
+    span = stmt.span
     form = stmt.form
     if isinstance(form, SimpleGoto):
-        ctx.emit_inst(Branch(label=CodeLabel(f"para_{form.target.paragraph}")))
+        ctx.emit_inst(
+            Branch(label=CodeLabel(f"para_{form.target.paragraph}")), span=span
+        )
     elif isinstance(form, ComputedGoto):
-        _lower_computed_goto(ctx, form, materialised)
+        _lower_computed_goto(ctx, form, materialised, span=span)
     # AlteredGoto: GO TO. with target supplied by ALTER — no-op, behavior
     # intentionally unchanged (not exercised by any test).

@@ -22,19 +22,7 @@ from cobol_asg.ref_mod import (
     is_function_operand,
 )
 from cobol_asg.frontend_extension import DialectParser
-
-# ── Source position ───────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class SourceSpan:
-    """Source position of a statement in the original COBOL file."""
-
-    line_start: int
-    col_start: int
-    line_end: int
-    col_end: int
-
+from cobol_asg.source_span import SourceSpan
 
 # ── Dialect parser injection ──────────────────────────────────────
 # Set by CobolFrontend.lower() for the duration of each parse call. Cicada
@@ -177,16 +165,7 @@ class MoveStatement:
         return cls(
             source=source,
             targets=targets,
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def _operand_dict(self, operand: RefModOperand) -> dict:
@@ -218,10 +197,7 @@ class MoveStatement:
         operands.extend(self._operand_dict(t) for t in self.targets)
         result = {"type": "MOVE", "operands": operands}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -238,16 +214,7 @@ class MoveCorrespondingStatement:
         return cls(
             source=data.get("source", ""),
             targets=data.get("targets", []),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -255,10 +222,7 @@ class MoveCorrespondingStatement:
         if self.targets:
             result["targets"] = list(self.targets)
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -278,16 +242,7 @@ class ArithmeticCorrespondingStatement:
             op=op,
             source=data.get("source", ""),
             target=data.get("target", ""),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -297,10 +252,7 @@ class ArithmeticCorrespondingStatement:
             "target": self.target,
         }
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -370,16 +322,7 @@ class ArithmeticStatement:
             not_on_size_error=[
                 parse_statement(c) for c in data.get("not_on_size_error", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -396,10 +339,7 @@ class ArithmeticStatement:
         if self.not_on_size_error:
             result["not_on_size_error"] = [c.to_dict() for c in self.not_on_size_error]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -449,16 +389,7 @@ class ComputeStatement:
             not_on_size_error=[
                 parse_statement(c) for c in data.get("not_on_size_error", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -470,10 +401,7 @@ class ComputeStatement:
         if self.not_on_size_error:
             result["not_on_size_error"] = [c.to_dict() for c in self.not_on_size_error]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -492,16 +420,7 @@ class IfStatement:
             condition=data.get("condition", {}),
             children=[parse_statement(c) for c in data.get("children", [])],
             else_children=[parse_statement(c) for c in data.get("else_children", [])],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -511,10 +430,7 @@ class IfStatement:
         if self.else_children:
             result["else_children"] = [c.to_dict() for c in self.else_children]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -545,16 +461,7 @@ class WhenStatement:
             also_conditions=tuple(raw_also),
             children=[parse_statement(c) for c in data.get("children", [])],
             condition_thru=data.get("condition_thru"),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -566,10 +473,7 @@ class WhenStatement:
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -584,16 +488,7 @@ class WhenOtherStatement:
     def from_dict(cls, data: dict) -> WhenOtherStatement:
         return cls(
             children=[parse_statement(c) for c in data.get("children", [])],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -601,10 +496,7 @@ class WhenOtherStatement:
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -627,16 +519,7 @@ class EvaluateStatement:
             subject=data.get("subject", ""),
             also_subjects=tuple(data.get("also_subjects", [])),
             children=[parse_statement(c) for c in data.get("children", [])],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -648,10 +531,7 @@ class EvaluateStatement:
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -669,25 +549,13 @@ class DisplayStatement:
                 RefModOperand.from_dict({"name": raw} if isinstance(raw, str) else raw)
                 for raw in data.get("operands", [])
             ),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "DISPLAY", "operands": [op.to_dict() for op in self.operands]}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -743,40 +611,35 @@ class GotoStatement:
             index = RefModOperand.from_dict(data.get("index", {}))
             return cls(
                 form=ComputedGoto(targets=targets, index=index),
-                span=(
-                    SourceSpan(
-                        data["line_start"],
-                        data["col_start"],
-                        data["line_end"],
-                        data["col_end"],
-                    )
-                    if "line_start" in data
-                    else None
-                ),
+                span=SourceSpan.from_dict(data),
             )
         if form_kind == "altered":
-            return cls(form=AlteredGoto())
+            return cls(form=AlteredGoto(), span=SourceSpan.from_dict(data))
         return cls(
-            form=SimpleGoto(target=ProcedureRef.from_dict(data.get("target", {})))
+            form=SimpleGoto(target=ProcedureRef.from_dict(data.get("target", {}))),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         form = self.form
+        result: dict
         if isinstance(form, ComputedGoto):
-            return {
+            result = {
                 "type": "GOTO",
                 "form": "computed",
                 "targets": [t.to_dict() for t in form.targets],
                 "index": form.index.to_dict(),
             }
-        if isinstance(form, AlteredGoto):
-            return {"type": "GOTO", "form": "altered"}
-        result = {"type": "GOTO", "form": "simple", "target": form.target.to_dict()}
+        elif isinstance(form, AlteredGoto):
+            result = {"type": "GOTO", "form": "altered"}
+        else:
+            result = {
+                "type": "GOTO",
+                "form": "simple",
+                "target": form.target.to_dict(),
+            }
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -789,25 +652,13 @@ class StopRunStatement:
     @classmethod
     def from_dict(cls, data: dict) -> StopRunStatement:
         return cls(
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "STOP_RUN"}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -820,25 +671,13 @@ class GobackStatement:
     @classmethod
     def from_dict(cls, data: dict) -> GobackStatement:
         return cls(
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "GOBACK"}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -851,25 +690,13 @@ class ExitProgramStatement:
     @classmethod
     def from_dict(cls, data: dict) -> ExitProgramStatement:
         return cls(
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "EXIT_PROGRAM"}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -882,25 +709,13 @@ class ContinueStatement:
     @classmethod
     def from_dict(cls, data: dict) -> ContinueStatement:
         return cls(
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "CONTINUE"}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -913,25 +728,13 @@ class ExitStatement:
     @classmethod
     def from_dict(cls, data: dict) -> ExitStatement:
         return cls(
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "EXIT"}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -946,25 +749,13 @@ class InitializeStatement:
     def from_dict(cls, data: dict) -> InitializeStatement:
         return cls(
             operands=data.get("operands", []),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "INITIALIZE", "operands": list(self.operands)}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -989,16 +780,7 @@ class SetStatement:
                 else [data.get("value", "")]
             ),
             by_type=data.get("by_type", ""),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1013,10 +795,7 @@ class SetStatement:
             result["by_type"] = self.by_type
             result["value"] = self.values[0] if self.values else ""
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1082,16 +861,7 @@ class StringStatement:
             sendings=[StringSending.from_dict(s) for s in data.get("sendings", [])],
             into=RefModOperand.from_dict(data.get("into", {})),
             pointer=data.get("pointer", ""),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1103,10 +873,7 @@ class StringStatement:
         if self.pointer:
             result["pointer"] = self.pointer
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1134,16 +901,7 @@ class UnstringStatement:
             into=[RefModOperand.from_dict(i) for i in data.get("into", [])],
             tallying_target=data.get("tallying_target", ""),
             pointer=data.get("pointer", ""),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1158,10 +916,7 @@ class UnstringStatement:
         if self.pointer:
             result["pointer"] = self.pointer
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1290,16 +1045,7 @@ class InspectStatement:
             replacings=[Replacing.from_dict(r) for r in data.get("replacings", [])],
             converting_from=data.get("converting_from", ""),
             converting_to=data.get("converting_to", ""),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1316,10 +1062,7 @@ class InspectStatement:
             result["converting_from"] = self.converting_from
             result["converting_to"] = self.converting_to
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1361,16 +1104,7 @@ class SearchStatement:
             varying=data.get("varying", ""),
             whens=[SearchWhen.from_dict(w) for w in data.get("whens", [])],
             at_end=[parse_statement(c) for c in data.get("at_end", [])],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1381,10 +1115,7 @@ class SearchStatement:
         if self.at_end:
             result["at_end"] = [c.to_dict() for c in self.at_end]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1430,16 +1161,7 @@ class CallStatement:
             program=data.get("program", ""),
             using=[CallUsingParam.from_dict(p) for p in data.get("using", [])],
             giving=data.get("giving", ""),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1449,10 +1171,7 @@ class CallStatement:
         if self.giving:
             result["giving"] = self.giving
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1487,16 +1206,7 @@ class AlterStatement:
             proceed_tos=[
                 AlterProceedTo.from_dict(p) for p in data.get("proceed_tos", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1504,10 +1214,7 @@ class AlterStatement:
         if self.proceed_tos:
             result["proceed_tos"] = [p.to_dict() for p in self.proceed_tos]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1524,16 +1231,7 @@ class EntryStatement:
         return cls(
             entry_name=data.get("entry_name", ""),
             using=data.get("using", []),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1541,10 +1239,7 @@ class EntryStatement:
         if self.using:
             result["using"] = self.using
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1559,25 +1254,13 @@ class CancelStatement:
     def from_dict(cls, data: dict) -> CancelStatement:
         return cls(
             programs=data.get("programs", []),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "CANCEL", "programs": self.programs}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1597,16 +1280,7 @@ class AcceptStatement:
         return cls(
             target=data.get("target", ""),
             from_device=data.get("from_device", "CONSOLE"),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1614,10 +1288,7 @@ class AcceptStatement:
         if self.from_device != "CONSOLE":
             result["from_device"] = self.from_device
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1671,16 +1342,7 @@ class OpenStatement:
         ]
         return cls(
             mode_groups=groups,
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1692,10 +1354,7 @@ class OpenStatement:
             ],
         }
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1710,25 +1369,13 @@ class CloseStatement:
     def from_dict(cls, data: dict) -> CloseStatement:
         return cls(
             files=data.get("files", []),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {"type": "CLOSE", "files": list(self.files)}
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1757,16 +1404,7 @@ class ReadStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1784,10 +1422,7 @@ class ReadStatement:
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1810,16 +1445,7 @@ class WriteStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1831,10 +1457,7 @@ class WriteStatement:
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1857,16 +1480,7 @@ class RewriteStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1878,10 +1492,7 @@ class RewriteStatement:
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1906,16 +1517,7 @@ class StartStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1929,10 +1531,7 @@ class StartStatement:
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -1953,16 +1552,7 @@ class DeleteStatement:
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -1972,10 +1562,7 @@ class DeleteStatement:
         if self.not_invalid_key:
             result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -2006,16 +1593,7 @@ class XmlGenerateStatement:
             not_on_exception=[
                 parse_statement(c) for c in data.get("not_on_exception", [])
             ],
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -2031,10 +1609,7 @@ class XmlGenerateStatement:
         if self.not_on_exception:
             result["not_on_exception"] = [c.to_dict() for c in self.not_on_exception]
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
@@ -2127,16 +1702,7 @@ class PerformStatement:
             thru=data.get("thru", ""),
             children=[parse_statement(c) for c in data.get("children", [])],
             spec=_parse_perform_spec(data),
-            span=(
-                SourceSpan(
-                    data["line_start"],
-                    data["col_start"],
-                    data["line_end"],
-                    data["col_end"],
-                )
-                if "line_start" in data
-                else None
-            ),
+            span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
@@ -2149,10 +1715,7 @@ class PerformStatement:
             result["children"] = [c.to_dict() for c in self.children]
         result.update(_spec_to_dict(self.spec))
         if self.span is not None:
-            result["line_start"] = self.span.line_start
-            result["col_start"] = self.span.col_start
-            result["line_end"] = self.span.line_end
-            result["col_end"] = self.span.col_end
+            self.span.write_into(result)
         return result
 
 
