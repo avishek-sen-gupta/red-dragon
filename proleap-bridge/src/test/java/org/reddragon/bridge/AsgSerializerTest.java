@@ -439,6 +439,51 @@ public class AsgSerializerTest {
         }
     }
 
+    // ── EXEC SQL data-description entries (forge-qhi) ─────────────────────
+
+    /**
+     * A DECLARE CURSOR written in WORKING-STORAGE (CardDemo's COTRTLIC does
+     * this for both of its cursors) must reach the ASG. ProLeap already
+     * builds a DataDescriptionEntryExecSql node and populates its text;
+     * before this fix DataFieldSerializer.serializeEntries silently dropped
+     * it -- no error, no JSON node -- because it falls off the instanceof
+     * chain and has no storage to report as a data_fields entry.
+     */
+    @Test
+    public void testDeclareCursorInWorkingStorageReachesDataDivisionExecSql() throws Exception {
+        JsonObject asg = parseFixture("exec_sql_working_storage.cbl");
+
+        assertTrue("ASG must have data_division_exec_sql",
+                asg.has("data_division_exec_sql"));
+        JsonArray execSqlEntries = asg.getAsJsonArray("data_division_exec_sql");
+        assertEquals("Should have 1 EXEC SQL data-division entry", 1, execSqlEntries.size());
+
+        JsonObject declare = execSqlEntries.get(0).getAsJsonObject();
+        assertEquals("WORKING-STORAGE", declare.get("section").getAsString());
+        String text = declare.get("exec_sql_text").getAsString();
+        assertTrue("exec_sql_text must carry the DECLARE CURSOR text",
+                text.toUpperCase().contains("DECLARE"));
+        assertTrue("exec_sql_text must carry the cursor name",
+                text.toUpperCase().contains("C-TR-TYPE-FORWARD"));
+        assertTrue("exec_sql_text must carry the query",
+                text.toUpperCase().contains("TRANSACTION_TYPE"));
+        assertTrue("Should carry a line_start position", declare.has("line_start"));
+    }
+
+    /**
+     * A DECLARE CURSOR in WORKING-STORAGE must not also appear in
+     * data_fields -- it has no storage, so sectioned_layout must never be
+     * asked to assign it an offset.
+     */
+    @Test
+    public void testDeclareCursorInWorkingStorageIsNotInDataFields() throws Exception {
+        JsonObject asg = parseFixture("exec_sql_working_storage.cbl");
+
+        JsonArray fields = asg.getAsJsonArray("data_fields");
+        assertEquals("Only WS-COUNT should be in data_fields", 1, fields.size());
+        assertEquals("WS-COUNT", fields.get(0).getAsJsonObject().get("name").getAsString());
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private JsonObject parseFixture(String filename) throws Exception {
