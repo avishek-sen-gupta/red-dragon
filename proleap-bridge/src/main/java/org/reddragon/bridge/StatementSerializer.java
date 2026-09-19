@@ -131,6 +131,7 @@ import io.proleap.cobol.asg.metamodel.impl.ASGElementImpl;
 import io.proleap.cobol.CobolParser;
 import org.antlr.v4.runtime.ParserRuleContext;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -2398,11 +2399,141 @@ public final class StatementSerializer {
         String name = (fc.functionName() != null) ? fc.functionName().getText() : "";
         obj.addProperty("name", name.toUpperCase());
         JsonArray args = new JsonArray();
-        for (CobolParser.ArgumentContext arg : fc.argument()) {
-            args.add(serializeFunctionArg(arg));
+        for (JsonElement arg : serializeFunctionArguments(fc)) {
+            args.add(arg);
         }
         obj.add("args", args);
         return obj;
+    }
+
+    /**
+     * Arguments of a functionCall, with a trailing parenthesised group re-attached
+     * to the data name it subscripts.
+     *
+     * ProLeap's grammar is ambiguous for {@code FUNCTION TRIM(TBL(I))}:
+     * {@code identifier} lists {@code qualifiedDataName} ahead of {@code tableCall},
+     * and {@code (I)} is itself a legal parenthesised {@code basis}, so ANTLR's
+     * lowest-viable-alternative resolution hands back TWO {@code argument} contexts
+     * — {@code TBL} and {@code (I)} — and the subscript is lost. The grammar is
+     * vendored ProLeap, so the join belongs here.
+     *
+     * The join keys off the SEPARATOR, not the parenthesis: {@code FUNCTION MAX(A, (B))}
+     * is a genuine two-argument call and the comma forbids the join, whereas
+     * {@code FUNCTION MAX(A (B))} is what Enterprise COBOL reads as a subscripted
+     * {@code A} — a left parenthesis directly following a data name is subscripting.
+     * A parenthesised, arithmetic or already-subscripted left operand is never a
+     * join base, so {@code FUNCTION MAX((A) (B))} keeps both arguments.
+     */
+    private static List<JsonElement> serializeFunctionArguments(
+            CobolParser.FunctionCallContext fc) {
+        List<JsonElement> args = new ArrayList<>();
+        CobolParser.ArgumentContext joinBase = null;
+        for (int i = 0; i < fc.getChildCount(); i++) {
+            org.antlr.v4.runtime.tree.ParseTree child = fc.getChild(i);
+            if (!(child instanceof CobolParser.ArgumentContext)) {
+                // Any terminal at this level — the argument list's own parentheses,
+                // FUNCTION, or a bare COMMACHAR — ends the previous argument's
+                // eligibility as a subscript base.
+                joinBase = null;
+                continue;
+            }
+            CobolParser.ArgumentContext arg = (CobolParser.ArgumentContext) child;
+            CobolParser.ArithmeticExpressionContext index = parenthesisedArgument(arg);
+            CobolParser.IdentifierContext base =
+                    (index == null || joinBase == null || separatedByComma(joinBase, arg))
+                            ? null
+                            : bareDataNameArgument(joinBase);
+            if (base != null) {
+                args.set(args.size() - 1, subscriptedRef(base, index));
+                joinBase = null;
+            } else {
+                args.add(serializeFunctionArg(arg));
+                joinBase = arg;
+            }
+        }
+        return args;
+    }
+
+    /**
+     * True when a comma separates two adjacent arguments in the source.
+     *
+     * The lexer sends {@code ', '} to the HIDDEN channel as {@code SEPARATOR}, so a
+     * comma-with-space leaves no token in the parse tree at all; only the source
+     * text between the two arguments still carries it. That gap is what
+     * distinguishes the two-argument {@code FUNCTION MAX(A, (B))} from the
+     * subscripted read {@code FUNCTION MAX(A (B))}.
+     */
+    private static boolean separatedByComma(ParserRuleContext left, ParserRuleContext right) {
+        org.antlr.v4.runtime.Token end = left.getStop();
+        org.antlr.v4.runtime.Token begin = right.getStart();
+        if (end == null || begin == null || begin.getInputStream() == null) {
+            return false;
+        }
+        int from = end.getStopIndex() + 1;
+        int to = begin.getStartIndex() - 1;
+        return from <= to
+                && begin.getInputStream()
+                                .getText(org.antlr.v4.runtime.misc.Interval.of(from, to))
+                                .indexOf(',')
+                        >= 0;
+    }
+
+    /**
+     * The single unsigned {@code basis} an arithmeticExpression consists of, or
+     * {@code null} when it spans an operator (and so is a computed value, never a
+     * subscript base).
+     */
+    private static CobolParser.BasisContext soleBasis(
+            CobolParser.ArithmeticExpressionContext expr) {
+        if (expr == null || !expr.plusMinus().isEmpty()) {
+            return null;
+        }
+        CobolParser.MultDivsContext multDivs = expr.multDivs();
+        if (multDivs == null || !multDivs.multDiv().isEmpty()) {
+            return null;
+        }
+        CobolParser.PowersContext powers = multDivs.powers();
+        if (powers == null
+                || !powers.power().isEmpty()
+                || powers.PLUSCHAR() != null
+                || powers.MINUSCHAR() != null) {
+            return null;
+        }
+        return powers.basis();
+    }
+
+    /** The identifier of an argument that is exactly a bare, unsubscripted data name. */
+    private static CobolParser.IdentifierContext bareDataNameArgument(
+            CobolParser.ArgumentContext arg) {
+        if (arg == null) {
+            return null;
+        }
+        CobolParser.BasisContext basis = soleBasis(arg.arithmeticExpression());
+        CobolParser.IdentifierContext id = (basis == null) ? null : basis.identifier();
+        return (id != null && id.qualifiedDataName() != null) ? id : null;
+    }
+
+    /** The expression an argument parenthesises, or {@code null} when it is not a group. */
+    private static CobolParser.ArithmeticExpressionContext parenthesisedArgument(
+            CobolParser.ArgumentContext arg) {
+        if (arg == null) {
+            return null;
+        }
+        CobolParser.BasisContext basis = soleBasis(arg.arithmeticExpression());
+        return (basis == null || basis.LPARENCHAR() == null)
+                ? null
+                : basis.arithmeticExpression();
+    }
+
+    private static JsonObject subscriptedRef(
+            CobolParser.IdentifierContext base, CobolParser.ArithmeticExpressionContext index) {
+        JsonObject ref = new JsonObject();
+        ref.addProperty("kind", "ref");
+        ref.addProperty("name", baseDataName(base));
+        JsonArray subscripts = new JsonArray();
+        subscripts.add(serializeArithExprCtx(index));
+        ref.add("subscripts", subscripts);
+        return ref;
     }
 
     /**
@@ -3201,16 +3332,30 @@ public final class StatementSerializer {
                 obj.addProperty("name", inner != null ? leafDataName(inner) : "");
                 return obj;
             }
+            // OCCURS subscripts on a grammar-context identifier. The ASG-based
+            // serializer emits these via extractSubscripts/serializeRef; this path
+            // dropped them entirely, so every FUNCTION f(TBL(I)) read occurrence 1
+            // and a multi-dimension TBL(I, J) arrived as the unresolvable name
+            // "TBL(IJ)" (red-dragon-jscx).
+            JsonArray subscripts = serializeIdentifierSubscripts(id);
             // A reference-modified identifier (e.g. WS-FLD(1:LEN)) must keep its
             // slice structured so the frontend resolves the base field and the
             // start/length, rather than gluing them into an unresolvable name.
             // (red-dragon-74qu)
             JsonObject refMod = serializeRefModIdentifier(id);
             if (refMod != null) {
+                if (subscripts.size() > 0) {
+                    refMod.add("subscripts", subscripts);
+                }
                 return refMod;
             }
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
+            if (subscripts.size() > 0) {
+                ref.addProperty("name", baseDataName(id));
+                ref.add("subscripts", subscripts);
+                return ref;
+            }
             ref.addProperty("name", leafDataName(id));
             return ref;
         }
@@ -3225,6 +3370,45 @@ public final class StatementSerializer {
             }
         }
         return litNode(lit != null ? lit.getText() : "");
+    }
+
+    /**
+     * Subscripts carried by a grammar-context identifier's {@code tableCall}, in
+     * source order, each as a structured expression node — the ctx-side twin of
+     * {@link #serializeSubscripts}.
+     */
+    private static JsonArray serializeIdentifierSubscripts(CobolParser.IdentifierContext id) {
+        JsonArray arr = new JsonArray();
+        CobolParser.TableCallContext tableCall = (id == null) ? null : id.tableCall();
+        if (tableCall == null) {
+            return arr;
+        }
+        for (CobolParser.SubscriptContext sub : tableCall.subscript()) {
+            arr.add(serializeSubscriptCtx(sub));
+        }
+        return arr;
+    }
+
+    /** Grammar: subscript : ALL | arithmeticExpression | integerLiteral | qualifiedDataName | indexName */
+    private static JsonElement serializeSubscriptCtx(CobolParser.SubscriptContext sub) {
+        if (sub == null) {
+            return litNode("");
+        }
+        if (sub.arithmeticExpression() != null) {
+            return serializeArithExprCtx(sub.arithmeticExpression());
+        }
+        if (sub.qualifiedDataName() != null || sub.indexName() != null) {
+            JsonObject ref = new JsonObject();
+            ref.addProperty("kind", "ref");
+            CobolParser.QualifiedDataNameFormat1Context f1 = findQualifiedDataNameFormat1(sub);
+            ref.addProperty(
+                    "name",
+                    (f1 != null && f1.dataName() != null)
+                            ? f1.dataName().getText()
+                            : sub.getText());
+            return ref;
+        }
+        return litNode(sub.getText());
     }
 
     /**
