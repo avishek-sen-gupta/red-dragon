@@ -669,13 +669,15 @@ def _resolve_inspect_operand(
     *,
     span: SourceSpan | None = None,
 ) -> Register:
-    """Resolve an INSPECT operand shared by CONVERTING (from/to) and TALLYING
-    (FOR ALL/LEADING pattern, BEFORE/AFTER INITIAL boundary text): a data-item
-    name is decoded at runtime; otherwise it is a figurative / quoted-literal
-    constant (red-dragon-twn — TALLYING previously passed both straight
-    through strip_cobol_literal, so a figurative constant like SPACES tallied
-    the literal text "SPACES" instead of its value, and a field operand
-    tallied its name instead of its contents)."""
+    """Resolve an INSPECT operand shared by CONVERTING (from/to), TALLYING
+    (FOR ALL/LEADING pattern, BEFORE/AFTER INITIAL boundary text), and
+    REPLACING (from/to pattern, BEFORE/AFTER INITIAL boundary text): a
+    data-item name is decoded at runtime; otherwise it is a figurative /
+    quoted-literal constant (red-dragon-twn — TALLYING and REPLACING
+    previously passed these straight through strip_cobol_literal, so a
+    figurative constant like SPACES matched/produced the literal text
+    "SPACES" instead of its value, and a field operand matched/produced its
+    name instead of its contents)."""
     if ctx.has_field(operand, materialised):
         ref, rr = ctx.resolve_field_ref(operand, materialised, span=span)
         decoded = ctx.emit_decode_field(
@@ -838,8 +840,11 @@ def lower_inspect_replacing(
     for replacing in stmt.replacings:
         remainder_reg: Register = NO_REGISTER
         if isinstance(replacing.boundary, BeforeAfterBoundary):
-            boundary_text_reg = ctx.const_to_reg(
-                strip_cobol_literal(str(replacing.boundary.boundary_text)), span=span
+            boundary_text_reg = _resolve_inspect_operand(
+                ctx,
+                str(replacing.boundary.boundary_text),
+                materialised,
+                span=span,
             )
             kind_reg = ctx.const_to_reg(replacing.boundary.kind.lower(), span=span)
             split_reg = ctx.fresh_reg()
@@ -874,11 +879,11 @@ def lower_inspect_replacing(
         else:
             bounded_str_reg = current_str_reg
 
-        from_reg = ctx.const_to_reg(
-            strip_cobol_literal(str(replacing.from_pattern)), span=span
+        from_reg = _resolve_inspect_operand(
+            ctx, str(replacing.from_pattern), materialised, span=span
         )
-        to_reg = ctx.const_to_reg(
-            strip_cobol_literal(str(replacing.to_pattern)), span=span
+        to_reg = _resolve_inspect_operand(
+            ctx, str(replacing.to_pattern), materialised, span=span
         )
         mode_reg = ctx.const_to_reg(replacing.mode.lower(), span=span)
         ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")

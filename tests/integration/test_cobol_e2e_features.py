@@ -939,6 +939,160 @@ class TestStringOperations:
         region = _first_region(vm)
         assert _decode(region, 11, 4) == 2
 
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_all_from_figurative_constant(self):
+        """REPLACING ALL SPACES BY <lit> must match the space character, not
+        the six-character literal text "SPACES" (red-dragon-twn family)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-FROM-FIG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(5) VALUE "A B C".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING ALL SPACES BY 'Z'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 5) == "AZBZC"
+
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_all_to_figurative_constant(self):
+        """REPLACING ALL <lit> BY SPACES must write the space character, not
+        the literal text "SPACES" (red-dragon-twn family)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-TO-FIG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(5) VALUE "AABAA".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING ALL 'B' BY SPACES.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 5) == "AA AA"
+
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_all_from_field_operand(self):
+        """REPLACING ALL <identifier> BY <lit> must match the field's runtime
+        value, not the field's name (red-dragon-twn family)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-FROM-FIELD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(5) VALUE "ABABA".',
+                '77 WS-FIND PIC X(1) VALUE "B".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING ALL WS-FIND BY 'Z'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 5) == "AZAZA"
+
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_all_to_field_operand(self):
+        """REPLACING ALL <lit> BY <identifier> must write the field's runtime
+        value, not the field's name (red-dragon-twn family)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-TO-FIELD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(5) VALUE "ABABA".',
+                '77 WS-REPL PIC X(1) VALUE "Z".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING ALL 'B' BY WS-REPL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 5) == "AZAZA"
+
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_leading_to_field_operand(self):
+        """REPLACING LEADING <lit> BY <identifier> shares the same from/to
+        resolution code path as ALL (red-dragon-twn family).
+
+        Uses a single leading occurrence deliberately: _builtin_string_replace's
+        LEADING mode has its own separate, pre-existing bug where multiple
+        leading matches only get the first one replaced (the while loop's
+        re-check compares against the already-substituted prefix, which no
+        longer starts with from_pat) -- out of scope here since it is not an
+        operand-resolution defect; flagged in the task report instead.
+        """
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-LEADING-FIELD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(5) VALUE "ABAAA".',
+                '77 WS-REPL PIC X(1) VALUE "Z".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING LEADING 'A' BY WS-REPL.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 5) == "ZBAAA"
+
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_first_from_field_operand(self):
+        """REPLACING FIRST <identifier> BY <lit> shares the same from/to
+        resolution code path as ALL (red-dragon-twn family)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-FIRST-FIELD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(4) VALUE "ABAB".',
+                '77 WS-FIND PIC X(1) VALUE "B".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING FIRST WS-FIND BY 'Z'.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 4) == "AZAB"
+
+    @covers(CobolFeature.INSPECT_REPLACING)
+    def test_inspect_replacing_before_initial_field_operand_boundary(self):
+        """BEFORE INITIAL <identifier> must bound the scan at the field's
+        runtime value, not at the field's name (red-dragon-twn family)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-REPL-BEFORE-FIELD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AA.AA     ".',
+                '77 WS-BOUNDARY PIC X(1) VALUE ".".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC REPLACING ALL 'A' BY 'Z'",
+                "        BEFORE INITIAL WS-BOUNDARY.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_alpha(region, 0, 10) == "ZZ.AA     "
+
 
 class TestLevel88ConditionNames:
     """Single-value, THRU range, and multi-value level-88 conditions in one program."""
