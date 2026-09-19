@@ -852,6 +852,93 @@ class TestStringOperations:
         region = _first_region(vm)
         assert _decode(region, 10, 4) == 2
 
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_for_all_spaces_figurative_constant(self):
+        """FOR ALL SPACES must tally occurrences of the space character, not
+        of the six-character literal text "SPACES" (red-dragon-twn)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-FIGURATIVE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(7) VALUE "       ".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL SPACES.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 7, 4) == 7
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_for_all_field_operand(self):
+        """FOR ALL <identifier> must tally occurrences of the field's runtime
+        value, not occurrences of the field's name (red-dragon-twn)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-FIELD-OPERAND.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "AAABBAAAB.".',
+                '77 LIT-UPDATE-FLAG PIC X(1) VALUE "A".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL LIT-UPDATE-FLAG.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 11, 4) == 6
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_for_leading_figurative_constant(self):
+        """FOR LEADING ZEROS must tally leading '0' characters, not the
+        literal text "ZEROS" (red-dragon-twn)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-LEADING-FIGURATIVE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "0001200000".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR LEADING ZEROS.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 10, 4) == 3
+
+    @covers(CobolFeature.INSPECT_TALLYING)
+    def test_inspect_tallying_before_initial_field_operand_boundary(self):
+        """BEFORE INITIAL <identifier> must bound the scan at the field's
+        runtime value, not at the field's name (red-dragon-twn)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-INSPECT-BEFORE-FIELD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-SRC PIC X(10) VALUE "ABCABC.ABC".',
+                '77 WS-BOUNDARY PIC X(1) VALUE ".".',
+                "77 WS-CNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-SRC TALLYING WS-CNT FOR ALL 'A'",
+                "        BEFORE INITIAL WS-BOUNDARY.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode(region, 11, 4) == 2
+
 
 class TestLevel88ConditionNames:
     """Single-value, THRU range, and multi-value level-88 conditions in one program."""

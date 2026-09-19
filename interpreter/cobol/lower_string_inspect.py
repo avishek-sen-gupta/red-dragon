@@ -662,15 +662,20 @@ def lower_inspect(
         lower_inspect_converting(ctx, stmt, src_str_reg, source_fl, materialised)
 
 
-def _resolve_convert_operand(
+def _resolve_inspect_operand(
     ctx: EmitContext,
     operand: str,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
 ) -> Register:
-    """Resolve a CONVERTING from/to operand: a data-item name is decoded at
-    runtime; otherwise it is a figurative / quoted-literal constant."""
+    """Resolve an INSPECT operand shared by CONVERTING (from/to) and TALLYING
+    (FOR ALL/LEADING pattern, BEFORE/AFTER INITIAL boundary text): a data-item
+    name is decoded at runtime; otherwise it is a figurative / quoted-literal
+    constant (red-dragon-twn — TALLYING previously passed both straight
+    through strip_cobol_literal, so a figurative constant like SPACES tallied
+    the literal text "SPACES" instead of its value, and a field operand
+    tallied its name instead of its contents)."""
     if ctx.has_field(operand, materialised):
         ref, rr = ctx.resolve_field_ref(operand, materialised, span=span)
         decoded = ctx.emit_decode_field(
@@ -695,10 +700,10 @@ def lower_inspect_converting(
     to the source field (red-dragon-zuhj — unblocks CardDemo's alphabetic edits).
     """
     span = stmt.span
-    from_reg = _resolve_convert_operand(
+    from_reg = _resolve_inspect_operand(
         ctx, str(stmt.converting_from), materialised, span=span
     )
-    to_reg = _resolve_convert_operand(
+    to_reg = _resolve_inspect_operand(
         ctx, str(stmt.converting_to), materialised, span=span
     )
     converted_reg = ctx.fresh_reg()
@@ -762,8 +767,10 @@ def lower_inspect_tallying(
         for tally_for in group.patterns:
             bounded_str_reg = src_str_reg
             if isinstance(tally_for.boundary, BeforeAfterBoundary):
-                boundary_text_reg = ctx.const_to_reg(
-                    strip_cobol_literal(str(tally_for.boundary.boundary_text)),
+                boundary_text_reg = _resolve_inspect_operand(
+                    ctx,
+                    str(tally_for.boundary.boundary_text),
+                    materialised,
                     span=span,
                 )
                 kind_reg = ctx.const_to_reg(tally_for.boundary.kind.lower(), span=span)
@@ -776,8 +783,8 @@ def lower_inspect_tallying(
                     ),
                     span=span,
                 )
-            pattern_reg = ctx.const_to_reg(
-                strip_cobol_literal(str(tally_for.pattern)), span=span
+            pattern_reg = _resolve_inspect_operand(
+                ctx, str(tally_for.pattern), materialised, span=span
             )
             mode_reg = ctx.const_to_reg(tally_for.mode.lower(), span=span)
             ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
