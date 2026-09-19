@@ -62,13 +62,22 @@ public final class DataFieldSerializer {
                 JsonObject field = instance.serializeRename(rename);
                 fields.add(field);
                 // RENAMES does not allocate storage — no offset increment
+            } else if (entry instanceof DataDescriptionEntryExecSql) {
+                // Deliberately not serialized here: it has no storage and does
+                // not belong in data_fields. Collected separately by
+                // serializeExecSqlEntries (forge-qhi) -- see AsgSerializer's
+                // "data_division_exec_sql" key. Named explicitly (not folded
+                // into the else below) so it is never mistaken for the
+                // unhandled-type case that else logs.
+            } else {
+                // Anything else is a ProLeap entry kind this serializer does
+                // not yet know about. This is the exact trap forge-qhi found:
+                // EXEC_SQL fell off the end of this chain silently -- no
+                // error, no JSON node -- for years. Log loudly instead of
+                // repeating that history for the next new kind.
+                LOG.warning("Unhandled DataDescriptionEntry subtype: "
+                        + entry.getClass().getName() + " -- dropped from data_fields");
             }
-            // DataDescriptionEntryExecSql (e.g. a DECLARE CURSOR written in
-            // WORKING-STORAGE rather than PROCEDURE DIVISION) falls off this
-            // chain deliberately: it has no storage and does not belong in
-            // data_fields. It is collected separately by
-            // serializeExecSqlEntries (forge-qhi) -- see AsgSerializer's
-            // "data_division_exec_sql" key.
         }
         return fields;
     }
@@ -103,13 +112,28 @@ public final class DataFieldSerializer {
         }
         for (DataDescriptionEntry entry : entries) {
             if (entry instanceof DataDescriptionEntryExecSql execSql) {
+                String text = execSql.getExecSqlText();
+                if (text == null) {
+                    // A null here would reach Python as None and crash
+                    // parse_exec_sql at compile time -- skip and log loudly
+                    // rather than emit a node the consumer cannot use.
+                    LOG.warning("DataDescriptionEntryExecSql with null exec_sql_text -- skipped");
+                    continue;
+                }
                 JsonObject obj = new JsonObject();
                 obj.addProperty("section", section);
-                obj.addProperty("exec_sql_text", execSql.getExecSqlText());
+                obj.addProperty("exec_sql_text", text);
                 StatementSerializer.addSpan(obj, execSql.getCtx());
                 out.add(obj);
             } else if (entry instanceof DataDescriptionEntryGroup group) {
                 collectExecSqlEntries(group.getDataDescriptionEntries(), section, out);
+            } else {
+                // Rename/Condition entries cannot themselves carry a nested
+                // EXEC SQL entry, but logging here (rather than silently
+                // matching nothing) means a future ProLeap entry kind that
+                // COULD nest one does not repeat forge-qhi's silent-drop trap.
+                LOG.fine("collectExecSqlEntries: not recursing into "
+                        + entry.getClass().getName());
             }
         }
     }

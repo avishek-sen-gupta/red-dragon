@@ -456,32 +456,125 @@ public class AsgSerializerTest {
         assertTrue("ASG must have data_division_exec_sql",
                 asg.has("data_division_exec_sql"));
         JsonArray execSqlEntries = asg.getAsJsonArray("data_division_exec_sql");
-        assertEquals("Should have 1 EXEC SQL data-division entry", 1, execSqlEntries.size());
+        // DECLARE TABLE + two DECLARE CURSORs -- mirrors COTRTLIC's own shape
+        // (a DECLARE TABLE alongside both cursors, all nested inside a group).
+        assertEquals("Should have 3 EXEC SQL data-division entries", 3, execSqlEntries.size());
 
-        JsonObject declare = execSqlEntries.get(0).getAsJsonObject();
-        assertEquals("WORKING-STORAGE", declare.get("section").getAsString());
-        String text = declare.get("exec_sql_text").getAsString();
-        assertTrue("exec_sql_text must carry the DECLARE CURSOR text",
-                text.toUpperCase().contains("DECLARE"));
-        assertTrue("exec_sql_text must carry the cursor name",
-                text.toUpperCase().contains("C-TR-TYPE-FORWARD"));
-        assertTrue("exec_sql_text must carry the query",
-                text.toUpperCase().contains("TRANSACTION_TYPE"));
-        assertTrue("Should carry a line_start position", declare.has("line_start"));
+        for (int i = 0; i < execSqlEntries.size(); i++) {
+            JsonObject entry = execSqlEntries.get(i).getAsJsonObject();
+            assertEquals("WORKING-STORAGE", entry.get("section").getAsString());
+            assertTrue("Should carry a line_start position", entry.has("line_start"));
+        }
+    }
+
+    /**
+     * Pins the exact bookend form ProLeap's setExecSqlText() actually
+     * returns (verified against DataDescriptionEntryContainerImpl /
+     * TagUtils.getUntaggedText: only the preprocessor's own internal
+     * "*>EXECSQL" / "}" tags are stripped, so the literal "EXEC SQL" ...
+     * "END-EXEC" source text survives verbatim, each physical line trimmed
+     * and joined with a single space). squall feeds this string straight to
+     * parse_exec_sql, which requires the full bookended statement -- if
+     * ProLeap ever returned bare text instead, every hand-written Python
+     * fixture (which always bookends its own strings) would stay green
+     * while the real pipeline broke. This is the one assertion that would
+     * catch that regression.
+     */
+    @Test
+    public void testDeclareCursorExecSqlTextIsExactlyBookended() throws Exception {
+        JsonObject asg = parseFixture("exec_sql_working_storage.cbl");
+        JsonArray execSqlEntries = asg.getAsJsonArray("data_division_exec_sql");
+
+        JsonObject declareTable = execSqlEntries.get(0).getAsJsonObject();
+        assertEquals(
+                "EXEC SQL DECLARE CARDDEMO.TRANSACTION_TYPE TABLE "
+                        + "( TR_TYPE CHAR(2) NOT NULL, TR_DESCRIPTION VARCHAR(50) NOT NULL ) "
+                        + "END-EXEC",
+                declareTable.get("exec_sql_text").getAsString());
+
+        JsonObject forward = execSqlEntries.get(1).getAsJsonObject();
+        assertEquals(
+                "EXEC SQL DECLARE C-TR-TYPE-FORWARD CURSOR FOR "
+                        + "SELECT TR_TYPE FROM CARDDEMO.TRANSACTION_TYPE "
+                        + "WHERE TR_TYPE >= :WS-START-KEY ORDER BY TR_TYPE "
+                        + "END-EXEC",
+                forward.get("exec_sql_text").getAsString());
+
+        JsonObject backward = execSqlEntries.get(2).getAsJsonObject();
+        assertEquals(
+                "EXEC SQL DECLARE C-TR-TYPE-BACKWARD CURSOR FOR "
+                        + "SELECT TR_TYPE FROM CARDDEMO.TRANSACTION_TYPE "
+                        + "WHERE TR_TYPE < :WS-START-KEY ORDER BY TR_TYPE DESC "
+                        + "END-EXEC",
+                backward.get("exec_sql_text").getAsString());
     }
 
     /**
      * A DECLARE CURSOR in WORKING-STORAGE must not also appear in
      * data_fields -- it has no storage, so sectioned_layout must never be
-     * asked to assign it an offset.
+     * asked to assign it an offset. Nested one level inside a group (like
+     * COTRTLIC's own WS-MISC-STORAGE), the group itself is the only
+     * data_fields entry -- the EXEC SQL children must not leak into either
+     * data_fields directly or the group's own "children" array.
      */
     @Test
     public void testDeclareCursorInWorkingStorageIsNotInDataFields() throws Exception {
         JsonObject asg = parseFixture("exec_sql_working_storage.cbl");
 
         JsonArray fields = asg.getAsJsonArray("data_fields");
-        assertEquals("Only WS-COUNT should be in data_fields", 1, fields.size());
-        assertEquals("WS-COUNT", fields.get(0).getAsJsonObject().get("name").getAsString());
+        assertEquals("WS-COUNT, WS-START-KEY, WS-GROUP", 3, fields.size());
+        assertEquals("WS-GROUP", fields.get(2).getAsJsonObject().get("name").getAsString());
+        assertFalse("WS-GROUP must have no children -- its only members are "
+                        + "EXEC SQL entries, which carry no storage",
+                fields.get(2).getAsJsonObject().has("children"));
+    }
+
+    /**
+     * The group-recursion path in collectExecSqlEntries: DECLARE CURSOR
+     * nested one level inside a 01-level group (COTRTLIC's own shape,
+     * WS-MISC-STORAGE) must still be found and tagged with the section it
+     * came from, not silently missed because it isn't a root entry.
+     */
+    @Test
+    public void testDeclareCursorNestedInsideAGroupIsStillFound() throws Exception {
+        JsonObject asg = parseFixture("exec_sql_working_storage.cbl");
+        JsonArray execSqlEntries = asg.getAsJsonArray("data_division_exec_sql");
+
+        boolean foundForward = false;
+        for (int i = 0; i < execSqlEntries.size(); i++) {
+            JsonObject entry = execSqlEntries.get(i).getAsJsonObject();
+            if (entry.get("exec_sql_text").getAsString().contains("C-TR-TYPE-FORWARD")) {
+                foundForward = true;
+            }
+        }
+        assertTrue("DECLARE CURSOR nested inside WS-GROUP must still be recovered",
+                foundForward);
+    }
+
+    /**
+     * The LINKAGE call site in serializeDataDivision -- untested until now.
+     */
+    @Test
+    public void testDeclareCursorInLinkageReachesDataDivisionExecSql() throws Exception {
+        JsonObject asg = parseFixture("exec_sql_linkage.cbl");
+
+        assertTrue(asg.has("data_division_exec_sql"));
+        JsonArray execSqlEntries = asg.getAsJsonArray("data_division_exec_sql");
+        assertEquals(1, execSqlEntries.size());
+        assertEquals("LINKAGE", execSqlEntries.get(0).getAsJsonObject().get("section").getAsString());
+    }
+
+    /**
+     * The LOCAL-STORAGE call site in serializeDataDivision -- untested until now.
+     */
+    @Test
+    public void testDeclareCursorInLocalStorageReachesDataDivisionExecSql() throws Exception {
+        JsonObject asg = parseFixture("exec_sql_local_storage.cbl");
+
+        assertTrue(asg.has("data_division_exec_sql"));
+        JsonArray execSqlEntries = asg.getAsJsonArray("data_division_exec_sql");
+        assertEquals(1, execSqlEntries.size());
+        assertEquals("LOCAL-STORAGE", execSqlEntries.get(0).getAsJsonObject().get("section").getAsString());
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
