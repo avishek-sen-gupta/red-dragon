@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryCondition;
+import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryExecSql;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryGroup;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryRename;
 import io.proleap.cobol.asg.metamodel.data.datadescription.BlankWhenZeroClause;
@@ -62,8 +63,55 @@ public final class DataFieldSerializer {
                 fields.add(field);
                 // RENAMES does not allocate storage — no offset increment
             }
+            // DataDescriptionEntryExecSql (e.g. a DECLARE CURSOR written in
+            // WORKING-STORAGE rather than PROCEDURE DIVISION) falls off this
+            // chain deliberately: it has no storage and does not belong in
+            // data_fields. It is collected separately by
+            // serializeExecSqlEntries (forge-qhi) -- see AsgSerializer's
+            // "data_division_exec_sql" key.
         }
         return fields;
+    }
+
+    /**
+     * Recursively collects every EXEC SQL data-description entry (e.g. a
+     * DECLARE CURSOR written in WORKING-STORAGE rather than PROCEDURE
+     * DIVISION) found anywhere under {@code entries}, including nested
+     * inside group children. ProLeap already builds this node and populates
+     * its text via {@link DataDescriptionEntryExecSql#getExecSqlText()};
+     * {@link #serializeEntries} silently drops it because it carries no
+     * storage. Each is tagged with which DATA DIVISION section it came from,
+     * so the Python side can tell a WORKING-STORAGE declare from a LINKAGE
+     * one without re-deriving that from source spans.
+     *
+     * @param entries root or child DataDescriptionEntry list to search
+     * @param section the DATA DIVISION section name this list came from
+     *                (e.g. "WORKING-STORAGE", "LINKAGE", "LOCAL-STORAGE")
+     * @return JSON array of {section, exec_sql_text, line_start, col_start,
+     *         line_end, col_end} objects, in source order
+     */
+    public static JsonArray serializeExecSqlEntries(List<DataDescriptionEntry> entries, String section) {
+        JsonArray out = new JsonArray();
+        collectExecSqlEntries(entries, section, out);
+        return out;
+    }
+
+    private static void collectExecSqlEntries(
+            List<DataDescriptionEntry> entries, String section, JsonArray out) {
+        if (entries == null) {
+            return;
+        }
+        for (DataDescriptionEntry entry : entries) {
+            if (entry instanceof DataDescriptionEntryExecSql execSql) {
+                JsonObject obj = new JsonObject();
+                obj.addProperty("section", section);
+                obj.addProperty("exec_sql_text", execSql.getExecSqlText());
+                StatementSerializer.addSpan(obj, execSql.getCtx());
+                out.add(obj);
+            } else if (entry instanceof DataDescriptionEntryGroup group) {
+                collectExecSqlEntries(group.getDataDescriptionEntries(), section, out);
+            }
+        }
     }
 
     /**

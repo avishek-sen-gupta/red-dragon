@@ -46,6 +46,9 @@ import java.util.logging.Logger;
  *   "data_fields": [...],          // WORKING-STORAGE SECTION
  *   "linkage_fields": [...],       // LINKAGE SECTION (optional)
  *   "local_storage_fields": [...], // LOCAL-STORAGE SECTION (optional)
+ *   "data_division_exec_sql": [...], // EXEC SQL entries outside PROCEDURE
+ *                                     // DIVISION, e.g. DECLARE CURSOR in
+ *                                     // WORKING-STORAGE (optional)
  *   "sections": [{"name": "...", "paragraphs": [...]}],
  *   "paragraphs": [{"name": "...", "statements": [...]}]
  * }
@@ -153,6 +156,15 @@ public final class AsgSerializer {
             return;
         }
 
+        // Collects every EXEC SQL data-description entry found across the
+        // sections below (e.g. a DECLARE CURSOR written in WORKING-STORAGE
+        // rather than PROCEDURE DIVISION) into one top-level array, tagged
+        // by which section it came from -- see DataFieldSerializer's
+        // serializeExecSqlEntries. Never folded into data_fields/etc.:
+        // sectioned_layout assigns storage offsets to everything in those
+        // arrays, and an EXEC SQL entry has no storage (forge-qhi).
+        JsonArray execSqlEntries = new JsonArray();
+
         WorkingStorageSection ws = dataDivision.getWorkingStorageSection();
         if (ws != null) {
             List<DataDescriptionEntry> rootEntries = ws.getRootDataDescriptionEntries();
@@ -160,6 +172,11 @@ public final class AsgSerializer {
                 JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
                 asg.add("data_fields", fields);
                 LOG.info("Serialized " + fields.size() + " working-storage fields");
+
+                for (com.google.gson.JsonElement elem : DataFieldSerializer
+                        .serializeExecSqlEntries(rootEntries, "WORKING-STORAGE")) {
+                    execSqlEntries.add(elem);
+                }
             }
         }
 
@@ -170,6 +187,11 @@ public final class AsgSerializer {
                 JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
                 asg.add("linkage_fields", fields);
                 LOG.info("Serialized " + fields.size() + " linkage fields");
+
+                for (com.google.gson.JsonElement elem : DataFieldSerializer
+                        .serializeExecSqlEntries(rootEntries, "LINKAGE")) {
+                    execSqlEntries.add(elem);
+                }
             }
         }
 
@@ -180,7 +202,17 @@ public final class AsgSerializer {
                 JsonArray fields = DataFieldSerializer.serializeEntries(rootEntries);
                 asg.add("local_storage_fields", fields);
                 LOG.info("Serialized " + fields.size() + " local-storage fields");
+
+                for (com.google.gson.JsonElement elem : DataFieldSerializer
+                        .serializeExecSqlEntries(rootEntries, "LOCAL-STORAGE")) {
+                    execSqlEntries.add(elem);
+                }
             }
+        }
+
+        if (execSqlEntries.size() > 0) {
+            asg.add("data_division_exec_sql", execSqlEntries);
+            LOG.info("Serialized " + execSqlEntries.size() + " EXEC SQL data-division entries");
         }
 
         FileSection fileSection = dataDivision.getFileSection();
