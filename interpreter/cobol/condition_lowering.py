@@ -22,6 +22,7 @@ from cobol_asg.cobol_expression import (
     LiteralNode,
     RefModNode,
     expr_from_dict,
+    expr_to_dict,
 )
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.condition_name import ConditionValue
@@ -1238,7 +1239,7 @@ def _lower_expr_node_body(
         builtin = _INTRINSIC_FUNCTIONS.get(node.name.upper())
         arg_regs = tuple(
             _lower_function_arg_to_string(
-                ctx, _expr_node_to_arg_dict(arg), materialised, span=span
+                ctx, expr_to_dict(arg), materialised, span=span
             )
             for arg in node.args
         )
@@ -1353,32 +1354,3 @@ def _lower_figurative_operand(
         fill,
     )
     return ctx.const_to_reg(fill, span=span)
-
-
-def _expr_node_to_arg_dict(node: ExprNode) -> dict:
-    """Convert an ExprNode argument back into the operand-dict shape consumed by
-    ``_lower_function_arg_to_string`` (ref/lit/binop/neg).
-
-    Intrinsic-function arguments are simple operands (a field ref or literal in
-    CardDemo's usage); richer arithmetic args round-trip through the generic
-    expression kinds.
-    """
-    if isinstance(node, LiteralNode):
-        return {"kind": "lit", "value": node.value}
-    if isinstance(node, FieldRefNode):
-        return {"kind": "ref", "name": node.name}
-    if isinstance(node, BinOpNode):
-        return {
-            "kind": "binop",
-            "op": node.op,
-            "left": _expr_node_to_arg_dict(node.left),
-            "right": _expr_node_to_arg_dict(node.right),
-        }
-    if isinstance(node, FunctionNode):
-        return {
-            "kind": "function",
-            "name": node.name,
-            "args": [_expr_node_to_arg_dict(a) for a in node.args],
-        }
-    # RefModNode and any other shape: stringify via the ref name as a fallback.
-    return {"kind": "ref", "name": getattr(node, "name", "")}

@@ -428,16 +428,21 @@ def _lower_function_arg_to_string(
     """
     kind = arg.get("kind", "lit")
     if kind == "ref":
-        name = arg.get("name", "")
-        if ctx.has_field(name, materialised):
-            ref, rr = ctx.resolve_field_ref(name, materialised, span=span)
-            decoded = ctx.emit_decode_field(
-                rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-            )
-            return ctx.emit_to_string(decoded, span=span)
-        from interpreter.cobol.condition_lowering import _unresolvable_operand
+        # Delegated rather than re-resolved: this path used to call
+        # resolve_field_ref with neither the subscripts nor the reference
+        # modification the node carries, so FUNCTION f(TBL(I)) always read
+        # occurrence 1 (red-dragon-jscx). _lower_expr_dict is the one place that
+        # decodes a structured ref, and it honours both.
+        from interpreter.cobol.condition_lowering import (
+            _lower_expr_dict,
+            _unresolvable_operand,
+        )
 
-        return _unresolvable_operand(ctx, name, span=span)
+        name = arg.get("name", "")
+        if not ctx.has_field(name, materialised):
+            return _unresolvable_operand(ctx, name, span=span)
+        decoded = _lower_expr_dict(ctx, arg, materialised, span=span)
+        return ctx.emit_to_string(decoded, span=span)
     if kind == "lit":
         return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")), span=span)
     # Arithmetic / other expression args: lower via the expression path, then
