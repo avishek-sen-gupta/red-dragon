@@ -2303,9 +2303,28 @@ public final class StatementSerializer {
         return qualifiers;
     }
 
+    /**
+     * Collects the {@code OF}/{@code IN} qualifier names written on an operand.
+     *
+     * <p>A qualifier arrives under one of two rules. Bare, it is an {@code inData}
+     * ({@code FA OF GA}). Followed by a subscript or a reference modifier, ANTLR
+     * takes the longer alternative and it is an {@code inTable} whose
+     * {@code tableCall} carries both the group name and the parenthesised part —
+     * {@code FA OF GA(1:2)} qualifies FA by GA exactly as the bare form does, so
+     * both rules yield a qualifier here. Reading only {@code inData} dropped the
+     * qualifier of every ref-modified or subscripted qualified operand, which then
+     * resolved against the wrong group (red-dragon-64s4).
+     *
+     * <p>The walk does not descend into a {@link
+     * CobolParser.ReferenceModifierContext}: names written in a slice's bounds
+     * qualify the BOUND's own operand, not the sliced field, so
+     * {@code FA OF GA(1:FB OF GB)} is qualified by GA and never by GB. This is the
+     * collecting form of {@link #boundsTheSliceOf} — a first-hit probe can test a
+     * node after finding it, a collecting walk has to refuse to enter the bound.
+     */
     private static void collectInDataQualifiers(
             org.antlr.v4.runtime.tree.ParseTree node, JsonArray out) {
-        if (node == null) {
+        if (node == null || node instanceof CobolParser.ReferenceModifierContext) {
             return;
         }
         if (node instanceof CobolParser.InDataContext) {
@@ -2313,10 +2332,29 @@ public final class StatementSerializer {
             if (dn != null) {
                 out.add(dn.getText());
             }
+        } else if (node instanceof CobolParser.InTableContext) {
+            String base = tableCallBaseName(((CobolParser.InTableContext) node).tableCall());
+            if (base != null) {
+                out.add(base);
+            }
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             collectInDataQualifiers(node.getChild(i), out);
         }
+    }
+
+    /** The bare data name a {@code tableCall} is built on, stripped of subscripts
+     *  and reference modification, or null when it has none. */
+    private static String tableCallBaseName(CobolParser.TableCallContext tableCall) {
+        if (tableCall == null || tableCall.qualifiedDataName() == null) {
+            return null;
+        }
+        CobolParser.QualifiedDataNameFormat1Context format1 =
+                tableCall.qualifiedDataName().qualifiedDataNameFormat1();
+        if (format1 == null || format1.dataName() == null) {
+            return null;
+        }
+        return format1.dataName().getText();
     }
 
 
