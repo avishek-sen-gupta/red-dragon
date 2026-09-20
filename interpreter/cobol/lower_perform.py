@@ -11,8 +11,9 @@ from cobol_asg.cobol_statements import (
     PerformUntilSpec,
     PerformVaryingSpec,
 )
+from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.source_span import SourceSpan
-from interpreter.cobol.condition_lowering import _lower_expr_dict
+from interpreter.cobol.condition_lowering import _lower_expr_dict, lower_expr_node
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.continuation_name import ContinuationName
@@ -470,6 +471,9 @@ def _eval_varying_from(
 
     Handles the structured forms emitted by the bridge:
     - {"kind": "length_of", "name": "WS-S"} → the field's byte length (a const)
+    - a ref-modified field, NUMF(1:4)      → the slice read as a NUMBER.
+      ``_lower_expr_dict`` returns the slice's characters, which is what a
+      condition wants and never what a loop bound does (red-dragon-twfl).
     - {"kind": "ref"/"lit"/"binop"/...}     → general expression lowering
       (a bare field decodes to its value, a literal to its const).
 
@@ -483,6 +487,10 @@ def _eval_varying_from(
                 return ctx.const_to_reg(ref.fl.byte_length, span=span)
             logger.warning("LENGTH OF unknown field %s — using 0", name)
             return ctx.const_to_reg(0, span=span)
+        if "ref_mod_start" in varying_from:
+            return lower_expr_node(
+                ctx, expr_from_dict(varying_from), materialised, span=span
+            )
         return _lower_expr_dict(ctx, varying_from, materialised, span=span)
 
     # Legacy text form (no structured node available).
