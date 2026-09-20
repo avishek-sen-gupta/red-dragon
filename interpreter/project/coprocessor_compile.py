@@ -12,7 +12,7 @@ them here — this module has no knowledge of what any of them are for.
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -30,8 +30,12 @@ def _identity(source: str) -> str:
     return source
 
 
-def _no_extra_program_source_dirs() -> Sequence[Path]:
+def _no_extra_source_search_dirs() -> Sequence[Path]:
     return ()
+
+
+def _no_linked_subprogram_sources() -> Mapping[str, bytes]:
+    return {}
 
 
 @dataclass(frozen=True)
@@ -60,13 +64,30 @@ class CoprocessorSpec:
     caller sets one (a real one, or the NullDialectParser default);
     compile_program collects them all unconditionally.
 
-    ``extra_program_source_dirs`` threads compile_cobol's
-    ``program_source_dirs=[...]`` search path through the same way — a
+    ``extra_source_search_dirs`` threads compile_cobol's
+    ``source_search_dirs=[...]`` search path through the same way — a
     coprocessor whose CALLed subprograms are never on disk under the
     caller's own directory (e.g. IBM Language Environment stubs) sets this to
     contribute that directory, without this module knowing what's in it or
     what any of it is for. compile_program appends every spec's
-    contribution, in order, after the caller's own program_source_dirs.
+    contribution, in order, after the caller's own source_search_dirs.
+
+    ``linked_subprogram_sources`` threads compile_cobol's
+    ``extra_subprogram_sources`` through, and is the other half of that pair:
+    a search path resolves callees *discovered* from ``CALL 'LITERAL'`` edges,
+    whereas this one links a
+    subprogram *unconditionally*, whether or not anything discovered it. It
+    exists for the callees no static scan can find — a CALL by data-name, where
+    the program name is the variable's runtime contents and the only edge a
+    text scan could report is the variable's own name. A coprocessor that
+    supplies such a callee returns ``{program_name: source_bytes}``;
+    compile_program merges every spec's mapping, later specs winning on a
+    repeated name, and this module never learns what any of it is for.
+
+    The contribution is a mapping and not a directory on purpose:
+    compile_program threads arguments and does no filesystem work, so reading
+    files and discovering ``.cbl`` members stays with the coprocessor that
+    knows which of its own programs it means.
     """
 
     name: str
@@ -74,8 +95,11 @@ class CoprocessorSpec:
     source_prepass: Callable[[str], str] = _identity
     owns_execution: bool = False
     dialect_parser: DialectParser = NullDialectParser()
-    extra_program_source_dirs: Callable[[], Sequence[Path]] = (
-        _no_extra_program_source_dirs
+    extra_source_search_dirs: Callable[[], Sequence[Path]] = (
+        _no_extra_source_search_dirs
+    )
+    linked_subprogram_sources: Callable[[], Mapping[str, bytes]] = (
+        _no_linked_subprogram_sources
     )
 
 
@@ -84,7 +108,7 @@ def compile_program(
     parser: Any,
     specs: Sequence[CoprocessorSpec],
     *,
-    program_source_dirs: Sequence[Path] = (),
+    source_search_dirs: Sequence[Path] = (),
     tolerant: bool = False,
 ) -> tuple[Any, LinkedProgram]:
     """Compile ``source`` with every spec's prepass and strategy composed.
@@ -100,10 +124,15 @@ def compile_program(
 
     strategies = [spec.make_strategy() for spec in specs]
     dialect_parsers = [spec.dialect_parser for spec in specs]
-    all_program_source_dirs: tuple[Path, ...] = functools.reduce(
-        lambda dirs, spec: (*dirs, *spec.extra_program_source_dirs()),
+    all_source_search_dirs: tuple[Path, ...] = functools.reduce(
+        lambda dirs, spec: (*dirs, *spec.extra_source_search_dirs()),
         specs,
-        tuple(program_source_dirs),
+        tuple(source_search_dirs),
+    )
+    all_subprogram_sources: dict[str, bytes] = functools.reduce(
+        lambda srcs, spec: {**srcs, **spec.linked_subprogram_sources()},
+        specs,
+        {},
     )
 
     return compile_cobol(
@@ -111,6 +140,7 @@ def compile_program(
         parser=parser,
         extension_strategies=strategies,
         dialect_parsers=dialect_parsers,
-        program_source_dirs=all_program_source_dirs,
+        source_search_dirs=all_source_search_dirs,
+        extra_subprogram_sources=all_subprogram_sources,
         tolerant=tolerant,
     )
