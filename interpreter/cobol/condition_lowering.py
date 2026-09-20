@@ -817,7 +817,7 @@ def _lower_ref_mod_operand(
     ref, rr = ctx.resolve_field_ref(
         name, materialised, subscripts=subscripts, span=span
     )
-    full_str_reg = ctx.emit_decode_field(
+    full_str_reg = ctx.emit_decode_field_characters(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
     )
 
@@ -1179,7 +1179,7 @@ def _lower_expr_node_body(
         ref, rr = ctx.resolve_field_ref(
             node.name, materialised, subscripts=node.subscripts, span=span
         )
-        full_str_reg = ctx.emit_decode_field(
+        full_str_reg = ctx.emit_decode_field_characters(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
         start_1based_reg = lower_expr_node(
