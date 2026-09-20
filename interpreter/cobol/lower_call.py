@@ -11,19 +11,27 @@ from cobol_asg.cobol_statements import (
     CancelStatement,
     EntryStatement,
 )
+from cobol_asg.ref_mod import RefModOperand
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
+from interpreter.cobol.cobol_constants import BuiltinName
+from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.instructions import (
     AllocRegion,
+    Binop,
+    CallFunction,
     CallWithMemory,
     Label_,
     StoreVar,
 )
 from interpreter.ir import CodeLabel
+from interpreter.operator_kind import resolve_binop
+from interpreter.register import NO_REGISTER, Register
+from cobol_asg.source_span import SourceSpan
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
@@ -72,12 +80,85 @@ def _params_extent(fl: FieldLayout, offset: int) -> FieldExtent:
     )
 
 
+def _emit_callee_name(
+    ctx: EmitContext,
+    operand: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """Emit IR that produces the callee's name from a data item, at run time.
+
+    ``CALL identifier`` names the program by the *contents* of a data item, so
+    the name only exists once the field has been read. The operand is the same
+    ``RefModOperand`` MOVE and STRING consume, so its subscripts, ``OF``/``IN``
+    qualifiers and reference-modification bounds are honoured by the machinery
+    that already handles them — ``CALL WS-PROG(1:8)`` is the common idiom, since
+    a program name is 8 characters and the holding field is usually wider.
+    """
+    if not ctx.has_field(operand.name, materialised):
+        raise ValueError(
+            f"CALL {operand.name}: the callee is a data name that resolves to no "
+            "field, so the program to call cannot be determined"
+        )
+
+    field_ref, region_reg = ctx.resolve_field_ref(
+        operand.name,
+        materialised,
+        qualifiers=operand.qualifiers,
+        subscripts=operand.subscripts,
+        span=span,
+    )
+    decoded_reg = ctx.emit_decode_field(
+        region_reg,
+        field_ref.fl,
+        field_ref.offset_reg,
+        extent=field_ref.extent,
+        span=span,
+    )
+    name_reg = ctx.emit_to_string(decoded_reg, span=span)
+
+    if operand.ref_mod_start is None:
+        return name_reg
+
+    raw_start_reg = eval_ref_mod_expr(
+        ctx, operand.ref_mod_start, materialised, span=span
+    )
+    one_reg = ctx.const_to_reg(1, span=span)
+    start_0indexed_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=start_0indexed_reg,
+            operator=resolve_binop("-"),
+            left=raw_start_reg,
+            right=one_reg,
+        ),
+        span=span,
+    )
+    if operand.ref_mod_length is not None:
+        length_reg = eval_ref_mod_expr(
+            ctx, operand.ref_mod_length, materialised, span=span
+        )
+    else:
+        length_reg = ctx.const_to_reg(9999, span=span)
+    sliced_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=sliced_reg,
+            func_name=FuncName(BuiltinName.STRING_SLICE),
+            args=(name_reg, start_0indexed_reg, length_reg),
+        ),
+        span=span,
+    )
+    return sliced_reg
+
+
 def lower_call(
     ctx: EmitContext,
     stmt: CallStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """CALL 'program' USING params — region-passing subprogram invocation via CallWithMemory.
+    """CALL (identifier | literal) USING params — region-passing subprogram invocation.
 
     When stmt.using is non-empty:
       1. Allocate a fresh params region (sum of USING field byte lengths).
@@ -143,13 +224,21 @@ def lower_call(
     else:
         _ws_layout, params_reg = materialised.working_storage
 
+    target = stmt.target
+    target_reg = (
+        _emit_callee_name(ctx, target.identifier, materialised, span=span)
+        if target.identifier is not None
+        else NO_REGISTER
+    )
+
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallWithMemory(
             result_reg=result_reg,
-            func_name=FuncName(stmt.program),
+            func_name=FuncName(target.literal),
             params_reg=params_reg,
             results_reg=params_reg,
+            target_reg=target_reg,
         ),
         span=span,
     )
@@ -211,7 +300,9 @@ def lower_call(
         )
 
     logger.info(
-        "CALL %s with %d params (CallWithMemory)", stmt.program, len(stmt.using)
+        "CALL %s with %d params (CallWithMemory)",
+        target.describe(),
+        len(stmt.using),
     )
 
 

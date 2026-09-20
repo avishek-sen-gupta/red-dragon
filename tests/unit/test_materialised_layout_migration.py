@@ -292,7 +292,7 @@ class TestLowerPerformWithMaterialised:
 class TestLowerCallWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_call_emits_call_with_memory(self):
-        from cobol_asg.cobol_statements import CallStatement
+        from cobol_asg.cobol_statements import CallStatement, CallTarget
         from interpreter.cobol.lower_call import lower_call
 
         asg = CobolASG(data_fields=[_make_field("WS-A")])
@@ -300,7 +300,9 @@ class TestLowerCallWithMaterialised:
         ctx = EmitContext(dispatch_fn=dispatch_statement)
         materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
-        stmt = CallStatement(program="MY-PROG", using=[], giving="")
+        stmt = CallStatement(
+            target=CallTarget.of_literal("MY-PROG"), using=[], giving=""
+        )
         lower_call(ctx, stmt, materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]

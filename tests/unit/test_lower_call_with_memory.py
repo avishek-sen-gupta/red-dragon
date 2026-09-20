@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from cobol_asg.asg_types import CobolASG, CobolField
-from cobol_asg.cobol_statements import CallStatement, CallUsingParam
+from cobol_asg.cobol_statements import CallStatement, CallTarget, CallUsingParam
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_call import lower_call
@@ -35,7 +35,7 @@ def _materialised_with_ws(
 def test_lower_call_emits_call_with_memory():
     ctx, materialised = _materialised_with_ws("WS-PARAM")
     stmt = CallStatement(
-        program="SUBPROG",
+        target=CallTarget.of_literal("SUBPROG"),
         using=[CallUsingParam(name="WS-PARAM", param_type="REFERENCE")],
         giving="",
     )
@@ -51,7 +51,7 @@ def test_lower_call_by_reference_params_eq_results():
 
     ctx, materialised = _materialised_with_ws("WS-PARAM")
     stmt = CallStatement(
-        program="SUBPROG",
+        target=CallTarget.of_literal("SUBPROG"),
         using=[CallUsingParam(name="WS-PARAM", param_type="REFERENCE")],
         giving="",
     )
@@ -68,7 +68,7 @@ def test_lower_call_giving_result_written_back():
     """GIVING: result written back to caller's WS field via WRITE_REGION."""
     ctx, materialised = _materialised_with_ws("WS-RESULT")
     stmt = CallStatement(
-        program="SUBPROG",
+        target=CallTarget.of_literal("SUBPROG"),
         using=[],
         giving="WS-RESULT",
     )
@@ -83,7 +83,7 @@ def test_lower_call_using_copy_in_before_call():
     """CALL with USING: ALLOC_REGION + LOAD_REGION+WRITE_REGION (copy-in) appear before CALL_WITH_MEMORY."""
     ctx, materialised = _materialised_with_ws("WS-INPUT")
     stmt = CallStatement(
-        program="DOUBLIT",
+        target=CallTarget.of_literal("DOUBLIT"),
         using=[CallUsingParam(name="WS-INPUT", param_type="REFERENCE")],
         giving="",
     )
@@ -107,7 +107,7 @@ def test_lower_call_by_reference_copy_back_after_call():
     """BY REFERENCE: LOAD_REGION+WRITE_REGION copy-back appear after CALL_WITH_MEMORY."""
     ctx, materialised = _materialised_with_ws("WS-INPUT")
     stmt = CallStatement(
-        program="DOUBLIT",
+        target=CallTarget.of_literal("DOUBLIT"),
         using=[CallUsingParam(name="WS-INPUT", param_type="REFERENCE")],
         giving="",
     )
@@ -128,7 +128,7 @@ def test_lower_call_by_value_no_copy_back():
     """BY VALUE: callee gets a copy; no LOAD_REGION or WRITE_REGION after CALL_WITH_MEMORY."""
     ctx, materialised = _materialised_with_ws("WS-INPUT")
     stmt = CallStatement(
-        program="SUBPROG",
+        target=CallTarget.of_literal("SUBPROG"),
         using=[CallUsingParam(name="WS-INPUT", param_type="VALUE")],
         giving="",
     )
@@ -149,7 +149,7 @@ def test_lower_call_by_content_no_copy_back():
     """BY CONTENT: identical to BY VALUE at the IR level; no copy-back after CALL_WITH_MEMORY."""
     ctx, materialised = _materialised_with_ws("WS-INPUT")
     stmt = CallStatement(
-        program="SUBPROG",
+        target=CallTarget.of_literal("SUBPROG"),
         using=[CallUsingParam(name="WS-INPUT", param_type="CONTENT")],
         giving="",
     )
@@ -196,7 +196,7 @@ def test_lower_call_marshals_from_the_argument_own_section():
         lower_call(
             ctx,
             CallStatement(
-                program="SUBPROG",
+                target=CallTarget.of_literal("SUBPROG"),
                 using=[CallUsingParam(name=name, param_type="REFERENCE")],
                 giving="",
             ),
