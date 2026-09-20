@@ -44,6 +44,19 @@ class RefModLengthOf:
 
 
 @dataclass(frozen=True)
+class RefModFunction:
+    """An intrinsic FUNCTION call computing a reference-modification bound.
+
+    ``M(1:FUNCTION LENGTH(M))`` — the call is the bound; the operand is still the
+    slice of ``M`` (red-dragon-pe45). ``args`` are structured expression dicts,
+    the same shape ``FunctionCallOperand`` carries.
+    """
+
+    name: str
+    args: tuple[dict, ...] = ()
+
+
+@dataclass(frozen=True)
 class RefModBinOp:
     """Binary arithmetic operation in reference modification.
 
@@ -56,7 +69,9 @@ class RefModBinOp:
 
 
 # Discriminated union of all reference modification expression types
-RefModExpr = Union[RefModLiteral, RefModReference, RefModLengthOf, RefModBinOp]
+RefModExpr = Union[
+    RefModLiteral, RefModReference, RefModLengthOf, RefModFunction, RefModBinOp
+]
 
 
 def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
@@ -66,6 +81,7 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
       {"kind": "lit", "value": "2"}
       {"kind": "ref", "name": "WS-A"}
       {"kind": "binop", "op": "+", "left": {...}, "right": {...}}
+      {"kind": "function", "name": "LENGTH", "args": [{...}]}
     """
     kind = data.get("kind")
 
@@ -77,6 +93,11 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
 
     elif kind == "length_of":
         return RefModLengthOf(name=data.get("name", ""))
+
+    elif kind == "function":
+        return RefModFunction(
+            name=data.get("name", ""), args=tuple(data.get("args", []) or [])
+        )
 
     elif kind == "binop":
         left = ref_mod_expr_from_dict(data.get("left", {}))
@@ -96,6 +117,8 @@ def _ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
         return {"kind": "ref", "name": expr.name}
     elif isinstance(expr, RefModLengthOf):
         return {"kind": "length_of", "name": expr.name}
+    elif isinstance(expr, RefModFunction):
+        return {"kind": "function", "name": expr.name, "args": list(expr.args)}
     elif isinstance(expr, RefModBinOp):
         return {
             "kind": "binop",

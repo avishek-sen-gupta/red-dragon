@@ -60,6 +60,7 @@ from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModBinOp,
     RefModExpr,
+    RefModFunction,
     RefModLengthOf,
     RefModLiteral,
     RefModOperand,
@@ -331,6 +332,17 @@ def eval_ref_mod_expr(
             return ctx.const_to_reg(field_ref.fl.byte_length, span=span)
         logging.warning("eval_ref_mod_expr: LENGTH OF unknown field %s → 0", name)
         return ctx.const_to_reg(0, span=span)
+
+    elif isinstance(expr, RefModFunction):
+        # An intrinsic FUNCTION computing a bound: M(1:FUNCTION LENGTH(M)). The
+        # call is the bound, never the operand — the operand serializer used to
+        # return it in place of the whole sliced reference (red-dragon-pe45).
+        return lower_function_operand(
+            ctx,
+            FunctionCallOperand(name=expr.name, args=expr.args),
+            materialised,
+            span=span,
+        )
 
     elif isinstance(expr, RefModBinOp):
         # Binary operation: evaluate left and right, emit Binop
