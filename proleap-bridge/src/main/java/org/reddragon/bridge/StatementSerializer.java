@@ -1393,12 +1393,27 @@ public final class StatementSerializer {
     private static JsonObject serializeCall(CallStatement stmt) {
         JsonObject obj = newStatement("CALL");
         try {
-            // Program name
-            if (stmt.getProgramValueStmt() != null) {
-                String progName = extractValueStmtText(stmt.getProgramValueStmt());
-                // Strip quotes from literal program names (e.g., 'SUBPROG' -> SUBPROG)
-                progName = progName.replaceAll("^['\"]|['\"]$", "");
-                obj.addProperty("program", progName);
+            // Callee. Cobol.g4:1241 is `CALL (identifier | literal)`, and the two
+            // arms mean different things at run time: a literal names the program
+            // outright, while an identifier's *contents* name it. ProLeap models
+            // the identifier arm as a CallValueStmt, so it gets the same structured
+            // reference every other operand does (name + subscripts + ref-mod +
+            // qualifiers) — `CALL WS-PROG(1:8)` is a common idiom and flattening it
+            // to text would call the wrong program. (red-dragon-jgra)
+            ValueStmt programValueStmt = stmt.getProgramValueStmt();
+            if (programValueStmt != null) {
+                Call programCall =
+                        (programValueStmt instanceof CallValueStmt)
+                                ? ((CallValueStmt) programValueStmt).getCall()
+                                : null;
+                if (programCall != null) {
+                    obj.add("program_ref", serializeRef(programCall));
+                } else {
+                    String progName = extractValueStmtText(programValueStmt);
+                    // Strip quotes from literal program names (e.g., 'SUBPROG' -> SUBPROG)
+                    progName = progName.replaceAll("^['\"]|['\"]$", "");
+                    obj.addProperty("program", progName);
+                }
             }
             // USING parameters — each BY REFERENCE/VALUE/CONTENT clause may carry
             // multiple operands (e.g. CALL 'X' USING BY REFERENCE WS-A WS-B).

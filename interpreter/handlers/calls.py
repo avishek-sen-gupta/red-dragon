@@ -60,6 +60,18 @@ from interpreter.vm.vm_types import BuiltinResult
 logger = logging.getLogger(__name__)
 
 
+class UnresolvedProgramError(RuntimeError):
+    """A CALL whose callee was resolved at runtime named no linked program.
+
+    Raised only for ``CALL identifier`` (the program name comes from a data
+    item's contents). A literal callee that is not linked is an ordinary
+    analysis-mode situation — the run unit simply does not contain that module
+    — and stays symbolic. A runtime-resolved name is different: the program
+    computed it and expects it to dispatch, so a miss is a real defect in the
+    run unit and must be diagnosable rather than silent (red-dragon-jgra).
+    """
+
+
 # Strings that genuinely name a heap/region address start with one of these.
 # (See NEW_OBJECT/NEW_ARRAY/ALLOC_REGION and _handle_address_of's "mem_".)
 _HEAP_ADDR_PREFIXES = (
@@ -684,8 +696,31 @@ def _handle_call_with_memory(
     params_tv = _resolve_reg(vm, t.params_reg)
     results_tv = _resolve_reg(vm, t.results_reg)
 
-    program_id = str(t.func_name).upper()
+    # `CALL identifier` carries the callee in a register: the program name is
+    # whatever the data item held when control reached the CALL. Trailing blanks
+    # are padding in the holding field, not part of the name.
+    resolved_at_runtime = t.target_reg.is_present()
+    if resolved_at_runtime:
+        program_id = str(_resolve_reg(vm, t.target_reg).value).strip().upper()
+    else:
+        program_id = str(t.func_name).upper()
     singleton_key = VarName(f"__prog_{program_id}")
+
+    def _unresolved() -> ExecutionResult:
+        """A callee the run unit does not contain.
+
+        For a literal this is ordinary: the module simply is not linked, and the
+        configured resolver produces a symbolic result so analysis can continue.
+        For a runtime-resolved name it is a defect — the program computed a name
+        and expects it to dispatch — and staying silent there is the bug this
+        exists to end (red-dragon-jgra).
+        """
+        if resolved_at_runtime:
+            raise UnresolvedProgramError(
+                f"CALL resolved to program name {program_id!r} at run time, but no "
+                f"program named {program_id} is linked into this run unit"
+            )
+        return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
 
     # Walk scope chain to find singleton HeapObject address.
     # NEW_OBJECT stores a Pointer(base=Address, offset=0); unwrap to base.
@@ -700,20 +735,20 @@ def _handle_call_with_memory(
             break
 
     if singleton_addr_val is None or not vm.heap_contains(singleton_addr_val):
-        return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
+        return _unresolved()
 
     singleton = vm.heap_get(singleton_addr_val)
     init_params_tv = singleton.fields.get(FieldName("__init_params__"))
 
     if init_params_tv is None or not isinstance(init_params_tv.value, BoundFuncRef):
-        return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
+        return _unresolved()
 
     init_params_ref = init_params_tv.value
     flabel = init_params_ref.func_ref.label
     fname = init_params_ref.func_ref.name
 
     if flabel not in ctx.cfg.blocks:
-        return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
+        return _unresolved()
 
     new_vars: dict[VarName, TypedValue] = {
         VarName("__params_region"): params_tv,
@@ -728,7 +763,7 @@ def _handle_call_with_memory(
             ),
             next_label=flabel,
             reasoning=(
-                f"call_with_memory {str(t.func_name)},"
+                f"call_with_memory {program_id},"
                 f" params={params_tv.value!r},"
                 f" results={results_tv.value!r},"
                 f" dispatch to {flabel} via singleton __init_params__"

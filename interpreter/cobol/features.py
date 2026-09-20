@@ -101,6 +101,10 @@ class CobolFeature(Enum):
     CALL_USING_OMITTED = "CALL 'program' USING OMITTED placeholder for absent arguments"
     CALL_USING_LITERAL = "CALL 'program' USING BY CONTENT/VALUE literal arguments"
     CALL_GIVING = "CALL 'program' GIVING result return value capture in CALL"
+    CALL_BY_IDENTIFIER = (
+        "CALL identifier — callee named by a data item's runtime contents, "
+        "including subscripted and reference-modified forms"
+    )
     USING_BY_REFERENCE = "USING BY REFERENCE pass-by-reference parameter mode"
     USING_BY_CONTENT = "USING BY CONTENT pass-by-copy parameter mode"
     USING_BY_VALUE = "USING BY VALUE pass-by-value parameter mode"
