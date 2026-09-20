@@ -2317,6 +2317,10 @@ public final class StatementSerializer {
      * Walks a grammar context (and its ancestors/descendants) to find a
      * FunctionCallContext. ProLeap may attach the call to an identifier-shaped
      * context whose subtree (or parent) holds the actual functionCall rule.
+     *
+     * <p>A call found below a referenceModifier of {@code ctx} is NOT returned:
+     * it computes a slice bound, not the operand. See
+     * {@link #boundsTheSliceOf(CobolParser.FunctionCallContext, ParserRuleContext)}.
      */
     private static CobolParser.FunctionCallContext findFunctionCallCtx(ParserRuleContext ctx) {
         if (ctx == null) {
@@ -2332,9 +2336,39 @@ public final class StatementSerializer {
             }
         }
         // Search descendants (the functionCall rule may be nested under ctx).
-        return ctx.getRuleContext(CobolParser.FunctionCallContext.class, 0) != null
-                ? ctx.getRuleContext(CobolParser.FunctionCallContext.class, 0)
-                : firstFunctionCallDescendant(ctx);
+        CobolParser.FunctionCallContext direct =
+                ctx.getRuleContext(CobolParser.FunctionCallContext.class, 0);
+        CobolParser.FunctionCallContext found =
+                (direct != null) ? direct : firstFunctionCallDescendant(ctx);
+        return boundsTheSliceOf(found, ctx) ? null : found;
+    }
+
+    /**
+     * True when {@code fc} sits under a referenceModifier that {@code operand}
+     * contains — i.e. the call computes one of the slice's bounds, as the LENGTH
+     * call does in {@code M(1:FUNCTION LENGTH(M))}.
+     *
+     * <p>Such a call is not the operand. An operand serializer that returned it
+     * dropped the sliced field and both bounds, so {@code MOVE M(1:FUNCTION
+     * LENGTH(M)) TO D} moved a number where text belonged. The ref-modified
+     * identifier serializes structurally instead, and the bound reaches the same
+     * probe again as the expression it is (red-dragon-pe45).
+     *
+     * <p>The walk stops at {@code operand}: inside the bound's own serialization
+     * the enclosing referenceModifier is no longer between the call and the
+     * context being serialized, so the call is correctly the operand there.
+     */
+    private static boolean boundsTheSliceOf(
+            CobolParser.FunctionCallContext fc, ParserRuleContext operand) {
+        if (fc == null) {
+            return false;
+        }
+        for (ParserRuleContext p = fc.getParent(); p != null && p != operand; p = p.getParent()) {
+            if (p instanceof CobolParser.ReferenceModifierContext) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
