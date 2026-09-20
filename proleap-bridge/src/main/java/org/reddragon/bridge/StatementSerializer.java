@@ -3013,6 +3013,17 @@ public final class StatementSerializer {
         return result;
     }
 
+    /**
+     * True when a basis is the parenthesised alternative of
+     * {@code basis : LPARENCHAR arithmeticExpression RPARENCHAR | identifier | literal}
+     * — a whole sub-expression in parentheses, whose contents belong to the
+     * expression, not to the basis.
+     */
+    private static boolean parenthesisedBasis(ParserRuleContext ctx) {
+        return ctx instanceof CobolParser.BasisContext
+                && ((CobolParser.BasisContext) ctx).arithmeticExpression() != null;
+    }
+
     private static JsonElement serializeBasis(Basis b) {
         if (b == null) return litNode("");
         // Intrinsic FUNCTION call as a basis (e.g. inside an IF relation:
@@ -3022,8 +3033,17 @@ public final class StatementSerializer {
         // subtree (self + descendants, NOT ancestors) for a functionCall rule and
         // emit the structured {"kind":"function","name":..,"args":[..]} node — the
         // same shape MOVE/arithmetic already produce (red-dragon-ge72).
+        //
+        // A PARENTHESISED basis is excluded: its subtree holds a whole
+        // sub-expression, and any FUNCTION inside it is one operand of that
+        // sub-expression, not the basis itself. Probing it returned the nested
+        // call as the entire group and silently discarded every other operand
+        // and operator — `(FUNCTION LENGTH(M) - N)` computed LENGTH(M)
+        // (red-dragon-84k). Such a basis falls through to the
+        // ArithmeticValueStmt branch, which recurses and reaches the function
+        // through the operand that actually is one.
         CobolParser.FunctionCallContext fnCtx =
-                findFunctionCallCtxInSubtree(b.getCtx());
+                parenthesisedBasis(b.getCtx()) ? null : findFunctionCallCtxInSubtree(b.getCtx());
         if (fnCtx != null) {
             JsonObject fn = serializeFunctionNodeFromCtx(fnCtx);
             if (fn != null) {
