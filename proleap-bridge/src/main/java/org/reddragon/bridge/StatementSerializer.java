@@ -2125,12 +2125,8 @@ public final class StatementSerializer {
         }
         // A `LENGTH OF G` appearing INSIDE a reference modifier (e.g.
         // MOVE SRC(1:LENGTH OF G) TO ...) is the slice length, not the sending
-        // operand — leave it for the ref-mod path. Only treat the source as a
-        // LENGTH OF value when no referenceModifier wraps it. (red-dragon)
-        if (firstReferenceModifierDescendant(ctx) != null) {
-            return null;
-        }
-        CobolParser.SpecialRegisterContext sr = findLengthOfSpecialRegister(ctx);
+        // operand — leave it for the ref-mod path. (red-dragon)
+        CobolParser.SpecialRegisterContext sr = lengthOfSpecialRegisterOperand(ctx);
         if (sr == null) {
             return null;
         }
@@ -2152,7 +2148,7 @@ public final class StatementSerializer {
             // fall through
         }
         if (ctx != null) {
-            CobolParser.SpecialRegisterContext sr = findLengthOfSpecialRegister(ctx);
+            CobolParser.SpecialRegisterContext sr = lengthOfSpecialRegisterOperand(ctx);
             if (sr != null) {
                 JsonObject obj = new JsonObject();
                 obj.addProperty("kind", "length_of");
@@ -2168,6 +2164,14 @@ public final class StatementSerializer {
         if (vs instanceof ArithmeticValueStmt) {
             return serializeArithmeticExpr((ArithmeticValueStmt) vs);
         }
+        // A ref-modified operand — PERFORM VARYING I FROM NUMF(1:LENGTH OF N) —
+        // must keep its base field and both bounds structured; the flat text
+        // below would glue them into the unresolvable name "NUMF(1:LENGTHOFN)".
+        // (red-dragon-twfl)
+        JsonObject sliced = serializeRefModIdentifier(wholeOperandIdentifier(ctx));
+        if (sliced != null) {
+            return sliced;
+        }
         // Bare field reference / literal — keep structured so the Python side can
         // decide between field decode and literal parse.
         String text = (ctx != null) ? ctx.getText() : extractValueStmtText(vs);
@@ -2175,6 +2179,50 @@ public final class StatementSerializer {
         ref.addProperty("kind", "ref");
         ref.addProperty("name", text);
         return ref;
+    }
+
+    /**
+     * The identifier an operand IS — one that spans {@code ctx} end to end — or
+     * {@code null} when {@code ctx} is anything larger.
+     *
+     * <p>The span test is the same containment discipline
+     * {@link #boundsTheSliceOf(ParserRuleContext, ParserRuleContext)} enforces:
+     * an identifier nested inside a wider expression is one operand of it, never
+     * a replacement for it.
+     */
+    private static CobolParser.IdentifierContext wholeOperandIdentifier(ParserRuleContext ctx) {
+        if (ctx == null) {
+            return null;
+        }
+        if (ctx instanceof CobolParser.IdentifierContext) {
+            return (CobolParser.IdentifierContext) ctx;
+        }
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            org.antlr.v4.runtime.tree.ParseTree child = ctx.getChild(i);
+            if (!(child instanceof ParserRuleContext)) {
+                continue;
+            }
+            ParserRuleContext rule = (ParserRuleContext) child;
+            if (rule.getStart() == ctx.getStart() && rule.getStop() == ctx.getStop()) {
+                return wholeOperandIdentifier(rule);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The {@code LENGTH OF} specialRegister an operand IS, or {@code null} when
+     * the operand merely contains one.
+     *
+     * <p>A register reached through {@code operand}'s own referenceModifier
+     * computes a slice bound — {@code NUMF(1:LENGTH OF N)} is four bytes of NUMF,
+     * not the number 4. Returning it discarded the sliced field and both bounds
+     * (red-dragon-twfl). Same guard as the functionCall probes.
+     */
+    private static CobolParser.SpecialRegisterContext lengthOfSpecialRegisterOperand(
+            ParserRuleContext operand) {
+        CobolParser.SpecialRegisterContext sr = findLengthOfSpecialRegister(operand);
+        return boundsTheSliceOf(sr, operand) ? null : sr;
     }
 
     /**
@@ -2344,26 +2392,33 @@ public final class StatementSerializer {
     }
 
     /**
-     * True when {@code fc} sits under a referenceModifier that {@code operand}
-     * contains — i.e. the call computes one of the slice's bounds, as the LENGTH
-     * call does in {@code M(1:FUNCTION LENGTH(M))}.
+     * True when {@code node} sits under a referenceModifier that {@code operand}
+     * contains — i.e. the node computes one of the slice's bounds, as the LENGTH
+     * call does in {@code M(1:FUNCTION LENGTH(M))} and the special register does
+     * in {@code NUMF(1:LENGTH OF N)}.
      *
-     * <p>Such a call is not the operand. An operand serializer that returned it
+     * <p>Such a node is not the operand. An operand serializer that returned it
      * dropped the sliced field and both bounds, so {@code MOVE M(1:FUNCTION
      * LENGTH(M)) TO D} moved a number where text belonged. The ref-modified
      * identifier serializes structurally instead, and the bound reaches the same
      * probe again as the expression it is (red-dragon-pe45).
      *
      * <p>The walk stops at {@code operand}: inside the bound's own serialization
-     * the enclosing referenceModifier is no longer between the call and the
-     * context being serialized, so the call is correctly the operand there.
+     * the enclosing referenceModifier is no longer between the node and the
+     * context being serialized, so the node is correctly the operand there.
+     *
+     * <p>Every subtree probe that returns a nested node in place of its container
+     * shares this guard — the functionCall probes (red-dragon-pe45,
+     * red-dragon-35do) and the {@code LENGTH OF} specialRegister probes
+     * (red-dragon-twfl) alike; the nesting question is the same one regardless of
+     * which rule was found.
      */
     private static boolean boundsTheSliceOf(
-            CobolParser.FunctionCallContext fc, ParserRuleContext operand) {
-        if (fc == null) {
+            ParserRuleContext node, ParserRuleContext operand) {
+        if (node == null) {
             return false;
         }
-        for (ParserRuleContext p = fc.getParent(); p != null && p != operand; p = p.getParent()) {
+        for (ParserRuleContext p = node.getParent(); p != null && p != operand; p = p.getParent()) {
             if (p instanceof CobolParser.ReferenceModifierContext) {
                 return true;
             }
@@ -2376,6 +2431,10 @@ public final class StatementSerializer {
      * ONLY (never ancestors). Used when serializing a basis operand: a basis that
      * IS a function call must serialize structurally, but a basis that is a plain
      * ref nested inside a larger function call must NOT be mistaken for one.
+     *
+     * <p>A call found below a referenceModifier of {@code ctx} is NOT returned:
+     * it computes a slice bound, not the operand. See
+     * {@link #boundsTheSliceOf(ParserRuleContext, ParserRuleContext)}.
      */
     private static CobolParser.FunctionCallContext findFunctionCallCtxInSubtree(ParserRuleContext ctx) {
         if (ctx == null) {
@@ -2384,7 +2443,8 @@ public final class StatementSerializer {
         if (ctx instanceof CobolParser.FunctionCallContext) {
             return (CobolParser.FunctionCallContext) ctx;
         }
-        return firstFunctionCallDescendant(ctx);
+        CobolParser.FunctionCallContext found = firstFunctionCallDescendant(ctx);
+        return boundsTheSliceOf(found, ctx) ? null : found;
     }
 
     /** Depth-first search for the first FunctionCallContext descendant. */
@@ -3393,7 +3453,7 @@ public final class StatementSerializer {
             // (an unresolvable name the frontend treats as 0). Emit a structured
             // length_of node so the frontend resolves the field's byte length —
             // matching serializeFromValue's PERFORM-VARYING handling. (oq2c)
-            CobolParser.SpecialRegisterContext sr = findLengthOfSpecialRegister(id);
+            CobolParser.SpecialRegisterContext sr = lengthOfSpecialRegisterOperand(id);
             if (sr != null) {
                 JsonObject obj = new JsonObject();
                 obj.addProperty("kind", "length_of");

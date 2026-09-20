@@ -949,6 +949,14 @@ def _lower_expr_dict(
         operand = FunctionCallOperand.from_dict(expr)
         return lower_function_operand(ctx, operand, materialised, span=span)
 
+    if kind == "length_of":
+        # LENGTH OF <field> as a ref-mod bound: NUMF(1:LENGTH OF N). This
+        # dispatcher's unknown-kind fallback is an empty literal, so the bound
+        # reached STRING_SLICE as '' and the slice raised. lower_expr_node is
+        # the one implementation of the register's constant byte length
+        # (red-dragon-twfl).
+        return lower_expr_node(ctx, expr_from_dict(expr), materialised, span=span)
+
     if kind == "neg":
         inner = _lower_expr_dict(ctx, expr["expr"], materialised, span=span)
         zero_reg = ctx.const_to_reg(0, span=span)
