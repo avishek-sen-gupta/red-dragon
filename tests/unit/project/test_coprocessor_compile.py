@@ -23,7 +23,7 @@ def test_defaults_are_non_execution_owning_with_null_dialect_parser():
     assert spec.owns_execution is False
     assert isinstance(spec.dialect_parser, NullDialectParser)
     assert spec.dialect_parser.applies({"type": "ANYTHING"}) is False
-    assert spec.extra_source_search_dirs() == ()
+    assert spec.source_search_dirs() == ()
 
 
 def test_spec_is_frozen():
